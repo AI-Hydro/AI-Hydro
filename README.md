@@ -30,19 +30,19 @@
 
 **AI-Hydro** is an intelligent computational environment for hydrology and Earth-system sciences research. Built as a VSCode extension on the Cline framework, AI-Hydro combines domain-specific Python tools, curated hydrological knowledge bases, and RAG-based intelligence to assist researchers in complex hydrological analyses.
 
-Unlike general-purpose coding assistants, AI-Hydro understands hydrology-specific concepts, workflows, and data structures. As if now, it provides **12+ specialized tools** and **6+ complete workflows** for watershed analysis, CAMELS attribute extraction, streamflow analysis, and more.
+Unlike general-purpose coding assistants, AI-Hydro understands hydrology-specific concepts, workflows, and data structures. It provides dozens of **specialized tools** and **complete workflows** for watershed analysis, CAMELS attribute extraction, streamflow analysis, and more.
 
 ### What Makes AI-Hydro Special
 
-1. **Domain-Specific Tools**: 12+ wrapper functions + 6+ complete workflows for hydrology
-2. **RAG Intelligence**: Validated tool recommendations from curated knowledge base
+1. **Domain-Specific Tools**: Dozens of wrapper functions + complete workflows for hydrology
+2. **Intelligent Tool Discovery**: Multi-criteria weighted scoring with semantic understanding
 3. **Multi-Tier Architecture**: Progressive disclosure from workflows to tools to libraries
 4. **Reproducible Workflows**: Complete audit trails with workspace-isolated environments
 5. **Direct Data Access**: USGS NWIS, NLDI, 3DEP, GridMET, and more
 
 ### Core Capabilities
 
-**Tier 2 Tools** (11 focused functions):
+**Tier 2 Tools** (Some of the focused functions):
 - `delineate_watershed()` - Extract watershed boundaries
 - `extract_topographic_attributes()` - Elevation, slope, drainage stats
 - `extract_climate_indices()` - Precipitation, temperature, aridity
@@ -55,13 +55,11 @@ Unlike general-purpose coding assistants, AI-Hydro understands hydrology-specifi
 - `fetch_climate_data()` - GridMET climate data
 - `fetch_forcing_data()` - Basin-averaged forcing
 
-**Tier 3 Workflows** (6 complete orchestrations):
+**Tier 3 Workflows** (some of the complete orchestrations):
 - `extract_camels_attributes()` - Complete CAMELS extraction (70+ attributes)
 - `fetch_hydrological_data()` - Multi-source data retrieval
 - `compute_all_signatures()` - Comprehensive signature calculation
 - `scientific_investigation()` - End-to-end watershed analysis
-- `auto_modeling()` - Automated hydrological modeling
-- `query_knowledge()` - RAG-powered knowledge search
 
 ---
 
@@ -94,11 +92,33 @@ print(f"Aridity: {result['attributes']['aridity']:.2f}")
 ### How It Works
 
 1. **Natural Language Request**: "Extract CAMELS attributes for gauge 01031500"
-2. **RAG Intelligence**: AI-Hydro queries knowledge base for relevant tools
-3. **Tool Selection**: Recommends `extract_camels_attributes()` workflow
-4. **Code Generation**: Creates Python script using validated tools
+2. **Intelligent Tool Discovery**: Multi-criteria scoring finds optimal tools (name matching, semantic similarity, category alignment)
+3. **Tool Validation**: Verifies tool existence to prevent hallucinations
+4. **Code Generation**: Creates Python script using validated, ranked tools
 5. **Execution**: Runs in isolated workspace virtual environment
 6. **Results**: Presents findings with visualizations and next steps
+
+See [AI-Hydro's complete architecture](./AI_HYDRO_COMPLETE_WORKFLOW_ARCHITECTURE.md) for comprehensive technical details.
+
+### RAG System Intelligence
+
+AI-Hydro uses an **Adjusted Weights** multi-criteria scoring approach that achieved **66.67% precision@3** in testing:
+
+- **Name Match (35%)**: Identifies tools by name/phrase matching
+- **Semantic Similarity (30%)**: TF-IDF-based understanding of query intent
+- **Category Alignment (20%)**: Matches queries to relevant tool categories
+- **Tier Appropriateness (10%)**: Selects right abstraction level (workflow vs. tool)
+- **Keyword Density (5%)**: Evaluates keyword concentration in descriptions
+
+This approach **fixes critical bugs** from previous systems (e.g., correctly ranking `fetch_streamflow_data` #1 for streamflow queries, not `delineate_watershed`).
+
+**Key Features:**
+- ✅ Automatic tool validation prevents AI hallucinations
+- ✅ Semantic understanding through TF-IDF vectorization
+- ✅ Domain-specific synonym handling (TWI → topographic wetness index)
+- ✅ Acronym recognition (LAI, PET, DEM, etc.)
+
+See [AI_HYDRO_RAG_SYSTEM_GUIDE.md](./AI_HYDRO_RAG_SYSTEM_GUIDE.md) for technical details.
 
 
 ---
@@ -167,9 +187,7 @@ python/ai_hydro/
 
 ## Features
 
-<img align="right" width="340" src="https://github.com/user-attachments/assets/3cf21e04-7ce9-4d22-a7b9-ba2c595e88a4">
-
-### Hydrology-Aware AI Models
+### AI Models
 
 AI-Hydro works with leading AI providers (Anthropic, OpenAI, Google, AWS Bedrock) but enhances them with domain-specific knowledge:
 
@@ -181,10 +199,6 @@ AI-Hydro works with leading AI providers (Anthropic, OpenAI, Google, AWS Bedrock
 
 The extension tracks API usage and provides cost transparency.
 
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
-
-<img align="left" width="370" src="https://github.com/user-attachments/assets/81be79a8-1fdb-4028-9129-5fe055e01e76">
-
 ### Execute Hydrological Workflows
 
 AI-Hydro executes Python scripts in isolated workspace environments:
@@ -195,10 +209,6 @@ AI-Hydro executes Python scripts in isolated workspace environments:
 - Manage long-running computations
 
 For long-running processes, use "Proceed While Running" to continue working.
-
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
-
-<img align="right" width="400" src="https://github.com/user-attachments/assets/c5977833-d9b8-491e-90f9-05f9cd38c588">
 
 ### Create and Edit Analysis Scripts
 
@@ -212,10 +222,6 @@ AI-Hydro generates Python scripts following hydrological best practices:
 
 All changes tracked in Timeline for reproducibility.
 
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
-
-<img align="left" width="370" src="https://github.com/user-attachments/assets/bc2e85ba-dfeb-4fe6-9942-7cfc4703cbe5">
-
 ### Visualize Results
 
 Create interactive visualizations using plotly, matplotlib:
@@ -225,10 +231,6 @@ Create interactive visualizations using plotly, matplotlib:
 - CAMELS attribute correlations
 - Model performance metrics
 - Interactive dashboards
-
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
-
-<img align="right" width="350" src="https://github.com/user-attachments/assets/7fdf41e6-281a-4b4b-ac19-020b838b6970">
 
 ### Add Research Context
 
@@ -240,10 +242,6 @@ Create interactive visualizations using plotly, matplotlib:
 
 **`@folder`:** Add entire project folders
 
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
-
-<img align="left" width="360" src="https://github.com/user-attachments/assets/140c8606-d3bf-41b9-9a1f-4dbf0d4c90cb">
-
 ### Research Checkpoints
 
 AI-Hydro takes git-based snapshots at each step:
@@ -252,8 +250,6 @@ AI-Hydro takes git-based snapshots at each step:
 - 'Restore' to roll back
 - Ensure reproducibility
 - Test different configurations
-
-<img width="2000" height="0" src="https://github.com/user-attachments/assets/ee14e6f7-20b8-4391-9091-8e8e25561929"><br>
 
 ---
 
@@ -281,16 +277,7 @@ and identify key controlling attributes"
 
 ## Python Package Installation
 
-The `ai-hydro` Python package is automatically installed in your workspace's virtual environment. To install manually:
-
-```bash
-# From the repository root
-cd python
-pip install -e .
-
-# Or install from PyPI (when available)
-pip install ai-hydro
-```
+The `ai-hydro` Python package is automatically installed in your workspace's virtual environment. 
 
 ### Dependencies
 
@@ -307,9 +294,8 @@ See `python/pyproject.toml` for complete list.
 ## Documentation
 
 - **Architecture**: See `AI_HYDRO_COMPLETE_WORKFLOW_ARCHITECTURE.md`
-- **Tools Guide**: See `AI_HYDRO_CAMELS_TOOLS_GUIDE.md`
-- **RAG System**: See `AI_HYDRO_BRAIN_AND_RAG_GUIDE.md`
-- **Correct Tools**: See `.clinerules/correct-tools.md`
+- **RAG System**: See `AI_HYDRO_RAG_SYSTEM_GUIDE.md`
+- **Developers Guide**: See `AI_HYDRO_TOOLS_AND_WORKFLOWS_DEVELOPER_GUIDE.md`
 
 ---
 
@@ -347,7 +333,7 @@ If you use AI-Hydro in your research, please cite:
   author = {Galib, Mohammad and AI-Hydro Research Team},
   year = {2025},
   url = {https://github.com/galib9690/AI-Hydro},
-  version = {1.0.0}
+  version = {0.1.0}
 }
 ```
 
@@ -373,6 +359,6 @@ AI-Hydro is built on [Cline](https://github.com/cline/cline), an open-source aut
 
 ---
 
-**Version**: 1.0.0  
+**Version**: 0.1.0  
 **Last Updated**: January 2025  
 **Maintainer**: Mohammad Galib (mgalib@purdue.edu)
