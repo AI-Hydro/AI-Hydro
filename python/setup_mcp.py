@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -39,8 +40,6 @@ from pathlib import Path
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 _HERE = Path(__file__).resolve().parent
-# mcp_server.py is a thin entry point that delegates to ai_hydro.mcp.*
-_SERVER = _HERE / "mcp_server.py"
 _SERVER_KEY = "ai-hydro"
 
 _MCP_SETTINGS_PATHS = {
@@ -68,6 +67,25 @@ if sys.platform.startswith("linux"):
         Path.home()
         / ".config/Code/User/globalStorage"
         / "saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+    )
+
+
+def _get_server_command() -> tuple[str, list[str]]:
+    """Return (command, args) for the MCP server.
+
+    Prefers the ``aihydro-mcp`` console script (pip install mode).
+    Falls back to ``python mcp_server.py`` (monorepo dev mode).
+    """
+    aihydro_mcp = shutil.which("aihydro-mcp")
+    if aihydro_mcp:
+        return aihydro_mcp, []
+    # Fallback: run mcp_server.py directly
+    server_py = _HERE / "mcp_server.py"
+    if server_py.exists():
+        return sys.executable, [str(server_py)]
+    raise FileNotFoundError(
+        "Cannot find 'aihydro-mcp' on PATH or 'mcp_server.py' in this directory.\n"
+        "Install with: pip install aihydro-tools[all]"
     )
 
 
@@ -103,9 +121,10 @@ def register(ide: str) -> None:
     _cache_dir = Path.home() / ".aihydro" / "cache"
     _cache_dir.mkdir(parents=True, exist_ok=True)
 
+    command, args = _get_server_command()
     server_entry = {
-        "command": sys.executable,
-        "args": [str(_SERVER)],
+        "command": command,
+        "args": args,
         "cwd": str(_cache_dir),
         "timeout": 600,  # 10 minutes — TWI + model training can take 3-10 min
         "env": {
@@ -115,10 +134,7 @@ def register(ide: str) -> None:
         },
     }
 
-    if ide == "claude-code":
-        settings.setdefault("mcpServers", {})[_SERVER_KEY] = server_entry
-    else:
-        settings.setdefault("mcpServers", {})[_SERVER_KEY] = server_entry
+    settings.setdefault("mcpServers", {})[_SERVER_KEY] = server_entry
 
     _save_settings(path, settings)
     print(f"\nAI-Hydro MCP server registered in {ide} ({path})")

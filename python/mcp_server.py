@@ -8,8 +8,9 @@ Usage
 -----
     python mcp_server.py
 
-Or with uvx (no install required):
-    uvx --from ai-hydro aihydro-mcp
+Or via pip install:
+    pip install aihydro-tools[all]
+    aihydro-mcp
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 
-# ── Ensure the python package is importable when run directly ──
+# ── Dev mode: ensure the package is importable when run directly from monorepo ──
 _SERVER_DIR = Path(__file__).parent
 if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
@@ -40,7 +41,8 @@ from ai_hydro.mcp import mcp  # noqa: E402
 from ai_hydro.mcp.tools_docs import _write_tools_md  # noqa: E402
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for the ``aihydro-mcp`` console script (pyproject.toml)."""
     log.info("Starting AI-Hydro MCP server...")
     # Auto-generate .clinerules/tools.md on every startup
     try:
@@ -48,3 +50,7 @@ if __name__ == "__main__":
     except Exception as _e:
         log.debug("tools.md generation skipped: %s", _e)
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

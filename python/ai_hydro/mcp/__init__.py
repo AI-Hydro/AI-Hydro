@@ -20,3 +20,31 @@ from ai_hydro.mcp.registry import discover_tools as _discover_tools
 
 for _name, _fn in _discover_tools():
     mcp.tool(name=_name)(_fn)
+
+
+def main() -> None:
+    """Entry point for the ``aihydro-mcp`` console script."""
+    import logging
+    import os
+    from pathlib import Path
+
+    # Redirect cache/temp writes away from read-only filesystems (e.g. Box Drive)
+    cache_dir = Path.home() / ".aihydro" / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    os.chdir(cache_dir)
+    os.environ.setdefault("TMPDIR", str(cache_dir))
+    os.environ.setdefault("TEMP", str(cache_dir))
+    os.environ.setdefault("TMP", str(cache_dir))
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    log = logging.getLogger("ai_hydro.mcp")
+    log.info("Starting AI-Hydro MCP server...")
+
+    from ai_hydro.mcp.tools_docs import _write_tools_md
+
+    try:
+        _write_tools_md()
+    except Exception as _e:
+        log.debug("tools.md generation skipped: %s", _e)
+
+    mcp.run()

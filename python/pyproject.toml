@@ -122,7 +122,7 @@ forcing = ["ai-hydro[data]"]
 # ── Entry points ─────────────────────────────────────────────────────────────
 [project.scripts]
 # Run the MCP server directly
-aihydro-mcp = "mcp_server:main"
+aihydro-mcp = "ai_hydro.mcp:main"
 
 # Community plugin tool entry point namespace.
 # Third-party packages add tools in their own pyproject.toml:

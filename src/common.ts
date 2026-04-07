@@ -12,6 +12,7 @@ import "./utils/path" // necessary to have access to String.prototype.toPosix
 
 import { HostProvider } from "@/hosts/host-provider"
 import { FileContextTracker } from "./core/context/context-tracking/FileContextTracker"
+import { ensureDefaultMcpServer } from "./core/mcp/ensureDefaultMcpServer"
 import { StateManager } from "./core/storage/StateManager"
 import { ExtensionRegistryInfo } from "./registry"
 import { audioRecordingService } from "./services/dictation/AudioRecordingService"
@@ -66,6 +67,9 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 
 	// Clean up orphaned file context warnings (startup cleanup)
 	await FileContextTracker.cleanupOrphanedWarnings(context)
+
+	// Auto-register the aihydro-tools MCP server if installed and not already configured
+	await ensureDefaultMcpServer()
 
 	const webview = HostProvider.get().createWebviewProvider()
 
