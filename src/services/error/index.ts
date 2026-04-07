@@ -1,4 +1,4 @@
-export { ClineError, ClineErrorType } from "./ClineError"
+export { AiHydroError, AiHydroErrorType } from "./AiHydroError"
 export { type ErrorProviderConfig, ErrorProviderFactory, type ErrorProviderType } from "./ErrorProviderFactory"
 export { ErrorService } from "./ErrorService"
 export type { ErrorSettings, IErrorProvider } from "./providers/IErrorProvider"

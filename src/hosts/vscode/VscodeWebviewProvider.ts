@@ -99,7 +99,7 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 		// Listen for configuration changes
 		vscode.workspace.onDidChangeConfiguration(
 			async (e) => {
-				if (e && e.affectsConfiguration("cline.mcpMarketplace.enabled")) {
+				if (e && e.affectsConfiguration("aihydro.mcpMarketplace.enabled")) {
 					// Update state when marketplace tab setting changes
 					await this.controller.postStateToWebview()
 				}
@@ -186,6 +186,141 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 	 */
 	private async postMessageToWebview(message: ExtensionMessage): Promise<boolean | undefined> {
 		return this.webview?.webview.postMessage(message)
+	}
+
+	/**
+	 * Opens a side-by-side webview panel for the map visualization
+	 */
+	public async openMapPanel(): Promise<void> {
+		// Create a new webview panel for the map
+		const panel = vscode.window.createWebviewPanel(
+			"aihydroMap", // Identifies the type of the webview
+			"AI-Hydro Map", // Title of the panel
+			vscode.ViewColumn.Beside, // Show beside the current editor
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+				localResourceRoots: [vscode.Uri.file(HostProvider.get().extensionFsPath)],
+			},
+		)
+
+		// Set the HTML content for the map panel
+		panel.webview.html = this.getMapPanelHtmlContent(panel.webview)
+
+		// Handle messages from the map panel
+		panel.webview.onDidReceiveMessage(
+			(message) => {
+				// Forward map-related messages to the controller
+				this.handleWebviewMessage(message)
+			},
+			null,
+			this.disposables,
+		)
+
+		// Clean up when the panel is closed
+		panel.onDidDispose(
+			() => {
+				// Panel cleanup if needed
+			},
+			null,
+			this.disposables,
+		)
+	}
+
+	/**
+	 * Generates HTML content for the map panel webview
+	 */
+	private getMapPanelHtmlContent(webview: vscode.Webview): string {
+		// For now, return a simple HTML page that will be enhanced later
+		// This will eventually load the full React map component
+		const nonce = this.getNonce()
+		const cspSource = webview.cspSource
+
+		return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src ${cspSource};">
+	<title>AI-Hydro Map</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 20px;
+			font-family: var(--vscode-font-family);
+			color: var(--vscode-foreground);
+			background-color: var(--vscode-editor-background);
+		}
+		.container {
+			max-width: 800px;
+			margin: 0 auto;
+		}
+		h1 {
+			color: var(--vscode-foreground);
+			margin-bottom: 20px;
+		}
+		.info {
+			padding: 15px;
+			background-color: var(--vscode-editor-inactiveSelectionBackground);
+			border-radius: 4px;
+			margin-bottom: 20px;
+		}
+		#map-container {
+			width: 100%;
+			height: 500px;
+			background-color: var(--vscode-input-background);
+			border: 1px solid var(--vscode-input-border);
+			border-radius: 4px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>🗺️ AI-Hydro Map View</h1>
+		<div class="info">
+			<p><strong>Map visualization is now available in a side-by-side view!</strong></p>
+			<p>This panel will display watershed boundaries, stream networks, and other geospatial data.</p>
+		</div>
+		<div id="map-container">
+			<p>Map visualization will render here</p>
+		</div>
+	</div>
+	<script nonce="${nonce}">
+		const vscode = acquireVsCodeApi();
+		
+		// Example: Listen for map data from the extension
+		window.addEventListener('message', event => {
+			const message = event.data;
+			console.log('Map panel received message:', message);
+			// Handle map layer updates here
+		});
+		
+		// Example: Request current map state
+		vscode.postMessage({
+			type: 'grpc_request',
+			grpc_request: {
+				service: 'MapService',
+				method: 'getMapState'
+			}
+		});
+	</script>
+</body>
+</html>`
+	}
+
+	/**
+	 * Generates a nonce for Content Security Policy
+	 */
+	private getNonce(): string {
+		let text = ""
+		const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+		for (let i = 0; i < 32; i++) {
+			text += possible.charAt(Math.floor(Math.random() * possible.length))
+		}
+		return text
 	}
 
 	override async dispose() {

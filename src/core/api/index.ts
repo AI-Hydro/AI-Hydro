@@ -7,7 +7,6 @@ import { BasetenHandler } from "./providers/baseten"
 import { AwsBedrockHandler } from "./providers/bedrock"
 import { CerebrasHandler } from "./providers/cerebras"
 import { ClaudeCodeHandler } from "./providers/claude-code"
-import { ClineHandler } from "./providers/cline"
 import { DeepSeekHandler } from "./providers/deepseek"
 import { DifyHandler } from "./providers/dify"
 import { DoubaoHandler } from "./providers/doubao"
@@ -21,7 +20,6 @@ import { LmStudioHandler } from "./providers/lmstudio"
 import { MistralHandler } from "./providers/mistral"
 import { MoonshotHandler } from "./providers/moonshot"
 import { NebiusHandler } from "./providers/nebius"
-import { OcaHandler } from "./providers/oca"
 import { OllamaHandler } from "./providers/ollama"
 import { OpenAiHandler } from "./providers/openai"
 import { OpenAiNativeHandler } from "./providers/openai-native"
@@ -70,7 +68,9 @@ function createHandlerForProvider(
 	options: Omit<ApiConfiguration, "apiProvider">,
 	mode: Mode,
 ): ApiHandler {
-	switch (apiProvider) {
+	const normalizedProvider = apiProvider === "cline" || apiProvider === "oca" ? "openrouter" : apiProvider
+
+	switch (normalizedProvider) {
 		case "anthropic":
 			return new AnthropicHandler({
 				onRetryAttempt: options.onRetryAttempt,
@@ -235,18 +235,6 @@ function createHandlerForProvider(
 				vsCodeLmModelSelector:
 					mode === "plan" ? options.planModeVsCodeLmModelSelector : options.actModeVsCodeLmModelSelector,
 			})
-		case "cline":
-			return new ClineHandler({
-				onRetryAttempt: options.onRetryAttempt,
-				clineAccountId: options.clineAccountId,
-				ulid: options.ulid,
-				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
-				thinkingBudgetTokens:
-					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
-				openRouterProviderSorting: options.openRouterProviderSorting,
-				openRouterModelId: mode === "plan" ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId,
-				openRouterModelInfo: mode === "plan" ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo,
-			})
 		case "litellm":
 			return new LiteLlmHandler({
 				onRetryAttempt: options.onRetryAttempt,
@@ -374,20 +362,6 @@ function createHandlerForProvider(
 				zaiApiLine: options.zaiApiLine,
 				zaiApiKey: options.zaiApiKey,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
-			})
-		case "oca":
-			return new OcaHandler({
-				ocaMode: options.ocaMode || "internal",
-				ocaBaseUrl: options.ocaBaseUrl,
-				ocaModelId: mode === "plan" ? options.planModeOcaModelId : options.actModeOcaModelId,
-				ocaModelInfo: mode === "plan" ? options.planModeOcaModelInfo : options.actModeOcaModelInfo,
-				thinkingBudgetTokens:
-					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
-				ocaUsePromptCache:
-					mode === "plan"
-						? options.planModeOcaModelInfo?.supportsPromptCache
-						: options.actModeOcaModelInfo?.supportsPromptCache,
-				taskId: options.ulid,
 			})
 		default:
 			return new AnthropicHandler({

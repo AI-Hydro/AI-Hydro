@@ -9,6 +9,7 @@ import type { Controller } from "../index"
  * @returns Empty response
  */
 export async function ocaAccountLogoutClicked(controller: Controller, _request: EmptyRequest): Promise<Empty> {
+	// OCA account authorization is intentionally disabled in AI-Hydro lightweight mode.
 	await controller.handleOcaSignOut()
 	return Empty.create({})
 }

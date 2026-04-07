@@ -1,6 +1,7 @@
 import { ModelInfo } from "@shared/api"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import styled from "styled-components"
+import { DebouncedTextField } from "./DebouncedTextField"
 
 /**
  * Container for dropdowns that ensures proper z-index handling
@@ -47,26 +48,40 @@ OG Saoud Note:
  * A reusable component for selecting models from a dropdown
  */
 export const ModelSelector = ({ models, selectedModelId, onChange, zIndex, label = "Model" }: ModelSelectorProps) => {
+	const hasCustomSelection = !!selectedModelId && !(selectedModelId in models)
+	const sortedModelIds = Object.keys(models).sort((a, b) => a.localeCompare(b))
+
 	return (
-		<DropdownContainer className="dropdown-container" zIndex={zIndex}>
-			<label htmlFor="model-id">
-				<span style={{ fontWeight: 500 }}>{label}</span>
-			</label>
-			<VSCodeDropdown id="model-id" onChange={onChange} style={{ width: "100%" }} value={selectedModelId}>
-				<VSCodeOption value="">Select a model...</VSCodeOption>
-				{Object.keys(models).map((modelId) => (
-					<VSCodeOption
-						key={modelId}
-						style={{
-							whiteSpace: "normal",
-							wordWrap: "break-word",
-							maxWidth: "100%",
-						}}
-						value={modelId}>
-						{modelId}
-					</VSCodeOption>
-				))}
-			</VSCodeDropdown>
-		</DropdownContainer>
+		<div style={{ marginBottom: 10 }}>
+			<DebouncedTextField
+				initialValue={selectedModelId || ""}
+				onChange={(value) => onChange({ target: { value } })}
+				placeholder="Enter Model ID..."
+				style={{ width: "100%", marginBottom: 10 }}>
+				<span style={{ fontWeight: 500 }}>Model ID</span>
+			</DebouncedTextField>
+
+			<DropdownContainer className="dropdown-container" zIndex={zIndex}>
+				<label htmlFor="model-id">
+					<span style={{ fontWeight: 500 }}>{label}</span>
+				</label>
+				<VSCodeDropdown id="model-id" onChange={onChange} style={{ width: "100%" }} value={selectedModelId}>
+					<VSCodeOption value="">Select a model...</VSCodeOption>
+					{hasCustomSelection && <VSCodeOption value={selectedModelId}>{selectedModelId}</VSCodeOption>}
+					{sortedModelIds.map((modelId) => (
+						<VSCodeOption
+							key={modelId}
+							style={{
+								whiteSpace: "normal",
+								wordWrap: "break-word",
+								maxWidth: "100%",
+							}}
+							value={modelId}>
+							{modelId}
+						</VSCodeOption>
+					))}
+				</VSCodeDropdown>
+			</DropdownContainer>
+		</div>
 	)
 }

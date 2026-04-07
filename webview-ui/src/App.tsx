@@ -1,17 +1,23 @@
 import type { Boolean, EmptyRequest } from "@shared/proto/cline/common"
 import { useEffect } from "react"
-import AccountView from "./components/account/AccountView"
 import ChatView from "./components/chat/ChatView"
 import HistoryView from "./components/history/HistoryView"
+import MapPanel from "./components/map/MapPanel"
+import MapView from "./components/map/MapView"
 import McpView from "./components/mcp/configuration/McpConfigurationView"
 import SettingsView from "./components/settings/SettingsView"
 import WelcomeView from "./components/welcome/WelcomeView"
-import { useClineAuth } from "./context/ClineAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
 import { Providers } from "./Providers"
 import { UiServiceClient } from "./services/grpc-client"
 
+// Check if running in standalone map mode (separate panel)
+const isStandaloneMapMode = () => {
+	return typeof window !== "undefined" && (window as any).AIHYDRO_MAP_STANDALONE === true
+}
+
 const AppContent = () => {
+	// Otherwise, render normal app UI
 	const {
 		didHydrateState,
 		showWelcome,
@@ -20,7 +26,7 @@ const AppContent = () => {
 		mcpTab,
 		showSettings,
 		showHistory,
-		showAccount,
+		showMap,
 		showAnnouncement,
 		setShowAnnouncement,
 		setShouldShowAnnouncement,
@@ -28,11 +34,9 @@ const AppContent = () => {
 		navigateToHistory,
 		hideSettings,
 		hideHistory,
-		hideAccount,
+		hideMap,
 		hideAnnouncement,
 	} = useExtensionState()
-
-	const { clineUser, organizations, activeOrganization } = useClineAuth()
 
 	useEffect(() => {
 		if (shouldShowAnnouncement) {
@@ -49,8 +53,16 @@ const AppContent = () => {
 		}
 	}, [shouldShowAnnouncement, setShouldShowAnnouncement, setShowAnnouncement])
 
+	// Show loading screen with spinner
 	if (!didHydrateState) {
-		return null
+		return (
+			<div className="flex h-screen w-full items-center justify-center bg-[var(--vscode-editor-background)]">
+				<div className="flex flex-col items-center space-y-4">
+					<div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--vscode-progressBar-background)] border-t-transparent"></div>
+					<div className="text-sm text-[var(--vscode-descriptionForeground)]">Loading AI-Hydro...</div>
+				</div>
+			</div>
+		)
 	}
 
 	if (showWelcome) {
@@ -62,18 +74,11 @@ const AppContent = () => {
 			{showSettings && <SettingsView onDone={hideSettings} />}
 			{showHistory && <HistoryView onDone={hideHistory} />}
 			{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
-			{showAccount && (
-				<AccountView
-					activeOrganization={activeOrganization}
-					clineUser={clineUser}
-					onDone={hideAccount}
-					organizations={organizations}
-				/>
-			)}
+			{showMap && <MapPanel />}
 			{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
 			<ChatView
 				hideAnnouncement={hideAnnouncement}
-				isHidden={showSettings || showHistory || showMcp || showAccount}
+				isHidden={showSettings || showHistory || showMcp || showMap}
 				showAnnouncement={showAnnouncement}
 				showHistoryView={navigateToHistory}
 			/>
@@ -82,6 +87,17 @@ const AppContent = () => {
 }
 
 const App = () => {
+	// Check if in standalone map mode and render directly with Providers
+	if (isStandaloneMapMode()) {
+		return (
+			<Providers>
+				<div className="flex h-screen w-full">
+					<MapView height={window.innerHeight} width={window.innerWidth} />
+				</div>
+			</Providers>
+		)
+	}
+
 	return (
 		<Providers>
 			<AppContent />

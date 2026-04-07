@@ -1,4 +1,4 @@
-import { getSavedApiConversationHistory, getSavedClineMessages } from "@core/storage/disk"
+import { getSavedAiHydroMessages, getSavedApiConversationHistory } from "@core/storage/disk"
 import { WebviewProvider } from "@core/webview"
 import { Logger } from "@services/logging/Logger"
 import { AutoApprovalSettings, DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
@@ -86,8 +86,8 @@ async function updateAutoApprovalSettings(controller?: Controller) {
  * @returns The created HTTP server instance
  */
 export async function createTestServer(controller: Controller): Promise<http.Server> {
-	// Try to show the Cline sidebar
-	Logger.log("[createTestServer] Opening Cline in sidebar...")
+	// Try to show the AI-Hydro sidebar
+	Logger.log("[createTestServer] Opening AI-Hydro in sidebar...")
 	vscode.commands.executeCommand(`workbench.view.${ExtensionRegistryInfo.name}-ActivityBar`)
 
 	// Then ensure the webview is focused/loaded
@@ -152,7 +152,7 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 				const visibleWebview = WebviewProvider.getVisibleInstance()
 				if (!visibleWebview || !visibleWebview.controller) {
 					res.writeHead(500)
-					res.end(JSON.stringify({ error: "No active Cline instance found" }))
+					res.end(JSON.stringify({ error: "No active AI-Hydro instance found" }))
 					return
 				}
 
@@ -203,7 +203,6 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 					// Clear any existing task
 					await visibleWebview.controller.clearTask()
 
-					// TODO: convert apiKey to clineAccountId
 					// If API key is provided, update the API configuration
 					if (apiKey) {
 						Logger.log("API key provided, updating API configuration")
@@ -214,21 +213,21 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 						// Update API configuration with API key
 						const updatedConfig = {
 							...apiConfiguration,
-							apiProvider: "cline" as ApiProvider,
-							clineAccountId: apiKey,
+							apiProvider: "openrouter" as ApiProvider,
+							openRouterApiKey: apiKey,
 						}
 
 						// Store the API key securely
-						visibleWebview.controller.stateManager.setSecret("clineAccountId", apiKey)
+						visibleWebview.controller.stateManager.setSecret("openRouterApiKey", apiKey)
 
 						visibleWebview.controller.stateManager.setApiConfiguration(updatedConfig)
 
-						// Update cache service to use cline provider
+						// Update cache service to use openrouter provider
 						const currentConfig = visibleWebview.controller.stateManager.getApiConfiguration()
 						visibleWebview.controller.stateManager.setApiConfiguration({
 							...currentConfig,
-							planModeApiProvider: "cline",
-							actModeApiProvider: "cline",
+							planModeApiProvider: "openrouter",
+							actModeApiProvider: "openrouter",
 						})
 
 						// Post state to webview to reflect changes
@@ -305,10 +304,10 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 						let apiConversationHistory: any[] = []
 						try {
 							if (typeof taskId === "string") {
-								messages = await getSavedClineMessages(taskId)
+								messages = await getSavedAiHydroMessages(taskId)
 							}
 						} catch (error) {
-							Logger.log(`Error getting saved Cline messages: ${error}`)
+							Logger.log(`Error getting saved AI-Hydro messages: ${error}`)
 						}
 
 						try {

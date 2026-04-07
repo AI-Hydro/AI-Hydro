@@ -1,5 +1,5 @@
 import { BROWSER_VIEWPORT_PRESETS } from "@shared/BrowserSettings"
-import { BrowserAction, BrowserActionResult, ClineMessage, ClineSayBrowserAction } from "@shared/ExtensionMessage"
+import { AiHydroMessage, AiHydroSayBrowserAction, BrowserAction, BrowserActionResult } from "@shared/ExtensionMessage"
 import { StringRequest } from "@shared/proto/cline/common"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
@@ -14,10 +14,10 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { FileServiceClient } from "@/services/grpc-client"
 
 interface BrowserSessionRowProps {
-	messages: ClineMessage[]
+	messages: AiHydroMessage[]
 	expandedRows: Record<number, boolean>
 	onToggleExpand: (messageTs: number) => void
-	lastModifiedMessage?: ClineMessage
+	lastModifiedMessage?: AiHydroMessage
 	isLast: boolean
 	onHeightChange: (isTaller: boolean) => void
 	onSetQuote: (text: string) => void
@@ -151,15 +151,15 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 				screenshot?: string
 				mousePosition?: string
 				consoleLogs?: string
-				messages: ClineMessage[] // messages up to and including the result
+				messages: AiHydroMessage[] // messages up to and including the result
 			}
 			nextAction?: {
-				messages: ClineMessage[] // messages leading to next result
+				messages: AiHydroMessage[] // messages leading to next result
 			}
 		}[] = []
 
-		let currentStateMessages: ClineMessage[] = []
-		let nextActionMessages: ClineMessage[] = []
+		let currentStateMessages: AiHydroMessage[] = []
+		let nextActionMessages: AiHydroMessage[] = []
 
 		messages.forEach((message) => {
 			if (message.ask === "browser_action_launch" || message.say === "browser_action_launch") {
@@ -329,7 +329,7 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 		for (let i = actions.length - 1; i >= 0; i--) {
 			const message = actions[i]
 			if (message.say === "browser_action") {
-				const browserAction = JSON.parse(message.text || "{}") as ClineSayBrowserAction
+				const browserAction = JSON.parse(message.text || "{}") as AiHydroSayBrowserAction
 				if (browserAction.action === "click" && browserAction.coordinate) {
 					return browserAction.coordinate
 				}
@@ -365,7 +365,7 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 					<span className="codicon codicon-inspect" style={browserIconStyle}></span>
 				)}
 				<span style={approveTextStyle}>
-					{isAutoApproved ? "Cline is using the browser:" : "Cline wants to use the browser:"}
+					{isAutoApproved ? "AI-Hydro is using the browser:" : "AI-Hydro wants to use the browser:"}
 				</span>
 			</div>
 			<div
@@ -498,7 +498,7 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 }, deepEqual)
 
 interface BrowserSessionRowContentProps extends Omit<BrowserSessionRowProps, "messages" | "onHeightChange"> {
-	message: ClineMessage
+	message: AiHydroMessage
 	setMaxActionHeight: (height: number) => void
 	onSetQuote: (text: string) => void
 }
@@ -553,7 +553,7 @@ const BrowserSessionRowContent = memo(
 						)
 
 					case "browser_action":
-						const browserAction = JSON.parse(message.text || "{}") as ClineSayBrowserAction
+						const browserAction = JSON.parse(message.text || "{}") as AiHydroSayBrowserAction
 						return (
 							<BrowserActionBox
 								action={browserAction.action}

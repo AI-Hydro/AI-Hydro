@@ -1,22 +1,18 @@
-import { ClineMessage } from "@shared/ExtensionMessage"
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import { memo } from "react"
 import CreditLimitError from "@/components/chat/CreditLimitError"
-import { handleSignIn, useClineAuth } from "@/context/ClineAuthContext"
-import { ClineError, ClineErrorType } from "../../../../src/services/error/ClineError"
+import { AiHydroError, AiHydroErrorType } from "../../../../src/services/error/AiHydroError"
 
 const _errorColor = "var(--vscode-errorForeground)"
 
 interface ErrorRowProps {
-	message: ClineMessage
-	errorType: "error" | "mistake_limit_reached" | "auto_approval_max_req_reached" | "diff_error" | "clineignore_error"
+	message: AiHydroMessage
+	errorType: "error" | "mistake_limit_reached" | "auto_approval_max_req_reached" | "diff_error" | "aihydroignore_error"
 	apiRequestFailedMessage?: string
 	apiReqStreamingFailedMessage?: string
 }
 
 const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStreamingFailedMessage }: ErrorRowProps) => {
-	const { clineUser } = useClineAuth()
-
 	const renderErrorContent = () => {
 		switch (errorType) {
 			case "error":
@@ -24,15 +20,15 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 			case "auto_approval_max_req_reached":
 				// Handle API request errors with special error parsing
 				if (apiRequestFailedMessage || apiReqStreamingFailedMessage) {
-					// FIXME: ClineError parsing should not be applied to non-Cline providers, but it seems we're using clineErrorMessage below in the default error display
-					const clineError = ClineError.parse(apiRequestFailedMessage || apiReqStreamingFailedMessage)
-					const clineErrorMessage = clineError?.message
-					const requestId = clineError?._error?.request_id
-					const isClineProvider = clineError?.providerId === "cline" // FIXME: since we are modifying backend to return generic error, we need to make sure we're not expecting providerId here
+					// FIXME: AiHydroError parsing should not be applied to non-AI-Hydro providers, but it seems we're using parsedErrorMessage below in the default error display
+					const parsedError = AiHydroError.parse(apiRequestFailedMessage || apiReqStreamingFailedMessage)
+					const parsedErrorMessage = parsedError?.message
+					const requestId = parsedError?._error?.request_id
+					const isAiHydroProvider = parsedError?.providerId === "aihydro"
 
-					if (clineError) {
-						if (clineError.isErrorType(ClineErrorType.Balance)) {
-							const errorDetails = clineError._error?.details
+					if (parsedError) {
+						if (parsedError.isErrorType(AiHydroErrorType.Balance)) {
+							const errorDetails = parsedError._error?.details
 							return (
 								<CreditLimitError
 									buyCreditsUrl={errorDetails?.buy_credits_url}
@@ -45,18 +41,18 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 						}
 					}
 
-					if (clineError?.isErrorType(ClineErrorType.RateLimit)) {
+					if (parsedError?.isErrorType(AiHydroErrorType.RateLimit)) {
 						return (
 							<p className="m-0 whitespace-pre-wrap text-[var(--vscode-errorForeground)] wrap-anywhere">
-								{clineErrorMessage}
+								{parsedErrorMessage}
 								{requestId && <div>Request ID: {requestId}</div>}
 							</p>
 						)
 					}
 
-					// For non-cline providers, we display the raw error message
-					const errorMessageToDisplay = isClineProvider
-						? clineErrorMessage
+					// For non-AI-Hydro providers, we display the raw error message
+					const errorMessageToDisplay = isAiHydroProvider
+						? parsedErrorMessage
 						: apiReqStreamingFailedMessage || apiRequestFailedMessage
 
 					// Default error display
@@ -64,33 +60,24 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 						<p className="m-0 whitespace-pre-wrap text-[var(--vscode-errorForeground)] wrap-anywhere">
 							{errorMessageToDisplay}
 							{requestId && <div>Request ID: {requestId}</div>}
-							{clineErrorMessage?.toLowerCase()?.includes("powershell") && (
+							{parsedErrorMessage?.toLowerCase()?.includes("powershell") && (
 								<>
 									<br />
 									<br />
 									It seems like you're having Windows PowerShell issues, please see this{" "}
-									<a
-										className="underline text-inherit"
-										href="https://github.com/cline/cline/wiki/TroubleShooting-%E2%80%90-%22PowerShell-is-not-recognized-as-an-internal-or-external-command%22">
+									<a className="underline text-inherit" href="https://github.com/galib9690/AI-Hydro/issues">
 										troubleshooting guide
 									</a>
 									.
 								</>
 							)}
-							{clineError?.isErrorType(ClineErrorType.Auth) && (
+							{parsedError?.isErrorType(AiHydroErrorType.Auth) && (
 								<>
 									<br />
 									<br />
-									{/* The user is signed in or not using cline provider */}
-									{clineUser && !isClineProvider ? (
-										<span className="mb-4 text-[var(--vscode-descriptionForeground)]">
-											(Click "Retry" below)
-										</span>
-									) : (
-										<VSCodeButton className="w-full mb-4" onClick={handleSignIn}>
-											Sign in to Cline
-										</VSCodeButton>
-									)}
+									<span className="mb-4 text-[var(--vscode-descriptionForeground)]">
+										Check your provider credentials, then click Retry.
+									</span>
 								</>
 							)}
 						</p>
@@ -109,11 +96,12 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 					</div>
 				)
 
-			case "clineignore_error":
+			case "aihydroignore_error":
 				return (
 					<div className="flex flex-col p-2 rounded text-xs bg-[var(--vscode-textBlockQuote-background)] text-[var(--vscode-foreground)] opacity-80">
 						<div>
-							Cline tried to access <code>{message.text}</code> which is blocked by the <code>.clineignore</code>
+							AI-Hydro tried to access <code>{message.text}</code> which is blocked by the{" "}
+							<code>.aihydroignore</code>
 							file.
 						</div>
 					</div>
@@ -124,8 +112,8 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 		}
 	}
 
-	// For diff_error and clineignore_error, we don't show the header separately
-	if (errorType === "diff_error" || errorType === "clineignore_error") {
+	// For diff_error and aihydroignore_error, we don't show the header separately
+	if (errorType === "diff_error" || errorType === "aihydroignore_error") {
 		return <>{renderErrorContent()}</>
 	}
 

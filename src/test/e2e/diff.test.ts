@@ -14,8 +14,8 @@ e2e.describe("Diff Editor", () => {
 			const inputbox = sidebar.getByTestId("chat-input")
 			await expect(inputbox).toBeVisible()
 
-			await inputbox.fill("Hello, Cline!")
-			await expect(inputbox).toHaveValue("Hello, Cline!")
+			await inputbox.fill("Hello, AI-Hydro!")
+			await expect(inputbox).toHaveValue("Hello, AI-Hydro!")
 			await sidebar.getByTestId("send-button").click({ delay: 100 })
 			await expect(inputbox).toHaveValue("")
 
@@ -25,7 +25,7 @@ e2e.describe("Diff Editor", () => {
 			// Back to home page with history
 			await sidebar.getByRole("button", { name: "Start New Task" }).click()
 			await expect(sidebar.getByText("Recent Tasks")).toBeVisible()
-			await expect(sidebar.getByText("Hello, Cline!")).toBeVisible() // History with the previous sent message
+			await expect(sidebar.getByText("Hello, AI-Hydro!")).toBeVisible() // History with the previous sent message
 			await expect(sidebar.getByText("Tokens:")).toBeVisible() // History with token usage
 
 			// Submit a file edit request
@@ -34,10 +34,10 @@ e2e.describe("Diff Editor", () => {
 			await sidebar.getByTestId("send-button").click({ delay: 50 })
 
 			// Wait for the sidebar to load the file edit request
-			await sidebar.waitForSelector('span:has-text("Cline wants to edit this file:")')
+			await sidebar.waitForSelector('span:has-text("AI-Hydro wants to edit this file:")')
 
-			// Cline Diff Editor should open with the file name and diff
-			await expect(page.getByText("test.ts: Original ↔ Cline's")).toBeVisible()
+			// AI-Hydro Diff Editor should open with the file name and diff
+			await expect(page.getByText("test.ts: Original ↔ AI-Hydro's")).toBeVisible()
 
 			// Diff editor should show the original and modified content
 			const diffEditor = page.locator(

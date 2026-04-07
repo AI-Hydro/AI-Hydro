@@ -4,7 +4,7 @@ import { parseSourceCodeForDefinitionsTopLevel } from "@services/tree-sitter"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { formatResponse } from "@/core/prompts/responses"
 import { telemetryService } from "@/services/telemetry"
-import { ClineDefaultTool } from "@/shared/tools"
+import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -14,7 +14,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
-	readonly name = ClineDefaultTool.LIST_CODE_DEF
+	readonly name = AiHydroDefaultTool.LIST_CODE_DEF
 
 	constructor(private validator: ToolValidator) {}
 
@@ -65,7 +65,7 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relDirPath! } : pathResult
 
 		// Execute the actual parse source code operation
-		const result = await parseSourceCodeForDefinitionsTopLevel(absolutePath, config.services.clineIgnoreController)
+		const result = await parseSourceCodeForDefinitionsTopLevel(absolutePath, config.services.aihydroIgnoreController)
 
 		// Handle approval flow
 		const sharedMessageProps = {
@@ -89,7 +89,7 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 			telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, true, true)
 		} else {
 			// Manual approval flow
-			const notificationMessage = `Cline wants to analyze code definitions in ${getWorkspaceBasename(absolutePath, "ListCodeDefinitionNamesToolHandler.notification")}`
+			const notificationMessage = `AI-Hydro wants to analyze code definitions in ${getWorkspaceBasename(absolutePath, "ListCodeDefinitionNamesToolHandler.notification")}`
 
 			// Show notification
 			showNotificationForApprovalIfAutoApprovalEnabled(

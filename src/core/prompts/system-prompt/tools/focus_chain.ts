@@ -1,11 +1,11 @@
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
-import type { ClineToolSpec } from "../spec"
+import { AiHydroDefaultTool } from "@/shared/tools"
+import type { AiHydroToolSpec } from "../spec"
 
 // HACK: Placeholder to act as tool dependency
-const generic: ClineToolSpec = {
+const generic: AiHydroToolSpec = {
 	variant: ModelFamily.GENERIC,
-	id: ClineDefaultTool.TODO,
+	id: AiHydroDefaultTool.TODO,
 	name: "focus_chain",
 	description: "",
 	contextRequirements: (context) => context.focusChainSettings?.enabled === true,

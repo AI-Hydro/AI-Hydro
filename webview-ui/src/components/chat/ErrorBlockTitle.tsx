@@ -1,5 +1,5 @@
 import React from "react"
-import { ClineError, ClineErrorType } from "../../../../src/services/error/ClineError"
+import { AiHydroError, AiHydroErrorType } from "../../../../src/services/error/AiHydroError"
 import { ProgressIndicator } from "./ChatRow"
 
 interface ErrorBlockTitleProps {
@@ -57,8 +57,8 @@ export const ErrorBlockTitle = ({
 			details.classNames.push("text-[var(--vscode-foreground)]")
 		} else if (apiRequestFailedMessage) {
 			// Handle failed request
-			const clineError = ClineError.parse(apiRequestFailedMessage)
-			const titleText = clineError?.isErrorType(ClineErrorType.Balance) ? "Credit Limit Reached" : "API Request Failed"
+			const clineError = AiHydroError.parse(apiRequestFailedMessage)
+			const titleText = clineError?.isErrorType(AiHydroErrorType.Balance) ? "Credit Limit Reached" : "API Request Failed"
 			details.title = titleText
 			details.classNames.push("font-bold text-[var(--vscode-errorForeground)]")
 		} else if (retryStatus) {

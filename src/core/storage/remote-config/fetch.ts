@@ -1,8 +1,8 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios"
 import { Controller } from "@/core/controller"
-import { ClineEnv } from "../../../config"
+import { AiHydroEnv, isAiHydroCloudAccountEnabled } from "../../../config"
 import { AuthService } from "../../../services/auth/AuthService"
-import { CLINE_API_ENDPOINT } from "../../../shared/cline/api"
+import { AIHYDRO_API_ENDPOINT } from "../../../shared/aihydro/api"
 import { RemoteConfig, RemoteConfigSchema } from "../../../shared/remote-config/schema"
 import { deleteRemoteConfigFromCache, readRemoteConfigFromCache, writeRemoteConfigToCache } from "../disk"
 import { StateManager } from "../StateManager"
@@ -22,12 +22,12 @@ async function fetchRemoteConfigForOrganization(organizationId: string): Promise
 		// Get authentication token
 		const authToken = await authService.getAuthToken()
 		if (!authToken) {
-			throw new Error("No Cline account auth token found")
+			throw new Error("No AI-Hydro account auth token found")
 		}
 
 		// Construct URL by replacing {id} placeholder with organizationId
-		const endpoint = CLINE_API_ENDPOINT.REMOTE_CONFIG.replace("{id}", organizationId)
-		const url = new URL(endpoint, ClineEnv.config().apiBaseUrl).toString()
+		const endpoint = AIHYDRO_API_ENDPOINT.REMOTE_CONFIG.replace("{id}", organizationId)
+		const url = new URL(endpoint, AiHydroEnv.config().apiBaseUrl).toString()
 
 		// Make authenticated request
 		const requestConfig: AxiosRequestConfig = {
@@ -184,5 +184,10 @@ async function ensureUserInOrgWithRemoteConfig(controller: Controller): Promise<
  * @returns Promise resolving to the RemoteConfig object, or undefined if no organization has remote config
  */
 export async function fetchRemoteConfig(controller: Controller): Promise<RemoteConfig | undefined> {
+	if (!isAiHydroCloudAccountEnabled()) {
+		StateManager.get().clearRemoteConfig()
+		return undefined
+	}
+
 	return ensureUserInOrgWithRemoteConfig(controller)
 }

@@ -39,7 +39,7 @@ export class OpenRouterHandler implements ApiHandler {
 					apiKey: this.options.openRouterApiKey,
 					defaultHeaders: {
 						"HTTP-Referer": "https://cline.bot", // Optional, for including your app on openrouter.ai rankings.
-						"X-Title": "Cline", // Optional. Shows in rankings on openrouter.ai.
+						"X-Title": "AI-Hydro", // Optional. Shows in rankings on openrouter.ai.
 					},
 				})
 			} catch (error: any) {

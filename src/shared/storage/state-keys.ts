@@ -1,7 +1,7 @@
 import { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
+import { AiHydroRulesToggles } from "@shared/aihydro-rules"
 import { ApiProvider, ModelInfo, type OcaModelInfo } from "@shared/api"
 import { BrowserSettings } from "@shared/BrowserSettings"
-import { ClineRulesToggles } from "@shared/cline-rules"
 import { DictationSettings } from "@shared/DictationSettings"
 import { FocusChainSettings } from "@shared/FocusChainSettings"
 import { HistoryItem } from "@shared/HistoryItem"
@@ -68,8 +68,8 @@ export interface Settings {
 	azureApiVersion: string | undefined
 	openRouterProviderSorting: string | undefined
 	autoApprovalSettings: AutoApprovalSettings
-	globalClineRulesToggles: ClineRulesToggles
-	globalWorkflowToggles: ClineRulesToggles
+	globalAiHydroRulesToggles: AiHydroRulesToggles
+	globalWorkflowToggles: AiHydroRulesToggles
 	browserSettings: BrowserSettings
 	liteLlmBaseUrl: string | undefined
 	liteLlmUsePromptCache: boolean | undefined
@@ -238,8 +238,8 @@ export interface Secrets {
 }
 
 export interface LocalState {
-	localClineRulesToggles: ClineRulesToggles
-	localCursorRulesToggles: ClineRulesToggles
-	localWindsurfRulesToggles: ClineRulesToggles
-	workflowToggles: ClineRulesToggles
+	localAiHydroRulesToggles: AiHydroRulesToggles
+	localCursorRulesToggles: AiHydroRulesToggles
+	localWindsurfRulesToggles: AiHydroRulesToggles
+	workflowToggles: AiHydroRulesToggles
 }

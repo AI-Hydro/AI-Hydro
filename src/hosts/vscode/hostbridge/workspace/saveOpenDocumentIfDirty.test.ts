@@ -14,7 +14,7 @@ describe("saveOpenDocumentIfDirty Integration Test", () => {
 
 	before(async () => {
 		// Use a temporary directory for tests
-		testWorkspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cline-test-"))
+		testWorkspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-test-"))
 
 		// Create a test file path
 		testFilePath = path.join(testWorkspaceRoot, "test-save-document.txt")

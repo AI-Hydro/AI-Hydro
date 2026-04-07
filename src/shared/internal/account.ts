@@ -1,16 +1,16 @@
 /**
- * List of email domains that are considered trusted testers for Cline.
+ * List of email domains that are considered trusted testers for AI-Hydro.
  */
-const CLINE_TRUSTED_TESTER_DOMAINS = ["fibilabs.tech"]
+const AIHYDRO_TRUSTED_TESTER_DOMAINS = ["fibilabs.tech"]
 
 /**
- * Checks if the given email belongs to a Cline bot user.
+ * Checks if the given email belongs to a AI-Hydro bot user.
  * E.g. Emails ending with @cline.bot
  */
-export function isClineBotUser(email: string): boolean {
+export function isAiHydroBotUser(email: string): boolean {
 	return email.endsWith("@cline.bot")
 }
 
-export function isClineInternalTester(email: string): boolean {
-	return isClineBotUser(email) || CLINE_TRUSTED_TESTER_DOMAINS.some((d) => email.endsWith(`@${d}`))
+export function isAiHydroInternalTester(email: string): boolean {
+	return isAiHydroBotUser(email) || AIHYDRO_TRUSTED_TESTER_DOMAINS.some((d) => email.endsWith(`@${d}`))
 }

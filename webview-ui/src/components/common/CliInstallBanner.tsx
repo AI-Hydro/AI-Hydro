@@ -12,7 +12,7 @@ export const CURRENT_CLI_BANNER_VERSION = 1
 export const CliInstallBanner: React.FC = () => {
 	const { navigateToSettings, subagentsEnabled, platform } = useExtensionState()
 	const [isCopied, setIsCopied] = useState(false)
-	const [isClineCliInstalled, setIsClineCliInstalled] = useState(false)
+	const [isAiHydroCliInstalled, setIsAiHydroCliInstalled] = useState(false)
 
 	const isMacOS = platform === "darwin"
 
@@ -21,7 +21,7 @@ export const CliInstallBanner: React.FC = () => {
 		const checkInstallation = async () => {
 			try {
 				const result = await StateServiceClient.checkCliInstallation(EmptyRequest.create())
-				setIsClineCliInstalled(result.value)
+				setIsAiHydroCliInstalled(result.value)
 			} catch (error) {
 				console.error("Failed to check CLI installation:", error)
 			}
@@ -48,10 +48,10 @@ export const CliInstallBanner: React.FC = () => {
 	}, [])
 
 	const handleInstallClick = async () => {
-		if (!isClineCliInstalled) {
+		if (!isAiHydroCliInstalled) {
 			try {
 				// Call the backend to initiate CLI installation
-				await StateServiceClient.installClineCli(EmptyRequest.create())
+				await StateServiceClient.installAiHydroCli(EmptyRequest.create())
 				// Banner will automatically close after successful installation
 				// setTimeout(() => {
 				// 	handleClose()
@@ -82,7 +82,7 @@ export const CliInstallBanner: React.FC = () => {
 		e.stopPropagation()
 
 		// Copy the install command to clipboard
-		await navigator.clipboard.writeText("npm install -g cline")
+		await navigator.clipboard.writeText("npm install -g aihydro")
 
 		// Show feedback by changing the icon
 		setIsCopied(true)
@@ -102,16 +102,16 @@ export const CliInstallBanner: React.FC = () => {
 			}}>
 			<h4 className="m-0 flex items-center gap-2" style={{ paddingRight: "24px" }}>
 				<Terminal className="w-4 h-4" />
-				{isMacOS ? "Cline for CLI is here!" : "Cline CLI Information"}
+				{isMacOS ? "AI-Hydro CLI is here!" : "AI-Hydro CLI Information"}
 			</h4>
 			<p className="m-0">
 				{isMacOS ? (
 					<>
-						Install to use Cline directly in your terminal and enable subagent capabilities. Cline can spawn{" "}
+						Install to use AI-Hydro directly in your terminal and enable subagent capabilities. AI-Hydro can spawn{" "}
 						<code>cline</code> commands to handle focused tasks like exploring large codebases for information. This
 						keeps your main context window clean by running these operations in separate subprocesses.{" "}
 						<a
-							href="https://docs.cline.bot/cline-cli/overview"
+							href="https://github.com/galib9690/AI-Hydro#readme"
 							rel="noopener noreferrer"
 							style={{ color: "var(--vscode-textLink-foreground)" }}
 							target="_blank">
@@ -120,9 +120,9 @@ export const CliInstallBanner: React.FC = () => {
 					</>
 				) : (
 					<>
-						Cline CLI is available for Mac OS users now! coming <code>soon</code> to other platforms.{" "}
+						AI-Hydro CLI is available for Mac OS users now! coming <code>soon</code> to other platforms.{" "}
 						<a
-							href="https://docs.cline.bot/cline-cli/overview"
+							href="https://github.com/galib9690/AI-Hydro#readme"
 							rel="noopener noreferrer"
 							style={{ color: "var(--vscode-textLink-foreground)" }}
 							target="_blank">
@@ -153,9 +153,9 @@ export const CliInstallBanner: React.FC = () => {
 						<VSCodeButton
 							appearance="primary"
 							className="flex-1"
-							disabled={isClineCliInstalled}
+							disabled={isAiHydroCliInstalled}
 							onClick={handleInstallClick}>
-							{isClineCliInstalled ? (
+							{isAiHydroCliInstalled ? (
 								<>
 									<span className="codicon codicon-check" style={{ marginRight: "4px" }}></span>
 									Installed
@@ -178,9 +178,9 @@ export const CliInstallBanner: React.FC = () => {
 						<VSCodeButton
 							appearance="primary"
 							className="flex-1"
-							disabled={isClineCliInstalled}
+							disabled={isAiHydroCliInstalled}
 							onClick={handleInstallClick}>
-							{isClineCliInstalled ? (
+							{isAiHydroCliInstalled ? (
 								<>
 									<span className="codicon codicon-check" style={{ marginRight: "4px" }}></span>
 									Installed
@@ -193,7 +193,7 @@ export const CliInstallBanner: React.FC = () => {
 							appearance="secondary"
 							className="flex-1"
 							disabled
-							title="Cline CLI & subagents are only available on macOS">
+							title="AI-Hydro CLI & subagents are only available on macOS">
 							Subagents (macOS only)
 						</VSCodeButton>
 					</div>

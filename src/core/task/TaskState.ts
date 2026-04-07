@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { AssistantMessageContent } from "@core/assistant-message"
-import { ClineAskResponse } from "@shared/WebviewMessage"
+import { AiHydroAskResponse } from "@shared/WebviewMessage"
 
 export class TaskState {
 	// Streaming flags
@@ -19,7 +19,7 @@ export class TaskState {
 	presentAssistantMessageHasPendingUpdates = false
 
 	// Ask/Response handling
-	askResponse?: ClineAskResponse
+	askResponse?: AiHydroAskResponse
 	askResponseText?: string
 	askResponseImages?: string[]
 	askResponseFiles?: string[]
@@ -65,4 +65,7 @@ export class TaskState {
 	// Auto-context summarization
 	currentlySummarizing: boolean = false
 	lastAutoCompactTriggerIndex?: number
+
+	// RAG Brain integration
+	hasPromptedForRagInstall: boolean = false
 }

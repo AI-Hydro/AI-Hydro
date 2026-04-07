@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
-import type { ClineToolSpec } from "../spec"
+import { AiHydroDefaultTool } from "@/shared/tools"
+import type { AiHydroToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
 /**
@@ -22,9 +22,9 @@ Checklist here (optional)
 </write_to_file>
  */
 
-const id = ClineDefaultTool.FILE_NEW
+const id = AiHydroDefaultTool.FILE_NEW
 
-const generic: ClineToolSpec = {
+const generic: AiHydroToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "write_to_file",

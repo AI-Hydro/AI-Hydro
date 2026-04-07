@@ -1,0 +1,62 @@
+name: ✨ Feature Request
+description: Suggest a new tool, data source, or improvement
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement to AI-Hydro! Please describe your idea clearly so we can evaluate and discuss it.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - New MCP tool (new data source or analysis)
+        - Improved model (better calibration, new model structure)
+        - More CAMELS attributes or gauges
+        - Extension UI improvement
+        - Session / export feature
+        - Documentation / tutorial
+        - Other
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the research task or workflow that this feature would enable.
+      placeholder: |
+        e.g., I want to compute baseflow recession constants (k, n) from
+        the USGS streamflow record but there's no tool for it yet.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe what you'd like to see. For a new tool, sketch the function signature and return values.
+      placeholder: |
+        Add extract_recession_constants(gauge_id, method="matching_strip") that
+        returns {"k": 0.92, "n": 1.0, "n_events": 45}
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Are there existing tools (Python packages, APIs) that partially solve this?
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: References, papers, or examples that support this idea.
+    validations:
+      required: false

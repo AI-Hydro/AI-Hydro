@@ -7,7 +7,7 @@ export const openTab = async (_page: Page, tabName: string) => {
 		.click()
 }
 
-export const addSelectedCodeToClineWebview = async (_page: Page) => {
+export const addSelectedCodeToAiHydroWebview = async (_page: Page) => {
 	await _page.locator("div:nth-child(4) > span > span").first().click()
 	await _page.getByRole("textbox", { name: "The editor is not accessible" }).press("ControlOrMeta+a")
 
@@ -19,7 +19,7 @@ export const addSelectedCodeToClineWebview = async (_page: Page) => {
 	} catch {
 		await _page.getByRole("menu").first().waitFor({ state: "visible", timeout: 5000 })
 	}
-	await _page.keyboard.press("Enter", { delay: 100 }) // First action - "Add to Cline"
+	await _page.keyboard.press("Enter", { delay: 100 }) // First action - "Add to AI-Hydro"
 }
 
 export const toggleNotifications = async (_page: Page) => {
@@ -49,7 +49,7 @@ export async function cleanChatView(sidebar: Page): Promise<Page> {
 		await signUpBtn.click({ delay: 50 })
 	}
 	// Verify the help improve banner is visible and can be closed.
-	const helpBanner = sidebar.getByText("Help Improve Cline")
+	const helpBanner = sidebar.getByText("Help Improve AI-Hydro")
 	if (await helpBanner.isVisible()) {
 		await sidebar.getByRole("button", { name: "Close banner and enable" }).click()
 	}

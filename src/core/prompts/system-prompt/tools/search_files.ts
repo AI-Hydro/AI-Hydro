@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
-import type { ClineToolSpec } from "../spec"
+import { AiHydroDefaultTool } from "@/shared/tools"
+import type { AiHydroToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
 /**
@@ -18,9 +18,9 @@ Usage:
 </search_files>
  */
 
-const id = ClineDefaultTool.SEARCH
+const id = AiHydroDefaultTool.SEARCH
 
-const generic: ClineToolSpec = {
+const generic: AiHydroToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "search_files",

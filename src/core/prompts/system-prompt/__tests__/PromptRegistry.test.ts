@@ -21,7 +21,7 @@ describe("PromptRegistry", () => {
 		} as unknown as McpHub,
 		focusChainSettings: {
 			enabled: true,
-			remindClineInterval: 6,
+			remindAiHydroInterval: 6,
 		},
 		browserSettings: {
 			viewport: {

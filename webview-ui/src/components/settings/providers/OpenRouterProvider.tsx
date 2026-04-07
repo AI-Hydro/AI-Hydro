@@ -1,14 +1,14 @@
-import { EmptyRequest } from "@shared/proto/cline/common"
+import { openRouterAutoModelId } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeLink, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { AccountServiceClient } from "@/services/grpc-client"
 import { useOpenRouterKeyInfo } from "../../ui/hooks/useOpenRouterKeyInfo"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { DropdownContainer } from "../common/ModelSelector"
 import OpenRouterModelPicker, { OPENROUTER_MODEL_PICKER_Z_INDEX } from "../OpenRouterModelPicker"
 import { formatPrice } from "../utils/pricingUtils"
+import { getModeSpecificFields } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
 /**
@@ -60,8 +60,11 @@ interface OpenRouterProviderProps {
  * The OpenRouter provider configuration component
  */
 export const OpenRouterProvider = ({ showModelOptions, isPopup, currentMode }: OpenRouterProviderProps) => {
-	const { apiConfiguration } = useExtensionState()
-	const { handleFieldChange } = useApiConfigurationHandlers()
+	const { apiConfiguration, openRouterModels, refreshOpenRouterModels } = useExtensionState()
+	const { handleFieldChange, handleModeFieldsChange } = useApiConfigurationHandlers()
+	const modeFields = getModeSpecificFields(apiConfiguration, currentMode)
+	const isAutoRouterEnabled = modeFields.openRouterModelId === openRouterAutoModelId
+	const [isRefreshingModels, setIsRefreshingModels] = useState(false)
 
 	const [providerSortingSelected, setProviderSortingSelected] = useState(!!apiConfiguration?.openRouterProviderSorting)
 
@@ -82,18 +85,9 @@ export const OpenRouterProvider = ({ showModelOptions, isPopup, currentMode }: O
 					</div>
 				</DebouncedTextField>
 				{!apiConfiguration?.openRouterApiKey && (
-					<VSCodeButton
-						appearance="secondary"
-						onClick={async () => {
-							try {
-								await AccountServiceClient.openrouterAuthClicked(EmptyRequest.create())
-							} catch (error) {
-								console.error("Failed to open OpenRouter auth:", error)
-							}
-						}}
-						style={{ margin: "5px 0 0 0" }}>
+					<VSCodeLink href="https://openrouter.ai/settings/keys" style={{ display: "inline-block", marginTop: 5 }}>
 						Get OpenRouter API Key
-					</VSCodeButton>
+					</VSCodeLink>
 				)}
 				<p
 					style={{
@@ -103,10 +97,47 @@ export const OpenRouterProvider = ({ showModelOptions, isPopup, currentMode }: O
 					}}>
 					This key is stored locally and only used to make API requests from this extension.
 				</p>
+				<VSCodeButton
+					appearance="secondary"
+					disabled={isRefreshingModels}
+					onClick={() => {
+						setIsRefreshingModels(true)
+						refreshOpenRouterModels()
+						setTimeout(() => {
+							setIsRefreshingModels(false)
+						}, 1200)
+					}}
+					style={{ marginBottom: 8 }}>
+					{isRefreshingModels ? "Refreshing models..." : "Refresh OpenRouter models"}
+				</VSCodeButton>
 			</div>
 
 			{showModelOptions && (
 				<>
+					<VSCodeCheckbox
+						checked={isAutoRouterEnabled}
+						onChange={(e: any) => {
+							const isChecked = e.target.checked === true
+							if (isChecked) {
+								handleModeFieldsChange(
+									{
+										openRouterModelId: { plan: "planModeOpenRouterModelId", act: "actModeOpenRouterModelId" },
+										openRouterModelInfo: {
+											plan: "planModeOpenRouterModelInfo",
+											act: "actModeOpenRouterModelInfo",
+										},
+									},
+									{
+										openRouterModelId: openRouterAutoModelId,
+										openRouterModelInfo: openRouterModels[openRouterAutoModelId],
+									},
+									currentMode,
+								)
+							}
+						}}>
+						Auto-select model by task complexity (OpenRouter Auto Router)
+					</VSCodeCheckbox>
+
 					<VSCodeCheckbox
 						checked={providerSortingSelected}
 						onChange={(e: any) => {
@@ -146,6 +177,12 @@ export const OpenRouterProvider = ({ showModelOptions, isPopup, currentMode }: O
 									"Sort providers by response time, prioritizing the provider with the lowest latency"}
 							</p>
 						</div>
+					)}
+
+					{isAutoRouterEnabled && (
+						<p style={{ fontSize: "12px", marginTop: 3, color: "var(--vscode-descriptionForeground)" }}>
+							Auto Router is enabled for this mode. Uncheck the option above to manually pick a specific model.
+						</p>
 					)}
 
 					<OpenRouterModelPicker currentMode={currentMode} isPopup={isPopup} />

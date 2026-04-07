@@ -1,5 +1,5 @@
 import { ensureRulesDirectoryExists, ensureWorkflowsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
-import { ClineRulesToggles } from "@shared/cline-rules"
+import { AiHydroRulesToggles } from "@shared/aihydro-rules"
 import { fileExistsAtPath, isDirectory, readDirectory } from "@utils/fs"
 import fs from "fs/promises"
 import * as path from "path"
@@ -37,10 +37,10 @@ export async function readDirectoryRecursive(
  */
 export async function synchronizeRuleToggles(
 	rulesDirectoryPath: string,
-	currentToggles: ClineRulesToggles,
+	currentToggles: AiHydroRulesToggles,
 	allowedFileExtension: string = "",
 	excludedPaths: string[][] = [],
-): Promise<ClineRulesToggles> {
+): Promise<AiHydroRulesToggles> {
 	// Create a copy of toggles to modify
 	const updatedToggles = { ...currentToggles }
 
@@ -104,14 +104,14 @@ export async function synchronizeRuleToggles(
 /**
  * Certain project rules have more than a single location where rules are allowed to be stored
  */
-export function combineRuleToggles(toggles1: ClineRulesToggles, toggles2: ClineRulesToggles): ClineRulesToggles {
+export function combineRuleToggles(toggles1: AiHydroRulesToggles, toggles2: AiHydroRulesToggles): AiHydroRulesToggles {
 	return { ...toggles1, ...toggles2 }
 }
 
 /**
  * Read the content of rules files
  */
-export const getRuleFilesTotalContent = async (rulesFilePaths: string[], basePath: string, toggles: ClineRulesToggles) => {
+export const getRuleFilesTotalContent = async (rulesFilePaths: string[], basePath: string, toggles: AiHydroRulesToggles) => {
 	const ruleFilesTotalContent = await Promise.all(
 		rulesFilePaths.map(async (filePath) => {
 			const ruleFilePath = path.resolve(basePath, filePath)
@@ -128,31 +128,31 @@ export const getRuleFilesTotalContent = async (rulesFilePaths: string[], basePat
 }
 
 /**
- * Handles converting any directory into a file (specifically used for .clinerules and .clinerules/workflows)
- * The old .clinerules file or .clinerules/workflows file will be renamed to a default filename
+ * Handles converting any directory into a file (specifically used for .aihydrorules and .aihydrorules/workflows)
+ * The old .aihydrorules file or .aihydrorules/workflows file will be renamed to a default filename
  * Doesn't do anything if the dir already exists or doesn't exist
  * Returns whether there are any uncaught errors
  */
-export async function ensureLocalClineDirExists(clinerulePath: string, defaultRuleFilename: string): Promise<boolean> {
+export async function ensureLocalAiHydroDirExists(aihydroRulePath: string, defaultRuleFilename: string): Promise<boolean> {
 	try {
-		const exists = await fileExistsAtPath(clinerulePath)
+		const exists = await fileExistsAtPath(aihydroRulePath)
 
-		if (exists && !(await isDirectory(clinerulePath))) {
-			// logic to convert .clinerules file into directory, and rename the rules file to {defaultRuleFilename}
-			const content = await fs.readFile(clinerulePath, "utf8")
-			const tempPath = clinerulePath + ".bak"
-			await fs.rename(clinerulePath, tempPath) // create backup
+		if (exists && !(await isDirectory(aihydroRulePath))) {
+			// logic to convert .aihydrorules file into directory, and rename the rules file to {defaultRuleFilename}
+			const content = await fs.readFile(aihydroRulePath, "utf8")
+			const tempPath = aihydroRulePath + ".bak"
+			await fs.rename(aihydroRulePath, tempPath) // create backup
 			try {
-				await fs.mkdir(clinerulePath, { recursive: true })
-				await fs.writeFile(path.join(clinerulePath, defaultRuleFilename), content, "utf8")
+				await fs.mkdir(aihydroRulePath, { recursive: true })
+				await fs.writeFile(path.join(aihydroRulePath, defaultRuleFilename), content, "utf8")
 				await fs.unlink(tempPath).catch(() => {}) // delete backup
 
 				return false // conversion successful with no errors
 			} catch (_conversionError) {
 				// attempt to restore backup on conversion failure
 				try {
-					await fs.rm(clinerulePath, { recursive: true, force: true }).catch(() => {})
-					await fs.rename(tempPath, clinerulePath) // restore backup
+					await fs.rm(aihydroRulePath, { recursive: true, force: true }).catch(() => {})
+					await fs.rename(tempPath, aihydroRulePath) // restore backup
 				} catch (_restoreError) {}
 				return true // in either case here we consider this an error
 			}
@@ -172,26 +172,26 @@ export const createRuleFile = async (isGlobal: boolean, filename: string, cwd: s
 		let filePath: string
 		if (isGlobal) {
 			if (type === "workflow") {
-				const globalClineWorkflowFilePath = await ensureWorkflowsDirectoryExists()
-				filePath = path.join(globalClineWorkflowFilePath, filename)
+				const globalAiHydroWorkflowFilePath = await ensureWorkflowsDirectoryExists()
+				filePath = path.join(globalAiHydroWorkflowFilePath, filename)
 			} else {
-				const globalClineRulesFilePath = await ensureRulesDirectoryExists()
-				filePath = path.join(globalClineRulesFilePath, filename)
+				const globalAiHydroRulesFilePath = await ensureRulesDirectoryExists()
+				filePath = path.join(globalAiHydroRulesFilePath, filename)
 			}
 		} else {
-			const localClineRulesFilePath = path.resolve(cwd, GlobalFileNames.clineRules)
+			const localAiHydroRulesFilePath = path.resolve(cwd, GlobalFileNames.aihydroRules)
 
-			const hasError = await ensureLocalClineDirExists(localClineRulesFilePath, "default-rules.md")
+			const hasError = await ensureLocalAiHydroDirExists(localAiHydroRulesFilePath, "default-rules.md")
 			if (hasError === true) {
 				return { filePath: null, fileExists: false }
 			}
 
-			await fs.mkdir(localClineRulesFilePath, { recursive: true })
+			await fs.mkdir(localAiHydroRulesFilePath, { recursive: true })
 
 			if (type === "workflow") {
 				const localWorkflowsFilePath = path.resolve(cwd, GlobalFileNames.workflows)
 
-				const hasError = await ensureLocalClineDirExists(localWorkflowsFilePath, "default-workflows.md")
+				const hasError = await ensureLocalAiHydroDirExists(localWorkflowsFilePath, "default-workflows.md")
 				if (hasError === true) {
 					return { filePath: null, fileExists: false }
 				}
@@ -200,8 +200,8 @@ export const createRuleFile = async (isGlobal: boolean, filename: string, cwd: s
 
 				filePath = path.join(localWorkflowsFilePath, filename)
 			} else {
-				// clinerules file creation
-				filePath = path.join(localClineRulesFilePath, filename)
+				// aihydrorules file creation
+				filePath = path.join(localAiHydroRulesFilePath, filename)
 			}
 		}
 
@@ -251,9 +251,9 @@ export async function deleteRuleFile(
 				delete toggles[rulePath]
 				controller.stateManager.setGlobalState("globalWorkflowToggles", toggles)
 			} else {
-				const toggles = controller.stateManager.getGlobalSettingsKey("globalClineRulesToggles")
+				const toggles = controller.stateManager.getGlobalSettingsKey("globalAiHydroRulesToggles")
 				delete toggles[rulePath]
-				controller.stateManager.setGlobalState("globalClineRulesToggles", toggles)
+				controller.stateManager.setGlobalState("globalAiHydroRulesToggles", toggles)
 			}
 		} else {
 			if (type === "workflow") {
@@ -269,9 +269,9 @@ export async function deleteRuleFile(
 				delete toggles[rulePath]
 				controller.stateManager.setWorkspaceState("localWindsurfRulesToggles", toggles)
 			} else {
-				const toggles = controller.stateManager.getWorkspaceStateKey("localClineRulesToggles")
+				const toggles = controller.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
 				delete toggles[rulePath]
-				controller.stateManager.setWorkspaceState("localClineRulesToggles", toggles)
+				controller.stateManager.setWorkspaceState("localAiHydroRulesToggles", toggles)
 			}
 		}
 

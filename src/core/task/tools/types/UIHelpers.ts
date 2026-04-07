@@ -1,6 +1,6 @@
-import type { ClineAsk, ClineSay } from "@shared/ExtensionMessage"
-import type { ClineDefaultTool } from "@shared/tools"
-import type { ClineAskResponse } from "@shared/WebviewMessage"
+import type { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
+import type { AiHydroDefaultTool } from "@shared/tools"
+import type { AiHydroAskResponse } from "@shared/WebviewMessage"
 import { telemetryService } from "@/services/telemetry"
 import type { ToolParamName, ToolUse } from "../../../assistant-message"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
@@ -12,14 +12,14 @@ import type { TaskConfig } from "./TaskConfig"
  */
 export interface StronglyTypedUIHelpers {
 	// Core UI methods
-	say: (type: ClineSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
+	say: (type: AiHydroSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
 
 	ask: (
-		type: ClineAsk,
+		type: AiHydroAsk,
 		text?: string,
 		partial?: boolean,
 	) => Promise<{
-		response: ClineAskResponse
+		response: AiHydroAskResponse
 		text?: string
 		images?: string[]
 		files?: string[]
@@ -27,15 +27,15 @@ export interface StronglyTypedUIHelpers {
 
 	// Utility methods
 	removeClosingTag: (block: ToolUse, tag: ToolParamName, text?: string) => string
-	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: ClineAsk | ClineSay) => Promise<void>
+	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: AiHydroAsk | AiHydroSay) => Promise<void>
 
 	// Approval methods
-	shouldAutoApproveTool: (toolName: ClineDefaultTool) => boolean | [boolean, boolean]
-	shouldAutoApproveToolWithPath: (toolName: ClineDefaultTool, path?: string) => Promise<boolean>
-	askApproval: (messageType: ClineAsk, message: string) => Promise<boolean>
+	shouldAutoApproveTool: (toolName: AiHydroDefaultTool) => boolean | [boolean, boolean]
+	shouldAutoApproveToolWithPath: (toolName: AiHydroDefaultTool, path?: string) => Promise<boolean>
+	askApproval: (messageType: AiHydroAsk, message: string) => Promise<boolean>
 
 	// Telemetry and notifications
-	captureTelemetry: (toolName: ClineDefaultTool, autoApproved: boolean, approved: boolean) => void
+	captureTelemetry: (toolName: AiHydroDefaultTool, autoApproved: boolean, approved: boolean) => void
 	showNotificationIfEnabled: (message: string) => void
 
 	// Config access - returns the proper typed config
@@ -51,13 +51,13 @@ export function createUIHelpers(config: TaskConfig): StronglyTypedUIHelpers {
 		ask: config.callbacks.ask,
 		removeClosingTag: (block: ToolUse, tag: ToolParamName, text?: string) => removeClosingTag(block, tag, text),
 		removeLastPartialMessageIfExistsWithType: config.callbacks.removeLastPartialMessageIfExistsWithType,
-		shouldAutoApproveTool: (toolName: ClineDefaultTool) => config.autoApprover.shouldAutoApproveTool(toolName),
+		shouldAutoApproveTool: (toolName: AiHydroDefaultTool) => config.autoApprover.shouldAutoApproveTool(toolName),
 		shouldAutoApproveToolWithPath: config.callbacks.shouldAutoApproveToolWithPath,
-		askApproval: async (messageType: ClineAsk, message: string): Promise<boolean> => {
+		askApproval: async (messageType: AiHydroAsk, message: string): Promise<boolean> => {
 			const { response } = await config.callbacks.ask(messageType, message, false)
 			return response === "yesButtonClicked"
 		},
-		captureTelemetry: (toolName: ClineDefaultTool, autoApproved: boolean, approved: boolean) => {
+		captureTelemetry: (toolName: AiHydroDefaultTool, autoApproved: boolean, approved: boolean) => {
 			telemetryService.captureToolUsage(config.ulid, toolName, config.api.getModel().id, autoApproved, approved)
 		},
 		showNotificationIfEnabled: (message: string) => {

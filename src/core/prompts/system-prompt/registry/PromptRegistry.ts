@@ -1,7 +1,7 @@
 import { ModelFamily } from "@/shared/prompts"
 import { getModelFamily } from ".."
 import { getSystemPromptComponents } from "../components"
-import { registerClineToolSets } from "../tools"
+import { registerAiHydroToolSets } from "../tools"
 import type { ComponentFunction, ComponentRegistry, PromptVariant, SystemPromptContext } from "../types"
 import { loadAllVariantConfigs } from "../variants"
 import { config as genericConfig } from "../variants/generic/config"
@@ -14,7 +14,7 @@ export class PromptRegistry {
 	private loaded: boolean = false
 
 	private constructor() {
-		registerClineToolSets()
+		registerAiHydroToolSets()
 	}
 
 	static getInstance(): PromptRegistry {

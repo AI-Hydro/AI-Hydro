@@ -1,6 +1,6 @@
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
-import { ClineAsk, ClineSayTool } from "@shared/ExtensionMessage"
-import { ClineDefaultTool } from "@shared/tools"
+import { AiHydroAsk, AiHydroSayTool } from "@shared/ExtensionMessage"
+import { AiHydroDefaultTool } from "@shared/tools"
 import { telemetryService } from "@/services/telemetry"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
@@ -12,7 +12,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class WebFetchToolHandler implements IFullyManagedTool {
-	readonly name = ClineDefaultTool.WEB_FETCH
+	readonly name = AiHydroDefaultTool.WEB_FETCH
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.url}']`
@@ -20,19 +20,19 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
 		const url = block.params.url || ""
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: AiHydroSayTool = {
 			tool: "webFetch",
 			path: uiHelpers.removeClosingTag(block, "url", url),
 			content: `Fetching URL: ${uiHelpers.removeClosingTag(block, "url", url)}`,
 			operationIsLocatedInWorkspace: false, // web_fetch is always external
-		} satisfies ClineSayTool
+		} satisfies AiHydroSayTool
 
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
 		// For partial blocks, we'll let the ToolExecutor handle auto-approval logic
 		// Just stream the UI update for now
 		await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "tool")
-		await uiHelpers.ask("tool" as ClineAsk, partialMessage, block.partial).catch(() => {})
+		await uiHelpers.ask("tool" as AiHydroAsk, partialMessage, block.partial).catch(() => {})
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -47,7 +47,7 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 			config.taskState.consecutiveMistakeCount = 0
 
 			// Create message for approval
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: AiHydroSayTool = {
 				tool: "webFetch",
 				path: url,
 				content: `Fetching URL: ${url}`,
@@ -66,7 +66,7 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 			} else {
 				// Manual approval flow
 				showNotificationForApprovalIfAutoApprovalEnabled(
-					`Cline wants to fetch content from ${url}`,
+					`AI-Hydro wants to fetch content from ${url}`,
 					config.autoApprovalSettings.enabled,
 					config.autoApprovalSettings.enableNotifications,
 				)

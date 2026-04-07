@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
-import type { ClineToolSpec } from "../spec"
+import { AiHydroDefaultTool } from "@/shared/tools"
+import type { AiHydroToolSpec } from "../spec"
 
 /**
  * ## new_task
@@ -19,9 +19,9 @@ Usage:
 </new_task>
  */
 
-const id = ClineDefaultTool.NEW_TASK
+const id = AiHydroDefaultTool.NEW_TASK
 
-const generic: ClineToolSpec = {
+const generic: AiHydroToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "new_task",

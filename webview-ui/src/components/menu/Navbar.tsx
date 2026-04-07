@@ -1,5 +1,5 @@
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import { HistoryIcon, PlusIcon, SettingsIcon, UserCircleIcon } from "lucide-react"
+import { HistoryIcon, MapIcon, PlusIcon, SettingsIcon } from "lucide-react"
 import { useMemo } from "react"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { useExtensionState } from "../../context/ExtensionStateContext"
@@ -14,7 +14,7 @@ const McpServerIcon = ({ className, size }: { className?: string; size?: number 
 )
 
 export const Navbar = () => {
-	const { navigateToHistory, navigateToSettings, navigateToAccount, navigateToMcp, navigateToChat } = useExtensionState()
+	const { navigateToHistory, navigateToSettings, navigateToMcp, navigateToMap, navigateToChat } = useExtensionState()
 
 	const SETTINGS_TABS = useMemo(
 		() => [
@@ -40,18 +40,18 @@ export const Navbar = () => {
 				navigate: navigateToMcp,
 			},
 			{
+				id: "map",
+				name: "Map",
+				tooltip: "Map View",
+				icon: MapIcon,
+				navigate: navigateToMap,
+			},
+			{
 				id: "history",
 				name: "History",
 				tooltip: "History",
 				icon: HistoryIcon,
 				navigate: navigateToHistory,
-			},
-			{
-				id: "account",
-				name: "Account",
-				tooltip: "Account",
-				icon: UserCircleIcon,
-				navigate: navigateToAccount,
 			},
 			{
 				id: "settings",
@@ -61,13 +61,13 @@ export const Navbar = () => {
 				navigate: navigateToSettings,
 			},
 		],
-		[navigateToAccount, navigateToChat, navigateToHistory, navigateToMcp, navigateToSettings],
+		[navigateToChat, navigateToHistory, navigateToMap, navigateToMcp, navigateToSettings],
 	)
 
 	return (
 		<nav
 			className="flex-none inline-flex justify-end bg-transparent gap-2 mb-1 z-10 border-none items-center mr-4!"
-			id="cline-navbar-container"
+			id="aihydro-navbar-container"
 			style={{ gap: "4px" }}>
 			{SETTINGS_TABS.map((tab) => (
 				<HeroTooltip content={tab.tooltip} key={`navbar-tooltip-${tab.id}`} placement="bottom">

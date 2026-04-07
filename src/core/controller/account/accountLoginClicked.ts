@@ -1,5 +1,4 @@
 import { EmptyRequest, String } from "@shared/proto/cline/common"
-import { AuthService } from "@/services/auth/AuthService"
 import { Controller } from "../index"
 
 /**
@@ -11,5 +10,6 @@ import { Controller } from "../index"
  * @returns The login URL as a string.
  */
 export async function accountLoginClicked(_controller: Controller, _: EmptyRequest): Promise<String> {
-	return await AuthService.getInstance().createAuthRequest()
+	// Account authorization is intentionally disabled in AI-Hydro lightweight mode.
+	return String.create({ value: "" })
 }

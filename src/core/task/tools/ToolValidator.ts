@@ -1,5 +1,5 @@
 import type { ToolParamName, ToolUse } from "@core/assistant-message"
-import type { ClineIgnoreController } from "@core/ignore/ClineIgnoreController"
+import type { AiHydroIgnoreController } from "@core/ignore/AiHydroIgnoreController"
 
 export type ValidationResult = { ok: true } | { ok: false; error: string }
 
@@ -8,7 +8,7 @@ export type ValidationResult = { ok: true } | { ok: false; error: string }
  * The legacy ToolExecutor switch remains unchanged and does not depend on this.
  */
 export class ToolValidator {
-	constructor(private readonly clineIgnoreController: ClineIgnoreController) {}
+	constructor(private readonly aihydroIgnoreController: AiHydroIgnoreController) {}
 
 	/**
 	 * Verifies required parameters exist on the tool block.
@@ -26,15 +26,15 @@ export class ToolValidator {
 	}
 
 	/**
-	 * Verifies access is allowed to a given path via .clineignore rules.
+	 * Verifies access is allowed to a given path via .aihydroignore rules.
 	 * Callers should pass a repo-relative (workspace-relative) path.
 	 */
-	checkClineIgnorePath(relPath: string): ValidationResult {
-		const accessAllowed = this.clineIgnoreController.validateAccess(relPath)
+	checkAiHydroIgnorePath(relPath: string): ValidationResult {
+		const accessAllowed = this.aihydroIgnoreController.validateAccess(relPath)
 		if (!accessAllowed) {
 			return {
 				ok: false,
-				error: `Access to path '${relPath}' is blocked by .clineignore settings.`,
+				error: `Access to path '${relPath}' is blocked by .aihydroignore settings.`,
 			}
 		}
 		return { ok: true }

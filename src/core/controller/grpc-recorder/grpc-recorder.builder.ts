@@ -46,7 +46,7 @@ export class GrpcRecorderBuilder {
 	static getRecorder(controller: Controller): IRecorder {
 		if (!GrpcRecorderBuilder.recorder) {
 			GrpcRecorderBuilder.recorder = GrpcRecorder.builder()
-				.enableIf(process.env.GRPC_RECORDER_ENABLED === "true" && process.env.CLINE_ENVIRONMENT === "local")
+				.enableIf(process.env.GRPC_RECORDER_ENABLED === "true" && process.env.AIHYDRO_ENVIRONMENT === "local")
 				.withLogFileHandler(new LogFileHandler())
 				.build(controller)
 		}

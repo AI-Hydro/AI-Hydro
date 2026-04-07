@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
-import type { ClineToolSpec } from "../spec"
+import { AiHydroDefaultTool } from "@/shared/tools"
+import type { AiHydroToolSpec } from "../spec"
 
 /**
  * ## plan_mode_respond
@@ -20,9 +20,9 @@ Checklist here (If you have presented the user with concrete steps or requiremen
 </plan_mode_respond>
  */
 
-const id = ClineDefaultTool.PLAN_MODE
+const id = AiHydroDefaultTool.PLAN_MODE
 
-const generic: ClineToolSpec = {
+const generic: AiHydroToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "plan_mode_respond",
@@ -49,7 +49,7 @@ However, if while writing your response you realize you actually need to do more
 			instruction:
 				" A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)",
 			usage: "Checklist here (If you have presented the user with concrete steps or requirements, you can optionally include a todo list outlining these steps.)",
-			dependencies: [ClineDefaultTool.TODO],
+			dependencies: [AiHydroDefaultTool.TODO],
 		},
 	],
 }

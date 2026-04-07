@@ -1,12 +1,12 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { ApiHandler } from "@core/api"
-import { ClineApiReqInfo, ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroApiReqInfo, AiHydroMessage } from "@shared/ExtensionMessage"
 import { getContextWindowInfo } from "./context-window-utils"
 
 class ContextManager {
 	getNewContextMessagesAndMetadata(
 		apiConversationHistory: Anthropic.Messages.MessageParam[],
-		clineMessages: ClineMessage[],
+		aihydroMessages: AiHydroMessage[],
 		api: ApiHandler,
 		conversationHistoryDeletedRange: [number, number] | undefined,
 		previousApiReqIndex: number,
@@ -15,9 +15,9 @@ class ContextManager {
 
 		// If the previous API request's total token usage is close to the context window, truncate the conversation history to free up space for the new request
 		if (previousApiReqIndex >= 0) {
-			const previousRequest = clineMessages[previousApiReqIndex]
+			const previousRequest = aihydroMessages[previousApiReqIndex]
 			if (previousRequest && previousRequest.text) {
-				const { tokensIn, tokensOut, cacheWrites, cacheReads }: ClineApiReqInfo = JSON.parse(previousRequest.text)
+				const { tokensIn, tokensOut, cacheWrites, cacheReads }: AiHydroApiReqInfo = JSON.parse(previousRequest.text)
 				const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 				const { maxAllowedSize } = getContextWindowInfo(api)
 

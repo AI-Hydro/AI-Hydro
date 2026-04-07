@@ -1,13 +1,13 @@
 import { AuthState, UserInfo } from "@shared/proto/cline/account"
 import { type EmptyRequest, String } from "@shared/proto/cline/common"
-import { ClineEnv } from "@/config"
+import { AiHydroEnv } from "@/config"
 import { Controller } from "@/core/controller"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { HostProvider } from "@/hosts/host-provider"
 import { telemetryService } from "@/services/telemetry"
 import { openExternal } from "@/utils/env"
 import { featureFlagsService } from "../feature-flags"
-import { ClineAuthProvider } from "./providers/ClineAuthProvider"
+import { AiHydroAuthProvider } from "./providers/AiHydroAuthProvider"
 import { FirebaseAuthProvider } from "./providers/FirebaseAuthProvider"
 import { IAuthProvider } from "./providers/IAuthProvider"
 import { LogoutReason } from "./types"
@@ -17,7 +17,7 @@ export type ServiceConfig = {
 	[key: string]: any
 }
 
-export interface ClineAuthInfo {
+export interface AiHydroAuthInfo {
 	/**
 	 * accessToken
 	 */
@@ -31,18 +31,18 @@ export interface ClineAuthInfo {
 	 * When expired, the access token needs to be refreshed using the refresh token.
 	 */
 	expiresAt?: number
-	userInfo: ClineAccountUserInfo
+	userInfo: AiHydroAccountUserInfo
 	provider: string
 }
 
-export interface ClineAccountUserInfo {
+export interface AiHydroAccountUserInfo {
 	createdAt: string
 	displayName: string
 	email: string
 	id: string
-	organizations: ClineAccountOrganization[]
+	organizations: AiHydroAccountOrganization[]
 	/**
-	 * Cline app base URL, used for webview UI and other client-side operations
+	 * AI-Hydro app base URL, used for webview UI and other client-side operations
 	 */
 	appBaseUrl?: string
 	/**
@@ -51,7 +51,7 @@ export interface ClineAccountUserInfo {
 	subject?: string
 }
 
-export interface ClineAccountOrganization {
+export interface AiHydroAccountOrganization {
 	active: boolean
 	memberId: string
 	name: string
@@ -62,7 +62,7 @@ export interface ClineAccountOrganization {
 export class AuthService {
 	protected static instance: AuthService | null = null
 	protected _authenticated: boolean = false
-	protected _clineAuthInfo: ClineAuthInfo | null = null
+	protected _aihydroAuthInfo: AiHydroAuthInfo | null = null
 	protected _provider: IAuthProvider | null = null
 	protected _fallbackProvider: IAuthProvider | null = null
 	protected _activeAuthStatusUpdateHandlers = new Set<StreamingResponseHandler<AuthState>>()
@@ -133,10 +133,10 @@ export class AuthService {
 	 * @returns The active organization ID, or null if no active organization exists
 	 */
 	getActiveOrganizationId(): string | null {
-		if (!this._clineAuthInfo?.userInfo?.organizations) {
+		if (!this._aihydroAuthInfo?.userInfo?.organizations) {
 			return null
 		}
-		const activeOrg = this._clineAuthInfo.userInfo.organizations.find((org) => org.active)
+		const activeOrg = this._aihydroAuthInfo.userInfo.organizations.find((org) => org.active)
 		return activeOrg?.organizationId ?? null
 	}
 
@@ -144,27 +144,27 @@ export class AuthService {
 	 * Gets all organizations from the authenticated user's info
 	 * @returns Array of organizations, or undefined if not available
 	 */
-	getUserOrganizations(): ClineAccountOrganization[] | undefined {
-		return this._clineAuthInfo?.userInfo?.organizations
+	getUserOrganizations(): AiHydroAccountOrganization[] | undefined {
+		return this._aihydroAuthInfo?.userInfo?.organizations
 	}
 
 	private async internalGetAuthToken(provider: IAuthProvider): Promise<string | null> {
 		try {
-			let clineAccountAuthToken = this._clineAuthInfo?.idToken
-			if (!this._clineAuthInfo || !clineAccountAuthToken || this._clineAuthInfo.provider !== provider.name) {
+			let aihydroAccountAuthToken = this._aihydroAuthInfo?.idToken
+			if (!this._aihydroAuthInfo || !aihydroAccountAuthToken || this._aihydroAuthInfo.provider !== provider.name) {
 				// Not authenticated
 				return null
 			}
 
 			// Check if token has expired
-			if (await provider.shouldRefreshIdToken(clineAccountAuthToken, this._clineAuthInfo.expiresAt)) {
-				const updatedAuthInfo = await provider.retrieveClineAuthInfo(this._controller)
+			if (await provider.shouldRefreshIdToken(aihydroAccountAuthToken, this._aihydroAuthInfo.expiresAt)) {
+				const updatedAuthInfo = await provider.retrieveAiHydroAuthInfo(this._controller)
 				if (updatedAuthInfo) {
-					this._clineAuthInfo = updatedAuthInfo
+					this._aihydroAuthInfo = updatedAuthInfo
 					this._authenticated = true
-					clineAccountAuthToken = updatedAuthInfo.idToken
+					aihydroAccountAuthToken = updatedAuthInfo.idToken
 				} else if (this.shouldClearAuthInfo(provider)) {
-					this._clineAuthInfo = null
+					this._aihydroAuthInfo = null
 					this._authenticated = false
 					telemetryService.captureAuthLoggedOut(this._provider?.name, LogoutReason.ERROR_RECOVERY)
 				}
@@ -173,7 +173,7 @@ export class AuthService {
 
 			// IMPORTANT: Prefix with 'workos:' so backend can route verification to WorkOS provider
 			const prefix = provider.name === "cline" ? "workos:" : ""
-			return clineAccountAuthToken ? `${prefix}${clineAccountAuthToken}` : null
+			return aihydroAccountAuthToken ? `${prefix}${aihydroAccountAuthToken}` : null
 		} catch (error) {
 			console.error("Error getting auth token:", error)
 			return null
@@ -181,15 +181,15 @@ export class AuthService {
 	}
 
 	private shouldClearAuthInfo(provider: IAuthProvider) {
-		return this._clineAuthInfo?.provider === provider.name
+		return this._aihydroAuthInfo?.provider === provider.name
 	}
 
 	protected _setProvider(providerName: string): void {
-		// Only ClineAuthProvider is supported going forward
+		// Only AiHydroAuthProvider is supported going forward
 		// Keeping the providerName param for forward compatibility/telemetry
 		switch (providerName) {
 			case "cline":
-				this._provider = new ClineAuthProvider()
+				this._provider = new AiHydroAuthProvider()
 				this._fallbackProvider = new FirebaseAuthProvider()
 				break
 			case "firebase":
@@ -202,9 +202,9 @@ export class AuthService {
 	getInfo(): AuthState {
 		// TODO: this logic should be cleaner, but this will determine the authentication state for the webview -- if a user object is returned then the webview assumes authenticated, otherwise it assumes logged out (we previously returned a UserInfo object with empty fields, and this represented a broken logged in state)
 		let user: any = null
-		if (this._clineAuthInfo && this._authenticated) {
-			const userInfo = this._clineAuthInfo.userInfo
-			this._clineAuthInfo.userInfo.appBaseUrl = ClineEnv.config()?.appBaseUrl
+		if (this._aihydroAuthInfo && this._authenticated) {
+			const userInfo = this._aihydroAuthInfo.userInfo
+			this._aihydroAuthInfo.userInfo.appBaseUrl = AiHydroEnv.config()?.appBaseUrl
 
 			user = UserInfo.create({
 				// TODO: create proto for new user info type
@@ -251,7 +251,7 @@ export class AuthService {
 
 		try {
 			telemetryService.captureAuthLoggedOut(this._provider.name, reason)
-			this._clineAuthInfo = null
+			this._aihydroAuthInfo = null
 			this._authenticated = false
 			this._controller.stateManager.setSecret("clineAccountId", undefined)
 			this.sendAuthStatusUpdate()
@@ -267,8 +267,8 @@ export class AuthService {
 		}
 
 		try {
-			this._clineAuthInfo = await this._provider.signIn(this._controller, authorizationCode, provider)
-			this._authenticated = this._clineAuthInfo?.idToken !== undefined
+			this._aihydroAuthInfo = await this._provider.signIn(this._controller, authorizationCode, provider)
+			this._authenticated = this._aihydroAuthInfo?.idToken !== undefined
 
 			telemetryService.captureAuthSucceeded(this._provider.name)
 			await this.sendAuthStatusUpdate()
@@ -299,34 +299,34 @@ export class AuthService {
 		}
 
 		try {
-			this._clineAuthInfo = await this.retrieveAuthInfo()
-			if (this._clineAuthInfo) {
+			this._aihydroAuthInfo = await this.retrieveAuthInfo()
+			if (this._aihydroAuthInfo) {
 				this._authenticated = true
 				await this.sendAuthStatusUpdate()
 			} else {
 				console.warn("No user found after restoring auth token")
 				this._authenticated = false
-				this._clineAuthInfo = null
+				this._aihydroAuthInfo = null
 				telemetryService.captureAuthLoggedOut(this._provider?.name, LogoutReason.ERROR_RECOVERY)
 			}
 		} catch (error) {
 			console.error("Error restoring auth token:", error)
 			this._authenticated = false
-			this._clineAuthInfo = null
+			this._aihydroAuthInfo = null
 			telemetryService.captureAuthLoggedOut(this._provider?.name, LogoutReason.ERROR_RECOVERY)
 			return
 		}
 	}
 
-	private async retrieveAuthInfo(): Promise<ClineAuthInfo | null> {
+	private async retrieveAuthInfo(): Promise<AiHydroAuthInfo | null> {
 		if (!this._provider) {
 			throw new Error("Auth provider is not set")
 		}
 
-		const authInfo = await this._provider.retrieveClineAuthInfo(this._controller)
+		const authInfo = await this._provider.retrieveAiHydroAuthInfo(this._controller)
 
 		if (!authInfo && this._fallbackProvider) {
-			return this._fallbackProvider.retrieveClineAuthInfo(this._controller)
+			return this._fallbackProvider.retrieveAiHydroAuthInfo(this._controller)
 		}
 
 		return authInfo
@@ -399,8 +399,8 @@ export class AuthService {
 		await Promise.all(streamSends)
 
 		// Identify the user in telemetry if available
-		if (this._clineAuthInfo?.userInfo?.id) {
-			telemetryService.identifyAccount(this._clineAuthInfo.userInfo)
+		if (this._aihydroAuthInfo?.userInfo?.id) {
+			telemetryService.identifyAccount(this._aihydroAuthInfo.userInfo)
 			// Reset feature flags to ensure they are fetched for the new/logged in user
 			featureFlagsService.reset()
 		}

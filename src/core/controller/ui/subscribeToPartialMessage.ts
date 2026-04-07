@@ -1,10 +1,10 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
-import { ClineMessage } from "@shared/proto/cline/ui"
+import { ClineMessage as AiHydroMessage } from "@shared/proto/cline/ui"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
 import { Controller } from "../index"
 
 // Keep track of active partial message subscriptions
-const activePartialMessageSubscriptions = new Set<StreamingResponseHandler<ClineMessage>>()
+const activePartialMessageSubscriptions = new Set<StreamingResponseHandler<AiHydroMessage>>()
 
 /**
  * Subscribe to partial message events
@@ -16,7 +16,7 @@ const activePartialMessageSubscriptions = new Set<StreamingResponseHandler<Cline
 export async function subscribeToPartialMessage(
 	_controller: Controller,
 	_request: EmptyRequest,
-	responseStream: StreamingResponseHandler<ClineMessage>,
+	responseStream: StreamingResponseHandler<AiHydroMessage>,
 	requestId?: string,
 ): Promise<void> {
 	// Add this subscription to the active subscriptions
@@ -35,9 +35,9 @@ export async function subscribeToPartialMessage(
 
 /**
  * Send a partial message event to all active subscribers
- * @param partialMessage The ClineMessage to send
+ * @param partialMessage The AiHydroMessage to send
  */
-export async function sendPartialMessageEvent(partialMessage: ClineMessage): Promise<void> {
+export async function sendPartialMessageEvent(partialMessage: AiHydroMessage): Promise<void> {
 	// Send the event to all active subscribers
 	const promises = Array.from(activePartialMessageSubscriptions).map(async (responseStream) => {
 		try {

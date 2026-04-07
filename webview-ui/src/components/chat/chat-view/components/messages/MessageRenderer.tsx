@@ -1,4 +1,4 @@
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import React from "react"
 import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
 import ChatRow from "@/components/chat/ChatRow"
@@ -6,9 +6,9 @@ import { MessageHandlers } from "../../types/chatTypes"
 
 interface MessageRendererProps {
 	index: number
-	messageOrGroup: ClineMessage | ClineMessage[]
-	groupedMessages: (ClineMessage | ClineMessage[])[]
-	modifiedMessages: ClineMessage[]
+	messageOrGroup: AiHydroMessage | AiHydroMessage[]
+	groupedMessages: (AiHydroMessage | AiHydroMessage[])[]
+	modifiedMessages: AiHydroMessage[]
 	expandedRows: Record<number, boolean>
 	onToggleExpand: (ts: number) => void
 	onHeightChange: (isTaller: boolean) => void
@@ -78,8 +78,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
  * This allows us to encapsulate the rendering logic while maintaining performance
  */
 export const createMessageRenderer = (
-	groupedMessages: (ClineMessage | ClineMessage[])[],
-	modifiedMessages: ClineMessage[],
+	groupedMessages: (AiHydroMessage | AiHydroMessage[])[],
+	modifiedMessages: AiHydroMessage[],
 	expandedRows: Record<number, boolean>,
 	onToggleExpand: (ts: number) => void,
 	onHeightChange: (isTaller: boolean) => void,
@@ -87,7 +87,7 @@ export const createMessageRenderer = (
 	inputValue: string,
 	messageHandlers: MessageHandlers,
 ) => {
-	return (index: number, messageOrGroup: ClineMessage | ClineMessage[]) => (
+	return (index: number, messageOrGroup: AiHydroMessage | AiHydroMessage[]) => (
 		<MessageRenderer
 			expandedRows={expandedRows}
 			groupedMessages={groupedMessages}

@@ -2,16 +2,16 @@ import type { ToolUse } from "@core/assistant-message"
 import { continuationPrompt } from "@core/prompts/contextManagement"
 import { formatResponse } from "@core/prompts/responses"
 import { ensureTaskDirectoryExists } from "@core/storage/disk"
-import { ClineSayTool } from "@shared/ExtensionMessage"
+import { AiHydroSayTool } from "@shared/ExtensionMessage"
 import { telemetryService } from "@/services/telemetry"
-import { ClineDefaultTool } from "@/shared/tools"
+import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler {
-	readonly name = ClineDefaultTool.SUMMARIZE_TASK
+	readonly name = AiHydroDefaultTool.SUMMARIZE_TASK
 
 	constructor() {}
 
@@ -35,7 +35,7 @@ export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler 
 			const completeMessage = JSON.stringify({
 				tool: "summarizeTask",
 				content: context,
-			} satisfies ClineSayTool)
+			} satisfies AiHydroSayTool)
 
 			await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
 
@@ -53,7 +53,7 @@ export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler 
 				config.taskState.conversationHistoryDeletedRange,
 				keepStrategy,
 			)
-			await config.messageState.saveClineMessagesAndUpdateHistory()
+			await config.messageState.saveAiHydroMessagesAndUpdateHistory()
 			await config.services.contextManager.triggerApplyStandardContextTruncationNoticeChange(
 				Date.now(),
 				await ensureTaskDirectoryExists(config.taskId),
@@ -65,7 +65,7 @@ export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler 
 
 			// Capture telemetry after main business logic is complete
 			const telemetryData = config.services.contextManager.getContextTelemetryData(
-				config.messageState.getClineMessages(),
+				config.messageState.getAiHydroMessages(),
 				config.api,
 				config.taskState.lastAutoCompactTriggerIndex,
 			)
@@ -92,7 +92,7 @@ export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler 
 		const partialMessage = JSON.stringify({
 			tool: "summarizeTask",
 			content: uiHelpers.removeClosingTag(block, "context", context),
-		} satisfies ClineSayTool)
+		} satisfies AiHydroSayTool)
 
 		await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 	}

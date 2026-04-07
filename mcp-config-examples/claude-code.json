@@ -1,0 +1,13 @@
+{
+	"_comment": "Add this to ~/.claude/settings.json to use AI-Hydro tools natively in Claude Code",
+	"_setup": "Or run: python python/setup_mcp.py --ide claude-code",
+	"mcpServers": {
+		"ai-hydro": {
+			"command": "python",
+			"args": [
+				"/ABSOLUTE/PATH/TO/AI-Hydro/python/mcp_server.py"
+			],
+			"_note": "Replace /ABSOLUTE/PATH/TO/ with your actual path. Install deps first: pip install 'ai-hydro[all]'"
+		}
+	}
+}

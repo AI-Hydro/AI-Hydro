@@ -3,7 +3,7 @@ import type { BrowserSettings } from "@shared/BrowserSettings"
 import { ShowMessageType } from "@shared/proto/host/window"
 import type { TaskFeedbackType } from "@shared/WebviewMessage"
 import * as os from "os"
-import { ClineAccountUserInfo } from "@/services/auth/AuthService"
+import { AiHydroAccountUserInfo } from "@/services/auth/AuthService"
 import { Setting } from "@/shared/proto/index.host"
 import { Mode } from "@/shared/storage/types"
 import { version as extensionVersion } from "../../../package.json"
@@ -46,7 +46,7 @@ export enum TerminalHangStage {
 }
 
 export type TelemetryMetadata = {
-	/** The extension or cline-core version. */
+	/** The extension or aihydro-core version. */
 	extension_version: string
 	/** The name of the host IDE or environment e.g. VSCode */
 	platform: string
@@ -67,7 +67,7 @@ export type TelemetryMetadata = {
 const MAX_ERROR_MESSAGE_LENGTH = 500
 
 /**
- * TelemetryService handles telemetry event tracking for the Cline extension
+ * TelemetryService handles telemetry event tracking for the AI-Hydro extension
  * Uses an abstracted telemetry provider to support multiple analytics backends
  * Respects user privacy settings and VSCode's global telemetry configuration
  */
@@ -179,7 +179,7 @@ export class TelemetryService {
 			AUTO_COMPACT: "task.summarize_task",
 			// Tracks when slash commands or workflows are activated
 			SLASH_COMMAND_USED: "task.slash_command_used",
-			// Tracks when individual Cline rules are toggled on/off
+			// Tracks when individual AI-Hydro rules are toggled on/off
 			RULE_TOGGLED: "task.rule_toggled",
 			// Tracks when auto condense setting is toggled on/off
 			AUTO_CONDENSE_TOGGLED: "task.auto_condense_toggled",
@@ -254,13 +254,13 @@ export class TelemetryService {
 		// We only enable telemetry if global host telemetry is enabled
 		const hostSetting = await HostProvider.env.getTelemetrySettings({})
 		if (hostSetting.isEnabled === Setting.DISABLED) {
-			// Only show warning if user has opted in to Cline telemetry but host telemetry is disabled
+			// Only show warning if user has opted in to AI-Hydro telemetry but host telemetry is disabled
 			if (didUserOptIn) {
 				void HostProvider.window
 					.showMessage({
 						type: ShowMessageType.WARNING,
 						message:
-							"Anonymous Cline error and usage reporting is enabled, but IDE telemetry is disabled. To enable error and usage reporting for this extension, enable telemetry in IDE settings.",
+							"Anonymous AI-Hydro error and usage reporting is enabled, but IDE telemetry is disabled. To enable error and usage reporting for this extension, enable telemetry in IDE settings.",
 						options: {
 							items: ["Open Settings"],
 						},
@@ -388,7 +388,7 @@ export class TelemetryService {
 	 * Identifies the accounts user
 	 * @param userInfo The user's information
 	 */
-	public identifyAccount(userInfo: ClineAccountUserInfo) {
+	public identifyAccount(userInfo: AiHydroAccountUserInfo) {
 		const propertiesWithMetadata: TelemetryProperties = {
 			...this.telemetryMetadata,
 		}
@@ -554,7 +554,7 @@ export class TelemetryService {
 	}
 
 	/**
-	 * Records when cline calls the task completion_result tool signifying that cline is done with the task
+	 * Records when AI-Hydro calls the task completion_result tool signifying that AI-Hydro is done with the task
 	 * @param ulid Unique identifier for the task
 	 */
 	public captureTaskCompleted(ulid: string) {
@@ -1153,13 +1153,13 @@ export class TelemetryService {
 	}
 
 	/**
-	 * Records when individual Cline rules are toggled on/off
+	 * Records when individual AI-Hydro rules are toggled on/off
 	 * @param ulid Unique identifier for the task (to track rule changes within task context)
 	 * @param ruleFileName The filename of the rule (sanitized to exclude full path)
 	 * @param enabled Whether the rule is being enabled (true) or disabled (false)
 	 * @param isGlobal Whether this is a global rule or workspace-specific rule
 	 */
-	public captureClineRuleToggled(ulid: string, ruleFileName: string, enabled: boolean, isGlobal: boolean) {
+	public captureAiHydroRuleToggled(ulid: string, ruleFileName: string, enabled: boolean, isGlobal: boolean) {
 		// Sanitize filename to remove any path information for privacy
 		const sanitizedFileName = ruleFileName.split("/").pop() || ruleFileName.split("\\").pop() || ruleFileName
 

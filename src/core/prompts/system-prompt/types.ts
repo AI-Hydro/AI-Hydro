@@ -7,8 +7,8 @@ import type { McpHub } from "@/services/mcp/McpHub"
 import type { BrowserSettings } from "@/shared/BrowserSettings"
 import type { FocusChainSettings } from "@/shared/FocusChainSettings"
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
-import type { ClineToolSpec } from "./spec"
+import { AiHydroDefaultTool } from "@/shared/tools"
+import type { AiHydroToolSpec } from "./spec"
 import { SystemPromptSection } from "./templates/placeholders"
 
 /**
@@ -39,8 +39,8 @@ export interface PromptVariant {
 	readonly placeholders: Readonly<Record<string, string>> // Default placeholder values
 
 	// Tool configuration
-	readonly tools?: readonly ClineDefaultTool[] // Ordered list of tools to include
-	readonly toolOverrides?: Readonly<Partial<Record<ClineDefaultTool, ConfigOverride>>> // Tool customizations
+	readonly tools?: readonly AiHydroDefaultTool[] // Ordered list of tools to include
+	readonly toolOverrides?: Readonly<Partial<Record<AiHydroDefaultTool, ConfigOverride>>> // Tool customizations
 }
 
 /**
@@ -58,8 +58,8 @@ export interface MutablePromptVariant {
 	componentOrder: SystemPromptSection[]
 	componentOverrides: Partial<Record<SystemPromptSection, ConfigOverride>>
 	placeholders: Record<string, string>
-	tools?: ClineDefaultTool[]
-	toolOverrides?: Partial<Record<ClineDefaultTool, ConfigOverride>>
+	tools?: AiHydroDefaultTool[]
+	toolOverrides?: Partial<Record<AiHydroDefaultTool, ConfigOverride>>
 }
 
 /**
@@ -69,7 +69,7 @@ export interface PromptConfig {
 	readonly modelName?: string
 	readonly temperature?: number
 	readonly maxTokens?: number
-	readonly tools?: readonly ClineToolSpec[]
+	readonly tools?: readonly AiHydroToolSpec[]
 	readonly [key: string]: unknown // Additional arbitrary config
 }
 
@@ -95,12 +95,12 @@ export interface SystemPromptContext {
 	readonly supportsBrowserUse?: boolean
 	readonly mcpHub?: McpHub
 	readonly focusChainSettings?: FocusChainSettings
-	readonly globalClineRulesFileInstructions?: string
-	readonly localClineRulesFileInstructions?: string
+	readonly globalAiHydroRulesFileInstructions?: string
+	readonly localAiHydroRulesFileInstructions?: string
 	readonly localCursorRulesFileInstructions?: string
 	readonly localCursorRulesDirInstructions?: string
 	readonly localWindsurfRulesFileInstructions?: string
-	readonly clineIgnoreInstructions?: string
+	readonly aihydroIgnoreInstructions?: string
 	readonly preferredLanguageInstructions?: string
 	readonly browserSettings?: BrowserSettings
 	readonly isTesting?: boolean
@@ -138,8 +138,8 @@ export type ComponentKey = keyof typeof SystemPromptSection
 export type ComponentValue = (typeof SystemPromptSection)[ComponentKey]
 
 // Extract tool keys as literal types
-export type ToolKey = keyof typeof ClineDefaultTool
-export type ToolValue = (typeof ClineDefaultTool)[ToolKey]
+export type ToolKey = keyof typeof AiHydroDefaultTool
+export type ToolValue = (typeof AiHydroDefaultTool)[ToolKey]
 
 // Type for variant builder methods
 export type VariantBuilderMethod<T> = (this: T, ...args: any[]) => T
@@ -153,8 +153,8 @@ export function isValidSystemPromptSection(section: string): section is SystemPr
 	return Object.values(SystemPromptSection).includes(section as SystemPromptSection)
 }
 
-export function isValidClineDefaultTool(tool: string): tool is ClineDefaultTool {
-	return Object.values(ClineDefaultTool).includes(tool as ClineDefaultTool)
+export function isValidAiHydroDefaultTool(tool: string): tool is AiHydroDefaultTool {
+	return Object.values(AiHydroDefaultTool).includes(tool as AiHydroDefaultTool)
 }
 
 /**
@@ -185,8 +185,8 @@ export interface VariantBuilder {
 	template(baseTemplate: string): this
 	components(...sections: SystemPromptSection[]): this
 	overrideComponent(section: SystemPromptSection, override: ConfigOverride): this
-	tools(...tools: ClineDefaultTool[]): this
-	overrideTool(tool: ClineDefaultTool, override: ConfigOverride): this
+	tools(...tools: AiHydroDefaultTool[]): this
+	overrideTool(tool: AiHydroDefaultTool, override: ConfigOverride): this
 	placeholders(placeholders: Record<string, string>): this
 	config(config: Record<string, any>): this
 	build(): VariantConfig
@@ -254,5 +254,5 @@ export const TASK_PROGRESS_PARAMETER = {
 	required: false,
 	instruction: `A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)`,
 	usage: "Checklist here (optional)",
-	dependencies: [ClineDefaultTool.TODO],
+	dependencies: [AiHydroDefaultTool.TODO],
 }

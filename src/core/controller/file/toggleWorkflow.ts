@@ -1,4 +1,4 @@
-import { ClineRulesToggles, ToggleWorkflowRequest } from "@shared/proto/cline/file"
+import { ClineRulesToggles as AiHydroRulesToggles, ToggleWorkflowRequest } from "@shared/proto/cline/file"
 import { Controller } from ".."
 
 /**
@@ -7,7 +7,7 @@ import { Controller } from ".."
  * @param request The request containing the workflow path and enabled state
  * @returns The updated workflow toggles
  */
-export async function toggleWorkflow(controller: Controller, request: ToggleWorkflowRequest): Promise<ClineRulesToggles> {
+export async function toggleWorkflow(controller: Controller, request: ToggleWorkflowRequest): Promise<AiHydroRulesToggles> {
 	const { workflowPath, enabled, isGlobal } = request
 
 	if (!workflowPath || typeof enabled !== "boolean") {
@@ -27,7 +27,7 @@ export async function toggleWorkflow(controller: Controller, request: ToggleWork
 		await controller.postStateToWebview()
 
 		// Return the global toggles
-		return ClineRulesToggles.create({ toggles: toggles })
+		return AiHydroRulesToggles.create({ toggles: toggles })
 	} else {
 		// Workspace workflows
 		const toggles = controller.stateManager.getWorkspaceStateKey("workflowToggles")
@@ -36,6 +36,6 @@ export async function toggleWorkflow(controller: Controller, request: ToggleWork
 		await controller.postStateToWebview()
 
 		// Return the workspace toggles
-		return ClineRulesToggles.create({ toggles: toggles })
+		return AiHydroRulesToggles.create({ toggles: toggles })
 	}
 }

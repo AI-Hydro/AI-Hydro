@@ -1,17 +1,17 @@
 import type { ApiHandler } from "@core/api"
 import type { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
-import type { ClineIgnoreController } from "@core/ignore/ClineIgnoreController"
+import type { AiHydroIgnoreController } from "@core/ignore/AiHydroIgnoreController"
 import type { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
 import type { BrowserSession } from "@services/browser/BrowserSession"
 import type { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import type { McpHub } from "@services/mcp/McpHub"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { BrowserSettings } from "@shared/BrowserSettings"
-import type { ClineAsk, ClineSay } from "@shared/ExtensionMessage"
+import type { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
 import type { FocusChainSettings } from "@shared/FocusChainSettings"
 import type { Mode } from "@shared/storage/types"
-import type { ClineDefaultTool } from "@shared/tools"
-import type { ClineAskResponse } from "@shared/WebviewMessage"
+import type { AiHydroDefaultTool } from "@shared/tools"
+import type { AiHydroAskResponse } from "@shared/WebviewMessage"
 import * as vscode from "vscode"
 import { WorkspaceRootManager } from "@/core/workspace"
 import type { ContextManager } from "../../../context/context-management/ContextManager"
@@ -69,7 +69,7 @@ export interface TaskServices {
 	urlContentFetcher: UrlContentFetcher
 	diffViewProvider: DiffViewProvider
 	fileContextTracker: FileContextTracker
-	clineIgnoreController: ClineIgnoreController
+	aihydroIgnoreController: AiHydroIgnoreController
 	contextManager: ContextManager
 	stateManager: StateManager
 }
@@ -78,14 +78,14 @@ export interface TaskServices {
  * All callback functions available to tool handlers
  */
 export interface TaskCallbacks {
-	say: (type: ClineSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
+	say: (type: AiHydroSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
 
 	ask: (
-		type: ClineAsk,
+		type: AiHydroAsk,
 		text?: string,
 		partial?: boolean,
 	) => Promise<{
-		response: ClineAskResponse
+		response: AiHydroAskResponse
 		text?: string
 		images?: string[]
 		files?: string[]
@@ -93,9 +93,9 @@ export interface TaskCallbacks {
 
 	saveCheckpoint: (isAttemptCompletionMessage?: boolean, completionMessageTs?: number) => Promise<void>
 
-	sayAndCreateMissingParamError: (toolName: ClineDefaultTool, paramName: string, relPath?: string) => Promise<any>
+	sayAndCreateMissingParamError: (toolName: AiHydroDefaultTool, paramName: string, relPath?: string) => Promise<any>
 
-	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: ClineAsk | ClineSay) => Promise<void>
+	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: AiHydroAsk | AiHydroSay) => Promise<void>
 
 	executeCommandTool: (command: string, timeoutSeconds: number | undefined) => Promise<[boolean, any]>
 
@@ -103,8 +103,8 @@ export interface TaskCallbacks {
 
 	updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>
 
-	shouldAutoApproveTool: (toolName: ClineDefaultTool) => boolean | [boolean, boolean]
-	shouldAutoApproveToolWithPath: (toolName: ClineDefaultTool, path?: string) => Promise<boolean>
+	shouldAutoApproveTool: (toolName: AiHydroDefaultTool) => boolean | [boolean, boolean]
+	shouldAutoApproveToolWithPath: (toolName: AiHydroDefaultTool, path?: string) => Promise<boolean>
 
 	// Additional callbacks for task management
 	postStateToWebview: () => Promise<void>

@@ -4,13 +4,14 @@
 import assert from "node:assert"
 import { DIFF_VIEW_URI_SCHEME } from "@hosts/vscode/VscodeDiffViewProvider"
 import * as vscode from "vscode"
-import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
+import { loadGeojsonCommand } from "./core/controller/map/loadGeojsonCommand"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
 import { sendHistoryButtonClickedEvent } from "./core/controller/ui/subscribeToHistoryButtonClicked"
 import { sendMcpButtonClickedEvent } from "./core/controller/ui/subscribeToMcpButtonClicked"
 import { sendSettingsButtonClickedEvent } from "./core/controller/ui/subscribeToSettingsButtonClicked"
 import { WebviewProvider } from "./core/webview"
-import { createClineAPI } from "./exports"
+import { createAiHydroAPI } from "./exports"
+import { VscodeMapPanelProvider } from "./hosts/vscode/VscodeMapPanelProvider"
 import { Logger } from "./services/logging/Logger"
 import { cleanupTestMode, initializeTestMode } from "./services/test/TestMode"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
@@ -21,10 +22,10 @@ import { HostProvider } from "@/hosts/host-provider"
 import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-grpc-client"
 import { readTextFromClipboard, writeTextToClipboard } from "@/utils/env"
 import { initialize, tearDown } from "./common"
-import { addToCline } from "./core/controller/commands/addToCline"
-import { explainWithCline } from "./core/controller/commands/explainWithCline"
-import { fixWithCline } from "./core/controller/commands/fixWithCline"
-import { improveWithCline } from "./core/controller/commands/improveWithCline"
+import { addToAiHydro } from "./core/controller/commands/addToAiHydro"
+import { explainWithAiHydro } from "./core/controller/commands/explainWithAiHydro"
+import { fixWithAiHydro } from "./core/controller/commands/fixWithAiHydro"
+import { improveWithAiHydro } from "./core/controller/commands/improveWithAiHydro"
 import { sendAddToInputEvent } from "./core/controller/ui/subscribeToAddToInput"
 import { sendFocusChatInputEvent } from "./core/controller/ui/subscribeToFocusChatInput"
 import { workspaceResolver } from "./core/workspace"
@@ -55,13 +56,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const webview = (await initialize(context)) as VscodeWebviewProvider
 
-	Logger.log("Cline extension activated")
+	Logger.log("AI-Hydro extension activated")
 
 	const testModeWatchers = await initializeTestMode(webview)
 	// Initialize test mode and add disposables to context
 	context.subscriptions.push(...testModeWatchers)
 
-	vscode.commands.executeCommand("setContext", "cline.isDevMode", IS_DEV && IS_DEV === "true")
+	vscode.commands.executeCommand("setContext", "aihydro.isDevMode", IS_DEV && IS_DEV === "true")
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(VscodeWebviewProvider.SIDEBAR_ID, webview, {
@@ -73,7 +74,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.PlusButton, async () => {
-			console.log("[DEBUG] plusButtonClicked")
+			console.log("[DEBUG] aihydro.plusButtonClicked")
 
 			const sidebarInstance = WebviewProvider.getInstance()
 			await sidebarInstance.controller.clearTask()
@@ -101,10 +102,26 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	)
 
+	// Initialize map panel provider with controller
+	VscodeMapPanelProvider.initialize(context, webview.controller)
+
 	context.subscriptions.push(
-		vscode.commands.registerCommand(commands.AccountButton, () => {
-			// Send event to all subscribers using the gRPC streaming method
-			sendAccountButtonClickedEvent()
+		vscode.commands.registerCommand(commands.MapButton, async () => {
+			console.log("[DEBUG] aihydro.mapButtonClicked - opening side-by-side map panel")
+
+			// Open map in a separate side-by-side panel instead of replacing the chat view
+			await VscodeMapPanelProvider.createOrShow()
+
+			// Auto-load workspace GeoJSON files as hidden layers
+			await webview.controller.loadWorkspaceGeoJsonLayers()
+		}),
+	)
+
+	// Register the Load GeoJSON to Map command
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.LoadGeojsonToMap, async () => {
+			const sidebarInstance = WebviewProvider.getInstance()
+			await loadGeojsonCommand(sidebarInstance.controller)
 		}),
 	)
 
@@ -144,7 +161,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			.then((module) => {
 				const devTaskCommands = module.registerTaskCommands(webview.controller)
 				context.subscriptions.push(...devTaskCommands)
-				Logger.log("Cline dev task commands registered")
+				Logger.log("AI-Hydro dev task commands registered")
 			})
 			.catch((error) => {
 				Logger.log("Failed to register dev task commands: " + error)
@@ -180,7 +197,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 				await sendAddToInputEvent(`Terminal output:\n\`\`\`\n${terminalContents}\n\`\`\``)
 
-				console.log("addSelectedTerminalOutputToChat", terminalContents, terminal.name)
+				console.log("addSelectedTerminalOutputToAIHydro", terminalContents, terminal.name)
 			} catch (error) {
 				// Ensure clipboard is restored even if an error occurs
 				await writeTextToClipboard(tempCopyBuffer)
@@ -240,40 +257,40 @@ export async function activate(context: vscode.ExtensionContext) {
 						)
 					}
 
-					// Add to Cline (Always available)
-					const addAction = new vscode.CodeAction("Add to Cline", vscode.CodeActionKind.QuickFix)
+					// Add to AI-Hydro (Always available)
+					const addAction = new vscode.CodeAction("Add to AI-Hydro", vscode.CodeActionKind.QuickFix)
 					addAction.command = {
 						command: commands.AddToChat,
-						title: "Add to Cline",
+						title: "Add to AI-Hydro",
 						arguments: [expandedRange, context.diagnostics],
 					}
 					actions.push(addAction)
 
-					// Explain with Cline (Always available)
-					const explainAction = new vscode.CodeAction("Explain with Cline", vscode.CodeActionKind.RefactorExtract) // Using a refactor kind
+					// Explain with AI-Hydro (Always available)
+					const explainAction = new vscode.CodeAction("Explain with AI-Hydro", vscode.CodeActionKind.RefactorExtract) // Using a refactor kind
 					explainAction.command = {
 						command: commands.ExplainCode,
-						title: "Explain with Cline",
+						title: "Explain with AI-Hydro",
 						arguments: [expandedRange],
 					}
 					actions.push(explainAction)
 
-					// Improve with Cline (Always available)
-					const improveAction = new vscode.CodeAction("Improve with Cline", vscode.CodeActionKind.RefactorRewrite) // Using a refactor kind
+					// Improve with AI-Hydro (Always available)
+					const improveAction = new vscode.CodeAction("Improve with AI-Hydro", vscode.CodeActionKind.RefactorRewrite) // Using a refactor kind
 					improveAction.command = {
 						command: commands.ImproveCode,
-						title: "Improve with Cline",
+						title: "Improve with AI-Hydro",
 						arguments: [expandedRange],
 					}
 					actions.push(improveAction)
 
-					// Fix with Cline (Only if diagnostics exist)
+					// Fix with AI-Hydro (Only if diagnostics exist)
 					if (context.diagnostics.length > 0) {
-						const fixAction = new vscode.CodeAction("Fix with Cline", vscode.CodeActionKind.QuickFix)
+						const fixAction = new vscode.CodeAction("Fix with AI-Hydro", vscode.CodeActionKind.QuickFix)
 						fixAction.isPreferred = true
 						fixAction.command = {
-							command: commands.FixWithCline,
-							title: "Fix with Cline",
+							command: commands.FixWithAiHydro,
+							title: "Fix with AI-Hydro",
 							arguments: [expandedRange, context.diagnostics],
 						}
 						actions.push(fixAction)
@@ -298,17 +315,20 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (!context) {
 				return
 			}
-			await addToCline(context.controller, context.commandContext)
+			await addToAiHydro(context.controller, context.commandContext)
 		}),
 	)
 	context.subscriptions.push(
-		vscode.commands.registerCommand(commands.FixWithCline, async (range: vscode.Range, diagnostics: vscode.Diagnostic[]) => {
-			const context = await getContextForCommand(range, diagnostics)
-			if (!context) {
-				return
-			}
-			await fixWithCline(context.controller, context.commandContext)
-		}),
+		vscode.commands.registerCommand(
+			commands.FixWithAiHydro,
+			async (range: vscode.Range, diagnostics: vscode.Diagnostic[]) => {
+				const context = await getContextForCommand(range, diagnostics)
+				if (!context) {
+					return
+				}
+				await fixWithAiHydro(context.controller, context.commandContext)
+			},
+		),
 	)
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.ExplainCode, async (range: vscode.Range) => {
@@ -316,7 +336,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (!context) {
 				return
 			}
-			await explainWithCline(context.controller, context.commandContext)
+			await explainWithAiHydro(context.controller, context.commandContext)
 		}),
 	)
 	context.subscriptions.push(
@@ -325,7 +345,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (!context) {
 				return
 			}
-			await improveWithCline(context.controller, context.commandContext)
+			await improveWithAiHydro(context.controller, context.commandContext)
 		}),
 	)
 
@@ -342,15 +362,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
 			// Send focus event
 			sendFocusChatInputEvent()
-			telemetryService.captureButtonClick("command_focusChatInput", webview.controller?.task?.ulid)
+			telemetryService.captureButtonClick("aihydro_focusChatInput", webview.controller?.task?.ulid)
 		}),
 	)
 
 	// Register the openWalkthrough command handler
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.Walkthrough, async () => {
-			await vscode.commands.executeCommand("workbench.action.openWalkthrough", `${context.extension.id}#ClineWalkthrough`)
-			telemetryService.captureButtonClick("command_openWalkthrough")
+			await vscode.commands.executeCommand("workbench.action.openWalkthrough", `${context.extension.id}#AIHydroWalkthrough`)
+			telemetryService.captureButtonClick("aihydro_openWalkthrough")
 		}),
 	)
 
@@ -359,7 +379,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand(commands.ReconstructTaskHistory, async () => {
 			const { reconstructTaskHistory } = await import("./core/commands/reconstructTaskHistory")
 			await reconstructTaskHistory()
-			telemetryService.captureButtonClick("command_reconstructTaskHistory")
+			telemetryService.captureButtonClick("aihydro_reconstructTaskHistory")
 		}),
 	)
 
@@ -375,7 +395,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		context.secrets.onDidChange(async (event) => {
-			if (event.key === "clineAccountId" || event.key === "cline:clineAccountId") {
+			if (event.key === "aihydroAccountId" || event.key === "aihydro:aihydroAccountId") {
 				// Check if the secret was removed (logout) or added/updated (login)
 				const secretValue = await context.secrets.get(event.key)
 				const activeWebview = WebviewProvider.getVisibleInstance()
@@ -393,15 +413,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	)
 
-	return createClineAPI(webview.controller)
+	return createAiHydroAPI(webview.controller) // AI-Hydro API
 }
 
 function setupHostProvider(context: ExtensionContext) {
-	console.log("Setting up vscode host providers...")
+	console.log("Setting up AI-Hydro vscode host providers...")
 
 	const createWebview = () => new VscodeWebviewProvider(context)
 	const createDiffView = () => new VscodeDiffViewProvider()
-	const outputChannel = vscode.window.createOutputChannel("Cline")
+	const outputChannel = vscode.window.createOutputChannel("AI-Hydro")
 	context.subscriptions.push(outputChannel)
 
 	const getCallbackUrl = async () => `${vscode.env.uriScheme || "vscode"}://${context.extension.id}`
@@ -420,14 +440,14 @@ function setupHostProvider(context: ExtensionContext) {
 async function getBinaryLocation(name: string): Promise<string> {
 	// The only binary currently supported is the rg binary from the VSCode installation.
 	if (!name.startsWith("rg")) {
-		throw new Error(`Binary '${name}' is not supported`)
+		throw new Error(`AI-Hydro: Binary '${name}' is not supported`)
 	}
 
 	const checkPath = async (pkgFolder: string) => {
 		const fullPathResult = workspaceResolver.resolveWorkspacePath(
 			vscode.env.appRoot,
 			path.join(pkgFolder, name),
-			"Services.ripgrep.getBinPath",
+			"AI-Hydro.ripgrep.getBinPath",
 		)
 		const fullPath = typeof fullPathResult === "string" ? fullPathResult : fullPathResult.absolutePath
 		return (await fileExistsAtPath(fullPath)) ? fullPath : undefined
@@ -439,7 +459,7 @@ async function getBinaryLocation(name: string): Promise<string> {
 		(await checkPath("node_modules.asar.unpacked/vscode-ripgrep/bin/")) ||
 		(await checkPath("node_modules.asar.unpacked/@vscode/ripgrep/bin/"))
 	if (!binPath) {
-		throw new Error("Could not find ripgrep binary")
+		throw new Error("AI-Hydro: Could not find ripgrep binary")
 	}
 	return binPath
 }
@@ -451,7 +471,7 @@ export async function deactivate() {
 	// Clean up test mode
 	cleanupTestMode()
 
-	Logger.log("Cline extension deactivated")
+	Logger.log("AI-Hydro extension deactivated")
 }
 
 // TODO: Find a solution for automatically removing DEV related content from production builds.

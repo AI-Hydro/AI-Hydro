@@ -1,4 +1,4 @@
-import { ClineIgnoreController } from "@core/ignore/ClineIgnoreController"
+import { AiHydroIgnoreController } from "@core/ignore/AiHydroIgnoreController"
 import * as childProcess from "child_process"
 import * as path from "path"
 import * as readline from "readline"
@@ -103,7 +103,7 @@ export async function regexSearchFiles(
 	directoryPath: string,
 	regex: string,
 	filePattern?: string,
-	clineIgnoreController?: ClineIgnoreController,
+	aihydroIgnoreController?: AiHydroIgnoreController,
 ): Promise<string> {
 	const args = ["--json", "-e", regex, "--glob", filePattern || "*", "--context", "1", directoryPath]
 
@@ -149,9 +149,9 @@ export async function regexSearchFiles(
 		results.push(currentResult as SearchResult)
 	}
 
-	// Filter results using ClineIgnoreController if provided
-	const filteredResults = clineIgnoreController
-		? results.filter((result) => clineIgnoreController.validateAccess(result.filePath))
+	// Filter results using AiHydroIgnoreController if provided
+	const filteredResults = aihydroIgnoreController
+		? results.filter((result) => aihydroIgnoreController.validateAccess(result.filePath))
 		: results
 
 	return formatResults(filteredResults, cwd)

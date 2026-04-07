@@ -6,7 +6,7 @@ import { ShowMessageType } from "@/shared/proto/host/window"
 import { Controller } from ".."
 
 /**
- * Transcribes audio using Cline transcription service
+ * Transcribes audio using AI-Hydro transcription service
  * @param controller The controller instance
  * @param request TranscribeAudioRequest containing base64 audio data
  * @returns Transcription with transcribed text or error

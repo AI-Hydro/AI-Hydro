@@ -82,8 +82,8 @@ describe("FileContextTracker", () => {
 		expect(fileEntry.cline_edit_date).to.be.null
 	})
 
-	it("should add a record when a file is edited by Cline", async () => {
-		await tracker.trackFileContext(filePath, "cline_edited")
+	it("should add a record when a file is edited by AI-Hydro", async () => {
+		await tracker.trackFileContext(filePath, "aihydro_edited")
 
 		// Verify saveTaskMetadata was called with the correct data
 		expect(saveTaskMetadataStub.calledOnce).to.be.true
@@ -103,7 +103,7 @@ describe("FileContextTracker", () => {
 		// Now check the properties of the active entry
 		expect(activeEntry.path).to.equal(filePath)
 		expect(activeEntry.record_state).to.equal("active")
-		expect(activeEntry.record_source).to.equal("cline_edited")
+		expect(activeEntry.record_source).to.equal("aihydro_edited")
 		expect(activeEntry.cline_read_date).to.be.a("number")
 		expect(activeEntry.cline_edit_date).to.be.a("number")
 	})
@@ -153,7 +153,7 @@ describe("FileContextTracker", () => {
 		]
 
 		// Track a new operation on the same file
-		await tracker.trackFileContext(filePath, "cline_edited")
+		await tracker.trackFileContext(filePath, "aihydro_edited")
 
 		// Verify the metadata now has two entries - one stale and one active
 		const savedMetadata = saveTaskMetadataStub.firstCall.args[1]
@@ -165,7 +165,7 @@ describe("FileContextTracker", () => {
 		// New entry should be active
 		const newEntry = savedMetadata.files_in_context[1]
 		expect(newEntry.record_state).to.equal("active")
-		expect(newEntry.record_source).to.equal("cline_edited")
+		expect(newEntry.record_source).to.equal("aihydro_edited")
 	})
 
 	it("should setup a file watcher for tracked files", async () => {
@@ -203,12 +203,12 @@ describe("FileContextTracker", () => {
 		expect(modifiedFiles).to.include(filePath)
 	})
 
-	it("should not track Cline edits as user edits", async () => {
+	it("should not track AI-Hydro edits as user edits", async () => {
 		// First track the file to set up the watcher
 		await tracker.trackFileContext(filePath, "read_tool")
 
-		// Mark the file as edited by Cline
-		tracker.markFileAsEditedByCline(filePath)
+		// Mark the file as edited by AI-Hydro
+		tracker.markFileAsEditedByAiHydro(filePath)
 
 		// Reset the stubs to check the next calls
 		getTaskMetadataStub.resetHistory()

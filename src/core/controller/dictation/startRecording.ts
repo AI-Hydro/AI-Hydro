@@ -8,16 +8,16 @@ import { ShowMessageType } from "@/shared/proto/host/window"
 import { Controller } from ".."
 
 /**
- * Handles the installation of missing dependencies with Cline
+ * Handles the installation of missing dependencies with AI-Hydro
  */
-async function handleInstallWithCline(
+async function handleInstallWithAiHydro(
 	controller: Controller,
 	dependencyName: string,
 	installCommand: string,
 	platform: string,
 ): Promise<void> {
 	const platformName = platform === "darwin" ? "macOS" : platform === "win32" ? "Windows" : "Linux"
-	const installTask = `Please install ${dependencyName} for voice recording on ${platformName}.\n\nRun this command:\n\`\`\`bash\n${installCommand}\n\`\`\`\n\nThis will enable voice recording functionality in Cline.`
+	const installTask = `Please install ${dependencyName} for voice recording on ${platformName}.\n\nRun this command:\n\`\`\`bash\n${installCommand}\n\`\`\`\n\nThis will enable voice recording functionality in AI-Hydro.`
 
 	// Clear any existing task and start the installation task
 	await controller.clearTask()
@@ -47,18 +47,18 @@ async function handleMissingDependency(
 	platform: string,
 	config: (typeof AUDIO_PROGRAM_CONFIG)[keyof typeof AUDIO_PROGRAM_CONFIG],
 ): Promise<void> {
-	const installWithCline = "Install with Cline"
+	const installWithAiHydro = "Install with AI-Hydro"
 	const installManually = "Copy Command"
 	const dismiss = "Dismiss"
 
 	const action = await HostProvider.window.showMessage({
 		type: ShowMessageType.INFORMATION,
 		message: `${config.dependencyName} is required for voice recording. ${config.installDescription}`,
-		options: { items: [installWithCline, installManually, dismiss] },
+		options: { items: [installWithAiHydro, installManually, dismiss] },
 	})
 
-	if (action.selectedOption === installWithCline) {
-		await handleInstallWithCline(controller, config.dependencyName, config.installCommand, platform)
+	if (action.selectedOption === installWithAiHydro) {
+		await handleInstallWithAiHydro(controller, config.dependencyName, config.installCommand, platform)
 	} else if (action.selectedOption === installManually) {
 		await handleCopyCommand(config.installCommand)
 	}
@@ -69,7 +69,7 @@ async function handleMissingDependency(
  * Handles sign-in errors for dictation
  */
 async function handleSignInError(controller: Controller, errorMessage: string): Promise<void> {
-	const signInAction = "Sign in to Cline"
+	const signInAction = "Sign in to AI-Hydro"
 	const action = await HostProvider.window.showMessage({
 		type: ShowMessageType.ERROR,
 		message: `Voice recording error: ${errorMessage}`,
@@ -114,7 +114,7 @@ export const startRecording = async (controller: Controller): Promise<RecordingR
 		// Verify user authentication
 		const userInfo = controller.authService.getInfo()
 		if (!userInfo?.user?.uid) {
-			throw new Error("Please sign in to your Cline Account to use Dictation.")
+			throw new Error("Please sign in to your AI-Hydro Account to use Dictation.")
 		}
 
 		// Attempt to start recording

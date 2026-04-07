@@ -1,0 +1,11 @@
+{
+	"_comment": "Add this to .cursor/mcp.json in your project to use AI-Hydro tools in Cursor",
+	"mcpServers": {
+		"ai-hydro": {
+			"command": "python",
+			"args": [
+				"/ABSOLUTE/PATH/TO/AI-Hydro/python/mcp_server.py"
+			]
+		}
+	}
+}

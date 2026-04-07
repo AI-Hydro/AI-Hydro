@@ -1,7 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { TaskMetadata } from "@core/context/context-tracking/ContextTrackerTypes"
 import { execa } from "@packages/execa"
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { RemoteConfig } from "@shared/remote-config/schema"
 import { GlobalState, Settings } from "@shared/storage/state-keys"
@@ -21,10 +21,10 @@ export const GlobalFileNames = {
 	vercelAiGatewayModels: "vercel_ai_gateway_models.json",
 	groqModels: "groq_models.json",
 	basetenModels: "baseten_models.json",
-	mcpSettings: "cline_mcp_settings.json",
-	clineRules: ".clinerules",
-	workflows: ".clinerules/workflows",
-	hooksDir: ".clinerules/hooks",
+	mcpSettings: "aihydro_mcp_settings.json",
+	aihydroRules: ".aihydrorules",
+	workflows: ".aihydrorules/workflows",
+	hooksDir: ".aihydrorules/hooks",
 	cursorRulesDir: ".cursor/rules",
 	cursorRulesFile: ".cursorrules",
 	windsurfRules: ".windsurfrules",
@@ -75,43 +75,43 @@ export async function ensureTaskDirectoryExists(taskId: string): Promise<string>
 
 export async function ensureRulesDirectoryExists(): Promise<string> {
 	const userDocumentsPath = await getDocumentsPath()
-	const clineRulesDir = path.join(userDocumentsPath, "Cline", "Rules")
+	const aihydroRulesDir = path.join(userDocumentsPath, "AI-Hydro", "Rules")
 	try {
-		await fs.mkdir(clineRulesDir, { recursive: true })
+		await fs.mkdir(aihydroRulesDir, { recursive: true })
 	} catch (_error) {
-		return path.join(os.homedir(), "Documents", "Cline", "Rules") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
+		return path.join(os.homedir(), "Documents", "AI-Hydro", "Rules") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
 	}
-	return clineRulesDir
+	return aihydroRulesDir
 }
 
 export async function ensureWorkflowsDirectoryExists(): Promise<string> {
 	const userDocumentsPath = await getDocumentsPath()
-	const clineWorkflowsDir = path.join(userDocumentsPath, "Cline", "Workflows")
+	const aihydroWorkflowsDir = path.join(userDocumentsPath, "AI-Hydro", "Workflows")
 	try {
-		await fs.mkdir(clineWorkflowsDir, { recursive: true })
+		await fs.mkdir(aihydroWorkflowsDir, { recursive: true })
 	} catch (_error) {
-		return path.join(os.homedir(), "Documents", "Cline", "Workflows") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
+		return path.join(os.homedir(), "Documents", "AI-Hydro", "Workflows") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
 	}
-	return clineWorkflowsDir
+	return aihydroWorkflowsDir
 }
 
 export async function ensureMcpServersDirectoryExists(): Promise<string> {
 	const userDocumentsPath = await getDocumentsPath()
-	const mcpServersDir = path.join(userDocumentsPath, "Cline", "MCP")
+	const mcpServersDir = path.join(userDocumentsPath, "AI-Hydro", "MCP")
 	try {
 		await fs.mkdir(mcpServersDir, { recursive: true })
 	} catch (_error) {
-		return path.join(os.homedir(), "Documents", "Cline", "MCP") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine since this path is only ever used in the system prompt
+		return path.join(os.homedir(), "Documents", "AI-Hydro", "MCP") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine since this path is only ever used in the system prompt
 	}
 	return mcpServersDir
 }
 
 export async function ensureHooksDirectoryExists(): Promise<string> {
 	const rulesDir = await ensureRulesDirectoryExists()
-	const clineHooksDir = path.join(rulesDir, "Hooks")
+	const aihydroHooksDir = path.join(rulesDir, "Hooks")
 	try {
-		await fs.mkdir(clineHooksDir, { recursive: true })
-		return clineHooksDir
+		await fs.mkdir(aihydroHooksDir, { recursive: true })
+		return aihydroHooksDir
 	} catch (_error) {
 		// If mkdir fails, return a fallback path based on the Rules directory fallback
 		// This matches the pattern of other ensure*DirectoryExists functions
@@ -142,7 +142,7 @@ export async function saveApiConversationHistory(taskId: string, apiConversation
 	}
 }
 
-export async function getSavedClineMessages(taskId: string): Promise<ClineMessage[]> {
+export async function getSavedAiHydroMessages(taskId: string): Promise<AiHydroMessage[]> {
 	const filePath = path.join(await ensureTaskDirectoryExists(taskId), GlobalFileNames.uiMessages)
 	if (await fileExistsAtPath(filePath)) {
 		return JSON.parse(await fs.readFile(filePath, "utf8"))
@@ -158,7 +158,7 @@ export async function getSavedClineMessages(taskId: string): Promise<ClineMessag
 	return []
 }
 
-export async function saveClineMessages(taskId: string, uiMessages: ClineMessage[]) {
+export async function saveAiHydroMessages(taskId: string, uiMessages: AiHydroMessage[]) {
 	try {
 		const taskDir = await ensureTaskDirectoryExists(taskId)
 		const filePath = path.join(taskDir, GlobalFileNames.uiMessages)
@@ -352,7 +352,7 @@ export async function getGlobalHooksDir(): Promise<string | undefined> {
 /**
  * Gets the paths to all hooks directories to search for hooks, including:
  * 1. The global hooks directory (if it exists)
- * 2. Each workspace root's .clinerules/hooks directory (if they exist)
+ * 2. Each workspace root's .aihydrorules/hooks directory (if they exist)
  *
  * Note: Hooks from different directories may be executed concurrently.
  * No execution order is guaranteed between hooks from different directories.
@@ -376,7 +376,7 @@ export async function getAllHooksDirs(): Promise<string[]> {
 }
 
 /**
- * Gets the paths to the workspace's .clinerules/hooks directories to search for
+ * Gets the paths to the workspace's .aihydrorules/hooks directories to search for
  * hooks. A workspace may not use hooks, and the resulting array will be empty. A
  * multi-root workspace may have multiple hooks directories.
  */
@@ -389,7 +389,7 @@ export async function getWorkspaceHooksDirs(): Promise<string[]> {
 	return (
 		await Promise.all(
 			workspaceRootPaths.map(async (workspaceRootPath) => {
-				// Look for a .clinerules/hooks folder in this workspace root.
+				// Look for a .aihydrorules/hooks folder in this workspace root.
 				const candidate = path.join(workspaceRootPath, GlobalFileNames.hooksDir)
 				return (await isDirectory(candidate)) ? candidate : undefined
 			}),

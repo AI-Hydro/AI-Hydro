@@ -1,5 +1,5 @@
 import { isPostHogConfigValid, PostHogClientConfig, posthogConfig } from "@/shared/services/config/posthog-config"
-import { ClineError } from "./ClineError"
+import { AiHydroError } from "./AiHydroError"
 import { IErrorProvider } from "./providers/IErrorProvider"
 import { PostHogErrorProvider } from "./providers/PostHogErrorProvider"
 
@@ -62,7 +62,7 @@ export class ErrorProviderFactory {
  * or for testing purposes
  */
 class NoOpErrorProvider implements IErrorProvider {
-	public logException(error: Error | ClineError, _properties?: Record<string, unknown>): void {
+	public logException(error: Error | AiHydroError, _properties?: Record<string, unknown>): void {
 		// Use console.error directly to avoid potential infinite recursion through Logger
 		console.error("[NoOpErrorProvider]", error.message || String(error))
 	}

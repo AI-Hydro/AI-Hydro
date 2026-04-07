@@ -23,10 +23,10 @@ export class TerminalRegistry {
 	static createTerminal(cwd?: string | vscode.Uri | undefined, shellPath?: string): TerminalInfo {
 		const terminalOptions: vscode.TerminalOptions = {
 			cwd,
-			name: "Cline",
+			name: "AI-Hydro",
 			iconPath: new vscode.ThemeIcon("robot"),
 			env: {
-				CLINE_ACTIVE: "true",
+				AIHYDRO_ACTIVE: "true",
 			},
 		}
 

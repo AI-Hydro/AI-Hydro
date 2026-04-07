@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import fs from "fs/promises"
 import path from "path"
-import { version as clineVersion } from "../../../package.json"
+import { version as aihydroVersion } from "../../../package.json"
 import { getDistinctId } from "../../services/logging/distinctId"
 import {
 	HookInput,
@@ -56,7 +56,7 @@ type HookName = keyof Hooks
 
 /**
  * The hook input parameters for a named hook. These are the parameters the caller must
- * provide--the other common parameters like clineVersion and userId are handled by the
+ * provide--the other common parameters like aihydroVersion and userId are handled by the
  * hook system.
  */
 export type NamedHookInput<Name extends HookName> = {
@@ -102,11 +102,11 @@ export abstract class HookRunner<Name extends HookName> {
 				.getGlobalStateKey("workspaceRoots")
 				?.map((root) => root.path) || []
 		return {
-			clineVersion,
+			clineVersion: aihydroVersion,
 			hookName: this.hookName,
 			timestamp: Date.now().toString(),
 			workspaceRoots,
-			userId: getDistinctId(), // Always available: Cline User ID, machine ID, or generated UUID
+			userId: getDistinctId(), // Always available: AI-Hydro User ID, machine ID, or generated UUID
 			...params,
 		}
 	}
@@ -270,7 +270,7 @@ function isExpectedHookError(error: unknown): boolean {
 	}
 
 	// Expected: Permission denied (file not executable or not readable)
-	// Note: This is expected because users may have hooks in .clinerules that they don't want to execute
+	// Note: This is expected because users may have hooks in .aihydrorules that they don't want to execute
 	if (nodeError.code === "EACCES") {
 		return true
 	}
@@ -296,8 +296,8 @@ export class HookFactory {
 
 	/**
 	 * @returns A list of paths to scripts for the given hook name.
-	 * Includes both global hooks (from ~/Documents/Cline/Rules/Hooks/) and workspace hooks
-	 * (from .clinerules/hooks/ in each workspace root).
+	 * Includes both global hooks (from ~/Documents/AI-Hydro/Rules/Hooks/) and workspace hooks
+	 * (from .aihydrorules/hooks/ in each workspace root).
 	 */
 	private static async findHookScripts(hookName: HookName): Promise<string[]> {
 		const hookScripts = []
@@ -309,10 +309,10 @@ export class HookFactory {
 	}
 
 	/**
-	 * Finds the path to a hook in a .clinerules hooks directory.
+	 * Finds the path to a hook in a .aihydrorules hooks directory.
 	 *
 	 * @param hookName the name of the hook to search for, for example 'PreToolUse'
-	 * @param hooksDir the .clinerules directory path to search
+	 * @param hooksDir the .aihydrorules directory path to search
 	 * @returns the path to the hook to execute, or undefined if none found
 	 * @throws Error if an unexpected file system error occurs
 	 */
@@ -349,7 +349,7 @@ export class HookFactory {
 	 * Finds a hook on Unix-like systems (Linux, macOS) by checking for an executable file.
 	 *
 	 * @param hookName the name of the hook to search for
-	 * @param hooksDir the .clinerules directory path to search
+	 * @param hooksDir the .aihydrorules directory path to search
 	 * @returns the path to the hook to execute, or undefined if none found
 	 * @throws Error if an unexpected file system error occurs
 	 */

@@ -8,15 +8,15 @@ import { ExtensionRegistryInfo } from "@/registry"
 import { log } from "./utils"
 import { EnvironmentVariableCollection, MementoStore, readJson, SecretStore } from "./vscode-context-utils"
 
-log("Running standalone cline", ExtensionRegistryInfo.version)
-log(`CLINE_ENVIRONMENT: ${process.env.CLINE_ENVIRONMENT}`)
+log("Running standalone aihydro-core", ExtensionRegistryInfo.version)
+log(`AIHYDRO_ENVIRONMENT: ${process.env.AIHYDRO_ENVIRONMENT}`)
 
 // WE WILL HAVE TO MIGRATE THIS FROM DATA TO v1 LATER
 const SETTINGS_SUBFOLDER = "data"
 
-export function initializeContext(clineDir?: string) {
-	const CLINE_DIR = clineDir || process.env.CLINE_DIR || `${os.homedir()}/.cline`
-	const DATA_DIR = path.join(CLINE_DIR, SETTINGS_SUBFOLDER)
+export function initializeContext(aihydroDir?: string) {
+	const AIHYDRO_DIR = aihydroDir || process.env.AIHYDRO_DIR || `${os.homedir()}/.cline`
+	const DATA_DIR = path.join(AIHYDRO_DIR, SETTINGS_SUBFOLDER)
 	const INSTALL_DIR = process.env.INSTALL_DIR || __dirname
 	const WORKSPACE_STORAGE_DIR = process.env.WORKSPACE_STORAGE_DIR || path.join(DATA_DIR, "workspace")
 
@@ -48,16 +48,16 @@ export function initializeContext(clineDir?: string) {
 
 		// Set up URIs.
 		storageUri: URI.file(WORKSPACE_STORAGE_DIR),
-		storagePath: WORKSPACE_STORAGE_DIR, // Deprecated, not used in cline.
+		storagePath: WORKSPACE_STORAGE_DIR, // Deprecated, not used in aihydro-core.
 		globalStorageUri: URI.file(DATA_DIR),
-		globalStoragePath: DATA_DIR, // Deprecated, not used in cline.
+		globalStoragePath: DATA_DIR, // Deprecated, not used in aihydro-core.
 
 		// Logs are global per extension, not per workspace.
 		logUri: URI.file(DATA_DIR),
-		logPath: DATA_DIR, // Deprecated, not used in cline.
+		logPath: DATA_DIR, // Deprecated, not used in aihydro-core.
 
 		extensionUri: URI.file(EXTENSION_DIR),
-		extensionPath: EXTENSION_DIR, // Deprecated, not used in cline.
+		extensionPath: EXTENSION_DIR, // Deprecated, not used in aihydro-core.
 		asAbsolutePath: (relPath: string) => path.join(EXTENSION_DIR, relPath),
 
 		subscriptions: [], // These need to be destroyed when the extension is deactivated.

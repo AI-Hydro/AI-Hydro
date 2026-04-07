@@ -1,5 +1,5 @@
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
+import { AiHydroDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
 import { validateVariant } from "../variant-validator"
@@ -33,23 +33,23 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		SystemPromptSection.USER_INSTRUCTIONS,
 	)
 	.tools(
-		ClineDefaultTool.BASH,
-		ClineDefaultTool.FILE_READ,
-		ClineDefaultTool.FILE_NEW,
-		ClineDefaultTool.FILE_EDIT,
-		ClineDefaultTool.SEARCH,
-		ClineDefaultTool.LIST_FILES,
-		ClineDefaultTool.LIST_CODE_DEF,
-		ClineDefaultTool.BROWSER,
-		ClineDefaultTool.WEB_FETCH,
-		ClineDefaultTool.MCP_USE,
-		ClineDefaultTool.MCP_ACCESS,
-		ClineDefaultTool.ASK,
-		ClineDefaultTool.ATTEMPT,
-		ClineDefaultTool.NEW_TASK,
-		ClineDefaultTool.PLAN_MODE,
-		ClineDefaultTool.MCP_DOCS,
-		ClineDefaultTool.TODO,
+		AiHydroDefaultTool.BASH,
+		AiHydroDefaultTool.FILE_READ,
+		AiHydroDefaultTool.FILE_NEW,
+		AiHydroDefaultTool.FILE_EDIT,
+		AiHydroDefaultTool.SEARCH,
+		AiHydroDefaultTool.LIST_FILES,
+		AiHydroDefaultTool.LIST_CODE_DEF,
+		AiHydroDefaultTool.BROWSER,
+		AiHydroDefaultTool.WEB_FETCH,
+		AiHydroDefaultTool.MCP_USE,
+		AiHydroDefaultTool.MCP_ACCESS,
+		AiHydroDefaultTool.ASK,
+		AiHydroDefaultTool.ATTEMPT,
+		AiHydroDefaultTool.NEW_TASK,
+		AiHydroDefaultTool.PLAN_MODE,
+		AiHydroDefaultTool.MCP_DOCS,
+		AiHydroDefaultTool.TODO,
 	)
 	.placeholders({
 		MODEL_FAMILY: ModelFamily.NEXT_GEN,

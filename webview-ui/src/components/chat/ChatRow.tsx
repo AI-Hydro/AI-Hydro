@@ -1,11 +1,11 @@
 import { COMMAND_OUTPUT_STRING, COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
 import {
-	ClineApiReqInfo,
-	ClineAskQuestion,
-	ClineAskUseMcpServer,
-	ClineMessage,
-	ClinePlanModeResponse,
-	ClineSayTool,
+	AiHydroApiReqInfo,
+	AiHydroAskQuestion,
+	AiHydroAskUseMcpServer,
+	AiHydroMessage,
+	AiHydroPlanModeResponse,
+	AiHydroSayTool,
 	COMPLETION_RESULT_CHANGES_FLAG,
 } from "@shared/ExtensionMessage"
 import { BooleanRequest, Int64Request, StringRequest } from "@shared/proto/cline/common"
@@ -56,10 +56,10 @@ const ChatRowContainer = styled.div`
 `
 
 interface ChatRowProps {
-	message: ClineMessage
+	message: AiHydroMessage
 	isExpanded: boolean
 	onToggleExpand: (ts: number) => void
-	lastModifiedMessage?: ClineMessage
+	lastModifiedMessage?: AiHydroMessage
 	isLast: boolean
 	onHeightChange: (isTaller: boolean) => void
 	inputValue?: string
@@ -151,7 +151,7 @@ const CommandOutput = memo(
 					position: "relative",
 					paddingBottom: lineCount > 5 ? "16px" : "0",
 					overflow: "visible",
-					borderTop: "1px solid rgba(255,255,255,.07)",
+					borderTop: "1px solid var(--ai-hydro-border, rgba(51, 65, 85, 0.7))",
 					backgroundColor: TERMINAL_CODE_BLOCK_BG_COLOR,
 					borderBottomLeftRadius: "6px",
 					borderBottomRightRadius: "6px",
@@ -270,7 +270,7 @@ export const ChatRowContent = memo(
 		const prevCommandExecutingRef = useRef<boolean>(false)
 		const [cost, apiReqCancelReason, apiReqStreamingFailedMessage, retryStatus] = useMemo(() => {
 			if (message.text != null && message.say === "api_req_started") {
-				const info: ClineApiReqInfo = JSON.parse(message.text)
+				const info: AiHydroApiReqInfo = JSON.parse(message.text)
 				return [info.cost, info.cancelReason, info.streamingFailedMessage, info.retryStatus]
 			}
 			return [undefined, undefined, undefined, undefined, undefined]
@@ -397,7 +397,7 @@ export const ChatRowContent = memo(
 								color: errorColor,
 								marginBottom: "-1.5px",
 							}}></span>,
-						<span style={{ color: errorColor, fontWeight: "bold" }}>Cline is having trouble...</span>,
+						<span style={{ color: errorColor, fontWeight: "bold" }}>AI Hydro is having trouble...</span>,
 					]
 				case "auto_approval_max_req_reached":
 					return [
@@ -417,10 +417,10 @@ export const ChatRowContent = memo(
 								color: normalColor,
 								marginBottom: "-1.5px",
 							}}></span>,
-						<span style={{ color: normalColor, fontWeight: "bold" }}>Cline wants to execute this command:</span>,
+						<span style={{ color: normalColor, fontWeight: "bold" }}>AI Hydro wants to execute this command:</span>,
 					]
 				case "use_mcp_server":
-					const mcpServerUse = JSON.parse(message.text || "{}") as ClineAskUseMcpServer
+					const mcpServerUse = JSON.parse(message.text || "{}") as AiHydroAskUseMcpServer
 					return [
 						isMcpServerResponding ? (
 							<ProgressIndicator />
@@ -435,7 +435,7 @@ export const ChatRowContent = memo(
 						<span
 							className="ph-no-capture"
 							style={{ color: normalColor, fontWeight: "bold", wordBreak: "break-word" }}>
-							Cline wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
+							AI Hydro wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
 							<code style={{ wordBreak: "break-all" }}>
 								{getMcpServerDisplayName(mcpServerUse.serverName, mcpMarketplaceCatalog)}
 							</code>{" "}
@@ -467,7 +467,7 @@ export const ChatRowContent = memo(
 								color: normalColor,
 								marginBottom: "-1.5px",
 							}}></span>,
-						<span style={{ color: normalColor, fontWeight: "bold" }}>Cline has a question:</span>,
+						<span style={{ color: normalColor, fontWeight: "bold" }}>AI Hydro has a question:</span>,
 					]
 				default:
 					return [null, null]
@@ -499,7 +499,7 @@ export const ChatRowContent = memo(
 
 		const tool = useMemo(() => {
 			if (message.ask === "tool" || message.say === "tool") {
-				return JSON.parse(message.text || "{}") as ClineSayTool
+				return JSON.parse(message.text || "{}") as AiHydroSayTool
 			}
 			return null
 		}, [message.ask, message.say, message.text])
@@ -536,7 +536,7 @@ export const ChatRowContent = memo(
 								{toolIcon("edit")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span style={{ fontWeight: "bold" }}>Cline wants to edit this file:</span>
+								<span style={{ fontWeight: "bold" }}>AI Hydro wants to edit this file:</span>
 							</div>
 							<CodeAccordian
 								// isLoading={message.partial}
@@ -554,7 +554,7 @@ export const ChatRowContent = memo(
 								{toolIcon("new-file")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span style={{ fontWeight: "bold" }}>Cline wants to create a new file:</span>
+								<span style={{ fontWeight: "bold" }}>AI Hydro wants to create a new file:</span>
 							</div>
 							<CodeAccordian
 								code={tool.content!}
@@ -574,8 +574,8 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
-									{/* {message.type === "ask" ? "" : "Cline read this file:"} */}
-									Cline wants to read this file:
+									{/* {message.type === "ask" ? "" : "AI Hydro read this file:"} */}
+									AI Hydro wants to read this file:
 								</span>
 							</div>
 							<div
@@ -583,7 +583,7 @@ export const ChatRowContent = memo(
 									borderRadius: 3,
 									backgroundColor: CODE_BLOCK_BG_COLOR,
 									overflow: "hidden",
-									border: "1px solid var(--vscode-editorGroup-border)",
+									border: "1px solid var(--ai-hydro-border, var(--vscode-editorGroup-border))",
 								}}>
 								<div
 									onClick={
@@ -642,8 +642,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? "Cline wants to view the top level files in this directory:"
-										: "Cline viewed the top level files in this directory:"}
+										? "AI Hydro wants to view the top level files in this directory:"
+										: "AI Hydro viewed the top level files in this directory:"}
 								</span>
 							</div>
 							<CodeAccordian
@@ -664,8 +664,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? "Cline wants to recursively view all files in this directory:"
-										: "Cline recursively viewed all files in this directory:"}
+										? "AI Hydro wants to recursively view all files in this directory:"
+										: "AI Hydro recursively viewed all files in this directory:"}
 								</span>
 							</div>
 							<CodeAccordian
@@ -686,8 +686,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? "Cline wants to view source code definition names used in this directory:"
-										: "Cline viewed source code definition names used in this directory:"}
+										? "AI Hydro wants to view source code definition names used in this directory:"
+										: "AI Hydro viewed source code definition names used in this directory:"}
 								</span>
 							</div>
 							<CodeAccordian
@@ -706,7 +706,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
-									Cline wants to search this directory for{" "}
+									AI Hydro wants to search this directory for{" "}
 									<code style={{ wordBreak: "break-all" }}>{tool.regex}</code>:
 								</span>
 							</div>
@@ -724,7 +724,7 @@ export const ChatRowContent = memo(
 						<>
 							<div style={headerStyle}>
 								{toolIcon("book")}
-								<span style={{ fontWeight: "bold" }}>Cline is condensing the conversation:</span>
+								<span style={{ fontWeight: "bold" }}>AI Hydro is condensing the conversation:</span>
 							</div>
 							<div
 								style={{
@@ -805,8 +805,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This URL is external")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? "Cline wants to fetch content from this URL:"
-										: "Cline fetched content from this URL:"}
+										? "AI Hydro wants to fetch content from this URL:"
+										: "AI Hydro fetched content from this URL:"}
 								</span>
 							</div>
 							<div
@@ -917,23 +917,23 @@ export const ChatRowContent = memo(
 				typeof onCancelCommand === "function" &&
 				vscodeTerminalExecutionMode === "backgroundExec"
 
-			// Check if this is a Cline subagent command
-			const isSubagentCommand = command.trim().startsWith("cline ")
+			// Check if this is a AI-Hydro subagent command
+			const isSubagentCommand = command.trim().startsWith("aihydro ")
 			let subagentPrompt: string | undefined
 
 			if (isSubagentCommand) {
-				// Parse the cline command to extract prompt
-				// Format: cline "prompt"
-				const clineCommandRegex = /^cline\s+"([^"]+)"(?:\s+--no-interactive)?/
-				const match = command.match(clineCommandRegex)
+				// Parse the aihydro command to extract prompt
+				// Format: aihydro "prompt"
+				const aihydroCommandRegex = /^aihydro\s+"([^"]+)"(?:\s+--no-interactive)?/
+				const match = command.match(aihydroCommandRegex)
 
 				if (match) {
 					subagentPrompt = match[1]
 				}
 			}
 
-			// Compact Cline SVG icon component
-			const ClineIcon = () => (
+			// Compact AI-Hydro SVG icon component
+			const AiHydroIcon = () => (
 				<svg height="16" style={{ marginBottom: "-1.5px" }} viewBox="0 0 92 96" width="16">
 					<g fill="currentColor">
 						<path d="M65.4492701,16.3 C76.3374701,16.3 85.1635558,25.16479 85.1635558,36.1 L85.1635558,42.7 L90.9027661,54.1647464 C91.4694141,55.2966923 91.4668177,56.6300535 90.8957658,57.7597839 L85.1635558,69.1 L85.1635558,75.7 C85.1635558,86.63554 76.3374701,95.5 65.4492701,95.5 L26.0206986,95.5 C15.1328272,95.5 6.30641291,86.63554 6.30641291,75.7 L6.30641291,69.1 L0.448507752,57.7954874 C-0.14693501,56.6464093 -0.149634367,55.2802504 0.441262896,54.1288283 L6.30641291,42.7 L6.30641291,36.1 C6.30641291,25.16479 15.1328272,16.3 26.0206986,16.3 L65.4492701,16.3 Z M62.9301895,22 L29.189529,22 C19.8723267,22 12.3191987,29.5552188 12.3191987,38.875 L12.3191987,44.5 L7.44288578,53.9634655 C6.84794449,55.1180686 6.85066096,56.4896598 7.45017099,57.6418974 L12.3191987,67 L12.3191987,72.625 C12.3191987,81.9450625 19.8723267,89.5 29.189529,89.5 L62.9301895,89.5 C72.2476729,89.5 79.8005198,81.9450625 79.8005198,72.625 L79.8005198,67 L84.5682187,57.6061395 C85.1432011,56.473244 85.1458141,55.1345713 84.5752587,53.9994398 L79.8005198,44.5 L79.8005198,38.875 C79.8005198,29.5552188 72.2476729,22 62.9301895,22 Z" />
@@ -947,14 +947,14 @@ export const ChatRowContent = memo(
 			// Customize icon and title for subagent commands
 			const displayIcon = isSubagentCommand ? (
 				<span style={{ color: normalColor }}>
-					<ClineIcon />
+					<AiHydroIcon />
 				</span>
 			) : (
 				icon
 			)
 
 			const displayTitle = isSubagentCommand ? (
-				<span style={{ color: normalColor, fontWeight: "bold" }}>Cline wants to use a subagent:</span>
+				<span style={{ color: normalColor, fontWeight: "bold" }}>AI Hydro wants to use a subagent:</span>
 			) : (
 				title
 			)
@@ -1134,7 +1134,7 @@ export const ChatRowContent = memo(
 		}
 
 		if (message.ask === "use_mcp_server" || message.say === "use_mcp_server") {
-			const useMcpServer = JSON.parse(message.text || "{}") as ClineAskUseMcpServer
+			const useMcpServer = JSON.parse(message.text || "{}") as AiHydroAskUseMcpServer
 			const server = mcpServers.find((server) => server.name === useMcpServer.serverName)
 			return (
 				<>
@@ -1388,7 +1388,7 @@ export const ChatRowContent = memo(
 							/>
 						)
 					case "user_feedback_diff":
-						const tool = JSON.parse(message.text || "{}") as ClineSayTool
+						const tool = JSON.parse(message.text || "{}") as AiHydroSayTool
 						return (
 							<div
 								style={{
@@ -1407,8 +1407,8 @@ export const ChatRowContent = memo(
 						return <ErrorRow errorType="error" message={message} />
 					case "diff_error":
 						return <ErrorRow errorType="diff_error" message={message} />
-					case "clineignore_error":
-						return <ErrorRow errorType="clineignore_error" message={message} />
+					case "aihydroignore_error":
+						return <ErrorRow errorType="aihydroignore_error" message={message} />
 					case "checkpoint_created":
 						return <CheckmarkControl isCheckpointCheckedOut={message.isCheckpointCheckedOut} messageTs={message.ts} />
 					case "load_mcp_documentation":
@@ -1526,12 +1526,12 @@ export const ChatRowContent = memo(
 									</span>
 								</div>
 								<div style={{ color: "var(--vscode-foreground)", opacity: 0.8 }}>
-									Cline may have trouble viewing the command's output. Please update VSCode (
+									AI Hydro may have trouble viewing the command's output. Please update VSCode (
 									<code>CMD/CTRL + Shift + P</code> → "Update") and make sure you're using a supported shell:
 									zsh, bash, fish, or PowerShell (<code>CMD/CTRL + Shift + P</code> → "Terminal: Select Default
 									Profile").{" "}
 									<a
-										href="https://github.com/cline/cline/wiki/Troubleshooting-%E2%80%90-Shell-Integration-Unavailable"
+										href="https://github.com/galib9690/AI-Hydro/issues"
 										style={{
 											color: "inherit",
 											textDecoration: "underline",
@@ -1783,7 +1783,7 @@ export const ChatRowContent = memo(
 						let options: string[] | undefined
 						let selected: string | undefined
 						try {
-							const parsedMessage = JSON.parse(message.text || "{}") as ClineAskQuestion
+							const parsedMessage = JSON.parse(message.text || "{}") as AiHydroAskQuestion
 							question = parsedMessage.question
 							options = parsedMessage.options
 							selected = parsedMessage.selected
@@ -1828,6 +1828,141 @@ export const ChatRowContent = memo(
 								</WithCopyButton>
 							</>
 						)
+					case "install_dependencies":
+						return (
+							<>
+								<div style={headerStyle}>
+									<span style={{ marginRight: "8px", fontSize: "16px" }}>📦</span>
+									<span style={{ color: normalColor, fontWeight: "bold" }}>AI-Hydro RAG Brain Setup:</span>
+								</div>
+								<WithCopyButton
+									onMouseUp={handleMouseUp}
+									position="bottom-right"
+									ref={contentRef}
+									style={{ paddingTop: 10 }}
+									textToCopy={message.text}>
+									<Markdown markdown={message.text} />
+									{quoteButtonState.visible && (
+										<QuoteButton
+											left={quoteButtonState.left}
+											onClick={() => {
+												handleQuoteClick()
+											}}
+											top={quoteButtonState.top}
+										/>
+									)}
+								</WithCopyButton>
+							</>
+						)
+					case "workspace_env_setup":
+						try {
+							const workspaceInfo = JSON.parse(message.text || "{}")
+							return (
+								<>
+									<div style={headerStyle}>
+										<span style={{ marginRight: "8px", fontSize: "16px" }}>🐍</span>
+										<span style={{ color: normalColor, fontWeight: "bold" }}>
+											AI-Hydro Workspace Environment Setup:
+										</span>
+									</div>
+									<div style={{ paddingTop: 10, paddingBottom: 10 }}>
+										<div
+											style={{
+												backgroundColor: "var(--vscode-textBlockQuote-background)",
+												borderRadius: "4px",
+												padding: "12px",
+												marginBottom: "10px",
+											}}>
+											<div style={{ marginBottom: "8px" }}>
+												<strong>📁 Workspace:</strong>
+												<div
+													className="ph-no-capture"
+													style={{
+														fontFamily: "var(--vscode-editor-font-family)",
+														fontSize: "12px",
+														opacity: 0.9,
+														marginTop: "4px",
+													}}>
+													{workspaceInfo.workspaceRoot || "No workspace open"}
+												</div>
+											</div>
+											<div style={{ marginBottom: "8px" }}>
+												<strong>🔧 Environment Path:</strong>
+												<div
+													style={{
+														fontFamily: "var(--vscode-editor-font-family)",
+														fontSize: "12px",
+														opacity: 0.9,
+														marginTop: "4px",
+													}}>
+													{workspaceInfo.envPath || ".ai-hydro-env"}
+												</div>
+											</div>
+											<div style={{ marginBottom: "8px" }}>
+												<strong>💾 Disk Space:</strong>
+												<span
+													style={{
+														marginLeft: "8px",
+														fontSize: "12px",
+														opacity: 0.9,
+													}}>
+													{workspaceInfo.diskSpace || "~800MB"}
+												</span>
+											</div>
+											<div>
+												<strong>⏱️ Estimated Time:</strong>
+												<span
+													style={{
+														marginLeft: "8px",
+														fontSize: "12px",
+														opacity: 0.9,
+													}}>
+													{workspaceInfo.estimatedTime || "2-5 minutes"}
+												</span>
+											</div>
+										</div>
+										<div
+											style={{
+												fontSize: "13px",
+												opacity: 0.8,
+												marginTop: "12px",
+											}}>
+											This will create an isolated Python environment in your workspace for AI-Hydro's
+											hydrological knowledge base.
+										</div>
+									</div>
+								</>
+							)
+						} catch (_e) {
+							// Fallback if JSON parsing fails
+							return (
+								<>
+									<div style={headerStyle}>
+										<span style={{ marginRight: "8px", fontSize: "16px" }}>🐍</span>
+										<span style={{ color: normalColor, fontWeight: "bold" }}>
+											AI-Hydro Workspace Environment Setup:
+										</span>
+									</div>
+									<WithCopyButton
+										onMouseUp={handleMouseUp}
+										position="bottom-right"
+										ref={contentRef}
+										style={{ paddingTop: 10 }}
+										textToCopy={message.text}>
+										<Markdown markdown={message.text} />
+										{quoteButtonState.visible && (
+											<QuoteButton
+												left={quoteButtonState.left}
+												onClick={() => {
+													handleQuoteClick()
+												}}
+												top={quoteButtonState.top}
+											/>
+										)}
+									</WithCopyButton>
+								</>
+							)
+						}
 					case "new_task":
 						return (
 							<>
@@ -1839,7 +1974,7 @@ export const ChatRowContent = memo(
 											marginBottom: "-1.5px",
 										}}></span>
 									<span style={{ color: normalColor, fontWeight: "bold" }}>
-										Cline wants to start a new task:
+										AI Hydro wants to start a new task:
 									</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
@@ -1856,7 +1991,7 @@ export const ChatRowContent = memo(
 											marginBottom: "-1.5px",
 										}}></span>
 									<span style={{ color: normalColor, fontWeight: "bold" }}>
-										Cline wants to condense your conversation:
+										AI Hydro wants to condense your conversation:
 									</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
@@ -1873,7 +2008,7 @@ export const ChatRowContent = memo(
 											marginBottom: "-1.5px",
 										}}></span>
 									<span style={{ color: normalColor, fontWeight: "bold" }}>
-										Cline wants to create a Github issue:
+										AI Hydro wants to create a Github issue:
 									</span>
 								</div>
 								<ReportBugPreview data={message.text || ""} />
@@ -1884,7 +2019,7 @@ export const ChatRowContent = memo(
 						let options: string[] | undefined
 						let selected: string | undefined
 						try {
-							const parsedMessage = JSON.parse(message.text || "{}") as ClinePlanModeResponse
+							const parsedMessage = JSON.parse(message.text || "{}") as AiHydroPlanModeResponse
 							response = parsedMessage.response
 							options = parsedMessage.options
 							selected = parsedMessage.selected

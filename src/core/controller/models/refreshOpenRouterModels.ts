@@ -6,8 +6,10 @@ import cloneDeep from "clone-deep"
 import fs from "fs/promises"
 import path from "path"
 import {
+	aihydroCodeSupernovaModelInfo,
 	CLAUDE_SONNET_1M_TIERS,
-	clineCodeSupernovaModelInfo,
+	openRouterAutoModelId,
+	openRouterAutoModelInfo,
 	openRouterClaudeSonnet41mModelId,
 	openRouterClaudeSonnet451mModelId,
 } from "@/shared/api"
@@ -235,8 +237,10 @@ export async function refreshOpenRouterModels(
 		} else {
 			console.error("Invalid response from OpenRouter API")
 		}
-		await fs.writeFile(openRouterModelsFilePath, JSON.stringify(models))
-		console.log("OpenRouter models fetched and saved", JSON.stringify(models).slice(0, 300))
+		const modelsWithStealth = appendAiHydroStealthModels(models)
+		await fs.writeFile(openRouterModelsFilePath, JSON.stringify(modelsWithStealth))
+		console.log("OpenRouter models fetched and saved", JSON.stringify(modelsWithStealth).slice(0, 300))
+		return OpenRouterCompatibleModelInfo.create({ models: modelsWithStealth })
 	} catch (error) {
 		console.error("Error fetching OpenRouter models:", error)
 
@@ -247,36 +251,50 @@ export async function refreshOpenRouterModels(
 		}
 	}
 	// Append stealth models if any
-	return OpenRouterCompatibleModelInfo.create({ models: appendClineStealthModels(models) })
+	return OpenRouterCompatibleModelInfo.create({ models: appendAiHydroStealthModels(models) })
 }
 
 /**
  * Stealth models are models that are compatible with the OpenRouter API but not listed on the OpenRouter website or API.
  */
-const CLINE_STEALTH_MODELS: Record<string, OpenRouterModelInfo> = {
+const AIHYDRO_STEALTH_MODELS: Record<string, OpenRouterModelInfo> = {
+	[openRouterAutoModelId]: OpenRouterModelInfo.create({
+		maxTokens: openRouterAutoModelInfo.maxTokens ?? 0,
+		contextWindow: openRouterAutoModelInfo.contextWindow ?? 0,
+		supportsImages: openRouterAutoModelInfo.supportsImages ?? false,
+		supportsPromptCache: openRouterAutoModelInfo.supportsPromptCache ?? false,
+		inputPrice: openRouterAutoModelInfo.inputPrice ?? 0,
+		outputPrice: openRouterAutoModelInfo.outputPrice ?? 0,
+		cacheWritesPrice: openRouterAutoModelInfo.cacheWritesPrice ?? 0,
+		cacheReadsPrice: openRouterAutoModelInfo.cacheReadsPrice ?? 0,
+		description: openRouterAutoModelInfo.description ?? "",
+		thinkingConfig: openRouterAutoModelInfo.thinkingConfig ?? undefined,
+		supportsGlobalEndpoint: openRouterAutoModelInfo.supportsGlobalEndpoint ?? undefined,
+		tiers: openRouterAutoModelInfo.tiers ?? [],
+	}),
 	"cline/code-supernova-1-million": OpenRouterModelInfo.create({
-		maxTokens: clineCodeSupernovaModelInfo.maxTokens ?? 0,
-		contextWindow: clineCodeSupernovaModelInfo.contextWindow ?? 0,
-		supportsImages: clineCodeSupernovaModelInfo.supportsImages ?? false,
-		supportsPromptCache: clineCodeSupernovaModelInfo.supportsPromptCache ?? false,
-		inputPrice: clineCodeSupernovaModelInfo.inputPrice ?? 0,
-		outputPrice: clineCodeSupernovaModelInfo.outputPrice ?? 0,
-		cacheWritesPrice: clineCodeSupernovaModelInfo.cacheWritesPrice ?? 0,
-		cacheReadsPrice: clineCodeSupernovaModelInfo.cacheReadsPrice ?? 0,
-		description: clineCodeSupernovaModelInfo.description ?? "",
-		thinkingConfig: clineCodeSupernovaModelInfo.thinkingConfig ?? undefined,
-		supportsGlobalEndpoint: clineCodeSupernovaModelInfo.supportsGlobalEndpoint ?? undefined,
-		tiers: clineCodeSupernovaModelInfo.tiers ?? [],
+		maxTokens: aihydroCodeSupernovaModelInfo.maxTokens ?? 0,
+		contextWindow: aihydroCodeSupernovaModelInfo.contextWindow ?? 0,
+		supportsImages: aihydroCodeSupernovaModelInfo.supportsImages ?? false,
+		supportsPromptCache: aihydroCodeSupernovaModelInfo.supportsPromptCache ?? false,
+		inputPrice: aihydroCodeSupernovaModelInfo.inputPrice ?? 0,
+		outputPrice: aihydroCodeSupernovaModelInfo.outputPrice ?? 0,
+		cacheWritesPrice: aihydroCodeSupernovaModelInfo.cacheWritesPrice ?? 0,
+		cacheReadsPrice: aihydroCodeSupernovaModelInfo.cacheReadsPrice ?? 0,
+		description: aihydroCodeSupernovaModelInfo.description ?? "",
+		thinkingConfig: aihydroCodeSupernovaModelInfo.thinkingConfig ?? undefined,
+		supportsGlobalEndpoint: aihydroCodeSupernovaModelInfo.supportsGlobalEndpoint ?? undefined,
+		tiers: aihydroCodeSupernovaModelInfo.tiers ?? [],
 	}),
 	// Add more stealth models here as needed
 }
 
-export function appendClineStealthModels(
+export function appendAiHydroStealthModels(
 	currentModels: Record<string, OpenRouterModelInfo>,
 ): Record<string, OpenRouterModelInfo> {
 	// Create a shallow clone of the current models to avoid mutating the original object
 	const cloned = { ...currentModels }
-	for (const [modelId, modelInfo] of Object.entries(CLINE_STEALTH_MODELS)) {
+	for (const [modelId, modelInfo] of Object.entries(AIHYDRO_STEALTH_MODELS)) {
 		if (!cloned[modelId]) {
 			cloned[modelId] = modelInfo
 		}

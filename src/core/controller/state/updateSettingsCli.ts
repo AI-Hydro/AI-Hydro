@@ -9,7 +9,7 @@ import {
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { Settings } from "@shared/storage/state-keys"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
-import { ClineEnv } from "@/config"
+import { AiHydroEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 import { TerminalInfo } from "@/integrations/terminal/TerminalRegistry"
 import { ShowMessageType } from "@/shared/proto/host/window"
@@ -45,7 +45,7 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 
 	try {
 		if (request.environment !== undefined) {
-			ClineEnv.setEnvironment(request.environment)
+			AiHydroEnv.setEnvironment(request.environment)
 			await controller.handleSignOut()
 		}
 
@@ -170,7 +170,7 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 
 				const newFocusChainSettings = {
 					enabled: isEnabled,
-					remindClineInterval: focusChainSettings.remindClineInterval,
+					remindAiHydroInterval: focusChainSettings.remindClineInterval,
 				}
 				controller.stateManager.setGlobalState("focusChainSettings", newFocusChainSettings)
 

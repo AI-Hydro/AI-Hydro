@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package cline;
+
+option go_package = "github.com/cline/grpc-go/cline";
+option java_package = "bot.cline.proto";
+option java_multiple_files = true;
+
+import "cline/common.proto";
+
+// Message representing a map layer
+message MapLayer {
+    string id = 1;                    // Unique layer identifier
+    string name = 2;                  // Display name
+    string geojson = 3;               // GeoJSON as string
+    string layer_type = 4;            // "polygon", "point", "line", "raster"
+    MapLayerStyle style = 5;          // Visual styling
+    map<string, string> metadata = 6; // Additional metadata
+    bool visible = 7;                 // Visibility state (default true)
+}
+
+// Visual styling for a layer
+message MapLayerStyle {
+    string color = 1;          // Hex color (e.g., "#0000FF")
+    double opacity = 2;        // 0.0 to 1.0
+    int32 stroke_width = 3;    // Line width in pixels
+    string stroke_color = 4;   // Stroke color
+    string fill_color = 5;     // Fill color
+    double fill_opacity = 6;   // Fill opacity 0.0 to 1.0
+    int32 weight = 7;          // Line weight in pixels
+}
+
+// Request to add a layer to the map
+message AddMapLayerRequest {
+    MapLayer layer = 1;
+    bool auto_zoom = 2;        // Auto-fit to layer bounds
+    bool replace_existing = 3; // Replace layer with same ID
+}
+
+// Request to remove a layer
+message RemoveMapLayerRequest {
+    string layer_id = 1;
+}
+
+// Request to clear all layers
+message ClearMapLayersRequest {}
+
+// Request to show the map view
+message ShowMapRequest {}
+
+// Response with current map state
+message MapStateResponse {
+    repeated MapLayer layers = 1;
+    int32 layer_count = 2;
+}
+
+// Service for map operations
+service MapService {
+    // Add a layer to the map
+    rpc addMapLayer(AddMapLayerRequest) returns (Empty);
+    
+    // Remove a layer from the map
+    rpc removeMapLayer(RemoveMapLayerRequest) returns (Empty);
+    
+    // Clear all layers
+    rpc clearMapLayers(ClearMapLayersRequest) returns (Empty);
+    
+    // Show the map view (switch to map tab)
+    rpc showMap(ShowMapRequest) returns (Empty);
+    
+    // Get current map state
+    rpc getMapState(EmptyRequest) returns (MapStateResponse);
+    
+    // Subscribe to map layer updates
+    rpc subscribeToMapLayers(EmptyRequest) returns (stream MapLayer);
+}

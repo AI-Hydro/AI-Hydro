@@ -1,5 +1,6 @@
 import { geminiModels } from "@shared/api"
 import { Mode } from "@shared/storage/types"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
@@ -8,6 +9,7 @@ import { ModelSelector } from "../common/ModelSelector"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
+import { useDynamicProviderModels } from "../utils/useDynamicProviderModels"
 
 // Gemini models that support thinking/reasoning mode
 const SUPPORTED_THINKING_MODELS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite-preview-06-17"]
@@ -30,6 +32,18 @@ export const GeminiProvider = ({ showModelOptions, isPopup, currentMode }: Gemin
 
 	// Get the normalized configuration
 	const { selectedModelId, selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, currentMode)
+	const {
+		models: dynamicGeminiModels,
+		refresh: refreshGeminiModels,
+		isLoading: isLoadingGeminiModels,
+	} = useDynamicProviderModels({
+		baseUrl: apiConfiguration?.geminiBaseUrl || "https://generativelanguage.googleapis.com",
+		apiKey: apiConfiguration?.geminiApiKey,
+		fallbackModels: geminiModels,
+		selectedModelId,
+		selectedModelInfo,
+		enabled: showModelOptions,
+	})
 
 	return (
 		<div>
@@ -51,7 +65,7 @@ export const GeminiProvider = ({ showModelOptions, isPopup, currentMode }: Gemin
 				<>
 					<ModelSelector
 						label="Model"
-						models={geminiModels}
+						models={dynamicGeminiModels}
 						onChange={(e: any) =>
 							handleModeFieldChange(
 								{ plan: "planModeApiModelId", act: "actModeApiModelId" },
@@ -61,6 +75,9 @@ export const GeminiProvider = ({ showModelOptions, isPopup, currentMode }: Gemin
 						}
 						selectedModelId={selectedModelId}
 					/>
+					<VSCodeButton disabled={isLoadingGeminiModels} onClick={() => refreshGeminiModels()}>
+						{isLoadingGeminiModels ? "Refreshing..." : "Refresh Gemini models"}
+					</VSCodeButton>
 
 					{SUPPORTED_THINKING_MODELS.includes(selectedModelId) && (
 						<ThinkingBudgetSlider currentMode={currentMode} maxBudget={selectedModelInfo.thinkingConfig?.maxBudget} />

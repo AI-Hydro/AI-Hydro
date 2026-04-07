@@ -1,10 +1,7 @@
-import { EmptyRequest } from "@shared/proto/cline/common"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { CSSProperties, memo, useState } from "react"
 import { useMount } from "react-use"
-import { useClineAuth } from "@/context/ClineAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { AccountServiceClient } from "@/services/grpc-client"
 import { getAsVar, VSC_DESCRIPTION_FOREGROUND, VSC_INACTIVE_SELECTION_BACKGROUND } from "@/utils/vscStyles"
 import { useApiConfigurationHandlers } from "../settings/utils/useApiConfigurationHandlers"
 
@@ -41,9 +38,7 @@ Patch releases (3.19.1 → 3.19.2) will not trigger new announcements.
 */
 const Announcement = ({ version, hideAnnouncement }: AnnouncementProps) => {
 	const minorVersion = version.split(".").slice(0, 2).join(".") // 2.0.0 -> 2.0
-	const { clineUser } = useClineAuth()
 	const { openRouterModels, setShowChatModelSelector, refreshOpenRouterModels } = useExtensionState()
-	const user = clineUser || undefined
 	const { handleFieldsChange } = useApiConfigurationHandlers()
 
 	const [didClickGrokCodeButton, setDidClickGrokCodeButton] = useState(false)
@@ -60,8 +55,8 @@ const Announcement = ({ version, hideAnnouncement }: AnnouncementProps) => {
 			actModeOpenRouterModelId: modelId,
 			planModeOpenRouterModelInfo: openRouterModels[modelId],
 			actModeOpenRouterModelInfo: openRouterModels[modelId],
-			planModeApiProvider: "cline",
-			actModeApiProvider: "cline",
+			planModeApiProvider: "openrouter",
+			actModeApiProvider: "openrouter",
 		})
 
 		setTimeout(() => {
@@ -78,20 +73,14 @@ const Announcement = ({ version, hideAnnouncement }: AnnouncementProps) => {
 			actModeOpenRouterModelId: modelId,
 			planModeOpenRouterModelInfo: openRouterModels[modelId],
 			actModeOpenRouterModelInfo: openRouterModels[modelId],
-			planModeApiProvider: "cline",
-			actModeApiProvider: "cline",
+			planModeApiProvider: "openrouter",
+			actModeApiProvider: "openrouter",
 		})
 
 		setTimeout(() => {
 			setDidClickCodeSupernovaButton(true)
 			setShowChatModelSelector(true)
 		}, 10)
-	}
-
-	const handleShowAccount = () => {
-		AccountServiceClient.accountLoginClicked(EmptyRequest.create()).catch((err) =>
-			console.error("Failed to get login URL:", err),
-		)
 	}
 
 	return (
@@ -104,8 +93,8 @@ const Announcement = ({ version, hideAnnouncement }: AnnouncementProps) => {
 			</h3>
 			<ul style={ulStyle}>
 				<li>
-					<b>Cline CLI (Preview):</b> Run Cline from the command line with experimental Subagent support.{" "}
-					<VSCodeLink href="http://cline.bot/blog/cline-cli-my-undying-love-of-cline-core" style={linkStyle}>
+					<b>AI-Hydro CLI (Preview):</b> Run AI-Hydro from the command line with experimental Subagent support.{" "}
+					<VSCodeLink href="https://github.com/galib9690/AI-Hydro#readme" style={linkStyle}>
 						Learn more
 					</VSCodeLink>
 				</li>
@@ -120,15 +109,15 @@ const Announcement = ({ version, hideAnnouncement }: AnnouncementProps) => {
 			<div style={hrStyle} />
 			<p style={linkContainerStyle}>
 				Join us on{" "}
-				<VSCodeLink href="https://x.com/cline" style={linkStyle}>
-					X,
+				<VSCodeLink href="https://github.com/galib9690/AI-Hydro/discussions" style={linkStyle}>
+					Community,
 				</VSCodeLink>{" "}
-				<VSCodeLink href="https://discord.gg/cline" style={linkStyle}>
-					discord,
+				<VSCodeLink href="https://github.com/galib9690/AI-Hydro/issues" style={linkStyle}>
+					issues,
 				</VSCodeLink>{" "}
 				or{" "}
-				<VSCodeLink href="https://www.reddit.com/r/cline/" style={linkStyle}>
-					r/cline
+				<VSCodeLink href="https://github.com/galib9690/AI-Hydro" style={linkStyle}>
+					GitHub
 				</VSCodeLink>
 				for more updates!
 			</p>

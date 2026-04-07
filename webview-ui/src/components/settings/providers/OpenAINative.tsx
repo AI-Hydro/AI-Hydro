@@ -1,11 +1,13 @@
 import { openAiNativeModels } from "@shared/api"
 import { Mode } from "@shared/storage/types"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { ModelSelector } from "../common/ModelSelector"
 import { normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
+import { useDynamicProviderModels } from "../utils/useDynamicProviderModels"
 
 /**
  * Props for the OpenAINativeProvider component
@@ -25,6 +27,18 @@ export const OpenAINativeProvider = ({ showModelOptions, isPopup, currentMode }:
 
 	// Get the normalized configuration
 	const { selectedModelId, selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, currentMode)
+	const {
+		models: dynamicOpenAiModels,
+		refresh: refreshOpenAiNativeModels,
+		isLoading: isLoadingOpenAiModels,
+	} = useDynamicProviderModels({
+		baseUrl: "https://api.openai.com/v1",
+		apiKey: apiConfiguration?.openAiNativeApiKey,
+		fallbackModels: openAiNativeModels,
+		selectedModelId,
+		selectedModelInfo,
+		enabled: showModelOptions,
+	})
 
 	return (
 		<div>
@@ -39,7 +53,7 @@ export const OpenAINativeProvider = ({ showModelOptions, isPopup, currentMode }:
 				<>
 					<ModelSelector
 						label="Model"
-						models={openAiNativeModels}
+						models={dynamicOpenAiModels}
 						onChange={(e: any) =>
 							handleModeFieldChange(
 								{ plan: "planModeApiModelId", act: "actModeApiModelId" },
@@ -49,6 +63,9 @@ export const OpenAINativeProvider = ({ showModelOptions, isPopup, currentMode }:
 						}
 						selectedModelId={selectedModelId}
 					/>
+					<VSCodeButton disabled={isLoadingOpenAiModels} onClick={() => refreshOpenAiNativeModels()}>
+						{isLoadingOpenAiModels ? "Refreshing..." : "Refresh OpenAI models"}
+					</VSCodeButton>
 
 					<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />
 				</>

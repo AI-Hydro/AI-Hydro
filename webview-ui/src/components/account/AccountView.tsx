@@ -1,12 +1,12 @@
-import type { UsageTransaction as ClineAccountUsageTransaction, PaymentTransaction } from "@shared/ClineAccount"
-import { isClineInternalTester } from "@shared/internal/account"
+import type { UsageTransaction as AiHydroAccountUsageTransaction, PaymentTransaction } from "@shared/AiHydroAccount"
+import { isAiHydroInternalTester } from "@shared/internal/account"
 import type { UserOrganization } from "@shared/proto/cline/account"
 import { EmptyRequest } from "@shared/proto/cline/common"
 import { VSCodeButton, VSCodeDivider, VSCodeDropdown, VSCodeOption, VSCodeTag } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useInterval } from "react-use"
-import { type ClineUser, handleSignOut } from "@/context/ClineAuthContext"
+import { type AiHydroUser, handleSignOut } from "@/context/AiHydroAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { AccountServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
@@ -16,17 +16,17 @@ import { updateSetting } from "../settings/utils/settingsHandlers"
 import { AccountWelcomeView } from "./AccountWelcomeView"
 import { CreditBalance } from "./CreditBalance"
 import CreditsHistoryTable from "./CreditsHistoryTable"
-import { convertProtoUsageTransactions, getClineUris, getMainRole } from "./helpers"
+import { convertProtoUsageTransactions, getAiHydroUris, getMainRole } from "./helpers"
 
 type AccountViewProps = {
-	clineUser: ClineUser | null
+	aihydroUser: AiHydroUser | null
 	organizations: UserOrganization[] | null
 	activeOrganization: UserOrganization | null
 	onDone: () => void
 }
 
-type ClineAccountViewProps = {
-	clineUser: ClineUser
+type AiHydroAccountViewProps = {
+	aihydroUser: AiHydroUser
 	userOrganizations: UserOrganization[] | null
 	activeOrganization: UserOrganization | null
 	clineEnv: "Production" | "Staging" | "Local"
@@ -34,14 +34,14 @@ type ClineAccountViewProps = {
 
 type CachedData = {
 	balance: number | null
-	usageData: ClineAccountUsageTransaction[]
+	usageData: AiHydroAccountUsageTransaction[]
 	paymentsData: PaymentTransaction[]
 	lastFetchTime: number
 }
 
-const ClineEnvOptions = ["Production", "Staging", "Local"] as const
+const AiHydroEnvOptions = ["Production", "Staging", "Local"] as const
 
-const AccountView = ({ onDone, clineUser, organizations, activeOrganization }: AccountViewProps) => {
+const AccountView = ({ onDone, aihydroUser, organizations, activeOrganization }: AccountViewProps) => {
 	const { environment } = useExtensionState()
 	const titleColor = getEnvironmentColor(environment)
 
@@ -55,12 +55,12 @@ const AccountView = ({ onDone, clineUser, organizations, activeOrganization }: A
 			</div>
 			<div className="flex-grow overflow-hidden pr-[8px] flex flex-col">
 				<div className="h-full mb-1.5">
-					{clineUser?.uid ? (
-						<ClineAccountView
+					{aihydroUser?.uid ? (
+						<AiHydroAccountView
 							activeOrganization={activeOrganization}
+							aihydroUser={aihydroUser}
 							clineEnv={environment === "local" ? "Local" : environment === "staging" ? "Staging" : "Production"}
-							clineUser={clineUser}
-							key={clineUser.uid}
+							key={aihydroUser.uid}
 							userOrganizations={organizations}
 						/>
 					) : (
@@ -72,8 +72,8 @@ const AccountView = ({ onDone, clineUser, organizations, activeOrganization }: A
 	)
 }
 
-export const ClineAccountView = ({ clineUser, userOrganizations, activeOrganization, clineEnv }: ClineAccountViewProps) => {
-	const { email, displayName, appBaseUrl, uid } = clineUser
+export const AiHydroAccountView = ({ aihydroUser, userOrganizations, activeOrganization, clineEnv }: AiHydroAccountViewProps) => {
+	const { email, displayName, appBaseUrl, uid } = aihydroUser
 	const { remoteConfigSettings } = useExtensionState()
 
 	// Determine if dropdown should be locked by remote config
@@ -90,7 +90,7 @@ export const ClineAccountView = ({ clineUser, userOrganizations, activeOrganizat
 
 	// Current displayed data
 	const [balance, setBalance] = useState<number | null>(null)
-	const [usageData, setUsageData] = useState<ClineAccountUsageTransaction[]>([])
+	const [usageData, setUsageData] = useState<AiHydroAccountUsageTransaction[]>([])
 	const [paymentsData, setPaymentsData] = useState<PaymentTransaction[]>([])
 	const [lastFetchTime, setLastFetchTime] = useState<number>(Date.now())
 
@@ -128,7 +128,7 @@ export const ClineAccountView = ({ clineUser, userOrganizations, activeOrganizat
 	// Track if initial mount fetch has completed to avoid duplicate fetches
 	const initialFetchCompleteRef = useRef<boolean>(false)
 
-	const isClineTester = useMemo(() => (email ? isClineInternalTester(email) : false), [email])
+	const isAiHydroTester = useMemo(() => (email ? isAiHydroInternalTester(email) : false), [email])
 
 	const fetchUserCredit = useCallback(async () => {
 		try {
@@ -237,7 +237,7 @@ export const ClineAccountView = ({ clineUser, userOrganizations, activeOrganizat
 		fetchCreditBalance(dropdownValue)
 	}, 60000)
 
-	const clineUrl = appBaseUrl || "https://app.cline.bot"
+	const aihydroUrl = appBaseUrl || "https://github.com/galib9690/AI-Hydro"
 
 	// Fetch balance on mount
 	useEffect(() => {
@@ -375,7 +375,10 @@ export const ClineAccountView = ({ clineUser, userOrganizations, activeOrganizat
 
 				<div className="w-full flex gap-2 flex-col min-[225px]:flex-row">
 					<div className="w-full min-[225px]:w-1/2">
-						<VSCodeButtonLink appearance="primary" className="w-full" href={getClineUris(clineUrl, "dashboard").href}>
+						<VSCodeButtonLink
+							appearance="primary"
+							className="w-full"
+							href={getAiHydroUris(aihydroUrl, "dashboard").href}>
 							Dashboard
 						</VSCodeButtonLink>
 					</div>
@@ -388,7 +391,7 @@ export const ClineAccountView = ({ clineUser, userOrganizations, activeOrganizat
 
 				<CreditBalance
 					balance={balance}
-					creditUrl={getClineUris(clineUrl, "credits", dropdownValue === uid ? "account" : "organization")}
+					creditUrl={getAiHydroUris(aihydroUrl, "credits", dropdownValue === uid ? "account" : "organization")}
 					fetchCreditBalance={() => fetchCreditBalance(dropdownValue)}
 					isLoading={isLoading}
 					lastFetchTime={lastFetchTime}
@@ -405,10 +408,10 @@ export const ClineAccountView = ({ clineUser, userOrganizations, activeOrganizat
 					/>
 				</div>
 
-				{isClineTester && (
+				{isAiHydroTester && (
 					<div className="w-full gap-1 items-end">
 						<VSCodeDivider className="w-full my-3" />
-						<div className="text-sm font-semibold">Cline Environment</div>
+						<div className="text-sm font-semibold">AI-Hydro Environment</div>
 						<VSCodeDropdown
 							className="w-full mt-1"
 							currentValue={clineEnv}
@@ -419,7 +422,7 @@ export const ClineAccountView = ({ clineUser, userOrganizations, activeOrganizat
 									updateSetting("clineEnv", value.toLowerCase())
 								}
 							}}>
-							{ClineEnvOptions.map((env) => (
+							{AiHydroEnvOptions.map((env) => (
 								<VSCodeOption key={env} value={env}>
 									{env}
 								</VSCodeOption>

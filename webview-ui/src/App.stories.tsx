@@ -1,7 +1,7 @@
 import { HeroUIProvider } from "@heroui/react"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import type { ApiConfiguration } from "@shared/api"
-import type { ClineMessage } from "@shared/ExtensionMessage"
+import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useMemo } from "react"
@@ -37,7 +37,7 @@ const meta: Meta<typeof MockApp> = {
 		docs: {
 			description: {
 				component: `
-The ChatView component is the main interface for interacting with Cline. It provides a comprehensive chat experience with AI assistance, task management, and various tools.
+The ChatView component is the main interface for interacting with AI-Hydro. It provides a comprehensive chat experience with AI assistance, task management, and various tools.
 
 **Key Features:**
 - **Task Management**: Create, resume, and manage AI-assisted tasks
@@ -134,11 +134,11 @@ const mockTaskHistory: HistoryItem[] = [
 
 const createMessage = (
 	minutesAgo: number,
-	type: ClineMessage["type"],
-	say: ClineMessage["say"],
+	type: AiHydroMessage["type"],
+	say: AiHydroMessage["say"],
 	text: string,
-	overrides: Partial<ClineMessage> = {},
-): ClineMessage => ({
+	overrides: Partial<AiHydroMessage> = {},
+): AiHydroMessage => ({
 	ts: Date.now() - minutesAgo * 60000,
 	type,
 	say,
@@ -163,7 +163,7 @@ const createApiReqMessage = (minutesAgo: number, request: string, metrics: any =
 		}),
 	)
 
-const mockActiveMessages: ClineMessage[] = [
+const mockActiveMessages: AiHydroMessage[] = [
 	createMessage(5, "say", "task", "Help me create a responsive navigation component for a React application"),
 	createApiReqMessage(4.9, "Initial analysis request"),
 	createMessage(
@@ -199,7 +199,7 @@ const mockActiveMessages: ClineMessage[] = [
 	),
 ]
 
-const mockStreamingMessages: ClineMessage[] = [
+const mockStreamingMessages: AiHydroMessage[] = [
 	...mockActiveMessages,
 	createMessage(
 		0.17,
@@ -217,7 +217,7 @@ const createMockState = (overrides: any = {}) => ({
 	autoCondenseThreshold: 0.5,
 	welcomeViewCompleted: true,
 	showWelcome: false,
-	clineMessages: mockActiveMessages,
+	aihydroMessages: mockActiveMessages,
 	taskHistory: mockTaskHistory,
 	apiConfiguration: mockApiConfiguration,
 	...overrides,
@@ -239,7 +239,7 @@ const createStoryDecorator =
 	}
 
 export const WelcomeScreen: Story = {
-	decorators: [createStoryDecorator({ welcomeViewCompleted: false, showWelcome: true, clineMessages: [] })],
+	decorators: [createStoryDecorator({ welcomeViewCompleted: false, showWelcome: true, aihydroMessages: [] })],
 	parameters: {
 		docs: {
 			description: {
@@ -267,14 +267,14 @@ export const ActiveConversation: Story = {
 	parameters: {
 		docs: {
 			description: {
-				story: "An active conversation showing a typical interaction with Cline, including task creation, tool usage, and AI responses.",
+				story: "An active conversation showing a typical interaction with AI-Hydro, including task creation, tool usage, and AI responses.",
 			},
 		},
 	},
 }
 
 export const StreamingResponse: Story = {
-	decorators: [createStoryDecorator({ clineMessages: mockStreamingMessages })],
+	decorators: [createStoryDecorator({ aihydroMessages: mockStreamingMessages })],
 	parameters: {
 		docs: {
 			description: {
@@ -284,7 +284,7 @@ export const StreamingResponse: Story = {
 	},
 }
 
-const createLongMessages = (): ClineMessage[] => [
+const createLongMessages = (): AiHydroMessage[] => [
 	createMessage(30, "say", "task", "Help me build a complete e-commerce application with React, Node.js, and MongoDB"),
 	createMessage(
 		29.7,
@@ -339,7 +339,7 @@ const createLongMessages = (): ClineMessage[] => [
 ]
 
 export const LongConversation: Story = {
-	decorators: [createStoryDecorator({ clineMessages: createLongMessages() })],
+	decorators: [createStoryDecorator({ aihydroMessages: createLongMessages() })],
 	parameters: {
 		docs: {
 			description: {
@@ -384,11 +384,11 @@ const createAskMessage = (type: string, text: string, streamingFailedMessage?: s
 })
 
 export const ErrorState: Story = {
-	decorators: [createStoryDecorator({ clineMessages: createErrorMessages() })],
+	decorators: [createStoryDecorator({ aihydroMessages: createErrorMessages() })],
 	parameters: {
 		docs: {
 			description: {
-				story: "Shows how Cline handles and displays error messages, helping users understand and resolve issues.",
+				story: "Shows how AI-Hydro handles and displays error messages, helping users understand and resolve issues.",
 			},
 		},
 	},
@@ -408,7 +408,7 @@ export const AutoApprovalEnabled: Story = {
 	parameters: {
 		docs: {
 			description: {
-				story: "Shows the interface with auto-approval enabled, allowing Cline to execute certain actions automatically without user confirmation.",
+				story: "Shows the interface with auto-approval enabled, allowing AI-Hydro to execute certain actions automatically without user confirmation.",
 			},
 		},
 	},
@@ -433,7 +433,7 @@ const createPlanModeMessages = () => [
 export const PlanMode: Story = {
 	decorators: [
 		createStoryDecorator({
-			clineMessages: createPlanModeMessages(),
+			aihydroMessages: createPlanModeMessages(),
 			apiConfiguration: mockApiConfigurationPlan,
 			mode: "plan" as const,
 		}),
@@ -441,14 +441,14 @@ export const PlanMode: Story = {
 	parameters: {
 		docs: {
 			description: {
-				story: "Shows Cline in Plan mode, where it focuses on creating detailed plans and discussing approaches before implementation.",
+				story: "Shows AI-Hydro in Plan mode, where it focuses on creating detailed plans and discussing approaches before implementation.",
 			},
 		},
 	},
 }
 
 export const EmptyState: Story = {
-	decorators: [createStoryDecorator({ clineMessages: [], taskHistory: [], isNewUser: true })],
+	decorators: [createStoryDecorator({ aihydroMessages: [], taskHistory: [], isNewUser: true })],
 	parameters: {
 		docs: {
 			description: {
@@ -484,11 +484,11 @@ const createBrowserMessages = () => [
 ]
 
 export const BrowserAutomation: Story = {
-	decorators: [createStoryDecorator({ clineMessages: createBrowserMessages() })],
+	decorators: [createStoryDecorator({ aihydroMessages: createBrowserMessages() })],
 	parameters: {
 		docs: {
 			description: {
-				story: "Shows Cline performing browser automation tasks, including launching browsers, clicking elements, and testing web applications.",
+				story: "Shows AI-Hydro performing browser automation tasks, including launching browsers, clicking elements, and testing web applications.",
 			},
 		},
 	},
@@ -502,7 +502,7 @@ const createToolApprovalMessages = () => [
 ]
 
 export const ToolApproval: Story = {
-	decorators: [createStoryDecorator({ clineMessages: createToolApprovalMessages() })],
+	decorators: [createStoryDecorator({ aihydroMessages: createToolApprovalMessages() })],
 	parameters: {
 		docs: {
 			description: {
@@ -515,7 +515,7 @@ export const ToolApproval: Story = {
 export const ToolSave: Story = {
 	decorators: [
 		createStoryDecorator({
-			clineMessages: [
+			aihydroMessages: [
 				createMessage(5, "say", "task", "Update the README file with new instructions"),
 				createMessage(4.7, "say", "text", "I'll update your README file with the new instructions."),
 				createAskMessage("tool", JSON.stringify({ tool: "editedExistingFile", path: "README.md" })),
@@ -541,7 +541,7 @@ const quickStory = (
 ): Story => ({
 	decorators: [
 		createStoryDecorator({
-			clineMessages: [
+			aihydroMessages: [
 				...createLongMessages(),
 				createMessage(6, "say", "task", `Help with ${name.toLowerCase()}`),
 				createMessage(4.7, "say", "text", `I'll help you with ${name.toLowerCase()}.`),
@@ -562,7 +562,7 @@ export const CommandExecution: Story = quickStory(
 export const CommandOutput: Story = {
 	decorators: [
 		createStoryDecorator({
-			clineMessages: [
+			aihydroMessages: [
 				createAskMessage("command", "npm install"),
 				createAskMessage("command_output", "Installing packages... This may take a few minutes."),
 			],
@@ -612,7 +612,7 @@ export const Followup = quickStory(
 	"Follow-up",
 	"followup",
 	"What would you like me to work on next?",
-	"Shows followup question state where Cline asks for next steps.",
+	"Shows followup question state where AI-Hydro asks for next steps.",
 )
 export const ResumeTask = quickStory(
 	"Resume Task",
@@ -636,7 +636,7 @@ export const AutoApprovalMaxReached = quickStory(
 export const ApiRequestActive: Story = {
 	decorators: [
 		createStoryDecorator({
-			clineMessages: [
+			aihydroMessages: [
 				createMessage(5, "say", "text", "Processing your request...", { partial: true }),
 				createApiReqMessage(4.7, "Making API request to generate response", { partial: true }),
 			],
@@ -648,7 +648,7 @@ export const PlanModeResponse = quickStory(
 	"Plan Mode Response",
 	"plan_mode_respond",
 	"Here's my detailed plan for creating a comprehensive testing strategy.",
-	"Shows plan mode response where Cline presents a detailed plan for user approval.",
+	"Shows plan mode response where AI-Hydro presents a detailed plan for user approval.",
 )
 export const CondenseConversation = quickStory(
 	"Condense Conversation",
@@ -659,7 +659,7 @@ export const CondenseConversation = quickStory(
 export const ReportBug = quickStory(
 	"Report Bug",
 	"report_bug",
-	"Would you like to report this issue to help improve Cline?",
+	"Would you like to report this issue to help improve AI-Hydro?",
 	"Shows utility action to report bugs to the GitHub repository.",
 )
 export const ResumeCompletedTask = quickStory(

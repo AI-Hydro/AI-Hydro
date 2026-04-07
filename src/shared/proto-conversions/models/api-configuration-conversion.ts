@@ -269,8 +269,6 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.MISTRAL
 		case "vscode-lm":
 			return ProtoApiProvider.VSCODE_LM
-		case "cline":
-			return ProtoApiProvider.CLINE
 		case "litellm":
 			return ProtoApiProvider.LITELLM
 		case "moonshot":
@@ -305,8 +303,6 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.ZAI
 		case "dify":
 			return ProtoApiProvider.DIFY
-		case "oca":
-			return ProtoApiProvider.OCA
 		default:
 			return ProtoApiProvider.ANTHROPIC
 	}
@@ -350,7 +346,7 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 		case ProtoApiProvider.VSCODE_LM:
 			return "vscode-lm"
 		case ProtoApiProvider.CLINE:
-			return "cline"
+			return "openrouter"
 		case ProtoApiProvider.LITELLM:
 			return "litellm"
 		case ProtoApiProvider.MOONSHOT:
@@ -386,7 +382,7 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 		case ProtoApiProvider.DIFY:
 			return "dify"
 		case ProtoApiProvider.OCA:
-			return "oca"
+			return "openrouter"
 		default:
 			return "anthropic"
 	}

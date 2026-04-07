@@ -1,5 +1,5 @@
 import { cn } from "@heroui/react"
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import { StringRequest } from "@shared/proto/cline/common"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { useCallback, useMemo } from "react"
@@ -20,7 +20,7 @@ import TaskTimeline from "./TaskTimeline"
 
 const IS_DEV = process.env.IS_DEV === '"true"'
 interface TaskHeaderProps {
-	task: ClineMessage
+	task: AiHydroMessage
 	tokensIn: number
 	tokensOut: number
 	doesModelSupportPromptCache: boolean
@@ -53,7 +53,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		apiConfiguration,
 		currentTaskItem,
 		checkpointManagerErrorMessage,
-		clineMessages,
+		aihydroMessages,
 		navigateToSettings,
 		useAutoCondense,
 		mode,
@@ -174,7 +174,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							useAutoCondense={false} // Disable auto-condense configuration in UI for now
 						/>
 
-						<TaskTimeline messages={clineMessages} onBlockClick={onScrollToMessage} />
+						<TaskTimeline messages={aihydroMessages} onBlockClick={onScrollToMessage} />
 					</div>
 				)}
 			</div>

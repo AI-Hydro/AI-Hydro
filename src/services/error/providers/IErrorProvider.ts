@@ -3,7 +3,7 @@
  * Allows switching between different error tracking providers (PostHog, Sentry, etc.)
  */
 
-import type { ClineError } from "../ClineError"
+import type { AiHydroError } from "../AiHydroError"
 
 /**
  * Error settings that control when and how errors are logged
@@ -24,10 +24,10 @@ export interface ErrorSettings {
 export interface IErrorProvider {
 	/**
 	 * Log an exception with error details
-	 * @param error The error to log (Error or ClineError)
+	 * @param error The error to log (Error or AiHydroError)
 	 * @param properties Optional additional properties to attach
 	 */
-	logException(error: Error | ClineError, properties?: Record<string, unknown>): void
+	logException(error: Error | AiHydroError, properties?: Record<string, unknown>): void
 
 	/**
 	 * Log a message with specified level

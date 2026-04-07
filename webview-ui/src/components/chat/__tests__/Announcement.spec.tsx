@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import React from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { ClineAuthProvider } from "@/context/ClineAuthContext"
+import { AiHydroAuthProvider } from "@/context/AiHydroAuthContext"
 import Announcement from "../Announcement"
 
 // Mock the VSCode webview toolkit
@@ -47,7 +47,7 @@ vi.mock("@/context/ExtensionStateContext", () => ({
 		setShowChatModelSelector: vi.fn(),
 		refreshOpenRouterModels: vi.fn(), // Add this missing mock function
 		version: "2.0.0",
-		clineMessages: [],
+		aihydroMessages: [],
 		taskHistory: [],
 		shouldShowAnnouncement: false,
 		theme: "dark",
@@ -60,7 +60,7 @@ vi.mock("@/context/ExtensionStateContext", () => ({
 
 // Test wrapper component that provides all necessary contexts
 const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	return <ClineAuthProvider>{children}</ClineAuthProvider>
+	return <AiHydroAuthProvider>{children}</AiHydroAuthProvider>
 }
 
 describe("Announcement", () => {

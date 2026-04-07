@@ -1,5 +1,5 @@
 // Define available tool ids
-export enum ClineDefaultTool {
+export enum AiHydroDefaultTool {
 	ASK = "ask_followup_question",
 	ATTEMPT = "attempt_completion",
 	BASH = "execute_command",
@@ -25,4 +25,4 @@ export enum ClineDefaultTool {
 
 // Array of all tool names for compatibility
 // Automatically generated from the enum values
-export const toolUseNames = Object.values(ClineDefaultTool) as ClineDefaultTool[]
+export const toolUseNames = Object.values(AiHydroDefaultTool) as AiHydroDefaultTool[]

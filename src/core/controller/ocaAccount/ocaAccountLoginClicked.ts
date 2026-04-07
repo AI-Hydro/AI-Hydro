@@ -1,5 +1,4 @@
 import { EmptyRequest, String as ProtoString } from "@shared/proto/cline/common"
-import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { Controller } from "../index"
 
 /**
@@ -11,5 +10,6 @@ import { Controller } from "../index"
  * @returns The login URL as a string.
  */
 export async function ocaAccountLoginClicked(_controller: Controller, _: EmptyRequest): Promise<ProtoString> {
-	return await OcaAuthService.getInstance().createAuthRequest()
+	// OCA account authorization is intentionally disabled in AI-Hydro lightweight mode.
+	return ProtoString.create({ value: "" })
 }

@@ -1,4 +1,4 @@
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useMemo } from "react"
 import { expect, userEvent, within } from "storybook/test"
@@ -6,7 +6,7 @@ import { createStorybookDecorator } from "@/config/StorybookDecorator"
 import ErrorRow from "./ErrorRow"
 
 // Mock data factories
-const createMockMessage = (overrides: Partial<ClineMessage> = {}): ClineMessage => ({
+const createMockMessage = (overrides: Partial<AiHydroMessage> = {}): AiHydroMessage => ({
 	ts: Date.now(),
 	type: "say",
 	say: "error",
@@ -15,7 +15,7 @@ const createMockMessage = (overrides: Partial<ClineMessage> = {}): ClineMessage 
 })
 
 const createMockAuthState = (overrides: any = {}) => ({
-	clineUser: null,
+	aihydroUser: null,
 	activeOrganization: null,
 	isAuthenticated: false,
 	...overrides,
@@ -23,7 +23,7 @@ const createMockAuthState = (overrides: any = {}) => ({
 
 const createMockExtensionState = (overrides: any = {}) => ({
 	version: "1.0.0",
-	clineMessages: [],
+	aihydroMessages: [],
 	taskHistory: [],
 	shouldShowAnnouncement: false,
 	...overrides,
@@ -51,7 +51,7 @@ const meta: Meta<typeof ErrorRow> = {
 		docs: {
 			description: {
 				component:
-					"Displays different types of error messages in the chat interface, including API errors, credit limit errors, diff errors, and clineignore errors. Handles special error parsing for Cline provider errors and provides appropriate user actions.",
+					"Displays different types of error messages in the chat interface, including API errors, credit limit errors, diff errors, and aihydroignore errors. Handles special error parsing for AI-Hydro provider errors and provides appropriate user actions.",
 			},
 		},
 	},
@@ -71,7 +71,7 @@ export const Default: Story = {
 	argTypes: {
 		errorType: {
 			control: { type: "select" },
-			options: ["error", "mistake_limit_reached", "auto_approval_max_req_reached", "diff_error", "clineignore_error"],
+			options: ["error", "mistake_limit_reached", "auto_approval_max_req_reached", "diff_error", "aihydroignore_error"],
 			description: "Type of error to display",
 		},
 		message: {
@@ -121,7 +121,7 @@ export const ApiStreamingFailed: Story = {
 }
 
 // Cline-specific errors
-export const ClineBalanceError: Story = {
+export const AiHydroBalanceError: Story = {
 	args: {
 		message: createMockMessage(),
 		errorType: "error",
@@ -141,7 +141,7 @@ export const ClineBalanceError: Story = {
 	},
 }
 
-export const ClineRateLimitError: Story = {
+export const AiHydroRateLimitError: Story = {
 	args: {
 		message: createMockMessage(),
 		errorType: "error",
@@ -185,7 +185,7 @@ export const AuthErrorSignedIn: Story = {
 	...AuthenticationErrors,
 	decorators: [
 		createStoryDecorator({
-			clineUser: { id: "user123", email: "user@example.com" },
+			aihydroUser: { id: "user123", email: "user@example.com" },
 			isAuthenticated: true,
 		}),
 	],
@@ -206,7 +206,7 @@ export const InteractiveSignIn: Story = {
 		message: createMockMessage(),
 		errorType: "error",
 		apiRequestFailedMessage: JSON.stringify({
-			message: "Please sign in to access Cline services.",
+			message: "Please sign in to access AI-Hydro services.",
 			code: "ERR_BAD_REQUEST",
 			request_id: "req_signin_test",
 			providerId: "cline",

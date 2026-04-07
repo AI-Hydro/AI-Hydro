@@ -13,7 +13,6 @@ import { StateServiceClient } from "@/services/grpc-client"
 import { highlight } from "../history/HistoryView"
 import { ContextWindowSwitcher } from "./common/ContextWindowSwitcher"
 import { ModelInfoView } from "./common/ModelInfoView"
-import FeaturedModelCard from "./FeaturedModelCard"
 import ThinkingBudgetSlider from "./ThinkingBudgetSlider"
 import { getModeSpecificFields, normalizeApiConfiguration } from "./utils/providerUtils"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
@@ -43,30 +42,6 @@ export interface OpenRouterModelPickerProps {
 	isPopup?: boolean
 	currentMode: Mode
 }
-
-// Featured models for Cline provider
-const featuredModels = [
-	{
-		id: "anthropic/claude-sonnet-4.5",
-		description: "Recommended for agentic coding in Cline",
-		label: "Best",
-	},
-	{
-		id: "anthropic/claude-haiku-4.5",
-		description: "Fast frontier intelligence at low cost",
-		label: "New",
-	},
-	{
-		id: "x-ai/grok-code-fast-1",
-		description: "Advanced model with 262K context for complex coding",
-		label: "Free",
-	},
-	{
-		id: "cline/code-supernova-1-million",
-		description: "Stealth coding model with image support",
-		label: "Free",
-	},
-]
 
 const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, currentMode }) => {
 	const { handleModeFieldsChange } = useApiConfigurationHandlers()
@@ -124,15 +99,8 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 
 	const modelIds = useMemo(() => {
 		const unfilteredModelIds = Object.keys(openRouterModels).sort((a, b) => a.localeCompare(b))
-
-		if (modeFields.apiProvider === "cline") {
-			// For Cline provider: exclude :free models
-			return unfilteredModelIds.filter((id) => !id.includes(":free"))
-		} else {
-			// For OpenRouter provider: exclude Cline-specific models
-			return unfilteredModelIds.filter((id) => !id.startsWith("cline/"))
-		}
-	}, [openRouterModels, modeFields.apiProvider])
+		return unfilteredModelIds.filter((id) => !id.startsWith("cline/"))
+	}, [openRouterModels])
 
 	const searchableItems = useMemo(() => {
 		return modelIds.map((id) => ({
@@ -250,24 +218,6 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 					<span style={{ fontWeight: 500 }}>Model</span>
 				</label>
 
-				{modeFields.apiProvider === "cline" && (
-					<div style={{ marginBottom: "6px", marginTop: 4 }}>
-						{featuredModels.map((model) => (
-							<FeaturedModelCard
-								description={model.description}
-								isSelected={selectedModelId === model.id}
-								key={model.id}
-								label={model.label}
-								modelId={model.id}
-								onClick={() => {
-									handleModelChange(model.id)
-									setIsDropdownVisible(false)
-								}}
-							/>
-						))}
-					</div>
-				)}
-
 				<DropdownWrapper ref={dropdownRef}>
 					<VSCodeTextField
 						id="model-search"
@@ -369,7 +319,7 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 					<VSCodeLink href="https://openrouter.ai/models" style={{ display: "inline", fontSize: "inherit" }}>
 						OpenRouter.
 					</VSCodeLink>
-					If you're unsure which model to choose, Cline works best with{" "}
+					If you're unsure which model to choose, AI-Hydro works best with{" "}
 					<VSCodeLink
 						onClick={() => handleModelChange("anthropic/claude-sonnet-4.5")}
 						style={{ display: "inline", fontSize: "inherit" }}>

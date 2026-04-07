@@ -3,11 +3,11 @@ import { formatResponse } from "@core/prompts/responses"
 import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
 import { showSystemNotification } from "@integrations/notifications"
 import { COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
-import { ClineAsk } from "@shared/ExtensionMessage"
+import { AiHydroAsk } from "@shared/ExtensionMessage"
 import { arePathsEqual } from "@utils/path"
 import { fixModelHtmlEscaping } from "@utils/string"
 import { telemetryService } from "@/services/telemetry"
-import { ClineDefaultTool } from "@/shared/tools"
+import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -17,7 +17,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class ExecuteCommandToolHandler implements IFullyManagedTool {
-	readonly name = ClineDefaultTool.BASH
+	readonly name = AiHydroDefaultTool.BASH
 
 	constructor(_validator: ToolValidator) {}
 
@@ -38,7 +38,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			return
 		} else {
 			await uiHelpers
-				.ask("command" as ClineAsk, uiHelpers.removeClosingTag(block, "command", command), block.partial)
+				.ask("command" as AiHydroAsk, uiHelpers.removeClosingTag(block, "command", command), block.partial)
 				.catch(() => {})
 		}
 	}
@@ -111,11 +111,11 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			// If no hint, use primary workspace (cwd)
 		}
 
-		// Check clineignore validation for command
-		const ignoredFileAttemptedToAccess = config.services.clineIgnoreController.validateCommand(actualCommand)
+		// Check aihydroignore validation for command
+		const ignoredFileAttemptedToAccess = config.services.aihydroIgnoreController.validateCommand(actualCommand)
 		if (ignoredFileAttemptedToAccess) {
-			await config.callbacks.say("clineignore_error", ignoredFileAttemptedToAccess)
-			return formatResponse.toolError(formatResponse.clineIgnoreError(ignoredFileAttemptedToAccess))
+			await config.callbacks.say("aihydroignore_error", ignoredFileAttemptedToAccess)
+			return formatResponse.toolError(formatResponse.aihydroIgnoreError(ignoredFileAttemptedToAccess))
 		}
 
 		let didAutoApprove = false
@@ -161,7 +161,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		} else {
 			// Manual approval flow
 			showNotificationForApprovalIfAutoApprovalEnabled(
-				`Cline wants to execute a command: ${actualCommand}`,
+				`AI-Hydro wants to execute a command: ${actualCommand}`,
 				config.autoApprovalSettings.enabled,
 				config.autoApprovalSettings.enableNotifications,
 			)

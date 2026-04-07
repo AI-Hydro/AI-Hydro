@@ -1,24 +1,17 @@
-import { BooleanRequest, EmptyRequest } from "@shared/proto/cline/common"
+import { BooleanRequest } from "@shared/proto/cline/common"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { memo, useEffect, useState } from "react"
-import ClineLogoWhite from "@/assets/ClineLogoWhite"
+
 import ApiOptions from "@/components/settings/ApiOptions"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { AccountServiceClient, StateServiceClient } from "@/services/grpc-client"
+import { StateServiceClient } from "@/services/grpc-client"
 import { validateApiConfiguration } from "@/utils/validate"
 
 const WelcomeView = memo(() => {
 	const { apiConfiguration, mode } = useExtensionState()
 	const [apiErrorMessage, setApiErrorMessage] = useState<string | undefined>(undefined)
-	const [showApiOptions, setShowApiOptions] = useState(false)
 
 	const disableLetsGoButton = apiErrorMessage != null
-
-	const handleLogin = () => {
-		AccountServiceClient.accountLoginClicked(EmptyRequest.create()).catch((err) =>
-			console.error("Failed to get login URL:", err),
-		)
-	}
 
 	const handleSubmit = async () => {
 		try {
@@ -33,11 +26,13 @@ const WelcomeView = memo(() => {
 	}, [apiConfiguration, mode])
 
 	return (
-		<div className="fixed inset-0 p-0 flex flex-col">
+		<div className="fixed inset-0 p-0 flex flex-col bg-gradient-to-br from-aihydro-ocean-dark via-aihydro-background to-aihydro-surface">
 			<div className="h-full px-5 overflow-auto">
-				<h2>Hi, I'm Cline</h2>
+				<h2 className="text-aihydro-text">Hi, I'm AI-Hydro</h2>
 				<div className="flex justify-center my-5">
-					<ClineLogoWhite className="size-16" />
+					<div className="w-16 h-16 bg-gradient-to-br from-aihydro-ocean-blue to-aihydro-teal rounded-lg flex items-center justify-center">
+						<span className="text-2xl">🌊</span>
+					</div>
 				</div>
 				<p>
 					I can do all kinds of tasks thanks to breakthroughs in{" "}
@@ -49,33 +44,13 @@ const WelcomeView = memo(() => {
 					create new tools and extend my own capabilities.
 				</p>
 
-				<p className="text-[var(--vscode-descriptionForeground)]">
-					Sign up for an account to get started for free, or use an API key that provides access to models like Claude
-					Sonnet.
-				</p>
-
-				<VSCodeButton appearance="primary" className="w-full mt-1" onClick={handleLogin}>
-					Get Started for Free
-				</VSCodeButton>
-
-				{!showApiOptions && (
-					<VSCodeButton
-						appearance="secondary"
-						className="mt-2.5 w-full"
-						onClick={() => setShowApiOptions(!showApiOptions)}>
-						Use your own API key
-					</VSCodeButton>
-				)}
+				<p className="text-[var(--vscode-descriptionForeground)]">Configure a model provider to get started.</p>
 
 				<div className="mt-4.5">
-					{showApiOptions && (
-						<div>
-							<ApiOptions currentMode={mode} showModelOptions={false} />
-							<VSCodeButton className="mt-0.75" disabled={disableLetsGoButton} onClick={handleSubmit}>
-								Let's go!
-							</VSCodeButton>
-						</div>
-					)}
+					<ApiOptions currentMode={mode} showModelOptions={false} />
+					<VSCodeButton className="mt-0.75" disabled={disableLetsGoButton} onClick={handleSubmit}>
+						Let's go!
+					</VSCodeButton>
 				</div>
 			</div>
 		</div>

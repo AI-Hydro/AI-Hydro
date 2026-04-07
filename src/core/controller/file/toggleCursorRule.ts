@@ -1,5 +1,5 @@
 import type { ToggleCursorRuleRequest } from "@shared/proto/cline/file"
-import { ClineRulesToggles } from "@shared/proto/cline/file"
+import { ClineRulesToggles as AiHydroRulesToggles } from "@shared/proto/cline/file"
 import type { Controller } from "../index"
 
 /**
@@ -8,7 +8,7 @@ import type { Controller } from "../index"
  * @param request The toggle request
  * @returns The updated Cursor rule toggles
  */
-export async function toggleCursorRule(controller: Controller, request: ToggleCursorRuleRequest): Promise<ClineRulesToggles> {
+export async function toggleCursorRule(controller: Controller, request: ToggleCursorRuleRequest): Promise<AiHydroRulesToggles> {
 	const { rulePath, enabled } = request
 
 	if (!rulePath || typeof enabled !== "boolean") {
@@ -27,7 +27,7 @@ export async function toggleCursorRule(controller: Controller, request: ToggleCu
 	// Get the current state to return in the response
 	const cursorToggles = controller.stateManager.getWorkspaceStateKey("localCursorRulesToggles")
 
-	return ClineRulesToggles.create({
+	return AiHydroRulesToggles.create({
 		toggles: cursorToggles,
 	})
 }

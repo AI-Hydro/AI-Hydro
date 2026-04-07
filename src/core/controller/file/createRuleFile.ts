@@ -1,4 +1,4 @@
-import { refreshClineRulesToggles } from "@core/context/instructions/user-instructions/cline-rules"
+import { refreshAiHydroRulesToggles } from "@core/context/instructions/user-instructions/aihydro-rules"
 import { createRuleFile as createRuleFileImpl } from "@core/context/instructions/user-instructions/rule-helpers"
 import { getWorkspaceBasename } from "@core/workspace"
 import { RuleFile, RuleFileRequest } from "@shared/proto/cline/file"
@@ -53,7 +53,7 @@ export async function createRuleFile(controller: Controller, request: RuleFileRe
 		if (request.type === "workflow") {
 			await refreshWorkflowToggles(controller, cwd)
 		} else {
-			await refreshClineRulesToggles(controller, cwd)
+			await refreshAiHydroRulesToggles(controller, cwd)
 		}
 		await controller.postStateToWebview()
 

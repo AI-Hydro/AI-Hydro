@@ -1,10 +1,10 @@
 import { Controller } from "@core/controller"
 import { sendChatButtonClickedEvent } from "@core/controller/ui/subscribeToChatButtonClicked"
 import { HostProvider } from "@/hosts/host-provider"
-import { ClineAPI } from "./cline"
+import { AiHydroAPI } from "./aihydro"
 
-export function createClineAPI(sidebarController: Controller): ClineAPI {
-	const api: ClineAPI = {
+export function createAiHydroAPI(sidebarController: Controller): AiHydroAPI {
+	const api: AiHydroAPI = {
 		startNewTask: async (task?: string, images?: string[]) => {
 			HostProvider.get().logToChannel("Starting new task")
 			await sidebarController.clearTask()

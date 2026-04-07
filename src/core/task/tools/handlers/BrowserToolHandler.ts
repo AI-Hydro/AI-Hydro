@@ -1,5 +1,5 @@
-import { BrowserAction, BrowserActionResult, browserActions, ClineSayBrowserAction } from "@shared/ExtensionMessage"
-import { ClineDefaultTool } from "@/shared/tools"
+import { AiHydroSayBrowserAction, BrowserAction, BrowserActionResult, browserActions } from "@shared/ExtensionMessage"
+import { AiHydroDefaultTool } from "@/shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { ToolResponse } from "../.."
@@ -10,7 +10,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class BrowserToolHandler implements IFullyManagedTool {
-	readonly name = ClineDefaultTool.BROWSER
+	readonly name = AiHydroDefaultTool.BROWSER
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.action}']`
@@ -51,7 +51,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 					action: action as BrowserAction,
 					coordinate: uiHelpers.removeClosingTag(block, "coordinate", coordinate),
 					text: uiHelpers.removeClosingTag(block, "text", text),
-				} satisfies ClineSayBrowserAction),
+				} satisfies AiHydroSayBrowserAction),
 				undefined,
 				undefined,
 				block.partial,
@@ -98,7 +98,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 				} else {
 					// Show notification for approval if auto approval enabled
 					showNotificationForApprovalIfAutoApprovalEnabled(
-						`Cline wants to use a browser and launch ${url}`,
+						`AI-Hydro wants to use a browser and launch ${url}`,
 						config.autoApprovalSettings.enabled,
 						config.autoApprovalSettings.enableNotifications,
 					)
@@ -144,7 +144,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 						action: action as BrowserAction,
 						coordinate,
 						text,
-					} satisfies ClineSayBrowserAction),
+					} satisfies AiHydroSayBrowserAction),
 					undefined,
 					undefined,
 					false,

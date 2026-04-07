@@ -62,15 +62,15 @@ export const AwsBedrockSettingsSchema = z.object({
 	awsBedrockEndpoint: z.string().optional(),
 })
 
-// Cline Provider model schema with per-model settings
-export const ClineModelSchema = z.object({
+// AI-Hydro Provider model schema with per-model settings
+export const AiHydroModelSchema = z.object({
 	id: z.string(), // The model ID is required
 })
 
-// Cline Provider specific settings
-export const ClineSettingsSchema = z.object({
+// AI-Hydro Provider specific settings
+export const AiHydroSettingsSchema = z.object({
 	// A list of the allowed models with their settings
-	models: z.array(ClineModelSchema).optional(),
+	models: z.array(AiHydroModelSchema).optional(),
 })
 
 // Provider settings schema
@@ -78,7 +78,7 @@ export const ClineSettingsSchema = z.object({
 const ProviderSettingsSchema = z.object({
 	OpenAiCompatible: OpenAiCompatibleSchema.optional(),
 	AwsBedrock: AwsBedrockSettingsSchema.optional(),
-	Cline: ClineSettingsSchema.optional(),
+	Cline: AiHydroSettingsSchema.optional(),
 })
 
 export const RemoteConfigSchema = z.object({

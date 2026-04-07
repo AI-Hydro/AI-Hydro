@@ -16,7 +16,7 @@ type CheckpointOperation = "CHECKPOINT_INIT" | "CHECKPOINT_COMMIT" | "CHECKPOINT
 /**
  * CheckpointTracker Module
  *
- * Core implementation of Cline's Checkpoints system that provides version control
+ * Core implementation of AI-Hydro's Checkpoints system that provides version control
  * capabilities without interfering with the user's main Git repository. Key features:
  *
  * Shadow Git Repository:
@@ -120,7 +120,7 @@ class CheckpointTracker {
 	 * - Creates/initializes shadow git repository
 	 *
 	 * Configuration:
-	 * - Respects 'cline.enableCheckpoints' VS Code setting
+	 * - Respects 'aihydro.enableCheckpoints' VS Code setting
 	 */
 	public static async create(
 		taskId: string,
@@ -220,7 +220,7 @@ class CheckpointTracker {
 			// Locking failed due to conflicting lock
 			if (!lockResult.acquired && !lockResult.skipped) {
 				throw new Error(
-					"Failed to acquire checkpoint folder lock - another Cline instance may be performing checkpoint operations",
+					"Failed to acquire checkpoint folder lock - another AI-Hydro instance may be performing checkpoint operations",
 				)
 			}
 
@@ -343,7 +343,7 @@ class CheckpointTracker {
 			// Locking failed due to conflicting lock
 			if (!lockResult.acquired && !lockResult.skipped) {
 				throw new Error(
-					"Failed to acquire checkpoint folder lock - another Cline instance may be performing checkpoint operations",
+					"Failed to acquire checkpoint folder lock - another AI-Hydro instance may be performing checkpoint operations",
 				)
 			}
 

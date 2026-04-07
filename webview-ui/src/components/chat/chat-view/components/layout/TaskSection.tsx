@@ -1,10 +1,10 @@
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import React from "react"
 import TaskHeader from "@/components/chat/task-header/TaskHeader"
 import { MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 
 interface TaskSectionProps {
-	task: ClineMessage
+	task: AiHydroMessage
 	apiMetrics: {
 		totalTokensIn: number
 		totalTokensOut: number

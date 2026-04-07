@@ -12,10 +12,10 @@ export async function executeCommandInTerminal(
 	try {
 		// Create terminal with fixed options
 		const terminalOptions: vscode.TerminalOptions = {
-			name: "Cline",
+			name: "AI-Hydro",
 			iconPath: new vscode.ThemeIcon("robot"),
 			env: {
-				CLINE_ACTIVE: "true",
+				AIHYDRO_ACTIVE: "true",
 			},
 		}
 

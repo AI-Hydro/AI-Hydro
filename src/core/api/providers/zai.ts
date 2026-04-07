@@ -43,8 +43,8 @@ export class ZAiHandler implements ApiHandler {
 					apiKey: this.options.zaiApiKey,
 					defaultHeaders: {
 						"HTTP-Referer": "https://cline.bot",
-						"X-Title": "Cline",
-						"X-Cline-Version": extensionVersion,
+						"X-Title": "AI-Hydro",
+						"X-AI-Hydro-Version": extensionVersion,
 					},
 				})
 			} catch (error: any) {

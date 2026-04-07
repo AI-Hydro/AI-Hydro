@@ -1,0 +1,77 @@
+<svg width="800" height="220" viewBox="0 0 800 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="800" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0a15"/>
+      <stop offset="50%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#0f0f1e"/>
+    </linearGradient>
+    <linearGradient id="dropletGrad" x1="100" y1="40" x2="100" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00D4FF"/>
+      <stop offset="100%" stop-color="#00FFFF"/>
+    </linearGradient>
+    <linearGradient id="waveGrad1" x1="0" y1="0" x2="800" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00A3FF" stop-opacity="0.4"/>
+      <stop offset="50%" stop-color="#00DDFF" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#00A3FF" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="waveGrad2" x1="0" y1="0" x2="800" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00A3FF" stop-opacity="0.3"/>
+      <stop offset="50%" stop-color="#00DDFF" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#00A3FF" stop-opacity="0.3"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="strongGlow">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Dark background -->
+  <rect width="800" height="220" fill="url(#bgGrad)"/>
+  
+  <!-- Static waves at the bottom -->
+  <path d="M0,150 Q200,130 400,150 T800,150 L800,220 L0,220 Z" fill="url(#waveGrad1)" filter="url(#glow)"/>
+  <path d="M0,168 Q200,153 400,168 T800,168 L800,220 L0,220 Z" fill="url(#waveGrad2)" opacity="0.7" filter="url(#glow)"/>
+  
+  <!-- Floating particles (static positions) -->
+  <circle cx="50" cy="70" r="3" fill="#00FFFF" opacity="0.6" filter="url(#glow)"/>
+  <circle cx="750" cy="95" r="2.5" fill="#00D4FF" opacity="0.5" filter="url(#glow)"/>
+  <circle cx="680" cy="55" r="3" fill="#00FFFF" opacity="0.7" filter="url(#glow)"/>
+  <circle cx="30" cy="145" r="2.5" fill="#00D4FF" opacity="0.4" filter="url(#glow)"/>
+  <circle cx="720" cy="125" r="3" fill="#00FFFF" opacity="0.6" filter="url(#glow)"/>
+  <circle cx="620" cy="85" r="2.5" fill="#00D4FF" opacity="0.6" filter="url(#glow)"/>
+  <circle cx="160" cy="65" r="2" fill="#00FFFF" opacity="0.5" filter="url(#glow)"/>
+  <circle cx="580" cy="115" r="2" fill="#00D4FF" opacity="0.5" filter="url(#glow)"/>
+  
+  <!-- Droplet mascot with strong glow -->
+  <g filter="url(#strongGlow)">
+    <path d="M100 50 C100 50 60 95 60 125 C60 150 75 170 100 170 C125 170 140 150 140 125 C140 95 100 50 100 50 Z" fill="url(#dropletGrad)"/>
+    <ellipse cx="55" cy="122" rx="8" ry="11" fill="url(#dropletGrad)"/>
+    <ellipse cx="145" cy="122" rx="8" ry="11" fill="url(#dropletGrad)"/>
+    <ellipse cx="85" cy="115" rx="10" ry="15" fill="#0a0a15"/>
+    <ellipse cx="115" cy="115" rx="10" ry="15" fill="#0a0a15"/>
+    <path d="M 82 138 Q 100 148 118 138" stroke="#0a0a15" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <circle cx="100" cy="56" r="7" fill="url(#dropletGrad)" opacity="0.8"/>
+  </g>
+  
+  <!-- Title with glow -->
+  <g filter="url(#glow)">
+    <text x="200" y="120" font-family="system-ui, -apple-system" font-size="76" font-weight="800" fill="url(#dropletGrad)">
+      AI-Hydro
+    </text>
+  </g>
+  
+  <!-- Tagline -->
+  <text x="200" y="160" font-family="system-ui" font-size="26" font-weight="400" fill="#7dd3fc">
+    Intelligent Hydrological Computing
+  </text>
+</svg>

@@ -90,6 +90,33 @@ export default {
 				description: "var(--vscode-descriptionForeground)",
 				success: "var(--vscode-charts-green)",
 				warning: "var(--vscode-charts-yellow)",
+				// Hydrological Theme Colors
+				aihydro: {
+					ocean: {
+						blue: "#4A90E2",
+						light: "#6BB6FF",
+						dark: "#2E5BBA",
+					},
+					emerald: {
+						DEFAULT: "#50C878",
+						light: "#6ADE8F",
+						dark: "#3A9B5C",
+					},
+					teal: {
+						DEFAULT: "#20B2AA",
+						light: "#48D1CC",
+						dark: "#008B8B",
+					},
+					cyan: {
+						DEFAULT: "#00CED1",
+						light: "#20E3E3",
+					},
+					background: "#0f172a",
+					surface: "#1e293b",
+					border: "#334155",
+					text: "#f1f5f9",
+					"text-muted": "#94a3b8",
+				},
 			},
 			fontSize: {
 				xl: "calc(2 * var(--vscode-font-size))",

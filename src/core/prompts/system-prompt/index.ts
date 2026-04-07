@@ -4,7 +4,7 @@ import { ModelFamily } from "@/shared/prompts"
 import { PromptRegistry } from "./registry/PromptRegistry"
 import type { SystemPromptContext } from "./types"
 
-export { ClineToolSet } from "./registry/ClineToolSet"
+export { AiHydroToolSet } from "./registry/AiHydroToolSet"
 export { PromptBuilder } from "./registry/PromptBuilder"
 export { PromptRegistry } from "./registry/PromptRegistry"
 export * from "./templates/placeholders"

@@ -20,13 +20,54 @@ export async function refreshOpenAiModels(_controller: Controller, request: Open
 			return StringArray.create({ values: [] })
 		}
 
-		const config: AxiosRequestConfig = {}
-		if (request.apiKey) {
-			config["headers"] = { Authorization: `Bearer ${request.apiKey}` }
+		const normalizedBaseUrl = request.baseUrl.replace(/\/+$/, "")
+		const lowerBaseUrl = normalizedBaseUrl.toLowerCase()
+		const isAnthropic = lowerBaseUrl.includes("anthropic.com")
+		const isGemini = lowerBaseUrl.includes("generativelanguage.googleapis.com")
+
+		const config: AxiosRequestConfig = { timeout: 15000 }
+
+		let url = `${normalizedBaseUrl}/models`
+		if (isAnthropic) {
+			// Anthropic list models endpoint.
+			url = lowerBaseUrl.endsWith("/v1") ? `${normalizedBaseUrl}/models` : `${normalizedBaseUrl}/v1/models`
+		} else if (isGemini) {
+			// Gemini list models endpoint.
+			url = lowerBaseUrl.includes("/v1beta/models")
+				? normalizedBaseUrl
+				: lowerBaseUrl.endsWith("/v1beta")
+					? `${normalizedBaseUrl}/models`
+					: `${normalizedBaseUrl}/v1beta/models`
 		}
 
-		const response = await axios.get(`${request.baseUrl}/models`, config)
-		const modelsArray = response.data?.data?.map((model: any) => model.id) || []
+		if (request.apiKey) {
+			if (isAnthropic) {
+				config.headers = {
+					"x-api-key": request.apiKey,
+					"anthropic-version": "2023-06-01",
+				}
+			} else if (isGemini) {
+				config.params = { key: request.apiKey }
+			} else {
+				config.headers = { Authorization: `Bearer ${request.apiKey}` }
+			}
+		}
+
+		const response = await axios.get(url, config)
+		const data = response.data
+
+		const modelsArray: string[] =
+			// OpenAI-compatible shape.
+			(
+				data?.data?.map((model: any) => model?.id) ||
+				// Gemini shape.
+				data?.models?.map((model: any) => {
+					const name = model?.name
+					return typeof name === "string" && name.startsWith("models/") ? name.slice("models/".length) : name
+				}) ||
+				[]
+			).filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+
 		const models = [...new Set<string>(modelsArray)]
 
 		return StringArray.create({ values: models })

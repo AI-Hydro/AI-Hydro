@@ -5,8 +5,8 @@ import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
 import { extractFileContent } from "@integrations/misc/extract-file-content"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
-import { ClineSayTool } from "@/shared/ExtensionMessage"
-import { ClineDefaultTool } from "@/shared/tools"
+import { AiHydroSayTool } from "@/shared/ExtensionMessage"
+import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -16,7 +16,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class ReadFileToolHandler implements IFullyManagedTool {
-	readonly name = ClineDefaultTool.FILE_READ
+	readonly name = AiHydroDefaultTool.FILE_READ
 
 	constructor(private validator: ToolValidator) {}
 
@@ -59,11 +59,11 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "path")
 		}
 
-		// Check clineignore access
-		const accessValidation = this.validator.checkClineIgnorePath(relPath!)
+		// Check aihydroignore access
+		const accessValidation = this.validator.checkAiHydroIgnorePath(relPath!)
 		if (!accessValidation.ok) {
-			await config.callbacks.say("clineignore_error", relPath)
-			return formatResponse.toolError(formatResponse.clineIgnoreError(relPath!))
+			await config.callbacks.say("aihydroignore_error", relPath)
+			return formatResponse.toolError(formatResponse.aihydroIgnoreError(relPath!))
 		}
 
 		config.taskState.consecutiveMistakeCount = 0
@@ -88,7 +88,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			path: getReadablePath(config.cwd, displayPath),
 			content: absolutePath,
 			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath!),
-		} satisfies ClineSayTool
+		} satisfies AiHydroSayTool
 
 		const completeMessage = JSON.stringify(sharedMessageProps)
 
@@ -104,7 +104,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, true, true, workspaceContext)
 		} else {
 			// Manual approval flow
-			const notificationMessage = `Cline wants to read ${getWorkspaceBasename(absolutePath, "ReadFileToolHandler.notification")}`
+			const notificationMessage = `AI-Hydro wants to read ${getWorkspaceBasename(absolutePath, "ReadFileToolHandler.notification")}`
 
 			// Show notification
 			showNotificationForApprovalIfAutoApprovalEnabled(

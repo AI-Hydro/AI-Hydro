@@ -265,7 +265,7 @@ export class AwsBedrockHandler implements ApiHandler {
 			}
 		}
 		return new BedrockRuntimeClient({
-			defaultUserAgentProvider: () => Promise.resolve([["cline", ExtensionRegistryInfo.version]]),
+			defaultUserAgentProvider: () => Promise.resolve([["aihydro", ExtensionRegistryInfo.version]]),
 			region: this.getRegion(),
 			...auth,
 			...(this.options.awsBedrockEndpoint && { endpoint: this.options.awsBedrockEndpoint }),

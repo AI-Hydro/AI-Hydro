@@ -81,16 +81,16 @@ export function normalizeApiConfiguration(
 	apiConfiguration: ApiConfiguration | undefined,
 	currentMode: Mode,
 ): NormalizedApiConfig {
-	const provider =
-		(currentMode === "plan" ? apiConfiguration?.planModeApiProvider : apiConfiguration?.actModeApiProvider) || "anthropic"
+	const rawProvider = currentMode === "plan" ? apiConfiguration?.planModeApiProvider : apiConfiguration?.actModeApiProvider
+	const provider: ApiProvider = (rawProvider === "cline" || rawProvider === "oca" ? "openrouter" : rawProvider) || "anthropic"
 	const modelId = currentMode === "plan" ? apiConfiguration?.planModeApiModelId : apiConfiguration?.actModeApiModelId
 
 	const getProviderData = (models: Record<string, ModelInfo>, defaultId: string) => {
 		let selectedModelId: string
 		let selectedModelInfo: ModelInfo
-		if (modelId && modelId in models) {
+		if (modelId) {
 			selectedModelId = modelId
-			selectedModelInfo = models[modelId]
+			selectedModelInfo = modelId in models ? models[modelId] : models[defaultId]
 		} else {
 			selectedModelId = defaultId
 			selectedModelInfo = models[defaultId]
@@ -169,20 +169,6 @@ export function normalizeApiConfiguration(
 				selectedProvider: provider,
 				selectedModelId: requestyModelId || requestyDefaultModelId,
 				selectedModelInfo: requestyModelInfo || requestyDefaultModelInfo,
-			}
-		case "cline":
-			const clineOpenRouterModelId =
-				(currentMode === "plan"
-					? apiConfiguration?.planModeOpenRouterModelId
-					: apiConfiguration?.actModeOpenRouterModelId) || openRouterDefaultModelId
-			const clineOpenRouterModelInfo =
-				(currentMode === "plan"
-					? apiConfiguration?.planModeOpenRouterModelInfo
-					: apiConfiguration?.actModeOpenRouterModelInfo) || openRouterDefaultModelInfo
-			return {
-				selectedProvider: provider,
-				selectedModelId: clineOpenRouterModelId,
-				selectedModelInfo: clineOpenRouterModelInfo,
 			}
 		case "openai":
 			const openAiModelId =
@@ -348,15 +334,6 @@ export function normalizeApiConfiguration(
 						? fireworksModels[fireworksModelId as keyof typeof fireworksModels]
 						: fireworksModels[fireworksDefaultModelId],
 			}
-		case "oca":
-			const ocaModelId = currentMode === "plan" ? apiConfiguration?.planModeOcaModelId : apiConfiguration?.actModeOcaModelId
-			const ocaModelInfo =
-				currentMode === "plan" ? apiConfiguration?.planModeOcaModelInfo : apiConfiguration?.actModeOcaModelInfo
-			return {
-				selectedProvider: provider,
-				selectedModelId: ocaModelId || "",
-				selectedModelInfo: ocaModelInfo || liteLlmModelInfoSaneDefaults,
-			}
 		default:
 			return getProviderData(anthropicModels, anthropicDefaultModelId)
 	}
@@ -516,7 +493,6 @@ export async function syncModeConfigurations(
 	// Handle provider-specific fields
 	switch (apiProvider) {
 		case "openrouter":
-		case "cline":
 			updates.planModeOpenRouterModelId = sourceFields.openRouterModelId
 			updates.actModeOpenRouterModelId = sourceFields.openRouterModelId
 			updates.planModeOpenRouterModelInfo = sourceFields.openRouterModelInfo
@@ -615,12 +591,6 @@ export async function syncModeConfigurations(
 			updates.actModeVercelAiGatewayModelId = sourceFields.vercelAiGatewayModelId
 			updates.planModeVercelAiGatewayModelInfo = sourceFields.vercelAiGatewayModelInfo
 			updates.actModeVercelAiGatewayModelInfo = sourceFields.vercelAiGatewayModelInfo
-			break
-		case "oca":
-			updates.planModeOcaModelId = sourceFields.ocaModelId
-			updates.actModeOcaModelId = sourceFields.ocaModelId
-			updates.planModeOcaModelInfo = sourceFields.ocaModelInfo
-			updates.actModeOcaModelInfo = sourceFields.ocaModelInfo
 			break
 
 		// Providers that use apiProvider + apiModelId fields

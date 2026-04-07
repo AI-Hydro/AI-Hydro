@@ -1,9 +1,8 @@
 import { AskResponseRequest } from "@shared/proto/cline/task"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useMemo } from "react"
 import VSCodeButtonLink from "@/components/common/VSCodeButtonLink"
-import { useClineAuth } from "@/context/ClineAuthContext"
-import { AccountServiceClient, TaskServiceClient } from "@/services/grpc-client"
+import { TaskServiceClient } from "@/services/grpc-client"
 
 interface CreditLimitErrorProps {
 	currentBalance: number
@@ -14,8 +13,8 @@ interface CreditLimitErrorProps {
 }
 
 const DEFAULT_BUY_CREDITS_URL = {
-	USER: "https://app.cline.bot/dashboard/account?tab=credits&redirect=true",
-	ORG: "https://app.cline.bot/dashboard/organization?tab=credits&redirect=true",
+	USER: "https://github.com/galib9690/AI-Hydro#readme",
+	ORG: "https://github.com/galib9690/AI-Hydro#readme",
 }
 
 const CreditLimitError: React.FC<CreditLimitErrorProps> = ({
@@ -25,28 +24,9 @@ const CreditLimitError: React.FC<CreditLimitErrorProps> = ({
 	totalPromotions,
 	totalSpent,
 }) => {
-	const { activeOrganization } = useClineAuth()
-	const [fullBuyCreditsUrl, setFullBuyCreditsUrl] = useState<string>("")
-
 	const dashboardUrl = useMemo(() => {
-		return buyCreditsUrl ?? (activeOrganization?.organizationId ? DEFAULT_BUY_CREDITS_URL.ORG : DEFAULT_BUY_CREDITS_URL.USER)
-	}, [buyCreditsUrl, activeOrganization?.organizationId])
-
-	useEffect(() => {
-		const fetchCallbackUrl = async () => {
-			try {
-				const callbackUrl = (await AccountServiceClient.getRedirectUrl({})).value
-				const url = new URL(dashboardUrl)
-				url.searchParams.set("callback_url", callbackUrl)
-				setFullBuyCreditsUrl(url.toString())
-			} catch (error) {
-				console.error("Error fetching callback URL:", error)
-				// Fallback to URL without callback if the API call fails
-				setFullBuyCreditsUrl(dashboardUrl)
-			}
-		}
-		fetchCallbackUrl()
-	}, [dashboardUrl])
+		return buyCreditsUrl ?? DEFAULT_BUY_CREDITS_URL.USER
+	}, [buyCreditsUrl])
 
 	// We have to divide because the balance is stored in microcredits
 	return (
@@ -66,7 +46,7 @@ const CreditLimitError: React.FC<CreditLimitErrorProps> = ({
 				</div>
 			</div>
 
-			<VSCodeButtonLink className="w-full mb-2" href={fullBuyCreditsUrl}>
+			<VSCodeButtonLink className="w-full mb-2" href={dashboardUrl}>
 				<span className="codicon codicon-credit-card mr-[6px] text-[14px]" />
 				Buy Credits
 			</VSCodeButtonLink>

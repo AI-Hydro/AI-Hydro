@@ -1,15 +1,15 @@
 import { Tooltip } from "@heroui/react"
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import React from "react"
 import { getColor } from "./util"
 
 interface TaskTimelineTooltipProps {
-	message: ClineMessage
+	message: AiHydroMessage
 	children: React.ReactNode
 }
 
 const TaskTimelineTooltip = ({ message, children }: TaskTimelineTooltipProps) => {
-	const getMessageDescription = (message: ClineMessage): string => {
+	const getMessageDescription = (message: AiHydroMessage): string => {
 		if (message.type === "say") {
 			switch (message.say) {
 				// TODO: Need to confirm these classifcations with design
@@ -101,7 +101,7 @@ const TaskTimelineTooltip = ({ message, children }: TaskTimelineTooltipProps) =>
 		return "Unknown Message Type"
 	}
 
-	const getMessageContent = (message: ClineMessage): string => {
+	const getMessageContent = (message: AiHydroMessage): string => {
 		if (message.text) {
 			if (message.type === "ask" && message.ask === "plan_mode_respond" && message.text) {
 				try {
@@ -127,7 +127,7 @@ const TaskTimelineTooltip = ({ message, children }: TaskTimelineTooltipProps) =>
 		return ""
 	}
 
-	const getTimestamp = (message: ClineMessage): string => {
+	const getTimestamp = (message: AiHydroMessage): string => {
 		if (message.ts) {
 			const messageDate = new Date(message.ts)
 			const today = new Date()

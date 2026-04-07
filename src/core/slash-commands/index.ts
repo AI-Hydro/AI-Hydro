@@ -1,4 +1,4 @@
-import { ClineRulesToggles } from "@shared/cline-rules"
+import { AiHydroRulesToggles } from "@shared/aihydro-rules"
 import fs from "fs/promises"
 import { telemetryService } from "@/services/telemetry"
 import {
@@ -16,11 +16,11 @@ import {
  */
 export async function parseSlashCommands(
 	text: string,
-	localWorkflowToggles: ClineRulesToggles,
-	globalWorkflowToggles: ClineRulesToggles,
+	localWorkflowToggles: AiHydroRulesToggles,
+	globalWorkflowToggles: AiHydroRulesToggles,
 	ulid: string,
 	focusChainSettings?: { enabled: boolean },
-): Promise<{ processedText: string; needsClinerulesFileCheck: boolean }> {
+): Promise<{ processedText: string; needsAihydrorulesFileCheck: boolean }> {
 	const SUPPORTED_DEFAULT_COMMANDS = ["newtask", "smol", "compact", "newrule", "reportbug", "deep-planning", "subagent"]
 
 	const commandReplacements: Record<string, string> = {
@@ -71,7 +71,7 @@ export async function parseSlashCommands(
 				// Track telemetry for builtin slash command usage
 				telemetryService.captureSlashCommandUsed(ulid, commandName, "builtin")
 
-				return { processedText: processedText, needsClinerulesFileCheck: commandName === "newrule" }
+				return { processedText: processedText, needsAihydrorulesFileCheck: commandName === "newrule" }
 			}
 
 			const globalWorkflows = Object.entries(globalWorkflowToggles)
@@ -124,7 +124,7 @@ export async function parseSlashCommands(
 					// Track telemetry for workflow command usage
 					telemetryService.captureSlashCommandUsed(ulid, commandName, "workflow")
 
-					return { processedText, needsClinerulesFileCheck: false }
+					return { processedText, needsAihydrorulesFileCheck: false }
 				} catch (error) {
 					console.error(`Error reading workflow file ${matchingWorkflow.fullPath}: ${error}`)
 				}
@@ -133,5 +133,5 @@ export async function parseSlashCommands(
 	}
 
 	// if no supported commands are found, return the original text
-	return { processedText: text, needsClinerulesFileCheck: false }
+	return { processedText: text, needsAihydrorulesFileCheck: false }
 }

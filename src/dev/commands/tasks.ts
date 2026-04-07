@@ -1,5 +1,5 @@
 import { Controller } from "@core/controller"
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -13,7 +13,7 @@ import { ShowMessageType } from "@/shared/proto/host/window"
  */
 export function registerTaskCommands(controller: Controller): vscode.Disposable[] {
 	return [
-		vscode.commands.registerCommand("cline.dev.createTestTasks", async () => {
+		vscode.commands.registerCommand("aihydro.dev.createTestTasks", async () => {
 			const count = (
 				await HostProvider.window.showInputBox({
 					title: "Test Tasks",
@@ -114,7 +114,7 @@ export function registerTaskCommands(controller: Controller): vscode.Disposable[
 /**
  * Creates a realistic sequence of messages that would occur in a typical task
  */
-function createRealisticMessageSequence(baseTimestamp: number, taskPrompt: string, taskIndex: number): ClineMessage[] {
+function createRealisticMessageSequence(baseTimestamp: number, taskPrompt: string, taskIndex: number): AiHydroMessage[] {
 	// Use an incrementing timestamp to ensure messages appear in sequence
 	let timestamp = baseTimestamp
 	const getNextTimestamp = () => {
@@ -127,8 +127,8 @@ function createRealisticMessageSequence(baseTimestamp: number, taskPrompt: strin
 	const commitHash = `commit${taskIndex}${Math.floor(Math.random() * 1000000).toString(16)}`
 
 	// Create a realistic message sequence
-	const messages: ClineMessage[] = [
-		// Initial task message - uses "say" with "text" which is the format used in Cline.ts
+	const messages: AiHydroMessage[] = [
+		// Initial task message - uses "say" with "text" which is the format used in AI-Hydro.ts
 		{
 			ts: baseTimestamp,
 			type: "say",

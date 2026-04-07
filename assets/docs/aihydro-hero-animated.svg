@@ -1,0 +1,119 @@
+<svg width="800" height="220" viewBox="0 0 800 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="800" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0a15"/>
+      <stop offset="50%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#0f0f1e"/>
+    </linearGradient>
+    <linearGradient id="dropletGrad" x1="100" y1="40" x2="100" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00D4FF"/>
+      <stop offset="100%" stop-color="#00FFFF"/>
+    </linearGradient>
+    <linearGradient id="waveGrad" x1="0" y1="0" x2="800" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00A3FF" stop-opacity="0.4"/>
+      <stop offset="50%" stop-color="#00DDFF" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#00A3FF" stop-opacity="0.4"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="strongGlow">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Dark background -->
+  <rect width="800" height="220" fill="url(#bgGrad)"/>
+  
+  <!-- Animated waves at the bottom -->
+  <path d="M0,150 Q200,130 400,150 T800,150 L800,220 L0,220 Z" fill="url(#waveGrad)" filter="url(#glow)">
+    <animate attributeName="d" values="
+      M0,150 Q200,130 400,150 T800,150 L800,220 L0,220 Z;
+      M0,155 Q200,135 400,155 T800,155 L800,220 L0,220 Z;
+      M0,150 Q200,130 400,150 T800,150 L800,220 L0,220 Z"
+      dur="4s" repeatCount="indefinite"/>
+  </path>
+  <path d="M0,170 Q200,155 400,170 T800,170 L800,220 L0,220 Z" fill="url(#waveGrad)" opacity="0.7" filter="url(#glow)">
+    <animate attributeName="d" values="
+      M0,170 Q200,155 400,170 T800,170 L800,220 L0,220 Z;
+      M0,165 Q200,150 400,165 T800,165 L800,220 L0,220 Z;
+      M0,170 Q200,155 400,170 T800,170 L800,220 L0,220 Z"
+      dur="3s" repeatCount="indefinite"/>
+  </path>
+  
+  <!-- Floating particles with glow -->
+  <circle cx="50" cy="80" r="3" fill="#00FFFF" opacity="0.8" filter="url(#glow)">
+    <animate attributeName="cy" values="80;60;80" dur="3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.8;0.3;0.8" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="750" cy="100" r="2.5" fill="#00D4FF" opacity="0.7" filter="url(#glow)">
+    <animate attributeName="cy" values="100;85;100" dur="4s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.7;0.2;0.7" dur="4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="680" cy="60" r="3" fill="#00FFFF" opacity="0.9" filter="url(#glow)">
+    <animate attributeName="cy" values="60;45;60" dur="3.5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.9;0.4;0.9" dur="3.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="30" cy="150" r="2.5" fill="#00D4FF" opacity="0.6" filter="url(#glow)">
+    <animate attributeName="cy" values="150;135;150" dur="2.8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.6;0.2;0.6" dur="2.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="720" cy="130" r="3" fill="#00FFFF" opacity="0.7" filter="url(#glow)">
+    <animate attributeName="cy" values="130;115;130" dur="3.2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.7;0.3;0.7" dur="3.2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="620" cy="90" r="2.5" fill="#00D4FF" opacity="0.8" filter="url(#glow)">
+    <animate attributeName="cy" values="90;75;90" dur="3.8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.8;0.3;0.8" dur="3.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="160" cy="70" r="2" fill="#00FFFF" opacity="0.6" filter="url(#glow)">
+    <animate attributeName="cy" values="70;55;70" dur="3.3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.6;0.2;0.6" dur="3.3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="580" cy="120" r="2" fill="#00D4FF" opacity="0.7" filter="url(#glow)">
+    <animate attributeName="cy" values="120;105;120" dur="3.6s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.7;0.2;0.7" dur="3.6s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Droplet with strong glow -->
+  <g filter="url(#strongGlow)">
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0,0; 0,-12; 0,0" dur="2s" repeatCount="indefinite" calcMode="spline" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1"/>
+      
+      <path d="M100 50 C100 50 60 95 60 125 C60 150 75 170 100 170 C125 170 140 150 140 125 C140 95 100 50 100 50 Z" fill="url(#dropletGrad)"/>
+      <ellipse cx="55" cy="122" rx="8" ry="11" fill="url(#dropletGrad)"/>
+      <ellipse cx="145" cy="122" rx="8" ry="11" fill="url(#dropletGrad)"/>
+      <ellipse cx="85" cy="115" rx="10" ry="15" fill="#0a0a15">
+        <animate attributeName="ry" values="15;2;15" dur="4s" repeatCount="indefinite"/>
+      </ellipse>
+      <ellipse cx="115" cy="115" rx="10" ry="15" fill="#0a0a15">
+        <animate attributeName="ry" values="15;2;15" dur="4s" repeatCount="indefinite"/>
+      </ellipse>
+      <path d="M 82 138 Q 100 148 118 138" stroke="#0a0a15" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <circle cx="100" cy="56" r="7" fill="url(#dropletGrad)">
+        <animate attributeName="opacity" values="1;0.5;1" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+  </g>
+  
+  <!-- Animated text with gradient and glow -->
+  <g filter="url(#glow)">
+    <text x="200" y="120" font-family="system-ui, -apple-system" font-size="76" font-weight="800" fill="url(#dropletGrad)">
+      AI-Hydro
+      <animate attributeName="opacity" values="1;0.85;1" dur="3s" repeatCount="indefinite"/>
+    </text>
+  </g>
+  
+  <!-- Tagline -->
+  <text x="200" y="160" font-family="system-ui" font-size="26" font-weight="400" fill="#7dd3fc">
+    Intelligent Hydrological Computing
+  </text>
+</svg>

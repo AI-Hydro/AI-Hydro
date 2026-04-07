@@ -1,0 +1,2 @@
+[console_scripts]
+aihydro-mcp = mcp_server:main

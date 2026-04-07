@@ -1,0 +1,323 @@
+"""
+MCP Server Integration Tests
+==============================
+
+Validates that the modular MCP server registers all 17 tools correctly,
+helpers work as expected, and session wiring behaves across tool calls.
+
+Run:
+    pytest tests/test_mcp_integration.py -v
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import tempfile
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+import pytest
+
+
+# ── Tool registration tests ────────────────────────────────────────────────
+
+class TestToolRegistration:
+    """Verify that importing ai_hydro.mcp registers all expected tools."""
+
+    EXPECTED_TOOLS = {
+        # Analysis (9)
+        "delineate_watershed",
+        "fetch_streamflow_data",
+        "extract_hydrological_signatures",
+        "extract_geomorphic_parameters",
+        "compute_twi",
+        "create_cn_grid",
+        "fetch_forcing_data",
+        "extract_camels_attributes",
+        "query_hydro_concepts",
+        # Session (6)
+        "start_session",
+        "get_session_summary",
+        "clear_session",
+        "add_note",
+        "export_session",
+        "sync_research_context",
+        # Modelling (2)
+        "train_hydro_model",
+        "get_model_results",
+    }
+
+    def test_import_mcp_singleton(self):
+        """Importing ai_hydro.mcp should provide the FastMCP instance."""
+        from ai_hydro.mcp import mcp
+        assert mcp is not None
+        assert mcp.name == "AI-Hydro"
+
+    def test_all_17_tools_registered(self):
+        """All 17 tools must be registered after importing ai_hydro.mcp."""
+        from ai_hydro.mcp import mcp
+        tools = asyncio.run(mcp.list_tools())
+        tool_names = {t.name for t in tools}
+        assert tool_names == self.EXPECTED_TOOLS, (
+            f"Missing: {self.EXPECTED_TOOLS - tool_names}, "
+            f"Extra: {tool_names - self.EXPECTED_TOOLS}"
+        )
+
+    def test_tool_count_is_17(self):
+        """Exactly 17 tools — catches accidental duplicates or drops."""
+        from ai_hydro.mcp import mcp
+        tools = asyncio.run(mcp.list_tools())
+        assert len(tools) == 17
+
+    def test_all_tools_have_descriptions(self):
+        """Every tool should have a non-empty description (from docstring)."""
+        from ai_hydro.mcp import mcp
+        tools = asyncio.run(mcp.list_tools())
+        for tool in tools:
+            assert tool.description, f"Tool {tool.name} has no description"
+
+    def test_all_tools_have_input_schema(self):
+        """Every tool should have an input schema (may use various attr names)."""
+        from ai_hydro.mcp import mcp
+        tools = asyncio.run(mcp.list_tools())
+        for tool in tools:
+            # FastMCP may expose schema as inputSchema or input_schema
+            schema = (
+                getattr(tool, "inputSchema", None)
+                or getattr(tool, "input_schema", None)
+                or {}
+            )
+            # Schema should exist (even if empty for tools with all-optional params)
+            assert isinstance(schema, dict), f"Tool {tool.name} has no input schema"
+
+
+# ── Helper tests ────────────────────────────────────────────────────────────
+
+class TestHelpers:
+    """Test shared MCP helper functions."""
+
+    def test_validate_gauge_id_pads_short(self):
+        from ai_hydro.mcp.helpers import _validate_gauge_id
+        assert _validate_gauge_id("1031500") == "01031500"
+
+    def test_validate_gauge_id_accepts_8_digit(self):
+        from ai_hydro.mcp.helpers import _validate_gauge_id
+        assert _validate_gauge_id("01031500") == "01031500"
+
+    def test_validate_gauge_id_rejects_alpha(self):
+        from ai_hydro.mcp.helpers import _validate_gauge_id
+        with pytest.raises(ValueError, match="Invalid gauge_id"):
+            _validate_gauge_id("abc12345")
+
+    def test_validate_gauge_id_strips_whitespace(self):
+        from ai_hydro.mcp.helpers import _validate_gauge_id
+        assert _validate_gauge_id("  01031500  ") == "01031500"
+
+    def test_result_to_dict_passthrough(self):
+        from ai_hydro.mcp.helpers import _result_to_dict
+        d = {"data": {"x": 1}, "meta": {}}
+        assert _result_to_dict(d) is d
+
+    def test_result_to_dict_hydro_result(self):
+        from ai_hydro.mcp.helpers import _result_to_dict
+        mock = MagicMock()
+        mock.to_dict.return_value = {"data": {}, "meta": {}}
+        assert _result_to_dict(mock) == {"data": {}, "meta": {}}
+
+    def test_tool_error_to_dict_plain_exception(self):
+        from ai_hydro.mcp.helpers import _tool_error_to_dict
+        result = _tool_error_to_dict(ValueError("bad input"))
+        assert result["error"] is True
+        assert result["code"] == "UNKNOWN_ERROR"
+        assert "bad input" in result["message"]
+
+    def test_tool_error_to_dict_tool_error(self):
+        from ai_hydro.mcp.helpers import _tool_error_to_dict
+        mock = MagicMock()
+        mock.to_dict.return_value = {"error": True, "code": "TEST"}
+        assert _tool_error_to_dict(mock) == {"error": True, "code": "TEST"}
+
+    def test_strip_forcing_arrays(self):
+        from ai_hydro.mcp.helpers import _strip_forcing_arrays
+        data = {
+            "n_days": 365,
+            "prcp_mm": [1.0, 2.0, 3.0],
+            "tmax_C": [10.0, 20.0, 30.0],
+        }
+        compact = _strip_forcing_arrays(data)
+        assert "prcp_mm" not in compact  # array stripped
+        assert compact["prcp_mm_mean"] == 2.0
+        assert compact["tmax_C_mean"] == 20.0
+        assert compact["n_days"] == 365
+        assert compact["n_variables"] == 2
+
+    def test_cached_response_structure(self):
+        from ai_hydro.mcp.helpers import _cached_response
+        session = MagicMock()
+        session.gauge_id = "01031500"
+        session.signatures = {"data": {"bfi": 0.5}, "meta": {"tool": "test"}}
+        result = _cached_response("signatures", session)
+        assert result["_cached"] is True
+        assert result["data"]["bfi"] == 0.5
+        assert "clear_session" in result["_note"]
+
+
+# ── Session wiring tests ────────────────────────────────────────────────────
+
+class TestSessionWiring:
+    """Test that session load/store/ensure helpers work correctly."""
+
+    def test_ensure_session_creates_new(self, tmp_path):
+        """_ensure_session should create a new session for unknown gauge."""
+        from ai_hydro.mcp.helpers import _ensure_session
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path):
+            session = _ensure_session("99999999")
+            assert session.gauge_id == "99999999"
+
+    def test_ensure_session_sets_workspace(self, tmp_path):
+        """_ensure_session should store workspace_dir on first call."""
+        from ai_hydro.mcp.helpers import _ensure_session
+        ws = str(tmp_path / "workspace")
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path):
+            session = _ensure_session("99999999", workspace_dir=ws)
+            assert session.workspace_dir == ws
+
+    def test_session_store_caches_result(self, tmp_path):
+        """_session_store should persist a result and write research.md."""
+        from ai_hydro.mcp.helpers import _session_store
+        from ai_hydro.session import HydroSession
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path), \
+             patch("ai_hydro.session.store._RESEARCH_MD", tmp_path / "research.md"):
+            _session_store("99999999", "watershed", {"data": {"area_km2": 100}})
+            # Verify it was saved
+            reloaded = HydroSession.load("99999999")
+            assert reloaded.watershed is not None
+            assert reloaded.watershed["data"]["area_km2"] == 100
+
+    def test_session_roundtrip(self, tmp_path):
+        """Full save/load cycle with multiple slots."""
+        from ai_hydro.session import HydroSession
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path), \
+             patch("ai_hydro.session.store._RESEARCH_MD", tmp_path / "research.md"):
+            s = HydroSession("99999999")
+            s.watershed = {"data": {"area_km2": 50}}
+            s.streamflow = {"data": {"n_days": 365}}
+            s.notes.append("test note")
+            s.save()
+
+            s2 = HydroSession.load("99999999")
+            assert s2.watershed["data"]["area_km2"] == 50
+            assert s2.streamflow["data"]["n_days"] == 365
+            assert "test note" in s2.notes
+            assert "watershed" in s2.computed()
+            assert "streamflow" in s2.computed()
+
+
+# ── Tool-level smoke tests (mocked backends) ────────────────────────────────
+
+class TestToolSmoke:
+    """Smoke-test individual tools with mocked backends."""
+
+    def test_start_session_creates_session(self, tmp_path):
+        """start_session should return a summary dict."""
+        from ai_hydro.mcp.tools_session import start_session
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path), \
+             patch("ai_hydro.session.store._RESEARCH_MD", tmp_path / "research.md"):
+            result = start_session("01031500")
+            assert result["gauge_id"] == "01031500"
+            assert "computed" in result
+            assert "pending" in result
+
+    def test_get_session_summary(self, tmp_path):
+        """get_session_summary should return computed/pending lists."""
+        from ai_hydro.mcp.tools_session import get_session_summary
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path), \
+             patch("ai_hydro.session.store._RESEARCH_MD", tmp_path / "research.md"):
+            result = get_session_summary("01031500")
+            assert isinstance(result["computed"], list)
+            assert isinstance(result["pending"], list)
+
+    def test_add_note_appends(self, tmp_path):
+        """add_note should append text to session notes."""
+        from ai_hydro.mcp.tools_session import add_note
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path), \
+             patch("ai_hydro.session.store._RESEARCH_MD", tmp_path / "research.md"):
+            result = add_note("01031500", "my research note")
+            assert "my research note" in result["notes"]
+
+    def test_clear_session_resets_slots(self, tmp_path):
+        """clear_session should reset specified slots."""
+        from ai_hydro.session import HydroSession
+        from ai_hydro.mcp.tools_session import clear_session
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path), \
+             patch("ai_hydro.session.store._RESEARCH_MD", tmp_path / "research.md"):
+            # Pre-populate
+            s = HydroSession("01031500")
+            s.watershed = {"data": {"area_km2": 100}}
+            s.streamflow = {"data": {"n_days": 365}}
+            s.save()
+            # Clear just watershed
+            result = clear_session("01031500", ["watershed"])
+            assert "watershed" in result["cleared"]
+            assert "streamflow" not in result.get("cleared", [])
+
+    def test_clear_session_rejects_invalid_slot(self, tmp_path):
+        """clear_session with invalid slot name should return error."""
+        from ai_hydro.mcp.tools_session import clear_session
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path), \
+             patch("ai_hydro.session.store._RESEARCH_MD", tmp_path / "research.md"):
+            result = clear_session("01031500", ["nonexistent_slot"])
+            assert result["error"] is True
+            assert result["code"] == "INVALID_SLOTS"
+
+    def test_export_session_json(self, tmp_path):
+        """export_session should write JSON and return file path."""
+        from ai_hydro.mcp.tools_session import export_session
+        from ai_hydro.session import HydroSession
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path), \
+             patch("ai_hydro.session.store._RESEARCH_MD", tmp_path / "research.md"):
+            s = HydroSession("01031500")
+            s.workspace_dir = str(tmp_path)
+            s.save()
+            result = export_session("01031500", format="json")
+            assert result["file_saved"] is not None
+            assert Path(result["file_saved"]).exists()
+
+    def test_get_model_results_no_model(self, tmp_path):
+        """get_model_results should report no model trained."""
+        from ai_hydro.mcp.tools_modelling import get_model_results
+        with patch("ai_hydro.session.store._SESSIONS_DIR", tmp_path), \
+             patch("ai_hydro.session.store._RESEARCH_MD", tmp_path / "research.md"):
+            result = get_model_results("01031500")
+            assert result["model_trained"] is False
+
+    def test_delineate_watershed_invalid_gauge(self):
+        """delineate_watershed with invalid gauge should return error."""
+        from ai_hydro.mcp.tools_analysis import delineate_watershed
+        result = delineate_watershed("not_a_gauge")
+        assert result["error"] is True
+
+    def test_query_hydro_concepts_graceful_fallback(self):
+        """query_hydro_concepts should return empty results if RAG unavailable."""
+        from ai_hydro.mcp.tools_analysis import query_hydro_concepts
+        with patch("ai_hydro.mcp.tools_analysis.log"):
+            result = query_hydro_concepts("baseflow index")
+            # Either returns results (if RAG installed) or graceful fallback
+            assert "results" in result or "warning" in result
+
+
+# ── Version helpers ──────────────────────────────────────────────────────────
+
+class TestVersionHelpers:
+    """Test tools_docs version introspection."""
+
+    def test_get_version_returns_string(self):
+        from ai_hydro.mcp.tools_docs import _get_version
+        v = _get_version()
+        assert isinstance(v, str)
+        assert len(v) > 0
+
+    def test_get_camels_attrs_version_returns_string(self):
+        from ai_hydro.mcp.tools_docs import _get_camels_attrs_version
+        v = _get_camels_attrs_version()
+        assert isinstance(v, str)

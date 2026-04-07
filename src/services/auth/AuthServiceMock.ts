@@ -1,8 +1,8 @@
 import { String } from "@shared/proto/cline/common"
-import { ClineEnv } from "@/config"
+import { AiHydroEnv } from "@/config"
 import { Controller } from "@/core/controller"
 import { WebviewProvider } from "@/core/webview"
-import { CLINE_API_ENDPOINT } from "@/shared/cline/api"
+import { AIHYDRO_API_ENDPOINT } from "@/shared/aihydro/api"
 import { AuthService } from "./AuthService"
 
 // TODO: Consider adding a mock auth provider implementing IAuthProvider for more realistic testing
@@ -10,7 +10,7 @@ export class AuthServiceMock extends AuthService {
 	protected constructor(controller: Controller) {
 		super(controller)
 
-		if (process?.env?.CLINE_ENVIRONMENT !== "local") {
+		if (process?.env?.AIHYDRO_ENVIRONMENT !== "local") {
 			throw new Error("AuthServiceMock should only be used in local environment for testing purposes.")
 		}
 
@@ -38,25 +38,25 @@ export class AuthServiceMock extends AuthService {
 	}
 
 	override async getAuthToken(): Promise<string | null> {
-		if (!this._clineAuthInfo) {
+		if (!this._aihydroAuthInfo) {
 			return null
 		}
-		return this._clineAuthInfo.idToken
+		return this._aihydroAuthInfo.idToken
 	}
 
 	override async createAuthRequest(): Promise<String> {
 		// Use URL object for more graceful query construction
-		const authUrl = new URL(ClineEnv.config().apiBaseUrl)
+		const authUrl = new URL(AiHydroEnv.config().apiBaseUrl)
 		const authUrlString = authUrl.toString()
 		// Call the parent implementation
-		if (this._authenticated && this._clineAuthInfo) {
+		if (this._authenticated && this._aihydroAuthInfo) {
 			console.log("Already authenticated with mock server")
 			return String.create({ value: authUrlString })
 		}
 
 		try {
-			// Use token exchange endpoint like ClineAuthProvider
-			const tokenExchangeUri = new URL(CLINE_API_ENDPOINT.TOKEN_EXCHANGE, ClineEnv.config().apiBaseUrl)
+			// Use token exchange endpoint like AiHydroAuthProvider
+			const tokenExchangeUri = new URL(AIHYDRO_API_ENDPOINT.TOKEN_EXCHANGE, AiHydroEnv.config().apiBaseUrl)
 			const tokenType = "personal"
 			const testCode = `test-${tokenType}-token`
 
@@ -83,8 +83,8 @@ export class AuthServiceMock extends AuthService {
 
 			const authData = responseData.data
 
-			// Convert to ClineAuthInfo format matching ClineAuthProvider
-			this._clineAuthInfo = {
+			// Convert to AiHydroAuthInfo format matching AiHydroAuthProvider
+			this._aihydroAuthInfo = {
 				idToken: authData.accessToken,
 				refreshToken: authData.refreshToken,
 				expiresAt: new Date(authData.expiresAt).getTime() / 1000,
@@ -94,7 +94,7 @@ export class AuthServiceMock extends AuthService {
 					displayName: authData.userInfo.name,
 					createdAt: new Date().toISOString(),
 					organizations: authData.organizations,
-					appBaseUrl: ClineEnv.config().appBaseUrl,
+					appBaseUrl: AiHydroEnv.config().appBaseUrl,
 					subject: authData.userInfo.subject,
 				},
 				provider: this._provider?.name || "mock",
@@ -111,7 +111,7 @@ export class AuthServiceMock extends AuthService {
 		} catch (error) {
 			console.error("Error signing in with mock server:", error)
 			this._authenticated = false
-			this._clineAuthInfo = null
+			this._aihydroAuthInfo = null
 			throw error
 		}
 
@@ -130,18 +130,18 @@ export class AuthServiceMock extends AuthService {
 
 	override async restoreRefreshTokenAndRetrieveAuthInfo(): Promise<void> {
 		try {
-			if (this._clineAuthInfo) {
+			if (this._aihydroAuthInfo) {
 				this._authenticated = true
 				await this.sendAuthStatusUpdate()
 			} else {
 				console.warn("No user found after restoring auth token")
 				this._authenticated = false
-				this._clineAuthInfo = null
+				this._aihydroAuthInfo = null
 			}
 		} catch (error) {
 			console.error("Error restoring auth token:", error)
 			this._authenticated = false
-			this._clineAuthInfo = null
+			this._aihydroAuthInfo = null
 			return
 		}
 	}

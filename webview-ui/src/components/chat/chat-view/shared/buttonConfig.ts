@@ -1,4 +1,4 @@
-import type { ClineMessage, ClineSayTool } from "@shared/ExtensionMessage"
+import type { AiHydroMessage, AiHydroSayTool } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 
 /**
@@ -8,6 +8,7 @@ export type ButtonActionType =
 	| "approve" // Send yesButtonClicked
 	| "reject" // Send noButtonClicked
 	| "proceed" // Send messageResponse or yesButtonClicked
+	| "system" // Use system Python instead of workspace venv
 	| "new_task" // Start a new task
 	| "cancel" // Cancel streaming
 	| "utility" // Execute utility function (condense, report_bug)
@@ -108,6 +109,22 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		secondaryText: "Reject",
 		primaryAction: "approve",
 		secondaryAction: "reject",
+	},
+	install_dependencies: {
+		sendingDisabled: false,
+		enableButtons: true,
+		primaryText: "Yes",
+		secondaryText: "No",
+		primaryAction: "approve",
+		secondaryAction: "reject",
+	},
+	workspace_env_setup: {
+		sendingDisabled: false,
+		enableButtons: true,
+		primaryText: "Yes, proceed",
+		secondaryText: "Use system Python",
+		primaryAction: "proceed",
+		secondaryAction: "system",
 	},
 	followup: {
 		sendingDisabled: false,
@@ -213,7 +230,7 @@ const errorTypes = ["api_req_failed", "mistake_limit_reached", "auto_approval_ma
  * Determines button configuration based on message type and state
  * This is the single source of truth used by both ActionButtons and useMessageHandlers
  */
-export function getButtonConfig(message: ClineMessage | undefined, _mode: Mode = "act"): ButtonConfig {
+export function getButtonConfig(message: AiHydroMessage | undefined, _mode: Mode = "act"): ButtonConfig {
 	if (!message) {
 		return BUTTON_CONFIGS.default
 	}
@@ -242,7 +259,7 @@ export function getButtonConfig(message: ClineMessage | undefined, _mode: Mode =
 			case "tool": {
 				// Only parse JSON if we need to determine save vs approve
 				try {
-					const tool = JSON.parse(message.text || "{}") as ClineSayTool
+					const tool = JSON.parse(message.text || "{}") as AiHydroSayTool
 					if (tool.tool === "editedExistingFile" || tool.tool === "newFileCreated") {
 						return BUTTON_CONFIGS.tool_save
 					}
@@ -265,6 +282,10 @@ export function getButtonConfig(message: ClineMessage | undefined, _mode: Mode =
 				return BUTTON_CONFIGS.browser_action_launch
 			case "use_mcp_server":
 				return BUTTON_CONFIGS.use_mcp_server
+			case "install_dependencies":
+				return BUTTON_CONFIGS.install_dependencies
+			case "workspace_env_setup":
+				return BUTTON_CONFIGS.workspace_env_setup
 			case "plan_mode_respond":
 				return BUTTON_CONFIGS.plan_mode_respond
 

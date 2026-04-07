@@ -37,7 +37,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 
 	const isMacOS = platform === "darwin"
 
-	const [isClineCliInstalled, setIsClineCliInstalled] = useState(false)
+	const [isAiHydroCliInstalled, setIsAiHydroCliInstalled] = useState(false)
 
 	const handleReasoningEffortChange = (newValue: OpenaiReasoningEffort) => {
 		updateSetting("openaiReasoningEffort", newValue)
@@ -48,7 +48,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		const checkInstallation = async () => {
 			try {
 				const result = await StateServiceClient.checkCliInstallation(EmptyRequest.create())
-				setIsClineCliInstalled(result.value)
+				setIsAiHydroCliInstalled(result.value)
 			} catch (error) {
 				console.error("Failed to check CLI installation:", error)
 			}
@@ -99,7 +99,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 										className="codicon codicon-warning mr-1"
 										style={{ fontSize: "12px", marginTop: "1px", flexShrink: 0 }}></span>
 									<span>
-										Cline for CLI is required for subagents. Install it with:
+										AI-Hydro CLI is required for subagents. Install it with:
 										<code
 											className="ml-1 px-1 rounded"
 											style={{
@@ -119,15 +119,15 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 											}}>
 											cline auth
 										</code>
-										To authenticate with Cline or configure an API provider.
+										To authenticate with AI-Hydro or configure an API provider.
 									</span>
 								</p>
-								{!isClineCliInstalled && (
+								{!isAiHydroCliInstalled && (
 									<VSCodeButton
 										appearance="secondary"
 										onClick={async () => {
 											try {
-												await StateServiceClient.installClineCli(EmptyRequest.create())
+												await StateServiceClient.installAiHydroCli(EmptyRequest.create())
 											} catch (error) {
 												console.error("Failed to initiate CLI installation:", error)
 											}
@@ -143,7 +143,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							</div>
 							<VSCodeCheckbox
 								checked={subagentsEnabled}
-								disabled={!isClineCliInstalled}
+								disabled={!isAiHydroCliInstalled}
 								onChange={(e: any) => {
 									const checked = e.target.checked === true
 									updateSetting("subagentsEnabled", checked)
@@ -155,7 +155,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							<p className="text-xs mt-1 mb-0">
 								<span className="text-[var(--vscode-errorForeground)]">Experimental: </span>{" "}
 								<span className="text-description">
-									Allows Cline to spawn subprocesses to handle focused tasks like exploring large codebases,
+									Allows AI-Hydro to spawn subprocesses to handle focused tasks like exploring large codebases,
 									keeping your main context clean.
 								</span>
 							</p>
@@ -309,14 +309,14 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									if (!Number.isNaN(value) && value >= 1 && value <= 100) {
 										updateSetting("focusChainSettings", {
 											...focusChainSettings,
-											remindClineInterval: value,
+											remindAiHydroInterval: value,
 										})
 									}
 								}}
-								value={String(focusChainSettings?.remindClineInterval || 6)}
+								value={String(focusChainSettings?.remindAiHydroInterval || 6)}
 							/>
 							<p className="text-xs mt-[5px] text-[var(--vscode-descriptionForeground)]">
-								Interval (in messages) to remind Cline about its focus chain checklist (1-100). Lower values
+								Interval (in messages) to remind AI-Hydro about its focus chain checklist (1-100). Lower values
 								provide more frequent reminders.
 							</p>
 						</div>
@@ -337,7 +337,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									Enable Dictation
 								</VSCodeCheckbox>
 								<p className="text-xs text-description mt-1">
-									Enables speech-to-text transcription using your Cline account. Uses the Whisper model, at
+									Enables speech-to-text transcription using your AI-Hydro account. Uses the Whisper model, at
 									$0.006 credits per minute of audio processed. 5 minutes max per message.
 								</p>
 							</div>
@@ -390,7 +390,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							Enables advanced context management system which uses LLM based condensing for next-gen models.{" "}
 							<a
 								className="text-[var(--vscode-textLink-foreground)] hover:text-[var(--vscode-textLink-activeForeground)]"
-								href="https://docs.cline.bot/features/auto-compact"
+								href="https://github.com/galib9690/AI-Hydro#readme"
 								rel="noopener noreferrer"
 								target="_blank">
 								Learn more
@@ -409,7 +409,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							</VSCodeCheckbox>
 							<p className="text-xs">
 								<span className="text-[var(--vscode-errorForeground)]">Experimental: </span>{" "}
-								<span className="text-description">Allows cline to work across multiple workspaces.</span>
+								<span className="text-description">Allows AI-Hydro to work across multiple workspaces.</span>
 							</p>
 						</div>
 					)}
@@ -426,7 +426,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							<p className="text-xs">
 								<span className="text-[var(--vscode-errorForeground)]">Experimental: </span>{" "}
 								<span className="text-description">
-									Allows execution of hooks from .clinerules/hooks/ directory.
+									Allows execution of hooks from .aihydrorules/hooks/ directory.
 								</span>
 							</p>
 						</div>
@@ -459,7 +459,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							</VSCodeCheckbox>
 						)}
 						<p className="text-xs text-[var(--vscode-errorForeground)]">
-							EXPERIMENTAL & DANGEROUS: This mode disables safety checks and user confirmations. Cline will
+							EXPERIMENTAL & DANGEROUS: This mode disables safety checks and user confirmations. AI-Hydro will
 							automatically approve all actions without asking. Use with extreme caution.
 						</p>
 					</div>

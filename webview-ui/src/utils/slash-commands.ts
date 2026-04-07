@@ -17,12 +17,12 @@ export const DEFAULT_SLASH_COMMANDS: SlashCommand[] = [
 	},
 	{
 		name: "newrule",
-		description: "Create a new Cline rule based on your conversation",
+		description: "Create a new AI-Hydro rule based on your conversation",
 		section: "default",
 	},
 	{
 		name: "reportbug",
-		description: "Create a Github issue with Cline",
+		description: "Create a GitHub issue for AI-Hydro",
 		section: "default",
 	},
 	{
@@ -32,7 +32,7 @@ export const DEFAULT_SLASH_COMMANDS: SlashCommand[] = [
 	},
 	{
 		name: "subagent",
-		description: "Invoke a Cline CLI subagent for focused research tasks",
+		description: "Invoke an AI-Hydro CLI subagent for focused research tasks",
 		section: "default",
 	},
 ]

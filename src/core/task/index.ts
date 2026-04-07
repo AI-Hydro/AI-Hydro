@@ -9,17 +9,17 @@ import { getContextWindowInfo } from "@core/context/context-management/context-w
 import { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import { ModelContextTracker } from "@core/context/context-tracking/ModelContextTracker"
 import {
-	getGlobalClineRules,
-	getLocalClineRules,
-	refreshClineRulesToggles,
-} from "@core/context/instructions/user-instructions/cline-rules"
+	getGlobalAiHydroRules,
+	getLocalAiHydroRules,
+	refreshAiHydroRulesToggles,
+} from "@core/context/instructions/user-instructions/aihydro-rules"
 import {
 	getLocalCursorRules,
 	getLocalWindsurfRules,
 	refreshExternalRulesToggles,
 } from "@core/context/instructions/user-instructions/external-rules"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
-import { ClineIgnoreController } from "@core/ignore/ClineIgnoreController"
+import { AiHydroIgnoreController } from "@core/ignore/AiHydroIgnoreController"
 import { parseMentions } from "@core/mentions"
 import { summarizeTask } from "@core/prompts/contextManagement"
 import { formatResponse } from "@core/prompts/responses"
@@ -28,8 +28,8 @@ import {
 	ensureRulesDirectoryExists,
 	ensureTaskDirectoryExists,
 	GlobalFileNames,
+	getSavedAiHydroMessages,
 	getSavedApiConversationHistory,
-	getSavedClineMessages,
 } from "@core/storage/disk"
 import { releaseTaskLock } from "@core/task/TaskLockUtils"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
@@ -54,18 +54,18 @@ import { findLast, findLastIndex } from "@shared/array"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import {
-	ClineApiReqCancelReason,
-	ClineApiReqInfo,
-	ClineAsk,
-	ClineMessage,
-	ClineSay,
+	AiHydroApiReqCancelReason,
+	AiHydroApiReqInfo,
+	AiHydroAsk,
+	AiHydroMessage,
+	AiHydroSay,
 	COMMAND_CANCEL_TOKEN,
 } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay } from "@shared/Languages"
-import { convertClineMessageToProto } from "@shared/proto-conversions/cline-message"
-import { ClineDefaultTool } from "@shared/tools"
-import { ClineAskResponse } from "@shared/WebviewMessage"
+import { convertAiHydroMessageToProto } from "@shared/proto-conversions/aihydro-message"
+import { AiHydroDefaultTool } from "@shared/tools"
+import { AiHydroAskResponse } from "@shared/WebviewMessage"
 import { isLocalModel, isNextGenModelFamily } from "@utils/model-utils"
 import { arePathsEqual, getDesktopDir } from "@utils/path"
 import { filterExistingFiles } from "@utils/tabFiltering"
@@ -78,13 +78,13 @@ import * as vscode from "vscode"
 import type { SystemPromptContext } from "@/core/prompts/system-prompt"
 import { getSystemPrompt } from "@/core/prompts/system-prompt"
 import { HostProvider } from "@/hosts/host-provider"
-import { isSubagentCommand, transformClineCommand } from "@/integrations/cli-subagents/subagent_command"
-import { ClineError, ClineErrorType, ErrorService } from "@/services/error"
+import { isSubagentCommand, transformAiHydroCommand } from "@/integrations/cli-subagents/subagent_command"
+import { AiHydroError, AiHydroErrorType, ErrorService } from "@/services/error"
 import { TerminalHangStage, TerminalUserInterventionAction, telemetryService } from "@/services/telemetry"
 import { ShowMessageType } from "@/shared/proto/index.host"
-import { isClineCliInstalled, isCliSubagentContext } from "@/utils/cli-detector"
+import { isAiHydroCliInstalled, isCliSubagentContext } from "@/utils/cli-detector"
 import { isInTestMode } from "../../services/test/TestMode"
-import { ensureLocalClineDirExists } from "../context/instructions/user-instructions/rule-helpers"
+import { ensureLocalAiHydroDirExists } from "../context/instructions/user-instructions/rule-helpers"
 import { refreshWorkflowToggles } from "../context/instructions/user-instructions/workflows"
 import { Controller } from "../controller"
 import { StateManager } from "../storage/StateManager"
@@ -149,7 +149,7 @@ export class Task {
 	contextManager: ContextManager
 	private diffViewProvider: DiffViewProvider
 	public checkpointManager?: ICheckpointManager
-	private clineIgnoreController: ClineIgnoreController
+	private aihydroIgnoreController: AiHydroIgnoreController
 	private toolExecutor: ToolExecutor
 
 	private terminalExecutionMode: "vscodeTerminal" | "backgroundExec"
@@ -218,7 +218,7 @@ export class Task {
 		this.postStateToWebview = postStateToWebview
 		this.reinitExistingTaskFromId = reinitExistingTaskFromId
 		this.cancelTask = cancelTask
-		this.clineIgnoreController = new ClineIgnoreController(cwd)
+		this.aihydroIgnoreController = new AiHydroIgnoreController(cwd)
 		this.taskLockAcquired = taskLockAcquired
 
 		// TODO(ae) this is a hack to replace the terminal manager for standalone,
@@ -376,11 +376,13 @@ export class Task {
 			...apiConfiguration,
 			ulid: this.ulid,
 			onRetryAttempt: async (attempt: number, maxRetries: number, delay: number, error: any) => {
-				const clineMessages = this.messageStateHandler.getClineMessages()
-				const lastApiReqStartedIndex = findLastIndex(clineMessages, (m) => m.say === "api_req_started")
+				const aihydroMessages = this.messageStateHandler.getAiHydroMessages()
+				const lastApiReqStartedIndex = findLastIndex(aihydroMessages, (m) => m.say === "api_req_started")
 				if (lastApiReqStartedIndex !== -1) {
 					try {
-						const currentApiReqInfo: ClineApiReqInfo = JSON.parse(clineMessages[lastApiReqStartedIndex].text || "{}")
+						const currentApiReqInfo: AiHydroApiReqInfo = JSON.parse(
+							aihydroMessages[lastApiReqStartedIndex].text || "{}",
+						)
 						currentApiReqInfo.retryStatus = {
 							attempt: attempt, // attempt is already 1-indexed from retry.ts
 							maxAttempts: maxRetries, // total attempts
@@ -390,7 +392,7 @@ export class Task {
 						// Clear previous cancelReason and streamingFailedMessage if we are retrying
 						delete currentApiReqInfo.cancelReason
 						delete currentApiReqInfo.streamingFailedMessage
-						await this.messageStateHandler.updateClineMessage(lastApiReqStartedIndex, {
+						await this.messageStateHandler.updateAiHydroMessage(lastApiReqStartedIndex, {
 							text: JSON.stringify(currentApiReqInfo),
 						})
 
@@ -459,7 +461,7 @@ export class Task {
 			this.diffViewProvider,
 			this.mcpHub,
 			this.fileContextTracker,
-			this.clineIgnoreController,
+			this.aihydroIgnoreController,
 			this.contextManager,
 			this.stateManager,
 			cwd,
@@ -487,39 +489,39 @@ export class Task {
 
 	// partial has three valid states true (partial message), false (completion of partial message), undefined (individual complete message)
 	async ask(
-		type: ClineAsk,
+		type: AiHydroAsk,
 		text?: string,
 		partial?: boolean,
 	): Promise<{
-		response: ClineAskResponse
+		response: AiHydroAskResponse
 		text?: string
 		images?: string[]
 		files?: string[]
 		askTs?: number
 	}> {
-		// If this Cline instance was aborted by the provider, then the only thing keeping us alive is a promise still running in the background, in which case we don't want to send its result to the webview as it is attached to a new instance of Cline now. So we can safely ignore the result of any active promises, and this class will be deallocated. (Although we set Cline = undefined in provider, that simply removes the reference to this instance, but the instance is still alive until this promise resolves or rejects.)
+		// If this AI-Hydro instance was aborted by the provider, then the only thing keeping us alive is a promise still running in the background, in which case we don't want to send its result to the webview as it is attached to a new instance of AI-Hydro now. So we can safely ignore the result of any active promises, and this class will be deallocated. (Although we set AI-Hydro = undefined in provider, that simply removes the reference to this instance, but the instance is still alive until this promise resolves or rejects.)
 		if (this.taskState.abort) {
-			throw new Error("Cline instance aborted")
+			throw new Error("AI-Hydro instance aborted")
 		}
 		let askTs: number
 		if (partial !== undefined) {
-			const clineMessages = this.messageStateHandler.getClineMessages()
-			const lastMessage = clineMessages.at(-1)
-			const lastMessageIndex = clineMessages.length - 1
+			const aihydroMessages = this.messageStateHandler.getAiHydroMessages()
+			const lastMessage = aihydroMessages.at(-1)
+			const lastMessageIndex = aihydroMessages.length - 1
 
 			const isUpdatingPreviousPartial =
 				lastMessage && lastMessage.partial && lastMessage.type === "ask" && lastMessage.ask === type
 			if (partial) {
 				if (isUpdatingPreviousPartial) {
 					// existing partial message, so update it
-					await this.messageStateHandler.updateClineMessage(lastMessageIndex, {
+					await this.messageStateHandler.updateAiHydroMessage(lastMessageIndex, {
 						text,
 						partial,
 					})
 					// todo be more efficient about saving and posting only new data or one whole message at a time so ignore partial for saves, and only post parts of partial message instead of whole array in new listener
-					// await this.saveClineMessagesAndUpdateHistory()
+					// await this.saveAiHydroMessagesAndUpdateHistory()
 					// await this.postStateToWebview()
-					const protoMessage = convertClineMessageToProto(lastMessage)
+					const protoMessage = convertAiHydroMessageToProto(lastMessage)
 					await sendPartialMessageEvent(protoMessage)
 					throw new Error("Current ask promise was ignored 1")
 				} else {
@@ -529,7 +531,7 @@ export class Task {
 					// this.askResponseImages = undefined
 					askTs = Date.now()
 					this.taskState.lastMessageTs = askTs
-					await this.messageStateHandler.addToClineMessages({
+					await this.messageStateHandler.addToAiHydroMessages({
 						ts: askTs,
 						type: "ask",
 						ask: type,
@@ -557,12 +559,12 @@ export class Task {
 					askTs = lastMessage.ts
 					this.taskState.lastMessageTs = askTs
 					// lastMessage.ts = askTs
-					await this.messageStateHandler.updateClineMessage(lastMessageIndex, {
+					await this.messageStateHandler.updateAiHydroMessage(lastMessageIndex, {
 						text,
 						partial: false,
 					})
 					// await this.postStateToWebview()
-					const protoMessage = convertClineMessageToProto(lastMessage)
+					const protoMessage = convertAiHydroMessageToProto(lastMessage)
 					await sendPartialMessageEvent(protoMessage)
 				} else {
 					// this is a new partial=false message, so add it like normal
@@ -572,7 +574,7 @@ export class Task {
 					this.taskState.askResponseFiles = undefined
 					askTs = Date.now()
 					this.taskState.lastMessageTs = askTs
-					await this.messageStateHandler.addToClineMessages({
+					await this.messageStateHandler.addToAiHydroMessages({
 						ts: askTs,
 						type: "ask",
 						ask: type,
@@ -583,14 +585,14 @@ export class Task {
 			}
 		} else {
 			// this is a new non-partial message, so add it like normal
-			// const lastMessage = this.clineMessages.at(-1)
+			// const lastMessage = this.aihydroMessages.at(-1)
 			this.taskState.askResponse = undefined
 			this.taskState.askResponseText = undefined
 			this.taskState.askResponseImages = undefined
 			this.taskState.askResponseFiles = undefined
 			askTs = Date.now()
 			this.taskState.lastMessageTs = askTs
-			await this.messageStateHandler.addToClineMessages({
+			await this.messageStateHandler.addToAiHydroMessages({
 				ts: askTs,
 				type: "ask",
 				ask: type,
@@ -618,7 +620,7 @@ export class Task {
 		return result
 	}
 
-	async handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[], files?: string[]) {
+	async handleWebviewAskResponse(askResponse: AiHydroAskResponse, text?: string, images?: string[], files?: string[]) {
 		this.taskState.askResponse = askResponse
 		this.taskState.askResponseText = text
 		this.taskState.askResponseImages = images
@@ -626,18 +628,18 @@ export class Task {
 	}
 
 	async say(
-		type: ClineSay,
+		type: AiHydroSay,
 		text?: string,
 		images?: string[],
 		files?: string[],
 		partial?: boolean,
 	): Promise<number | undefined> {
 		if (this.taskState.abort) {
-			throw new Error("Cline instance aborted")
+			throw new Error("AI-Hydro instance aborted")
 		}
 
 		if (partial !== undefined) {
-			const lastMessage = this.messageStateHandler.getClineMessages().at(-1)
+			const lastMessage = this.messageStateHandler.getAiHydroMessages().at(-1)
 			const isUpdatingPreviousPartial =
 				lastMessage && lastMessage.partial && lastMessage.type === "say" && lastMessage.say === type
 			if (partial) {
@@ -647,14 +649,14 @@ export class Task {
 					lastMessage.images = images
 					lastMessage.files = files
 					lastMessage.partial = partial
-					const protoMessage = convertClineMessageToProto(lastMessage)
+					const protoMessage = convertAiHydroMessageToProto(lastMessage)
 					await sendPartialMessageEvent(protoMessage)
 					return undefined
 				} else {
 					// this is a new partial message, so add it with partial state
 					const sayTs = Date.now()
 					this.taskState.lastMessageTs = sayTs
-					await this.messageStateHandler.addToClineMessages({
+					await this.messageStateHandler.addToAiHydroMessages({
 						ts: sayTs,
 						type: "say",
 						say: type,
@@ -678,16 +680,16 @@ export class Task {
 					lastMessage.partial = false
 
 					// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
-					await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+					await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 					// await this.postStateToWebview()
-					const protoMessage = convertClineMessageToProto(lastMessage)
+					const protoMessage = convertAiHydroMessageToProto(lastMessage)
 					await sendPartialMessageEvent(protoMessage) // more performant than an entire postStateToWebview
 					return undefined
 				} else {
 					// this is a new partial=false message, so add it like normal
 					const sayTs = Date.now()
 					this.taskState.lastMessageTs = sayTs
-					await this.messageStateHandler.addToClineMessages({
+					await this.messageStateHandler.addToAiHydroMessages({
 						ts: sayTs,
 						type: "say",
 						say: type,
@@ -703,7 +705,7 @@ export class Task {
 			// this is a new non-partial message, so add it like normal
 			const sayTs = Date.now()
 			this.taskState.lastMessageTs = sayTs
-			await this.messageStateHandler.addToClineMessages({
+			await this.messageStateHandler.addToAiHydroMessages({
 				ts: sayTs,
 				type: "say",
 				say: type,
@@ -716,22 +718,22 @@ export class Task {
 		}
 	}
 
-	async sayAndCreateMissingParamError(toolName: ClineDefaultTool, paramName: string, relPath?: string) {
+	async sayAndCreateMissingParamError(toolName: AiHydroDefaultTool, paramName: string, relPath?: string) {
 		await this.say(
 			"error",
-			`Cline tried to use ${toolName}${
+			`AI-Hydro tried to use ${toolName}${
 				relPath ? ` for '${relPath.toPosix()}'` : ""
 			} without value for required parameter '${paramName}'. Retrying...`,
 		)
 		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName))
 	}
 
-	async removeLastPartialMessageIfExistsWithType(type: "ask" | "say", askOrSay: ClineAsk | ClineSay) {
-		const clineMessages = this.messageStateHandler.getClineMessages()
-		const lastMessage = clineMessages.at(-1)
+	async removeLastPartialMessageIfExistsWithType(type: "ask" | "say", askOrSay: AiHydroAsk | AiHydroSay) {
+		const aihydroMessages = this.messageStateHandler.getAiHydroMessages()
+		const lastMessage = aihydroMessages.at(-1)
 		if (lastMessage?.partial && lastMessage.type === type && (lastMessage.ask === askOrSay || lastMessage.say === askOrSay)) {
-			this.messageStateHandler.setClineMessages(clineMessages.slice(0, -1))
-			await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+			this.messageStateHandler.setAiHydroMessages(aihydroMessages.slice(0, -1))
+			await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 		}
 	}
 
@@ -794,14 +796,85 @@ export class Task {
 
 	private async startTask(task?: string, images?: string[], files?: string[]): Promise<void> {
 		try {
-			await this.clineIgnoreController.initialize()
+			await this.aihydroIgnoreController.initialize()
 		} catch (error) {
-			console.error("Failed to initialize ClineIgnoreController:", error)
+			console.error("Failed to initialize AiHydroIgnoreController:", error)
 			// Optionally, inform the user or handle the error appropriately
 		}
-		// conversationHistory (for API) and clineMessages (for webview) need to be in sync
-		// if the extension process were killed, then on restart the clineMessages might not be empty, so we need to set it to [] when we create a new Cline client (otherwise webview would show stale messages from previous session)
-		this.messageStateHandler.setClineMessages([])
+
+		// Interactive RAG workspace venv setup check
+		const ragService = this.controller.ragService
+		if (ragService) {
+			try {
+				const workspaceRoot = await ragService.getWorkspaceRoot()
+				if (workspaceRoot) {
+					const venvExists = await ragService.workspaceVenvExists()
+					const ragAlreadyAvailable = await ragService.isRagAvailable()
+					if (!venvExists && !ragAlreadyAvailable) {
+						// Get workspace details for user approval
+						const envInfo = await ragService.getWorkspaceEnvInfo()
+
+						// Ask user for approval to install workspace venv
+						const { response } = await this.ask(
+							"tool",
+							`# RAG Knowledge Base Setup\n\n` +
+								`To enable the AI-Hydro knowledge base (RAG system) for hydrological tools and workflows, a Python virtual environment needs to be installed in your workspace.\n\n` +
+								`**Workspace:** ${envInfo.workspaceRoot}\n` +
+								`**Environment Path:** ${envInfo.envPath}\n` +
+								`**Disk Space Required:** ${envInfo.diskSpace}\n` +
+								`**Estimated Time:** ${envInfo.estimatedTime}\n\n` +
+								`Would you like to proceed with the installation?`,
+						)
+
+						if (response === "yesButtonClicked") {
+							// User approved, proceed with installation
+							await this.say("text", "Installing workspace virtual environment for RAG system...")
+
+							try {
+								// Pass callback to stream progress to chat
+								const result = await ragService.setupWorkspaceEnvironment(async (message: string) => {
+									await this.say("text", message)
+								})
+
+								if (result.success) {
+									await this.say(
+										"text",
+										`✓ Workspace virtual environment successfully installed!\n\n` +
+											`The RAG knowledge base is now active and will provide context-aware assistance for hydrological tools and workflows.`,
+									)
+								} else {
+									await this.say(
+										"error",
+										`Failed to install workspace virtual environment:\n${result.message}\n\n` +
+											`The RAG knowledge base will not be available for this session.`,
+									)
+								}
+							} catch (error) {
+								const errorMessage = error instanceof Error ? error.message : String(error)
+								await this.say(
+									"error",
+									`Error during workspace venv installation: ${errorMessage}\n\n` +
+										`The RAG knowledge base will not be available for this session.`,
+								)
+							}
+						} else {
+							// User declined
+							await this.say(
+								"text",
+								"Workspace virtual environment installation declined. The RAG knowledge base will not be available for this session.",
+							)
+						}
+					}
+				}
+			} catch (error) {
+				console.error("Error checking RAG workspace venv:", error)
+				// Non-fatal error, continue with task
+			}
+		}
+
+		// conversationHistory (for API) and aihydroMessages (for webview) need to be in sync
+		// if the extension process were killed, then on restart the aihydroMessages might not be empty, so we need to set it to [] when we create a new AI-Hydro client (otherwise webview would show stale messages from previous session)
+		this.messageStateHandler.setAiHydroMessages([])
 		this.messageStateHandler.setApiConversationHistory([])
 
 		await this.postStateToWebview()
@@ -854,7 +927,7 @@ export class Task {
 					const errorMessage = taskStartResult.errorMessage || "TaskStart hook prevented task from starting"
 					await this.say("error", errorMessage)
 					// Ensure the error message is saved and posted before aborting
-					await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+					await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 					await this.postStateToWebview()
 					this.abortTask()
 					return
@@ -883,36 +956,36 @@ export class Task {
 
 	private async resumeTaskFromHistory() {
 		try {
-			await this.clineIgnoreController.initialize()
+			await this.aihydroIgnoreController.initialize()
 		} catch (error) {
-			console.error("Failed to initialize ClineIgnoreController:", error)
+			console.error("Failed to initialize AiHydroIgnoreController:", error)
 			// Optionally, inform the user or handle the error appropriately
 		}
 
-		const savedClineMessages = await getSavedClineMessages(this.taskId)
+		const savedAiHydroMessages = await getSavedAiHydroMessages(this.taskId)
 
 		// Remove any resume messages that may have been added before
 
 		const lastRelevantMessageIndex = findLastIndex(
-			savedClineMessages,
+			savedAiHydroMessages,
 			(m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"),
 		)
 		if (lastRelevantMessageIndex !== -1) {
-			savedClineMessages.splice(lastRelevantMessageIndex + 1)
+			savedAiHydroMessages.splice(lastRelevantMessageIndex + 1)
 		}
 
 		// since we don't use api_req_finished anymore, we need to check if the last api_req_started has a cost value, if it doesn't and no cancellation reason to present, then we remove it since it indicates an api request without any partial content streamed
-		const lastApiReqStartedIndex = findLastIndex(savedClineMessages, (m) => m.type === "say" && m.say === "api_req_started")
+		const lastApiReqStartedIndex = findLastIndex(savedAiHydroMessages, (m) => m.type === "say" && m.say === "api_req_started")
 		if (lastApiReqStartedIndex !== -1) {
-			const lastApiReqStarted = savedClineMessages[lastApiReqStartedIndex]
-			const { cost, cancelReason }: ClineApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
+			const lastApiReqStarted = savedAiHydroMessages[lastApiReqStartedIndex]
+			const { cost, cancelReason }: AiHydroApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
 			if (cost === undefined && cancelReason === undefined) {
-				savedClineMessages.splice(lastApiReqStartedIndex, 1)
+				savedAiHydroMessages.splice(lastApiReqStartedIndex, 1)
 			}
 		}
 
-		await this.messageStateHandler.overwriteClineMessages(savedClineMessages)
-		this.messageStateHandler.setClineMessages(await getSavedClineMessages(this.taskId))
+		await this.messageStateHandler.overwriteAiHydroMessages(savedAiHydroMessages)
+		this.messageStateHandler.setAiHydroMessages(await getSavedAiHydroMessages(this.taskId))
 
 		// Now present the cline messages to the user and ask if they want to resume (NOTE: we ran into a bug before where the apiconversationhistory wouldn't be initialized when opening a old task, and it was because we were waiting for resume)
 		// This is important in case the user deletes messages without resuming the task first
@@ -923,14 +996,14 @@ export class Task {
 		await ensureTaskDirectoryExists(this.taskId)
 		await this.contextManager.initializeContextHistory(await ensureTaskDirectoryExists(this.taskId))
 
-		const lastClineMessage = this.messageStateHandler
-			.getClineMessages()
+		const lastAiHydroMessage = this.messageStateHandler
+			.getAiHydroMessages()
 			.slice()
 			.reverse()
 			.find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")) // could be multiple resume tasks
 
-		let askType: ClineAsk
-		if (lastClineMessage?.ask === "completion_result") {
+		let askType: AiHydroAsk
+		if (lastAiHydroMessage?.ask === "completion_result") {
 			askType = "resume_completed_task"
 		} else {
 			askType = "resume_task"
@@ -980,7 +1053,7 @@ export class Task {
 		const newUserContent: UserContent = [...modifiedOldUserContent]
 
 		const agoText = (() => {
-			const timestamp = lastClineMessage?.ts ?? Date.now()
+			const timestamp = lastAiHydroMessage?.ts ?? Date.now()
 			const now = Date.now()
 			const diff = now - timestamp
 			const minutes = Math.floor(diff / 60000)
@@ -999,7 +1072,7 @@ export class Task {
 			return "just now"
 		})()
 
-		const wasRecent = lastClineMessage?.ts && Date.now() - lastClineMessage.ts < 30_000
+		const wasRecent = lastAiHydroMessage?.ts && Date.now() - lastAiHydroMessage.ts < 30_000
 
 		// Check if there are pending file context warnings before calling taskResumption
 		const pendingContextWarning = await this.fileContextTracker.retrieveAndClearPendingFileContextWarning()
@@ -1060,11 +1133,11 @@ export class Task {
 		let nextUserContent = userContent
 		let includeFileDetails = true
 		while (!this.taskState.abort) {
-			const didEndLoop = await this.recursivelyMakeClineRequests(nextUserContent, includeFileDetails)
+			const didEndLoop = await this.recursivelyMakeAiHydroRequests(nextUserContent, includeFileDetails)
 			includeFileDetails = false // we only need file details the first time
 
 			//  The way this agentic loop works is that cline will be given a task that he then calls tools to complete. unless there's an attempt_completion call, we keep responding back to him with his tool's responses until he either attempt_completion or does not use anymore tools. If he does not use anymore tools, we ask him to consider if he's completed the task and then call attempt_completion, otherwise proceed with completing the task.
-			// There is a MAX_REQUESTS_PER_TASK limit to prevent infinite requests, but Cline is prompted to finish the task as efficiently as he can.
+			// There is a MAX_REQUESTS_PER_TASK limit to prevent infinite requests, but AI-Hydro is prompted to finish the task as efficiently as he can.
 
 			//const totalCost = this.calculateApiCost(totalInputTokens, totalOutputTokens)
 			if (didEndLoop) {
@@ -1074,7 +1147,7 @@ export class Task {
 			} else {
 				// this.say(
 				// 	"tool",
-				// 	"Cline responded with only text blocks but has not called attempt_completion yet. Forcing him to continue with task..."
+				// 	"AI-Hydro responded with only text blocks but has not called attempt_completion yet. Forcing it to continue with task..."
 				// )
 				nextUserContent = [
 					{
@@ -1098,7 +1171,7 @@ export class Task {
 			this.terminalManager.disposeAll()
 			this.urlContentFetcher.closeBrowser()
 			await this.browserSession.dispose()
-			this.clineIgnoreController.dispose()
+			this.aihydroIgnoreController.dispose()
 			this.fileContextTracker.dispose()
 			// need to await for when we want to make sure directories/files are reverted before
 			// re-starting the task from a checkpoint
@@ -1201,11 +1274,11 @@ export class Task {
 	}
 
 	async executeCommandTool(command: string, timeoutSeconds: number | undefined): Promise<[boolean, ToolResponse]> {
-		// For Cline CLI subagents, we want to parse and process the command to ensure flags are correct
+		// For AI-Hydro CLI subagents, we want to parse and process the command to ensure flags are correct
 		const isSubagent = isSubagentCommand(command)
 
-		if (transformClineCommand(command) !== command && isSubagent) {
-			command = transformClineCommand(command)
+		if (transformAiHydroCommand(command) !== command && isSubagent) {
+			command = transformAiHydroCommand(command)
 		}
 
 		const subAgentStartTime = isSubagent ? performance.now() : 0
@@ -1263,10 +1336,10 @@ export class Task {
 			this.controller.updateBackgroundCommandState(false, this.taskId)
 
 			// Mark the command message as completed
-			const clineMessages = this.messageStateHandler.getClineMessages()
-			const lastCommandIndex = findLastIndex(clineMessages, (m) => m.ask === "command" || m.say === "command")
+			const aihydroMessages = this.messageStateHandler.getAiHydroMessages()
+			const lastCommandIndex = findLastIndex(aihydroMessages, (m) => m.ask === "command" || m.say === "command")
 			if (lastCommandIndex !== -1) {
-				await this.messageStateHandler.updateClineMessage(lastCommandIndex, {
+				await this.messageStateHandler.updateAiHydroMessage(lastCommandIndex, {
 					commandCompleted: true,
 				})
 			}
@@ -1576,7 +1649,7 @@ export class Task {
 	 * Migrates the disableBrowserTool setting from VSCode configuration to browserSettings
 	 */
 	private async migrateDisableBrowserToolSetting(): Promise<void> {
-		const config = vscode.workspace.getConfiguration("cline")
+		const config = vscode.workspace.getConfiguration("aihydro")
 		const disableBrowserTool = config.get<boolean>("disableBrowserTool")
 
 		if (disableBrowserTool !== undefined) {
@@ -1612,7 +1685,7 @@ export class Task {
 			this.taskState.conversationHistoryDeletedRange,
 			"quarter", // Force aggressive truncation
 		)
-		await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+		await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 		await this.contextManager.triggerApplyStandardContextTruncationNoticeChange(
 			Date.now(),
 			await ensureTaskDirectoryExists(this.taskId),
@@ -1650,27 +1723,27 @@ export class Task {
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
 		let isSubagentsEnabledAndCliInstalled = false
 		if (subagentsEnabled) {
-			const clineCliInstalled = await isClineCliInstalled()
-			isSubagentsEnabledAndCliInstalled = subagentsEnabled && clineCliInstalled
+			const aihydroCliInstalled = await isAiHydroCliInstalled()
+			isSubagentsEnabledAndCliInstalled = subagentsEnabled && aihydroCliInstalled
 		}
 
-		const { globalToggles, localToggles } = await refreshClineRulesToggles(this.controller, this.cwd)
+		const { globalToggles, localToggles } = await refreshAiHydroRulesToggles(this.controller, this.cwd)
 		const { windsurfLocalToggles, cursorLocalToggles } = await refreshExternalRulesToggles(this.controller, this.cwd)
 
-		const globalClineRulesFilePath = await ensureRulesDirectoryExists()
-		const globalClineRulesFileInstructions = await getGlobalClineRules(globalClineRulesFilePath, globalToggles)
+		const globalAiHydroRulesFilePath = await ensureRulesDirectoryExists()
+		const globalAiHydroRulesFileInstructions = await getGlobalAiHydroRules(globalAiHydroRulesFilePath, globalToggles)
 
-		const localClineRulesFileInstructions = await getLocalClineRules(this.cwd, localToggles)
+		const localAiHydroRulesFileInstructions = await getLocalAiHydroRules(this.cwd, localToggles)
 		const [localCursorRulesFileInstructions, localCursorRulesDirInstructions] = await getLocalCursorRules(
 			this.cwd,
 			cursorLocalToggles,
 		)
 		const localWindsurfRulesFileInstructions = await getLocalWindsurfRules(this.cwd, windsurfLocalToggles)
 
-		const clineIgnoreContent = this.clineIgnoreController.clineIgnoreContent
-		let clineIgnoreInstructions: string | undefined
-		if (clineIgnoreContent) {
-			clineIgnoreInstructions = formatResponse.clineIgnoreInstructions(clineIgnoreContent)
+		const aihydroIgnoreContent = this.aihydroIgnoreController.aihydroIgnoreContent
+		let aihydroIgnoreInstructions: string | undefined
+		if (aihydroIgnoreContent) {
+			aihydroIgnoreInstructions = formatResponse.aihydroIgnoreInstructions(aihydroIgnoreContent)
 		}
 
 		// Prepare multi-root workspace information if enabled
@@ -1697,12 +1770,12 @@ export class Task {
 			supportsBrowserUse,
 			mcpHub: this.mcpHub,
 			focusChainSettings: this.stateManager.getGlobalSettingsKey("focusChainSettings"),
-			globalClineRulesFileInstructions,
-			localClineRulesFileInstructions,
+			globalAiHydroRulesFileInstructions,
+			localAiHydroRulesFileInstructions,
 			localCursorRulesFileInstructions,
 			localCursorRulesDirInstructions,
 			localWindsurfRulesFileInstructions,
-			clineIgnoreInstructions,
+			aihydroIgnoreInstructions,
 			preferredLanguageInstructions,
 			browserSettings: this.stateManager.getGlobalSettingsKey("browserSettings"),
 			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
@@ -1716,7 +1789,7 @@ export class Task {
 
 		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(
 			this.messageStateHandler.getApiConversationHistory(),
-			this.messageStateHandler.getClineMessages(),
+			this.messageStateHandler.getAiHydroMessages(),
 			this.api,
 			this.taskState.conversationHistoryDeletedRange,
 			previousApiReqIndex,
@@ -1726,7 +1799,7 @@ export class Task {
 
 		if (contextManagementMetadata.updatedConversationHistoryDeletedRange) {
 			this.taskState.conversationHistoryDeletedRange = contextManagementMetadata.conversationHistoryDeletedRange
-			await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+			await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 			// saves task history item which we use to keep track of conversation history deleted range
 		}
 
@@ -1743,7 +1816,7 @@ export class Task {
 		} catch (error) {
 			const isContextWindowExceededError = checkContextWindowExceededError(error)
 			const { model, providerId } = this.getCurrentProviderInfo()
-			const clineError = ErrorService.get().toClineError(error, model.id, providerId)
+			const clineError = ErrorService.get().toAiHydroError(error, model.id, providerId)
 
 			// Capture provider failure telemetry using clineError
 			// TODO: Move into errorService
@@ -1774,40 +1847,40 @@ export class Task {
 
 				// Update the 'api_req_started' message to reflect final failure before asking user to manually retry
 				const lastApiReqStartedIndex = findLastIndex(
-					this.messageStateHandler.getClineMessages(),
+					this.messageStateHandler.getAiHydroMessages(),
 					(m) => m.say === "api_req_started",
 				)
 				if (lastApiReqStartedIndex !== -1) {
-					const clineMessages = this.messageStateHandler.getClineMessages()
-					const currentApiReqInfo: ClineApiReqInfo = JSON.parse(clineMessages[lastApiReqStartedIndex].text || "{}")
+					const aihydroMessages = this.messageStateHandler.getAiHydroMessages()
+					const currentApiReqInfo: AiHydroApiReqInfo = JSON.parse(aihydroMessages[lastApiReqStartedIndex].text || "{}")
 					delete currentApiReqInfo.retryStatus
 
-					await this.messageStateHandler.updateClineMessage(lastApiReqStartedIndex, {
+					await this.messageStateHandler.updateAiHydroMessage(lastApiReqStartedIndex, {
 						text: JSON.stringify({
 							...currentApiReqInfo, // Spread the modified info (with retryStatus removed)
 							// cancelReason: "retries_exhausted", // Indicate that automatic retries failed
 							streamingFailedMessage,
-						} satisfies ClineApiReqInfo),
+						} satisfies AiHydroApiReqInfo),
 					})
 					// this.ask will trigger postStateToWebview, so this change should be picked up.
 				}
 
-				// Check if this is a Cline provider insufficient credits error - don't auto-retry these
-				const isClineProviderInsufficientCredits = (() => {
+				// Check if this is a AI-Hydro provider insufficient credits error - don't auto-retry these
+				const isAiHydroProviderInsufficientCredits = (() => {
 					if (providerId !== "cline") {
 						return false
 					}
 					try {
-						const parsedError = ClineError.transform(error, model.id, providerId)
-						return parsedError.isErrorType(ClineErrorType.Balance)
+						const parsedError = AiHydroError.transform(error, model.id, providerId)
+						return parsedError.isErrorType(AiHydroErrorType.Balance)
 					} catch {
 						return false
 					}
 				})()
 
-				let response: ClineAskResponse
-				// Skip auto-retry for Cline provider insufficient credits errors
-				if (!isClineProviderInsufficientCredits && this.taskState.autoRetryAttempts < 3) {
+				let response: AiHydroAskResponse
+				// Skip auto-retry for AI-Hydro provider insufficient credits errors
+				if (!isAiHydroProviderInsufficientCredits && this.taskState.autoRetryAttempts < 3) {
 					// Auto-retry enabled with max 3 attempts: automatically approve the retry
 					this.taskState.autoRetryAttempts++
 
@@ -1826,7 +1899,7 @@ export class Task {
 						cancelReason: "streaming_failed",
 						streamingFailedMessage,
 					})
-					await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+					await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 					await this.postStateToWebview()
 
 					response = "yesButtonClicked"
@@ -1841,7 +1914,7 @@ export class Task {
 					await setTimeoutPromise(delay)
 				} else {
 					// Show error_retry with failed flag to indicate all retries exhausted (but not for insufficient credits)
-					if (!isClineProviderInsufficientCredits) {
+					if (!isAiHydroProviderInsufficientCredits) {
 						await this.say(
 							"error_retry",
 							JSON.stringify({
@@ -1866,14 +1939,14 @@ export class Task {
 
 				// Clear streamingFailedMessage when user manually retries
 				const manualRetryApiReqIndex = findLastIndex(
-					this.messageStateHandler.getClineMessages(),
+					this.messageStateHandler.getAiHydroMessages(),
 					(m) => m.say === "api_req_started",
 				)
 				if (manualRetryApiReqIndex !== -1) {
-					const clineMessages = this.messageStateHandler.getClineMessages()
-					const currentApiReqInfo: ClineApiReqInfo = JSON.parse(clineMessages[manualRetryApiReqIndex].text || "{}")
+					const aihydroMessages = this.messageStateHandler.getAiHydroMessages()
+					const currentApiReqInfo: AiHydroApiReqInfo = JSON.parse(aihydroMessages[manualRetryApiReqIndex].text || "{}")
 					delete currentApiReqInfo.streamingFailedMessage
-					await this.messageStateHandler.updateClineMessage(manualRetryApiReqIndex, {
+					await this.messageStateHandler.updateAiHydroMessage(manualRetryApiReqIndex, {
 						text: JSON.stringify(currentApiReqInfo),
 					})
 				}
@@ -1896,7 +1969,7 @@ export class Task {
 
 	async presentAssistantMessage() {
 		if (this.taskState.abort) {
-			throw new Error("Cline instance aborted")
+			throw new Error("AI-Hydro instance aborted")
 		}
 
 		if (this.taskState.presentAssistantMessageLocked) {
@@ -2014,9 +2087,9 @@ export class Task {
 		}
 	}
 
-	async recursivelyMakeClineRequests(userContent: UserContent, includeFileDetails: boolean = false): Promise<boolean> {
+	async recursivelyMakeAiHydroRequests(userContent: UserContent, includeFileDetails: boolean = false): Promise<boolean> {
 		if (this.taskState.abort) {
-			throw new Error("Cline instance aborted")
+			throw new Error("AI-Hydro instance aborted")
 		}
 
 		// Increment API request counter for focus chain list management
@@ -2040,14 +2113,14 @@ export class Task {
 			if (autoApprovalSettings.enabled && autoApprovalSettings.enableNotifications) {
 				showSystemNotification({
 					subtitle: "Error",
-					message: "Cline is having trouble. Would you like to continue the task?",
+					message: "AI-Hydro is having trouble. Would you like to continue the task?",
 				})
 			}
 			const { response, text, images, files } = await this.ask(
 				"mistake_limit_reached",
 				this.api.getModel().id.includes("claude")
 					? `This may indicate a failure in his thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. "Try breaking down the task into smaller steps").`
-					: "Cline uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 4 Sonnet for its advanced agentic coding capabilities.",
+					: "AI-Hydro uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 4 Sonnet for its advanced agentic coding capabilities.",
 			)
 			if (response === "messageResponse") {
 				// Display the user's message in the chat UI
@@ -2091,12 +2164,12 @@ export class Task {
 			if (autoApprovalSettings.enableNotifications) {
 				showSystemNotification({
 					subtitle: "Max Requests Reached",
-					message: `Cline has auto-approved ${autoApprovalSettings.maxRequests.toString()} API requests.`,
+					message: `AI-Hydro has auto-approved ${autoApprovalSettings.maxRequests.toString()} API requests.`,
 				})
 			}
 			const { response, text, images, files } = await this.ask(
 				"auto_approval_max_req_reached",
-				`Cline has auto-approved ${autoApprovalSettings.maxRequests.toString()} API requests. Would you like to reset the count and proceed with the task?`,
+				`AI-Hydro has auto-approved ${autoApprovalSettings.maxRequests.toString()} API requests. Would you like to reset the count and proceed with the task?`,
 			)
 			// if we get past the promise it means the user approved and did not start a new task
 			this.taskState.consecutiveAutoApprovedRequestsCount = 0
@@ -2133,10 +2206,14 @@ export class Task {
 		}
 
 		// get previous api req's index to check token usage and determine if we need to truncate conversation history
-		const previousApiReqIndex = findLastIndex(this.messageStateHandler.getClineMessages(), (m) => m.say === "api_req_started")
+		const previousApiReqIndex = findLastIndex(
+			this.messageStateHandler.getAiHydroMessages(),
+			(m) => m.say === "api_req_started",
+		)
 
 		// Save checkpoint if this is the first API request
-		const isFirstRequest = this.messageStateHandler.getClineMessages().filter((m) => m.say === "api_req_started").length === 0
+		const isFirstRequest =
+			this.messageStateHandler.getAiHydroMessages().filter((m) => m.say === "api_req_started").length === 0
 
 		// getting verbose details is an expensive operation, it uses globby to top-down build file structure of project which for large projects can take a few seconds
 		// for the best UX we show a placeholder api_req_started message with a loading spinner as this happens
@@ -2159,7 +2236,7 @@ export class Task {
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : "Unknown error"
 				console.error("Failed to initialize checkpoint manager:", errorMessage)
-				this.taskState.checkpointManagerErrorMessage = errorMessage // will be displayed right away since we saveClineMessages next which posts state to webview
+				this.taskState.checkpointManagerErrorMessage = errorMessage // will be displayed right away since we saveAiHydroMessages next which posts state to webview
 				HostProvider.window.showMessage({
 					type: ShowMessageType.ERROR,
 					message: `Checkpoint initialization timed out: ${errorMessage}`,
@@ -2172,7 +2249,7 @@ export class Task {
 		if (isFirstRequest && this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting") && this.checkpointManager) {
 			await this.say("checkpoint_created") // Now this is conditional
 			const lastCheckpointMessageIndex = findLastIndex(
-				this.messageStateHandler.getClineMessages(),
+				this.messageStateHandler.getAiHydroMessages(),
 				(m) => m.say === "checkpoint_created",
 			)
 			if (lastCheckpointMessageIndex !== -1) {
@@ -2180,10 +2257,10 @@ export class Task {
 					?.commit()
 					.then(async (commitHash) => {
 						if (commitHash) {
-							await this.messageStateHandler.updateClineMessage(lastCheckpointMessageIndex, {
+							await this.messageStateHandler.updateAiHydroMessage(lastCheckpointMessageIndex, {
 								lastCheckpointHash: commitHash,
 							})
-							// saveClineMessagesAndUpdateHistory will be called later after API response,
+							// saveAiHydroMessagesAndUpdateHistory will be called later after API response,
 							// so no need to call it here unless this is the only modification to this message.
 							// For now, assuming it's handled later.
 						}
@@ -2224,7 +2301,7 @@ export class Task {
 					const safeEnd = Math.min(end + 2, apiHistory.length - 1)
 					if (end + 2 <= safeEnd) {
 						this.taskState.conversationHistoryDeletedRange = [start, end + 2]
-						await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+						await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 					}
 				}
 			} else {
@@ -2232,7 +2309,7 @@ export class Task {
 					| number
 					| undefined
 				shouldCompact = this.contextManager.shouldCompactContextWindow(
-					this.messageStateHandler.getClineMessages(),
+					this.messageStateHandler.getAiHydroMessages(),
 					this.api,
 					previousApiReqIndex,
 					autoCondenseThreshold,
@@ -2243,7 +2320,7 @@ export class Task {
 				// estimate, which require a full new message to be completed along with gathering the latest usage block. A proxy for whether
 				// we just summarized would be to check the number of in-range messages, which itself has some extreme edge case (e.g. what if
 				// first+second user messages take up entire context-window, but in this case there's already an issue). TODO: Examine other
-				// approaches such as storing this.taskState.currentlySummarizing on disk in the clineMessages. This was intentionally not done
+				// approaches such as storing this.taskState.currentlySummarizing on disk in the aihydroMessages. This was intentionally not done
 				// for now to prevent additional disk from needing to be used.
 				// The worse case scenario is effectively cline summarizing a summary, which is bad UX, but doesn't break other logic.
 				if (shouldCompact && this.taskState.conversationHistoryDeletedRange) {
@@ -2260,26 +2337,26 @@ export class Task {
 
 			let parsedUserContent: UserContent
 			let environmentDetails: string
-			let clinerulesError: boolean
+			let aihydrorulesError: boolean
 
 			// when summarizing the context window, we do not want to inject updated to the context
 			if (shouldCompact) {
 				parsedUserContent = userContent
 				environmentDetails = ""
-				clinerulesError = false
+				aihydrorulesError = false
 				this.taskState.lastAutoCompactTriggerIndex = previousApiReqIndex
 			} else {
-				;[parsedUserContent, environmentDetails, clinerulesError] = await this.loadContext(
+				;[parsedUserContent, environmentDetails, aihydrorulesError] = await this.loadContext(
 					userContent,
 					includeFileDetails,
 				)
 			}
 
-			// error handling if the user uses the /newrule command & their .clinerules is a file, for file read operations didnt work properly
-			if (clinerulesError === true) {
+			// error handling if the user uses the /newrule command & their .aihydrorules is a file, for file read operations didnt work properly
+			if (aihydrorulesError === true) {
 				await this.say(
 					"error",
-					"Issue with processing the /newrule command. Double check that, if '.clinerules' already exists, it's a directory and not a file. Otherwise there was an issue referencing this file/directory.",
+					"Issue with processing the /newrule command. Double check that, if '.aihydrorules' already exists, it's a directory and not a file. Otherwise there was an issue referencing this file/directory.",
 				)
 			}
 
@@ -2298,16 +2375,16 @@ export class Task {
 			}
 		} else {
 			const useCompactPrompt = customPrompt === "compact" && isLocalModel(this.getCurrentProviderInfo())
-			const [parsedUserContent, environmentDetails, clinerulesError] = await this.loadContext(
+			const [parsedUserContent, environmentDetails, aihydrorulesError] = await this.loadContext(
 				userContent,
 				includeFileDetails,
 				useCompactPrompt,
 			)
 
-			if (clinerulesError === true) {
+			if (aihydrorulesError === true) {
 				await this.say(
 					"error",
-					"Issue with processing the /newrule command. Double check that, if '.clinerules' already exists, it's a directory and not a file. Otherwise there was an issue referencing this file/directory.",
+					"Issue with processing the /newrule command. Double check that, if '.aihydrorules' already exists, it's a directory and not a file. Otherwise there was an issue referencing this file/directory.",
 				)
 			}
 
@@ -2357,11 +2434,11 @@ export class Task {
 		}
 
 		// since we sent off a placeholder api_req_started message to update the webview while waiting to actually start the API request (to load potential details for example), we need to update the text of that message
-		const lastApiReqIndex = findLastIndex(this.messageStateHandler.getClineMessages(), (m) => m.say === "api_req_started")
-		await this.messageStateHandler.updateClineMessage(lastApiReqIndex, {
+		const lastApiReqIndex = findLastIndex(this.messageStateHandler.getAiHydroMessages(), (m) => m.say === "api_req_started")
+		await this.messageStateHandler.updateAiHydroMessage(lastApiReqIndex, {
 			text: JSON.stringify({
 				request: userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n"),
-			} satisfies ClineApiReqInfo),
+			} satisfies AiHydroApiReqInfo),
 		})
 		await this.postStateToWebview()
 
@@ -2372,19 +2449,19 @@ export class Task {
 			let outputTokens = 0
 			let totalCost: number | undefined
 
-			const abortStream = async (cancelReason: ClineApiReqCancelReason, streamingFailedMessage?: string) => {
+			const abortStream = async (cancelReason: AiHydroApiReqCancelReason, streamingFailedMessage?: string) => {
 				if (this.diffViewProvider.isEditing) {
 					await this.diffViewProvider.revertChanges() // closes diff view
 				}
 
 				// if last message is a partial we need to update and save it
-				const lastMessage = this.messageStateHandler.getClineMessages().at(-1)
+				const lastMessage = this.messageStateHandler.getAiHydroMessages().at(-1)
 				if (lastMessage && lastMessage.partial) {
 					// lastMessage.ts = Date.now() DO NOT update ts since it is used as a key for virtuoso list
 					lastMessage.partial = false
 					// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
 					console.log("updating partial message", lastMessage)
-					// await this.saveClineMessagesAndUpdateHistory()
+					// await this.saveAiHydroMessagesAndUpdateHistory()
 				}
 
 				// Let assistant know their response was interrupted for when task is resumed
@@ -2417,7 +2494,7 @@ export class Task {
 					cancelReason,
 					streamingFailedMessage,
 				})
-				await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+				await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 
 				telemetryService.captureConversationTurnEvent(this.ulid, providerId, this.api.getModel().id, "assistant", {
 					tokensIn: inputTokens,
@@ -2543,7 +2620,7 @@ export class Task {
 			} catch (error) {
 				// abandoned happens when extension is no longer waiting for the cline instance to finish aborting (error is thrown here when any function in the for loop throws due to this.abort)
 				if (!this.taskState.abandoned) {
-					const clineError = ErrorService.get().toClineError(error, this.api.getModel().id)
+					const clineError = ErrorService.get().toAiHydroError(error, this.api.getModel().id)
 					const errorMessage = clineError.serialize()
 					// Auto-retry for streaming failures (always enabled)
 					if (this.taskState.autoRetryAttempts < 3) {
@@ -2594,7 +2671,7 @@ export class Task {
 				this.taskState.isStreaming = false
 			}
 
-			// OpenRouter/Cline may not return token usage as part of the stream (since it may abort early), so we fetch after the stream is finished
+			// OpenRouter/AI-Hydro may not return token usage as part of the stream (since it may abort early), so we fetch after the stream is finished
 			// (updateApiReq below will update the api_req_started message with the usage details. we do this async so it updates the api_req_started message in the background)
 			if (!didReceiveUsageChunk) {
 				this.api.getApiStreamUsage?.().then(async (apiStreamUsage) => {
@@ -2615,14 +2692,14 @@ export class Task {
 						api: this.api,
 						totalCost,
 					})
-					await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+					await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 					await this.postStateToWebview()
 				})
 			}
 
 			// need to call here in case the stream was aborted
 			if (this.taskState.abort) {
-				throw new Error("Cline instance aborted")
+				throw new Error("AI-Hydro instance aborted")
 			}
 
 			this.taskState.didCompleteReadingStream = true
@@ -2648,7 +2725,7 @@ export class Task {
 				api: this.api,
 				totalCost,
 			})
-			await this.messageStateHandler.saveClineMessagesAndUpdateHistory()
+			await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 			await this.postStateToWebview()
 
 			// now add to apiconversationhistory
@@ -2707,7 +2784,7 @@ export class Task {
 				// Reset auto-retry counter for each new API request
 				this.taskState.autoRetryAttempts = 0
 
-				const recDidEndLoop = await this.recursivelyMakeClineRequests(this.taskState.userMessageContent)
+				const recDidEndLoop = await this.recursivelyMakeAiHydroRequests(this.taskState.userMessageContent)
 				didEndLoop = recDidEndLoop
 			} else {
 				// if there's no assistant_responses, that means we got no text or tool_use content blocks from API which we should assume is an error
@@ -2730,7 +2807,7 @@ export class Task {
 				})
 
 				const baseErrorMessage =
-					"Invalid API Response: The provider returned an empty or unparsable response. This is a provider-side issue where the model failed to generate valid output or returned tool calls that Cline cannot process. Retrying the request may help resolve this issue."
+					"Invalid API Response: The provider returned an empty or unparsable response. This is a provider-side issue where the model failed to generate valid output or returned tool calls that AI-Hydro cannot process. Retrying the request may help resolve this issue."
 				const errorText = reqId ? `${baseErrorMessage} (Request ID: ${reqId})` : baseErrorMessage
 
 				await this.say("error", errorText)
@@ -2744,7 +2821,7 @@ export class Task {
 					],
 				})
 
-				let response: ClineAskResponse
+				let response: AiHydroAskResponse
 
 				if (this.taskState.autoRetryAttempts < 3) {
 					// Auto-retry enabled with max 3 attempts: automatically approve the retry
@@ -2805,8 +2882,8 @@ export class Task {
 		includeFileDetails: boolean = false,
 		useCompactPrompt = false,
 	): Promise<[UserContent, string, boolean]> {
-		// Track if we need to check clinerulesFile
-		let needsClinerulesFileCheck = false
+		// Track if we need to check aihydrorulesFile
+		let needsAihydrorulesFileCheck = false
 
 		const { localWorkflowToggles, globalWorkflowToggles } = await refreshWorkflowToggles(this.controller, this.cwd)
 
@@ -2833,7 +2910,7 @@ export class Task {
 							)
 
 							// when parsing slash commands, we still want to allow the user to provide their desired context
-							const { processedText, needsClinerulesFileCheck: needsCheck } = await parseSlashCommands(
+							const { processedText, needsAihydrorulesFileCheck: needsCheck } = await parseSlashCommands(
 								parsedText,
 								localWorkflowToggles,
 								globalWorkflowToggles,
@@ -2842,7 +2919,7 @@ export class Task {
 							)
 
 							if (needsCheck) {
-								needsClinerulesFileCheck = true
+								needsAihydrorulesFileCheck = true
 							}
 
 							return {
@@ -2862,10 +2939,10 @@ export class Task {
 			this.getEnvironmentDetails(includeFileDetails),
 		])
 
-		// After processing content, check clinerulesData if needed
-		let clinerulesError = false
-		if (needsClinerulesFileCheck) {
-			clinerulesError = await ensureLocalClineDirExists(this.cwd, GlobalFileNames.clineRules)
+		// After processing content, check aihydrorulesData if needed
+		let aihydrorulesError = false
+		if (needsAihydrorulesFileCheck) {
+			aihydrorulesError = await ensureLocalAiHydroDirExists(this.cwd, GlobalFileNames.aihydroRules)
 		}
 
 		// Add focu chain list instructions if needed
@@ -2880,8 +2957,75 @@ export class Task {
 			this.taskState.todoListWasUpdatedByUser = false
 		}
 
+		// Add RAG context augmentation if available
+		const ragService = this.controller.ragService
+		if (ragService) {
+			const ragNowAvailable = await ragService.isRagAvailable()
+			if (ragNowAvailable) {
+				// Extract user query with THREE filters:
+				// 1. Remove [TASK RESUMPTION] messages
+				// 2. Remove tool metadata [ask_followup_question for '...]
+				// 3. Remove system prompts (While in PLAN MODE, etc.)
+				// 4. Extract from semantic tags (<task>, <feedback>, etc.)
+				const extractUserQuery = (content: UserContent): string => {
+					return content
+						.filter((block) => block.type === "text")
+						.map((block) => {
+							if (block.type === "text") {
+								let text = block.text
+								// Filter 1: Remove task resumption messages
+								text = text.replace(/\[TASK RESUMPTION\][^\n]*/g, "")
+								// Filter 2: Remove tool metadata
+								text = text.replace(/\[[\w_]+\s+for\s+'[^']*'\]/g, "")
+								// Filter 3: Remove system prompts
+								text = text.replace(/^(While in (PLAN|ACT) MODE,|You are in (PLAN|ACT) MODE)[^\n]*/gm, "")
+
+								// Filter 4: Extract from semantic tags
+								const taskMatch = text.match(/<task>([\s\S]*?)<\/task>/)
+								const feedbackMatch = text.match(/<feedback>([\s\S]*?)<\/feedback>/)
+								const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/)
+								const userMessageMatch = text.match(/<user_message>([\s\S]*?)<\/user_message>/)
+
+								const extracted: string[] = []
+								if (taskMatch) {
+									extracted.push(taskMatch[1])
+								}
+								if (feedbackMatch) {
+									extracted.push(feedbackMatch[1])
+								}
+								if (answerMatch) {
+									extracted.push(answerMatch[1])
+								}
+								if (userMessageMatch) {
+									extracted.push(userMessageMatch[1])
+								}
+
+								return extracted.length > 0 ? extracted.join(" ") : text
+							}
+							return ""
+						})
+						.join(" ")
+						.trim()
+						.slice(0, 500)
+				}
+
+				const userQuery = extractUserQuery(processedUserContent)
+
+				if (userQuery.length > 10) {
+					const ragResults = await ragService.query(userQuery, 3)
+					if (ragResults.length > 0) {
+						const ragContext = ragService.formatResultsAsContext(ragResults)
+						processedUserContent.push({
+							type: "text",
+							text: ragContext,
+						})
+					}
+				}
+			}
+		}
+
 		// Return all results
-		return [processedUserContent, environmentDetails, clinerulesError]
+		return [processedUserContent, environmentDetails, aihydrorulesError]
 	}
 
 	/**
@@ -2956,8 +3100,8 @@ export class Task {
 		const filteredVisiblePaths = await filterExistingFiles(rawVisiblePaths)
 		const visibleFilePaths = filteredVisiblePaths.map((absolutePath) => path.relative(this.cwd, absolutePath))
 
-		// Filter paths through clineIgnoreController
-		const allowedVisibleFiles = this.clineIgnoreController
+		// Filter paths through aihydroIgnoreController
+		const allowedVisibleFiles = this.aihydroIgnoreController
 			.filterPaths(visibleFilePaths)
 			.map((p) => p.toPosix())
 			.join("\n")
@@ -2973,8 +3117,8 @@ export class Task {
 		const filteredOpenTabPaths = await filterExistingFiles(rawOpenTabPaths)
 		const openTabPaths = filteredOpenTabPaths.map((absolutePath) => path.relative(this.cwd, absolutePath))
 
-		// Filter paths through clineIgnoreController
-		const allowedOpenTabs = this.clineIgnoreController
+		// Filter paths through aihydroIgnoreController
+		const allowedOpenTabs = this.aihydroIgnoreController
 			.filterPaths(openTabPaths)
 			.map((p) => p.toPosix())
 			.join("\n")
@@ -3080,7 +3224,7 @@ export class Task {
 				details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
 			} else {
 				const [files, didHitLimit] = await listFiles(this.cwd, true, 200)
-				const result = formatResponse.formatFilesList(this.cwd, files, didHitLimit, this.clineIgnoreController)
+				const result = formatResponse.formatFilesList(this.cwd, files, didHitLimit, this.aihydroIgnoreController)
 				details += result
 			}
 
@@ -3103,7 +3247,7 @@ export class Task {
 		const { contextWindow } = getContextWindowInfo(this.api)
 
 		// Get the token count from the most recent API request to accurately reflect context management
-		const getTotalTokensFromApiReqMessage = (msg: ClineMessage) => {
+		const getTotalTokensFromApiReqMessage = (msg: AiHydroMessage) => {
 			if (!msg.text) {
 				return 0
 			}
@@ -3115,8 +3259,8 @@ export class Task {
 			}
 		}
 
-		const clineMessages = this.messageStateHandler.getClineMessages()
-		const modifiedMessages = combineApiRequests(combineCommandSequences(clineMessages.slice(1)))
+		const aihydroMessages = this.messageStateHandler.getAiHydroMessages()
+		const modifiedMessages = combineApiRequests(combineCommandSequences(aihydroMessages.slice(1)))
 		const lastApiReqMessage = findLast(modifiedMessages, (msg) => {
 			if (msg.say !== "api_req_started") {
 				return false

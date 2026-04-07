@@ -32,8 +32,8 @@ describe("Hook System", () => {
 		tempDir = path.join(os.tmpdir(), `hook-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
 		await fs.mkdir(tempDir, { recursive: true })
 
-		// Create .clinerules/hooks directory
-		const hooksDir = path.join(tempDir, ".clinerules", "hooks")
+		// Create .aihydrorules/hooks directory
+		const hooksDir = path.join(tempDir, ".aihydrorules", "hooks")
 		await fs.mkdir(hooksDir, { recursive: true })
 
 		// Mock StateManager to return our temp directory
@@ -72,7 +72,7 @@ describe("Hook System", () => {
 	describe("StdioHookRunner", () => {
 		it("should execute hook script and parse output", async () => {
 			// Create a test hook script
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 const input = require('fs').readFileSync(0, 'utf-8');
 console.log(JSON.stringify({
@@ -99,7 +99,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should handle script that blocks execution", async () => {
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({
   shouldContinue: false,
@@ -124,7 +124,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should truncate large context modifications", async () => {
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			// Create context larger than 50KB
 			const largeContext = "x".repeat(60000)
 			const hookScript = `#!/usr/bin/env node
@@ -151,7 +151,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should handle script errors", async () => {
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 process.exit(1)`
 
@@ -175,7 +175,7 @@ process.exit(1)`
 		})
 
 		it("should handle malformed JSON output", async () => {
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 console.log("not valid json")`
 
@@ -199,7 +199,7 @@ console.log("not valid json")`
 		})
 
 		it("should pass hook input via stdin", async () => {
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 const input = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
 console.log(JSON.stringify({
@@ -226,7 +226,7 @@ console.log(JSON.stringify({
 
 	describe("PostToolUse Hook", () => {
 		it("should receive execution results", async () => {
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PostToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PostToolUse")
 			const hookScript = `#!/usr/bin/env node
 const input = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
 console.log(JSON.stringify({
@@ -256,7 +256,7 @@ console.log(JSON.stringify({
 
 	describe("Hook Discovery", () => {
 		it("should find executable hook", async () => {
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({ shouldContinue: true }))`
 
@@ -279,7 +279,7 @@ console.log(JSON.stringify({ shouldContinue: true }))`
 		})
 
 		it("should not find non-executable file", async () => {
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({ shouldContinue: true }))`
 
@@ -341,10 +341,10 @@ console.log(JSON.stringify({ shouldContinue: true }))`
 		})
 
 		it("should handle hook input with all parameters", async () => {
-			const hookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 const input = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
-const hasAllFields = input.clineVersion && input.hookName && input.timestamp && 
+const hasAllFields = input.aihydroVersion && input.hookName && input.timestamp && 
                      input.taskId && input.workspaceRoots !== undefined;
 console.log(JSON.stringify({
   shouldContinue: true,
@@ -400,7 +400,7 @@ console.log(JSON.stringify({
 			await writeHookScript(globalHookPath, globalHookScript)
 
 			// Create workspace hook
-			const workspaceHookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const workspaceHookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const workspaceHookScript = `#!/usr/bin/env node
 const input = require('fs').readFileSync(0, 'utf-8');
 console.log(JSON.stringify({
@@ -434,7 +434,7 @@ console.log(JSON.stringify({
 			await writeHookScript(globalHookPath, globalHookScript)
 
 			// Create allowing workspace hook
-			const workspaceHookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const workspaceHookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const workspaceHookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({
   shouldContinue: true
@@ -484,7 +484,7 @@ console.log(JSON.stringify({
 			await writeHookScript(globalHookPath, globalHookScript)
 
 			// Create blocking workspace hook
-			const workspaceHookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const workspaceHookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const workspaceHookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({
   shouldContinue: false,
@@ -516,7 +516,7 @@ console.log(JSON.stringify({
 			await writeHookScript(globalHookPath, globalHookScript)
 
 			// Create blocking workspace hook
-			const workspaceHookPath = path.join(tempDir, ".clinerules", "hooks", "PreToolUse")
+			const workspaceHookPath = path.join(tempDir, ".aihydrorules", "hooks", "PreToolUse")
 			const workspaceHookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({
   shouldContinue: false,

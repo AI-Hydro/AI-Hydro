@@ -10,12 +10,12 @@ The following additional instructions are provided by the user, and should be fo
 
 export async function getUserInstructions(variant: PromptVariant, context: SystemPromptContext): Promise<string | undefined> {
 	const customInstructions = buildUserInstructions(
-		context.globalClineRulesFileInstructions,
-		context.localClineRulesFileInstructions,
+		context.globalAiHydroRulesFileInstructions,
+		context.localAiHydroRulesFileInstructions,
 		context.localCursorRulesFileInstructions,
 		context.localCursorRulesDirInstructions,
 		context.localWindsurfRulesFileInstructions,
-		context.clineIgnoreInstructions,
+		context.aihydroIgnoreInstructions,
 		context.preferredLanguageInstructions,
 	)
 
@@ -32,23 +32,23 @@ export async function getUserInstructions(variant: PromptVariant, context: Syste
 }
 
 function buildUserInstructions(
-	globalClineRulesFileInstructions?: string,
-	localClineRulesFileInstructions?: string,
+	globalAiHydroRulesFileInstructions?: string,
+	localAiHydroRulesFileInstructions?: string,
 	localCursorRulesFileInstructions?: string,
 	localCursorRulesDirInstructions?: string,
 	localWindsurfRulesFileInstructions?: string,
-	clineIgnoreInstructions?: string,
+	aihydroIgnoreInstructions?: string,
 	preferredLanguageInstructions?: string,
 ): string | undefined {
 	const customInstructions = []
 	if (preferredLanguageInstructions) {
 		customInstructions.push(preferredLanguageInstructions)
 	}
-	if (globalClineRulesFileInstructions) {
-		customInstructions.push(globalClineRulesFileInstructions)
+	if (globalAiHydroRulesFileInstructions) {
+		customInstructions.push(globalAiHydroRulesFileInstructions)
 	}
-	if (localClineRulesFileInstructions) {
-		customInstructions.push(localClineRulesFileInstructions)
+	if (localAiHydroRulesFileInstructions) {
+		customInstructions.push(localAiHydroRulesFileInstructions)
 	}
 	if (localCursorRulesFileInstructions) {
 		customInstructions.push(localCursorRulesFileInstructions)
@@ -59,8 +59,8 @@ function buildUserInstructions(
 	if (localWindsurfRulesFileInstructions) {
 		customInstructions.push(localWindsurfRulesFileInstructions)
 	}
-	if (clineIgnoreInstructions) {
-		customInstructions.push(clineIgnoreInstructions)
+	if (aihydroIgnoreInstructions) {
+		customInstructions.push(aihydroIgnoreInstructions)
 	}
 	if (customInstructions.length === 0) {
 		return undefined

@@ -1,4 +1,4 @@
-import type { PaymentTransaction, UsageTransaction } from "@shared/ClineAccount"
+import type { PaymentTransaction, UsageTransaction } from "@shared/AiHydroAccount"
 import { VSCodeDataGrid, VSCodeDataGridCell, VSCodeDataGridRow } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"
 import { formatDollars, formatTimestamp } from "@/utils/format"

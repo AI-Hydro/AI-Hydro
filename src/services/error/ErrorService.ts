@@ -1,9 +1,9 @@
-import { ClineError } from "./ClineError"
+import { AiHydroError } from "./AiHydroError"
 import { ErrorProviderFactory } from "./ErrorProviderFactory"
 import { IErrorProvider } from "./providers/IErrorProvider"
 
 /**
- * ErrorService handles error logging and tracking for the Cline extension
+ * ErrorService handles error logging and tracking for the AI-Hydro extension
  * Uses an abstracted error provider to support multiple error tracking backends
  * Respects user privacy settings and VSCode's global telemetry configuration
  */
@@ -39,7 +39,7 @@ export class ErrorService {
 		this.provider = provider
 	}
 
-	public logException(error: Error | ClineError, properties?: Record<string, unknown>): void {
+	public logException(error: Error | AiHydroError, properties?: Record<string, unknown>): void {
 		this.provider.logException(error, properties)
 		console.error("[ErrorService] Logging exception", error)
 	}
@@ -52,8 +52,8 @@ export class ErrorService {
 		this.provider.logMessage(message, level, properties)
 	}
 
-	public toClineError(rawError: unknown, modelId?: string, providerId?: string): ClineError {
-		const transformed = ClineError.transform(rawError, modelId, providerId)
+	public toAiHydroError(rawError: unknown, modelId?: string, providerId?: string): AiHydroError {
+		const transformed = AiHydroError.transform(rawError, modelId, providerId)
 		this.logException(transformed, { modelId, providerId })
 		return transformed
 	}

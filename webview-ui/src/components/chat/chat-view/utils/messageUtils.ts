@@ -4,23 +4,23 @@
 
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
-import { ClineMessage, ClineSayBrowserAction } from "@shared/ExtensionMessage"
+import { AiHydroMessage, AiHydroSayBrowserAction } from "@shared/ExtensionMessage"
 
 /**
  * Combine API requests and command sequences in messages
  */
-export function processMessages(messages: ClineMessage[]): ClineMessage[] {
+export function processMessages(messages: AiHydroMessage[]): AiHydroMessage[] {
 	return combineApiRequests(combineCommandSequences(messages))
 }
 
 /**
  * Filter messages that should be visible in the chat
  */
-export function filterVisibleMessages(messages: ClineMessage[]): ClineMessage[] {
+export function filterVisibleMessages(messages: AiHydroMessage[]): AiHydroMessage[] {
 	return messages.filter((message) => {
 		switch (message.ask) {
 			case "completion_result":
-				// don't show a chat row for a completion_result ask without text. This specific type of message only occurs if cline wants to execute a command as part of its completion result, in which case we interject the completion_result tool with the execute_command tool.
+				// don't show a chat row for a completion_result ask without text. This specific type of message only occurs if AI-Hydro wants to execute a command as part of its completion result, in which case we interject the completion_result tool with the execute_command tool.
 				if (message.text === "") {
 					return false
 				}
@@ -37,7 +37,7 @@ export function filterVisibleMessages(messages: ClineMessage[]): ClineMessage[] 
 			case "task_progress": // task progress messages are displayed in TaskHeader, not in main chat
 				return false
 			case "text":
-				// Sometimes cline returns an empty text message, we don't want to render these. (We also use a say text for user messages, so in case they just sent images we still render that)
+				// Sometimes AI-Hydro returns an empty text message, we don't want to render these. (We also use a say text for user messages, so in case they just sent images we still render that)
 				if ((message.text ?? "") === "" && (message.images?.length ?? 0) === 0) {
 					return false
 				}
@@ -52,7 +52,7 @@ export function filterVisibleMessages(messages: ClineMessage[]): ClineMessage[] 
 /**
  * Check if a message is part of a browser session
  */
-export function isBrowserSessionMessage(message: ClineMessage): boolean {
+export function isBrowserSessionMessage(message: AiHydroMessage): boolean {
 	if (message.type === "ask") {
 		return ["browser_action_launch"].includes(message.ask!)
 	}
@@ -73,9 +73,9 @@ export function isBrowserSessionMessage(message: ClineMessage): boolean {
 /**
  * Group messages, combining browser session messages into arrays
  */
-export function groupMessages(visibleMessages: ClineMessage[]): (ClineMessage | ClineMessage[])[] {
-	const result: (ClineMessage | ClineMessage[])[] = []
-	let currentGroup: ClineMessage[] = []
+export function groupMessages(visibleMessages: AiHydroMessage[]): (AiHydroMessage | AiHydroMessage[])[] {
+	const result: (AiHydroMessage | AiHydroMessage[])[] = []
+	let currentGroup: AiHydroMessage[] = []
 	let isInBrowserSession = false
 
 	const endBrowserSession = () => {
@@ -114,7 +114,7 @@ export function groupMessages(visibleMessages: ClineMessage[]): (ClineMessage | 
 
 				// Check if this is a close action
 				if (message.say === "browser_action") {
-					const browserAction = JSON.parse(message.text || "{}") as ClineSayBrowserAction
+					const browserAction = JSON.parse(message.text || "{}") as AiHydroSayBrowserAction
 					if (browserAction.action === "close") {
 						endBrowserSession()
 					}
@@ -140,7 +140,7 @@ export function groupMessages(visibleMessages: ClineMessage[]): (ClineMessage | 
 /**
  * Get the task message from the messages array
  */
-export function getTaskMessage(messages: ClineMessage[]): ClineMessage | undefined {
+export function getTaskMessage(messages: AiHydroMessage[]): AiHydroMessage | undefined {
 	return messages.at(0)
 }
 

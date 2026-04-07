@@ -1,10 +1,10 @@
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
-import type { ClineToolSpec } from "../spec"
+import { AiHydroDefaultTool } from "@/shared/tools"
+import type { AiHydroToolSpec } from "../spec"
 
-const id = ClineDefaultTool.ATTEMPT
+const id = AiHydroDefaultTool.ATTEMPT
 
-const generic: ClineToolSpec = {
+const generic: AiHydroToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "attempt_completion",
@@ -31,7 +31,7 @@ IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user th
 			instruction:
 				"A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)",
 			usage: "Checklist here (required if you used task_progress in previous tool uses)",
-			dependencies: [ClineDefaultTool.TODO],
+			dependencies: [AiHydroDefaultTool.TODO],
 			description:
 				"If you were using task_progress to update the task progress, you must include the completed list in the result as well.",
 		},

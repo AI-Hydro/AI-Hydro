@@ -1,22 +1,22 @@
 import { name, publisher, version } from "../package.json"
 
-const prefix = name === "claude-dev" ? "cline" : name
+const prefix = name === "claude-dev" ? "cline" : name === "ai-hydro" ? "aihydro" : name
 
 /**
  * List of commands with the name of the extension they are registered under.
  * These should match the command IDs defined in package.json.
  * For Nightly build, the publish script has updated all the commands to use the extension name as prefix.
- * In production, all commands are registered under "cline" for consistency.
+ * In production, all commands are registered under "aihydro" for consistency.
  */
-const ClineCommands = {
+const AiHydroCommands = {
 	PlusButton: prefix + ".plusButtonClicked",
 	McpButton: prefix + ".mcpButtonClicked",
+	MapButton: prefix + ".mapButtonClicked",
 	SettingsButton: prefix + ".settingsButtonClicked",
 	HistoryButton: prefix + ".historyButtonClicked",
-	AccountButton: prefix + ".accountButtonClicked",
 	TerminalOutput: prefix + ".addTerminalOutputToChat",
 	AddToChat: prefix + ".addToChat",
-	FixWithCline: prefix + ".fixWithCline",
+	FixWithAiHydro: prefix + ".fixWithAiHydro",
 	ExplainCode: prefix + ".explainCode",
 	ImproveCode: prefix + ".improveCode",
 	FocusChatInput: prefix + ".focusChatInput",
@@ -24,14 +24,15 @@ const ClineCommands = {
 	GenerateCommit: prefix + ".generateGitCommitMessage",
 	AbortCommit: prefix + ".abortGitCommitMessage",
 	ReconstructTaskHistory: prefix + ".reconstructTaskHistory",
+	LoadGeojsonToMap: prefix + ".loadGeojsonToMap",
 }
 
 /**
  * IDs for the views registered by the extension.
- * These should match the name + view IDs defined in package.json.
+ * These should match the prefix + view IDs defined in package.json.
  */
-const ClineViewIds = {
-	Sidebar: name + ".SidebarProvider",
+const AiHydroViewIds = {
+	Sidebar: prefix + ".SidebarProvider",
 }
 
 /**
@@ -43,6 +44,6 @@ export const ExtensionRegistryInfo = {
 	name,
 	version,
 	publisher,
-	commands: ClineCommands,
-	views: ClineViewIds,
+	commands: AiHydroCommands,
+	views: AiHydroViewIds,
 }

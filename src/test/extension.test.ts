@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 
 const packagePath = path.join(__dirname, "..", "..", "package.json")
 
-describe("Cline Extension", () => {
+describe("AI-Hydro Extension", () => {
 	after(() => {
 		vscode.window.showInformationMessage("All tests done!")
 	})
@@ -14,9 +14,9 @@ describe("Cline Extension", () => {
 	it("should verify extension ID matches package.json", async () => {
 		const packageJSON = JSON.parse(await readFile(packagePath, "utf8"))
 		const id = packageJSON.publisher + "." + packageJSON.name
-		const clineExtensionApi = vscode.extensions.getExtension(id)
+		const aihydroExtensionApi = vscode.extensions.getExtension(id)
 
-		clineExtensionApi?.id.should.equal(id)
+		aihydroExtensionApi?.id.should.equal(id)
 	})
 
 	it("should successfully execute the plus button command", async () => {

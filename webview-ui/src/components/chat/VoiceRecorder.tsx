@@ -41,7 +41,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 	useEffect(() => {
 		if (isAuthenticated && error) {
 			// Clear error if it's related to authentication
-			if (error.toLowerCase().includes("sign in") || error.toLowerCase().includes("cline account")) {
+			if (error.toLowerCase().includes("sign in") || error.toLowerCase().includes("aihydro account")) {
 				setError(null)
 			}
 		}

@@ -19,17 +19,22 @@ export interface EnvironmentConfig {
 	}
 }
 
-class ClineEndpoint {
-	public static instance = new ClineEndpoint()
+function getEnvOrDefault(name: string, fallback: string): string {
+	const value = process?.env?.[name]
+	return value && value.trim().length > 0 ? value : fallback
+}
+
+class AiHydroEndpoint {
+	public static instance = new AiHydroEndpoint()
 	public static get config() {
-		return ClineEndpoint.instance.config()
+		return AiHydroEndpoint.instance.config()
 	}
 
 	private environment: Environment = Environment.production
 
 	private constructor() {
 		// Set environment at module load
-		const _env = process?.env?.CLINE_ENVIRONMENT
+		const _env = process?.env?.AIHYDRO_ENVIRONMENT
 		if (_env && Object.values(Environment).includes(_env as Environment)) {
 			this.environment = _env as Environment
 			return
@@ -38,12 +43,12 @@ class ClineEndpoint {
 	}
 
 	public config(): EnvironmentConfig {
-		console.info("Cline environment:", this.environment)
+		console.info("AI-Hydro environment:", this.environment)
 		return this.getEnvironment()
 	}
 
 	public setEnvironment(env: string) {
-		console.info("Setting Cline environment:", env)
+		console.info("Setting AI-Hydro environment:", env)
 		switch (env.toLowerCase()) {
 			case "staging":
 				this.environment = Environment.staging
@@ -55,7 +60,7 @@ class ClineEndpoint {
 				this.environment = Environment.production
 				break
 		}
-		console.info("Cline environment updated:", this.environment)
+		console.info("AI-Hydro environment updated:", this.environment)
 	}
 
 	public getEnvironment(): EnvironmentConfig {
@@ -63,43 +68,43 @@ class ClineEndpoint {
 			case Environment.staging:
 				return {
 					environment: Environment.staging,
-					appBaseUrl: "https://staging-app.cline.bot",
-					apiBaseUrl: "https://core-api.staging.int.cline.bot",
-					mcpBaseUrl: "https://api.cline.bot/v1/mcp",
+					appBaseUrl: getEnvOrDefault("AI_HYDRO_APP_BASE_URL_STAGING", "https://github.com/galib9690/AI-Hydro"),
+					apiBaseUrl: getEnvOrDefault("AI_HYDRO_API_BASE_URL_STAGING", "http://127.0.0.1:7777"),
+					mcpBaseUrl: getEnvOrDefault("AI_HYDRO_MCP_BASE_URL_STAGING", ""),
 					firebase: {
-						apiKey: "AIzaSyASSwkwX1kSO8vddjZkE5N19QU9cVQ0CIk",
-						authDomain: "cline-staging.firebaseapp.com",
-						projectId: "cline-staging",
-						storageBucket: "cline-staging.firebasestorage.app",
-						messagingSenderId: "853479478430",
-						appId: "1:853479478430:web:2de0dba1c63c3262d4578f",
+						apiKey: getEnvOrDefault("AI_HYDRO_FIREBASE_API_KEY_STAGING", ""),
+						authDomain: getEnvOrDefault("AI_HYDRO_FIREBASE_AUTH_DOMAIN_STAGING", ""),
+						projectId: getEnvOrDefault("AI_HYDRO_FIREBASE_PROJECT_ID_STAGING", ""),
+						storageBucket: getEnvOrDefault("AI_HYDRO_FIREBASE_STORAGE_BUCKET_STAGING", ""),
+						messagingSenderId: getEnvOrDefault("AI_HYDRO_FIREBASE_MESSAGING_SENDER_ID_STAGING", ""),
+						appId: getEnvOrDefault("AI_HYDRO_FIREBASE_APP_ID_STAGING", ""),
 					},
 				}
 			case Environment.local:
 				return {
 					environment: Environment.local,
-					appBaseUrl: "http://localhost:3000",
-					apiBaseUrl: "http://localhost:7777",
-					mcpBaseUrl: "https://api.cline.bot/v1/mcp",
+					appBaseUrl: getEnvOrDefault("AI_HYDRO_APP_BASE_URL_LOCAL", "http://localhost:3000"),
+					apiBaseUrl: getEnvOrDefault("AI_HYDRO_API_BASE_URL_LOCAL", "http://localhost:7777"),
+					mcpBaseUrl: getEnvOrDefault("AI_HYDRO_MCP_BASE_URL_LOCAL", ""),
 					firebase: {
-						apiKey: "AIzaSyD8wtkd1I-EICuAg6xgAQpRdwYTvwxZG2w",
-						authDomain: "cline-preview.firebaseapp.com",
-						projectId: "cline-preview",
+						apiKey: getEnvOrDefault("AI_HYDRO_FIREBASE_API_KEY_LOCAL", ""),
+						authDomain: getEnvOrDefault("AI_HYDRO_FIREBASE_AUTH_DOMAIN_LOCAL", ""),
+						projectId: getEnvOrDefault("AI_HYDRO_FIREBASE_PROJECT_ID_LOCAL", ""),
 					},
 				}
 			default:
 				return {
 					environment: Environment.production,
-					appBaseUrl: "https://app.cline.bot",
-					apiBaseUrl: "https://api.cline.bot",
-					mcpBaseUrl: "https://api.cline.bot/v1/mcp",
+					appBaseUrl: getEnvOrDefault("AI_HYDRO_APP_BASE_URL", "https://github.com/galib9690/AI-Hydro"),
+					apiBaseUrl: getEnvOrDefault("AI_HYDRO_API_BASE_URL", "http://127.0.0.1:7777"),
+					mcpBaseUrl: getEnvOrDefault("AI_HYDRO_MCP_BASE_URL", ""),
 					firebase: {
-						apiKey: "AIzaSyC5rx59Xt8UgwdU3PCfzUF7vCwmp9-K2vk",
-						authDomain: "cline-prod.firebaseapp.com",
-						projectId: "cline-prod",
-						storageBucket: "cline-prod.firebasestorage.app",
-						messagingSenderId: "941048379330",
-						appId: "1:941048379330:web:45058eedeefc5cdfcc485b",
+						apiKey: getEnvOrDefault("AI_HYDRO_FIREBASE_API_KEY", ""),
+						authDomain: getEnvOrDefault("AI_HYDRO_FIREBASE_AUTH_DOMAIN", ""),
+						projectId: getEnvOrDefault("AI_HYDRO_FIREBASE_PROJECT_ID", ""),
+						storageBucket: getEnvOrDefault("AI_HYDRO_FIREBASE_STORAGE_BUCKET", ""),
+						messagingSenderId: getEnvOrDefault("AI_HYDRO_FIREBASE_MESSAGING_SENDER_ID", ""),
+						appId: getEnvOrDefault("AI_HYDRO_FIREBASE_APP_ID", ""),
 					},
 				}
 		}
@@ -109,7 +114,15 @@ class ClineEndpoint {
 /**
  * Singleton instance to access the current environment configuration.
  * Usage:
- * - ClineEnv.config() to get the current config.
- * - ClineEnv.setEnvironment(Environment.local) to change the environment.
+ * - AiHydroEnv.config() to get the current config.
+ * - AiHydroEnv.setEnvironment(Environment.local) to change the environment.
  */
-export const ClineEnv = ClineEndpoint.instance
+export const AiHydroEnv = AiHydroEndpoint.instance
+
+/**
+ * Cloud account/remote-config integrations are opt-in for AI-Hydro.
+ * Default is disabled to keep BYO-provider mode fully self-sufficient.
+ */
+export function isAiHydroCloudAccountEnabled(): boolean {
+	return process?.env?.AI_HYDRO_ENABLE_CLOUD_ACCOUNT === "true"
+}

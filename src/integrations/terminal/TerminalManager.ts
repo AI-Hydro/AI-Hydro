@@ -242,7 +242,7 @@ export class TerminalManager {
 			if (t.shellPath !== expectedShellPath) {
 				return false
 			}
-			const terminalCwd = t.terminal.shellIntegration?.cwd // one of cline's commands could have changed the cwd of the terminal
+			const terminalCwd = t.terminal.shellIntegration?.cwd // one of AI-Hydro's commands could have changed the cwd of the terminal
 			if (!terminalCwd) {
 				console.log(`[TerminalManager] Terminal ${t.id} has no cwd, skipping`)
 				return false

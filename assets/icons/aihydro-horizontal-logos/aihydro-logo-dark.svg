@@ -1,0 +1,13 @@
+<svg width="800" height="240" viewBox="0 0 800 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Droplet icon -->
+  <path d="M120 40 C120 40 70 90 70 130 C70 160 90 190 120 190 C150 190 170 160 170 130 C170 90 120 40 120 40 Z" fill="#1a1a2e"/>
+  <ellipse cx="60" cy="124" rx="12" ry="16" fill="#1a1a2e"/>
+  <ellipse cx="180" cy="124" rx="12" ry="16" fill="#1a1a2e"/>
+  <ellipse cx="100" cy="116" rx="14" ry="20" fill="white"/>
+  <ellipse cx="140" cy="116" rx="14" ry="20" fill="white"/>
+  <path d="M 96 144 Q 120 156 144 144" stroke="white" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <circle cx="120" cy="48" r="10" fill="#1a1a2e"/>
+  
+  <!-- AI-Hydro text -->
+  <text x="240" y="150" font-family="Quicksand, Poppins, Nunito, Comfortaa, system-ui" font-size="104" font-weight="700" fill="#1a1a2e">AI-Hydro</text>
+</svg>

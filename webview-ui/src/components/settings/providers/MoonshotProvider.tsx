@@ -1,12 +1,13 @@
 import { moonshotModels } from "@shared/api"
 import { Mode } from "@shared/storage/types"
-import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeButton, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { DropdownContainer, ModelSelector } from "../common/ModelSelector"
 import { normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
+import { useDynamicProviderModels } from "../utils/useDynamicProviderModels"
 
 /**
  * Props for the MoonshotProvider component
@@ -26,6 +27,20 @@ export const MoonshotProvider = ({ showModelOptions, isPopup, currentMode }: Moo
 
 	// Get the normalized configuration
 	const { selectedModelId, selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, currentMode)
+	const moonshotBaseUrl =
+		apiConfiguration?.moonshotApiLine === "china" ? "https://api.moonshot.cn/v1" : "https://api.moonshot.ai/v1"
+	const {
+		models: dynamicMoonshotModels,
+		refresh: refreshMoonshotModels,
+		isLoading: isLoadingMoonshotModels,
+	} = useDynamicProviderModels({
+		baseUrl: moonshotBaseUrl,
+		apiKey: apiConfiguration?.moonshotApiKey,
+		fallbackModels: moonshotModels,
+		selectedModelId,
+		selectedModelInfo,
+		enabled: showModelOptions,
+	})
 
 	return (
 		<div>
@@ -61,7 +76,7 @@ export const MoonshotProvider = ({ showModelOptions, isPopup, currentMode }: Moo
 				<>
 					<ModelSelector
 						label="Model"
-						models={moonshotModels}
+						models={dynamicMoonshotModels}
 						onChange={(e: any) =>
 							handleModeFieldChange(
 								{ plan: "planModeApiModelId", act: "actModeApiModelId" },
@@ -71,6 +86,9 @@ export const MoonshotProvider = ({ showModelOptions, isPopup, currentMode }: Moo
 						}
 						selectedModelId={selectedModelId}
 					/>
+					<VSCodeButton disabled={isLoadingMoonshotModels} onClick={() => refreshMoonshotModels()}>
+						{isLoadingMoonshotModels ? "Refreshing..." : "Refresh Moonshot models"}
+					</VSCodeButton>
 
 					<ModelInfoView isPopup={isPopup} modelInfo={selectedModelInfo} selectedModelId={selectedModelId} />
 				</>

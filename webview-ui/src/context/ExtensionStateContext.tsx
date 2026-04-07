@@ -1,7 +1,7 @@
+import { AiHydroFeatureSetting } from "@shared/AiHydroFeatureSetting"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { findLastIndex } from "@shared/array"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
-import { ClineFeatureSetting } from "@shared/ClineFeatureSetting"
 import { DEFAULT_DICTATION_SETTINGS, DictationSettings } from "@shared/DictationSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
@@ -10,7 +10,7 @@ import type { UserInfo } from "@shared/proto/cline/account"
 import { EmptyRequest } from "@shared/proto/cline/common"
 import type { OpenRouterCompatibleModelInfo } from "@shared/proto/cline/models"
 import { type TerminalProfile } from "@shared/proto/cline/state"
-import { convertProtoToClineMessage } from "@shared/proto-conversions/cline-message"
+import { convertProtoToAiHydroMessage } from "@shared/proto-conversions/aihydro-message"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import type React from "react"
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
@@ -21,6 +21,8 @@ import {
 	groqDefaultModelId,
 	groqModels,
 	type ModelInfo,
+	openRouterAutoModelId,
+	openRouterAutoModelInfo,
 	openRouterDefaultModelId,
 	openRouterDefaultModelInfo,
 	requestyDefaultModelId,
@@ -50,11 +52,12 @@ export interface ExtensionStateContextType extends ExtensionState {
 
 	// View state
 	showMcp: boolean
-	hooksEnabled?: ClineFeatureSetting
+	hooksEnabled?: AiHydroFeatureSetting
 	mcpTab?: McpViewTab
 	showSettings: boolean
 	showHistory: boolean
 	showAccount: boolean
+	showMap: boolean
 	showAnnouncement: boolean
 	showChatModelSelector: boolean
 	expandTaskHeader: boolean
@@ -70,8 +73,8 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setBasetenModels: (value: Record<string, ModelInfo>) => void
 	setHuggingFaceModels: (value: Record<string, ModelInfo>) => void
 	setVercelAiGatewayModels: (value: Record<string, ModelInfo>) => void
-	setGlobalClineRulesToggles: (toggles: Record<string, boolean>) => void
-	setLocalClineRulesToggles: (toggles: Record<string, boolean>) => void
+	setGlobalAiHydroRulesToggles: (toggles: Record<string, boolean>) => void
+	setLocalAiHydroRulesToggles: (toggles: Record<string, boolean>) => void
 	setLocalCursorRulesToggles: (toggles: Record<string, boolean>) => void
 	setLocalWindsurfRulesToggles: (toggles: Record<string, boolean>) => void
 	setLocalWorkflowToggles: (toggles: Record<string, boolean>) => void
@@ -93,12 +96,14 @@ export interface ExtensionStateContextType extends ExtensionState {
 	navigateToSettings: () => void
 	navigateToHistory: () => void
 	navigateToAccount: () => void
+	navigateToMap: () => void
 	navigateToChat: () => void
 
 	// Hide functions
 	hideSettings: () => void
 	hideHistory: () => void
 	hideAccount: () => void
+	hideMap: () => void
 	hideAnnouncement: () => void
 	hideChatModelSelector: () => void
 	closeMcpView: () => void
@@ -118,6 +123,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [showSettings, setShowSettings] = useState(false)
 	const [showHistory, setShowHistory] = useState(false)
 	const [showAccount, setShowAccount] = useState(false)
+	const [showMap, setShowMap] = useState(false)
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [showChatModelSelector, setShowChatModelSelector] = useState(false)
 
@@ -131,6 +137,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const hideSettings = useCallback(() => setShowSettings(false), [setShowSettings])
 	const hideHistory = useCallback(() => setShowHistory(false), [setShowHistory])
 	const hideAccount = useCallback(() => setShowAccount(false), [setShowAccount])
+	const hideMap = useCallback(() => setShowMap(false), [setShowMap])
 	const hideAnnouncement = useCallback(() => setShowAnnouncement(false), [setShowAnnouncement])
 	const hideChatModelSelector = useCallback(() => setShowChatModelSelector(false), [setShowChatModelSelector])
 
@@ -166,19 +173,29 @@ export const ExtensionStateContextProvider: React.FC<{
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
+		setShowMap(false)
 		setShowAccount(true)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount])
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowMap, setShowAccount])
+
+	const navigateToMap = useCallback(() => {
+		setShowSettings(false)
+		closeMcpView()
+		setShowHistory(false)
+		setShowAccount(false)
+		setShowMap(true)
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowMap])
 
 	const navigateToChat = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
 		setShowAccount(false)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount])
+		setShowMap(false)
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowMap])
 
 	const [state, setState] = useState<ExtensionState>({
 		version: "",
-		clineMessages: [],
+		aihydroMessages: [],
 		taskHistory: [],
 		shouldShowAnnouncement: false,
 		autoApprovalSettings: DEFAULT_AUTO_APPROVAL_SETTINGS,
@@ -195,8 +212,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		planActSeparateModelsSetting: true,
 		enableCheckpointsSetting: true,
 		mcpDisplayMode: DEFAULT_MCP_DISPLAY_MODE,
-		globalClineRulesToggles: {},
-		localClineRulesToggles: {},
+		globalAiHydroRulesToggles: {},
+		localAiHydroRulesToggles: {},
 		localCursorRulesToggles: {},
 		localWindsurfRulesToggles: {},
 		localWorkflowToggles: {},
@@ -235,7 +252,24 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [expandTaskHeader, setExpandTaskHeader] = useState(true)
 	const [didHydrateState, setDidHydrateState] = useState(false)
 	const [showWelcome, setShowWelcome] = useState(false)
+
+	// Add timeout fallback for infinite loading - using ref to avoid stale closure
+	useEffect(() => {
+		console.log("[DEBUG] ExtensionStateContext: Initializing with timeout fallback")
+
+		const didHydrateRef = { current: didHydrateState }
+
+		// Set a timeout to force didHydrateState to true after 2 seconds
+		const timeout = setTimeout(() => {
+			console.warn("[DEBUG] ExtensionStateContext: Forcing didHydrateState to true due to timeout")
+			setDidHydrateState(true)
+			setShowWelcome(false) // Default to chat view on timeout
+		}, 2000)
+
+		return () => clearTimeout(timeout)
+	}, []) // Empty deps array - run only once on mount
 	const [openRouterModels, setOpenRouterModels] = useState<Record<string, ModelInfo>>({
+		[openRouterAutoModelId]: openRouterAutoModelInfo,
 		[openRouterDefaultModelId]: openRouterDefaultModelInfo,
 	})
 	const [totalTasksSize, setTotalTasksSize] = useState<number | null>(null)
@@ -266,8 +300,8 @@ export const ExtensionStateContextProvider: React.FC<{
 	const mcpButtonUnsubscribeRef = useRef<(() => void) | null>(null)
 	const historyButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const chatButtonUnsubscribeRef = useRef<(() => void) | null>(null)
-	const accountButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const settingsButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
+	const mapButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const partialMessageUnsubscribeRef = useRef<(() => void) | null>(null)
 	const mcpMarketplaceUnsubscribeRef = useRef<(() => void) | null>(null)
 	const openRouterModelsUnsubscribeRef = useRef<(() => void) | null>(null)
@@ -300,11 +334,11 @@ export const ExtensionStateContextProvider: React.FC<{
 							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
 							const currentVersion = prevState.autoApprovalSettings?.version ?? 1
 							const shouldUpdateAutoApproval = incomingVersion > currentVersion
-							// HACK: Preserve clineMessages if currentTaskItem is the same
+							// HACK: Preserve aihydroMessages if currentTaskItem is the same
 							if (stateData.currentTaskItem?.id === prevState.currentTaskItem?.id) {
-								stateData.clineMessages = stateData.clineMessages?.length
-									? stateData.clineMessages
-									: prevState.clineMessages
+								stateData.aihydroMessages = stateData.aihydroMessages?.length
+									? stateData.aihydroMessages
+									: prevState.aihydroMessages
 							}
 
 							const newState = {
@@ -318,19 +352,28 @@ export const ExtensionStateContextProvider: React.FC<{
 							setShowWelcome(!newState.welcomeViewCompleted)
 							setDidHydrateState(true)
 
-							console.log("[DEBUG] returning new state in ESC")
+							console.log("[DEBUG] Successfully hydrated state from gRPC subscription")
 
 							return newState
 						})
 					} catch (error) {
-						console.error("Error parsing state JSON:", error)
-						console.log("[DEBUG] ERR getting state", error)
+						console.error("Error parsing state JSON:", error, response.stateJson)
+						// Force hydration even on parse error to prevent infinite loading
+						setDidHydrateState(true)
+						setShowWelcome(false)
 					}
+				} else {
+					console.warn("[DEBUG] Received empty state response, forcing hydration")
+					setDidHydrateState(true)
+					setShowWelcome(false)
 				}
-				console.log('[DEBUG] ended "got subscribed state"')
 			},
 			onError: (error) => {
 				console.error("Error in state subscription:", error)
+				// Always force hydration on error to prevent infinite loading
+				console.warn("[DEBUG] Forcing didHydrateState to true due to subscription error")
+				setDidHydrateState(true)
+				setShowWelcome(false)
 			},
 			onComplete: () => {
 				console.log("State subscription completed")
@@ -440,14 +483,14 @@ export const ExtensionStateContextProvider: React.FC<{
 						return
 					}
 
-					const partialMessage = convertProtoToClineMessage(protoMessage)
+					const partialMessage = convertProtoToAiHydroMessage(protoMessage)
 					setState((prevState) => {
 						// worth noting it will never be possible for a more up-to-date message to be sent here or in normal messages post since the presentAssistantContent function uses lock
-						const lastIndex = findLastIndex(prevState.clineMessages, (msg) => msg.ts === partialMessage.ts)
+						const lastIndex = findLastIndex(prevState.aihydroMessages, (msg) => msg.ts === partialMessage.ts)
 						if (lastIndex !== -1) {
-							const newClineMessages = [...prevState.clineMessages]
-							newClineMessages[lastIndex] = partialMessage
-							return { ...prevState, clineMessages: newClineMessages }
+							const newAiHydroMessages = [...prevState.aihydroMessages]
+							newAiHydroMessages[lastIndex] = partialMessage
+							return { ...prevState, aihydroMessages: newAiHydroMessages }
 						}
 						return prevState
 					})
@@ -483,6 +526,7 @@ export const ExtensionStateContextProvider: React.FC<{
 				console.log("[DEBUG] Received OpenRouter models update from gRPC stream")
 				const models = response.models
 				setOpenRouterModels({
+					[openRouterAutoModelId]: openRouterAutoModelInfo,
 					[openRouterDefaultModelId]: openRouterDefaultModelInfo, // in case the extension sent a model list without the default model
 					...models,
 				})
@@ -504,18 +548,18 @@ export const ExtensionStateContextProvider: React.FC<{
 				console.error("Failed to initialize webview via gRPC:", error)
 			})
 
-		// Set up account button clicked subscription
-		accountButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToAccountButtonClicked(EmptyRequest.create(), {
+		// Set up map button clicked subscription
+		mapButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToMapButtonClicked(EmptyRequest.create(), {
 			onResponse: () => {
-				// When account button is clicked, navigate to account view
-				console.log("[DEBUG] Received account button clicked event from gRPC stream")
-				navigateToAccount()
+				// When map button is clicked, navigate to map view
+				console.log("[DEBUG] Received map button clicked event from gRPC stream")
+				navigateToMap()
 			},
 			onError: (error) => {
-				console.error("Error in account button clicked subscription:", error)
+				console.error("Error in map button clicked subscription:", error)
 			},
 			onComplete: () => {
-				console.log("Account button clicked subscription completed")
+				console.log("Map button clicked subscription completed")
 			},
 		})
 
@@ -575,13 +619,13 @@ export const ExtensionStateContextProvider: React.FC<{
 				chatButtonUnsubscribeRef.current()
 				chatButtonUnsubscribeRef.current = null
 			}
-			if (accountButtonClickedSubscriptionRef.current) {
-				accountButtonClickedSubscriptionRef.current()
-				accountButtonClickedSubscriptionRef.current = null
-			}
 			if (settingsButtonClickedSubscriptionRef.current) {
 				settingsButtonClickedSubscriptionRef.current()
 				settingsButtonClickedSubscriptionRef.current = null
+			}
+			if (mapButtonClickedSubscriptionRef.current) {
+				mapButtonClickedSubscriptionRef.current()
+				mapButtonClickedSubscriptionRef.current = null
 			}
 			if (partialMessageUnsubscribeRef.current) {
 				partialMessageUnsubscribeRef.current()
@@ -623,6 +667,7 @@ export const ExtensionStateContextProvider: React.FC<{
 			.then((response: OpenRouterCompatibleModelInfo) => {
 				const models = response.models
 				setOpenRouterModels({
+					[openRouterAutoModelId]: openRouterAutoModelInfo,
 					[openRouterDefaultModelId]: openRouterDefaultModelInfo, // in case the extension sent a model list without the default model
 					...models,
 				})
@@ -650,10 +695,11 @@ export const ExtensionStateContextProvider: React.FC<{
 		showSettings,
 		showHistory,
 		showAccount,
+		showMap,
 		showAnnouncement,
 		showChatModelSelector,
-		globalClineRulesToggles: state.globalClineRulesToggles || {},
-		localClineRulesToggles: state.localClineRulesToggles || {},
+		globalAiHydroRulesToggles: state.globalAiHydroRulesToggles || {},
+		localAiHydroRulesToggles: state.localAiHydroRulesToggles || {},
 		localCursorRulesToggles: state.localCursorRulesToggles || {},
 		localWindsurfRulesToggles: state.localWindsurfRulesToggles || {},
 		localWorkflowToggles: state.localWorkflowToggles || {},
@@ -666,12 +712,14 @@ export const ExtensionStateContextProvider: React.FC<{
 		navigateToSettings,
 		navigateToHistory,
 		navigateToAccount,
+		navigateToMap,
 		navigateToChat,
 
 		// Hide functions
 		hideSettings,
 		hideHistory,
 		hideAccount,
+		hideMap,
 		hideAnnouncement,
 		setShowAnnouncement,
 		hideChatModelSelector,
@@ -690,15 +738,15 @@ export const ExtensionStateContextProvider: React.FC<{
 		setMcpMarketplaceCatalog: (catalog: McpMarketplaceCatalog) => setMcpMarketplaceCatalog(catalog),
 		setShowMcp,
 		closeMcpView,
-		setGlobalClineRulesToggles: (toggles) =>
+		setGlobalAiHydroRulesToggles: (toggles) =>
 			setState((prevState) => ({
 				...prevState,
-				globalClineRulesToggles: toggles,
+				globalAiHydroRulesToggles: toggles,
 			})),
-		setLocalClineRulesToggles: (toggles) =>
+		setLocalAiHydroRulesToggles: (toggles) =>
 			setState((prevState) => ({
 				...prevState,
-				localClineRulesToggles: toggles,
+				localAiHydroRulesToggles: toggles,
 			})),
 		setLocalCursorRulesToggles: (toggles) =>
 			setState((prevState) => ({

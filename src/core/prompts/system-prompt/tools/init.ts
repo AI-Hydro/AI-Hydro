@@ -1,5 +1,5 @@
 // Import all tool variants
-import { ClineToolSet } from "../registry/ClineToolSet"
+import { AiHydroToolSet } from "../registry/AiHydroToolSet"
 import { access_mcp_resource_variants } from "./access_mcp_resource"
 import { ask_followup_question_variants } from "./ask_followup_question"
 import { attempt_completion_variants } from "./attempt_completion"
@@ -19,11 +19,11 @@ import { web_fetch_variants } from "./web_fetch"
 import { write_to_file_variants } from "./write_to_file"
 
 /**
- * Registers all tool variants with the ClineToolSet provider.
+ * Registers all tool variants with the AiHydroToolSet provider.
  * This function must be called at prompt registry
  * to allow all tool sets be available at build time.
  */
-export function registerClineToolSets(): void {
+export function registerAiHydroToolSets(): void {
 	// Collect all variants from all tools
 	const allToolVariants = [
 		...access_mcp_resource_variants,
@@ -47,6 +47,6 @@ export function registerClineToolSets(): void {
 
 	// Register each variant
 	allToolVariants.forEach((v) => {
-		ClineToolSet.register(v)
+		AiHydroToolSet.register(v)
 	})
 }

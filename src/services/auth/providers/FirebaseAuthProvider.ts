@@ -2,10 +2,10 @@ import axios from "axios"
 import { initializeApp } from "firebase/app"
 import { GithubAuthProvider, GoogleAuthProvider, getAuth, type OAuthCredential, signInWithCredential, User } from "firebase/auth"
 import { jwtDecode } from "jwt-decode"
-import { ClineEnv, EnvironmentConfig } from "@/config"
+import { AiHydroEnv, EnvironmentConfig } from "@/config"
 import { Controller } from "@/core/controller"
 import { ErrorService } from "@/services/error"
-import type { ClineAccountUserInfo, ClineAuthInfo } from "../AuthService"
+import type { AiHydroAccountUserInfo, AiHydroAuthInfo } from "../AuthService"
 import { IAuthProvider } from "./IAuthProvider"
 
 export class FirebaseAuthProvider implements IAuthProvider {
@@ -13,7 +13,7 @@ export class FirebaseAuthProvider implements IAuthProvider {
 	readonly callbackEndpoint = "/auth"
 
 	get config(): EnvironmentConfig {
-		return ClineEnv.config()
+		return AiHydroEnv.config()
 	}
 
 	async shouldRefreshIdToken(existingIdToken: string, _expiresAt?: number): Promise<boolean> {
@@ -34,7 +34,7 @@ export class FirebaseAuthProvider implements IAuthProvider {
 	 * @returns {Promise<User>} A promise that resolves with the authenticated user.
 	 * @throws {Error} Throws an error if the restoration fails.
 	 */
-	async retrieveClineAuthInfo(controller: Controller): Promise<ClineAuthInfo | null> {
+	async retrieveAiHydroAuthInfo(controller: Controller): Promise<AiHydroAuthInfo | null> {
 		const userRefreshToken = controller.stateManager.getSecretKey("clineAccountId")
 		if (!userRefreshToken) {
 			console.error("No stored authentication credential found.")
@@ -49,16 +49,16 @@ export class FirebaseAuthProvider implements IAuthProvider {
 			}
 
 			// Now retrieve the user info from the backend (this was an easy solution to keep providing user profile details like name and email, but we should move to using the fetchMe() function instead)
-			// Fetch user info from Cline API
+			// Fetch user info from AI-Hydro API
 			// TODO: consolidate with fetchMe() instead of making the call directly here
-			const userResponse = await axios.get(`${ClineEnv.config().apiBaseUrl}/api/v1/users/me`, {
+			const userResponse = await axios.get(`${AiHydroEnv.config().apiBaseUrl}/api/v1/users/me`, {
 				headers: {
 					Authorization: `Bearer ${idToken}`,
 				},
 			})
 
 			// Store user data
-			const userInfo: ClineAccountUserInfo = userResponse.data.data
+			const userInfo: AiHydroAccountUserInfo = userResponse.data.data
 
 			return { idToken, userInfo, provider: this.name }
 		} catch (error) {
@@ -67,7 +67,7 @@ export class FirebaseAuthProvider implements IAuthProvider {
 		}
 	}
 
-	async refreshToken(userRefreshToken: string): Promise<Partial<ClineAuthInfo>> {
+	async refreshToken(userRefreshToken: string): Promise<Partial<AiHydroAuthInfo>> {
 		// Exchange refresh token for new access token using Firebase's secure token endpoint
 		// https://stackoverflow.com/questions/38233687/how-to-use-the-firebase-refreshtoken-to-reauthenticate/57119131#57119131
 		const firebaseApiKey = this.config.firebase.apiKey
@@ -88,13 +88,13 @@ export class FirebaseAuthProvider implements IAuthProvider {
 
 	getAuthRequest(callbackUrl: string): Promise<string> {
 		// Use URL object for more graceful query construction
-		const authUrl = new URL(`${ClineEnv.config().appBaseUrl}/auth`)
+		const authUrl = new URL(`${AiHydroEnv.config().appBaseUrl}/auth`)
 		authUrl.searchParams.set("callback_url", callbackUrl)
 
 		return Promise.resolve(authUrl.toString())
 	}
 
-	async signIn(controller: Controller, token: string, provider: string): Promise<ClineAuthInfo | null> {
+	async signIn(controller: Controller, token: string, provider: string): Promise<AiHydroAuthInfo | null> {
 		try {
 			let credential: OAuthCredential
 			switch (provider) {
@@ -125,7 +125,7 @@ export class FirebaseAuthProvider implements IAuthProvider {
 			}
 
 			// userCredential = await this._signInWithCredential(context, credential)
-			return await this.retrieveClineAuthInfo(controller)
+			return await this.retrieveAiHydroAuthInfo(controller)
 		} catch (error) {
 			ErrorService.get().logMessage("Firebase sign-in error", "error")
 			ErrorService.get().logException(error)

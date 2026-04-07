@@ -1,4 +1,4 @@
-export const DEFAULT_MCP_TIMEOUT_SECONDS = 60 // matches Anthropic's default timeout in their MCP SDK
+export const DEFAULT_MCP_TIMEOUT_SECONDS = 300 // 5 min default; AI-Hydro tools (TWI, model training) need 3-10 min
 export const MIN_MCP_TIMEOUT_SECONDS = 1
 export type McpMode = "full" | "server-use-only" | "off"
 

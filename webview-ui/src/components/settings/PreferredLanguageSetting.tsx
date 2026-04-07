@@ -42,7 +42,7 @@ const PreferredLanguageSetting: React.FC = () => {
 				<VSCodeOption value="Turkish - Türkçe">Turkish - Türkçe</VSCodeOption>
 			</VSCodeDropdown>
 			<p className="text-xs text-[var(--vscode-descriptionForeground)] mt-1">
-				The language that Cline should use for communication.
+				The language that AI-Hydro should use for communication.
 			</p>
 		</div>
 	)

@@ -19,7 +19,6 @@ export type ApiProvider =
 	| "doubao"
 	| "mistral"
 	| "vscode-lm"
-	| "cline"
 	| "litellm"
 	| "moonshot"
 	| "nebius"
@@ -36,7 +35,6 @@ export type ApiProvider =
 	| "baseten"
 	| "vercel-ai-gateway"
 	| "zai"
-	| "oca"
 
 export interface ApiHandlerSecrets {
 	apiKey?: string // anthropic
@@ -664,6 +662,7 @@ export const bedrockModels = {
 // OpenRouter
 // https://openrouter.ai/models?order=newest&supported_parameters=tools
 export const openRouterDefaultModelId = "anthropic/claude-sonnet-4.5" // will always exist in openRouterModels
+export const openRouterAutoModelId = "openrouter/auto"
 export const openRouterClaudeSonnet41mModelId = `anthropic/claude-sonnet-4${CLAUDE_SONNET_1M_SUFFIX}`
 export const openRouterClaudeSonnet451mModelId = `anthropic/claude-sonnet-4.5${CLAUDE_SONNET_1M_SUFFIX}`
 export const openRouterDefaultModelInfo: ModelInfo = {
@@ -678,9 +677,17 @@ export const openRouterDefaultModelInfo: ModelInfo = {
 	description:
 		"Claude Sonnet 4.5 delivers superior intelligence across coding, agentic search, and AI agent capabilities. It's a powerful choice for agentic coding, and can complete tasks across the entire software development lifecycle—from initial planning to bug fixes, maintenance to large refactors. It offers strong performance in both planning and solving for complex coding tasks, making it an ideal choice to power end-to-end software development processes.\n\nRead more in the [blog post here](https://www.anthropic.com/claude/sonnet)",
 }
+export const openRouterAutoModelInfo: ModelInfo = {
+	maxTokens: 8192,
+	contextWindow: 200_000,
+	supportsImages: true,
+	supportsPromptCache: false,
+	description:
+		"OpenRouter Auto Router (`openrouter/auto`) automatically chooses the best model for each prompt to balance quality, speed, and cost.",
+}
 
-// Cline custom model - code-supernova
-export const clineCodeSupernovaModelInfo: ModelInfo = {
+// AI-Hydro custom model - code-supernova
+export const aihydroCodeSupernovaModelInfo: ModelInfo = {
 	contextWindow: 1000000,
 	supportsImages: true,
 	supportsPromptCache: true,

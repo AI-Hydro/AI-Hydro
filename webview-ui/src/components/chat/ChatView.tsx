@@ -1,7 +1,7 @@
 import { findLast } from "@shared/array"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
-import type { ClineApiReqInfo, ClineMessage } from "@shared/ExtensionMessage"
+import type { AiHydroApiReqInfo, AiHydroMessage } from "@shared/ExtensionMessage"
 import { getApiMetrics } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/cline/common"
 import { useCallback, useEffect, useMemo } from "react"
@@ -44,7 +44,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	const showNavbar = useShowNavbar()
 	const {
 		version,
-		clineMessages: messages,
+		aihydroMessages: messages,
 		taskHistory,
 		apiConfiguration,
 		telemetrySetting,
@@ -52,21 +52,21 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		userInfo,
 		currentFocusChainChecklist,
 	} = useExtensionState()
-	const isProdHostedApp = userInfo?.apiBaseUrl === "https://app.cline.bot"
+	const isProdHostedApp = userInfo?.apiBaseUrl === "https://github.com/galib9690/AI-Hydro"
 	const shouldShowQuickWins = isProdHostedApp && (!taskHistory || taskHistory.length < QUICK_WINS_HISTORY_THRESHOLD)
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
-	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see Cline.abort)
+	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see AiHydro.abort)
 	const modifiedMessages = useMemo(() => combineApiRequests(combineCommandSequences(messages.slice(1))), [messages])
 	// has to be after api_req_finished are all reduced into api_req_started messages
 	const apiMetrics = useMemo(() => getApiMetrics(modifiedMessages), [modifiedMessages])
 
 	const lastApiReqTotalTokens = useMemo(() => {
-		const getTotalTokensFromApiReqMessage = (msg: ClineMessage) => {
+		const getTotalTokensFromApiReqMessage = (msg: AiHydroMessage) => {
 			if (!msg.text) {
 				return 0
 			}
-			const { tokensIn, tokensOut, cacheWrites, cacheReads }: ClineApiReqInfo = JSON.parse(msg.text)
+			const { tokensIn, tokensOut, cacheWrites, cacheReads }: AiHydroApiReqInfo = JSON.parse(msg.text)
 			return (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 		}
 		const lastApiReqMessage = findLast(modifiedMessages, (msg) => {

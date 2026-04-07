@@ -11,39 +11,34 @@ const AboutSection = ({ version, renderSectionHeader }: AboutSectionProps) => {
 			{renderSectionHeader("about")}
 			<Section>
 				<div style={{ padding: "0 16px" }}>
-					<h2>Cline v{version}</h2>
+					<h2>AI-Hydro v{version}</h2>
 					<p>
-						An AI assistant that can use your CLI and Editor. Cline can handle complex software development tasks
-						step-by-step with tools that let him create & edit files, explore large projects, use the browser, and
-						execute terminal commands (after you grant permission).
+						An AI assistant for hydrological and computational workflows that can use your CLI and editor. AI-Hydro
+						can handle complex tasks step-by-step with tools that create and edit files, explore projects, use the
+						browser, and execute terminal commands (after you grant permission).
 					</p>
 
 					<h3>Community & Support</h3>
 					<p>
-						<VSCodeLink href="https://x.com/cline">X</VSCodeLink>
+						<VSCodeLink href="https://github.com/galib9690/AI-Hydro/discussions">Community</VSCodeLink>
 						{" • "}
-						<VSCodeLink href="https://discord.gg/cline">Discord</VSCodeLink>
-						{" • "}
-						<VSCodeLink href="https://www.reddit.com/r/cline/"> r/cline</VSCodeLink>
+						<VSCodeLink href="https://github.com/galib9690/AI-Hydro/issues">Support</VSCodeLink>
 					</p>
 
 					<h3>Development</h3>
 					<p>
-						<VSCodeLink href="https://github.com/cline/cline">GitHub</VSCodeLink>
+						<VSCodeLink href="https://github.com/galib9690/AI-Hydro">GitHub</VSCodeLink>
 						{" • "}
-						<VSCodeLink href="https://github.com/cline/cline/issues"> Issues</VSCodeLink>
+						<VSCodeLink href="https://github.com/galib9690/AI-Hydro/issues"> Issues</VSCodeLink>
 						{" • "}
-						<VSCodeLink href="https://github.com/cline/cline/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop">
-							{" "}
-							Feature Requests
-						</VSCodeLink>
+						<VSCodeLink href="https://github.com/galib9690/AI-Hydro/discussions"> Feature Requests</VSCodeLink>
 					</p>
 
 					<h3>Resources</h3>
 					<p>
-						<VSCodeLink href="https://docs.cline.bot/getting-started/for-new-coders">Documentation</VSCodeLink>
+						<VSCodeLink href="https://github.com/galib9690/AI-Hydro#readme">Documentation</VSCodeLink>
 						{" • "}
-						<VSCodeLink href="https://cline.bot/">https://cline.bot</VSCodeLink>
+						<VSCodeLink href="https://github.com/galib9690/AI-Hydro">AI-Hydro Project</VSCodeLink>
 					</p>
 				</div>
 			</Section>

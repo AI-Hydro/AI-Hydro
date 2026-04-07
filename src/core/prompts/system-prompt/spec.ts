@@ -1,23 +1,23 @@
 import type { ModelFamily } from "@/shared/prompts"
-import type { ClineDefaultTool } from "@/shared/tools"
+import type { AiHydroDefaultTool } from "@/shared/tools"
 import type { SystemPromptContext } from "./types"
 
-export interface ClineToolSpec {
+export interface AiHydroToolSpec {
 	variant: ModelFamily
-	id: ClineDefaultTool
+	id: AiHydroDefaultTool
 	name: string
 	description: string
 	instruction?: string
 	contextRequirements?: (context: SystemPromptContext) => boolean
-	parameters?: Array<ClineToolSpecParameter>
+	parameters?: Array<AiHydroToolSpecParameter>
 }
 
-interface ClineToolSpecParameter {
+interface AiHydroToolSpecParameter {
 	name: string
 	required: boolean
 	instruction: string
 	usage?: string
-	dependencies?: ClineDefaultTool[]
+	dependencies?: AiHydroDefaultTool[]
 	description?: string
 	contextRequirements?: (context: SystemPromptContext) => boolean
 }

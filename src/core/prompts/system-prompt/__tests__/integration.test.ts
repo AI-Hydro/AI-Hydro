@@ -151,7 +151,7 @@ const baseContext: SystemPromptContext = {
 	} as unknown as McpHub,
 	focusChainSettings: {
 		enabled: true,
-		remindClineInterval: 6,
+		remindAiHydroInterval: 6,
 	},
 	browserSettings: {
 		viewport: {
@@ -159,8 +159,8 @@ const baseContext: SystemPromptContext = {
 			height: 720,
 		},
 	},
-	globalClineRulesFileInstructions: "Follow global rules",
-	localClineRulesFileInstructions: "Follow local rules",
+	globalAiHydroRulesFileInstructions: "Follow global rules",
+	localAiHydroRulesFileInstructions: "Follow local rules",
 	preferredLanguageInstructions: "Prefer TypeScript",
 	isTesting: true,
 	providerInfo: mockProviderInfo,

@@ -183,6 +183,43 @@ vscode-dropdown::part(listbox) {
 	opacity: 0.4;
 }
 
+/* Hydrological Theme Colors for Dark Mode */
+:root {
+	/* Ocean Blue Theme - Primary Colors */
+	--ai-hydro-ocean-blue: #4a90e2; /* Primary ocean blue */
+	--ai-hydro-ocean-light: #6bb6ff; /* Light ocean blue */
+	--ai-hydro-ocean-dark: #2e5bba; /* Dark ocean blue */
+
+	/* Emerald Green Theme - Action Colors */
+	--ai-hydro-emerald: #50c878; /* Primary emerald */
+	--ai-hydro-emerald-light: #6ade8f; /* Light emerald */
+	--ai-hydro-emerald-dark: #3a9b5c; /* Dark emerald */
+
+	/* Teal Theme - Accent Colors */
+	--ai-hydro-teal: #20b2aa; /* Primary teal */
+	--ai-hydro-teal-light: #48d1cc; /* Light teal */
+	--ai-hydro-teal-dark: #008b8b; /* Dark teal */
+
+	/* Cyan Theme - Highlight Colors */
+	--ai-hydro-cyan: #00ced1; /* Primary cyan */
+	--ai-hydro-cyan-light: #20e3e3; /* Light cyan */
+
+	/* Dark Theme Background Colors */
+	--ai-hydro-background: #0f172a; /* Dark slate background */
+	--ai-hydro-surface: #1e293b; /* Surface color */
+	--ai-hydro-border: #334155; /* Border color */
+	--ai-hydro-text: #f1f5f9; /* Light text */
+	--ai-hydro-text-muted: #94a3b8; /* Muted text */
+
+	/* Semantic Color Mappings */
+	--ai-hydro-plan-mode: var(--ai-hydro-ocean-blue);
+	--ai-hydro-act-mode: var(--ai-hydro-emerald);
+	--ai-hydro-accent: var(--ai-hydro-teal);
+	--ai-hydro-success: var(--ai-hydro-emerald);
+	--ai-hydro-info: var(--ai-hydro-cyan);
+	--ai-hydro-warning: var(--ai-hydro-teal);
+}
+
 /* Context mentions */
 
 .mention-context-textarea-highlight {

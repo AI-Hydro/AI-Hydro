@@ -3,11 +3,11 @@
 import { WorkspaceRoot } from "@shared/multi-root/types"
 import { GlobalStateAndSettings } from "@shared/storage/state-keys"
 import type { Environment } from "../config"
+import { AiHydroFeatureSetting } from "./AiHydroFeatureSetting"
 import { AutoApprovalSettings } from "./AutoApprovalSettings"
+import { AiHydroRulesToggles } from "./aihydro-rules"
 import { ApiConfiguration } from "./api"
 import { BrowserSettings } from "./BrowserSettings"
-import { ClineFeatureSetting } from "./ClineFeatureSetting"
-import { ClineRulesToggles } from "./cline-rules"
 import { DictationSettings } from "./DictationSettings"
 import { FocusChainSettings } from "./FocusChainSettings"
 import { HistoryItem } from "./HistoryItem"
@@ -33,7 +33,7 @@ export type Platform = "aix" | "darwin" | "freebsd" | "linux" | "openbsd" | "sun
 
 export const DEFAULT_PLATFORM = "unknown"
 
-export const COMMAND_CANCEL_TOKEN = "__cline_command_cancel__"
+export const COMMAND_CANCEL_TOKEN = "__aihydro_command_cancel__"
 
 export interface ExtensionState {
 	isNewUser: boolean
@@ -46,7 +46,7 @@ export interface ExtensionState {
 	openaiReasoningEffort?: OpenaiReasoningEffort
 	mode: Mode
 	checkpointManagerErrorMessage?: string
-	clineMessages: ClineMessage[]
+	aihydroMessages: AiHydroMessage[]
 	currentTaskItem?: HistoryItem
 	currentFocusChainChecklist?: string | null
 	mcpMarketplaceEnabled?: boolean
@@ -71,12 +71,12 @@ export interface ExtensionState {
 	userInfo?: UserInfo
 	version: string
 	distinctId: string
-	globalClineRulesToggles: ClineRulesToggles
-	localClineRulesToggles: ClineRulesToggles
-	localWorkflowToggles: ClineRulesToggles
-	globalWorkflowToggles: ClineRulesToggles
-	localCursorRulesToggles: ClineRulesToggles
-	localWindsurfRulesToggles: ClineRulesToggles
+	globalAiHydroRulesToggles: AiHydroRulesToggles
+	localAiHydroRulesToggles: AiHydroRulesToggles
+	localWorkflowToggles: AiHydroRulesToggles
+	globalWorkflowToggles: AiHydroRulesToggles
+	localCursorRulesToggles: AiHydroRulesToggles
+	localWindsurfRulesToggles: AiHydroRulesToggles
 	mcpResponsesCollapsed?: boolean
 	strictPlanModeEnabled?: boolean
 	yoloModeToggled?: boolean
@@ -90,20 +90,20 @@ export interface ExtensionState {
 	workspaceRoots: WorkspaceRoot[]
 	primaryRootIndex: number
 	isMultiRootWorkspace: boolean
-	multiRootSetting: ClineFeatureSetting
+	multiRootSetting: AiHydroFeatureSetting
 	lastDismissedInfoBannerVersion: number
 	lastDismissedModelBannerVersion: number
 	lastDismissedCliBannerVersion: number
-	hooksEnabled?: ClineFeatureSetting
+	hooksEnabled?: AiHydroFeatureSetting
 	remoteConfigSettings?: Partial<GlobalStateAndSettings>
 	subagentsEnabled?: boolean
 }
 
-export interface ClineMessage {
+export interface AiHydroMessage {
 	ts: number
 	type: "ask" | "say"
-	ask?: ClineAsk
-	say?: ClineSay
+	ask?: AiHydroAsk
+	say?: AiHydroSay
 	text?: string
 	reasoning?: string
 	images?: string[]
@@ -117,7 +117,7 @@ export interface ClineMessage {
 	conversationHistoryDeletedRange?: [number, number] // for when conversation history is truncated for API requests
 }
 
-export type ClineAsk =
+export type AiHydroAsk =
 	| "followup"
 	| "plan_mode_respond"
 	| "command"
@@ -135,8 +135,10 @@ export type ClineAsk =
 	| "condense"
 	| "summarize_task"
 	| "report_bug"
+	| "install_dependencies"
+	| "workspace_env_setup"
 
-export type ClineSay =
+export type AiHydroSay =
 	| "task"
 	| "error"
 	| "error_retry"
@@ -162,13 +164,13 @@ export type ClineSay =
 	| "use_mcp_server"
 	| "diff_error"
 	| "deleted_api_reqs"
-	| "clineignore_error"
+	| "aihydroignore_error"
 	| "checkpoint_created"
 	| "load_mcp_documentation"
 	| "info" // Added for general informational messages like retry status
 	| "task_progress"
 
-export interface ClineSayTool {
+export interface AiHydroSayTool {
 	tool:
 		| "editedExistingFile"
 		| "newFileCreated"
@@ -191,7 +193,7 @@ export interface ClineSayTool {
 export const browserActions = ["launch", "click", "type", "scroll_down", "scroll_up", "close"] as const
 export type BrowserAction = (typeof browserActions)[number]
 
-export interface ClineSayBrowserAction {
+export interface AiHydroSayBrowserAction {
 	action: BrowserAction
 	coordinate?: string
 	text?: string
@@ -204,7 +206,7 @@ export type BrowserActionResult = {
 	currentMousePosition?: string
 }
 
-export interface ClineAskUseMcpServer {
+export interface AiHydroAskUseMcpServer {
 	serverName: string
 	type: "use_mcp_tool" | "access_mcp_resource"
 	toolName?: string
@@ -212,30 +214,30 @@ export interface ClineAskUseMcpServer {
 	uri?: string
 }
 
-export interface ClinePlanModeResponse {
+export interface AiHydroPlanModeResponse {
 	response: string
 	options?: string[]
 	selected?: string
 }
 
-export interface ClineAskQuestion {
+export interface AiHydroAskQuestion {
 	question: string
 	options?: string[]
 	selected?: string
 }
 
-export interface ClineAskNewTask {
+export interface AiHydroAskNewTask {
 	context: string
 }
 
-export interface ClineApiReqInfo {
+export interface AiHydroApiReqInfo {
 	request?: string
 	tokensIn?: number
 	tokensOut?: number
 	cacheWrites?: number
 	cacheReads?: number
 	cost?: number
-	cancelReason?: ClineApiReqCancelReason
+	cancelReason?: AiHydroApiReqCancelReason
 	streamingFailedMessage?: string
 	retryStatus?: {
 		attempt: number
@@ -245,6 +247,6 @@ export interface ClineApiReqInfo {
 	}
 }
 
-export type ClineApiReqCancelReason = "streaming_failed" | "user_cancelled" | "retries_exhausted"
+export type AiHydroApiReqCancelReason = "streaming_failed" | "user_cancelled" | "retries_exhausted"
 
 export const COMPLETION_RESULT_CHANGES_FLAG = "HAS_CHANGES"

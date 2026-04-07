@@ -5,7 +5,7 @@ import { DifyHandler } from "../../core/api/providers/dify"
  * Dify Integration Utilities
  *
  * This module provides helper functions to integrate Dify's additional APIs
- * with Cline's existing systems like file handling, conversation management,
+ * with AI-Hydro's existing systems like file handling, conversation management,
  * and feedback collection.
  */
 
@@ -247,11 +247,11 @@ export function createDifyIntegration(
 }
 
 /**
- * Utility function to convert Cline file objects to Dify upload format
- * @param files Array of file paths or file objects from Cline
+ * Utility function to convert AI-Hydro file objects to Dify upload format
+ * @param files Array of file paths or file objects from AI-Hydro
  * @returns Promise with array of file data ready for upload
  */
-export async function prepareClineFilesForDify(files: string[]): Promise<Array<{ name: string; content: Buffer }>> {
+export async function prepareAiHydroFilesForDify(files: string[]): Promise<Array<{ name: string; content: Buffer }>> {
 	const fs = await import("fs")
 
 	const fileData: Array<{ name: string; content: Buffer }> = []
@@ -259,7 +259,7 @@ export async function prepareClineFilesForDify(files: string[]): Promise<Array<{
 	for (const filePath of files) {
 		try {
 			const content = fs.readFileSync(filePath)
-			const name = workspaceResolver.getBasename(filePath, "DifyIntegration.prepareClineFilesForDify")
+			const name = workspaceResolver.getBasename(filePath, "DifyIntegration.prepareAiHydroFilesForDify")
 			fileData.push({ name, content })
 		} catch (error) {
 			console.error(`Failed to read file ${filePath}:`, error)

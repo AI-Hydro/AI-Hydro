@@ -197,7 +197,7 @@ export class OcaHandler implements ApiHandler {
 			stream_options: { include_usage: true },
 			...(thinkingConfig && { thinking: thinkingConfig }), // Add thinking configuration when applicable
 			...(this.options.taskId && {
-				litellm_session_id: `cline-${this.options.taskId}`,
+				litellm_session_id: `aihydro-${this.options.taskId}`,
 			}), // Add session ID for LiteLLM tracking
 		})
 

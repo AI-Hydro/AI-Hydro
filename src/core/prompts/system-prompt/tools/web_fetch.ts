@@ -1,11 +1,11 @@
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
-import type { ClineToolSpec } from "../spec"
+import { AiHydroDefaultTool } from "@/shared/tools"
+import type { AiHydroToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
-const nextGen: ClineToolSpec = {
+const nextGen: AiHydroToolSpec = {
 	variant: ModelFamily.NEXT_GEN,
-	id: ClineDefaultTool.WEB_FETCH,
+	id: AiHydroDefaultTool.WEB_FETCH,
 	name: "web_fetch",
 	description: `Fetches content from a specified URL and processes into markdown
 - Takes a URL as input

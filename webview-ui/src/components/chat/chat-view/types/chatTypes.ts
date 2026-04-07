@@ -2,7 +2,7 @@
  * Shared types and interfaces for the chat view components
  */
 
-import { ClineAsk, ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroAsk, AiHydroMessage } from "@shared/ExtensionMessage"
 import { VirtuosoHandle } from "react-virtuoso"
 import { ButtonActionType } from "../shared/buttonConfig"
 
@@ -46,10 +46,10 @@ export interface ChatState {
 	textAreaRef: React.RefObject<HTMLTextAreaElement>
 
 	// Derived values
-	lastMessage: ClineMessage | undefined
-	secondLastMessage: ClineMessage | undefined
-	clineAsk: ClineAsk | undefined
-	task: ClineMessage | undefined
+	lastMessage: AiHydroMessage | undefined
+	secondLastMessage: AiHydroMessage | undefined
+	aihydroAsk: AiHydroAsk | undefined
+	task: AiHydroMessage | undefined
 
 	// Handlers
 	handleFocusChange: (isFocused: boolean) => void
@@ -116,8 +116,8 @@ export interface InputState {
  * Task section props
  */
 export interface TaskSectionProps {
-	task: ClineMessage
-	messages: ClineMessage[]
+	task: AiHydroMessage
+	messages: AiHydroMessage[]
 	scrollBehavior: ScrollBehavior
 	buttonState: ButtonState
 	messageHandlers: MessageHandlers
@@ -135,8 +135,8 @@ export interface TaskSectionProps {
 		supportsImages: boolean
 	}
 	isStreaming: boolean
-	clineAsk?: ClineAsk
-	modifiedMessages: ClineMessage[]
+	aihydroAsk?: AiHydroAsk
+	modifiedMessages: AiHydroMessage[]
 }
 
 /**

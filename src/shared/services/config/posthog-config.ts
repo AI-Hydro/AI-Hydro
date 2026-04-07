@@ -25,7 +25,7 @@ export interface PostHogClientValidConfig extends PostHogClientConfig {
  * process.env.CI will always be true in the CI environment, during both testing and publishing step,
  * so it is not a reliable indicator of the environment.
  */
-const useDevEnv = process.env.IS_DEV === "true" || process.env.CLINE_ENVIRONMENT === "local"
+const useDevEnv = process.env.IS_DEV === "true" || process.env.AIHYDRO_ENVIRONMENT === "local"
 
 /**
  * PostHog configuration for Production Environment.
@@ -37,7 +37,7 @@ const useDevEnv = process.env.IS_DEV === "true" || process.env.CLINE_ENVIRONMENT
 export const posthogConfig: PostHogClientConfig = {
 	apiKey: process.env.TELEMETRY_SERVICE_API_KEY,
 	errorTrackingApiKey: process.env.ERROR_SERVICE_API_KEY,
-	host: "https://data.cline.bot",
+	host: process.env.AI_HYDRO_POSTHOG_HOST || "https://us.i.posthog.com",
 	uiHost: useDevEnv ? "https://us.i.posthog.com" : "https://us.posthog.com",
 }
 

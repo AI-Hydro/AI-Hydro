@@ -1,325 +1,232 @@
-# AI-Hydro – Computational Research Platform for Hydrology
+# AI-Hydro — Intelligent Research Platform for Hydrology
 
 <p align="center">
-  <img src="./assets/docs/aihydro-hero-static.png" alt="AI-Hydro" width="100%" />
+  <img src="./assets/docs/AIHYDRO-logo.png" alt="AI-Hydro" width="100%" />
 </p>
 
 <div align="center">
-<table>
-<tbody>
-<td align="center">
-<a href="https://github.com/galib9690/AI-Hydro" target="_blank"><strong>GitHub Repository</strong></a>
-</td>
-<td align="center">
-<a href="https://github.com/galib9690/AI-Hydro/issues" target="_blank"><strong>Issues</strong></a>
-</td>
-<td align="center">
-<a href="https://github.com/galib9690/AI-Hydro/discussions" target="_blank"><strong>Discussions</strong></a>
-</td>
-<td align="center">
-<a href="https://github.com/galib9690/AI-Hydro/discussions/categories/feature-requests" target="_blank"><strong>Feature Requests</strong></a>
-</td>
-<td align="center">
-<a href="https://github.com/galib9690/AI-Hydro/wiki" target="_blank"><strong>Documentation</strong></a>
-</td>
-</tbody>
-</table>
+
+[![Version](https://img.shields.io/badge/version-1.0.0--alpha-blue)](https://github.com/galib9690/AI-Hydro/releases)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![VSCode](https://img.shields.io/badge/VSCode-1.84%2B-blue)](https://code.visualstudio.com/)
+
 </div>
 
-## Overview
-
-**AI-Hydro** is an intelligent computational environment for hydrology and Earth-system sciences research. Built as a VSCode extension on the Cline framework, AI-Hydro combines domain-specific Python tools, curated hydrological knowledge bases, and RAG-based intelligence to assist researchers in complex hydrological analyses.
-
-Unlike general-purpose coding assistants, AI-Hydro understands hydrology-specific concepts, workflows, and data structures. It provides dozens of **specialized tools** and **complete workflows** for watershed analysis, CAMELS attribute extraction, streamflow analysis, and more.
-
-### What Makes AI-Hydro Special
-
-1. **Domain-Specific Tools**: Dozens of wrapper functions + complete workflows for hydrology
-2. **Intelligent Tool Discovery**: Multi-criteria weighted scoring with semantic understanding
-3. **Multi-Tier Architecture**: Progressive disclosure from workflows to tools to libraries
-4. **Reproducible Workflows**: Complete audit trails with workspace-isolated environments
-5. **Direct Data Access**: USGS NWIS, NLDI, 3DEP, GridMET, and more
-
-### Core Capabilities
-
-**Tier 2 Tools** (Some of the focused functions):
-- `delineate_watershed()` - Extract watershed boundaries
-- `extract_topographic_attributes()` - Elevation, slope, drainage stats
-- `extract_climate_indices()` - Precipitation, temperature, aridity
-- `extract_hydrological_signatures()` - Flow statistics, baseflow, timing
-- `extract_soil_attributes()` - Porosity, texture, depth
-- `extract_vegetation_attributes()` - LAI, land cover, GVF
-- `extract_geological_attributes()` - Lithology, permeability
-- `extract_geomorphic_parameters()` - 28 basin morphometry metrics
-- `fetch_streamflow_data()` - USGS streamflow retrieval
-- `fetch_climate_data()` - GridMET climate data
-- `fetch_forcing_data()` - Basin-averaged forcing
-
-**Tier 3 Workflows** (some of the complete orchestrations):
-- `extract_camels_attributes()` - Complete CAMELS extraction (70+ attributes)
-- `fetch_hydrological_data()` - Multi-source data retrieval
-- `compute_all_signatures()` - Comprehensive signature calculation
-- `scientific_investigation()` - End-to-end watershed analysis
+<div align="center">
+<table><tbody>
+<td align="center"><a href="https://github.com/galib9690/AI-Hydro"><strong>GitHub</strong></a></td>
+<td align="center"><a href="https://github.com/galib9690/AI-Hydro/issues"><strong>Issues</strong></a></td>
+<td align="center"><a href="https://github.com/galib9690/AI-Hydro/discussions"><strong>Discussions</strong></a></td>
+<td align="center"><a href="./docs/quickstart.md"><strong>Quick Start</strong></a></td>
+<td align="center"><a href="./docs/tools-reference.md"><strong>Tools Reference</strong></a></td>
+</tbody></table>
+</div>
 
 ---
 
-## Getting Started
+## What is AI-Hydro?
 
-### Quick Example
-
-```python
-# Example 1: Delineate a watershed
-from ai_hydro.tools.watershed import delineate_watershed
-
-result = delineate_watershed('01031500')
-print(f"Watershed: {result['gauge_name']}")
-print(f"Area: {result['area_km2']:.1f} km²")
-
-# Example 2: Extract complete CAMELS attributes
-from ai_hydro.workflows.camels_extraction import extract_camels_attributes
-
-result = extract_camels_attributes(
-    gauge_id='01031500',
-    save_results=True,
-    output_dir='./results'
-)
-
-print(f"Extracted {len(result['attributes'])} attributes")
-print(f"Mean elevation: {result['attributes']['elev_mean']:.1f} m")
-print(f"Aridity: {result['attributes']['aridity']:.2f}")
-```
-
-### How It Works
-
-1. **Natural Language Request**: "Extract CAMELS attributes for gauge 01031500"
-2. **Intelligent Tool Discovery**: Multi-criteria scoring finds optimal tools (name matching, semantic similarity, category alignment)
-3. **Tool Validation**: Verifies tool existence to prevent hallucinations
-4. **Code Generation**: Creates Python script using validated, ranked tools
-5. **Execution**: Runs in isolated workspace virtual environment
-6. **Results**: Presents findings with visualizations and next steps
-
-See [AI-Hydro's complete architecture](./AI_HYDRO_COMPLETE_WORKFLOW_ARCHITECTURE.md) for comprehensive technical details.
-
-### RAG System Intelligence
-
-AI-Hydro uses an **Adjusted Weights** multi-criteria scoring approach that achieved **66.67% precision@3** in testing:
-
-- **Name Match (35%)**: Identifies tools by name/phrase matching
-- **Semantic Similarity (30%)**: TF-IDF-based understanding of query intent
-- **Category Alignment (20%)**: Matches queries to relevant tool categories
-- **Tier Appropriateness (10%)**: Selects right abstraction level (workflow vs. tool)
-- **Keyword Density (5%)**: Evaluates keyword concentration in descriptions
-
-This approach **fixes critical bugs** from previous systems (e.g., correctly ranking `fetch_streamflow_data` #1 for streamflow queries, not `delineate_watershed`).
-
-**Key Features:**
-- ✅ Automatic tool validation prevents AI hallucinations
-- ✅ Semantic understanding through TF-IDF vectorization
-- ✅ Domain-specific synonym handling (TWI → topographic wetness index)
-- ✅ Acronym recognition (LAI, PET, DEM, etc.)
-
-See [AI_HYDRO_RAG_SYSTEM_GUIDE.md](./AI_HYDRO_RAG_SYSTEM_GUIDE.md) for technical details.
-
-
----
-
-## Architecture
-
-### System Components
+**AI-Hydro** is a VS Code extension that gives AI assistants (Claude, GPT-4, Gemini, etc.) direct access to 17 specialized hydrological research tools. Instead of writing boilerplate data-fetching code, you describe what you need in plain language and the AI calls the right tools automatically.
 
 ```
-┌─────────────────────────────────────┐
-│  VSCode Extension (TypeScript)      │
-│  ├─ Chat Interface                  │
-│  ├─ RAG Service                     │
-│  ├─ Task Manager                    │
-│  └─ Workspace Manager               │
-└──────────────┬──────────────────────┘
-               │ JSON-RPC
-               ▼
-┌─────────────────────────────────────┐
-│  Python Package: ai-hydro           │
-│  ├─ tools/ (Tier 2 wrappers)     │
-│  ├─ workflows/ (Tier 3 workflows) │
-│  ├─ rag/ (RAG engine)               │
-│  ├─ registry/ (tool discovery)      │
-│  └─ knowledge/ (domain knowledge)   │
-└──────────────┬──────────────────────┘
-               │ API calls
-               ▼
-┌─────────────────────────────────────┐
-│  External Data Sources              │
-│  USGS, GridMET, 3DEP, MODIS, etc.   │
-└─────────────────────────────────────┘
+You: "Delineate the watershed for USGS gauge 01031500, fetch 10 years of
+     GridMET forcing, and calibrate a differentiable HBV model."
+
+AI-Hydro: [calls delineate_watershed → fetch_forcing_data → train_hydro_model]
+          Watershed: 769 km², Piscataquis River ME
+          HBV calibration complete: NSE = 0.638, KGE = 0.644
 ```
 
-### Package Structure (Just the Domain Specific Python Package)
-
-```
-python/ai_hydro/
-├── tools/          # Tier 2: Single-purpose wrappers
-│   ├── watershed.py
-│   ├── hydrology.py
-│   ├── climate.py
-│   ├── soil.py
-│   ├── vegetation.py
-│   ├── geology.py
-│   ├── topography.py
-│   ├── geomorphic.py
-│   └── forcing.py
-├── workflows/      # Tier 3: Complete workflows
-│   ├── camels_extraction.py
-│   ├── fetch_data.py
-│   ├── compute_signatures.py
-│   ├── investigation.py
-│   ├── modeling.py
-│   └── rag_search.py
-├── rag/            # RAG engine with validation
-│   ├── engine.py
-│   ├── embeddings.py
-│   └── knowledge_loader.py
-├── registry/       # Tool/workflow discovery
-├── knowledge/      # Domain knowledge (JSON)
-└── utils/          # Validators, helpers
-```
+**Key differentiator:** AI-Hydro is not a chatbot that writes Python scripts for you to run separately. The AI directly invokes production-quality tools via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), getting real results back in the same conversation.
 
 ---
 
 ## Features
 
-### AI Models
+### 17 Built-in Hydrological Tools
 
-AI-Hydro works with leading AI providers (Anthropic, OpenAI, Google, AWS Bedrock) but enhances them with domain-specific knowledge:
+| Category               | Tools                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| **Watershed**    | `delineate_watershed` — NHDPlus delineation from USGS NLDI                                |
+| **Streamflow**   | `fetch_streamflow_data` — USGS NWIS daily discharge                                       |
+| **Signatures**   | `extract_hydrological_signatures` — 15+ flow stats (BFI, runoff ratio, FDC)               |
+| **Geomorphic**   | `extract_geomorphic_parameters` — 28 basin morphometry metrics                            |
+| **Terrain**      | `compute_twi` — Topographic Wetness Index from 3DEP DEM                                   |
+| **Curve Number** | `create_cn_grid` — NRCS CN grid from NLCD land cover + Polaris soils                      |
+| **Forcing**      | `fetch_forcing_data` — GridMET basin-averaged climate (prcp, tmax, tmin, PET, srad, wind) |
+| **CAMELS**       | `extract_camels_attributes` — Full CAMELS-US attribute set via pygeohydro                 |
+| **Knowledge**    | `query_hydro_concepts` — RAG search over hydrological literature                          |
+| **Modelling**    | `train_hydro_model` — Differentiable HBV-light or NeuralHydrology LSTM                    |
+| **Modelling**    | `get_model_results` — Retrieve cached NSE / KGE / RMSE                                    |
+| **Session**      | `start_session`, `get_session_summary`, `clear_session`                                |
+| **Session**      | `add_note`, `export_session`, `sync_research_context`                                  |
 
-- Watershed delineation concepts
-- CAMELS attribute definitions
-- Hydrological signatures
-- Water balance equations
-- Common modeling approaches
+### Research Session Memory
 
-The extension tracks API usage and provides cost transparency.
+AI-Hydro caches every tool result in a **HydroSession** (JSON file per gauge). Expensive computations — watershed delineation (~10s), 10-year streamflow download (~5s) — are done once and reused across conversations.
 
-### Execute Hydrological Workflows
+```
+Session 01031500  [updated 2026-03-06]
+  Computed (7): watershed, streamflow, signatures, geomorphic, camels, forcing, model
+  Pending  (1): twi
 
-AI-Hydro executes Python scripts in isolated workspace environments:
+  Watershed area:    769.0 km²  (HUC-02: 01)
+  Streamflow record: 3,652 days
+  Baseflow index:    0.61
+  HBV differentiable: NSE=0.638, KGE=0.644
+```
 
-- Install required packages (geopandas, rasterio, etc.)
-- Run complete workflows (CAMELS extraction)
-- Process large datasets
-- Manage long-running computations
+### Differentiable HBV-Light
 
-For long-running processes, use "Proceed While Running" to continue working.
+The built-in `train_hydro_model` tool uses a pure-PyTorch differentiable HBV-light:
 
-### Create and Edit Analysis Scripts
+- 12 physically-meaningful calibrated parameters
+- Multi-restart Adam optimiser with cosine annealing
+- Automatic CAMELS streamflow via `pygeohydro` for 671 CONUS gauges
+- Typical performance: NSE 0.55–0.80
 
-AI-Hydro generates Python scripts following hydrological best practices:
+### Works with Any AI Provider
 
-- Presents changes in diff view
-- Monitors for errors automatically
-- Handles missing data appropriately
-- Validates coordinate reference systems
-- Ensures proper imports
+Configure any supported model in the Settings panel:
 
-All changes tracked in Timeline for reproducibility.
-
-### Visualize Results
-
-Create interactive visualizations using plotly, matplotlib:
-
-- Hydrographs and flow duration curves
-- Watershed boundary maps
-- CAMELS attribute correlations
-- Model performance metrics
-- Interactive dashboards
-
-### Add Research Context
-
-**`@url`:** Paste documentation URLs (USGS API docs, model manuals)
-
-**`@problems`:** Add analysis errors for diagnosis
-
-**`@file`:** Add data files, configurations, results
-
-**`@folder`:** Add entire project folders
-
-### Research Checkpoints
-
-AI-Hydro takes git-based snapshots at each step:
-
-- Use 'Compare' to see changes
-- 'Restore' to roll back
-- Ensure reproducibility
-- Test different configurations
+| Provider           | Recommended model       |
+| ------------------ | ----------------------- |
+| Anthropic          | Claude Sonnet 4.5 / 4.6 |
+| OpenAI             | GPT-4o                  |
+| Google             | Gemini 2.0 Flash        |
+| AWS Bedrock        | Claude on Bedrock       |
+| Ollama / LM Studio | Local models            |
 
 ---
 
-## Example Research Workflows
+## Installation
 
-### Watershed Analysis
-```
-"Analyze hydrological characteristics of USGS gage 01646500 
-using CAMELS attributes and compute flow duration curves"
+### Prerequisites
+
+- VS Code 1.84+
+- Python 3.10+ (Miniconda or system)
+- An API key for at least one AI provider
+
+### Step 1 — Install the VS Code Extension
+
+**Option A — VS Code Marketplace** *(coming soon)*
+
+**Option B — Install from `.vsix`**
+
+1. Download the latest `.vsix` from [Releases](https://github.com/galib9690/AI-Hydro/releases)
+2. In VS Code: `Extensions` → `...` → `Install from VSIX...`
+
+**Option C — Build from source**
+
+```bash
+git clone https://github.com/galib9690/AI-Hydro.git
+cd AI-Hydro
+npm run install:all
+npm run package          # produces ai-hydro-*.vsix
 ```
 
-### Model Calibration
-```
-"Extract CAMELS attributes for gauge 01031500 and prepare 
-forcing data for hydrological modeling"
+Then install the generated `.vsix` as above.
+
+### Step 2 — Install the Python MCP Server
+
+```bash
+# Clone or navigate to the AI-Hydro repository
+cd AI-Hydro/python
+
+# Install the package and its dependencies
+pip install -e .
+
+# Register the MCP server with the AI-Hydro extension
+python setup_mcp.py --ide vscode
 ```
 
-### Comparative Studies
+> **Other IDEs:**
+>
+> ```bash
+> python setup_mcp.py --ide cline         # Cline extension
+> python setup_mcp.py --ide claude-code   # Claude Code CLI
+> ```
+
+### Step 3 — Configure Your AI Provider
+
+1. Click the **AI-Hydro icon** in the VS Code sidebar
+2. Open **Settings** (gear icon)
+3. Select your provider and enter your API key
+4. Click **Save**
+
+### Step 4 — Verify
+
+```bash
+python setup_mcp.py --check
 ```
-"Compare rainfall-runoff responses across CAMELS basins 
-and identify key controlling attributes"
-```
+
+Should print `17 tools registered` and `Server started OK`.
+
+See [docs/installation.md](./docs/installation.md) for detailed platform-specific instructions.
 
 ---
 
-## Python Package Installation
+## Quick Start
 
-The `ai-hydro` Python package is automatically installed in your workspace's virtual environment. 
+Once installed, open the AI-Hydro chat panel and try:
 
-### Dependencies
+```
+Start a research session for USGS gauge 01031500 and delineate its watershed.
+```
 
-**Core:** numpy, pandas, xarray, scipy  
-**Geospatial:** geopandas, rasterio, shapely, pyproj  
-**Hydro Data:** pygeohydro, pynhd, py3dep, pygridmet  
-**RAG:** langchain, chromadb, sentence-transformers  
-**Visualization:** matplotlib, plotly, folium  
+Then continue naturally:
 
-See `python/pyproject.toml` for complete list.
+```
+Now fetch 10 years of GridMET forcing data and extract hydrological signatures.
+```
+
+```
+Train a differentiable HBV model and show me the performance metrics.
+```
+
+```
+Export the full session methods paragraph for my paper.
+```
+
+See [docs/quickstart.md](./docs/quickstart.md) for a complete walkthrough.
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│  VS Code Extension  (TypeScript / React)             │
+│   Chat panel · Settings · Map panel · MCP client     │
+└───────────────────────────┬──────────────────────────┘
+                            │  Model Context Protocol (stdio)
+                            ▼
+┌──────────────────────────────────────────────────────┐
+│  Python MCP Server  (python/mcp_server.py)           │
+│   17 tools · HydroSession · FAIR provenance          │
+└───────┬──────────────┬──────────────┬────────────────┘
+        │              │              │
+   USGS NWIS      GridMET API    pygeohydro
+   NHDPlus         3DEP DEM      CAMELS data
+   NLDI            MODIS         PyTorch HBV
+```
+
+The extension acts as an MCP **client**: when the AI decides to call `delineate_watershed`, it sends a JSON-RPC request to the Python server, which fetches real data from USGS/GridMET/etc. and returns structured results. No code generation needed — just direct tool calls.
+
+Full architecture details: [docs/architecture.md](./docs/architecture.md)
 
 ---
 
 ## Documentation
 
-- **Architecture**: See `AI_HYDRO_COMPLETE_WORKFLOW_ARCHITECTURE.md`
-- **RAG System**: See `AI_HYDRO_RAG_SYSTEM_GUIDE.md`
-- **Developers Guide**: See `AI_HYDRO_TOOLS_AND_WORKFLOWS_DEVELOPER_GUIDE.md`
-
----
-
-## Contributing
-
-To contribute to AI-Hydro, check our [Contributing Guide](CONTRIBUTING.md). Join our [Discord](https://discord.gg/ai-hydro) to discuss in the `#contributors` channel.
-
-### Development Setup
-
-```bash
-# Clone repository
-git clone https://github.com/galib9690/AI-Hydro.git
-cd AI-Hydro
-
-# Install VSCode extension dependencies
-npm install
-
-# Install Python package in editable mode
-cd python
-pip install -e ".[dev]"
-
-# Run tests
-pytest tests/
-```
+| Document                                          | Description                               |
+| ------------------------------------------------- | ----------------------------------------- |
+| [docs/installation.md](./docs/installation.md)       | Platform-specific install guide           |
+| [docs/quickstart.md](./docs/quickstart.md)           | First research session walkthrough        |
+| [docs/tools-reference.md](./docs/tools-reference.md) | All 17 tools with parameters and examples |
+| [docs/architecture.md](./docs/architecture.md)       | System design and data flow               |
+| [CONTRIBUTING.md](./CONTRIBUTING.md)                 | How to contribute                         |
 
 ---
 
@@ -329,36 +236,33 @@ If you use AI-Hydro in your research, please cite:
 
 ```bibtex
 @software{aihydro2025,
-  title = {AI-Hydro: An Intelligent Computational Environment for Hydrology Research},
-  author = {Galib, Mohammad and AI-Hydro Research Team},
-  year = {2025},
-  url = {https://github.com/galib9690/AI-Hydro},
-  version = {0.1.0}
+  title   = {AI-Hydro: An Intelligent Computational Research Platform for Hydrology},
+  author  = {Galib, Mohammad},
+  year    = {2025},
+  url     = {https://github.com/galib9690/AI-Hydro},
+  version = {1.0.0-alpha}
 }
 ```
 
 ---
 
-## License
+## Built on Open Source
 
-[Apache 2.0 © 2025 AI-Hydro Research Team](./LICENSE)
+AI-Hydro is a domain-specific fork of [Cline](https://github.com/cline/cline) (Apache 2.0).
+We are grateful to the Cline team for building the agentic VS Code framework.
+
+Python data access is powered by [HyRiver](https://hyriver.readthedocs.io/) (pygeohydro, pynhd, py3dep, pygridmet) and [PyTorch](https://pytorch.org/).
 
 ---
 
-## Built on Open Source
+## License
 
-AI-Hydro is built on [Cline](https://github.com/cline/cline), an open-source autonomous coding agent. We're grateful to the Cline community for creating the agentic framework that makes domain-specific research assistants like AI-Hydro possible.
+[Apache 2.0](./LICENSE) © 2026 Mohammad Galib
 
 ---
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/galib9690/AI-Hydro/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/galib9690/AI-Hydro/discussions)
+- **Bugs / questions**: [GitHub Issues](https://github.com/galib9690/AI-Hydro/issues)
+- **Ideas**: [GitHub Discussions](https://github.com/galib9690/AI-Hydro/discussions)
 - **Email**: mgalib@purdue.edu
-
----
-
-**Version**: 0.1.0  
-**Last Updated**: January 2025  
-**Maintainer**: Mohammad Galib (mgalib@purdue.edu)

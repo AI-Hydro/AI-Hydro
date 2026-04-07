@@ -1,6 +1,6 @@
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import React, { useCallback, useEffect, useMemo, useRef } from "react"
 import { Virtuoso } from "react-virtuoso"
 import { COLOR_GRAY } from "../colors"
@@ -14,7 +14,7 @@ const BLOCK_GAP = "4px"
 const _TOOLTIP_MARGIN = 32 // 32px margin on each side
 
 interface TaskTimelineProps {
-	messages: ClineMessage[]
+	messages: AiHydroMessage[]
 	onBlockClick?: (messageIndex: number) => void
 }
 

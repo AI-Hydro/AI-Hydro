@@ -6,7 +6,7 @@ import { GIT_DISABLED_SUFFIX } from "./CheckpointGitOperations"
 /**
  * CheckpointExclusions Module
  *
- * A specialized module within Cline's Checkpoints system that manages file exclusion rules
+ * A specialized module within AI-Hydro's Checkpoints system that manages file exclusion rules
  * for the checkpoint tracking process. It provides:
  *
  * File Filtering:
@@ -83,7 +83,7 @@ function getBuildArtifactPatterns(): string[] {
 		".sass-cache/",
 		".vs/",
 		".vscode/",
-		".clinerules/",
+		".aihydrorules/",
 		"Pods/",
 		"__pycache__/",
 		"bin/",

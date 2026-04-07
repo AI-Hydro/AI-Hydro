@@ -121,7 +121,7 @@ export async function migrateTaskHistoryToFile(context: vscode.ExtensionContext)
 }
 
 export async function migrateMcpMarketplaceEnableSetting(mcpMarketplaceEnabledRaw: boolean | undefined): Promise<boolean> {
-	const config = vscode.workspace.getConfiguration("cline")
+	const config = vscode.workspace.getConfiguration("aihydro")
 	const mcpMarketplaceEnabled = config.get<boolean>("mcpMarketplace.enabled")
 	if (mcpMarketplaceEnabled !== undefined) {
 		// Remove from VSCode configuration
@@ -133,7 +133,7 @@ export async function migrateMcpMarketplaceEnableSetting(mcpMarketplaceEnabledRa
 }
 
 export async function migrateEnableCheckpointsSetting(enableCheckpointsSettingRaw: boolean | undefined): Promise<boolean> {
-	const config = vscode.workspace.getConfiguration("cline")
+	const config = vscode.workspace.getConfiguration("aihydro")
 	const enableCheckpoints = config.get<boolean>("enableCheckpoints")
 	if (enableCheckpoints !== undefined) {
 		// Remove from VSCode configuration
@@ -148,9 +148,9 @@ export async function migrateCustomInstructionsToGlobalRules(context: vscode.Ext
 		const customInstructions = (await context.globalState.get("customInstructions")) as string | undefined
 
 		if (customInstructions?.trim()) {
-			console.log("Migrating custom instructions to global Cline rules...")
+			console.log("Migrating custom instructions to global AI-Hydro rules...")
 
-			// Create global .clinerules directory if it doesn't exist
+			// Create global .aihydrorules directory if it doesn't exist
 			const globalRulesDir = await ensureRulesDirectoryExists()
 
 			// Use a fixed filename for custom instructions
@@ -180,7 +180,7 @@ export async function migrateCustomInstructionsToGlobalRules(context: vscode.Ext
 
 			// Remove customInstructions from global state only after successful file creation
 			await context.globalState.update("customInstructions", undefined)
-			console.log("Successfully migrated custom instructions to global Cline rules")
+			console.log("Successfully migrated custom instructions to global AI-Hydro rules")
 		}
 	} catch (error) {
 		console.error("Failed to migrate custom instructions to global rules:", error)

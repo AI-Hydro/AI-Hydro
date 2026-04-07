@@ -1,6 +1,6 @@
 import { Logger } from "@services/logging/Logger"
 import axios from "axios"
-import { ClineAccountService } from "@/services/account/ClineAccountService"
+import { AiHydroAccountService } from "@/services/account/AiHydroAccountService"
 
 // Network error matchers using Map for O(1) lookup
 const NETWORK_ERROR_MAP = new Map<string, string>([
@@ -13,7 +13,7 @@ const NETWORK_ERROR_MAP = new Map<string, string>([
 
 // HTTP status code error messages using Map for O(1) lookup
 const STATUS_ERROR_MAP = new Map<number, string>([
-	[401, "Authentication failed. Please reauthenticate your Cline account"],
+	[401, "Authentication failed. Please reauthenticate your AI-Hydro account"],
 	[402, "Insufficient credits for transcription service."],
 	[500, "Transcription server error. Please try again later."],
 ])
@@ -31,10 +31,10 @@ const BAD_REQUEST_ERROR_PATTERNS = [
 ]
 
 export class VoiceTranscriptionService {
-	private readonly clineAccountService: ClineAccountService
+	private readonly aihydroAccountService: AiHydroAccountService
 
 	constructor() {
-		this.clineAccountService = ClineAccountService.getInstance()
+		this.aihydroAccountService = AiHydroAccountService.getInstance()
 	}
 
 	/**
@@ -102,14 +102,14 @@ export class VoiceTranscriptionService {
 
 	async transcribeAudio(audioBase64: string, language?: string): Promise<{ text?: string; error?: string }> {
 		try {
-			Logger.info("Transcribing audio with Cline transcription service...")
+			Logger.info("Transcribing audio with AI-Hydro transcription service...")
 
 			// Check if using organization account for telemetry
-			const userInfo = await this.clineAccountService.fetchMe()
+			const userInfo = await this.aihydroAccountService.fetchMe()
 			const activeOrg = userInfo?.organizations?.find((org) => org.active)
 			const isOrgAccount = !!activeOrg
 
-			const result = await this.clineAccountService.transcribeAudio(audioBase64, language)
+			const result = await this.aihydroAccountService.transcribeAudio(audioBase64, language)
 
 			Logger.info("Transcription successful")
 

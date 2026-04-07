@@ -1,7 +1,7 @@
 import { ApiHandler } from "@core/api"
 import { execSync } from "child_process"
 import { showSystemNotification } from "@/integrations/notifications"
-import { ClineApiReqCancelReason, ClineApiReqInfo } from "@/shared/ExtensionMessage"
+import { AiHydroApiReqCancelReason, AiHydroApiReqInfo } from "@/shared/ExtensionMessage"
 import { calculateApiCostAnthropic } from "@/utils/cost"
 import { MessageStateHandler } from "./message-state"
 
@@ -27,7 +27,7 @@ type UpdateApiReqMsgParams = {
 	cacheReadTokens: number
 	totalCost?: number
 	api: ApiHandler
-	cancelReason?: ClineApiReqCancelReason
+	cancelReason?: AiHydroApiReqCancelReason
 	streamingFailedMessage?: string
 }
 
@@ -35,11 +35,11 @@ type UpdateApiReqMsgParams = {
 // fortunately api_req_finished was always parsed out for the gui anyways, so it remains solely for legacy purposes to keep track of prices in tasks from history
 // (it's worth removing a few months from now)
 export const updateApiReqMsg = async (params: UpdateApiReqMsgParams) => {
-	const clineMessages = params.messageStateHandler.getClineMessages()
-	const currentApiReqInfo: ClineApiReqInfo = JSON.parse(clineMessages[params.lastApiReqIndex].text || "{}")
+	const aihydroMessages = params.messageStateHandler.getAiHydroMessages()
+	const currentApiReqInfo: AiHydroApiReqInfo = JSON.parse(aihydroMessages[params.lastApiReqIndex].text || "{}")
 	delete currentApiReqInfo.retryStatus // Clear retry status when request is finalized
 
-	await params.messageStateHandler.updateClineMessage(params.lastApiReqIndex, {
+	await params.messageStateHandler.updateAiHydroMessage(params.lastApiReqIndex, {
 		text: JSON.stringify({
 			...currentApiReqInfo, // Spread the modified info (with retryStatus removed)
 			tokensIn: params.inputTokens,
@@ -57,7 +57,7 @@ export const updateApiReqMsg = async (params: UpdateApiReqMsgParams) => {
 				),
 			cancelReason: params.cancelReason,
 			streamingFailedMessage: params.streamingFailedMessage,
-		} satisfies ClineApiReqInfo),
+		} satisfies AiHydroApiReqInfo),
 	})
 }
 

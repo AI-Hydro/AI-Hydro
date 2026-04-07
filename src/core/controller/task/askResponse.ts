@@ -1,6 +1,6 @@
 import { Empty } from "@shared/proto/cline/common"
 import { AskResponseRequest } from "@shared/proto/cline/task"
-import { ClineAskResponse } from "../../../shared/WebviewMessage"
+import { AiHydroAskResponse } from "../../../shared/WebviewMessage"
 import { Controller } from ".."
 
 /**
@@ -17,8 +17,8 @@ export async function askResponse(controller: Controller, request: AskResponseRe
 			return Empty.create()
 		}
 
-		// Map the string responseType to the ClineAskResponse enum
-		let responseType: ClineAskResponse
+		// Map the string responseType to the AiHydroAskResponse enum
+		let responseType: AiHydroAskResponse
 		switch (request.responseType) {
 			case "yesButtonClicked":
 				responseType = "yesButtonClicked"

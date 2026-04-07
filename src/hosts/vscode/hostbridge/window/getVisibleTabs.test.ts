@@ -149,7 +149,7 @@ describe("Hostbridge - Window - getVisibleTabs", () => {
 
 	it("should return all visible tabs including deleted files)", async () => {
 		// Create a temporary file on disk
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "cline-test-"))
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-test-"))
 		const testFilePath = path.join(tempDir, "test-file-to-delete.txt")
 		await fs.writeFile(testFilePath, "This file will be deleted")
 

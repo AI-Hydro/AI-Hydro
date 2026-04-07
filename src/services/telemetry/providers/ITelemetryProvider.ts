@@ -3,7 +3,7 @@
  * Allows switching between different analytics providers (PostHog, etc.)
  */
 
-import type { ClineAccountUserInfo } from "../../auth/AuthService"
+import type { AiHydroAccountUserInfo } from "../../auth/AuthService"
 
 /**
  * JSON-serializable primitive types for telemetry properties
@@ -68,7 +68,7 @@ export interface ITelemetryProvider {
 	 * @param userInfo The user's information
 	 * @param properties Optional additional JSON-serializable properties
 	 */
-	identifyUser(userInfo: ClineAccountUserInfo, properties?: TelemetryProperties): void
+	identifyUser(userInfo: AiHydroAccountUserInfo, properties?: TelemetryProperties): void
 
 	/**
 	 * Update telemetry opt-in/out status

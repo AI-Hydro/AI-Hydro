@@ -35,7 +35,7 @@ export async function deleteRuleFile(controller: Controller, request: RuleFileRe
 	}
 
 	// we refresh inside of the deleteRuleFileImpl(..) call
-	//await refreshClineRulesToggles(controller.context, cwd)
+	//await refreshAiHydroRulesToggles(controller.context, cwd)
 	//await refreshExternalRulesToggles(controller.context, cwd)
 	//await refreshWorkflowToggles(controller.context, cwd)
 	await controller.postStateToWebview()

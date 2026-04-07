@@ -2,17 +2,22 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
+import { FileScanner, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
 import { setupWorkspaceManager } from "@core/workspace/setup"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { cleanupLegacyCheckpoints } from "@integrations/checkpoints/CheckpointMigration"
 import { downloadTask } from "@integrations/misc/export-markdown"
-import { ClineAccountService } from "@services/account/ClineAccountService"
+import { AiHydroAccountService } from "@services/account/AiHydroAccountService"
+import { geoFormatConverter } from "@services/geo/GeoFormatConverter"
+import { GeoConversionError } from "@services/geo/types"
 import { McpHub } from "@services/mcp/McpHub"
+import { RagService } from "@services/rag/RagService"
 import { ApiProvider, ModelInfo } from "@shared/api"
 import { ChatContent } from "@shared/ChatContent"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { McpMarketplaceCatalog } from "@shared/mcp"
+import { MapLayer } from "@shared/proto/cline/map"
 import { Settings } from "@shared/storage/state-keys"
 import { Mode } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
@@ -24,7 +29,7 @@ import pWaitFor from "p-wait-for"
 import * as path from "path"
 import type { FolderLockWithRetryResult } from "src/core/locks/types"
 import * as vscode from "vscode"
-import { ClineEnv } from "@/config"
+import { AiHydroEnv, isAiHydroCloudAccountEnabled } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
 import { AuthService } from "@/services/auth/AuthService"
@@ -48,7 +53,7 @@ import { fetchRemoteConfig } from "../storage/remote-config/fetch"
 import { PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
-import { appendClineStealthModels } from "./models/refreshOpenRouterModels"
+import { appendAiHydroStealthModels } from "./models/refreshOpenRouterModels"
 import { checkCliInstallation } from "./state/checkCliInstallation"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
@@ -63,13 +68,16 @@ export class Controller {
 	task?: Task
 
 	mcpHub: McpHub
-	accountService: ClineAccountService
+	ragService: RagService
+	accountService: AiHydroAccountService
 	authService: AuthService
 	ocaAuthService: OcaAuthService
 	readonly stateManager: StateManager
 
 	// NEW: Add workspace manager (optional initially)
 	private workspaceManager?: WorkspaceRootManager
+	private fileScanner?: FileScanner
+	private workspaceGeoJsonFiles: WorkspaceGeoJsonFile[] = []
 	private backgroundCommandRunning = false
 	private backgroundCommandTaskId?: string
 
@@ -81,6 +89,10 @@ export class Controller {
 
 	// Timer for periodic remote config fetching
 	private remoteConfigTimer?: NodeJS.Timeout
+
+	// Map layer storage and streaming
+	private mapLayers: Map<string, MapLayer> = new Map()
+	private mapLayerSubscribers: Set<(layer: MapLayer) => void> = new Set()
 
 	// Public getter for workspace manager with lazy initialization - To get workspaces when task isn't initialized (Used by file mentions)
 	async ensureWorkspaceManager(): Promise<WorkspaceRootManager | undefined> {
@@ -107,6 +119,10 @@ export class Controller {
 	 * Fetches immediately and then every 30 seconds
 	 */
 	private startRemoteConfigTimer() {
+		if (!isAiHydroCloudAccountEnabled()) {
+			return
+		}
+
 		// Initial fetch
 		fetchRemoteConfig(this).catch((error) => {
 			console.error("Failed to fetch remote config:", error)
@@ -122,8 +138,12 @@ export class Controller {
 
 	constructor(readonly context: vscode.ExtensionContext) {
 		PromptRegistry.getInstance() // Ensure prompts and tools are registered
-		HostProvider.get().logToChannel("ClineProvider instantiated")
+		HostProvider.get().logToChannel("AiHydroProvider instantiated")
 		this.stateManager = StateManager.get()
+		this.ragService = new RagService(context)
+
+		// Initialize workspace GeoJSON file scanner
+		this.initializeFileScanner()
 		StateManager.get().registerCallbacks({
 			onPersistenceError: async ({ error }: PersistenceErrorEvent) => {
 				console.error("[Controller] Cache persistence failed, recovering:", error)
@@ -148,11 +168,12 @@ export class Controller {
 		})
 		this.authService = AuthService.getInstance(this)
 		this.ocaAuthService = OcaAuthService.initialize(this)
-		this.accountService = ClineAccountService.getInstance()
-
-		this.authService.restoreRefreshTokenAndRetrieveAuthInfo().then(() => {
-			this.startRemoteConfigTimer()
-		})
+		this.accountService = AiHydroAccountService.getInstance()
+		if (isAiHydroCloudAccountEnabled()) {
+			this.authService.restoreRefreshTokenAndRetrieveAuthInfo().then(() => {
+				this.startRemoteConfigTimer()
+			})
+		}
 
 		this.mcpHub = new McpHub(
 			() => ensureMcpServersDirectoryExists(),
@@ -182,6 +203,12 @@ export class Controller {
 			this.remoteConfigTimer = undefined
 		}
 
+		// Dispose file scanner
+		if (this.fileScanner) {
+			this.fileScanner.dispose()
+			this.fileScanner = undefined
+		}
+
 		await this.clearTask()
 		this.mcpHub.dispose()
 
@@ -206,7 +233,7 @@ export class Controller {
 			await this.postStateToWebview()
 			HostProvider.window.showMessage({
 				type: ShowMessageType.INFORMATION,
-				message: "Successfully logged out of Cline",
+				message: "Successfully logged out of AI-Hydro",
 			})
 		} catch (_error) {
 			HostProvider.window.showMessage({
@@ -285,6 +312,9 @@ export class Controller {
 		})
 
 		const cwd = this.workspaceManager?.getPrimaryRoot()?.path || (await getCwd(getDesktopDir()))
+
+		// RAG workspace venv check will be done interactively in Task.startTask()
+		// This allows us to ask the user for approval before installation
 
 		const taskId = historyItem?.id || Date.now().toString()
 
@@ -437,7 +467,7 @@ export class Controller {
 				this.task.taskState.abandoned = true
 			}
 			await this.initTask(undefined, undefined, undefined, historyItem) // clears task again, so we need to abortTask manually above
-			// Dont send the state to the webview, the new Cline instance will send state when it's ready.
+			// Dont send the state to the webview, the new AI-Hydro instance will send state when it's ready.
 			// Sending the state here sent an empty messages array to webview leading to virtuoso having to reload the entire list
 		}
 	}
@@ -494,36 +524,8 @@ export class Controller {
 	async handleAuthCallback(customToken: string, provider: string | null = null) {
 		try {
 			await this.authService.handleAuthCallback(customToken, provider ? provider : "google")
-
-			const clineProvider: ApiProvider = "cline"
-
-			// Get current settings to determine how to update providers
-			const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
-
 			const currentMode = this.stateManager.getGlobalSettingsKey("mode")
-
-			// Get current API configuration from cache
-			const currentApiConfiguration = this.stateManager.getApiConfiguration()
-
-			const updatedConfig = { ...currentApiConfiguration }
-
-			if (planActSeparateModelsSetting) {
-				// Only update the current mode's provider
-				if (currentMode === "plan") {
-					updatedConfig.planModeApiProvider = clineProvider
-				} else {
-					updatedConfig.actModeApiProvider = clineProvider
-				}
-			} else {
-				// Update both modes to keep them in sync
-				updatedConfig.planModeApiProvider = clineProvider
-				updatedConfig.actModeApiProvider = clineProvider
-			}
-
-			// Update the API configuration through cache service
-			this.stateManager.setApiConfiguration(updatedConfig)
-
-			// Mark welcome view as completed since user has successfully logged in
+			const updatedConfig = this.stateManager.getApiConfiguration()
 			this.stateManager.setGlobalState("welcomeViewCompleted", true)
 
 			if (this.task) {
@@ -535,7 +537,7 @@ export class Controller {
 			console.error("Failed to handle auth callback:", error)
 			HostProvider.window.showMessage({
 				type: ShowMessageType.ERROR,
-				message: "Failed to log in to Cline",
+				message: "Failed to log in to AI-Hydro",
 			})
 			// Even on login failure, we preserve any existing tokens
 			// Only clear tokens on explicit logout
@@ -545,36 +547,8 @@ export class Controller {
 	async handleOcaAuthCallback(code: string, state: string) {
 		try {
 			await this.ocaAuthService.handleAuthCallback(code, state)
-
-			const ocaProvider: ApiProvider = "oca"
-
-			// Get current settings to determine how to update providers
-			const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
-
 			const currentMode = this.stateManager.getGlobalSettingsKey("mode")
-
-			// Get current API configuration from cache
-			const currentApiConfiguration = this.stateManager.getApiConfiguration()
-
-			const updatedConfig = { ...currentApiConfiguration }
-
-			if (planActSeparateModelsSetting) {
-				// Only update the current mode's provider
-				if (currentMode === "plan") {
-					updatedConfig.planModeApiProvider = ocaProvider
-				} else {
-					updatedConfig.actModeApiProvider = ocaProvider
-				}
-			} else {
-				// Update both modes to keep them in sync
-				updatedConfig.planModeApiProvider = ocaProvider
-				updatedConfig.actModeApiProvider = ocaProvider
-			}
-
-			// Update the API configuration through cache service
-			this.stateManager.setApiConfiguration(updatedConfig)
-
-			// Mark welcome view as completed since user has successfully logged in
+			const updatedConfig = this.stateManager.getApiConfiguration()
 			this.stateManager.setGlobalState("welcomeViewCompleted", true)
 
 			if (this.task) {
@@ -601,7 +575,7 @@ export class Controller {
 	// MCP Marketplace
 	private async fetchMcpMarketplaceFromApi(silent: boolean = false): Promise<McpMarketplaceCatalog | undefined> {
 		try {
-			const response = await axios.get(`${ClineEnv.config().mcpBaseUrl}/marketplace`, {
+			const response = await axios.get(`${AiHydroEnv.config().mcpBaseUrl}/marketplace`, {
 				headers: {
 					"Content-Type": "application/json",
 				},
@@ -638,10 +612,10 @@ export class Controller {
 
 	private async fetchMcpMarketplaceFromApiRPC(silent: boolean = false): Promise<McpMarketplaceCatalog | undefined> {
 		try {
-			const response = await axios.get(`${ClineEnv.config().mcpBaseUrl}/marketplace`, {
+			const response = await axios.get(`${AiHydroEnv.config().mcpBaseUrl}/marketplace`, {
 				headers: {
 					"Content-Type": "application/json",
-					"User-Agent": "cline-vscode-extension",
+					"User-Agent": "aihydro-vscode-extension",
 				},
 			})
 
@@ -740,7 +714,7 @@ export class Controller {
 				const fileContents = await fs.readFile(openRouterModelsFilePath, "utf8")
 				const models = JSON.parse(fileContents)
 				// Append stealth models
-				return appendClineStealthModels(models)
+				return appendAiHydroStealthModels(models)
 			}
 		} catch (error) {
 			console.error("Error reading cached OpenRouter models:", error)
@@ -841,7 +815,7 @@ export class Controller {
 		const telemetrySetting = this.stateManager.getGlobalSettingsKey("telemetrySetting")
 		const planActSeparateModelsSetting = this.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
 		const enableCheckpointsSetting = this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting")
-		const globalClineRulesToggles = this.stateManager.getGlobalSettingsKey("globalClineRulesToggles")
+		const globalAiHydroRulesToggles = this.stateManager.getGlobalSettingsKey("globalAiHydroRulesToggles")
 		const globalWorkflowToggles = this.stateManager.getGlobalSettingsKey("globalWorkflowToggles")
 		const shellIntegrationTimeout = this.stateManager.getGlobalSettingsKey("shellIntegrationTimeout")
 		const terminalReuseEnabled = this.stateManager.getGlobalStateKey("terminalReuseEnabled")
@@ -862,14 +836,14 @@ export class Controller {
 		const lastDismissedCliBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedCliBannerVersion") || 0
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
 
-		const localClineRulesToggles = this.stateManager.getWorkspaceStateKey("localClineRulesToggles")
+		const localAiHydroRulesToggles = this.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
 		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
 		const localCursorRulesToggles = this.stateManager.getWorkspaceStateKey("localCursorRulesToggles")
 		const workflowToggles = this.stateManager.getWorkspaceStateKey("workflowToggles")
 		const autoCondenseThreshold = this.stateManager.getGlobalSettingsKey("autoCondenseThreshold")
 
 		const currentTaskItem = this.task?.taskId ? (taskHistory || []).find((item) => item.id === this.task?.taskId) : undefined
-		const clineMessages = this.task?.messageStateHandler.getClineMessages() || []
+		const aihydroMessages = this.task?.messageStateHandler.getAiHydroMessages() || []
 		const checkpointManagerErrorMessage = this.task?.taskState.checkpointManagerErrorMessage
 
 		const processedTaskHistory = (taskHistory || [])
@@ -882,7 +856,7 @@ export class Controller {
 		const platform = process.platform as Platform
 		const distinctId = getDistinctId()
 		const version = ExtensionRegistryInfo.version
-		const environment = ClineEnv.config().environment
+		const environment = AiHydroEnv.config().environment
 
 		// Set feature flag in dictation settings based on platform
 		const updatedDictationSettings = {
@@ -894,7 +868,7 @@ export class Controller {
 			version,
 			apiConfiguration,
 			currentTaskItem,
-			clineMessages,
+			aihydroMessages,
 			currentFocusChainChecklist: this.task?.taskState.currentFocusChainChecklist || null,
 			checkpointManagerErrorMessage,
 			autoApprovalSettings,
@@ -916,8 +890,8 @@ export class Controller {
 			platform,
 			environment,
 			distinctId,
-			globalClineRulesToggles: globalClineRulesToggles || {},
-			localClineRulesToggles: localClineRulesToggles || {},
+			globalAiHydroRulesToggles: globalAiHydroRulesToggles || {},
+			localAiHydroRulesToggles: localAiHydroRulesToggles || {},
 			localWindsurfRulesToggles: localWindsurfRulesToggles || {},
 			localCursorRulesToggles: localCursorRulesToggles || {},
 			localWorkflowToggles: workflowToggles || {},
@@ -971,12 +945,12 @@ export class Controller {
 	// Caching mechanism to keep track of webview messages + API conversation history per provider instance
 
 	/*
-	Now that we use retainContextWhenHidden, we don't have to store a cache of cline messages in the user's state, but we could to reduce memory footprint in long conversations.
+	Now that we use retainContextWhenHidden, we don't have to store a cache of aihydro messages in the user's state, but we could to reduce memory footprint in long conversations.
 
-	- We have to be careful of what state is shared between ClineProvider instances since there could be multiple instances of the extension running at once. For example when we cached cline messages using the same key, two instances of the extension could end up using the same key and overwriting each other's messages.
+	- We have to be careful of what state is shared between AiHydroProvider instances since there could be multiple instances of the extension running at once. For example when we cached cline messages using the same key, two instances of the extension could end up using the same key and overwriting each other's messages.
 	- Some state does need to be shared between the instances, i.e. the API key--however there doesn't seem to be a good way to notify the other instances that the API key has changed.
 
-	We need to use a unique identifier for each ClineProvider instance's message cache since we could be running several instances of the extension outside of just the sidebar i.e. in editor panels.
+	We need to use a unique identifier for each AiHydroProvider instance's message cache since we could be running several instances of the extension outside of just the sidebar i.e. in editor panels.
 
 	// conversation history to send in API requests
 
@@ -996,5 +970,317 @@ export class Controller {
 		}
 		this.stateManager.setGlobalState("taskHistory", history)
 		return history
+	}
+
+	// Map layer management methods
+
+	/**
+	 * Add or update a map layer
+	 * @param layer The layer to add/update
+	 */
+	addMapLayer(layer: MapLayer): void {
+		console.log(`[Controller] Adding map layer: ${layer.id}`)
+		this.mapLayers.set(layer.id, layer)
+		this.notifyMapLayerSubscribers(layer)
+	}
+
+	private notifyMapLayerSubscribers(layer: MapLayer): void {
+		this.mapLayerSubscribers.forEach((subscriber) => {
+			try {
+				subscriber(layer)
+			} catch (error) {
+				console.error("[Controller] Error notifying layer subscriber:", error)
+			}
+		})
+	}
+
+	/**
+	 * Remove a map layer
+	 * @param layerId The ID of the layer to remove
+	 */
+	removeMapLayer(layerId: string): void {
+		console.log(`[Controller] Removing map layer: ${layerId}`)
+
+		const wasRemoved = this.mapLayers.delete(layerId)
+		if (!wasRemoved) {
+			return
+		}
+
+		this.notifyMapLayerSubscribers(
+			MapLayer.create({
+				id: layerId,
+				metadata: { __operation: "remove" },
+				visible: false,
+			}),
+		)
+	}
+
+	/**
+	 * Clear all map layers
+	 */
+	clearMapLayers(): void {
+		console.log("[Controller] Clearing all map layers")
+
+		if (this.mapLayers.size === 0) {
+			return
+		}
+
+		this.mapLayers.clear()
+		this.notifyMapLayerSubscribers(
+			MapLayer.create({
+				id: `__map_event_clear_${Date.now()}`,
+				metadata: { __operation: "clear" },
+				visible: false,
+			}),
+		)
+	}
+
+	/**
+	 * Get all map layers
+	 * @returns Array of all current map layers
+	 */
+	getMapLayers(): MapLayer[] {
+		return Array.from(this.mapLayers.values())
+	}
+
+	/**
+	 * Subscribe to map layer updates
+	 * @param callback Function to call when a layer is added/updated
+	 * @returns Unsubscribe function
+	 */
+	subscribeToMapLayerUpdates(callback: (layer: MapLayer) => void): () => void {
+		console.log("[Controller] New layer subscription added")
+		this.mapLayerSubscribers.add(callback)
+
+		// Return unsubscribe function
+		return () => {
+			console.log("[Controller] Layer subscription removed")
+			this.mapLayerSubscribers.delete(callback)
+		}
+	}
+
+	// Workspace GeoJSON file scanner methods
+
+	/**
+	 * Initialize the workspace GeoJSON file scanner
+	 */
+	private async initializeFileScanner(): Promise<void> {
+		// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required
+		const workspaceFolders = vscode.workspace.workspaceFolders
+		if (!workspaceFolders || workspaceFolders.length === 0) {
+			console.log("[Controller] No workspace folders, skipping file scanner initialization")
+			return
+		}
+
+		try {
+			this.fileScanner = new FileScanner()
+			await this.fileScanner.initialize(workspaceFolders)
+
+			// Set up callback for file changes
+			this.fileScanner.onFilesChanged((files) => {
+				console.log(`[Controller] Workspace GeoJSON files updated: ${files.length} files`)
+				this.workspaceGeoJsonFiles = files
+			})
+
+			// Store initial files
+			this.workspaceGeoJsonFiles = this.fileScanner.getFiles()
+			console.log(`[Controller] File scanner initialized with ${this.workspaceGeoJsonFiles.length} GeoJSON files`)
+		} catch (error) {
+			console.error("[Controller] Failed to initialize file scanner:", error)
+		}
+	}
+
+	/**
+	 * Get list of workspace GeoJSON files
+	 */
+	getWorkspaceGeoJsonFiles(): WorkspaceGeoJsonFile[] {
+		return this.workspaceGeoJsonFiles
+	}
+
+	/**
+	 * Read GeoJSON content from a workspace file
+	 */
+	async readWorkspaceGeoJson(file: WorkspaceGeoJsonFile): Promise<string> {
+		if (!this.fileScanner) {
+			throw new Error("File scanner not initialized")
+		}
+		return await this.fileScanner.readGeoJson(file)
+	}
+
+	/**
+	 * Manually refresh workspace GeoJSON files
+	 */
+	async refreshWorkspaceGeoJsonFiles(): Promise<void> {
+		if (this.fileScanner) {
+			await this.fileScanner.refresh()
+			this.workspaceGeoJsonFiles = this.fileScanner.getFiles()
+		}
+	}
+
+	/**
+	 * Load all workspace geo data files as hidden map layers
+	 * Supports multiple formats: GeoJSON, KML, GPX, TopoJSON, FlatGeobuf, Shapefiles
+	 * Called when map panel opens to auto-discover workspace files
+	 */
+	async loadWorkspaceGeoJsonLayers(): Promise<void> {
+		console.log(`[Controller] Loading ${this.workspaceGeoJsonFiles.length} workspace geo data files as map layers`)
+
+		for (const file of this.workspaceGeoJsonFiles) {
+			try {
+				let geojsonContent: string
+				let originalFormat = "geojson"
+
+				// Check if file requires format conversion
+				if (file.requiresConversion) {
+					console.log(`[Controller] Converting ${file.extension} file: ${file.name}`)
+
+					// Special handling for shapefiles - need to read companion files
+					if (file.extension.toLowerCase() === ".shp") {
+						// Shapefile requires .shp, .shx, and .dbf files
+						const basePath = file.uri.fsPath.replace(/\.shp$/i, "")
+						const shpPath = `${basePath}.shp`
+						const shxPath = `${basePath}.shx`
+						const dbfPath = `${basePath}.dbf`
+						const prjPath = `${basePath}.prj`
+
+						console.log(`[Controller] Reading shapefile components from: ${basePath}`)
+
+						// Read all required files
+						const shpBuffer = await fs.readFile(shpPath)
+						const shxBuffer = await fs.readFile(shxPath)
+						const dbfBuffer = await fs.readFile(dbfPath)
+
+						// PRJ file is optional
+						let prjContent: string | undefined
+						try {
+							prjContent = await fs.readFile(prjPath, "utf8")
+						} catch (error) {
+							console.log(`[Controller] No .prj file found (optional)`)
+						}
+
+						// Combine into object for shpjs
+						const shapefileData = {
+							shp: shpBuffer,
+							shx: shxBuffer,
+							dbf: dbfBuffer,
+							prj: prjContent,
+						}
+
+						// Convert using the combined data
+						const conversionResult = await geoFormatConverter.convert(shapefileData as any, file.extension, {
+							includeStyles: true,
+						})
+
+						geojsonContent = JSON.stringify(conversionResult.geojson)
+						originalFormat = conversionResult.metadata.originalFormat
+
+						console.log(
+							`[Controller] Successfully converted shapefile to GeoJSON (${conversionResult.metadata.featureCount} features)`,
+						)
+					} else {
+						// For other formats, determine if we need buffer or string
+						const needsBuffer = [".fgb"].includes(file.extension.toLowerCase())
+
+						// Read raw file content
+						let rawContent: string | Buffer
+						if (needsBuffer) {
+							// Read as Buffer for binary formats (flatgeobuf)
+							const fileBuffer = await fs.readFile(file.uri.fsPath)
+							rawContent = fileBuffer
+						} else {
+							// Read as string for text formats (KML, GPX, TopoJSON)
+							rawContent = await this.readWorkspaceGeoJson(file)
+						}
+
+						// Convert to GeoJSON
+						try {
+							const conversionResult = await geoFormatConverter.convert(rawContent, file.extension, {
+								includeStyles: true,
+							})
+
+							geojsonContent = JSON.stringify(conversionResult.geojson)
+							originalFormat = conversionResult.metadata.originalFormat
+
+							console.log(
+								`[Controller] Successfully converted ${file.extension} to GeoJSON (${conversionResult.metadata.featureCount} features)`,
+							)
+						} catch (conversionError) {
+							if (conversionError instanceof GeoConversionError) {
+								console.error(`[Controller] Conversion failed for ${file.name}:`, conversionError.message)
+								throw conversionError
+							}
+							throw conversionError
+						}
+					}
+				} else {
+					// Already GeoJSON, read directly
+					geojsonContent = await this.readWorkspaceGeoJson(file)
+				}
+
+				// Parse to validate
+				const geojson = JSON.parse(geojsonContent)
+
+				// Generate layer ID from file path
+				const layerId = `workspace_${file.relativePath.replace(/[^a-zA-Z0-9]/g, "_")}`
+
+				// Determine format icon for display
+				const formatIcon = this.getFormatIcon(file.extension)
+
+				// Create MapLayer with workspace metadata
+				const layer = {
+					id: layerId,
+					name: file.name,
+					layerType: "geojson" as const,
+					geojson: geojsonContent,
+					visible: false, // Hidden by default as requested
+					style: {
+						fillColor: "#0066CC",
+						fillOpacity: 0.5,
+						color: "#0066CC",
+						strokeColor: "#0066CC",
+						strokeWidth: 3,
+						weight: 3,
+						opacity: 1,
+					},
+					metadata: {
+						source: "workspace",
+						path: file.relativePath,
+						lastModified: file.lastModified.toString(),
+						originalFormat,
+						formatIcon,
+					},
+				}
+
+				// Add layer to controller (this will notify subscribers)
+				this.addMapLayer(layer)
+
+				console.log(`[Controller] Added workspace layer: ${file.name} (${originalFormat}, hidden by default)`)
+			} catch (error) {
+				console.error(`[Controller] Failed to load workspace file ${file.relativePath}:`, error)
+				// Continue with next file instead of stopping completely
+			}
+		}
+	}
+
+	/**
+	 * Get display icon for geo data format
+	 */
+	private getFormatIcon(extension: string): string {
+		const ext = extension.toLowerCase()
+		switch (ext) {
+			case ".kml":
+				return "🗺️"
+			case ".gpx":
+				return "📍"
+			case ".topojson":
+			case ".topo.json":
+				return "🗾"
+			case ".fgb":
+				return "📦"
+			case ".shp":
+				return "🔷"
+			default:
+				return "📁"
+		}
 	}
 }

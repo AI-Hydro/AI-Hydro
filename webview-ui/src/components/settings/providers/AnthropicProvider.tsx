@@ -1,5 +1,6 @@
 import { anthropicModels, CLAUDE_SONNET_1M_SUFFIX } from "@shared/api"
 import { Mode } from "@shared/storage/types"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { BaseUrlField } from "../common/BaseUrlField"
@@ -9,6 +10,7 @@ import { ModelSelector } from "../common/ModelSelector"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
+import { useDynamicProviderModels } from "../utils/useDynamicProviderModels"
 
 // Anthropic models that support thinking/reasoning mode
 export const SUPPORTED_ANTHROPIC_THINKING_MODELS = [
@@ -40,6 +42,18 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 
 	// Get the normalized configuration
 	const { selectedModelId, selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, currentMode)
+	const {
+		models: dynamicAnthropicModels,
+		refresh: refreshAnthropicModels,
+		isLoading: isLoadingAnthropicModels,
+	} = useDynamicProviderModels({
+		baseUrl: apiConfiguration?.anthropicBaseUrl || "https://api.anthropic.com",
+		apiKey: apiConfiguration?.apiKey,
+		fallbackModels: anthropicModels,
+		selectedModelId,
+		selectedModelInfo,
+		enabled: showModelOptions,
+	})
 
 	// Helper function for model switching
 	const handleModelChange = (modelId: string) => {
@@ -66,7 +80,7 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 				<>
 					<ModelSelector
 						label="Model"
-						models={anthropicModels}
+						models={dynamicAnthropicModels}
 						onChange={(e) =>
 							handleModeFieldChange(
 								{ plan: "planModeApiModelId", act: "actModeApiModelId" },
@@ -76,6 +90,9 @@ export const AnthropicProvider = ({ showModelOptions, isPopup, currentMode }: An
 						}
 						selectedModelId={selectedModelId}
 					/>
+					<VSCodeButton disabled={isLoadingAnthropicModels} onClick={() => refreshAnthropicModels()}>
+						{isLoadingAnthropicModels ? "Refreshing..." : "Refresh Anthropic models"}
+					</VSCodeButton>
 
 					{/* Context window switcher for Claude Sonnet 4.5 */}
 					<ContextWindowSwitcher

@@ -1,22 +1,22 @@
 {
-	"name": "claude-dev",
-	"displayName": "Cline",
-	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
-	"version": "3.33.1",
+	"name": "ai-hydro",
+	"displayName": "AI-Hydro",
+	"description": "Intelligent computational research platform for hydrology. Execute CAMELS workflows, analyze watersheds, run hydrological models, and leverage domain-specific AI for reproducible Earth-system science.",
+	"version": "1.0.0-alpha.1",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0"
 	},
 	"author": {
-		"name": "Cline Bot Inc."
+		"name": "AI-Hydro Research Team"
 	},
 	"license": "Apache-2.0",
-	"publisher": "saoudrizwan",
+	"publisher": "aihydro",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/cline/cline"
+		"url": "https://github.com/galib9690/AI-Hydro"
 	},
-	"homepage": "https://cline.bot",
+	"homepage": "https://github.com/galib9690/AI-Hydro",
 	"categories": [
 		"AI",
 		"Chat",
@@ -26,18 +26,21 @@
 		"Testing"
 	],
 	"keywords": [
-		"cline",
-		"claude",
-		"dev",
-		"mcp",
-		"openrouter",
-		"coding",
-		"agent",
-		"autonomous",
-		"chatgpt",
-		"sonnet",
+		"hydrology",
+		"CAMELS",
+		"watershed",
+		"streamflow",
+		"USGS",
+		"SWAT",
+		"hydrological-modeling",
+		"computational-hydrology",
+		"earth-science",
+		"geospatial",
+		"python",
+		"research",
 		"ai",
-		"llama"
+		"rag",
+		"mcp"
 	],
 	"activationEvents": [
 		"onLanguage",
@@ -48,22 +51,22 @@
 	"contributes": {
 		"walkthroughs": [
 			{
-				"id": "ClineWalkthrough",
-				"title": "Meet Cline, your new coding partner",
-				"description": "Cline codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
+				"id": "AIHydroWalkthrough",
+				"title": "Meet AI-Hydro, your computational hydrology research assistant",
+				"description": "AI-Hydro understands hydrology, works with CAMELS data, and executes reproducible workflows. Here are 5 ways to accelerate your research:",
 				"steps": [
 					{
 						"id": "welcome",
 						"title": "Start with a Goal, Not Just a Prompt",
-						"description": "Tell Cline what you want to achieve. It plans, asks, and then codes, like a true partner.",
+						"description": "Tell AI-Hydro what you want to achieve. It plans, asks, and then codes, like a true partner.",
 						"media": {
 							"markdown": "walkthrough/step1.md"
 						}
 					},
 					{
 						"id": "learn",
-						"title": "Let Cline Learn Your Codebase",
-						"description": "Point Cline to your project. It builds understanding to make smart, context-aware changes.",
+						"title": "Let AI-Hydro Learn Your Codebase",
+						"description": "Point AI-Hydro to your project. It builds understanding to make smart, context-aware changes.",
 						"media": {
 							"markdown": "walkthrough/step2.md"
 						}
@@ -71,7 +74,7 @@
 					{
 						"id": "advanced-features",
 						"title": "Always Use the Best AI Models",
-						"description": "Cline empowers you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
+						"description": "AI-Hydro empowers you with state-of-the-art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
 						"media": {
 							"markdown": "walkthrough/step3.md"
 						}
@@ -87,7 +90,7 @@
 					{
 						"id": "getting-started",
 						"title": "You're Always in Control",
-						"description": "Review Cline's plans and diffs. Approve changes before they happen. No surprises.",
+						"description": "Review AI-Hydro's plans and diffs. Approve changes before they happen. No surprises.",
 						"media": {
 							"markdown": "walkthrough/step5.md"
 						},
@@ -101,17 +104,17 @@
 		"viewsContainers": {
 			"activitybar": [
 				{
-					"id": "claude-dev-ActivityBar",
-					"title": "Cline",
+					"id": "ai-hydro-ActivityBar",
+					"title": "AI-Hydro",
 					"icon": "assets/icons/icon.svg"
 				}
 			]
 		},
 		"views": {
-			"claude-dev-ActivityBar": [
+			"ai-hydro-ActivityBar": [
 				{
 					"type": "webview",
-					"id": "claude-dev.SidebarProvider",
+					"id": "aihydro.SidebarProvider",
 					"name": "",
 					"icon": "assets/icons/icon.svg"
 				}
@@ -119,90 +122,95 @@
 		},
 		"commands": [
 			{
-				"command": "cline.plusButtonClicked",
-				"title": "New Task",
+				"command": "aihydro.plusButtonClicked",
+				"title": "New Analysis",
 				"icon": "$(add)"
 			},
 			{
-				"command": "cline.mcpButtonClicked",
-				"title": "MCP Servers",
+				"command": "aihydro.mcpButtonClicked",
+				"title": "Hydro Tools & Data Sources",
 				"icon": "$(server)"
 			},
 			{
-				"command": "cline.historyButtonClicked",
-				"title": "History",
+				"command": "aihydro.mapButtonClicked",
+				"title": "Map View",
+				"icon": "$(map)"
+			},
+			{
+				"command": "aihydro.historyButtonClicked",
+				"title": "Analysis History",
 				"icon": "$(history)"
 			},
 			{
-				"command": "cline.accountButtonClicked",
-				"title": "Account",
-				"icon": "$(account)"
-			},
-			{
-				"command": "cline.settingsButtonClicked",
+				"command": "aihydro.settingsButtonClicked",
 				"title": "Settings",
 				"icon": "$(settings-gear)"
 			},
 			{
-				"command": "cline.dev.createTestTasks",
+				"command": "aihydro.dev.createTestTasks",
 				"title": "Create Test Tasks",
-				"category": "Cline",
-				"when": "cline.isDevMode"
+				"category": "AI-Hydro",
+				"when": "aihydro.isDevMode"
 			},
 			{
-				"command": "cline.addToChat",
-				"title": "Add to Cline",
-				"category": "Cline"
+				"command": "aihydro.addToChat",
+				"title": "Add to AI-Hydro Context",
+				"category": "AI-Hydro"
 			},
 			{
-				"command": "cline.addTerminalOutputToChat",
-				"title": "Add to Cline",
-				"category": "Cline"
+				"command": "aihydro.addTerminalOutputToChat",
+				"title": "Add to AI-Hydro",
+				"category": "AI-Hydro"
 			},
 			{
-				"command": "cline.focusChatInput",
+				"command": "aihydro.focusChatInput",
 				"title": "Jump to Chat Input",
-				"category": "Cline"
+				"category": "AI-Hydro"
 			},
 			{
-				"command": "cline.generateGitCommitMessage",
-				"title": "Generate Commit Message with Cline",
-				"category": "Cline",
+				"command": "aihydro.generateGitCommitMessage",
+				"title": "Generate Commit Message with AI-Hydro",
+				"category": "AI-Hydro",
 				"icon": {
 					"light": "assets/icons/robot_panel_light.png",
 					"dark": "assets/icons/robot_panel_dark.png"
 				}
 			},
 			{
-				"command": "cline.abortGitCommitMessage",
-				"title": "Generate Commit Message with Cline - Stop",
-				"category": "Cline",
+				"command": "aihydro.abortGitCommitMessage",
+				"title": "Generate Commit Message with AI-Hydro - Stop",
+				"category": "AI-Hydro",
 				"icon": "$(debug-stop)"
 			},
 			{
-				"command": "cline.explainCode",
-				"title": "Explain with Cline",
-				"category": "Cline"
+				"command": "aihydro.explainCode",
+				"title": "Explain Analysis with AI-Hydro",
+				"category": "AI-Hydro"
 			},
 			{
-				"command": "cline.improveCode",
-				"title": "Improve with Cline",
-				"category": "Cline"
+				"command": "aihydro.improveCode",
+				"title": "Improve Analysis with AI-Hydro",
+				"category": "AI-Hydro"
 			},
 			{
-				"command": "cline.openWalkthrough",
+				"command": "aihydro.openWalkthrough",
 				"title": "Open Walkthrough",
-				"category": "Cline"
+				"category": "AI-Hydro"
 			},
 			{
-				"command": "cline.reconstructTaskHistory",
-				"title": "Reconstruct Task History",
-				"category": "Cline"
+				"command": "aihydro.reconstructTaskHistory",
+				"title": "Reconstruct Analysis History",
+				"category": "AI-Hydro"
+			},
+			{
+				"command": "aihydro.loadGeojsonToMap",
+				"title": "Load GeoJSON to Map",
+				"category": "AI-Hydro"
 			}
 		],
 		"keybindings": [
 			{
-				"command": "cline.addToChat",
+				"command": "aihydro.addToChat",
 				"key": "cmd+'",
 				"mac": "cmd+'",
 				"win": "ctrl+'",
@@ -210,11 +218,11 @@
 				"when": "editorHasSelection"
 			},
 			{
-				"command": "cline.generateGitCommitMessage",
+				"command": "aihydro.generateGitCommitMessage",
 				"when": "config.git.enabled && scmProvider == git"
 			},
 			{
-				"command": "cline.focusChatInput",
+				"command": "aihydro.focusChatInput",
 				"key": "cmd+'",
 				"mac": "cmd+'",
 				"win": "ctrl+'",
@@ -225,69 +233,69 @@
 		"menus": {
 			"view/title": [
 				{
-					"command": "cline.plusButtonClicked",
+					"command": "aihydro.plusButtonClicked",
 					"group": "navigation@1",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == aihydro.SidebarProvider"
 				},
 				{
-					"command": "cline.mcpButtonClicked",
+					"command": "aihydro.mcpButtonClicked",
 					"group": "navigation@2",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == aihydro.SidebarProvider"
 				},
 				{
-					"command": "cline.historyButtonClicked",
+					"command": "aihydro.mapButtonClicked",
 					"group": "navigation@3",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == aihydro.SidebarProvider"
 				},
 				{
-					"command": "cline.accountButtonClicked",
+					"command": "aihydro.historyButtonClicked",
+					"group": "navigation@4",
+					"when": "view == aihydro.SidebarProvider"
+				},
+				{
+					"command": "aihydro.settingsButtonClicked",
 					"group": "navigation@5",
-					"when": "view == claude-dev.SidebarProvider"
-				},
-				{
-					"command": "cline.settingsButtonClicked",
-					"group": "navigation@6",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == aihydro.SidebarProvider"
 				}
 			],
 			"editor/context": [
 				{
-					"command": "cline.addToChat",
+					"command": "aihydro.addToChat",
 					"group": "navigation",
 					"when": "editorHasSelection"
 				}
 			],
 			"terminal/context": [
 				{
-					"command": "cline.addTerminalOutputToChat",
+					"command": "aihydro.addTerminalOutputToChat",
 					"group": "navigation"
 				}
 			],
 			"scm/title": [
 				{
-					"command": "cline.generateGitCommitMessage",
+					"command": "aihydro.generateGitCommitMessage",
 					"group": "navigation",
-					"when": "config.git.enabled && scmProvider == git && !cline.isGeneratingCommit"
+					"when": "config.git.enabled && scmProvider == git && !aihydro.isGeneratingCommit"
 				},
 				{
-					"command": "cline.abortGitCommitMessage",
+					"command": "aihydro.abortGitCommitMessage",
 					"group": "navigation",
-					"when": "config.git.enabled && scmProvider == git && cline.isGeneratingCommit"
+					"when": "config.git.enabled && scmProvider == git && aihydro.isGeneratingCommit"
 				}
 			],
 			"commandPalette": [
 				{
-					"command": "cline.generateGitCommitMessage",
-					"when": "config.git.enabled && scmProvider == git && !cline.isGeneratingCommit"
+					"command": "aihydro.generateGitCommitMessage",
+					"when": "config.git.enabled && scmProvider == git && !aihydro.isGeneratingCommit"
 				},
 				{
-					"command": "cline.abortGitCommitMessage",
-					"when": "config.git.enabled && scmProvider == git && cline.isGeneratingCommit"
+					"command": "aihydro.abortGitCommitMessage",
+					"when": "config.git.enabled && scmProvider == git && aihydro.isGeneratingCommit"
 				}
 			]
 		},
 		"configuration": {
-			"title": "Cline",
+			"title": "AI-Hydro",
 			"properties": {}
 		}
 	},
@@ -318,7 +326,7 @@
 		"clean:all": "npm run clean:build && npm run clean:deps",
 		"compile-tests": "node ./scripts/build-tests.js",
 		"watch-tests": "tsc -p . -w --outDir out",
-		"check-types": "npm run protos && npx tsc --noEmit && cd webview-ui && npx tsc -b --noEmit",
+		"check-types": "npm run protos && npx tsc --noEmit && cd webview-ui && npx tsc --noEmit",
 		"lint": "biome lint --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && buf lint",
 		"format": "biome format --changed --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error",
 		"format:fix": "biome check --changed --no-errors-on-unmatched --files-ignore-unknown=true --write",
@@ -376,7 +384,7 @@
 		"@types/vscode": "1.84.0",
 		"@vscode/test-cli": "^0.0.10",
 		"@vscode/test-electron": "^2.5.2",
-		"@vscode/vsce": "^3.6.0",
+		"@vscode/vsce": "^3.6.2",
 		"c8": "^10.1.3",
 		"chai": "^4.3.10",
 		"chalk": "5.6.2",
@@ -411,6 +419,7 @@
 		"@google/genai": "^1.11.0",
 		"@grpc/grpc-js": "^1.9.15",
 		"@grpc/reflection": "^1.0.4",
+		"@mapbox/togeojson": "^0.16.2",
 		"@mistralai/mistralai": "^1.5.0",
 		"@modelcontextprotocol/sdk": "^1.11.1",
 		"@opentelemetry/api": "^1.9.0",
@@ -439,6 +448,7 @@
 		"@streamparser/json": "^0.0.22",
 		"@types/uuid": "^10.0.0",
 		"@vscode/codicons": "^0.0.36",
+		"@xmldom/xmldom": "^0.8.11",
 		"archiver": "^7.0.1",
 		"axios": "^1.12.0",
 		"better-sqlite3": "^12.4.1",
@@ -452,6 +462,7 @@
 		"execa": "^9.5.2",
 		"fast-deep-equal": "^3.1.3",
 		"firebase": "^11.2.0",
+		"flatgeobuf": "^3.24.1",
 		"fzf": "^0.5.2",
 		"get-folder-size": "^5.0.0",
 		"globby": "^14.0.2",
@@ -479,8 +490,10 @@
 		"puppeteer-core": "^23.4.0",
 		"reconnecting-eventsource": "^1.6.4",
 		"serialize-error": "^11.0.3",
+		"shpjs": "^4.0.4",
 		"simple-git": "^3.27.0",
 		"strip-ansi": "^7.1.2",
+		"topojson-client": "^3.1.0",
 		"tree-sitter-wasms": "^0.1.11",
 		"ts-morph": "^25.0.1",
 		"turndown": "^7.2.0",

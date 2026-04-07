@@ -64,7 +64,7 @@ export async function generateCommitMessage(stateManager: StateManager, scm?: vs
 
 async function performCommitGeneration(stateManager: StateManager, gitDiff: string, inputBox: any) {
 	try {
-		vscode.commands.executeCommand("setContext", "cline.isGeneratingCommit", true)
+		vscode.commands.executeCommand("setContext", "aihydro.isGeneratingCommit", true)
 
 		const prompts = [PROMPT.instruction]
 
@@ -113,13 +113,13 @@ async function performCommitGeneration(stateManager: StateManager, gitDiff: stri
 			message: `Failed to generate commit message: ${errorMessage}`,
 		})
 	} finally {
-		vscode.commands.executeCommand("setContext", "cline.isGeneratingCommit", false)
+		vscode.commands.executeCommand("setContext", "aihydro.isGeneratingCommit", false)
 	}
 }
 
 export function abortCommitGeneration() {
 	commitGenerationAbortController?.abort()
-	vscode.commands.executeCommand("setContext", "cline.isGeneratingCommit", false)
+	vscode.commands.executeCommand("setContext", "aihydro.isGeneratingCommit", false)
 }
 
 /**

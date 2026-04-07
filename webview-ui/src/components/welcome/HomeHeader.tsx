@@ -1,5 +1,5 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
-import ClineLogoVariable from "@/assets/ClineLogoVariable"
+import AiHydroLogoVariable from "@/assets/AiHydroLogoVariable"
 import HeroTooltip from "@/components/common/HeroTooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { UiServiceClient } from "@/services/grpc-client"
@@ -22,14 +22,14 @@ const HomeHeader = ({ shouldShowQuickWins = false }: HomeHeaderProps) => {
 	return (
 		<div className="flex flex-col items-center mb-5">
 			<div className="my-5">
-				<ClineLogoVariable className="size-16" environment={environment} />
+				<AiHydroLogoVariable className="size-16" environment={environment} />
 			</div>
 			<div className="text-center flex items-center justify-center">
-				<h2 className="m-0 text-lg">{"What can I do for you?"}</h2>
+				<h2 className="m-0 text-lg">{"What hydrology research can I help with?"}</h2>
 				<HeroTooltip
 					className="max-w-[300px]"
 					content={
-						"I can develop software step-by-step by editing files, exploring projects, running commands, and using browsers. I can even extend my capabilities with MCP tools to assist beyond basic code completion."
+						"I can assist with hydrological modeling, watershed analysis, CAMELS data processing, streamflow analysis, and scientific workflows. I can fetch USGS data, compute signatures, run hydrological models, and help with Python-based hydrology computations."
 					}
 					placement="bottom">
 					<span className="codicon codicon-info ml-2 cursor-pointer text-link text-sm" />

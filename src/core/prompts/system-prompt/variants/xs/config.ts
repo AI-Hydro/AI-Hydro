@@ -1,5 +1,5 @@
 import { ModelFamily } from "@/shared/prompts"
-import { ClineDefaultTool } from "@/shared/tools"
+import { AiHydroDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
 import { validateVariant } from "../variant-validator"
@@ -29,16 +29,16 @@ export const config = createVariant(ModelFamily.XS)
 		SystemPromptSection.USER_INSTRUCTIONS,
 	)
 	.tools(
-		ClineDefaultTool.BASH,
-		ClineDefaultTool.FILE_READ,
-		ClineDefaultTool.FILE_NEW,
-		ClineDefaultTool.FILE_EDIT,
-		ClineDefaultTool.SEARCH,
-		ClineDefaultTool.LIST_FILES,
-		ClineDefaultTool.ASK,
-		ClineDefaultTool.ATTEMPT,
-		ClineDefaultTool.NEW_TASK,
-		ClineDefaultTool.PLAN_MODE,
+		AiHydroDefaultTool.BASH,
+		AiHydroDefaultTool.FILE_READ,
+		AiHydroDefaultTool.FILE_NEW,
+		AiHydroDefaultTool.FILE_EDIT,
+		AiHydroDefaultTool.SEARCH,
+		AiHydroDefaultTool.LIST_FILES,
+		AiHydroDefaultTool.ASK,
+		AiHydroDefaultTool.ATTEMPT,
+		AiHydroDefaultTool.NEW_TASK,
+		AiHydroDefaultTool.PLAN_MODE,
 	)
 	.placeholders({
 		MODEL_FAMILY: ModelFamily.XS,

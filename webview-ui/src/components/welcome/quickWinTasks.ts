@@ -14,7 +14,7 @@ export const quickWinTasks: QuickWinTask[] = [
 		title: "Build a Next.js App",
 		description: "Create a beautiful notetaking app with Next.js and Tailwind",
 		icon: "WebAppIcon",
-		actionCommand: "cline/createNextJsApp",
+		actionCommand: "aihydro/createNextJsApp",
 		prompt: "Make a beautiful Next.js notetaking app, using Tailwind CSS for styling. Set up the basic structure and a simple UI for adding and viewing notes.",
 		buttonText: ">",
 	},

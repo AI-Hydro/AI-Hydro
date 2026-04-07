@@ -3,18 +3,26 @@ import { GlobalStateAndSettings, LocalState, SecretKey, Secrets } from "@shared/
 import { ExtensionContext } from "vscode"
 import { Controller } from "@/core/controller"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@/shared/AutoApprovalSettings"
+import { AiHydroRulesToggles } from "@/shared/aihydro-rules"
 import { DEFAULT_BROWSER_SETTINGS } from "@/shared/BrowserSettings"
-import { ClineRulesToggles } from "@/shared/cline-rules"
 import { DEFAULT_DICTATION_SETTINGS, DictationSettings } from "@/shared/DictationSettings"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@/shared/FocusChainSettings"
 import { DEFAULT_MCP_DISPLAY_MODE } from "@/shared/McpDisplayMode"
 import { OpenaiReasoningEffort } from "@/shared/storage/types"
 import { readTaskHistoryFromState } from "../disk"
+
+function normalizeLegacyApiProvider(provider: unknown): ApiProvider | undefined {
+	if (provider === "cline" || provider === "oca") {
+		return "openrouter"
+	}
+	return provider as ApiProvider | undefined
+}
+
 export async function readSecretsFromDisk(context: ExtensionContext): Promise<Secrets> {
 	const [
 		apiKey,
 		openRouterApiKey,
-		firebaseClineAccountId,
+		firebaseAiHydroAccountId,
 		clineAccountId,
 		awsAccessKey,
 		awsSecretKey,
@@ -95,7 +103,7 @@ export async function readSecretsFromDisk(context: ExtensionContext): Promise<Se
 		authNonce,
 		apiKey,
 		openRouterApiKey,
-		clineAccountId: firebaseClineAccountId,
+		clineAccountId: firebaseAiHydroAccountId,
 		"cline:clineAccountId": clineAccountId,
 		huggingFaceApiKey,
 		huaweiCloudMaasApiKey,
@@ -134,13 +142,13 @@ export async function readSecretsFromDisk(context: ExtensionContext): Promise<Se
 }
 
 export async function readWorkspaceStateFromDisk(context: ExtensionContext): Promise<LocalState> {
-	const localClineRulesToggles = context.workspaceState.get("localClineRulesToggles") as ClineRulesToggles | undefined
-	const localWindsurfRulesToggles = context.workspaceState.get("localWindsurfRulesToggles") as ClineRulesToggles | undefined
-	const localCursorRulesToggles = context.workspaceState.get("localCursorRulesToggles") as ClineRulesToggles | undefined
-	const localWorkflowToggles = context.workspaceState.get("workflowToggles") as ClineRulesToggles | undefined
+	const localAiHydroRulesToggles = context.workspaceState.get("localAiHydroRulesToggles") as AiHydroRulesToggles | undefined
+	const localWindsurfRulesToggles = context.workspaceState.get("localWindsurfRulesToggles") as AiHydroRulesToggles | undefined
+	const localCursorRulesToggles = context.workspaceState.get("localCursorRulesToggles") as AiHydroRulesToggles | undefined
+	const localWorkflowToggles = context.workspaceState.get("workflowToggles") as AiHydroRulesToggles | undefined
 
 	return {
-		localClineRulesToggles: localClineRulesToggles || {},
+		localAiHydroRulesToggles: localAiHydroRulesToggles || {},
 		localWindsurfRulesToggles: localWindsurfRulesToggles || {},
 		localCursorRulesToggles: localCursorRulesToggles || {},
 		workflowToggles: localWorkflowToggles || {},
@@ -205,8 +213,8 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 		const planActSeparateModelsSettingRaw =
 			context.globalState.get<GlobalStateAndSettings["planActSeparateModelsSetting"]>("planActSeparateModelsSetting")
 		const favoritedModelIds = context.globalState.get<GlobalStateAndSettings["favoritedModelIds"]>("favoritedModelIds")
-		const globalClineRulesToggles =
-			context.globalState.get<GlobalStateAndSettings["globalClineRulesToggles"]>("globalClineRulesToggles")
+		const globalAiHydroRulesToggles =
+			context.globalState.get<GlobalStateAndSettings["globalAiHydroRulesToggles"]>("globalAiHydroRulesToggles")
 		const requestTimeoutMs = context.globalState.get<GlobalStateAndSettings["requestTimeoutMs"]>("requestTimeoutMs")
 		const shellIntegrationTimeout =
 			context.globalState.get<GlobalStateAndSettings["shellIntegrationTimeout"]>("shellIntegrationTimeout")
@@ -431,9 +439,12 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 		const sapAiCoreUseOrchestrationMode =
 			context.globalState.get<GlobalStateAndSettings["sapAiCoreUseOrchestrationMode"]>("sapAiCoreUseOrchestrationMode")
 
+		const normalizedPlanModeApiProvider = normalizeLegacyApiProvider(planModeApiProvider)
+		const normalizedActModeApiProvider = normalizeLegacyApiProvider(actModeApiProvider)
+
 		let apiProvider: ApiProvider
-		if (planModeApiProvider) {
-			apiProvider = planModeApiProvider
+		if (normalizedPlanModeApiProvider) {
+			apiProvider = normalizedPlanModeApiProvider
 		} else {
 			// New users should default to openrouter, since they've opted to use an API key instead of signing in
 			apiProvider = "openrouter"
@@ -457,7 +468,7 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 		const workspaceRoots = context.globalState.get<GlobalStateAndSettings["workspaceRoots"]>("workspaceRoots")
 		/**
 		 * Get primary root index from global state.
-		 * The primary root is the main workspace folder that Cline focuses on when dealing with
+		 * The primary root is the main workspace folder that AI-Hydro focuses on when dealing with
 		 * multi-root workspaces. In VS Code, you can have multiple folders open in one workspace,
 		 * and the primary root index indicates which folder (by its position in the array, 0-based)
 		 * should be treated as the main/default working directory for operations.
@@ -507,7 +518,7 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			ocaBaseUrl,
 			ocaMode: ocaMode || "internal",
 			// Plan mode configurations
-			planModeApiProvider: planModeApiProvider || apiProvider,
+			planModeApiProvider: normalizedPlanModeApiProvider || apiProvider,
 			planModeApiModelId,
 			// undefined means it was never modified, 0 means it was turned off
 			// (having this on by default ensures that <thinking> text does not pollute the user's chat and is instead rendered as reasoning)
@@ -543,7 +554,7 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			planModeOcaModelId,
 			planModeOcaModelInfo,
 			// Act mode configurations
-			actModeApiProvider: actModeApiProvider || apiProvider,
+			actModeApiProvider: normalizedActModeApiProvider || apiProvider,
 			actModeApiModelId,
 			actModeThinkingBudgetTokens: actModeThinkingBudgetTokens ?? ANTHROPIC_MIN_THINKING_BUDGET,
 			actModeReasoningEffort,
@@ -588,7 +599,7 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			lastShownAnnouncementId,
 			taskHistory: taskHistory || [],
 			autoApprovalSettings: autoApprovalSettings || DEFAULT_AUTO_APPROVAL_SETTINGS, // default value can be 0 or empty string
-			globalClineRulesToggles: globalClineRulesToggles || {},
+			globalAiHydroRulesToggles: globalAiHydroRulesToggles || {},
 			browserSettings: { ...DEFAULT_BROWSER_SETTINGS, ...browserSettings }, // this will ensure that older versions of browserSettings (e.g. before remoteBrowserEnabled was added) are merged with the default values (false for remoteBrowserEnabled)
 			preferredLanguage: preferredLanguage || "English",
 			openaiReasoningEffort: (openaiReasoningEffort as OpenaiReasoningEffort) || "medium",

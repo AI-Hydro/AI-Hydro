@@ -1,222 +1,195 @@
-# Contributing to Cline
+# Contributing to AI-Hydro
 
-We're thrilled you're interested in contributing to Cline. Whether you're fixing a bug, adding a feature, or improving our docs, every contribution makes Cline smarter! To keep our community vibrant and welcoming, all members must adhere to our [Code of Conduct](CODE_OF_CONDUCT.md).
+Thank you for your interest in contributing! AI-Hydro is an open-source hydrological research platform and we welcome contributions from the hydrology, earth sciences, and software engineering communities.
 
-## Reporting Bugs or Issues
+## Ways to Contribute
 
-Bug reports help make Cline better for everyone! Before creating a new issue, please [search existing ones](https://github.com/cline/cline/issues) to avoid duplicates. When you're ready to report a bug, head over to our [issues page](https://github.com/cline/cline/issues/new/choose) where you'll find a template to help you with filling out the relevant information.
+- **Bug reports** — if a tool returns wrong data or the extension crashes
+- **New tools** — wrap a new data source or analysis method as an MCP tool
+- **Improved models** — better rainfall–runoff models, regionalization schemes
+- **Documentation** — tutorials, worked examples, explanations
+- **Tests** — unit and integration tests for the Python package
 
-<blockquote class='warning-note'>
-     🔐 <b>Important:</b> If you discover a security vulnerability, please use the <a href="https://github.com/cline/cline/security/advisories/new">Github security tool to report it privately</a>.
-</blockquote>
+## Before You Start
 
+For anything beyond a small bug fix or typo:
 
-## Before Contributing
+1. Check [existing issues](https://github.com/galib9690/AI-Hydro/issues) and [discussions](https://github.com/galib9690/AI-Hydro/discussions) to avoid duplication.
+2. Open an issue or discussion describing what you plan to build and why.
+3. Wait for a maintainer response before investing significant time.
 
-All contributions must begin with a GitHub Issue, unless the change is for small bug fixes, typo corrections, minor wording improvements, or simple type fixes that don't change functionality.
-**For features and contributions**:
-- First check the [Feature Requests discussions board](https://github.com/cline/cline/discussions/categories/feature-requests) for similar ideas
-- If your idea is new, create a new feature request  
-- Wait for approval from core maintainers before starting implementation
-- Once approved, feel free to begin working on a PR with the help of our community!
+**Small fixes** (typos, obvious bugs, minor wording, simple type corrections) may be submitted directly without prior discussion.
 
-**PRs without approved issues may be closed.**
-
-
-## Deciding What to Work On
-
-Looking for a good first contribution? Check out issues labeled ["good first issue"](https://github.com/cline/cline/labels/good%20first%20issue) or ["help wanted"](https://github.com/cline/cline/labels/help%20wanted). These are specifically curated for new contributors and areas where we'd love some help!
-
-We also welcome contributions to our [documentation](https://github.com/cline/cline/tree/main/docs)! Whether it's fixing typos, improving existing guides, or creating new educational content - we'd love to build a community-driven repository of resources that helps everyone get the most out of Cline. You can start by diving into `/docs` and looking for areas that need improvement.
+---
 
 ## Development Setup
 
+### 1. Clone and install
 
-### Local Development Instructions
+```bash
+git clone https://github.com/galib9690/AI-Hydro.git
+cd AI-Hydro
 
-1. Clone the repository _(Requires [git-lfs](https://git-lfs.com/))_:
-    ```bash
-    git clone https://github.com/cline/cline.git
-    ```
-2. Open the project in VSCode:
-    ```bash
-    code cline
-    ```
-3. Install the necessary dependencies for the extension and webview-gui:
-    ```bash
-    npm run install:all
-    ```
-4. Launch by pressing `F5` (or `Run`->`Start Debugging`) to open a new VSCode window with the extension loaded. (You may need to install the [esbuild problem matchers extension](https://marketplace.visualstudio.com/items?itemName=connor4312.esbuild-problem-matchers) if you run into issues building the project.)
+# Extension (TypeScript / React)
+npm run install:all
 
+# Python package (editable)
+cd python
+pip install -e ".[dev]"
+cd ..
+```
 
+### 2. Run the extension in development mode
 
+Press **F5** in VS Code (or **Run → Start Debugging**). This opens a new Extension Development Host window with AI-Hydro loaded from source.
 
-### Creating a Pull Request
+### 3. Run Python tests
 
-1. Before creating a PR, generate a changeset entry:
-    ```bash
-    npm run changeset
-    ```
-   This will prompt you for:
-   - Type of change (major, minor, patch)
-     - `major` → breaking changes (1.0.0 → 2.0.0)
-     - `minor` → new features (1.0.0 → 1.1.0)
-     - `patch` → bug fixes (1.0.0 → 1.0.1)
-   - Description of your changes
+```bash
+cd python
+pytest tests/ -v
+```
 
-2. Commit your changes and the generated `.changeset` file
+### 4. Run TypeScript lint + format
 
-3. Push your branch and create a PR on GitHub. Our CI will:
-   - Run tests and checks
-   - Changesetbot will create a comment showing the version impact
-   - When merged to main, changesetbot will create a Version Packages PR
-   - When the Version Packages PR is merged, a new release will be published
-4. Testing
-    - Run `npm run test` to run tests locally. 
-    - Before submitting PR, run `npm run format:fix` to format your code
+```bash
+npm run lint
+npm run format
+```
 
-### Extension
+---
 
-1. **VS Code Extensions**
+## Adding a New Tool
 
-    - When opening the project, VS Code will prompt you to install recommended extensions
-    - These extensions are required for development - please accept all installation prompts
-    - If you dismissed the prompts, you can install them manually from the Extensions panel
+Each MCP tool requires two things: a Python implementation and an MCP registration.
 
-2. **Local Development**
-    - Run `npm run install:all` to install dependencies
-    - Run `npm run test` to run tests locally
-    - Run → Start Debugging or `>Debug: Select and Start Debugging` and wait for a new VS Code instance to open
-    - Before submitting PR, run `npm run format:fix` to format your code
+### Step 1 — Implement the tool
 
-3. **Linux-specific Setup**
-    VS Code extension tests on Linux require the following system libraries:
+Create or edit a file in `python/ai_hydro/tools/`:
 
-    - `dbus`
-    - `libasound2`
-    - `libatk-bridge2.0-0`
-    - `libatk1.0-0`
-    - `libdrm2`
-    - `libgbm1`
-    - `libgtk-3-0`
-    - `libnss3`
-    - `libx11-xcb1`
-    - `libxcomposite1`
-    - `libxdamage1`
-    - `libxfixes3`
-    - `libxkbfile1`
-    - `libxrandr2`
-    - `xvfb`
+```python
+# python/ai_hydro/tools/my_tool.py
 
-    These libraries provide necessary GUI components and system services for the test environment.
+from ai_hydro.core.types import HydroResult, HydroMeta
+from datetime import datetime, timezone
 
-    For example, on Debian-based distributions (e.g., Ubuntu), you can install these libraries using apt:
-    ```bash
-    sudo apt update
-    sudo apt install -y \
-      dbus \
-      libasound2 \
-      libatk-bridge2.0-0 \
-      libatk1.0-0 \
-      libdrm2 \
-      libgbm1 \
-      libgtk-3-0 \
-      libnss3 \
-      libx11-xcb1 \
-      libxcomposite1 \
-      libxdamage1 \
-      libxfixes3 \
-      libxkbfile1 \
-      libxrandr2 \
-      xvfb
-    ```
+def my_new_analysis(gauge_id: str, param: float = 1.0) -> dict:
+    """
+    One-sentence description.
 
-## Writing and Submitting Code
+    Parameters
+    ----------
+    gauge_id : str
+        8-digit USGS NWIS site ID.
+    param : float
+        Description of parameter.
 
-Anyone can contribute code to Cline, but we ask that you follow these guidelines to ensure your contributions can be smoothly integrated:
+    Returns
+    -------
+    dict
+        Keys: result_value, meta
+    """
+    # ... implementation ...
+    result = {"result_value": 42.0}
+    meta = HydroMeta(
+        tool="my_new_analysis",
+        version="1.0.0-alpha",
+        computed_at=datetime.now(timezone.utc).isoformat(),
+        params={"gauge_id": gauge_id, "param": param},
+        sources=[],  # add data source citations here
+    )
+    return HydroResult(data=result, meta=meta).to_dict()
+```
 
-1. **Keep Pull Requests Focused**
+### Step 2 — Register as an MCP tool
 
-    - Limit PRs to a single feature or bug fix
-    - Split larger changes into smaller, related PRs
-    - Break changes into logical commits that can be reviewed independently
+Add to `python/mcp_server.py`:
 
-2. **Code Quality**
+```python
+@mcp.tool()
+def my_new_analysis(gauge_id: str, param: float = 1.0) -> dict:
+    """One-sentence description shown to the AI model."""
+    try:
+        gauge_id = _validate_gauge_id(gauge_id)
+        from ai_hydro.tools.my_tool import my_new_analysis as _impl
+        result = _impl(gauge_id, param=param)
+        return result
+    except Exception as e:
+        return _tool_error_to_dict(e)
+```
 
-    - Run `npm run lint` to check code style
-    - Run `npm run format` to automatically format code
-    - All PRs must pass CI checks which include both linting and formatting
-    - Address any warnings or errors from linter before submitting
-    - Follow TypeScript best practices and maintain type safety
+### Step 3 — (Optional) Cache in HydroSession
 
-3. **Testing**
+If the result is expensive and should be reused:
 
-    - Add tests for new features
-    - Run `npm test` to ensure all tests pass
-    - Update existing tests if your changes affect them
-    - Include both unit tests and integration tests where appropriate
+1. Add a slot to `_RESULT_SLOTS` in `python/ai_hydro/session.py`
+2. Add `self.my_slot: dict | None = None` to `HydroSession.__init__`
+3. Add a key finding to `_key_findings()` if useful
+4. In the MCP tool, load/save the session:
 
-    **End-to-End (E2E) Testing**
-    
-    Cline includes comprehensive E2E tests using Playwright that simulate real user interactions with the extension in VS Code:
-    
-    - **Running E2E tests:**
-      ```bash
-      npm run test:e2e        # Build and run all E2E tests
-      npm run e2e             # Run tests without rebuilding
-      npm run test:e2e -- --debug  # Run with interactive debugger
-      ```
-    
-    - **Writing E2E tests:**
-      - Tests are located in `src/test/e2e/`
-      - Use the `e2e` fixture for single-root workspace tests
-      - Use `e2eMultiRoot` fixture for multi-root workspace tests
-      - Follow existing patterns in `auth.test.ts`, `chat.test.ts`, `diff.test.ts`, and `editor.test.ts`
-      - See `src/test/e2e/README.md` for detailed documentation
-    
-    - **Debug mode features:**
-      - Interactive Playwright Inspector for step-by-step debugging
-      - Record new interactions and generate test code automatically
-      - Visual VS Code instance for manual testing
-      - Element inspection and selector validation
-    
-    - **Test environment:**
-      - Automated VS Code setup with Cline extension loaded
-      - Mock API server for backend testing
-      - Temporary workspaces with test fixtures
-      - Video recording for failed tests
+```python
+session = HydroSession.load(gauge_id)
+session.my_slot = result
+session.save()
+```
 
-4. **Version Management with Changesets**
+### Step 4 — Write a test
 
-    - Create a changeset for any user-facing changes using `npm run changeset`
-    - Choose the appropriate version bump:
-        - `major` for breaking changes (1.0.0 → 2.0.0)
-        - `minor` for new features (1.0.0 → 1.1.0)
-        - `patch` for bug fixes (1.0.0 → 1.0.1)
-    - Write clear, descriptive changeset messages that explain the impact
-    - Documentation-only changes don't require changesets
+```python
+# python/tests/test_my_tool.py
+def test_my_new_analysis():
+    result = my_new_analysis("01031500")
+    assert result["result_value"] > 0
+    assert "meta" in result
+```
 
-5. **Commit Guidelines**
+### Step 5 — Document
 
-    - Write clear, descriptive commit messages
-    - Use conventional commit format (e.g., "feat:", "fix:", "docs:")
-    - Reference relevant issues in commits using #issue-number
+Add an entry to [docs/tools-reference.md](./docs/tools-reference.md) with:
+- Parameters table
+- Return value description
+- Example
 
-6. **Before Submitting**
+---
 
-    - Rebase your branch on the latest main
-    - Ensure your branch builds successfully
-    - Double-check all tests are passing
-    - Review your changes for any debugging code or console logs
+## Pull Request Guidelines
 
-7. **Pull Request Description**
-    - Clearly describe what your changes do
-    - Include steps to test the changes
-    - List any breaking changes
-    - Add screenshots for UI changes
+1. **One feature / fix per PR** — keep PRs focused and reviewable.
+2. **Link the issue** — include `Closes #123` in the PR description.
+3. **Tests pass** — `pytest tests/` and `npm test` must both pass.
+4. **Docs updated** — if you add a tool, update `docs/tools-reference.md`.
+5. **No secrets** — never commit API keys, credentials, or `.env` files.
 
-## Contribution Agreement
+Use the PR template when submitting.
 
-By submitting a pull request, you agree that your contributions will be licensed under the same license as the project ([Apache 2.0](LICENSE)).
+---
 
-Remember: Contributing to Cline isn't just about writing code - it's about being part of a community that's shaping the future of AI-assisted development. Let's build something amazing together! 🚀
+## Code Style
+
+**Python**
+- Black-formatted (`black python/`)
+- Type-annotated public functions
+- Docstrings in NumPy style
+
+**TypeScript**
+- Biome-formatted (`npm run format`)
+- No `any` types without a comment explaining why
+
+---
+
+## Reporting Security Issues
+
+Please **do not** file public issues for security vulnerabilities.
+Email mgalib@purdue.edu or use [GitHub Security Advisories](https://github.com/galib9690/AI-Hydro/security/advisories/new).
+
+---
+
+## Code of Conduct
+
+All contributors are expected to follow the [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+---
+
+## License
+
+By contributing to AI-Hydro, you agree that your contributions will be licensed under the [Apache 2.0 License](./LICENSE).

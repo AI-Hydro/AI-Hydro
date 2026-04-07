@@ -16,12 +16,12 @@ e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ s
 	// Verify provider selector is visible
 	await expect(providerSelectorInput).toBeVisible()
 
-	// Test Cline provider option
+	// Test AI-Hydro provider option
 	await providerSelectorInput.click({ delay: 100 })
-	// Wait for dropdown to appear and find Cline option
-	await expect(sidebar.getByTestId("provider-option-cline")).toBeVisible()
-	await sidebar.getByTestId("provider-option-cline").click({ delay: 100 })
-	await expect(sidebar.getByRole("button", { name: "Sign Up with Cline" })).toBeVisible()
+	// Wait for dropdown to appear and find AI-Hydro option
+	await expect(sidebar.getByTestId("provider-option-aihydro")).toBeVisible()
+	await sidebar.getByTestId("provider-option-aihydro").click({ delay: 100 })
+	await expect(sidebar.getByRole("button", { name: "Sign Up with AI-Hydro" })).toBeVisible()
 
 	// Switch to OpenRouter and complete setup
 	await providerSelectorInput.click({ delay: 100 })
@@ -43,8 +43,8 @@ e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ s
 	await expect(providerSelectorInput).not.toBeVisible()
 
 	// Verify you are now in the chat page after setup was completed
-	const clineLogo = sidebar.getByRole("img").filter({ hasText: /^$/ }).locator("path")
-	await expect(clineLogo).toBeVisible()
+	const aihydroLogo = sidebar.getByRole("img").filter({ hasText: /^$/ }).locator("path")
+	await expect(aihydroLogo).toBeVisible()
 	const chatInputBox = sidebar.getByTestId("chat-input")
 	await expect(chatInputBox).toBeVisible()
 

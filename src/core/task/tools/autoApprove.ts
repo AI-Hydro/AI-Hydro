@@ -1,6 +1,6 @@
 import { resolveWorkspacePath } from "@core/workspace"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
-import { ClineDefaultTool } from "@shared/tools"
+import { AiHydroDefaultTool } from "@shared/tools"
 import { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
 import { getCwd, getDesktopDir, isLocatedInPath, isLocatedInWorkspace } from "@/utils/path"
@@ -39,23 +39,23 @@ export class AutoApprove {
 
 	// Check if the tool should be auto-approved based on the settings
 	// Returns bool for most tools, and tuple for tools with nested settings
-	shouldAutoApproveTool(toolName: ClineDefaultTool): boolean | [boolean, boolean] {
+	shouldAutoApproveTool(toolName: AiHydroDefaultTool): boolean | [boolean, boolean] {
 		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
 			switch (toolName) {
-				case ClineDefaultTool.FILE_READ:
-				case ClineDefaultTool.LIST_FILES:
-				case ClineDefaultTool.LIST_CODE_DEF:
-				case ClineDefaultTool.SEARCH:
-				case ClineDefaultTool.NEW_RULE:
-				case ClineDefaultTool.FILE_NEW:
-				case ClineDefaultTool.FILE_EDIT:
-				case ClineDefaultTool.BASH:
+				case AiHydroDefaultTool.FILE_READ:
+				case AiHydroDefaultTool.LIST_FILES:
+				case AiHydroDefaultTool.LIST_CODE_DEF:
+				case AiHydroDefaultTool.SEARCH:
+				case AiHydroDefaultTool.NEW_RULE:
+				case AiHydroDefaultTool.FILE_NEW:
+				case AiHydroDefaultTool.FILE_EDIT:
+				case AiHydroDefaultTool.BASH:
 					return [true, true]
 
-				case ClineDefaultTool.BROWSER:
-				case ClineDefaultTool.WEB_FETCH:
-				case ClineDefaultTool.MCP_ACCESS:
-				case ClineDefaultTool.MCP_USE:
+				case AiHydroDefaultTool.BROWSER:
+				case AiHydroDefaultTool.WEB_FETCH:
+				case AiHydroDefaultTool.MCP_ACCESS:
+				case AiHydroDefaultTool.MCP_USE:
 					return true
 			}
 		}
@@ -64,26 +64,26 @@ export class AutoApprove {
 
 		if (autoApprovalSettings.enabled) {
 			switch (toolName) {
-				case ClineDefaultTool.FILE_READ:
-				case ClineDefaultTool.LIST_FILES:
-				case ClineDefaultTool.LIST_CODE_DEF:
-				case ClineDefaultTool.SEARCH:
+				case AiHydroDefaultTool.FILE_READ:
+				case AiHydroDefaultTool.LIST_FILES:
+				case AiHydroDefaultTool.LIST_CODE_DEF:
+				case AiHydroDefaultTool.SEARCH:
 					return [autoApprovalSettings.actions.readFiles, autoApprovalSettings.actions.readFilesExternally ?? false]
-				case ClineDefaultTool.NEW_RULE:
-				case ClineDefaultTool.FILE_NEW:
-				case ClineDefaultTool.FILE_EDIT:
+				case AiHydroDefaultTool.NEW_RULE:
+				case AiHydroDefaultTool.FILE_NEW:
+				case AiHydroDefaultTool.FILE_EDIT:
 					return [autoApprovalSettings.actions.editFiles, autoApprovalSettings.actions.editFilesExternally ?? false]
-				case ClineDefaultTool.BASH:
+				case AiHydroDefaultTool.BASH:
 					return [
 						autoApprovalSettings.actions.executeSafeCommands ?? false,
 						autoApprovalSettings.actions.executeAllCommands ?? false,
 					]
-				case ClineDefaultTool.BROWSER:
+				case AiHydroDefaultTool.BROWSER:
 					return autoApprovalSettings.actions.useBrowser
-				case ClineDefaultTool.WEB_FETCH:
+				case AiHydroDefaultTool.WEB_FETCH:
 					return autoApprovalSettings.actions.useBrowser
-				case ClineDefaultTool.MCP_ACCESS:
-				case ClineDefaultTool.MCP_USE:
+				case AiHydroDefaultTool.MCP_ACCESS:
+				case AiHydroDefaultTool.MCP_USE:
 					return autoApprovalSettings.actions.useMcp
 			}
 		}
@@ -94,7 +94,7 @@ export class AutoApprove {
 	// and the path of the action. Returns true if the tool should be auto-approved
 	// based on the user's settings and the path of the action.
 	async shouldAutoApproveToolWithPath(
-		blockname: ClineDefaultTool,
+		blockname: AiHydroDefaultTool,
 		autoApproveActionpath: string | undefined,
 	): Promise<boolean> {
 		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {

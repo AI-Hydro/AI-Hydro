@@ -1,40 +1,40 @@
 /**
- * Pattern to match simplified Cline CLI syntax: cline "prompt" or cline 'prompt'
+ * Pattern to match simplified AI-Hydro CLI syntax: aihydro "prompt" or aihydro 'prompt'
  * with optional additional flags after the closing quote
  */
-const CLINE_COMMAND_PATTERN = /^cline\s+(['"])(.+?)\1(\s+.*)?$/
+const AIHYDRO_COMMAND_PATTERN = /^aihydro\s+(['"])(.+?)\1(\s+.*)?$/
 
 /**
- * Detects if a command is a Cline CLI subagent command.
+ * Detects if a command is a AI-Hydro CLI subagent command.
  *
- * Matches the simplified syntax: cline "prompt" or cline 'prompt'
+ * Matches the simplified syntax: aihydro "prompt" or aihydro 'prompt'
  * This allows the system to apply subagent-specific settings like autonomous execution.
  *
  * @param command - The command string to check
- * @returns True if the command is a Cline CLI subagent command, false otherwise
+ * @returns True if the command is a AI-Hydro CLI subagent command, false otherwise
  */
 export function isSubagentCommand(command: string): boolean {
 	// Match simplified syntaxes
-	// cline "prompt"
-	// cline 'prompt'
-	return CLINE_COMMAND_PATTERN.test(command)
+	// aihydro "prompt"
+	// aihydro 'prompt'
+	return AIHYDRO_COMMAND_PATTERN.test(command)
 }
 
 /**
- * Transforms simplified Cline CLI command syntax with subagent settings.
+ * Transforms simplified AI-Hydro CLI command syntax with subagent settings.
  *
- * Converts: cline "prompt" or cline 'prompt'
- * To: cline "prompt" -s yolo_mode_toggled=true -s max_consecutive_mistakes=6 -F plain -y --oneshot
+ * Converts: aihydro "prompt" or aihydro 'prompt'
+ * To: aihydro "prompt" -s yolo_mode_toggled=true -s max_consecutive_mistakes=6 -F plain -y --oneshot
  *
  * Preserves additional flags like --workdir:
- * cline "prompt" --workdir ./path → cline "prompt" -s ... -F plain -y --oneshot --workdir ./path
+ * aihydro "prompt" --workdir ./path → aihydro "prompt" -s ... -F plain -y --oneshot --workdir ./path
  *
  * This enables autonomous subagent execution with proper CLI flags for automation.
  *
  * @param command - The command string to potentially transform
  * @returns The transformed command if it matches the pattern, otherwise the original command
  */
-export function transformClineCommand(command: string): string {
+export function transformAiHydroCommand(command: string): string {
 	if (!isSubagentCommand(command)) {
 		return command
 	}
@@ -46,26 +46,26 @@ export function transformClineCommand(command: string): string {
 }
 
 /**
- * Injects subagent-specific command structure and settings into Cline CLI commands.
+ * Injects subagent-specific command structure and settings into AI-Hydro CLI commands.
  *
- * @param command - The Cline CLI command (simplified or full syntax)
+ * @param command - The AI-Hydro CLI command (simplified or full syntax)
  * @returns The command with injected flags and settings
  */
 function injectSubagentSettings(command: string): string {
-	// No pre-prompt flags needed - use standard "cline 'prompt'" syntax
+	// No pre-prompt flags needed - use standard "aihydro 'prompt'" syntax
 	const prePromptFlags: string[] = []
 
 	// Flags/settings to insert after the prompt
 	const postPromptFlags = ["-s yolo_mode_toggled=true", "-s max_consecutive_mistakes=6", "-F plain", "-y", "--oneshot"]
 
-	const match = command.match(CLINE_COMMAND_PATTERN)
+	const match = command.match(AIHYDRO_COMMAND_PATTERN)
 
 	if (match) {
 		const quote = match[1]
 		const prompt = match[2]
 		const additionalFlags = match[3] || ""
 		const prePromptPart = prePromptFlags.length > 0 ? prePromptFlags.join(" ") + " " : ""
-		return `cline ${prePromptPart}${quote}${prompt}${quote} ${postPromptFlags.join(" ")}${additionalFlags}`
+		return `aihydro ${prePromptPart}${quote}${prompt}${quote} ${postPromptFlags.join(" ")}${additionalFlags}`
 	}
 
 	// Already full format: just inject settings after prompt

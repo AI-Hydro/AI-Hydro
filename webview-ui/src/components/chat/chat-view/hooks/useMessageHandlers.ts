@@ -1,4 +1,4 @@
-import type { ClineMessage } from "@shared/ExtensionMessage"
+import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
 import { AskResponseRequest, NewTaskRequest } from "@shared/proto/cline/task"
 import { useCallback } from "react"
@@ -11,7 +11,7 @@ import type { ChatState, MessageHandlers } from "../types/chatTypes"
  * Custom hook for managing message handlers
  * Handles sending messages, button clicks, and task management
  */
-export function useMessageHandlers(messages: ClineMessage[], chatState: ChatState): MessageHandlers {
+export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatState): MessageHandlers {
 	const { backgroundCommandRunning } = useExtensionState()
 	const {
 		setInputValue,
@@ -21,7 +21,7 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 		setSelectedFiles,
 		setSendingDisabled,
 		setEnableButtons,
-		clineAsk,
+		aihydroAsk,
 		lastMessage,
 	} = chatState
 
@@ -49,8 +49,8 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 							files,
 						}),
 					)
-				} else if (clineAsk) {
-					switch (clineAsk) {
+				} else if (aihydroAsk) {
+					switch (aihydroAsk) {
 						case "followup":
 						case "plan_mode_respond":
 						case "tool":
@@ -93,7 +93,7 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 		},
 		[
 			messages.length,
-			clineAsk,
+			aihydroAsk,
 			activeQuote,
 			setInputValue,
 			setActiveQuote,
@@ -196,7 +196,7 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 					break
 
 				case "new_task":
-					if (clineAsk === "new_task") {
+					if (aihydroAsk === "new_task") {
 						await TaskServiceClient.newTask(
 							NewTaskRequest.create({
 								text: lastMessage?.text,
@@ -218,7 +218,7 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 					break
 
 				case "utility":
-					switch (clineAsk) {
+					switch (aihydroAsk) {
 						case "condense":
 							await SlashServiceClient.condense(StringRequest.create({ value: lastMessage?.text })).catch((err) =>
 								console.error(err),
@@ -237,7 +237,16 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 				;(chatState as any).disableAutoScrollRef.current = false
 			}
 		},
-		[clineAsk, lastMessage, messages, clearInputState, handleSendMessage, startNewTask, chatState, backgroundCommandRunning],
+		[
+			aihydroAsk,
+			lastMessage,
+			messages,
+			clearInputState,
+			handleSendMessage,
+			startNewTask,
+			chatState,
+			backgroundCommandRunning,
+		],
 	)
 
 	// Handle task close button click

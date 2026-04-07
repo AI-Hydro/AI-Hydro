@@ -1,9 +1,8 @@
 {
 	"compilerOptions": {
-		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
 		"target": "ES2022",
 		"lib": [
-			"ES2023"
+			"ES2022"
 		],
 		"module": "ESNext",
 		"skipLibCheck": true,
@@ -19,8 +18,7 @@
 		"strict": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
-		"noFallthroughCasesInSwitch": true,
-		"noUncheckedSideEffectImports": true
+		"noFallthroughCasesInSwitch": true
 	},
 	"include": [
 		"vite.config.ts"

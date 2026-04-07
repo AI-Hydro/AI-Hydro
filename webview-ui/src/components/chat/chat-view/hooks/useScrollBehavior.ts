@@ -1,4 +1,4 @@
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import debounce from "debounce"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
@@ -10,9 +10,9 @@ import { ScrollBehavior } from "../types/chatTypes"
  * Handles auto-scrolling, manual scrolling, and scroll-to-message functionality
  */
 export function useScrollBehavior(
-	messages: ClineMessage[],
-	visibleMessages: ClineMessage[],
-	groupedMessages: (ClineMessage | ClineMessage[])[],
+	messages: AiHydroMessage[],
+	visibleMessages: AiHydroMessage[],
+	groupedMessages: (AiHydroMessage | AiHydroMessage[])[],
 	expandedRows: Record<number, boolean>,
 	setExpandedRows: React.Dispatch<React.SetStateAction<Record<number, boolean>>>,
 ): ScrollBehavior & {

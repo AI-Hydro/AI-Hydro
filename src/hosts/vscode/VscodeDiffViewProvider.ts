@@ -4,7 +4,7 @@ import * as vscode from "vscode"
 import { DecorationController } from "@/hosts/vscode/DecorationController"
 import { arePathsEqual } from "@/utils/path"
 
-export const DIFF_VIEW_URI_SCHEME = "cline-diff"
+export const DIFF_VIEW_URI_SCHEME = "aihydro-diff"
 
 export class VscodeDiffViewProvider extends DiffViewProvider {
 	private activeDiffEditor?: vscode.TextEditor
@@ -69,7 +69,7 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 						query: Buffer.from(this.originalContent ?? "").toString("base64"),
 					}),
 					uri,
-					`${fileName}: ${fileExists ? "Original ↔ Cline's Changes" : "New File"} (Editable)`,
+					`${fileName}: ${fileExists ? "Original ↔ AI-Hydro's Changes" : "New File"} (Editable)`,
 					{
 						preserveFocus: true,
 					},
@@ -171,7 +171,7 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 	}
 
 	protected async closeAllDiffViews(): Promise<void> {
-		// Close all the cline diff views.
+		// Close all the AI-Hydro diff views.
 		const tabs = vscode.window.tabGroups.all
 			.flatMap((tg) => tg.tabs)
 			.filter((tab) => tab.input instanceof vscode.TabInputTextDiff && tab.input?.original?.scheme === DIFF_VIEW_URI_SCHEME)

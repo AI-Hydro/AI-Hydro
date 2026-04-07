@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { ApiHandler } from "@core/api"
 import { formatResponse } from "@core/prompts/responses"
 import { GlobalFileNames } from "@core/storage/disk"
-import { ClineApiReqInfo, ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroApiReqInfo, AiHydroMessage } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
 import cloneDeep from "clone-deep"
 import fs from "fs/promises"
@@ -109,15 +109,15 @@ export class ContextManager {
 	 * Determine whether we should compact context window, based on token counts
 	 */
 	shouldCompactContextWindow(
-		clineMessages: ClineMessage[],
+		aihydroMessages: AiHydroMessage[],
 		api: ApiHandler,
 		previousApiReqIndex: number,
 		thresholdPercentage?: number,
 	): boolean {
 		if (previousApiReqIndex >= 0) {
-			const previousRequest = clineMessages[previousApiReqIndex]
+			const previousRequest = aihydroMessages[previousApiReqIndex]
 			if (previousRequest && previousRequest.text) {
-				const { tokensIn, tokensOut, cacheWrites, cacheReads }: ClineApiReqInfo = JSON.parse(previousRequest.text)
+				const { tokensIn, tokensOut, cacheWrites, cacheReads }: AiHydroApiReqInfo = JSON.parse(previousRequest.text)
 				const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 
 				const { contextWindow, maxAllowedSize } = getContextWindowInfo(api)
@@ -134,7 +134,7 @@ export class ContextManager {
 	 * Returns the token counts and context window info that drove summarization
 	 */
 	getContextTelemetryData(
-		clineMessages: ClineMessage[],
+		aihydroMessages: AiHydroMessage[],
 		api: ApiHandler,
 		triggerIndex?: number,
 	): {
@@ -147,7 +147,7 @@ export class ContextManager {
 			targetIndex = triggerIndex
 		} else {
 			// Find all API request indices
-			const apiReqIndices = clineMessages
+			const apiReqIndices = aihydroMessages
 				.map((msg, index) => (msg.say === "api_req_started" ? index : -1))
 				.filter((index) => index !== -1)
 
@@ -156,10 +156,10 @@ export class ContextManager {
 		}
 
 		if (targetIndex >= 0) {
-			const targetRequest = clineMessages[targetIndex]
+			const targetRequest = aihydroMessages[targetIndex]
 			if (targetRequest && targetRequest.text) {
 				try {
-					const { tokensIn, tokensOut, cacheWrites, cacheReads }: ClineApiReqInfo = JSON.parse(targetRequest.text)
+					const { tokensIn, tokensOut, cacheWrites, cacheReads }: AiHydroApiReqInfo = JSON.parse(targetRequest.text)
 					const tokensUsed = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 
 					const { contextWindow } = getContextWindowInfo(api)
@@ -181,7 +181,7 @@ export class ContextManager {
 	 */
 	async getNewContextMessagesAndMetadata(
 		apiConversationHistory: Anthropic.Messages.MessageParam[],
-		clineMessages: ClineMessage[],
+		aihydroMessages: AiHydroMessage[],
 		api: ApiHandler,
 		conversationHistoryDeletedRange: [number, number] | undefined,
 		previousApiReqIndex: number,
@@ -193,10 +193,10 @@ export class ContextManager {
 		if (!useAutoCondense) {
 			// If the previous API request's total token usage is close to the context window, truncate the conversation history to free up space for the new request
 			if (previousApiReqIndex >= 0) {
-				const previousRequest = clineMessages[previousApiReqIndex]
+				const previousRequest = aihydroMessages[previousApiReqIndex]
 				if (previousRequest && previousRequest.text) {
 					const timestamp = previousRequest.ts
-					const { tokensIn, tokensOut, cacheWrites, cacheReads }: ClineApiReqInfo = JSON.parse(previousRequest.text)
+					const { tokensIn, tokensOut, cacheWrites, cacheReads }: AiHydroApiReqInfo = JSON.parse(previousRequest.text)
 					const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 					const { maxAllowedSize } = getContextWindowInfo(api)
 

@@ -1,13 +1,13 @@
-import { ClineMessage } from "@shared/ExtensionMessage"
+import { AiHydroMessage } from "@shared/ExtensionMessage"
 import React, { useCallback } from "react"
 import { Virtuoso } from "react-virtuoso"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 import { createMessageRenderer } from "../messages/MessageRenderer"
 
 interface MessagesAreaProps {
-	task: ClineMessage
-	groupedMessages: (ClineMessage | ClineMessage[])[]
-	modifiedMessages: ClineMessage[]
+	task: AiHydroMessage
+	groupedMessages: (AiHydroMessage | AiHydroMessage[])[]
+	modifiedMessages: AiHydroMessage[]
 	scrollBehavior: ScrollBehavior
 	chatState: ChatState
 	messageHandlers: MessageHandlers
