@@ -128,7 +128,7 @@ export class ReportBugHandler implements IToolHandler, IPartialBlockHandler {
 
 				// Use our utility function to create and open the GitHub issue URL
 				// This bypasses VS Code's URI handling issues with special characters
-				await createAndOpenGitHubIssue("galib9690", "AI-Hydro", "bug_report.yml", params)
+				await createAndOpenGitHubIssue("AI-Hydro", "AI-Hydro", "bug_report.yml", params)
 			} catch (error) {
 				console.error(`An error occurred while attempting to report the bug: ${error}`)
 			}

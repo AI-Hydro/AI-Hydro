@@ -108,10 +108,10 @@ export const CliInstallBanner: React.FC = () => {
 				{isMacOS ? (
 					<>
 						Install to use AI-Hydro directly in your terminal and enable subagent capabilities. AI-Hydro can spawn{" "}
-						<code>cline</code> commands to handle focused tasks like exploring large codebases for information. This
+						<code>aihydro</code> commands to handle focused tasks like exploring large codebases for information. This
 						keeps your main context window clean by running these operations in separate subprocesses.{" "}
 						<a
-							href="https://github.com/galib9690/AI-Hydro#readme"
+							href="https://github.com/AI-Hydro/AI-Hydro#readme"
 							rel="noopener noreferrer"
 							style={{ color: "var(--vscode-textLink-foreground)" }}
 							target="_blank">
@@ -122,7 +122,7 @@ export const CliInstallBanner: React.FC = () => {
 					<>
 						AI-Hydro CLI is available for Mac OS users now! coming <code>soon</code> to other platforms.{" "}
 						<a
-							href="https://github.com/galib9690/AI-Hydro#readme"
+							href="https://github.com/AI-Hydro/AI-Hydro#readme"
 							rel="noopener noreferrer"
 							style={{ color: "var(--vscode-textLink-foreground)" }}
 							target="_blank">
@@ -139,7 +139,7 @@ export const CliInstallBanner: React.FC = () => {
 						fontFamily: "var(--vscode-editor-font-family)",
 						fontSize: 12,
 					}}>
-					npm install -g cline
+					npm install -g aihydro
 					<VSCodeButton
 						appearance="icon"
 						onClick={handleCopyCommand}

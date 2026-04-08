@@ -20,25 +20,25 @@ const AboutSection = ({ version, renderSectionHeader }: AboutSectionProps) => {
 
 					<h3>Community & Support</h3>
 					<p>
-						<VSCodeLink href="https://github.com/galib9690/AI-Hydro/discussions">Community</VSCodeLink>
+						<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro/discussions">Community</VSCodeLink>
 						{" • "}
-						<VSCodeLink href="https://github.com/galib9690/AI-Hydro/issues">Support</VSCodeLink>
+						<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro/issues">Support</VSCodeLink>
 					</p>
 
 					<h3>Development</h3>
 					<p>
-						<VSCodeLink href="https://github.com/galib9690/AI-Hydro">GitHub</VSCodeLink>
+						<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro">GitHub</VSCodeLink>
 						{" • "}
-						<VSCodeLink href="https://github.com/galib9690/AI-Hydro/issues"> Issues</VSCodeLink>
+						<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro/issues"> Issues</VSCodeLink>
 						{" • "}
-						<VSCodeLink href="https://github.com/galib9690/AI-Hydro/discussions"> Feature Requests</VSCodeLink>
+						<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro/discussions"> Feature Requests</VSCodeLink>
 					</p>
 
 					<h3>Resources</h3>
 					<p>
-						<VSCodeLink href="https://github.com/galib9690/AI-Hydro#readme">Documentation</VSCodeLink>
+						<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro#readme">Documentation</VSCodeLink>
 						{" • "}
-						<VSCodeLink href="https://github.com/galib9690/AI-Hydro">AI-Hydro Project</VSCodeLink>
+						<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro">AI-Hydro Project</VSCodeLink>
 					</p>
 				</div>
 			</Section>

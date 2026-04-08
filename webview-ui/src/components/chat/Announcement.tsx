@@ -94,7 +94,7 @@ const Announcement = ({ version, hideAnnouncement }: AnnouncementProps) => {
 			<ul style={ulStyle}>
 				<li>
 					<b>AI-Hydro CLI (Preview):</b> Run AI-Hydro from the command line with experimental Subagent support.{" "}
-					<VSCodeLink href="https://github.com/galib9690/AI-Hydro#readme" style={linkStyle}>
+					<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro#readme" style={linkStyle}>
 						Learn more
 					</VSCodeLink>
 				</li>
@@ -109,14 +109,14 @@ const Announcement = ({ version, hideAnnouncement }: AnnouncementProps) => {
 			<div style={hrStyle} />
 			<p style={linkContainerStyle}>
 				Join us on{" "}
-				<VSCodeLink href="https://github.com/galib9690/AI-Hydro/discussions" style={linkStyle}>
+				<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro/discussions" style={linkStyle}>
 					Community,
 				</VSCodeLink>{" "}
-				<VSCodeLink href="https://github.com/galib9690/AI-Hydro/issues" style={linkStyle}>
+				<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro/issues" style={linkStyle}>
 					issues,
 				</VSCodeLink>{" "}
 				or{" "}
-				<VSCodeLink href="https://github.com/galib9690/AI-Hydro" style={linkStyle}>
+				<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro" style={linkStyle}>
 					GitHub
 				</VSCodeLink>
 				for more updates!

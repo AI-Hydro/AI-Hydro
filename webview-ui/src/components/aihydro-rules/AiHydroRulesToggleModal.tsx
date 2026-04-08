@@ -260,7 +260,7 @@ const AiHydroRulesToggleModal: React.FC = () => {
 								to include context and preferences for your projects or globally for every conversation.{" "}
 								<VSCodeLink
 									className="text-xs"
-									href="https://github.com/galib9690/AI-Hydro#readme"
+									href="https://github.com/AI-Hydro/AI-Hydro#readme"
 									style={{ display: "inline" }}>
 									Docs
 								</VSCodeLink>
@@ -277,7 +277,7 @@ const AiHydroRulesToggleModal: React.FC = () => {
 								in the chat.{" "}
 								<VSCodeLink
 									className="text-xs"
-									href="https://github.com/galib9690/AI-Hydro#readme"
+									href="https://github.com/AI-Hydro/AI-Hydro#readme"
 									style={{ display: "inline" }}>
 									Docs
 								</VSCodeLink>

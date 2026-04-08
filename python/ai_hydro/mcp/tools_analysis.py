@@ -696,7 +696,7 @@ def extract_camels_attributes(gauge_id: str) -> dict:
     Notes
     -----
     Requires: pip install camels-attrs
-    See: https://github.com/galib9690/camels-attrs
+    See: https://github.com/AI-Hydro/camels-attrs
     """
     try:
         gauge_id = _validate_gauge_id(gauge_id)
@@ -728,7 +728,7 @@ def extract_camels_attributes(gauge_id: str) -> dict:
                 sources=[
                     DataSource(
                         name="USGS NLDI / NWIS / GridMET / STATSGO / MODIS / GLHYMPS",
-                        url="https://github.com/galib9690/camels-attrs",
+                        url="https://github.com/AI-Hydro/camels-attrs",
                         citation=(
                             "@article{Addor2017,\n"
                             "  title={The CAMELS data set: catchment attributes and "

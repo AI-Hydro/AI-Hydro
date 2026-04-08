@@ -14,7 +14,7 @@ Thank you for your interest in contributing! AI-Hydro is an open-source hydrolog
 
 For anything beyond a small bug fix or typo:
 
-1. Check [existing issues](https://github.com/galib9690/AI-Hydro/issues) and [discussions](https://github.com/galib9690/AI-Hydro/discussions) to avoid duplication.
+1. Check [existing issues](https://github.com/AI-Hydro/AI-Hydro/issues) and [discussions](https://github.com/AI-Hydro/AI-Hydro/discussions) to avoid duplication.
 2. Open an issue or discussion describing what you plan to build and why.
 3. Wait for a maintainer response before investing significant time.
 
@@ -27,7 +27,7 @@ For anything beyond a small bug fix or typo:
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/galib9690/AI-Hydro.git
+git clone https://github.com/AI-Hydro/AI-Hydro.git
 cd AI-Hydro
 
 # Extension (TypeScript / React)
@@ -180,7 +180,7 @@ Use the PR template when submitting.
 ## Reporting Security Issues
 
 Please **do not** file public issues for security vulnerabilities.
-Email mgalib@purdue.edu or use [GitHub Security Advisories](https://github.com/galib9690/AI-Hydro/security/advisories/new).
+Email mgalib@purdue.edu or use [GitHub Security Advisories](https://github.com/AI-Hydro/AI-Hydro/security/advisories/new).
 
 ---
 

@@ -238,6 +238,6 @@ def _check_deps() -> None:
 def _get_version() -> str:
     try:
         from importlib.metadata import version
-        return version("ai-hydro")
+        return version("aihydro-tools")
     except Exception:
         return "unknown"

@@ -13,8 +13,8 @@ interface CreditLimitErrorProps {
 }
 
 const DEFAULT_BUY_CREDITS_URL = {
-	USER: "https://github.com/galib9690/AI-Hydro#readme",
-	ORG: "https://github.com/galib9690/AI-Hydro#readme",
+	USER: "https://github.com/AI-Hydro/AI-Hydro#readme",
+	ORG: "https://github.com/AI-Hydro/AI-Hydro#readme",
 }
 
 const CreditLimitError: React.FC<CreditLimitErrorProps> = ({

@@ -159,7 +159,7 @@ describe("ErrorRow", () => {
 			expect(screen.getByText("troubleshooting guide")).toBeInTheDocument()
 			expect(screen.getByRole("link", { name: "troubleshooting guide" })).toHaveAttribute(
 				"href",
-				"https://github.com/galib9690/AI-Hydro/issues",
+				"https://github.com/AI-Hydro/AI-Hydro/issues",
 			)
 		})
 

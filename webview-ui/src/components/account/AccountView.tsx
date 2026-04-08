@@ -237,7 +237,7 @@ export const AiHydroAccountView = ({ aihydroUser, userOrganizations, activeOrgan
 		fetchCreditBalance(dropdownValue)
 	}, 60000)
 
-	const aihydroUrl = appBaseUrl || "https://github.com/galib9690/AI-Hydro"
+	const aihydroUrl = appBaseUrl || "https://github.com/AI-Hydro/AI-Hydro"
 
 	// Fetch balance on mount
 	useEffect(() => {

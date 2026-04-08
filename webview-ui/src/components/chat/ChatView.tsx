@@ -52,7 +52,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		userInfo,
 		currentFocusChainChecklist,
 	} = useExtensionState()
-	const isProdHostedApp = userInfo?.apiBaseUrl === "https://github.com/galib9690/AI-Hydro"
+	const isProdHostedApp = userInfo?.apiBaseUrl === "https://github.com/AI-Hydro/AI-Hydro"
 	const shouldShowQuickWins = isProdHostedApp && (!taskHistory || taskHistory.length < QUICK_WINS_HISTORY_THRESHOLD)
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined

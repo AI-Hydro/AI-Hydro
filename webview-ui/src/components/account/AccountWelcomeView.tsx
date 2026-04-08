@@ -21,8 +21,8 @@ export const AccountWelcomeView = () => {
 
 			<p className="text-[var(--vscode-descriptionForeground)] text-xs text-center m-0">
 				By continuing, you agree to the{" "}
-				<VSCodeLink href="https://github.com/galib9690/AI-Hydro#readme">Terms of Service</VSCodeLink> and{" "}
-				<VSCodeLink href="https://github.com/galib9690/AI-Hydro#readme">Privacy Policy.</VSCodeLink>
+				<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro#readme">Terms of Service</VSCodeLink> and{" "}
+				<VSCodeLink href="https://github.com/AI-Hydro/AI-Hydro#readme">Privacy Policy.</VSCodeLink>
 			</p>
 		</div>
 	)

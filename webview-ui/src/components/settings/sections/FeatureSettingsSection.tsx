@@ -107,7 +107,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 												color: "var(--vscode-foreground)",
 												opacity: 0.9,
 											}}>
-											npm install -g cline
+											npm install -g aihydro
 										</code>
 										, then run
 										<code
@@ -117,7 +117,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 												color: "var(--vscode-foreground)",
 												opacity: 0.9,
 											}}>
-											cline auth
+											aihydro auth
 										</code>
 										To authenticate with AI-Hydro or configure an API provider.
 									</span>
@@ -390,7 +390,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							Enables advanced context management system which uses LLM based condensing for next-gen models.{" "}
 							<a
 								className="text-[var(--vscode-textLink-foreground)] hover:text-[var(--vscode-textLink-activeForeground)]"
-								href="https://github.com/galib9690/AI-Hydro#readme"
+								href="https://github.com/AI-Hydro/AI-Hydro#readme"
 								rel="noopener noreferrer"
 								target="_blank">
 								Learn more

@@ -65,7 +65,7 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 									<br />
 									<br />
 									It seems like you're having Windows PowerShell issues, please see this{" "}
-									<a className="underline text-inherit" href="https://github.com/galib9690/AI-Hydro/issues">
+									<a className="underline text-inherit" href="https://github.com/AI-Hydro/AI-Hydro/issues">
 										troubleshooting guide
 									</a>
 									.

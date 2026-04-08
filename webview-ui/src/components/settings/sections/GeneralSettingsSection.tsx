@@ -52,14 +52,14 @@ const GeneralSettingsSection = ({ renderSectionHeader }: GeneralSettingsSectionP
 						are ever sent. See our{" "}
 						<VSCodeLink
 							className="text-inherit"
-							href="https://github.com/galib9690/AI-Hydro#readme"
+							href="https://github.com/AI-Hydro/AI-Hydro#readme"
 							style={{ fontSize: "inherit", textDecoration: "underline" }}>
 							telemetry overview
 						</VSCodeLink>{" "}
 						and{" "}
 						<VSCodeLink
 							className="text-inherit"
-							href="https://github.com/galib9690/AI-Hydro#readme"
+							href="https://github.com/AI-Hydro/AI-Hydro#readme"
 							style={{ fontSize: "inherit", textDecoration: "underline" }}>
 							privacy policy
 						</VSCodeLink>{" "}

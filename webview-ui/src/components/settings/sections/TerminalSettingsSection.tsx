@@ -168,7 +168,7 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							<strong>Having terminal issues?</strong> Check our{" "}
 							<a
 								className="text-[var(--vscode-textLink-foreground)] underline hover:no-underline"
-								href="https://github.com/galib9690/AI-Hydro/issues"
+								href="https://github.com/AI-Hydro/AI-Hydro/issues"
 								rel="noopener noreferrer"
 								target="_blank">
 								Terminal Quick Fixes
@@ -176,7 +176,7 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							or the{" "}
 							<a
 								className="text-[var(--vscode-textLink-foreground)] underline hover:no-underline"
-								href="https://github.com/galib9690/AI-Hydro/issues"
+								href="https://github.com/AI-Hydro/AI-Hydro/issues"
 								rel="noopener noreferrer"
 								target="_blank">
 								Complete Troubleshooting Guide

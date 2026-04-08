@@ -14,7 +14,7 @@ export const InfoBanner: React.FC = () => {
 		return (
 			<a
 				className="bg-banner-background px-3 py-2 flex flex-col gap-1 shrink-0 mb-1 relative text-sm m-4 no-underline transition-colors hover:brightness-120"
-				href="https://github.com/galib9690/AI-Hydro#readme"
+				href="https://github.com/AI-Hydro/AI-Hydro#readme"
 				rel="noopener noreferrer"
 				style={{ color: "var(--vscode-foreground)", outline: "none" }}
 				target="_blank">

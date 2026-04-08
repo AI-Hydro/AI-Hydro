@@ -1531,7 +1531,7 @@ export const ChatRowContent = memo(
 									zsh, bash, fish, or PowerShell (<code>CMD/CTRL + Shift + P</code> → "Terminal: Select Default
 									Profile").{" "}
 									<a
-										href="https://github.com/galib9690/AI-Hydro/issues"
+										href="https://github.com/AI-Hydro/AI-Hydro/issues"
 										style={{
 											color: "inherit",
 											textDecoration: "underline",

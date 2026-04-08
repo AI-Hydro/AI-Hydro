@@ -24,7 +24,7 @@ MCP-compatible AI assistant.
 ### 1. Set up
 
 ```bash
-git clone https://github.com/galib9690/AI-Hydro
+git clone https://github.com/AI-Hydro/AI-Hydro
 cd AI-Hydro/python
 pip install -e ".[dev]"
 ```
@@ -158,4 +158,4 @@ Add a YAML entry to `knowledge/` for the `query_hydro_concepts` MCP tool:
 
 ## Questions?
 
-Open an issue: https://github.com/galib9690/AI-Hydro/issues
+Open an issue: https://github.com/AI-Hydro/AI-Hydro/issues

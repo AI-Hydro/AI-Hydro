@@ -102,7 +102,7 @@ const TaskFeedbackButtons: React.FC<TaskFeedbackButtonsProps> = ({ messageTs, is
 					</VSCodeButton>
 				</ButtonWrapper>
 				{/* <VSCodeButtonLink
-					href="https://github.com/galib9690/AI-Hydro/issues/new"
+					href="https://github.com/AI-Hydro/AI-Hydro/issues/new"
 					appearance="icon"
 					title="Report a bug"
 					aria-label="Report a bug">

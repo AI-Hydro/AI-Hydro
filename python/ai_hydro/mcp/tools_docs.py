@@ -16,7 +16,7 @@ def _get_version() -> str:
     """Return the installed ai-hydro package version."""
     try:
         from importlib.metadata import version
-        return version("ai-hydro")
+        return version("aihydro-tools")
     except Exception:
         return "unknown"
 
@@ -35,6 +35,9 @@ def _list_tools_sync() -> list:
     import asyncio
     from ai_hydro.mcp.app import mcp
     try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return []
         return asyncio.run(mcp.list_tools())
     except Exception:
         return []

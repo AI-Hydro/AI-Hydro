@@ -171,7 +171,7 @@ See deprecation timeline in main project documentation.
 For questions or issues:
 - Check [CONTRIBUTING.md](CONTRIBUTING.md)
 - Review the [architecture docs](../docs/architecture.md)
-- Open an issue on [GitHub](https://github.com/galib9690/AI-Hydro/issues)
+- Open an issue on [GitHub](https://github.com/AI-Hydro/AI-Hydro/issues)
 
 ---
 

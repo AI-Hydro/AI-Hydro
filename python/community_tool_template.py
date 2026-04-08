@@ -6,7 +6,7 @@ Copy this file, fill in the TODO sections, and submit a pull request.
 
 Checklist before submitting
 ----------------------------
-[ ] Tool name is unique (check existing tools at https://github.com/galib9690/AI-Hydro)
+[ ] Tool name is unique (check existing tools at https://github.com/AI-Hydro/AI-Hydro)
 [ ] run() returns HydroResult (not a dict, DataFrame, or tuple)
 [ ] All data values are JSON-serializable (float, int, str, list, dict — no numpy/Shapely)
 [ ] validate() passes against at least gauge 01031500 (Mattawamkeag River, ME)
@@ -19,7 +19,7 @@ Naming conventions
 - Category: one of watershed, hydrology, climate, geomorphic, snow, groundwater, soil,
             vegetation, remote_sensing, water_quality, sociohydrology
 
-Questions?  Open an issue: https://github.com/galib9690/AI-Hydro/issues
+Questions?  Open an issue: https://github.com/AI-Hydro/AI-Hydro/issues
 """
 
 from __future__ import annotations

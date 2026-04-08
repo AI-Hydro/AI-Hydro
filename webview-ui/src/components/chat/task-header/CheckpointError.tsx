@@ -40,7 +40,7 @@ export const CheckpointError: React.FC<CheckpointErrorProps> = ({
 							</button>
 						)}
 						{messages.showGitInstructions && (
-							<a className="text-link underline" href="https://github.com/galib9690/AI-Hydro/issues">
+							<a className="text-link underline" href="https://github.com/AI-Hydro/AI-Hydro/issues">
 								See instructions
 							</a>
 						)}

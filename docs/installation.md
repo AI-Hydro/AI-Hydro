@@ -15,7 +15,7 @@
 
 ### Option A — Install from `.vsix` (recommended for alpha)
 
-1. Download the latest `ai-hydro-*.vsix` from the [Releases page](https://github.com/galib9690/AI-Hydro/releases).
+1. Download the latest `ai-hydro-*.vsix` from the [Releases page](https://github.com/AI-Hydro/AI-Hydro/releases).
 2. Open VS Code.
 3. Go to **Extensions** (`Ctrl+Shift+X` / `Cmd+Shift+X`).
 4. Click the `...` menu (top-right of Extensions panel) → **Install from VSIX…**
@@ -26,7 +26,7 @@
 
 ```bash
 # Prerequisites: Node.js 18+, npm
-git clone https://github.com/galib9690/AI-Hydro.git
+git clone https://github.com/AI-Hydro/AI-Hydro.git
 cd AI-Hydro
 
 # Install all dependencies (extension + webview)

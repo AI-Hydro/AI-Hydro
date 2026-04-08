@@ -668,7 +668,7 @@ def extract_geomorphic_parameters_result(
         def _get_version():
             try:
                 from importlib.metadata import version
-                return version("ai-hydro")
+                return version("aihydro-tools")
             except Exception:
                 return "unknown"
 

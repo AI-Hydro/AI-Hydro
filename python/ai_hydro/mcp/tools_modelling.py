@@ -138,9 +138,6 @@ async def train_hydro_model(
                 hidden_size=hidden_size,
                 learning_rate=learning_rate,
             )
-
-        if ctx:
-            await ctx.report_progress(progress=2, total=2)
         else:
             return {
                 "error": True,
@@ -151,6 +148,9 @@ async def train_hydro_model(
                     "'neuralhydrology' (LSTM, requires pip install neuralhydrology)."
                 ),
             }
+
+        if ctx:
+            await ctx.report_progress(progress=2, total=2)
 
         # Cache result in session
         session.model = result
