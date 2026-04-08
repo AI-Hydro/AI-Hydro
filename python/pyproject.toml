@@ -133,10 +133,10 @@ aihydro-mcp = "ai_hydro.mcp:main"
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
 [project.urls]
-Homepage = "https://github.com/galib9690/AI-Hydro"
-Documentation = "https://github.com/galib9690/AI-Hydro/wiki"
-Repository = "https://github.com/galib9690/AI-Hydro"
-Issues = "https://github.com/galib9690/AI-Hydro/issues"
+Homepage = "https://github.com/AI-Hydro/AI-Hydro"
+Documentation = "https://github.com/AI-Hydro/AI-Hydro/wiki"
+Repository = "https://github.com/AI-Hydro/AI-Hydro"
+Issues = "https://github.com/AI-Hydro/AI-Hydro/issues"
 
 # ── Package discovery ─────────────────────────────────────────────────────────
 [tool.setuptools.packages.find]
