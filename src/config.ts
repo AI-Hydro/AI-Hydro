@@ -68,9 +68,9 @@ class AiHydroEndpoint {
 			case Environment.staging:
 				return {
 					environment: Environment.staging,
-					appBaseUrl: getEnvOrDefault("AI_HYDRO_APP_BASE_URL_STAGING", "https://github.com/galib9690/AI-Hydro"),
+					appBaseUrl: getEnvOrDefault("AI_HYDRO_APP_BASE_URL_STAGING", "https://github.com/AI-Hydro/AI-Hydro"),
 					apiBaseUrl: getEnvOrDefault("AI_HYDRO_API_BASE_URL_STAGING", "http://127.0.0.1:7777"),
-					mcpBaseUrl: getEnvOrDefault("AI_HYDRO_MCP_BASE_URL_STAGING", ""),
+					mcpBaseUrl: getEnvOrDefault("AI_HYDRO_MCP_BASE_URL_STAGING", "https://ai-hydro.github.io/Marketplace/api"),
 					firebase: {
 						apiKey: getEnvOrDefault("AI_HYDRO_FIREBASE_API_KEY_STAGING", ""),
 						authDomain: getEnvOrDefault("AI_HYDRO_FIREBASE_AUTH_DOMAIN_STAGING", ""),
@@ -85,7 +85,7 @@ class AiHydroEndpoint {
 					environment: Environment.local,
 					appBaseUrl: getEnvOrDefault("AI_HYDRO_APP_BASE_URL_LOCAL", "http://localhost:3000"),
 					apiBaseUrl: getEnvOrDefault("AI_HYDRO_API_BASE_URL_LOCAL", "http://localhost:7777"),
-					mcpBaseUrl: getEnvOrDefault("AI_HYDRO_MCP_BASE_URL_LOCAL", ""),
+					mcpBaseUrl: getEnvOrDefault("AI_HYDRO_MCP_BASE_URL_LOCAL", "https://ai-hydro.github.io/Marketplace/api"),
 					firebase: {
 						apiKey: getEnvOrDefault("AI_HYDRO_FIREBASE_API_KEY_LOCAL", ""),
 						authDomain: getEnvOrDefault("AI_HYDRO_FIREBASE_AUTH_DOMAIN_LOCAL", ""),
@@ -95,9 +95,9 @@ class AiHydroEndpoint {
 			default:
 				return {
 					environment: Environment.production,
-					appBaseUrl: getEnvOrDefault("AI_HYDRO_APP_BASE_URL", "https://github.com/galib9690/AI-Hydro"),
+					appBaseUrl: getEnvOrDefault("AI_HYDRO_APP_BASE_URL", "https://github.com/AI-Hydro/AI-Hydro"),
 					apiBaseUrl: getEnvOrDefault("AI_HYDRO_API_BASE_URL", "http://127.0.0.1:7777"),
-					mcpBaseUrl: getEnvOrDefault("AI_HYDRO_MCP_BASE_URL", ""),
+					mcpBaseUrl: getEnvOrDefault("AI_HYDRO_MCP_BASE_URL", "https://ai-hydro.github.io/Marketplace/api"),
 					firebase: {
 						apiKey: getEnvOrDefault("AI_HYDRO_FIREBASE_API_KEY", ""),
 						authDomain: getEnvOrDefault("AI_HYDRO_FIREBASE_AUTH_DOMAIN", ""),

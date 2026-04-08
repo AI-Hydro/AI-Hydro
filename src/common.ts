@@ -69,7 +69,7 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 	await FileContextTracker.cleanupOrphanedWarnings(context)
 
 	// Auto-register the aihydro-tools MCP server if installed and not already configured
-	await ensureDefaultMcpServer()
+	await ensureDefaultMcpServer(context)
 
 	const webview = HostProvider.get().createWebviewProvider()
 

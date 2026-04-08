@@ -575,7 +575,7 @@ export class Controller {
 	// MCP Marketplace
 	private async fetchMcpMarketplaceFromApi(silent: boolean = false): Promise<McpMarketplaceCatalog | undefined> {
 		try {
-			const response = await axios.get(`${AiHydroEnv.config().mcpBaseUrl}/marketplace`, {
+			const response = await axios.get(`${AiHydroEnv.config().mcpBaseUrl}/marketplace.json`, {
 				headers: {
 					"Content-Type": "application/json",
 				},
@@ -612,7 +612,7 @@ export class Controller {
 
 	private async fetchMcpMarketplaceFromApiRPC(silent: boolean = false): Promise<McpMarketplaceCatalog | undefined> {
 		try {
-			const response = await axios.get(`${AiHydroEnv.config().mcpBaseUrl}/marketplace`, {
+			const response = await axios.get(`${AiHydroEnv.config().mcpBaseUrl}/marketplace.json`, {
 				headers: {
 					"Content-Type": "application/json",
 					"User-Agent": "aihydro-vscode-extension",

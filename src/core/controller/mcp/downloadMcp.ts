@@ -29,15 +29,10 @@ export async function downloadMcp(controller: Controller, request: StringRequest
 			throw new Error("This MCP server is already installed")
 		}
 
-		// Fetch server details from marketplace
-		const response = await axios.post<McpDownloadResponse>(
-			`${AiHydroEnv.config().mcpBaseUrl}/download`,
-			{ mcpId },
-			{
-				headers: { "Content-Type": "application/json" },
-				timeout: 10000,
-			},
-		)
+		// Fetch server details from marketplace (static JSON via GitHub Pages)
+		const response = await axios.get<McpDownloadResponse>(`${AiHydroEnv.config().mcpBaseUrl}/download/${mcpId}.json`, {
+			timeout: 10000,
+		})
 
 		if (!response.data) {
 			throw new Error("Invalid response from MCP marketplace API")
