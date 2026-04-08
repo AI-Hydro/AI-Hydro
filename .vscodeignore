@@ -36,6 +36,36 @@ evals/
 buf.yaml
 .changeset/
 .clinerules/
+.aihydrorules/
+
+# AI-Hydro specific — exclude large directories not needed in .vsix
+python/
+cache/
+output/
+knowledge/
+mcp-config-examples/
+*.pyc
+__pycache__/
+clean_rebuild.sh
+verify_extension_installation.sh
+test_watershed_to_map.py
+setup_mcp.py
+biome.jsonc
+esbuild.mjs
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+AI_HYDRO_FINAL_COMPLETE_WORKFLOW.md
+go.work
+go.work.sum
+knip.json
+.nycrc.unit.json
+.env.example
+test-setup.js
+.claude/
+testing-platform/
+tests/
+scripts/
+proto/
 
 # Include specific file needed for Background Exec mode
 !standalone/runtime-files/vscode/enhanced-terminal.js

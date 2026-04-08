@@ -1,6 +1,6 @@
 # API Options Component Architecture
 
-This directory contains the refactored API Options components for the Cline extension. The refactoring aims to improve maintainability, code organization, and reduce complexity by separating provider-specific code into modular components.
+This directory contains the refactored API Options components for the AI-Hydro extension. The refactoring aims to improve maintainability, code organization, and reduce complexity by separating provider-specific code into modular components.
 
 ## Directory Structure
 
@@ -14,7 +14,7 @@ settings/
 │   ├── ModelInfoView.tsx       # Model information display
 │   └── ModelSelector.tsx       # Model selection dropdown
 ├── providers/                   # Provider-specific components
-│   ├── ClineProvider.tsx       # Cline configuration
+│   ├── AiHydroProvider.tsx     # AI-Hydro configuration
 │   ├── AnthropicProvider.tsx   # Anthropic-specific configuration
 │   ├── BedrockProvider.tsx     # AWS Bedrock configuration
 │   ├── GeminiProvider.tsx      # Google Gemini configuration
