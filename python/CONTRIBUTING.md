@@ -102,12 +102,59 @@ pytest tests/test_reference_gauges.py -v -m "not live"
 In `pyproject.toml` (core repo tools) or your own package's `pyproject.toml`:
 
 ```toml
-[project.entry-points."ai_hydro.tools"]
-my_tool = "ai_hydro.tools.my_tool:MyTool"
+[project.entry-points."aihydro.tools"]
+my_tool = "my_package.my_module:my_tool_function"
 ```
 
-The MCP server discovers all registered entry points at startup — no changes
-to the server required.
+> **Important:** The entry point group is `"aihydro.tools"` (with a dot, not underscore).
+
+The MCP server discovers all registered entry points at startup via
+`ai_hydro.mcp.registry.discover_tools()` — no changes to the server required.
+
+#### Standalone plugin package (alternative to core PR)
+
+You can also create an independent package that extends AI-Hydro without
+modifying the core repo:
+
+```
+aihydro-my-extension/
+  pyproject.toml
+  my_extension/
+    __init__.py
+    tools.py
+```
+
+```toml
+# pyproject.toml
+[project]
+name = "aihydro-my-extension"
+version = "0.1.0"
+dependencies = ["aihydro-tools"]
+
+[project.entry-points."aihydro.tools"]
+my_tool = "my_extension.tools:my_tool_function"
+```
+
+```python
+# my_extension/tools.py
+from ai_hydro.session import HydroSession
+
+def my_tool_function(gauge_id: str, param: float = 1.0) -> dict:
+    """One-line description of what this tool does."""
+    session = HydroSession(gauge_id)
+    watershed = session.watershed  # access cached data from other tools
+    # ... your analysis ...
+    result = {"gauge_id": gauge_id, "output": 42.0}
+    session.set("my_custom_slot", result)
+    session.save()
+    return result
+```
+
+Install with `pip install -e .`, then restart the MCP server. Your tool appears
+automatically in `aihydro-mcp --diagnose`.
+
+For the full contribution guide (including standalone MCP servers, marketplace
+submission, and testing), see **[PLUGIN_GUIDE.md](../PLUGIN_GUIDE.md)**.
 
 ### 7. Open a pull request
 

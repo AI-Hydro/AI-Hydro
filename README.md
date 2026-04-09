@@ -152,9 +152,9 @@ All tools communicate via the [Model Context Protocol](https://modelcontextproto
 
 | Provider | Recommended model |
 | --- | --- |
-| Anthropic | Claude Sonnet 4.5 / Opus 4.6 |
-| OpenAI | GPT-4o |
-| Google | Gemini 2.0 Flash |
+| Anthropic | Claude Sonnet 4.6 / Opus 4.6 |
+| OpenAI | GPT-5.4 |
+| Google | Gemini 3.1 Pro / 2.5 Flash |
 | AWS Bedrock | Claude on Bedrock |
 | Ollama / LM Studio | Local models |
 
@@ -303,13 +303,36 @@ Full architecture details: [docs/architecture.md](./docs/architecture.md)
 
 ## Contributing Tools
 
-We welcome contributions from the hydrology and geospatial sciences community. Whether it's a single analysis function or a full sub-domain toolkit, adding tools to AI-Hydro is straightforward:
+We welcome contributions from the hydrology and geospatial sciences community. There are two paths depending on your goals:
 
-1. Write a Python function with type-annotated parameters
-2. Register it as an entry point in your `pyproject.toml`
-3. Publish to PyPI — every AI-Hydro user can install and use it immediately
+**Path A: Standalone MCP Server** — Build an independent MCP server for a full sub-domain toolkit (flood frequency analysis, hydraulic modelling, etc.). Your server runs as its own process with its own dependencies and gets registered alongside the core `ai-hydro` server. Best for complex toolkits or when you need full dependency isolation.
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for a step-by-step guide to contributing tools.
+**Path B: Entry Point Plugin** — Extend the existing `aihydro-tools` server by registering tool functions via Python entry points. Your tools load into the same process with full access to HydroSession, cached data, and shared helpers. Best for single tools or small extensions.
+
+```toml
+# Path B — just add this to your pyproject.toml
+[project.entry-points."aihydro.tools"]
+my_tool = "my_package.tools:my_tool_function"
+```
+
+Install, restart the server, and your tool is immediately available to every AI model.
+
+See **[PLUGIN_GUIDE.md](./PLUGIN_GUIDE.md)** for complete walkthroughs of both paths, including the data contract, session integration, and testing.
+
+### High-Priority Contribution Areas
+
+We're actively looking for community tools in these domains:
+
+- Flood frequency analysis and extreme event statistics
+- Sediment transport and reservoir sedimentation
+- Groundwater modelling, well analysis, and recharge estimation
+- Remote sensing workflows (MODIS snow cover, Landsat ET, SAR soil moisture)
+- Water quality and nutrient cycling
+- Snow hydrology and glaciology
+- Irrigation scheduling and water resources management
+- Hydraulic modelling and 2D flood mapping
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the step-by-step new tool guide and [python/CONTRIBUTING.md](./python/CONTRIBUTING.md) for Python-specific development setup.
 
 ---
 

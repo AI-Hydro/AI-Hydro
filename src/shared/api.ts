@@ -261,10 +261,40 @@ export const CLAUDE_SONNET_1M_TIERS = [
 // Anthropic
 // https://docs.anthropic.com/en/docs/about-claude/models // prices updated 2025-01-02
 export type AnthropicModelId = keyof typeof anthropicModels
-export const anthropicDefaultModelId: AnthropicModelId = "claude-sonnet-4-5-20250929"
+export const anthropicDefaultModelId: AnthropicModelId = "claude-sonnet-4-6"
 export const ANTHROPIC_MIN_THINKING_BUDGET = 1_024
 export const ANTHROPIC_MAX_THINKING_BUDGET = 6_000
 export const anthropicModels = {
+	"claude-opus-4-6": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheWritesPrice: 6.25,
+		cacheReadsPrice: 0.5,
+	},
+	"claude-sonnet-4-6": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 3.0,
+		outputPrice: 15.0,
+		cacheWritesPrice: 3.75,
+		cacheReadsPrice: 0.3,
+	},
+	"claude-opus-4-5-20251101": {
+		maxTokens: 8192,
+		contextWindow: 200_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheWritesPrice: 6.25,
+		cacheReadsPrice: 0.5,
+	},
 	"claude-sonnet-4-5-20250929": {
 		maxTokens: 8192,
 		contextWindow: 200_000,
@@ -393,15 +423,15 @@ export const anthropicModels = {
 
 // Claude Code
 export type ClaudeCodeModelId = keyof typeof claudeCodeModels
-export const claudeCodeDefaultModelId: ClaudeCodeModelId = "claude-sonnet-4-5-20250929"
+export const claudeCodeDefaultModelId: ClaudeCodeModelId = "claude-sonnet-4-6"
 export const claudeCodeModels = {
 	sonnet: {
-		...anthropicModels["claude-sonnet-4-5-20250929"],
+		...anthropicModels["claude-sonnet-4-6"],
 		supportsImages: false,
 		supportsPromptCache: false,
 	},
 	opus: {
-		...anthropicModels["claude-opus-4-1-20250805"],
+		...anthropicModels["claude-opus-4-6"],
 		supportsImages: false,
 		supportsPromptCache: false,
 	},
@@ -410,8 +440,23 @@ export const claudeCodeModels = {
 		supportsImages: false,
 		supportsPromptCache: false,
 	},
+	"claude-sonnet-4-6": {
+		...anthropicModels["claude-sonnet-4-6"],
+		supportsImages: false,
+		supportsPromptCache: false,
+	},
+	"claude-opus-4-6": {
+		...anthropicModels["claude-opus-4-6"],
+		supportsImages: false,
+		supportsPromptCache: false,
+	},
 	"claude-sonnet-4-5-20250929": {
 		...anthropicModels["claude-sonnet-4-5-20250929"],
+		supportsImages: false,
+		supportsPromptCache: false,
+	},
+	"claude-opus-4-5-20251101": {
+		...anthropicModels["claude-opus-4-5-20251101"],
 		supportsImages: false,
 		supportsPromptCache: false,
 	},
@@ -445,8 +490,39 @@ export const claudeCodeModels = {
 // AWS Bedrock
 // https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html
 export type BedrockModelId = keyof typeof bedrockModels
-export const bedrockDefaultModelId: BedrockModelId = "anthropic.claude-sonnet-4-20250514-v1:0" // TODO: update to 4-5
+export const bedrockDefaultModelId: BedrockModelId = "anthropic.claude-sonnet-4-6"
 export const bedrockModels = {
+	"anthropic.claude-opus-4-6-v1": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheWritesPrice: 6.25,
+		cacheReadsPrice: 0.5,
+	},
+	"anthropic.claude-sonnet-4-6": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsGlobalEndpoint: true,
+		inputPrice: 3.0,
+		outputPrice: 15.0,
+		cacheWritesPrice: 3.75,
+		cacheReadsPrice: 0.3,
+	},
+	"anthropic.claude-opus-4-5-20251101-v1:0": {
+		maxTokens: 8192,
+		contextWindow: 200_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheWritesPrice: 6.25,
+		cacheReadsPrice: 0.5,
+	},
 	"anthropic.claude-sonnet-4-5-20250929-v1:0": {
 		maxTokens: 8192,
 		contextWindow: 200_000,
@@ -661,7 +737,7 @@ export const bedrockModels = {
 
 // OpenRouter
 // https://openrouter.ai/models?order=newest&supported_parameters=tools
-export const openRouterDefaultModelId = "anthropic/claude-sonnet-4.5" // will always exist in openRouterModels
+export const openRouterDefaultModelId = "anthropic/claude-sonnet-4.6" // will always exist in openRouterModels
 export const openRouterAutoModelId = "openrouter/auto"
 export const openRouterClaudeSonnet41mModelId = `anthropic/claude-sonnet-4${CLAUDE_SONNET_1M_SUFFIX}`
 export const openRouterClaudeSonnet451mModelId = `anthropic/claude-sonnet-4.5${CLAUDE_SONNET_1M_SUFFIX}`
@@ -701,8 +777,38 @@ export const aihydroCodeSupernovaModelInfo: ModelInfo = {
 // https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude
 // https://cloud.google.com/vertex-ai/generative-ai/pricing#partner-models
 export type VertexModelId = keyof typeof vertexModels
-export const vertexDefaultModelId: VertexModelId = "claude-sonnet-4@20250514" // TODO: update to 4-5
+export const vertexDefaultModelId: VertexModelId = "claude-sonnet-4-6"
 export const vertexModels = {
+	"claude-opus-4-6": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheWritesPrice: 6.25,
+		cacheReadsPrice: 0.5,
+	},
+	"claude-sonnet-4-6": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 3.0,
+		outputPrice: 15.0,
+		cacheWritesPrice: 3.75,
+		cacheReadsPrice: 0.3,
+	},
+	"claude-opus-4-5@20251101": {
+		maxTokens: 8192,
+		contextWindow: 200_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheWritesPrice: 6.25,
+		cacheReadsPrice: 0.5,
+	},
 	"claude-sonnet-4-5@20250929": {
 		maxTokens: 8192,
 		contextWindow: 200_000,
@@ -896,6 +1002,45 @@ export const vertexModels = {
 		inputPrice: 0,
 		outputPrice: 0,
 	},
+	"gemini-3.1-pro-preview": {
+		maxTokens: 65536,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsGlobalEndpoint: true,
+		inputPrice: 2.0,
+		outputPrice: 12.0,
+		cacheReadsPrice: 0.5,
+		thinkingConfig: {
+			maxBudget: 32767,
+		},
+		tiers: [
+			{
+				contextWindow: 200000,
+				inputPrice: 2.0,
+				outputPrice: 12.0,
+				cacheReadsPrice: 0.5,
+			},
+			{
+				contextWindow: Infinity,
+				inputPrice: 4.0,
+				outputPrice: 18.0,
+				cacheReadsPrice: 1.0,
+			},
+		],
+	},
+	"gemini-3-flash-preview": {
+		maxTokens: 65536,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsGlobalEndpoint: true,
+		inputPrice: 0.5,
+		outputPrice: 3.0,
+		thinkingConfig: {
+			maxBudget: 24576,
+		},
+	},
 	"gemini-2.5-pro-exp-03-25": {
 		maxTokens: 65536,
 		contextWindow: 1_048_576,
@@ -1052,8 +1197,45 @@ export const openAiModelInfoSaneDefaults: OpenAiCompatibleModelInfo = {
 // Gemini
 // https://ai.google.dev/gemini-api/docs/models/gemini
 export type GeminiModelId = keyof typeof geminiModels
-export const geminiDefaultModelId: GeminiModelId = "gemini-2.5-pro"
+export const geminiDefaultModelId: GeminiModelId = "gemini-3.1-pro-preview"
 export const geminiModels = {
+	"gemini-3.1-pro-preview": {
+		maxTokens: 65536,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 2.0,
+		outputPrice: 12.0,
+		cacheReadsPrice: 0.5,
+		thinkingConfig: {
+			maxBudget: 32767,
+		},
+		tiers: [
+			{
+				contextWindow: 200000,
+				inputPrice: 2.0,
+				outputPrice: 12.0,
+				cacheReadsPrice: 0.5,
+			},
+			{
+				contextWindow: Infinity,
+				inputPrice: 4.0,
+				outputPrice: 18.0,
+				cacheReadsPrice: 1.0,
+			},
+		],
+	},
+	"gemini-3-flash-preview": {
+		maxTokens: 65536,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0.5,
+		outputPrice: 3.0,
+		thinkingConfig: {
+			maxBudget: 24576,
+		},
+	},
 	"gemini-2.5-pro": {
 		maxTokens: 65536,
 		contextWindow: 1_048_576,
@@ -1226,8 +1408,35 @@ export const geminiModels = {
 // OpenAI Native
 // https://openai.com/api/pricing/
 export type OpenAiNativeModelId = keyof typeof openAiNativeModels
-export const openAiNativeDefaultModelId: OpenAiNativeModelId = "gpt-5-2025-08-07"
+export const openAiNativeDefaultModelId: OpenAiNativeModelId = "gpt-5.4"
 export const openAiNativeModels = {
+	"gpt-5.4": {
+		maxTokens: 8_192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 2.5,
+		outputPrice: 15.0,
+		cacheReadsPrice: 0.25,
+	},
+	"gpt-5.4-mini": {
+		maxTokens: 8_192,
+		contextWindow: 400_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0.75,
+		outputPrice: 4.5,
+		cacheReadsPrice: 0.075,
+	},
+	"gpt-5.4-nano": {
+		maxTokens: 8_192,
+		contextWindow: 400_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0.2,
+		outputPrice: 1.25,
+		cacheReadsPrice: 0.02,
+	},
 	"gpt-5-2025-08-07": {
 		maxTokens: 8_192, // 128000 breaks context window truncation
 		contextWindow: 272000,
