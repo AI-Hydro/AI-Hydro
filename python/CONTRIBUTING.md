@@ -185,24 +185,6 @@ CI automatically runs:
 
 ---
 
-## Adding to the knowledge base
-
-Add a YAML entry to `knowledge/` for the `query_hydro_concepts` MCP tool:
-
-```yaml
-# knowledge/my_topic.yml
-- concept: "My Hydrological Concept"
-  category: "hydrology"
-  definition: "Plain-language definition."
-  formula: "optional LaTeX formula"
-  references:
-    - "Author, Year. Title. Journal."
-  related_tools:
-    - "my_tool"
-```
-
----
-
 ## Questions?
 
 Open an issue: https://github.com/AI-Hydro/AI-Hydro/issues

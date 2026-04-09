@@ -3,7 +3,7 @@
 > Auto-generated from the live MCP server — do not edit manually.
 > Run `sync_research_context` or restart the server to refresh.
 
-**17 tools registered**
+**16 tools registered**
 
 ---
 
@@ -32,7 +32,7 @@ Extract 60+ CAMELS-style catchment attributes for a USGS gauge.
 Extract 28 geomorphic parameters for a watershed.
 
 ### `extract_hydrological_signatures`
-Extract 17 CAMELS-style hydrological signatures for a USGS gauge.
+Extract CAMELS-style hydrological signatures for a USGS gauge.
 
 ### `fetch_forcing_data`
 Fetch basin-averaged daily forcing data from GridMET.
@@ -45,9 +45,6 @@ Return the cached model training results for a gauge.
 
 ### `get_session_summary`
 Return what has been computed and what still needs computing.
-
-### `query_hydro_concepts`
-Search the AI-Hydro hydrological knowledge base.
 
 ### `start_session`
 Start or resume a research session for a USGS gauge.

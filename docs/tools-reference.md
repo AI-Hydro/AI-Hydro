@@ -1,6 +1,6 @@
 # Tools Reference
 
-All 17 tools are available as MCP tools (called by the AI agent) and as importable Python functions.
+All tools are available as MCP tools (called by the AI agent) and as importable Python functions.
 
 **Performance note**: All results are automatically cached in the [HydroSession](#session-tools). Re-calling a tool for a gauge that already has a cached result is instant.
 
@@ -302,29 +302,6 @@ Extracts the full CAMELS-US attribute set (70+ attributes) for a gauge via `pyge
   "geol_permeability": -13.1
 }
 ```
-
----
-
-## Knowledge Tools
-
-### `query_hydro_concepts`
-
-Searches a curated hydrological knowledge base for definitions, equations, and methodology.
-
-**Parameters**
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `query` | str | required | Natural language question |
-| `n_results` | int | `5` | Number of results to return |
-
-**Example**
-
-```python
-result = query_hydro_concepts("what is the baseflow index and how is it computed")
-```
-
-Returns ranked excerpts from hydrological literature with source citations.
 
 ---
 

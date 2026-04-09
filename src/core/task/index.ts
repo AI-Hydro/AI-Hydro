@@ -802,11 +802,8 @@ export class Task {
 			// Optionally, inform the user or handle the error appropriately
 		}
 
-		// [DISABLED] Interactive RAG workspace venv setup check
-		// The standalone RAG service is not used in the current release;
-		// hydrological concept search is available via the MCP tool
-		// `query_hydro_concepts` instead.
-		// TODO: Re-enable when the embedded RAG engine is ready for production.
+		// [DISABLED] RAG service was removed from aihydro-tools v1.1.0.
+		// The RAG/knowledge system is archived at github.com/AI-Hydro/aihydro-rag.
 		// const ragService = this.controller.ragService
 		// if (ragService) {
 		// 	try {
@@ -2961,9 +2958,8 @@ export class Task {
 			this.taskState.todoListWasUpdatedByUser = false
 		}
 
-		// [DISABLED] RAG context augmentation — not used in current release.
-		// Concept search is available via the MCP tool `query_hydro_concepts`.
-		// TODO: Re-enable when the embedded RAG engine is ready for production.
+		// [DISABLED] RAG service was removed from aihydro-tools v1.1.0.
+		// The RAG/knowledge system is archived at github.com/AI-Hydro/aihydro-rag.
 		// const ragService = this.controller.ragService
 		// if (ragService) {
 		// 	const ragNowAvailable = await ragService.isRagAvailable()

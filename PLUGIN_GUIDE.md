@@ -278,7 +278,7 @@ Sessions are stored at `~/.aihydro/sessions/<gauge_id>.json`. The 9 built-in slo
 
 AI-Hydro follows a **hub-and-spoke** architecture:
 
-- **Hub**: `aihydro-tools` — the core package with 17 tools, HydroSession, MCP server, and plugin discovery
+- **Hub**: `aihydro-tools` — the core package with built-in tools, HydroSession, MCP server, and plugin discovery
 - **Spokes**: Community packages that register tools via entry points or run as standalone MCP servers
 
 Why keep the core monolithic:

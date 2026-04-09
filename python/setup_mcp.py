@@ -3,7 +3,7 @@ AI-Hydro MCP Server Setup
 ==========================
 
 Registers the AI-Hydro MCP server in your IDE's MCP settings so that
-all 17 hydrological tools are immediately available to AI agents.
+all hydrological tools are immediately available to AI agents.
 
 Usage
 -----
@@ -14,12 +14,12 @@ Usage
     python setup_mcp.py --check                  # verify server starts correctly
     python setup_mcp.py --remove                 # remove the server entry
 
-Tools registered (17)
----------------------
-  Analysis (9):
+Tools
+-----
+  Analysis (8):
     delineate_watershed, fetch_streamflow_data, extract_hydrological_signatures,
     extract_geomorphic_parameters, compute_twi, create_cn_grid, fetch_forcing_data,
-    extract_camels_attributes, query_hydro_concepts
+    extract_camels_attributes
   Session (6):
     start_session, get_session_summary, clear_session, add_note,
     export_session, sync_research_context
@@ -139,18 +139,17 @@ def register(ide: str) -> None:
     _save_settings(path, settings)
     print(f"\nAI-Hydro MCP server registered in {ide} ({path})")
     print(
-        "\n17 tools now available:"
+        "\nTools now available:"
         "\n"
-        "\n  Analysis (9):"
+        "\n  Analysis (8):"
         "\n    delineate_watershed        — watershed boundary + gauge metadata"
         "\n    fetch_streamflow_data      — USGS daily discharge time series"
-        "\n    extract_hydrological_signatures  — 17 CAMELS-style flow signatures"
+        "\n    extract_hydrological_signatures  — CAMELS-style flow signatures"
         "\n    extract_geomorphic_parameters    — 28 basin morphometry metrics"
         "\n    compute_twi                — Topographic Wetness Index statistics"
         "\n    create_cn_grid             — NRCS Curve Number grid"
         "\n    fetch_forcing_data         — basin-averaged GridMET forcing data"
         "\n    extract_camels_attributes  — 60+ CAMELS attributes (via camels-attrs)"
-        "\n    query_hydro_concepts       — hydrological knowledge base search"
         "\n"
         "\n  Session (6):"
         "\n    start_session              — create/resume research session"
@@ -200,7 +199,7 @@ def check() -> None:
         "delineate_watershed", "fetch_streamflow_data",
         "extract_hydrological_signatures", "extract_geomorphic_parameters",
         "compute_twi", "create_cn_grid", "fetch_forcing_data",
-        "extract_camels_attributes", "query_hydro_concepts",
+        "extract_camels_attributes",
         "start_session", "get_session_summary", "clear_session",
         "add_note", "export_session", "sync_research_context",
         "train_hydro_model", "get_model_results",

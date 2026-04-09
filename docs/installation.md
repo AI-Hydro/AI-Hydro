@@ -43,7 +43,7 @@ Then install the generated `.vsix` using Option A above.
 
 ## 2. Install the Python MCP Server
 
-The Python package provides all 17 hydrological tools. It must be installed in the same Python environment that will run the MCP server.
+The Python package provides the hydrological tools. It must be installed in the same Python environment that will run the MCP server.
 
 ### Install the package
 
@@ -107,10 +107,10 @@ python setup_mcp.py --check
 Expected output:
 ```
 [OK] Server starts successfully
-[OK] 17 tools registered:
+[OK] 16 tools registered:
      delineate_watershed, fetch_streamflow_data, extract_hydrological_signatures,
      extract_geomorphic_parameters, compute_twi, create_cn_grid,
-     fetch_forcing_data, extract_camels_attributes, query_hydro_concepts,
+     fetch_forcing_data, extract_camels_attributes,
      train_hydro_model, get_model_results, start_session, get_session_summary,
      clear_session, add_note, export_session, sync_research_context
 ```

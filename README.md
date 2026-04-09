@@ -36,7 +36,7 @@ Hydrological research today involves a fragmented cycle: downloading data from s
 
 **AI-Hydro** is a platform that bridges this gap. It puts foundation models (Claude, GPT-4, Gemini, and others) at the centre of the research workflow and gives them direct access to production-quality hydrological and geospatial tools — not as a chatbot that generates code you then debug, but as an intelligent agent that orchestrates real computations, remembers context across sessions, and adapts its approach when built-in tools fall short by writing standalone scripts leveraging the latest scientific Python ecosystem.
 
-The platform ships with **17 built-in tools** today — from USGS watershed delineation to differentiable HBV-light calibration — but the long-term vision is much larger: **a community-driven ecosystem** where researchers contribute domain-specific tools (flood frequency analysis, sediment transport, groundwater modelling, remote sensing workflows) that any AI agent can discover and compose into novel research pipelines. Through a simple plugin system, any Python package can register tools that become immediately available to every AI-Hydro user.
+The platform ships with a growing set of **built-in tools** — from USGS watershed delineation to differentiable HBV-light calibration — but the long-term vision is much larger: **a community-driven ecosystem** where researchers contribute domain-specific tools (flood frequency analysis, sediment transport, groundwater modelling, remote sensing workflows) that any AI agent can discover and compose into novel research pipelines. Through a simple plugin system, any Python package can register tools that become immediately available to every AI-Hydro user.
 
 This is what the future of computational hydrology and geospatial sciences looks like: researchers describe their intent, and intelligent agents assemble the right data, methods, and models to get it done.
 
@@ -44,7 +44,7 @@ This is what the future of computational hydrology and geospatial sciences looks
 
 ## What AI-Hydro Can Do
 
-### 1. Automated Research via 17 Built-in Tools
+### 1. Automated Research via Built-in Tools
 
 When a tool exists for the task, the AI calls it directly — no code generation, no copy-paste, no debugging. Results come back structured and cached.
 
@@ -97,7 +97,7 @@ Install the package, restart the server, and those tools are immediately availab
 
 ---
 
-## Built-in Tools (17)
+## Built-in Tools
 
 | Category | Tools |
 | --- | --- |
@@ -109,7 +109,6 @@ Install the package, restart the server, and those tools are immediately availab
 | **Curve Number** | `create_cn_grid` — NRCS CN grid from NLCD land cover + Polaris soils |
 | **Forcing** | `fetch_forcing_data` — GridMET basin-averaged climate (prcp, tmax, tmin, PET, srad, wind) |
 | **CAMELS** | `extract_camels_attributes` — Full CAMELS-US attribute set via pygeohydro |
-| **Knowledge** | `query_hydro_concepts` — RAG search over hydrological literature |
 | **Modelling** | `train_hydro_model` — Differentiable HBV-light or NeuralHydrology LSTM |
 | **Modelling** | `get_model_results` — Retrieve cached NSE / KGE / RMSE |
 | **Session** | `start_session`, `get_session_summary`, `clear_session`, `add_note`, `export_session`, `sync_research_context` |
@@ -174,7 +173,7 @@ All tools communicate via the [Model Context Protocol](https://modelcontextproto
 pip install aihydro-tools[all]
 ```
 
-This installs all 17 hydrological tools and the `aihydro-mcp` server command. The extension auto-detects it on startup.
+This installs all hydrological tools and the `aihydro-mcp` server command. The extension auto-detects it on startup.
 
 <details>
 <summary>Optional extras (install only what you need)</summary>
@@ -183,7 +182,6 @@ This installs all 17 hydrological tools and the `aihydro-mcp` server command. Th
 pip install aihydro-tools[data]       # streamflow, forcing, land cover, soil, CAMELS
 pip install aihydro-tools[analysis]   # watershed, signatures, TWI, geomorphic, CN
 pip install aihydro-tools[modelling]  # PyTorch HBV-light, NeuralHydrology LSTM
-pip install aihydro-tools[rag]        # RAG concept search over hydrology literature
 pip install aihydro-tools[viz]        # matplotlib, plotly, folium
 ```
 
@@ -219,7 +217,7 @@ npm run package          # produces ai-hydro-*.vsix
 ### Step 4 — Verify
 
 ```bash
-aihydro-mcp  # should start and show "17 tools registered"
+aihydro-mcp  # should start and list all registered tools
 ```
 
 The extension auto-registers the MCP server on startup. If you need manual registration:
@@ -273,7 +271,7 @@ See [docs/quickstart.md](./docs/quickstart.md) for a complete walkthrough.
               |                           |
               v                           v
 +---------------------------+  +---------------------+
-| Built-in MCP Tools (17)   |  | Standalone Scripts   |
+| Built-in MCP Tools        |  | Standalone Scripts   |
 | aihydro-tools on PyPI     |  | AI writes & executes |
 | + Community plugin tools  |  | full Python ecosystem |
 +-------+--------+----+----+  +---------------------+
@@ -295,7 +293,7 @@ Full architecture details: [docs/architecture.md](./docs/architecture.md)
 | --- | --- |
 | [docs/installation.md](./docs/installation.md) | Platform-specific install guide |
 | [docs/quickstart.md](./docs/quickstart.md) | First research session walkthrough |
-| [docs/tools-reference.md](./docs/tools-reference.md) | All 17 tools with parameters and examples |
+| [docs/tools-reference.md](./docs/tools-reference.md) | All tools with parameters and examples |
 | [docs/architecture.md](./docs/architecture.md) | System design and data flow |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute |
 

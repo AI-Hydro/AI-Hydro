@@ -2,7 +2,7 @@
 MCP Server Integration Tests
 ==============================
 
-Validates that the modular MCP server registers all 17 tools correctly,
+Validates that the modular MCP server registers all built-in tools correctly,
 helpers work as expected, and session wiring behaves across tool calls.
 
 Run:
@@ -25,7 +25,7 @@ class TestToolRegistration:
     """Verify that importing ai_hydro.mcp registers all expected tools."""
 
     EXPECTED_TOOLS = {
-        # Analysis (9)
+        # Analysis (8)
         "delineate_watershed",
         "fetch_streamflow_data",
         "extract_hydrological_signatures",
@@ -34,7 +34,6 @@ class TestToolRegistration:
         "create_cn_grid",
         "fetch_forcing_data",
         "extract_camels_attributes",
-        "query_hydro_concepts",
         # Session (6)
         "start_session",
         "get_session_summary",
@@ -53,8 +52,8 @@ class TestToolRegistration:
         assert mcp is not None
         assert mcp.name == "AI-Hydro"
 
-    def test_all_17_tools_registered(self):
-        """All 17 tools must be registered after importing ai_hydro.mcp."""
+    def test_all_builtin_tools_registered(self):
+        """All built-in tools must be registered after importing ai_hydro.mcp."""
         from ai_hydro.mcp import mcp
         tools = asyncio.run(mcp.list_tools())
         tool_names = {t.name for t in tools}
@@ -63,11 +62,11 @@ class TestToolRegistration:
             f"Extra: {tool_names - self.EXPECTED_TOOLS}"
         )
 
-    def test_tool_count_is_17(self):
-        """Exactly 17 tools — catches accidental duplicates or drops."""
+    def test_tool_count_matches_expected(self):
+        """Tool count matches EXPECTED_TOOLS — catches accidental duplicates or drops."""
         from ai_hydro.mcp import mcp
         tools = asyncio.run(mcp.list_tools())
-        assert len(tools) == 17
+        assert len(tools) == len(self.EXPECTED_TOOLS)
 
     def test_all_tools_have_descriptions(self):
         """Every tool should have a non-empty description (from docstring)."""
@@ -296,14 +295,6 @@ class TestToolSmoke:
         from ai_hydro.mcp.tools_analysis import delineate_watershed
         result = delineate_watershed("not_a_gauge")
         assert result["error"] is True
-
-    def test_query_hydro_concepts_graceful_fallback(self):
-        """query_hydro_concepts should return empty results if RAG unavailable."""
-        from ai_hydro.mcp.tools_analysis import query_hydro_concepts
-        with patch("ai_hydro.mcp.tools_analysis.log"):
-            result = query_hydro_concepts("baseflow index")
-            # Either returns results (if RAG installed) or graceful fallback
-            assert "results" in result or "warning" in result
 
 
 # ── Version helpers ──────────────────────────────────────────────────────────

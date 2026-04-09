@@ -26,7 +26,7 @@ AI-Hydro has three layers:
 │  Server                    │     │  GeoJSON → Leaflet layers    │
 │                            │     └──────────────────────────────┘
 │  python/mcp_server.py      │
-│  17 tools registered       │
+│  tools registered           │
 │  HydroSession caching      │
 └────────────┬───────────────┘
              │
@@ -35,7 +35,7 @@ AI-Hydro has three layers:
 │  python/ai_hydro/           │
 │                            │
 │  data/  analysis/ modelling/│
-│  session/  mcp/  rag/      │
+│  session/  mcp/             │
 └────────────┬───────────────┘
              │
     ┌────────┼─────────────────────────┐
@@ -81,7 +81,7 @@ python/
     ├── __init__.py              # Imports tool modules → triggers registration
     ├── app.py                   # FastMCP singleton + agent instructions
     ├── helpers.py               # 9 shared helpers (validation, caching, session)
-    ├── tools_analysis.py        # 9 analysis @mcp.tool() functions
+    ├── tools_analysis.py        # 8 analysis @mcp.tool() functions
     ├── tools_session.py         # 6 session management tools
     ├── tools_modelling.py       # 2 AI modelling tools
     ├── tools_docs.py            # tools.md generation + version helpers
@@ -90,7 +90,7 @@ python/
 
 **Startup sequence:**
 1. `mcp_server.py`: `os.chdir(~/.aihydro/cache/)` — avoids Box Drive / read-only cloud folder issues
-2. `from ai_hydro.mcp import mcp` — triggers tool module imports, registering all 17 tools via `@mcp.tool()` decorators
+2. `from ai_hydro.mcp import mcp` — triggers tool module imports, registering all built-in tools via `@mcp.tool()` decorators
 3. `mcp.run()` — listens for JSON-RPC calls on stdin/stdout
 
 **Tool execution flow:**
@@ -130,8 +130,6 @@ python/ai_hydro/
 │   └── neural/lstm.py           # NeuralHydrology LSTM
 ├── session/
 │   └── store.py                 # HydroSession — persistent research state
-├── rag/
-│   └── engine.py                # RAG search (TF-IDF over hydrological knowledge)
 └── __init__.py
 ```
 

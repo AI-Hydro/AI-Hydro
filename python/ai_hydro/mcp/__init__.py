@@ -7,7 +7,7 @@ decorators in the tool modules.
 from ai_hydro.mcp.app import mcp  # noqa: F401 — the FastMCP singleton
 
 # Import tool modules so their @mcp.tool() decorators execute and
-# register all 17 tools on the shared ``mcp`` instance.
+# register all built-in tools on the shared ``mcp`` instance.
 from ai_hydro.mcp import tools_analysis   # noqa: F401
 from ai_hydro.mcp import tools_session    # noqa: F401
 from ai_hydro.mcp import tools_modelling  # noqa: F401

@@ -32,7 +32,6 @@ Tools
 - compute_twi               Topographic Wetness Index
 - fetch_forcing_data        Basin-averaged GridMET forcing
 - extract_camels_attributes 60+ CAMELS attributes (via camels-attrs)
-- query_hydro_concepts      Search hydrological knowledge base
 
 Architecture
 ------------
