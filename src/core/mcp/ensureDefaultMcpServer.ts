@@ -11,14 +11,50 @@ import { HostProvider } from "@/hosts/host-provider"
 
 const SERVER_NAME = "ai-hydro"
 const CACHE_DIR = path.join(os.homedir(), ".aihydro", "cache")
-const PIP_COMMAND = "pip install aihydro-tools[all,mcp]"
+const PIP_COMMAND = "pip install aihydro-tools"
+
+/**
+ * Return candidate paths where pip may have installed `aihydro-mcp`.
+ * Checked when `which`/`where` fails (common for user-level pip installs).
+ */
+function getPipScriptCandidates(): string[] {
+	const home = os.homedir()
+	const candidates: string[] = []
+
+	if (process.platform === "win32") {
+		// User-level: %APPDATA%\Python\Python3XX\Scripts
+		const appData = process.env.APPDATA || path.join(home, "AppData", "Roaming")
+		const pythonDir = path.join(appData, "Python")
+		// Check common Python versions (3.9 through 3.13)
+		for (const ver of ["39", "310", "311", "312", "313"]) {
+			candidates.push(path.join(pythonDir, `Python${ver}`, "Scripts", "aihydro-mcp.exe"))
+		}
+		// System-level: C:\PythonXX\Scripts  or  C:\Program Files\PythonXX\Scripts
+		for (const ver of ["39", "310", "311", "312", "313"]) {
+			candidates.push(path.join("C:", `Python${ver}`, "Scripts", "aihydro-mcp.exe"))
+		}
+	} else {
+		// macOS / Linux user-level
+		candidates.push(path.join(home, ".local", "bin", "aihydro-mcp"))
+		// Homebrew / system Python
+		candidates.push("/usr/local/bin/aihydro-mcp")
+		candidates.push("/opt/homebrew/bin/aihydro-mcp")
+		// Conda default
+		candidates.push(path.join(home, "miniconda3", "bin", "aihydro-mcp"))
+		candidates.push(path.join(home, "anaconda3", "bin", "aihydro-mcp"))
+		candidates.push("/opt/miniconda3/bin/aihydro-mcp")
+	}
+
+	return candidates
+}
 
 /**
  * Auto-detect and register the `aihydro-tools` MCP server on extension startup.
  *
- * - If the `ai-hydro` server is already in settings → skip (respect user config).
- * - If `aihydro-mcp` console script is found on PATH → register it.
- * - If not found → show a one-time notification prompting the user to install.
+ * Detection order:
+ * 1. `which`/`where` aihydro-mcp (PATH lookup)
+ * 2. Common pip install locations (user-level, system-level, conda)
+ * 3. If not found → one-time install notification
  *
  * This runs once at activation, before McpHub reads the settings file.
  */
@@ -47,23 +83,35 @@ export async function ensureDefaultMcpServer(context: vscode.ExtensionContext): 
 			return
 		}
 
-		// 3. Detect aihydro-mcp on PATH
-		const whichCmd = process.platform === "win32" ? "where" : "which"
+		// 3. Detect aihydro-mcp: first try PATH, then common pip locations
 		let mcpPath: string | undefined
+
+		// 3a. PATH lookup
+		const whichCmd = process.platform === "win32" ? "where" : "which"
 		try {
 			const result = await execa(whichCmd, ["aihydro-mcp"])
 			mcpPath = result.stdout?.trim()
 		} catch {
-			// Not installed — prompt user if not previously dismissed
-			const dismissed = context.globalState.get<boolean>("aihydroToolsPromptDismissed")
-			if (!dismissed) {
-				// Fire-and-forget: don't block extension activation
-				showInstallNotification(context)
-			}
-			return
+			// Not on PATH — fall through to candidate search
 		}
 
+		// 3b. Check common pip install directories
 		if (!mcpPath) {
+			for (const candidate of getPipScriptCandidates()) {
+				if (await fileExistsAtPath(candidate)) {
+					mcpPath = candidate
+					console.log(`[AI-Hydro] Found aihydro-mcp at: ${candidate} (not on PATH)`)
+					break
+				}
+			}
+		}
+
+		// 3c. Not found anywhere — prompt user
+		if (!mcpPath) {
+			const dismissed = context.globalState.get<boolean>("aihydroToolsPromptDismissed")
+			if (!dismissed) {
+				showInstallNotification(context)
+			}
 			return
 		}
 
