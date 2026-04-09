@@ -24,6 +24,19 @@ for _name, _fn in _discover_tools():
 
 def main() -> None:
     """Entry point for the ``aihydro-mcp`` console script."""
+    import sys
+
+    # Handle CLI flags before heavy imports
+    if len(sys.argv) > 1:
+        from ai_hydro.mcp.__main__ import _version, _diagnose
+        arg = sys.argv[1]
+        if arg in ("--version", "-V"):
+            print(f"aihydro-tools {_version()}")
+            return
+        elif arg in ("--diagnose", "--check"):
+            _diagnose()
+            return
+
     import logging
     import os
     from pathlib import Path

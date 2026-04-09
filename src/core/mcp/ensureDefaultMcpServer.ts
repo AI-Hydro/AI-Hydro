@@ -54,7 +54,8 @@ function getPipScriptCandidates(): string[] {
  * Detection order:
  * 1. `which`/`where` aihydro-mcp (PATH lookup)
  * 2. Common pip install locations (user-level, system-level, conda)
- * 3. If not found → one-time install notification
+ * 3. `python -m ai_hydro.mcp` probe (universal fallback)
+ * 4. If not found → one-time install notification
  *
  * This runs once at activation, before McpHub reads the settings file.
  */
@@ -106,7 +107,26 @@ export async function ensureDefaultMcpServer(context: vscode.ExtensionContext): 
 			}
 		}
 
-		// 3c. Not found anywhere — prompt user
+		// 3c. Try `python -m ai_hydro.mcp` as universal fallback
+		let pythonModuleFallback = false
+		if (!mcpPath) {
+			const pythonCandidates = process.platform === "win32" ? ["python", "python3", "py"] : ["python3", "python"]
+
+			for (const py of pythonCandidates) {
+				try {
+					// Probe: import the package to verify it's installed
+					await execa(py, ["-c", "import ai_hydro.mcp"])
+					mcpPath = py
+					pythonModuleFallback = true
+					console.log(`[AI-Hydro] Found ai_hydro.mcp via: ${py} -m ai_hydro.mcp`)
+					break
+				} catch {
+					// This python doesn't have aihydro-tools — try next
+				}
+			}
+		}
+
+		// 3d. Not found anywhere — prompt user
 		if (!mcpPath) {
 			const dismissed = context.globalState.get<boolean>("aihydroToolsPromptDismissed")
 			if (!dismissed) {
@@ -117,17 +137,32 @@ export async function ensureDefaultMcpServer(context: vscode.ExtensionContext): 
 
 		// 4. Register the default server
 		await fs.mkdir(CACHE_DIR, { recursive: true })
-		config.mcpServers[SERVER_NAME] = {
-			command: mcpPath,
-			args: [],
-			cwd: CACHE_DIR,
-			timeout: 600,
-			env: {
-				TMPDIR: CACHE_DIR,
-				TEMP: CACHE_DIR,
-				TMP: CACHE_DIR,
-			},
-		}
+
+		const serverConfig = pythonModuleFallback
+			? {
+					command: mcpPath,
+					args: ["-m", "ai_hydro.mcp"],
+					cwd: CACHE_DIR,
+					timeout: 600,
+					env: {
+						TMPDIR: CACHE_DIR,
+						TEMP: CACHE_DIR,
+						TMP: CACHE_DIR,
+					},
+				}
+			: {
+					command: mcpPath,
+					args: [],
+					cwd: CACHE_DIR,
+					timeout: 600,
+					env: {
+						TMPDIR: CACHE_DIR,
+						TEMP: CACHE_DIR,
+						TMP: CACHE_DIR,
+					},
+				}
+
+		config.mcpServers[SERVER_NAME] = serverConfig
 
 		await fs.writeFile(settingsPath, JSON.stringify(config, null, 2))
 		console.log("[AI-Hydro] Auto-registered aihydro-tools MCP server")
