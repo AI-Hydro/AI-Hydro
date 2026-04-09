@@ -37,6 +37,7 @@ References
   topographic wetness index: evaluation of different methods based on field
   observations. Hydrology and Earth System Sciences, 10(1), pp.101-112.
 """
+from __future__ import annotations
 
 from typing import Callable, Dict, Optional, Tuple
 import warnings

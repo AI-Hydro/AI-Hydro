@@ -16,13 +16,20 @@ References:
     - Allen et al. (1998) - FAO-56 Penman-Monteith
 """
 
+from __future__ import annotations
+
 import warnings
 from typing import Tuple, Dict, Optional, Union
 from pathlib import Path
 import numpy as np
 import pandas as pd
-import xarray as xr
-import pygridmet as gridmet
+
+try:
+    import xarray as xr
+    import pygridmet as gridmet
+    _DEPS_AVAILABLE = True
+except ImportError:
+    _DEPS_AVAILABLE = False
 
 warnings.filterwarnings('ignore')
 
@@ -62,6 +69,8 @@ def fetch_forcing_data(
     ... )
     >>> print(df.head())
     """
+    if not _DEPS_AVAILABLE:
+        raise ImportError("forcing data requires: pip install aihydro-tools[data]")
     try:
         print(f"Fetching GridMET forcing data from {start_date} to {end_date}...")
         

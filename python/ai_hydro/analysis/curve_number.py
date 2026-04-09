@@ -8,15 +8,21 @@ Data retrieval functions (fetch_lulc_data, fetch_soil_data_polaris) are in
 ai_hydro.data.landcover and ai_hydro.data.soil respectively.
 """
 
-from ai_hydro.data.landcover import fetch_lulc_data
-from ai_hydro.data.soil import fetch_soil_data_polaris
+from __future__ import annotations
 
 import numpy as np
-import xarray as xr
-import geopandas as gpd
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 import warnings
+
+try:
+    import xarray as xr
+    import geopandas as gpd
+    from ai_hydro.data.landcover import fetch_lulc_data
+    from ai_hydro.data.soil import fetch_soil_data_polaris
+    _DEPS_AVAILABLE = True
+except ImportError:
+    _DEPS_AVAILABLE = False
 
 # Conditional imports for visualization
 try:
@@ -171,8 +177,10 @@ def create_curve_number_grid(
     - Uses NRCS CN lookup tables for NLCD classes
     - Outputs in WGS84 (EPSG:4326) projection
     """
+    if not _DEPS_AVAILABLE:
+        raise ImportError("curve number analysis requires: pip install aihydro-tools[analysis]")
     from ai_hydro.analysis.watershed import delineate_watershed
-    
+
     # Set defaults
     if output_formats is None:
         output_formats = ['geotiff', 'netcdf']
@@ -517,8 +525,10 @@ def create_curve_number_grid_from_geometry(
     - Accepts any geometry format - automatically handles conversion
     - Outputs in WGS84 (EPSG:4326) projection
     """
+    if not _DEPS_AVAILABLE:
+        raise ImportError("curve number analysis requires: pip install aihydro-tools[analysis]")
     from pathlib import Path
-    
+
     # Set defaults
     if output_formats is None:
         output_formats = ['geotiff', 'netcdf']

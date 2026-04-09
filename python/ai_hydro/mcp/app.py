@@ -10,9 +10,18 @@ from fastmcp import FastMCP, Context
 
 __all__ = ["mcp", "Context"]
 
+
+def _pkg_version() -> str:
+    try:
+        from importlib.metadata import version
+        return version("aihydro-tools")
+    except Exception:
+        return "unknown"
+
+
 mcp = FastMCP(
     name="AI-Hydro",
-    version="1.0.0",
+    version=_pkg_version(),
     instructions=(
         "You are connected to the AI-Hydro MCP server with hydrological tools.\n\n"
         "Tool selection rule:\n"

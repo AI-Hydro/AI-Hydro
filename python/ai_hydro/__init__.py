@@ -39,7 +39,11 @@ Architecture
 See AI_HYDRO_PLATFORM_ROADMAP.md for full architecture and community model.
 """
 
-__version__ = "1.0.0"
+try:
+    from importlib.metadata import version as _v
+    __version__ = _v("aihydro-tools")
+except Exception:
+    __version__ = "unknown"
 __author__ = "Mohammad Galib"
 __email__ = "mgalib@purdue.edu"
 

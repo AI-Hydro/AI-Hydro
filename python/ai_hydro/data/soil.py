@@ -3,10 +3,16 @@ Soil Data Retrieval for AI-Hydro
 
 Fetches soil properties from the Polaris database for hydrological analysis.
 """
+from __future__ import annotations
 
-import xarray as xr
-import geopandas as gpd
 from typing import Optional, List
+
+try:
+    import xarray as xr
+    import geopandas as gpd
+    _DEPS_AVAILABLE = True
+except ImportError:
+    _DEPS_AVAILABLE = False
 
 
 def fetch_soil_data_polaris(
@@ -47,6 +53,8 @@ def fetch_soil_data_polaris(
     For CN calculation, we use the top layer (0-5 cm) which most influences
     surface runoff characteristics.
     """
+    if not _DEPS_AVAILABLE:
+        raise ImportError("soil data requires: pip install aihydro-tools[data]")
     import pygeohydro as gh
 
     # Default to top layer soil properties needed for hydrologic group classification

@@ -12,20 +12,27 @@ References:
     - Gray, D.M. (1961) - Synthetic unit hydrographs
 """
 
+from __future__ import annotations
+
 import os
 import warnings
 from typing import Tuple, Dict, Optional, Union
 import numpy as np
-import geopandas as gpd
-from shapely.geometry import Point, LineString
-from pyproj import Geod
-import py3dep
-import xrspatial
+
+try:
+    import geopandas as gpd
+    from shapely.geometry import Point, LineString
+    from pyproj import Geod
+    import py3dep
+    import xrspatial
+    _DEPS_AVAILABLE = True
+    # Geodesic calculator for accurate area/perimeter on WGS84
+    geod = Geod(ellps="WGS84")
+except ImportError:
+    _DEPS_AVAILABLE = False
+    geod = None
 
 warnings.filterwarnings('ignore')
-
-# Geodesic calculator for accurate area/perimeter on WGS84
-geod = Geod(ellps="WGS84")
 
 
 def extract_geomorphic_parameters(
@@ -640,6 +647,8 @@ def extract_geomorphic_parameters_result(
         result.data: 28 float parameters + '_units' dict
         result.meta: FAIR provenance
     """
+    if not _DEPS_AVAILABLE:
+        raise ImportError("geomorphic analysis requires: pip install aihydro-tools[analysis]")
     from shapely.geometry import shape
     import geopandas as gpd
     from ai_hydro.core import HydroResult, HydroMeta, DataSource

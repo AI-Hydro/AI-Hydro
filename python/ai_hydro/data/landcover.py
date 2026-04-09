@@ -3,10 +3,16 @@ Land Cover Data Retrieval for AI-Hydro
 
 Fetches NLCD (National Land Cover Database) data for watershed analysis.
 """
+from __future__ import annotations
 
-import xarray as xr
-import geopandas as gpd
 from typing import Optional
+
+try:
+    import xarray as xr
+    import geopandas as gpd
+    _DEPS_AVAILABLE = True
+except ImportError:
+    _DEPS_AVAILABLE = False
 
 
 def fetch_lulc_data(
@@ -53,6 +59,8 @@ def fetch_lulc_data(
     - 90: Woody Wetlands
     - 95: Emergent Herbaceous Wetlands
     """
+    if not _DEPS_AVAILABLE:
+        raise ImportError("land cover data requires: pip install aihydro-tools[data]")
     import pygeohydro as gh
 
     print(f"  Retrieving NLCD land cover (year={year}, resolution={resolution}m)...")
