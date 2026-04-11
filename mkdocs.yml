@@ -1,0 +1,150 @@
+site_name: AI-Hydro
+site_url: https://ai-hydro.github.io/AI-Hydro/
+site_description: An open platform for AI-driven hydrological research — watershed analysis, streamflow retrieval, model calibration, and reproducible provenance in a single conversation.
+site_author: Mohammad Galib
+
+repo_name: AI-Hydro/AI-Hydro
+repo_url: https://github.com/AI-Hydro/AI-Hydro
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2026 Mohammad Galib, Venkatesh Merwade — Apache 2.0
+
+# ── Theme ─────────────────────────────────────────────────────────────────────
+theme:
+  name: material
+  logo: assets/logo.png
+  favicon: assets/favicon.png
+
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+  font:
+    text: Nunito
+    code: JetBrains Mono
+
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - search.suggest
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+
+# ── Custom CSS ─────────────────────────────────────────────────────────────────
+extra_css:
+  - stylesheets/extra.css
+
+# ── Plugins ───────────────────────────────────────────────────────────────────
+plugins:
+  - search:
+      lang: en
+  - minify:
+      minify_html: true
+
+# ── Markdown extensions ────────────────────────────────────────────────────────
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+
+# ── Extra ──────────────────────────────────────────────────────────────────────
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/AI-Hydro/AI-Hydro
+      name: GitHub
+    - icon: fontawesome/brands/youtube
+      link: https://www.youtube.com/channel/UC8RWDhJm61i2tlV9mt982cw
+      name: YouTube
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/aihydro-tools/
+      name: PyPI
+  analytics:
+    feedback:
+      title: Was this page helpful?
+      ratings:
+        - icon: material/thumb-up-outline
+          name: Yes
+          data: 1
+          note: Thanks for the feedback!
+        - icon: material/thumb-down-outline
+          name: No
+          data: 0
+          note: Thanks — we'll work on improving this page.
+
+# ── Navigation ─────────────────────────────────────────────────────────────────
+nav:
+  - Home: index.md
+
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quickstart: getting-started/quickstart.md
+    - First Analysis: getting-started/first-analysis.md
+
+  - User Guide:
+    - VS Code Extension: guide/vscode-extension.md
+    - Sessions & Provenance: guide/sessions.md
+    - Project Workspace: guide/project-session.md
+    - Researcher Profile: guide/researcher-profile.md
+    - Literature Module: guide/literature.md
+
+  - Tool Reference:
+    - Overview: tools/index.md
+    - Analysis Tools: tools/analysis.md
+    - Modelling Tools: tools/modelling.md
+    - Project & Literature: tools/project.md
+    - Session Tools: tools/session.md
+
+  - Plugins:
+    - Overview: plugins/overview.md
+    - Entry-Point Plugin (Path B): plugins/entry-point.md
+    - Standalone MCP Server (Path A): plugins/standalone-server.md
+    - Data Contract: plugins/data-contract.md
+
+  - Architecture: architecture.md
+
+  - Contributing: contributing.md
+
+  - Changelog: changelog.md
