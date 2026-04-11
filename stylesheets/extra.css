@@ -133,6 +133,14 @@
 	background-color: #0f0f1e;
 }
 
+/* ── Logo size ────────────────────────────────────────────────────────────── */
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+	width: 36px;
+	height: 36px;
+}
+
 /* ── Code blocks ──────────────────────────────────────────────────────────── */
 
 .md-typeset pre > code {
