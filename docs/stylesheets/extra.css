@@ -137,8 +137,22 @@
 
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
-	width: 36px;
-	height: 36px;
+	width: 52px;
+	height: 52px;
+}
+
+/* Give the header a bit more breathing room for the larger logo */
+.md-header__inner {
+	padding-top: 0.3rem;
+	padding-bottom: 0.3rem;
+}
+
+/* Site title next to logo */
+.md-header__title {
+	font-family: "Poppins", sans-serif;
+	font-size: 1.1rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
 }
 
 /* ── Code blocks ──────────────────────────────────────────────────────────── */
