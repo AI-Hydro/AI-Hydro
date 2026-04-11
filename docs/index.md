@@ -28,7 +28,7 @@ hide:
   &nbsp;
   <a href="https://pypi.org/project/aihydro-tools/"><img src="https://img.shields.io/pypi/v/aihydro-tools?color=3775a9&label=PyPI" alt="PyPI" /></a>
   &nbsp;
-  <a href="https://pypi.org/project/aihydro-tools/"><img src="https://img.shields.io/pypi/dm/aihydro-tools?color=3775a9&label=downloads" alt="Downloads" /></a>
+  <a href="https://pypi.org/project/aihydro-tools/"><img src="https://static.pepy.tech/badge/aihydro-tools" alt="Downloads" /></a>
   &nbsp;
   <a href="https://pypi.org/project/aihydro-tools/"><img src="https://img.shields.io/pypi/pyversions/aihydro-tools" alt="Python" /></a>
   &nbsp;
