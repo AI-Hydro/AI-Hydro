@@ -1,3 +1,7 @@
+---
+description: AI-Hydro project roadmap — current beta status, known limitations, and planned features for v0.2, v0.3, and v1.0.
+---
+
 # Roadmap
 
 !!! tip "Project Status: Beta (v0.1.x)"

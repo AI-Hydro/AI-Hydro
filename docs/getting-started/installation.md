@@ -1,3 +1,7 @@
+---
+description: Install AI-Hydro VS Code extension and aihydro-tools Python package. Step-by-step guide for macOS, Windows, and Linux with conda, pip, and PATH troubleshooting.
+---
+
 # Installation
 
 AI-Hydro has two components: the **VS Code extension** (the agent interface) and the **Python backend** (`aihydro-tools`, the MCP server). Both are needed for the full experience.
@@ -99,7 +103,7 @@ If `aihydro-mcp` is not found after install:
 | macOS/Linux (user) | `~/.local/bin/aihydro-mcp` |
 | macOS with Conda | `~/miniconda3/bin/aihydro-mcp` |
 | macOS with Homebrew Python | `/opt/homebrew/bin/aihydro-mcp` |
-| Windows (user) | `%APPDATA%\Python\Python3XX\Scripts\aihydro-mcp.exe` |
+| Windows (user) | `%APPDATA%\Python\Python3XX\Scriptsihydro-mcp.exe` |
 
 **Universal fallback** — works regardless of PATH:
 

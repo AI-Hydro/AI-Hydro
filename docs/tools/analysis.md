@@ -1,3 +1,7 @@
+---
+description: Reference for AI-Hydro analysis tools: delineate_watershed, fetch_streamflow_data, extract_hydrological_signatures, compute_twi, extract_geomorphic_parameters, and more.
+---
+
 # Analysis Tools
 
 Tools for data retrieval, watershed characterisation, and hydrological analysis.

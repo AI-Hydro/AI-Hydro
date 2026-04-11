@@ -1,3 +1,7 @@
+---
+description: How AI-Hydro records provenance automatically — HydroSession, ProjectSession, and ResearcherProfile explained with JSON schema examples.
+---
+
 # Sessions & Provenance
 
 AI-Hydro automatically records every analysis step with structured metadata — data source, parameters, timestamp, tool version — transforming reproducibility from an afterthought into a natural byproduct of the research process.

@@ -1,3 +1,7 @@
+---
+description: AI-Hydro ResearcherProfile: a persistent researcher persona that learns your expertise, preferred models, and research focus across sessions.
+---
+
 # Researcher Profile
 
 The `ResearcherProfile` is a persistent record of who you are as a researcher — your expertise, preferred models, active projects, and domain focus. It is built up from agent-researcher interactions over time and injected into every conversation automatically.

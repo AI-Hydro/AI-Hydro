@@ -1,3 +1,7 @@
+---
+description: AI-Hydro session and provenance JSON schema — HydroSession, ProjectSession, ResearcherProfile. How every tool call is recorded for reproducibility.
+---
+
 # Provenance & Session Schema
 
 One of AI-Hydro's central claims is that reproducibility should be a natural byproduct of the analysis process — not an afterthought. This page documents exactly what is recorded, where it is stored, and how it can be used to reconstruct or audit any analysis.

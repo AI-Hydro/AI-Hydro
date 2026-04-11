@@ -1,3 +1,7 @@
+---
+description: Build an AI-Hydro entry-point plugin in Python. Complete aihydro-snowmelt example with pyproject.toml, tool function, session integration, and PyPI publishing.
+---
+
 # Path B: Entry-Point Plugin
 
 Register a new tool into the `aihydro-mcp` server process via Python entry points. The simplest path — no separate server, no additional process, full HydroSession access.

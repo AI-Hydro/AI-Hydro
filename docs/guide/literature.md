@@ -1,3 +1,7 @@
+---
+description: Index your PDF paper collection and synthesise across it with an AI agent. No vector database required — AI-Hydro folder-based literature module.
+---
+
 # Literature Module
 
 The literature module lets you index your own PDF, text, and markdown documents and ask the agent to synthesise across them — without a vector database, embeddings, or any cloud service.

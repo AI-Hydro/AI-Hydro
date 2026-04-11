@@ -38,3 +38,6 @@ test-results
 paper.md
 branding.md
 site/
+.cache/
+**/__pycache__/
+**/*.pyc

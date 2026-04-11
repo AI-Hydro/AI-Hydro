@@ -206,4 +206,4 @@ The AI will call `get_session_summary("01031500")` and immediately know what's b
 
 - [Tools Reference](./tools-reference.md) — every tool's parameters and return values
 - [Architecture](./architecture.md) — how AI-Hydro works under the hood
-- [Contributing](../CONTRIBUTING.md) — add your own tools
+- [Contributing](contributing.md) — add your own tools

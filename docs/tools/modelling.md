@@ -1,3 +1,7 @@
+---
+description: Calibrate differentiable HBV-light or train NeuralHydrology LSTM models via AI-Hydro. Full parameter reference and performance metrics.
+---
+
 # Modelling Tools
 
 Tools for hydrological model calibration and result retrieval.

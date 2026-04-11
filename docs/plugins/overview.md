@@ -1,3 +1,7 @@
+---
+description: Extend AI-Hydro with community hydrology tools. Two plugin paths: Python entry-point plugins and standalone MCP servers. Flood frequency, sediment transport, groundwater, and more.
+---
+
 # Plugin Overview
 
 AI-Hydro is a platform, not a closed product. The most impactful contributions are new domain tools — knowledge that currently lives in papers and custom scripts, packaged so any AI agent can discover and use it.

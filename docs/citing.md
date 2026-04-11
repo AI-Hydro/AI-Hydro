@@ -1,3 +1,7 @@
+---
+description: BibTeX citations for AI-Hydro platform and all data sources — USGS NWIS, GridMET, 3DEP, CAMELS-US, NLCD, NHDPlus — for use in research papers.
+---
+
 # Citing AI-Hydro
 
 If you use AI-Hydro in your research, please cite the platform and the underlying data sources your analysis relied on.

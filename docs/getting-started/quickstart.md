@@ -1,3 +1,7 @@
+---
+description: Run your first hydrological analysis with AI-Hydro in minutes. Watershed delineation, streamflow retrieval, and HBV model calibration from a single conversation.
+---
+
 # Quickstart
 
 This guide walks through a complete hydrological analysis of a single USGS gauge — from watershed delineation to model calibration — in one agent conversation.

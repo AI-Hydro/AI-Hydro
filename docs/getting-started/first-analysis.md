@@ -1,3 +1,7 @@
+---
+description: Complete walkthrough of a multi-step AI-Hydro session — watershed delineation to HBV-light calibration — with annotated tool calls and provenance output.
+---
+
 # First Full Analysis
 
 A complete walkthrough of a multi-step hydrological research session — watershed delineation → signatures → terrain analysis → HBV-light calibration — with annotation of what the agent is doing at each step.

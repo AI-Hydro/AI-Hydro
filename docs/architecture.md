@@ -1,3 +1,7 @@
+---
+description: AI-Hydro system architecture — VS Code extension, MCP server, Python backend, memory hierarchy, and MCP communication flow with Mermaid diagrams.
+---
+
 # Architecture
 
 AI-Hydro is built on three layers: the VS Code extension (agent interface), the MCP server (tool execution), and the Python backend (domain computation + session persistence).
@@ -10,32 +14,44 @@ AI-Hydro is built on three layers: the VS Code extension (agent interface), the 
 flowchart TB
     subgraph EXT["VS Code Extension (TypeScript)"]
         direction LR
-        USER["Researcher\n(natural language)"] --> LLM["AI Agent\nClaude / GPT / Gemini"]
-        LLM --> CLIENT["MCP Client\nJSON-RPC over stdio"]
+        USER["Researcher
+(natural language)"] --> LLM["AI Agent
+Claude / GPT / Gemini"]
+        LLM --> CLIENT["MCP Client
+JSON-RPC over stdio"]
     end
 
     CLIENT -->|stdio| MCP
 
     subgraph MCP["aihydro-mcp (Python / FastMCP)"]
         direction TB
-        TOOLS["Tool Registry\n26 built-in tools"]
-        PLUGINS["Plugin Discovery\nentry_points('aihydro.tools')"]
+        TOOLS["Tool Registry
+26 built-in tools"]
+        PLUGINS["Plugin Discovery
+entry_points('aihydro.tools')"]
         TOOLS --- PLUGINS
     end
 
-    MCP -->|fetch| APIS["Federal Data APIs\nUSGS NWIS · GridMET\n3DEP · NLCD · NHDPlus"]
-    MCP -->|compute| ML["ML Backends\nconceptual · deep learning"]
+    MCP -->|fetch| APIS["Federal Data APIs
+USGS NWIS · GridMET
+3DEP · NLCD · NHDPlus"]
+    MCP -->|compute| ML["ML Backends
+conceptual · deep learning"]
     MCP -->|read/write| SESSION
 
     subgraph SESSION["Persistent State (~/.aihydro/)"]
         direction TB
-        RP["ResearcherProfile\nresearcher.json"]
-        PS["ProjectSession\nprojects/<name>/project.json"]
-        HS["HydroSession\nsessions/<gauge>.json"]
+        RP["ResearcherProfile
+researcher.json"]
+        PS["ProjectSession
+projects/<name>/project.json"]
+        HS["HydroSession
+sessions/<gauge>.json"]
         RP --> PS --> HS
     end
 
-    HS -->|provenance metadata| PROV["HydroResult\n{ data, meta }"]
+    HS -->|provenance metadata| PROV["HydroResult
+{ data, meta }"]
     PROV --> LLM
 
     style EXT fill:#0f0f1e,stroke:#00a3ff,color:#e0f0ff
@@ -63,14 +79,30 @@ flowchart TB
 flowchart LR
     subgraph MEMORY["Persistent Memory (~/.aihydro/)"]
         direction TB
-        RP["🧬 ResearcherProfile\nresearcher.json\n\nWho you are:\nexpertise · preferred models\nactive project · observations"]
-        PS["📁 ProjectSession\nprojects/&lt;name&gt;/project.json\n\nWhat you're working on:\ngauges · journal · literature"]
-        HS["💧 HydroSession\nsessions/&lt;gauge&gt;.json\n\nWhat was computed:\nwatershed · streamflow · signatures\ngeomorphic · model · notes"]
+        RP["🧬 ResearcherProfile
+researcher.json
+
+Who you are:
+expertise · preferred models
+active project · observations"]
+        PS["📁 ProjectSession
+projects/&lt;name&gt;/project.json
+
+What you're working on:
+gauges · journal · literature"]
+        HS["💧 HydroSession
+sessions/&lt;gauge&gt;.json
+
+What was computed:
+watershed · streamflow · signatures
+geomorphic · model · notes"]
         RP -->|context for| PS
         PS -->|contains| HS
     end
 
-    HS -->|appended to| RMD[".clinerules/research.md\nauto-injected into\nevery conversation"]
+    HS -->|appended to| RMD[".clinerules/research.md
+auto-injected into
+every conversation"]
 
     style MEMORY fill:#0f0f1e,stroke:#00a3ff,color:#e0f0ff
     style RMD fill:#1a1a2e,stroke:#00ddff,color:#00ddff
