@@ -101,8 +101,9 @@ def clear_session(gauge_id: str, slots: list[str] | None = None) -> dict:
         8-digit USGS gauge ID
     slots : list[str], optional
         Specific slots to clear. Valid values:
-        watershed, streamflow, signatures, geomorphic, camels, forcing, twi.
-        Default: clears ALL slots (keeps workspace_dir and notes).
+        watershed, streamflow, signatures, geomorphic, camels, forcing, twi, cn, model.
+        Notes and workspace_dir cannot be cleared via this tool — they are always preserved.
+        Default: clears ALL data slots (keeps workspace_dir and notes).
 
     Returns
     -------
@@ -126,10 +127,17 @@ def clear_session(gauge_id: str, slots: list[str] | None = None) -> dict:
         # Validate slot names
         invalid = [s for s in to_clear if s not in _RESULT_SLOTS]
         if invalid:
+            note_hint = (
+                " (notes are always preserved and cannot be cleared via slots)"
+                if "notes" in invalid else ""
+            )
             return {
                 "error": True,
                 "code": "INVALID_SLOTS",
-                "message": f"Unknown slots: {invalid}. Valid: {list(_RESULT_SLOTS)}",
+                "message": (
+                    f"Unknown slots: {invalid}. "
+                    f"Valid: {list(_RESULT_SLOTS)}{note_hint}"
+                ),
             }
         cleared = []
         for slot in to_clear:
@@ -147,7 +155,7 @@ def clear_session(gauge_id: str, slots: list[str] | None = None) -> dict:
 
 
 @mcp.tool()
-def add_note(gauge_id: str, text: str) -> dict:
+def add_note(gauge_id: str, note: str) -> dict:
     """
     Add a researcher annotation to the session.
 
@@ -155,7 +163,7 @@ def add_note(gauge_id: str, text: str) -> dict:
     ----------
     gauge_id : str
         8-digit USGS gauge ID
-    text : str
+    note : str
         Annotation text to attach
 
     Returns
@@ -165,7 +173,7 @@ def add_note(gauge_id: str, text: str) -> dict:
     try:
         from ai_hydro.session import HydroSession
         session = HydroSession.load(gauge_id)
-        session.notes.append(text)
+        session.notes.append(note)
         session.save()
         return session.summary()
     except Exception as e:

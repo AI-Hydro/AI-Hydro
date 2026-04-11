@@ -394,13 +394,28 @@ def _compute_relief_metrics(
         y_idx = max(0, min(y_idx, dem_proj.shape[0] - 1))
         
         outlet_elev = float(dem_proj.values[y_idx, x_idx])
-        
+
+        # If outlet pixel is NaN (river channel / no-data cell), search nearest valid pixel
+        if np.isnan(outlet_elev):
+            search_r = 3  # expand ±3 pixels
+            for r in range(1, search_r + 1):
+                y0 = max(0, y_idx - r); y1 = min(dem_proj.shape[0] - 1, y_idx + r)
+                x0 = max(0, x_idx - r); x1 = min(dem_proj.shape[1] - 1, x_idx + r)
+                patch = dem_proj.values[y0:y1+1, x0:x1+1]
+                valid_vals = patch[~np.isnan(patch)]
+                if len(valid_vals) > 0:
+                    outlet_elev = float(np.nanmin(valid_vals))  # lowest nearby = outlet
+                    break
+
         # Basin elevations
         z_max = float(np.nanmax(dem_proj.values))
         z_min = float(np.nanmin(dem_proj.values))
-        
-        # Relief
-        H_m = max(0.0, z_max - outlet_elev)
+
+        # Relief — guard against NaN outlet (returns np.nan rather than 0.0)
+        if np.isnan(outlet_elev):
+            H_m = float("nan")
+        else:
+            H_m = max(0.0, z_max - outlet_elev)
         
         # Compute slope
         slope_deg = xrspatial.slope(dem_proj)

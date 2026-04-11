@@ -93,24 +93,31 @@ def fetch_streamflow_data(
 
     # Lazy import of heavy dependencies
     try:
-        import hydrofunctions as hf
-        from pygeohydro import NWIS as NWISInfo
+        from dataretrieval import nwis as dr_nwis
     except ImportError as e:
         raise ToolError(
             code="DEPENDENCY_ERROR",
             message=str(e),
             tool=_TOOL_PATH_STREAMFLOW,
-            recovery="pip install 'ai-hydro[data]'",
+            recovery="pip install 'aihydro-tools[data]'",
         ) from e
 
     try:
         service = "dv" if interval == "daily" else "iv"
         log.info(f"Fetching USGS streamflow data for {gauge_id} ({service})")
 
-        nwis = hf.NWIS(gauge_id, service, start_date, end_date)
-        df = nwis.df()
+        if service == "dv":
+            df, _ = dr_nwis.get_dv(
+                sites=gauge_id, parameterCd="00060",
+                start=start_date, end=end_date,
+            )
+        else:
+            df, _ = dr_nwis.get_iv(
+                sites=gauge_id, parameterCd="00060",
+                startDT=start_date, endDT=end_date,
+            )
 
-        if df.empty:
+        if df is None or df.empty:
             raise ToolError(
                 code="NO_DATA",
                 message=f"No streamflow data returned for gauge {gauge_id} ({start_date} to {end_date}).",
@@ -118,9 +125,14 @@ def fetch_streamflow_data(
                 recovery="Check date range and verify gauge is active at waterdata.usgs.gov",
             )
 
-        # First data column is discharge in CFS
-        q_cfs = pd.to_numeric(df.iloc[:, 0], errors="coerce")
-        q_cms = q_cfs * 0.0283168  # Convert to m³/s
+        # Discharge column from dataretrieval
+        q_col = next((c for c in df.columns if "00060" in c and "Mean" in c), None)
+        if q_col is None:
+            # fallback: first numeric column
+            q_col = df.select_dtypes(include="number").columns[0]
+
+        q_cfs = pd.to_numeric(df[q_col], errors="coerce")
+        q_cms = q_cfs * 0.0283168  # Convert ft³/s → m³/s
         q_cms.index = pd.to_datetime(q_cms.index).tz_localize(None)
         q_cms = q_cms.dropna()
 
@@ -133,20 +145,23 @@ def fetch_streamflow_data(
             )
 
         # Fetch site metadata
-        info = NWISInfo().get_info([{"site": gauge_id}])
-        info["site_no"] = info["site_no"].astype(str)
-
-        if gauge_id not in info["site_no"].values:
-            log.warning(f"Gauge {gauge_id} not found in NWIS metadata")
+        try:
+            site_df, _ = dr_nwis.get_info(sites=gauge_id)
+            site_df["site_no"] = site_df["site_no"].astype(str)
+            if gauge_id in site_df["site_no"].values:
+                row = site_df.loc[site_df["site_no"] == gauge_id].iloc[0]
+                row_meta = {
+                    "gauge_name": str(row.get("station_nm", "")),
+                    "latitude": float(row.get("dec_lat_va", np.nan)),
+                    "longitude": float(row.get("dec_long_va", np.nan)),
+                    "huc_02": str(row.get("huc_cd", ""))[:2] if row.get("huc_cd") else "NA",
+                }
+            else:
+                log.warning(f"Gauge {gauge_id} not found in NWIS metadata")
+                row_meta = {}
+        except Exception as meta_err:
+            log.warning(f"Could not fetch site metadata for {gauge_id}: {meta_err}")
             row_meta = {}
-        else:
-            row = info.loc[info["site_no"] == str(gauge_id)].iloc[0]
-            row_meta = {
-                "gauge_name": str(row.get("station_nm", "")),
-                "latitude": float(row.get("dec_lat_va", np.nan)),
-                "longitude": float(row.get("dec_long_va", np.nan)),
-                "huc_02": str(row.get("huc_cd", ""))[:2] if row.get("huc_cd") else "NA",
-            }
 
         meta = {
             "gauge_id": str(gauge_id),
@@ -207,32 +222,47 @@ def _fetch_streamflow_internal(
 ) -> Optional[Dict]:
     """Internal fetch that returns {q_cms: pd.Series, meta: dict} for computation."""
     try:
-        import hydrofunctions as hf
-        from pygeohydro import NWIS as NWISInfo
+        from dataretrieval import nwis as dr_nwis
 
         service = "dv" if interval == "daily" else "iv"
-        nwis = hf.NWIS(gauge_id, service, start_date, end_date)
-        df = nwis.df()
-        if df.empty:
+        if service == "dv":
+            df, _ = dr_nwis.get_dv(
+                sites=gauge_id, parameterCd="00060",
+                start=start_date, end=end_date,
+            )
+        else:
+            df, _ = dr_nwis.get_iv(
+                sites=gauge_id, parameterCd="00060",
+                startDT=start_date, endDT=end_date,
+            )
+
+        if df is None or df.empty:
             return None
 
-        q_cfs = pd.to_numeric(df.iloc[:, 0], errors="coerce")
+        q_col = next((c for c in df.columns if "00060" in c and "Mean" in c), None)
+        if q_col is None:
+            q_col = df.select_dtypes(include="number").columns[0]
+
+        q_cfs = pd.to_numeric(df[q_col], errors="coerce")
         q_cms = q_cfs * 0.0283168
         q_cms.index = pd.to_datetime(q_cms.index).tz_localize(None)
         q_cms = q_cms.dropna()
         if len(q_cms) == 0:
             return None
 
-        info = NWISInfo().get_info([{"site": gauge_id}])
-        info["site_no"] = info["site_no"].astype(str)
         row_meta: dict = {}
-        if gauge_id in info["site_no"].values:
-            row = info.loc[info["site_no"] == gauge_id].iloc[0]
-            row_meta = {
-                "gauge_name": str(row.get("station_nm", "")),
-                "latitude": float(row.get("dec_lat_va", float("nan"))),
-                "longitude": float(row.get("dec_long_va", float("nan"))),
-            }
+        try:
+            site_df, _ = dr_nwis.get_info(sites=gauge_id)
+            site_df["site_no"] = site_df["site_no"].astype(str)
+            if gauge_id in site_df["site_no"].values:
+                row = site_df.loc[site_df["site_no"] == gauge_id].iloc[0]
+                row_meta = {
+                    "gauge_name": str(row.get("station_nm", "")),
+                    "latitude": float(row.get("dec_lat_va", float("nan"))),
+                    "longitude": float(row.get("dec_long_va", float("nan"))),
+                }
+        except Exception:
+            pass
         return {"q_cms": q_cms, "meta": row_meta}
     except Exception as e:
         log.error("Internal streamflow fetch failed: %s", e)

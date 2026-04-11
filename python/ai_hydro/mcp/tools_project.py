@@ -108,7 +108,7 @@ def start_project(
 
 
 @mcp.tool()
-def get_project_summary(name: str) -> dict:
+def get_project_summary(project_name: str) -> dict:
     """
     Return a full overview of a research project.
 
@@ -118,7 +118,7 @@ def get_project_summary(name: str) -> dict:
 
     Parameters
     ----------
-    name : str
+    project_name : str
         Project name as given to start_project.
 
     Returns
@@ -128,7 +128,7 @@ def get_project_summary(name: str) -> dict:
     try:
         from ai_hydro.session.project import ProjectSession
 
-        project = ProjectSession.load(name)
+        project = ProjectSession.load(project_name)
         summary = project.summary()
         summary["gauge_summaries"] = project.gauge_summaries()
         summary["recent_journal"] = project.journal[-5:] if project.journal else []
@@ -444,7 +444,7 @@ def search_literature(
 
         if not project.literature_index_path.exists():
             return {
-                "error": False,
+                "indexed": False,
                 "message": (
                     "Literature not indexed yet. "
                     "Run index_literature first."
@@ -522,7 +522,7 @@ def search_literature(
 @mcp.tool()
 def add_journal_entry(
     project_name: str,
-    text: str,
+    entry: str,
     tags: list[str] | None = None,
 ) -> dict:
     """
@@ -543,7 +543,7 @@ def add_journal_entry(
     ----------
     project_name : str
         Project name.
-    text : str
+    entry : str
         Journal entry text. Plain language, any length.
     tags : list[str], optional
         Optional tags for easier retrieval, e.g. ["HBV", "gauge 01109000"].
@@ -556,7 +556,7 @@ def add_journal_entry(
         from ai_hydro.session.project import ProjectSession
 
         project = ProjectSession.load(project_name)
-        entry = project.log_entry(text, tags)
+        entry = project.log_entry(entry, tags)
         project.save()
 
         return {
