@@ -2,7 +2,7 @@
 	"name": "ai-hydro",
 	"displayName": "AI-Hydro",
 	"description": "Intelligent computational research platform for hydrology. Execute CAMELS workflows, analyze watersheds, run hydrological models, and leverage domain-specific AI for reproducible Earth-system science.",
-	"version": "0.1.0",
+	"version": "0.1.2",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0"
