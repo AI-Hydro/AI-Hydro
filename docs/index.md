@@ -53,7 +53,7 @@ Delineate watersheds, fetch streamflow, extract hydrological signatures, charact
 
 ### Hydrological Modelling
 
-Calibrate differentiable HBV-light (PyTorch) or train NeuralHydrology LSTMs. Model results cached with full provenance.
+Calibrate differentiable conceptual models or train deep learning rainfall-runoff models. Results cached with full provenance.
 </div>
 
 <div class="feature-card" markdown>
@@ -144,7 +144,9 @@ No code written. No data downloaded manually. Full provenance recorded automatic
 ## Built on Open Source
 
 AI-Hydro is a domain-specific fork of [Cline](https://github.com/cline/cline) (Apache 2.0).
-Python data access powered by [HyRiver](https://hyriver.readthedocs.io/) and [PyTorch](https://pytorch.org/).
+The Python backend builds on the broader scientific Python ecosystem — federal data APIs,
+geospatial libraries, and deep learning frameworks — all open source and properly cited in
+the tool provenance metadata.
 
 ```bibtex
 @software{aihydro2026,

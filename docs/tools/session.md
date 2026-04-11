@@ -98,8 +98,8 @@ Daily streamflow records (2000–2024) were retrieved from the USGS National
 Water Information System (USGS NWIS). Hydrological signatures were computed
 following Addor et al. (2018). Climate forcing data were obtained from the
 GridMET dataset (Abatzoglou, 2013). A differentiable HBV-light model was
-calibrated using PyTorch (version 2.3.0), achieving NSE = 0.79 on the
-validation period (2018–2024).
+calibrated using the differentiable HBV-light implementation in aihydro-tools,
+achieving NSE = 0.79 on the validation period (2018–2024).
 ```
 
 ---

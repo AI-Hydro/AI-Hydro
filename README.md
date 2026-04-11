@@ -21,11 +21,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AI-Hydro/AI-Hydro"><strong>GitHub</strong></a> &middot;
-  <a href="https://pypi.org/project/aihydro-tools/"><strong>PyPI</strong></a> &middot;
-  <a href="./docs/quickstart.md"><strong>Quick Start</strong></a> &middot;
-  <a href="./docs/tools-reference.md"><strong>Tools Reference</strong></a> &middot;
-  <a href="https://www.youtube.com/channel/UC8RWDhJm61i2tlV9mt982cw"><strong>YouTube</strong></a> &middot;
+  <a href="https://github.com/AI-Hydro/AI-Hydro"><strong>GitHub</strong></a> ·
+  <a href="https://pypi.org/project/aihydro-tools/"><strong>PyPI</strong></a> ·
+  <a href="./docs/quickstart.md"><strong>Quick Start</strong></a> ·
+  <a href="./docs/tools-reference.md"><strong>Tools Reference</strong></a> ·
+  <a href="https://www.youtube.com/channel/UC8RWDhJm61i2tlV9mt982cw"><strong>YouTube</strong></a> ·
   <a href="https://github.com/AI-Hydro/AI-Hydro/issues"><strong>Issues</strong></a>
 </p>
 
@@ -100,19 +100,19 @@ Install the package, restart the server, and those tools are immediately availab
 
 ## Built-in Tools
 
-| Category | Tools |
-| --- | --- |
-| **Watershed** | `delineate_watershed` — NHDPlus delineation from USGS NLDI |
-| **Streamflow** | `fetch_streamflow_data` — USGS NWIS daily discharge |
-| **Signatures** | `extract_hydrological_signatures` — 15+ flow stats (BFI, runoff ratio, FDC) |
-| **Geomorphic** | `extract_geomorphic_parameters` — 28 basin morphometry metrics |
-| **Terrain** | `compute_twi` — Topographic Wetness Index from 3DEP DEM |
-| **Curve Number** | `create_cn_grid` — NRCS CN grid from NLCD land cover + Polaris soils |
-| **Forcing** | `fetch_forcing_data` — GridMET basin-averaged climate (prcp, tmax, tmin, PET, srad, wind) |
-| **CAMELS** | `extract_camels_attributes` — Full CAMELS-US attribute set via pygeohydro |
-| **Modelling** | `train_hydro_model` — Differentiable HBV-light or NeuralHydrology LSTM |
-| **Modelling** | `get_model_results` — Retrieve cached NSE / KGE / RMSE |
-| **Session** | `start_session`, `get_session_summary`, `clear_session`, `add_note`, `export_session`, `sync_research_context` |
+| Category               | Tools                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Watershed**    | `delineate_watershed` — NHDPlus delineation from USGS NLDI                                                              |
+| **Streamflow**   | `fetch_streamflow_data` — USGS NWIS daily discharge                                                                     |
+| **Signatures**   | `extract_hydrological_signatures` — 15+ flow stats (BFI, runoff ratio, FDC)                                             |
+| **Geomorphic**   | `extract_geomorphic_parameters` — 28 basin morphometry metrics                                                          |
+| **Terrain**      | `compute_twi` — Topographic Wetness Index from 3DEP DEM                                                                 |
+| **Curve Number** | `create_cn_grid` — NRCS CN grid from NLCD land cover + Polaris soils                                                    |
+| **Forcing**      | `fetch_forcing_data` — GridMET basin-averaged climate (prcp, tmax, tmin, PET, srad, wind)                               |
+| **CAMELS**       | `extract_camels_attributes` — Full CAMELS-US attribute set via pygeohydro                                               |
+| **Modelling**    | `train_hydro_model` — Differentiable HBV-light or NeuralHydrology LSTM                                                  |
+| **Modelling**    | `get_model_results` — Retrieve cached NSE / KGE / RMSE                                                                  |
+| **Session**      | `start_session`, `get_session_summary`, `clear_session`, `add_note`, `export_session`, `sync_research_context` |
 
 See [docs/tools-reference.md](./docs/tools-reference.md) for full parameters, examples, and return schemas.
 
@@ -150,13 +150,13 @@ All tools communicate via the [Model Context Protocol](https://modelcontextproto
 
 ### Works with Any AI Provider
 
-| Provider | Recommended model |
-| --- | --- |
-| Anthropic | Claude Sonnet 4.6 / Opus 4.6 |
-| OpenAI | GPT-5.4 |
-| Google | Gemini 3.1 Pro / 2.5 Flash |
-| AWS Bedrock | Claude on Bedrock |
-| Ollama / LM Studio | Local models |
+| Provider           | Recommended model            |
+| ------------------ | ---------------------------- |
+| Anthropic          | Claude Sonnet 4.6 / Opus 4.6 |
+| OpenAI             | GPT-5.4                      |
+| Google             | Gemini 3.1 Pro / 2.5 Flash   |
+| AWS Bedrock        | Claude on Bedrock            |
+| Ollama / LM Studio | Local models                 |
 
 ---
 
@@ -290,13 +290,13 @@ Full architecture details: [docs/architecture.md](./docs/architecture.md)
 
 ## Documentation
 
-| Document | Description |
-| --- | --- |
-| [docs/installation.md](./docs/installation.md) | Platform-specific install guide |
-| [docs/quickstart.md](./docs/quickstart.md) | First research session walkthrough |
+| Document                                          | Description                            |
+| ------------------------------------------------- | -------------------------------------- |
+| [docs/installation.md](./docs/installation.md)       | Platform-specific install guide        |
+| [docs/quickstart.md](./docs/quickstart.md)           | First research session walkthrough     |
 | [docs/tools-reference.md](./docs/tools-reference.md) | All tools with parameters and examples |
-| [docs/architecture.md](./docs/architecture.md) | System design and data flow |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute |
+| [docs/architecture.md](./docs/architecture.md)       | System design and data flow            |
+| [CONTRIBUTING.md](./CONTRIBUTING.md)                 | How to contribute                      |
 
 ---
 
@@ -341,12 +341,12 @@ If you use AI-Hydro in your research, please cite:
 
 ```bibtex
 @software{aihydro2026,
-  title   = {AI-Hydro: An Intelligent Computational Research Platform
+  title   = {AI-Hydro: An Intelligent Computational Hydrology Research Platform
              for Hydrology and Geospatial Sciences},
   author  = {Galib, Mohammad and Merwade, Venkatesh},
   year    = {2026},
   url     = {https://github.com/AI-Hydro/AI-Hydro},
-  version = {1.0.0}
+  version = {0.1.0}
 }
 ```
 
@@ -356,7 +356,7 @@ If you use AI-Hydro in your research, please cite:
 
 AI-Hydro is a domain-specific fork of [Cline](https://github.com/cline/cline) (Apache 2.0). We are grateful to the Cline team for building the agentic VS Code framework that made this possible.
 
-Python data access is powered by [HyRiver](https://hyriver.readthedocs.io/) (pygeohydro, pynhd, py3dep, pygridmet) and [PyTorch](https://pytorch.org/).
+The Python backend builds on the broader scientific Python ecosystem — federal data APIs, geospatial libraries, and deep learning frameworks — all open source and properly cited in the tool provenance metadata.
 
 ---
 

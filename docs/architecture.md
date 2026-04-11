@@ -27,8 +27,8 @@ AI-Hydro is built on three layers: the VS Code extension (agent interface), the 
 │  └─────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────┘
          │              │              │
-    Federal APIs    PyTorch/NH    ~/.aihydro/
-    USGS/GridMET/   training      sessions/
+    Federal APIs    ML backends   ~/.aihydro/
+    USGS/GridMET/   (modelling)   sessions/
     3DEP/NLCD                     projects/
 ```
 
