@@ -135,16 +135,15 @@ Full annotated schema:
 
   "model": {
     "data": {
-      "model_type": "hbv",
+      "framework": "hbv",
       "nse_train": 0.84,
       "kge_train": 0.81,
       "rmse_train_cms": 14.2,
       "nse_val": 0.79,
       "kge_val": 0.76,
       "rmse_val_cms": 16.8,
-      "train_period": ["2000-01-01", "2017-12-31"],
-      "val_period": ["2018-01-01", "2024-12-31"],
-      "warmup_days": 365,
+      "train_period": ["2000-10-01", "2007-09-30"],
+      "val_period": ["2000-10-01", "2005-09-30"],
       "parameters": {
         "TT": 0.21, "CFMAX": 4.12, "FC": 312.4,
         "LP": 0.78, "BETA": 2.31, "K0": 0.41,
@@ -155,13 +154,15 @@ Full annotated schema:
     "meta": {
       "tool": "train_hydro_model",
       "version": "1.2.0",
-      "source": "GridMET forcing + USGS NWIS streamflow",
+      "source": "GridMET forcing + CAMELS streamflow",
       "retrieved_at": "2026-04-10T10:44:00Z",
       "parameters": {
         "gauge_id": "01031500",
-        "model_type": "hbv",
-        "train_ratio": 0.7,
-        "warmup_days": 365
+        "framework": "hbv",
+        "train_start": "2000-10-01",
+        "train_end": "2007-09-30",
+        "epochs": 500,
+        "n_restarts": 3
       }
     }
   },

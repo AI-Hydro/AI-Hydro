@@ -10,19 +10,29 @@ Tools for hydrological model calibration and result retrieval.
 
 ## `train_hydro_model`
 
-Calibrate a hydrological model using the cached streamflow and forcing data.
+Train a hydrological model for streamflow prediction.
 
-**Requires:** `fetch_streamflow_data` and `fetch_forcing_data` to have been called first.
+**Requires:** `delineate_watershed` and `fetch_forcing_data` to have been called first.
+For LSTM (`framework="neuralhydrology"`), `fetch_streamflow_data` is also required.
+For HBV, streamflow is fetched automatically from CAMELS for the 671 CONUS CAMELS gauges.
 
 **Parameters:**
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `gauge_id` | str | Yes | USGS gauge ID |
-| `model_type` | str | No | `"hbv"` or `"lstm"` (default: `"hbv"`) |
-| `train_ratio` | float | No | Fraction of record used for training (default: 0.7) |
-| `epochs` | int | No | Training epochs — LSTM only (default: 30) |
-| `warmup_days` | int | No | Warm-up period excluded from loss (default: 365) |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `gauge_id` | str | — | USGS gauge ID |
+| `framework` | str | `"hbv"` | `"hbv"` (differentiable HBV-light) or `"neuralhydrology"` (LSTM) |
+| `model` | str | `"cudalstm"` | NeuralHydrology only: `"cudalstm"`, `"ealstm"`, `"transformer"` |
+| `train_start` | str | `"2000-10-01"` | Training period start (YYYY-MM-DD) |
+| `train_end` | str | `"2007-09-30"` | Training period end |
+| `val_start` | str | `"2000-10-01"` | Validation period start |
+| `val_end` | str | `"2005-09-30"` | Validation period end |
+| `test_start` | str | `"2007-10-01"` | Test period start |
+| `test_end` | str | `"2010-09-30"` | Test period end |
+| `epochs` | int | `500` | Training epochs per restart |
+| `n_restarts` | int | `3` | HBV only: number of random restarts; best is kept |
+| `hidden_size` | int | `64` | LSTM hidden state size |
+| `learning_rate` | float | `0.05` | Optimizer learning rate |
 
 ---
 
@@ -75,7 +85,6 @@ Retrieve cached model performance metrics and parameter sets.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `gauge_id` | str | Yes | USGS gauge ID |
-| `model_type` | str | No | `"hbv"` or `"lstm"` |
 
 **Returns:**
 

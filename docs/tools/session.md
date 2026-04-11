@@ -44,12 +44,12 @@ Session: 01031500
 
 ## `clear_session`
 
-Reset one slot or the entire session.
+Reset one or more slots, or the entire session.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `gauge_id` | str | USGS gauge ID |
-| `slot` | str | Optional — specific slot to clear (e.g., `"streamflow"`). Omit to clear all. |
+| `slots` | list[str] | Optional — list of slot names to clear (e.g., `["streamflow", "signatures"]`). Omit to clear all. |
 
 ```
 Clear the streamflow slot for gauge 01031500 — I want to re-fetch with
@@ -86,7 +86,7 @@ Export the session as a citable methods paragraph, JSON data file, or BibTeX ref
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `gauge_id` | str | USGS gauge ID |
-| `format` | str | `"text"` (default), `"json"`, or `"bibtex"` |
+| `format` | str | `"json"` (default), `"methods"` (prose paragraph), or `"bibtex"` |
 
 Output is written to disk at `~/.aihydro/sessions/<gauge_id>_export.<ext>` to preserve the context window.
 

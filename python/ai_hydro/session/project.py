@@ -27,11 +27,15 @@ Storage layout
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 _PROJECTS_DIR = Path.home() / ".aihydro" / "projects"
+
+# Only allow safe project names — prevents path traversal via project_name parameter
+_VALID_PROJECT_NAME = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 _SESSIONS_DIR = Path.home() / ".aihydro" / "sessions"
 
 # Project root: python/ai_hydro/session/project.py → up 4 levels
@@ -58,7 +62,18 @@ class ProjectSession:
     # ------------------------------------------------------------------
 
     @classmethod
+    def _validate_name(cls, name: str) -> str:
+        """Raise ValueError if name contains path-traversal characters."""
+        if not _VALID_PROJECT_NAME.match(name):
+            raise ValueError(
+                f"Invalid project name: {name!r}. "
+                "Use only letters, digits, underscores, and hyphens (max 64 chars)."
+            )
+        return name
+
+    @classmethod
     def _dir(cls, name: str) -> Path:
+        cls._validate_name(name)
         return _PROJECTS_DIR / name
 
     @classmethod

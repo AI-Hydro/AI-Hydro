@@ -102,7 +102,7 @@ Fetch GridMET forcing and calibrate a differentiable HBV-light model.
 ```
 
 1. `fetch_forcing_data` — basin-averaged daily GridMET (prcp, tmax, tmin, PET, srad, wind, 2000–2024)
-2. `train_hydro_model("01031500", model_type="hbv")` — PyTorch HBV-light, 70/30 train/val split
+2. `train_hydro_model("01031500", framework="hbv")` — differentiable HBV-light in PyTorch
 
 **Calibration results:**
 
