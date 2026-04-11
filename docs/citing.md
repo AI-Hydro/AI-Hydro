@@ -17,7 +17,7 @@ If you use AI-Hydro in your research, please cite the platform and the underlyin
   author  = {Galib, Mohammad and Merwade, Venkatesh},
   year    = {2026},
   url     = {https://github.com/AI-Hydro/AI-Hydro},
-  version = {0.1.2},
+  version = {0.1.3},
   license = {Apache-2.0}
 }
 ```
@@ -28,7 +28,7 @@ If you use AI-Hydro in your research, please cite the platform and the underlyin
   author  = {Galib, Mohammad},
   year    = {2026},
   url     = {https://github.com/AI-Hydro/aihydro-tools},
-  version = {1.2.0},
+  version = {1.2.1},
   license = {Apache-2.0}
 }
 ```

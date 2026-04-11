@@ -6,6 +6,26 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.1.3] — 2026-04-11
+
+### Fixed
+- **Security**: Path traversal vulnerability in `ProjectSession` — `project_name` now
+  validated against `^[a-zA-Z0-9_-]{1,64}$` before any filesystem use
+- **Critical**: `fetch_streamflow_data` broken on pandas 3.0 — replaced `hydrofunctions`
+  with `dataretrieval` (official USGS Python client); all streamflow fetches now work
+- **Geomorphic**: Outlet elevation NaN silently coerced to 0.0, cascading to 6 metrics
+  returning zero — added nearest-pixel fallback (±3 cells); returns `NaN` explicitly
+  if no valid pixel found
+- `research.md` and `tools.md` written to `.clinerules/` (old Cline path) instead of
+  `.aihydrorules/` — auto-injected research context was not reaching the agent
+- `add_note`: parameter `text` renamed to `note`; `add_journal_entry`: `text` → `entry`;
+  `get_project_summary`: `name` → `project_name` (consistent with all other project tools)
+- `export_session`: default format corrected from `"text"` to `"json"`, third option
+  corrected from `"text"` to `"methods"`; `clear_session` docs: `slot` → `slots` (list)
+- `train_hydro_model` docs: parameters fully corrected (`framework`, date ranges, `epochs=500`)
+
+---
+
 ## [0.1.2] — 2026-04-10
 
 ### Added
