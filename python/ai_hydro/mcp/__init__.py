@@ -11,6 +11,7 @@ from ai_hydro.mcp.app import mcp  # noqa: F401 — the FastMCP singleton
 from ai_hydro.mcp import tools_analysis   # noqa: F401
 from ai_hydro.mcp import tools_session    # noqa: F401
 from ai_hydro.mcp import tools_modelling  # noqa: F401
+from ai_hydro.mcp import tools_project    # noqa: F401  — v1.2: project, literature, persona
 
 # Discover and register community plugin tools via entry points.
 # Third-party packages register tools in their pyproject.toml:
