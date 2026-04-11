@@ -45,17 +45,17 @@ def _list_tools_sync() -> list:
 
 def _write_tools_md() -> Path:
     """
-    Write .clinerules/tools.md from the live MCP tool registry.
+    Write .aihydrorules/tools.md from the live MCP tool registry.
 
     This is the single source of truth for tool documentation.
     Community-added tools appear here automatically on next server start
     or sync_research_context call — no manual edits needed.
     """
-    # Project root: ai_hydro/mcp/tools_docs.py -> up 3 levels
-    project_root = Path(__file__).resolve().parent.parent.parent.parent
-    clinerules_dir = project_root / ".clinerules"
-    clinerules_dir.mkdir(parents=True, exist_ok=True)
-    tools_md = clinerules_dir / "tools.md"
+    # Repo root: ai_hydro/mcp/tools_docs.py → up 4 levels
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
+    rules_dir = repo_root / ".aihydrorules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    tools_md = rules_dir / "tools.md"
 
     tools = _list_tools_sync()
     if not tools:

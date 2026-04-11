@@ -184,7 +184,7 @@ def add_note(gauge_id: str, note: str) -> dict:
 @mcp.tool()
 def sync_research_context(gauge_id: str) -> dict:
     """
-    Refresh .clinerules/research.md and .clinerules/tools.md.
+    Refresh .aihydrorules/research.md and .aihydrorules/tools.md.
 
     research.md  — current session state (what is computed / pending).
     tools.md     — auto-generated list of ALL registered MCP tools with
@@ -204,14 +204,17 @@ def sync_research_context(gauge_id: str) -> dict:
     dict with paths written and tool count
     """
     try:
+        from pathlib import Path
         from ai_hydro.session import HydroSession
-        from ai_hydro.session.store import _RESEARCH_MD
+        from ai_hydro.session.store import _REPO_ROOT, _RULES_DIR_NAME
         from ai_hydro.mcp.tools_docs import _write_tools_md, _list_tools_sync
         session = HydroSession.load(gauge_id)
         session.write_research_context()
         tools_path = _write_tools_md()
+        base = Path(session.workspace_dir) if session.workspace_dir else _REPO_ROOT
+        research_md_path = base / _RULES_DIR_NAME / "research.md"
         return {
-            "research_md": str(_RESEARCH_MD),
+            "research_md": str(research_md_path),
             "tools_md": str(tools_path),
             "n_tools": len(_list_tools_sync()),
         }
