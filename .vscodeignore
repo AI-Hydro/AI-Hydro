@@ -38,6 +38,10 @@ buf.yaml
 .clinerules/
 .aihydrorules/
 
+# Private documents — never ship in VSIX
+paper.md
+branding.md
+
 # AI-Hydro specific — exclude large directories not needed in .vsix
 python/
 cache/

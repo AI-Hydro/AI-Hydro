@@ -25,6 +25,7 @@
   <a href="https://pypi.org/project/aihydro-tools/"><strong>PyPI</strong></a> &middot;
   <a href="./docs/quickstart.md"><strong>Quick Start</strong></a> &middot;
   <a href="./docs/tools-reference.md"><strong>Tools Reference</strong></a> &middot;
+  <a href="https://www.youtube.com/channel/UC8RWDhJm61i2tlV9mt982cw"><strong>YouTube</strong></a> &middot;
   <a href="https://github.com/AI-Hydro/AI-Hydro/issues"><strong>Issues</strong></a>
 </p>
 
