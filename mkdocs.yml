@@ -145,6 +145,10 @@ nav:
 
   - Architecture: architecture.md
 
+  - Provenance Schema: provenance.md
+
   - Contributing: contributing.md
+
+  - Citing AI-Hydro: citing.md
 
   - Changelog: changelog.md

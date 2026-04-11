@@ -6,30 +6,98 @@ AI-Hydro is built on three layers: the VS Code extension (agent interface), the 
 
 ## System Overview
 
+```mermaid
+flowchart TB
+    subgraph EXT["VS Code Extension (TypeScript)"]
+        direction LR
+        USER["Researcher\n(natural language)"] --> LLM["AI Agent\nClaude / GPT / Gemini"]
+        LLM --> CLIENT["MCP Client\nJSON-RPC over stdio"]
+    end
+
+    CLIENT -->|stdio| MCP
+
+    subgraph MCP["aihydro-mcp (Python / FastMCP)"]
+        direction TB
+        TOOLS["Tool Registry\n26 built-in tools"]
+        PLUGINS["Plugin Discovery\nentry_points('aihydro.tools')"]
+        TOOLS --- PLUGINS
+    end
+
+    MCP -->|fetch| APIS["Federal Data APIs\nUSGS NWIS · GridMET\n3DEP · NLCD · NHDPlus"]
+    MCP -->|compute| ML["ML Backends\nconceptual · deep learning"]
+    MCP -->|read/write| SESSION
+
+    subgraph SESSION["Persistent State (~/.aihydro/)"]
+        direction TB
+        RP["ResearcherProfile\nresearcher.json"]
+        PS["ProjectSession\nprojects/<name>/project.json"]
+        HS["HydroSession\nsessions/<gauge>.json"]
+        RP --> PS --> HS
+    end
+
+    HS -->|provenance metadata| PROV["HydroResult\n{ data, meta }"]
+    PROV --> LLM
+
+    style EXT fill:#0f0f1e,stroke:#00a3ff,color:#e0f0ff
+    style MCP fill:#0f0f1e,stroke:#00a3ff,color:#e0f0ff
+    style SESSION fill:#0f0f1e,stroke:#7dd3fc,color:#e0f0ff
+    style APIS fill:#1a1a2e,stroke:#94a3b8,color:#94a3b8
+    style ML fill:#1a1a2e,stroke:#94a3b8,color:#94a3b8
+    style PROV fill:#1a1a2e,stroke:#00ddff,color:#00ddff
 ```
-┌─────────────────────────────────────────────────────────┐
-│  VS Code Extension (TypeScript)                          │
-│  ┌──────────────────────┐  ┌──────────────────────────┐ │
-│  │  AI Agent (LLM)      │  │  MCP Client              │ │
-│  │  Claude / GPT /      │←→│  JSON-RPC over stdio     │ │
-│  │  Gemini / ...        │  │                          │ │
-│  └──────────────────────┘  └──────────┬───────────────┘ │
-└─────────────────────────────────────────────────────────┘
-                                         │ stdio
-┌────────────────────────────────────────▼────────────────┐
-│  aihydro-mcp (Python / FastMCP)                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐ │
-│  │ Analysis │ │Modelling │ │ Session  │ │  Project   │ │
-│  │  tools   │ │  tools   │ │  tools   │ │  tools     │ │
-│  └──────────┘ └──────────┘ └──────────┘ └────────────┘ │
-│  ┌─────────────────────────────────────────────────────┐│
-│  │  Plugin discovery (importlib.metadata entry_points) ││
-│  └─────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────┘
-         │              │              │
-    Federal APIs    ML backends   ~/.aihydro/
-    USGS/GridMET/   (modelling)   sessions/
-    3DEP/NLCD                     projects/
+
+**The flow in plain English:**
+
+1. Researcher describes intent in natural language
+2. The LLM agent decides which tools to call (no user code required)
+3. Tool calls go via JSON-RPC stdio to the Python MCP server
+4. The server fetches data from federal APIs, runs computation, and saves results to `~/.aihydro/`
+5. Every result carries `HydroResult` provenance metadata (source, parameters, timestamp)
+6. The agent interprets results and responds — or writes a standalone script if no tool exists
+
+---
+
+## Memory Hierarchy
+
+```mermaid
+flowchart LR
+    subgraph MEMORY["Persistent Memory (~/.aihydro/)"]
+        direction TB
+        RP["🧬 ResearcherProfile\nresearcher.json\n\nWho you are:\nexpertise · preferred models\nactive project · observations"]
+        PS["📁 ProjectSession\nprojects/&lt;name&gt;/project.json\n\nWhat you're working on:\ngauges · journal · literature"]
+        HS["💧 HydroSession\nsessions/&lt;gauge&gt;.json\n\nWhat was computed:\nwatershed · streamflow · signatures\ngeomorphic · model · notes"]
+        RP -->|context for| PS
+        PS -->|contains| HS
+    end
+
+    HS -->|appended to| RMD[".clinerules/research.md\nauto-injected into\nevery conversation"]
+
+    style MEMORY fill:#0f0f1e,stroke:#00a3ff,color:#e0f0ff
+    style RMD fill:#1a1a2e,stroke:#00ddff,color:#00ddff
+```
+
+Each tier survives VS Code restarts, new conversations, and weeks between sessions. The researcher never re-explains their context — it is always present.
+
+---
+
+## MCP Communication Flow
+
+```mermaid
+sequenceDiagram
+    participant R as Researcher
+    participant LLM as AI Agent (LLM)
+    participant MCP as aihydro-mcp
+    participant API as USGS NLDI API
+    participant DB as HydroSession
+
+    R->>LLM: "Delineate the watershed for gauge 01031500"
+    LLM->>MCP: tools/call delineate_watershed(gauge_id="01031500")
+    MCP->>API: GET /linked-data/comid/position?coords=...
+    API-->>MCP: GeoJSON watershed polygon
+    MCP->>DB: session.set_slot("watershed", data, meta)
+    DB-->>MCP: saved ✓
+    MCP-->>LLM: {area_km2: 1247.3, perimeter_km: 198.6, ...}
+    LLM-->>R: "Watershed delineated — 1,247 km², centroid 44.58°N..."
 ```
 
 ---
@@ -46,8 +114,6 @@ Responsibilities:
 - Handles file reads/writes and terminal execution for standalone scripts
 - Auto-registers the `ai-hydro` MCP server on activation
 
-When the agent decides to call `delineate_watershed`, it sends a JSON-RPC `tools/call` request over stdio to the Python server. The Python server executes the computation and returns a structured result. The agent then interprets the result in natural language.
-
 When no tool exists for a task, the agent writes a standalone Python script and executes it via the integrated terminal — combining the reliability of structured tools with the flexibility of the full Python ecosystem.
 
 ---
@@ -58,22 +124,20 @@ When no tool exists for a task, the agent writes a standalone Python script and 
 **Framework:** [FastMCP](https://github.com/jlowin/fastmcp)  
 **Protocol:** [Model Context Protocol](https://modelcontextprotocol.io/) (JSON-RPC over stdio)
 
-The server is modular:
-
 ```
 python/ai_hydro/mcp/
 ├── app.py             — FastMCP singleton + agent instructions
 ├── __init__.py        — imports all tool modules (triggers registration)
-├── tools_analysis.py  — 8 analysis tools
-├── tools_session.py   — 6 session tools
-├── tools_modelling.py — 2 modelling tools
-├── tools_project.py   — 10 project/literature/persona tools
-├── tools_docs.py      — tools.md generation + version helpers
+├── tools_analysis.py  — analysis tools
+├── tools_session.py   — session tools
+├── tools_modelling.py — modelling tools
+├── tools_project.py   — project/literature/persona tools
+├── tools_docs.py      — version helpers
 ├── helpers.py         — shared validation, caching, session utilities
 └── registry.py        — entry-point plugin discovery
 ```
 
-Tool registration happens at import time via `@mcp.tool()` decorators. Plugin discovery scans `aihydro.tools` entry points and registers any community tools found.
+Tool registration happens at import time via `@mcp.tool()` decorators. Plugin discovery scans `aihydro.tools` entry points and registers community tools automatically.
 
 ---
 
@@ -83,63 +147,36 @@ Tool registration happens at import time via `@mcp.tool()` decorators. Plugin di
 
 ### Data retrieval
 
-| Module | Library | Source |
-|--------|---------|--------|
-| `data/streamflow.py` | hydrofunctions | USGS NWIS |
-| `data/forcing.py` | pygridmet | GridMET |
-| `data/landcover.py` | pygeohydro | NLCD |
-| `data/soil.py` | requests | POLARIS |
+| Module | Source |
+|--------|--------|
+| `data/streamflow.py` | USGS NWIS |
+| `data/forcing.py` | GridMET |
+| `data/landcover.py` | NLCD |
+| `data/soil.py` | POLARIS |
 
 ### Analysis
 
-| Module | Library | What |
-|--------|---------|------|
-| `analysis/watershed.py` | pynhd | NHDPlus delineation |
-| `analysis/signatures.py` | numpy/pandas | Flow statistics |
-| `analysis/twi.py` | py3dep + xrspatial | Terrain analysis |
-| `analysis/geomorphic.py` | geopandas + py3dep | Basin morphometry |
-| `analysis/curve_number.py` | pygeohydro | CN grid |
-
-### Modelling
-
-| Module | Framework | Model |
-|--------|-----------|-------|
-| `modelling/conceptual/hbv.py` | PyTorch | Differentiable HBV-light |
-| `modelling/neural/lstm.py` | NeuralHydrology | LSTM |
+| Module | What |
+|--------|------|
+| `analysis/watershed.py` | NHDPlus delineation |
+| `analysis/signatures.py` | Flow statistics |
+| `analysis/twi.py` | Terrain analysis |
+| `analysis/geomorphic.py` | Basin morphometry |
+| `analysis/curve_number.py` | CN grid |
 
 ### Session persistence
 
-| Class | File | Storage |
-|-------|------|---------|
-| `HydroSession` | `session/store.py` | `~/.aihydro/sessions/<gauge>.json` |
-| `ProjectSession` | `session/project.py` | `~/.aihydro/projects/<name>/project.json` |
-| `ResearcherProfile` | `session/persona.py` | `~/.aihydro/researcher.json` |
-
----
-
-## MCP Communication
-
-```
-Agent                    aihydro-mcp
-  │                           │
-  │──tools/list──────────────>│  list all registered tools
-  │<─────────────[tool list]──│
-  │                           │
-  │──tools/call──────────────>│  {"name": "delineate_watershed",
-  │  {"gauge_id": "01031500"} │   "arguments": {"gauge_id": "01031500"}}
-  │                           │
-  │                     [USGS NLDI API call]
-  │                     [NHDPlus processing]
-  │                     [HydroSession.save()]
-  │                           │
-  │<─────────────[result]─────│  {"area_km2": 1247.3, ...}
-```
+| Class | Storage |
+|-------|---------|
+| `HydroSession` | `~/.aihydro/sessions/<gauge>.json` |
+| `ProjectSession` | `~/.aihydro/projects/<name>/project.json` |
+| `ResearcherProfile` | `~/.aihydro/researcher.json` |
 
 ---
 
 ## Dependency Management
 
-Heavy dependencies are lazy-loaded with `try/except` blocks and `_DEPS_AVAILABLE` flags:
+Heavy dependencies are lazy-loaded — the server starts successfully even if only the `[data]` extra is installed:
 
 ```python
 try:
@@ -156,20 +193,3 @@ def delineate_watershed(gauge_id: str) -> dict:
 ```
 
 Tools return informative errors for missing extras rather than crashing the server.
-
----
-
-## Memory Hierarchy
-
-```
-ResearcherProfile  (~/.aihydro/researcher.json)
-    — who you are: expertise, preferences, active project
-
-ProjectSession  (~/.aihydro/projects/<name>/project.json)
-    — what you're working on: gauges, journal, literature
-
-HydroSession  (~/.aihydro/sessions/<gauge>.json)
-    — what was computed: all tool results with provenance metadata
-```
-
-Each tier is injected into the agent context via `.clinerules/research.md`, written by `sync_research_context` and `write_research_context()`.

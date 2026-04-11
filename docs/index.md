@@ -148,11 +148,5 @@ The Python backend builds on the broader scientific Python ecosystem — federal
 geospatial libraries, and deep learning frameworks — all open source and properly cited in
 the tool provenance metadata.
 
-```bibtex
-@software{aihydro2026,
-  title   = {AI-Hydro: An Agent-Native Platform for Reproducible Computational Hydrology},
-  author  = {Galib, Mohammad and Merwade, Venkatesh},
-  year    = {2026},
-  url     = {https://github.com/AI-Hydro/AI-Hydro}
-}
-```
+If you use AI-Hydro in your research, see the **[Citing AI-Hydro](citing.md)** page for
+BibTeX entries for the platform and all data sources.
