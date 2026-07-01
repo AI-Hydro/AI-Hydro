@@ -3,7 +3,7 @@ export interface Env {
 }
 
 const MARKETPLACES = new Set(["gallery", "skills", "modules", "mcp", "connectors", "courses"])
-const EVENT_TYPES = new Set(["import", "install", "open_source", "copy_citation", "template_open", "uninstall"])
+const EVENT_TYPES = new Set(["import", "install", "open_source", "copy_citation", "template_open", "uninstall", "cite"])
 
 interface CountSummary {
 	marketplace: string

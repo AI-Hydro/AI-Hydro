@@ -9,7 +9,70 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [Unreleased]
+## [0.3.0] — 2026-06-14
+
+### Fixed — Reproducibility panels revived
+
+Evidence Board, Experiment Table, and Session Replay are no longer stale/dead-end UI surfaces. The extension now has a shared, tested session-surface reader (`src/integrations/aihydro-session/sessionSurfaces.ts`) that resolves canonical sessions, explicit JSON paths, and capsule `session.json` exports; normalizes `_experiments`, `_run_log`, and persisted `claims`/`_claims`; and powers Experiment Table, Session Replay, and ledger snapshots. Host-initiated replay loads now work, local panel loading no longer depends on the main sidebar webview being available, recent session ids are suggested from `~/.aihydro/sessions/`, and Evidence Board now exposes loading/error/manual-session controls instead of silently rendering an empty board on ledger failures. The panels also ship with a populated `demo-reproducibility-cockpit` fixture, cross-panel run links (experiment/evidence → replay), compact metric+CI cells, review filters, and clearer empty states. Regression test: `sessionSurfaces.test.ts`; docs: `docs/guide/reproducibility-panels.md`.
+
+### Added — Agent-native map control
+
+The map panel is now directly drivable by the AI agent. Three new MCP tools in `aihydro-tools` write commands that `MapCommandWatcher` picks up and executes:
+- **`map_fly_to`** — smooth `FlyToInterpolator` camera animation to any coordinate/zoom (agent can focus the map on a delineated basin automatically).
+- **`map_add_layer_from_run`** — adds a GeoJSON run output as a provenance-tagged map layer, with automatic geometry-type sniffing (polygon/line/point) for correct legend icons and styling.
+- **`map_set_time_range`** — drives the time slider via `BrushContext` so the agent can synchronise the map's temporal view with a modelling run.
+
+### Added — Session Replay panel
+
+New `ReplayPanel` webview + `VscodeReplayProvider` host panel. Loads a session's recorded `_run_log` from `~/.aihydro/sessions/<id>.json` and renders each tool invocation as a collapsible timeline step — step number, status badge (pass/warn/fail from quality flags), tool name, key-outputs table, per-validator quality-flag badges, timestamp. Supports filtering by tool or run_id and keyboard navigation (↑↓ / Esc). Open via the **AI-Hydro: Session Replay** command or the `$(debug-rerun)` icon in the sidebar.
+
+### Added — Experiment ↔ map linkage
+
+Clicking any row in the `ExperimentTable` panel highlights the corresponding basin on the map (`fit_layer`/`fit_extent` command). The aggregate stats panel gains sample standard deviation alongside mean/min/max.
+
+### Added — Panel accessibility
+
+Evidence Board, Experiment Table, and Session Replay panels are now reachable from the Command Palette and the sidebar toolbar (`$(checklist)`, `$(table)`, `$(debug-rerun)` icons) — previously their commands were registered but never surfaced in `package.json contributes`.
+
+### Added — Token-efficient waiting for long jobs (`wait_for_job`)
+
+New `wait_for_job(job_id)` MCP tool in `aihydro-tools`. Previously, after starting an async job (training, background data fetch) the agent had to call `get_job_status` in a loop — and **every poll is a full LLM turn that re-reads the entire context**, so babysitting a 5-minute job could cost dozens of turns and a large token bill. `wait_for_job` blocks **server-side**, polling the job's `status.json` every few seconds at zero token cost, and returns only when the job finishes (or after a ~280 s budget, just under the MCP transport timeout — in which case the agent makes one more call). Most jobs now complete in a single tool call. Returns a terse status plus a `retrieve_with` hint. The async-start tools (`train_hydro_model`, `data_fetch_background`) now point at `wait_for_job` in their guidance, and the system persona instructs the agent to wait efficiently rather than poll in a tight loop.
+
+### Fixed — Basemap tiles rendering black
+
+All basemap tiles were silently failing, leaving the map as a dark canvas. Root cause: `getTileData` returned `createImageBitmap(blob)` without `await` inside a `try-catch`; without `await`, a Promise rejection escapes the catch block and propagates to deck.gl, marking every tile as null. Fixed: `createImageBitmap` is now awaited inside a nested try-catch; if it fails (can occur for JPEG blobs in some Electron webview contexts), an `HTMLImageElement` fallback loads the tile via object URL. Also added explicit `mode: "cors", credentials: "omit"` on the fetch and `console.error` logging so future failures are diagnosable via webview DevTools.
+
+### Fixed — Map going black after loading a projected (non-WGS84) layer
+
+The map could turn entirely black — basemap included — after a layer in a projected CRS (e.g. a SWAT+ UTM shapefile loaded without its `.prj`) was added. Root cause: `fitViewStateToBounds` auto-fit the camera to the layer's raw bounds without checking they were lon/lat. UTM eastings/northings (e.g. 425000, 4425000) became `longitude/latitude`, collapsing zoom to 1 (the tell-tale "z 1.00" with a nonsensical "1 m" scale) and producing an invalid Web Mercator viewport that renders nothing. The bad camera was then persisted to `localStorage`, so the map stayed black on every reopen. Fixes: (1) `fitViewStateToBounds` now refuses to fly to non-WGS84 bounds and keeps the current valid camera; (2) the persisted view is sanitized on restore (out-of-range latitude/longitude and a UTM-collapsed zoom fall back to the default), so an already-corrupted saved view self-heals on reload; (3) loading a projected layer now shows a clear warning ("reproject to EPSG:4326 or include its .prj") instead of silently black-screening. No layer, however badly projected, can black-screen the map again. *(Reprojecting projected vector layers so they actually display is a separate follow-up; for now they are detected and reported rather than rendered off-world.)*
+
+### Fixed — Map going black after switching panels (WebGL context loss)
+
+The map could render correctly and then turn black after the panel was backgrounded and reopened. VS Code webviews — especially on macOS with several panels open — can have their GPU context reclaimed while hidden; deck.gl/luma does not reliably rewire to a restored context, so the canvas paints black while the toolbar, legend, and scale bar (plain DOM) survive. `MapView` now listens for `webglcontextlost` (preventDefault, to allow restoration) and `webglcontextrestored`, and remounts `<DeckGL>` via a key bump to acquire a fresh context. It also remounts on `visibilitychange → visible` when a loss was recorded (hidden webviews often never fire `restored`). `viewState` and layers are controlled props, so the camera and overlays are preserved — recovery is seamless.
+
+### Fixed — Agent routing robustness (MCP prompt grouping)
+
+Connected MCP servers are now grouped by role in the system prompt. When the host platform's server (any server that opts into progressive disclosure via `_meta.hot`) is connected alongside third-party MCP servers, the system prompt renders the native server first under **"# Native Platform (primary toolset)"** and third-party servers under **"# Additional Connected Servers (supplementary)"**. This corrects an asymmetry where progressive disclosure made native tools appear as terse summaries while third-party servers dumped full schemas, biasing agents toward name-association routing to third-party tools. The discriminator is general (no server named); framing activates only when both groups are present, so single-server output is byte-identical. Test: `mcpNativePrimacy.test.ts`.
+
+### Fixed — Agent routing robustness (persona)
+
+Added two general rules to the AI-Hydro persona: (1) **discover-before-commit** — do not infer a server's capabilities from its name; verify via `aihydro_describe_capability` or `list_available_tools` first; (2) **scope-matching** — prefer the most direct tool; do not launch a long-running multi-stage pipeline unless the request requires it. Also added a structural stop rule: if several different tools fail with the same structural error (same unexpected-keyword / connection / auth message), the cause is the server or its config — stop after two failures and report the blocker rather than silently switching servers.
+
+### Fixed — MCP tool calls lost due to context-variable injection
+
+All aihydro-tools MCP calls were failing with `ValidationError: Unexpected keyword argument _chat_id` because the VS Code extension injects `_chat_id` / `_workspace` into every tool call and the previous monkeypatch on `mcp._call_tool_mcp` was dead code (FastMCP 3.x binds the original handler at init). Replaced with `_ContextInjectionMiddleware` via `mcp.add_middleware()` — the correct extension point. The middleware strips injected keys before Pydantic validation and stores them in `contextvars.ContextVar` for tool access.
+
+### Fixed — Multi-line tool arguments ("invalid JSON argument. Retrying…")
+
+Weaker models emit multi-line values (e.g. `run_python`'s `code`) with raw unescaped newlines inside JSON strings, which strict parsing rejects. The argument-repair layer now runs `escapeControlCharsInStrings()` as a final fallback — a state-machine that escapes control characters only inside string literals. Guarded no-op on already-valid JSON. New `json_control_char_escape` repair kind and tests.
+
+### Fixed — "Let me answer in my own words…" inline text field
+
+Previously only fired a `focusChatInput` event at the distant bottom chat box, which was unreliable while a question was pending. Now reveals an inline autofocused textarea right inside the options (Enter to send, Shift+Enter for newline, Esc/Cancel to dismiss) — mirroring Claude Code's "Other" affordance so a custom answer is always typeable regardless of the main input's state.
+
+### Fixed — map_fly_to camera jumping instead of flying
+
+deck.gl's controlled `viewState` requires both `transitionDuration` **and** `transitionInterpolator`; adding only `transitionDuration` causes an instant jump. Fixed by adding `FlyToInterpolator({ speed: 1.2 })` from `@deck.gl/core`.
 
 ---
 
