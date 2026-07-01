@@ -500,9 +500,24 @@ async function loadGpx(file: File, id: string, name: string): Promise<LayerSpec>
 
 async function loadShp(file: File, id: string, name: string): Promise<LayerSpec> {
 	// shpjs accepts a zipped shapefile bundle (.shp + .dbf + .shx + optional .prj)
+	const buf = await file.arrayBuffer()
+
+	// Extract the .prj WKT from the zip before handing buf to shpjs — knowing the
+	// source CRS lets us reproject on the fly instead of rendering off-world.
+	let prjWkt: string | null = null
+	try {
+		const JSZip = (await import("jszip")).default
+		const zip = await JSZip.loadAsync(buf.slice(0)) // defensive copy; original buf goes to shpjs
+		const prjEntry = Object.values(zip.files).find((f) => /\.prj$/i.test(f.name))
+		if (prjEntry) {
+			prjWkt = await prjEntry.async("string")
+		}
+	} catch {
+		// Non-fatal: fall back to heuristic CRS detection below.
+	}
+
 	const shpMod: any = await import("shpjs")
 	const shp = shpMod.default ?? shpMod
-	const buf = await file.arrayBuffer()
 	let result: any
 	try {
 		result = await shp(buf)
@@ -513,16 +528,144 @@ async function loadShp(file: File, id: string, name: string): Promise<LayerSpec>
 			err,
 		)
 	}
+
 	// shpjs returns either a FeatureCollection or an array of FeatureCollections (for multi-layer zips)
-	const fc = Array.isArray(result)
+	const fc: any = Array.isArray(result)
 		? { type: "FeatureCollection", features: result.flatMap((r: any) => r.features ?? []) }
 		: result
+
+	const meta: Record<string, string> = { format: "shapefile" }
+	const isProjected = prjWkt ? !isGeographicWkt(prjWkt) : isLikelyProjected(fc)
+
+	if (isProjected) {
+		if (prjWkt) {
+			try {
+				const proj4 = (await import("proj4")).default
+				reprojectShpFeatureCollection(fc, proj4, prjWkt)
+				meta.crs = "auto-reprojected from .prj to WGS84"
+				meta.reprojected = "yes"
+			} catch {
+				meta.warnings = "CRS detected as projected but reprojection failed — coordinates may be off."
+			}
+		} else {
+			meta.warnings =
+				"Coordinates appear projected (not lon/lat) but no .prj file was found. " +
+				"Include a .prj file in the zip for automatic reprojection."
+		}
+	}
+
 	return {
 		kind: "vector",
 		id,
 		name,
 		geojson: JSON.stringify(fc),
-		metadata: { format: "shapefile" },
+		metadata: meta,
+	}
+}
+
+/** True only for WKT strings that describe a geographic (lon/lat) CRS — GEOGCS without PROJCS. */
+function isGeographicWkt(wkt: string): boolean {
+	return /GEOGCS/i.test(wkt) && !/PROJCS/i.test(wkt)
+}
+
+/**
+ * Heuristic: sample the first coordinate in the FeatureCollection.
+ * If abs(x) > 180 or abs(y) > 90 the data is almost certainly in a projected CRS (metres).
+ */
+function isLikelyProjected(fc: any): boolean {
+	let x: number | undefined, y: number | undefined
+
+	function sample(geom: any): boolean {
+		if (!geom) return false
+		function findCoord(c: any, depth: number): boolean {
+			if (!Array.isArray(c) || c.length < 2) return false
+			if (depth === 0) {
+				x = c[0]
+				y = c[1]
+				return true
+			}
+			for (const sub of c) {
+				if (findCoord(sub, depth - 1)) return true
+			}
+			return false
+		}
+		switch (geom.type) {
+			case "Point":
+				return findCoord(geom.coordinates, 0)
+			case "MultiPoint":
+			case "LineString":
+				return findCoord(geom.coordinates, 1)
+			case "MultiLineString":
+			case "Polygon":
+				return findCoord(geom.coordinates, 2)
+			case "MultiPolygon":
+				return findCoord(geom.coordinates, 3)
+			case "GeometryCollection":
+				return (geom.geometries ?? []).some(sample)
+		}
+		return false
+	}
+
+	if (fc.type === "FeatureCollection") {
+		;(fc.features ?? []).some((f: any) => f && sample(f.geometry))
+	} else if (fc.type === "Feature") {
+		sample(fc.geometry)
+	} else {
+		sample(fc)
+	}
+
+	if (x === undefined || y === undefined) return false
+	return Math.abs(x) > 180 || Math.abs(y) > 90
+}
+
+/**
+ * In-place reproject all coordinates in a GeoJSON FeatureCollection from srcWkt → WGS84.
+ * proj4 accepts WKT strings directly, so we pass the raw .prj text verbatim.
+ */
+function reprojectShpFeatureCollection(fc: any, proj4: any, srcWkt: string): void {
+	const convert = proj4(srcWkt, "WGS84")
+
+	function reprojectCoord(coord: number[]): number[] {
+		if (coord.length < 2) return coord
+		const [x, y] = convert.forward([coord[0], coord[1]])
+		return coord.length > 2 ? [x, y, coord[2]] : [x, y]
+	}
+
+	function reprojectRing(coords: any, depth: number): any {
+		if (!Array.isArray(coords)) return coords
+		if (depth === 0) return reprojectCoord(coords)
+		return coords.map((c: any) => reprojectRing(c, depth - 1))
+	}
+
+	function reprojectGeom(geom: any): void {
+		if (!geom) return
+		switch (geom.type) {
+			case "Point":
+				geom.coordinates = reprojectRing(geom.coordinates, 0)
+				break
+			case "MultiPoint":
+			case "LineString":
+				geom.coordinates = reprojectRing(geom.coordinates, 1)
+				break
+			case "MultiLineString":
+			case "Polygon":
+				geom.coordinates = reprojectRing(geom.coordinates, 2)
+				break
+			case "MultiPolygon":
+				geom.coordinates = reprojectRing(geom.coordinates, 3)
+				break
+			case "GeometryCollection":
+				;(geom.geometries ?? []).forEach(reprojectGeom)
+				break
+		}
+	}
+
+	if (fc.type === "FeatureCollection") {
+		;(fc.features ?? []).forEach((f: any) => f && reprojectGeom(f.geometry))
+	} else if (fc.type === "Feature") {
+		reprojectGeom(fc.geometry)
+	} else {
+		reprojectGeom(fc)
 	}
 }
 

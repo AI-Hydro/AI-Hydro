@@ -1,4 +1,4 @@
-import { type MapViewState, WebMercatorViewport } from "@deck.gl/core"
+import { FlyToInterpolator, LightingEffect, type MapViewState, WebMercatorViewport } from "@deck.gl/core"
 import { TileLayer } from "@deck.gl/geo-layers"
 import { BitmapLayer, GeoJsonLayer, PathLayer, TextLayer } from "@deck.gl/layers"
 import DeckGL from "@deck.gl/react"
@@ -6,6 +6,7 @@ import { EmptyRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useBrushContext } from "../../context/BrushContext"
 import { useMapContext } from "../../context/MapContext"
 import { MapServiceClient } from "../../services/grpc-client"
 import AnnotationsPanel from "./AnnotationsPanel"
@@ -34,6 +35,22 @@ import {
 } from "./galleryStorage"
 import { collectFeaturesAtPoint } from "./geoInspect"
 import { fmtDist, haversineKm } from "./geoMeasureMath"
+import Inundation3DControls from "./Inundation3DControls"
+import InundationScrubberPanel from "./InundationScrubberPanel"
+import { buildInundationTerrainLayer } from "./inundation3d/buildTerrainLayer"
+import { buildWaterSurfaceMeshLayer } from "./inundation3d/buildWaterSurfaceLayer"
+import { cameraKeyframeForFrame } from "./inundation3d/cinematicCamera"
+import {
+	findInundation3DManifestLayer,
+	type Inundation3DManifest,
+	manifestBoundsWgs84,
+	manifestFrameCount,
+	meshForFrame,
+	parseInundation3DManifest,
+} from "./inundation3d/manifest"
+import { meshTriangleCount } from "./inundation3d/meshCoordinates"
+import { hydrographFrameVisibilityUpdates } from "./inundation3d/syncHydrographFrame"
+import { terrainOffsetForManifest } from "./inundation3d/verticalAlignment"
 import MapContextMenu from "./MapContextMenu"
 import MapLegend from "./MapLegend"
 import { MapToolRibbon } from "./MapToolRibbon"
@@ -43,10 +60,12 @@ import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapH
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
 import { type CursorRasterReading, getLayerBounds, isGeoJsonLayer, sampleTopRasterAtPoint } from "./mapLayerAdapters"
 import { reportBasemapChanged, reportMapEvent, reportVisibleLayers } from "./mapSessionBridge"
-import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
+import { loadMapWorkspace, sanitizePersistedViewState, sanitizeViewStateForDeck, saveMapWorkspace } from "./mapWorkspace"
 import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGalleryPanel"
+import { resolveFileUri } from "./resolveFileUri"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
+import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
 import { loadTransects, type MapTransect, newTransect, saveTransects, type TransectCollection } from "./transectStorage"
 import VectorDrawTool, { type CompletedVectorDraw, type VectorDrawMode } from "./VectorDrawTool"
@@ -318,11 +337,36 @@ const mergeBounds = (allBounds: BoundingBox[]): BoundingBox | undefined => {
 	)
 }
 
+const _isFiniteNum = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n)
+
+// True only for bounds the Web Mercator projection can actually render. Raw
+// projected coordinates (e.g. UTM eastings/northings from an unprojected
+// shapefile — values like 425000, 4425000) fall far outside this range; flying
+// the camera there yields an invalid viewport that paints the ENTIRE canvas
+// (basemap included) black, so we must never fit to such bounds.
+const isWgs84Bounds = (bounds: BoundingBox): boolean => {
+	const [minLon, minLat, maxLon, maxLat] = bounds
+	return (
+		[minLon, minLat, maxLon, maxLat].every(_isFiniteNum) &&
+		minLon >= -180 &&
+		maxLon <= 180 &&
+		minLat >= -85 &&
+		maxLat <= 85 &&
+		minLon <= maxLon &&
+		minLat <= maxLat
+	)
+}
+
 const fitViewStateToBounds = (
 	bounds: BoundingBox,
 	dimensions: { width: number; height: number },
 	currentViewState: MapViewState,
 ): MapViewState => {
+	// Guard: never fly to non-WGS84 bounds — that black-screens the whole map.
+	// Keep the current (valid) camera instead; the caller surfaces a warning.
+	if (!isWgs84Bounds(bounds)) {
+		return sanitizeViewStateForDeck(currentViewState)
+	}
 	const [minLon, minLat, maxLon, maxLat] = bounds
 	const safeWidth = Math.max(200, dimensions.width * 0.82)
 	const safeHeight = Math.max(200, dimensions.height * 0.82)
@@ -331,14 +375,16 @@ const fitViewStateToBounds = (
 	const zoomX = Math.log2((safeWidth * 360) / (lonDelta * 512))
 	const zoomY = Math.log2((safeHeight * 180) / (latDelta * 512))
 	const zoom = Math.max(1, Math.min(16, Math.min(zoomX, zoomY)))
-	return {
-		...currentViewState,
-		longitude: (minLon + maxLon) / 2,
-		latitude: (minLat + maxLat) / 2,
-		zoom: Number.isFinite(zoom) ? zoom : currentViewState.zoom,
-		pitch: 0,
-		bearing: 0,
-	}
+	return sanitizeViewStateForDeck(
+		{
+			longitude: (minLon + maxLon) / 2,
+			latitude: (minLat + maxLat) / 2,
+			zoom: Number.isFinite(zoom) ? zoom : currentViewState.zoom,
+			pitch: 0,
+			bearing: 0,
+		},
+		sanitizeViewStateForDeck(currentViewState),
+	)
 }
 
 /**
@@ -421,7 +467,11 @@ const clusterGeoJSON = (geojson: any, zoom: number): any => {
 	const features = Array.from(clusters.values()).map((c) => ({
 		type: "Feature" as const,
 		geometry: { type: "Point" as const, coordinates: [c.lon / c.count, c.lat / c.count] as [number, number] },
-		properties: { _clusterCount: c.count, _clustered: true, ...c.sampleProps },
+		properties: {
+			_clusterCount: c.count,
+			_clustered: true,
+			...(c.sampleProps && typeof c.sampleProps === "object" && !Array.isArray(c.sampleProps) ? c.sampleProps : {}),
+		},
 	}))
 
 	return { type: "FeatureCollection" as const, features }
@@ -507,6 +557,20 @@ const DEFAULT_VIEW: MapViewState = {
 	zoom: 4,
 	pitch: 0,
 	bearing: 0,
+}
+
+// Clamp a (possibly persisted) camera back into renderable Web Mercator range.
+const sanitizeViewState = (vs: MapViewState | undefined): MapViewState => {
+	const stripped = sanitizeViewStateForDeck(sanitizePersistedViewState(vs), DEFAULT_VIEW)
+	const longitude = _isFiniteNum(stripped.longitude)
+		? Math.min(180, Math.max(-180, stripped.longitude))
+		: DEFAULT_VIEW.longitude
+	const latitude = _isFiniteNum(stripped.latitude) ? Math.min(85, Math.max(-85, stripped.latitude)) : DEFAULT_VIEW.latitude
+	const zoom = _isFiniteNum(stripped.zoom) ? Math.min(22, Math.max(0, stripped.zoom)) : DEFAULT_VIEW.zoom
+	if ((Math.abs(latitude) >= 85 || Math.abs(longitude) >= 180) && zoom <= 1) {
+		return DEFAULT_VIEW
+	}
+	return sanitizeViewStateForDeck({ ...stripped, longitude, latitude, zoom }, DEFAULT_VIEW)
 }
 
 interface MapViewProps {
@@ -603,6 +667,7 @@ const useEscToClosePanels = ({
 
 export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const { layers } = useMapContext()
+	const { setBrushExtent } = useBrushContext()
 	const knownLayerIdsRef = useRef<Set<string>>(new Set())
 	const pendingAutoFitLayerIdsRef = useRef<string[]>([])
 	const lastAutoFitKeyRef = useRef<string>("")
@@ -616,11 +681,15 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// (rasterCache is a module singleton, not React state — we need to trigger
 	// re-renders manually after async preloads complete.)
 	const [rasterReadyTick, setRasterReadyTick] = useState(0)
+	const [geojsonReadyTick, setGeojsonReadyTick] = useState(0)
+	const geojsonFileCacheRef = useRef<Map<string, unknown>>(new Map())
+	const [manifestReadyTick, setManifestReadyTick] = useState(0)
+	const manifestFileCacheRef = useRef<Map<string, Inundation3DManifest>>(new Map())
 
 	// Persistent state — restore on mount, save on change
 	const persisted = useMemo(() => loadMapWorkspace(), [])
 	const [selectedBaseMap, setSelectedBaseMap] = useState<string>(persisted.basemap ?? "usgs-topo")
-	const [viewState, setViewState] = useState<MapViewState>(persisted.viewState ?? DEFAULT_VIEW)
+	const [viewState, setViewState] = useState<MapViewState>(sanitizeViewState(persisted.viewState))
 	const [visibleLayerIds, setVisibleLayerIds] = useState<Set<string>>(
 		new Set(persisted.visibleLayerIds ?? layers.filter((layer) => layer.visible !== false).map((layer) => layer.id)),
 	)
@@ -685,6 +754,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 
 	// Swipe Tool
 	const [swipeMode, _setSwipeMode] = useState(false)
+	const [flood3dEnabled, setFlood3dEnabled] = useState(false)
+	const [flood3dTerrainEnabled, setFlood3dTerrainEnabled] = useState(true)
+	const [flood3dFrameIndex, setFlood3dFrameIndex] = useState(0)
+	const [flood3dCinematicCamera, setFlood3dCinematicCamera] = useState(true)
+	const [flood3dPlaybackActive, setFlood3dPlaybackActive] = useState(false)
 	const [swipeX, setSwipeX] = useState<number>(0.5)
 	const [swipeLayerLeft, setSwipeLayerLeft] = useState<string | null>(null)
 	const [swipeLayerRight, setSwipeLayerRight] = useState<string | null>(null)
@@ -760,6 +834,53 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		const observer = new ResizeObserver(update)
 		observer.observe(node)
 		return () => observer.disconnect()
+	}, [])
+
+	// ── WebGL context-loss recovery ───────────────────────────────────────────
+	// VS Code webviews (especially on macOS with several panels open) can have
+	// their GPU context reclaimed while the panel is backgrounded. deck.gl/luma
+	// does not reliably rewire to a restored context, so the canvas paints black
+	// while all React state and the surrounding chrome (toolbar, legend, scale)
+	// survive. We listen for the context-loss events and remount <DeckGL> via a
+	// key bump to acquire a fresh context. The bump re-runs this effect, which
+	// re-attaches the listeners to the freshly-created canvas. viewState/layers
+	// are controlled props, so the camera and overlays are preserved across the
+	// remount — the recovery is visually seamless.
+	const [glEpoch, setGlEpoch] = useState(0)
+	const contextLostRef = useRef(false)
+	useEffect(() => {
+		const canvas = containerRef.current?.querySelector("canvas")
+		if (!canvas) {
+			return
+		}
+		const onLost = (e: Event) => {
+			e.preventDefault() // preventDefault lets the browser attempt restoration
+			contextLostRef.current = true
+			console.warn("[MapView] WebGL context lost — will recover on restore/reshow")
+		}
+		const onRestored = () => {
+			contextLostRef.current = false
+			console.warn("[MapView] WebGL context restored — remounting deck.gl")
+			setGlEpoch((n) => n + 1)
+		}
+		canvas.addEventListener("webglcontextlost", onLost, false)
+		canvas.addEventListener("webglcontextrestored", onRestored, false)
+		return () => {
+			canvas.removeEventListener("webglcontextlost", onLost)
+			canvas.removeEventListener("webglcontextrestored", onRestored)
+		}
+	}, [glEpoch])
+	useEffect(() => {
+		// Hidden webviews often never fire `webglcontextrestored`; force a remount
+		// when the panel becomes visible again if we know the context was lost.
+		const onVisibility = () => {
+			if (document.visibilityState === "visible" && contextLostRef.current) {
+				contextLostRef.current = false
+				setGlEpoch((n) => n + 1)
+			}
+		}
+		document.addEventListener("visibilitychange", onVisibility)
+		return () => document.removeEventListener("visibilitychange", onVisibility)
 	}, [])
 
 	// Cursor coordinates for the status bar (lon/lat under mouse)
@@ -952,7 +1073,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	useEffect(() => {
 		saveMapWorkspace({
 			basemap: selectedBaseMap,
-			viewState,
+			viewState: sanitizePersistedViewState(viewState),
 			visibleLayerIds: Array.from(visibleLayerIds),
 			layerOpacities,
 			clusterLayerIds: Array.from(clusterLayerIds),
@@ -1097,7 +1218,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				try {
 					const scene = JSON.parse(msg.scene)
 					if (scene?.viewState) {
-						setViewState(scene.viewState)
+						setViewState(sanitizeViewState(scene.viewState))
 					}
 					if (typeof scene?.basemap === "string") {
 						setSelectedBaseMap(scene.basemap)
@@ -1160,13 +1281,35 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					return null
 				}
 				try {
-					const resp = await fetch(tile.url)
+					const resp = await fetch(tile.url, { mode: "cors", credentials: "omit" })
 					if (!resp.ok) {
 						return null
 					}
 					const blob = await resp.blob()
-					return createImageBitmap(blob)
-				} catch {
+					// `await` is required here — without it, a rejection from
+					// createImageBitmap escapes the try-catch and propagates to
+					// deck.gl as an unhandled rejection, leaving all tiles black.
+					try {
+						return await createImageBitmap(blob)
+					} catch {
+						// createImageBitmap can fail in some Electron webview contexts;
+						// fall back to an HTMLImageElement which deck.gl BitmapLayer also accepts.
+						const objectUrl = URL.createObjectURL(blob)
+						return await new Promise<HTMLImageElement>((resolve, reject) => {
+							const img = new Image()
+							img.onload = () => {
+								URL.revokeObjectURL(objectUrl)
+								resolve(img)
+							}
+							img.onerror = () => {
+								URL.revokeObjectURL(objectUrl)
+								reject(new Error(`Tile image load failed: ${tile.url}`))
+							}
+							img.src = objectUrl
+						})
+					}
+				} catch (err) {
+					console.error("[MapView] Basemap tile fetch failed:", tile.url, err)
 					return null
 				}
 			},
@@ -1211,9 +1354,31 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		knownLayerIdsRef.current = new Set(layers.map((layer) => layer.id))
 		// Evict parsed-GeoJSON cache entries for layers that no longer exist.
 		const liveIds = new Set(layers.map((layer) => layer.id))
+		setLayerOrder((previousOrder) => {
+			const nextOrder = previousOrder.filter((id) => liveIds.has(id))
+			return nextOrder.length === previousOrder.length ? previousOrder : nextOrder
+		})
+		setLayerOpacities((previousOpacities) => {
+			const nextOpacities = Object.fromEntries(Object.entries(previousOpacities).filter(([id]) => liveIds.has(id)))
+			return Object.keys(nextOpacities).length === Object.keys(previousOpacities).length ? previousOpacities : nextOpacities
+		})
+		setClusterLayerIds((previousClusterLayerIds) => {
+			const nextClusterLayerIds = new Set([...previousClusterLayerIds].filter((id) => liveIds.has(id)))
+			return nextClusterLayerIds.size === previousClusterLayerIds.size ? previousClusterLayerIds : nextClusterLayerIds
+		})
 		for (const id of parsedGeojsonCacheRef.current.keys()) {
 			if (!liveIds.has(id)) {
 				parsedGeojsonCacheRef.current.delete(id)
+			}
+		}
+		for (const id of geojsonFileCacheRef.current.keys()) {
+			if (!liveIds.has(id)) {
+				geojsonFileCacheRef.current.delete(id)
+			}
+		}
+		for (const id of manifestFileCacheRef.current.keys()) {
+			if (!liveIds.has(id)) {
+				manifestFileCacheRef.current.delete(id)
 			}
 		}
 	}, [layers])
@@ -1230,12 +1395,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			if (rasterCache.has(layer.id)) {
 				continue
 			}
-			const dataUrl = layer.metadata?.raster_data_url
 			const boundsRaw = layer.metadata?.raster_bounds
-			if (!dataUrl || !boundsRaw) {
-				console.error(
-					`[MapView] Raster layer "${layer.name}" (${layer.id}) is missing image data or bounds in metadata. PNG path read may have failed in MapEventWatcher.`,
-				)
+			if (!boundsRaw) {
+				console.error(`[MapView] Raster layer "${layer.name}" (${layer.id}) has no bounds metadata — skipping.`)
 				continue
 			}
 			let bounds: [number, number, number, number]
@@ -1245,17 +1407,142 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				console.error(`[MapView] Bad raster_bounds for layer ${layer.id}:`, err)
 				continue
 			}
-			dataUrlToImage(dataUrl)
-				.then((image) => {
+			const colormap = layer.metadata?.raster_colormap ?? "pre-rendered"
+
+			const dataUrl = layer.metadata?.raster_data_url
+			const rasterPath = layer.metadata?.raster_path
+
+			if (dataUrl) {
+				// Fast path: base64 data URL already in metadata (fresh push or initial load).
+				dataUrlToImage(dataUrl)
+					.then((image) => {
+						if (cancelled) return
+						rasterCache.set(layer.id, { image, bounds, colormap })
+						setRasterReadyTick((t) => t + 1)
+					})
+					.catch((err) => console.error(`[MapView] Failed to decode raster for ${layer.id}:`, err))
+			} else if (rasterPath) {
+				// Hydration path: layer was restored from catalog — resolve PNG via
+				// the webview host's file-URI resolver, then decode.
+				resolveFileUri(rasterPath)
+					.then(({ uri }) => dataUrlToImage(uri))
+					.then((image) => {
+						if (cancelled) return
+						rasterCache.set(layer.id, { image, bounds, colormap })
+						setRasterReadyTick((t) => t + 1)
+					})
+					.catch((err) =>
+						console.warn(`[MapView] Could not resolve raster file for ${layer.id} — layer will be invisible:`, err),
+					)
+			} else {
+				console.error(
+					`[MapView] Raster layer "${layer.name}" (${layer.id}) has no raster_data_url or raster_path — cannot render.`,
+				)
+			}
+		}
+		return () => {
+			cancelled = true
+		}
+	}, [layers])
+
+	// Lazy-load large vector layers from disk when gRPC sent path-only stubs.
+	// Keep this sequential and visibility-gated: multi-MB flood extents can be
+	// 30k+ features each, and parsing several at once blocks the webview thread.
+	useEffect(() => {
+		let cancelled = false
+		const yieldToUi = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+
+		void (async () => {
+			for (const layer of layers) {
+				if (cancelled) {
+					return
+				}
+				if (!visibleLayerIds.has(layer.id)) {
+					continue
+				}
+				if (!isGeoJsonLayer(layer)) {
+					continue
+				}
+				if (layer.geojson?.trim()) {
+					continue
+				}
+				if (geojsonFileCacheRef.current.has(layer.id)) {
+					continue
+				}
+				const filePath =
+					layer.metadata?.display_geojson_path ||
+					layer.metadata?.geojson_cache_path ||
+					layer.metadata?.workspace_path ||
+					layer.metadata?.source_path ||
+					layer.metadata?.path
+				if (!filePath) {
+					continue
+				}
+				try {
+					await yieldToUi()
+					const { uri } = await resolveFileUri(filePath)
+					const resp = await fetch(uri)
+					if (!resp.ok) {
+						throw new Error(`HTTP ${resp.status}`)
+					}
 					if (cancelled) {
 						return
 					}
-					rasterCache.set(layer.id, { image, bounds, colormap: layer.metadata?.raster_colormap ?? "pre-rendered" })
-					setRasterReadyTick((t) => t + 1)
+					const raw = await resp.text()
+					await yieldToUi()
+					if (cancelled) {
+						return
+					}
+					const parsed = JSON.parse(raw)
+					if (cancelled) {
+						return
+					}
+					geojsonFileCacheRef.current.set(layer.id, parsed)
+					setGeojsonReadyTick((t) => t + 1)
+				} catch (err) {
+					console.warn(`[MapView] GeoJSON load failed for ${layer.id}:`, err)
+				}
+			}
+		})()
+
+		return () => {
+			cancelled = true
+		}
+	}, [layers, visibleLayerIds])
+
+	// Lazy-load 3D inundation manifests stripped from gRPC payloads.
+	useEffect(() => {
+		let cancelled = false
+		for (const layer of layers) {
+			if (layer.layerType !== "inundation_3d") {
+				continue
+			}
+			if (layer.metadata?.inundation_3d_manifest_json || manifestFileCacheRef.current.has(layer.id)) {
+				continue
+			}
+			const filePath = layer.metadata?.inundation_3d_manifest_path
+			if (!filePath) {
+				continue
+			}
+			resolveFileUri(filePath)
+				.then(({ uri }) => fetch(uri))
+				.then((resp) => {
+					if (!resp.ok) {
+						throw new Error(`HTTP ${resp.status}`)
+					}
+					return resp.text()
 				})
-				.catch((err) => {
-					console.error(`[MapView] Failed to decode raster image for layer ${layer.id}:`, err)
+				.then((raw) => {
+					if (cancelled) {
+						return
+					}
+					const manifest = parseInundation3DManifest(raw)
+					if (manifest) {
+						manifestFileCacheRef.current.set(layer.id, manifest)
+						setManifestReadyTick((t) => t + 1)
+					}
 				})
+				.catch((err) => console.warn(`[MapView] 3D manifest load failed for ${layer.id}:`, err))
 		}
 		return () => {
 			cancelled = true
@@ -1316,6 +1603,16 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		}
 		pendingAutoFitLayerIdsRef.current = []
 		lastAutoFitKeyRef.current = autoFitKey
+		if (!isWgs84Bounds(bounds)) {
+			// Projected (e.g. UTM) layer — don't move the camera to invalid
+			// coordinates (that black-screens the map). Tell the user why.
+			setDropStatus({
+				kind: "err",
+				msg: "Layer coordinates appear projected (not lon/lat). Include a .prj file in the zip for auto-reprojection, or reproject to EPSG:4326 (WGS84) manually. Map view unchanged.",
+			})
+			window.setTimeout(() => setDropStatus(null), 6000)
+			return
+		}
 		setViewState((previousViewState) => fitViewStateToBounds(bounds, dimensions, previousViewState))
 	}, [layers, visibleLayerIds, dimensions])
 
@@ -1346,7 +1643,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	handleFitExtentRef.current = handleFitExtent
 	handleZoomToLayerRef.current = handleZoomToLayer
 
-	// Agent map commands (map_fit_extent, map_fit_layer) via host event stream
+	// Agent map commands (fit_extent, fit_layer, fly_to, set_time_range) via host event stream
 	useEffect(() => {
 		const processedCommandKeys = new Set<string>()
 		const unsub = MapServiceClient.subscribeToMapEvents(EmptyRequest.create({}), {
@@ -1378,13 +1675,49 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					if (layer) {
 						handleZoomToLayerRef.current(layer)
 					}
+					return
+				}
+				if (event.type === "command.fly_to") {
+					try {
+						const p = JSON.parse(event.payloadJson || "{}") as {
+							longitude?: number
+							latitude?: number
+							zoom?: number
+							durationMs?: number
+						}
+						if (typeof p.longitude === "number" && typeof p.latitude === "number") {
+							setViewState(
+								sanitizeViewStateForDeck({
+									longitude: p.longitude,
+									latitude: p.latitude,
+									zoom: p.zoom,
+									transitionDuration: p.durationMs ?? 2000,
+									transitionInterpolator: new FlyToInterpolator({ speed: 1.2 }),
+								}),
+							)
+						}
+					} catch {
+						/* ignore */
+					}
+					return
+				}
+				if (event.type === "command.set_time_range") {
+					try {
+						const p = JSON.parse(event.payloadJson || "{}") as { startIso?: string; endIso?: string }
+						if (p.startIso && p.endIso) {
+							setBrushExtent([p.startIso, p.endIso])
+						}
+					} catch {
+						/* ignore */
+					}
+					return
 				}
 			},
 			onError: (err) => console.error("[MapView] map events subscription error:", err),
 			onComplete: () => {},
 		})
 		return () => unsub()
-	}, [layers])
+	}, [layers, setBrushExtent])
 
 	const getTooltip = useCallback(
 		({ object, layer: deckLayer }: any) => {
@@ -1578,12 +1911,179 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		[clusterLayerIds, viewState.zoom],
 	)
 
+	const flood3dManifestInfo = useMemo(
+		() => findInundation3DManifestLayer(sortedLayers, manifestFileCacheRef.current),
+		[sortedLayers, manifestReadyTick],
+	)
+
+	const flood3dActiveMesh = useMemo(() => {
+		if (!flood3dManifestInfo) {
+			return null
+		}
+		return meshForFrame(flood3dManifestInfo.manifest, flood3dFrameIndex)
+	}, [flood3dManifestInfo, flood3dFrameIndex])
+
+	const flood3dMeshTriangles = useMemo(() => meshTriangleCount(flood3dActiveMesh), [flood3dActiveMesh])
+
+	const flood3dLighting = useMemo(() => (flood3dEnabled ? [new LightingEffect({})] : []), [flood3dEnabled])
+
+	const handleFlood3dEnabledChange = useCallback(
+		(enabled: boolean) => {
+			setFlood3dEnabled(enabled)
+			if (!enabled) {
+				setFlood3dPlaybackActive(false)
+			}
+			if (enabled) {
+				const bounds = manifestBoundsWgs84(flood3dManifestInfo?.manifest)
+				if (bounds) {
+					setViewState((prev) => {
+						const fitted = fitViewStateToBounds(bounds, dimensions, prev)
+						// Clamp zoom to at least 10 so the water mesh isn't microscopic;
+						// cap at 14 to keep the full flood extent visible.
+						const zoom = Math.max(10, Math.min(14, fitted.zoom ?? 10))
+						return { ...fitted, zoom, pitch: 50, bearing: -20 }
+					})
+				} else {
+					setViewState((prev) => ({
+						...prev,
+						pitch: Math.max(prev.pitch ?? 0, 50),
+					}))
+				}
+			} else {
+				setViewState((prev) => ({ ...prev, pitch: 0 }))
+			}
+		},
+		[flood3dManifestInfo, dimensions],
+	)
+
+	useEffect(() => {
+		if (!flood3dEnabled) {
+			return
+		}
+		const updates = hydrographFrameVisibilityUpdates(layers, flood3dFrameIndex, visibleLayerIds)
+		for (const { layerId, visible } of updates) {
+			handleVisibilityChange(layerId, visible)
+		}
+	}, [flood3dEnabled, flood3dFrameIndex, layers, visibleLayerIds])
+
+	const flood3dTerrainLayer = useMemo(() => {
+		if (!flood3dEnabled || !flood3dTerrainEnabled) {
+			return null
+		}
+		const bounds = manifestBoundsWgs84(flood3dManifestInfo?.manifest)
+		if (!bounds) {
+			return null
+		}
+		return buildInundationTerrainLayer(bounds, { visible: true })
+	}, [flood3dEnabled, flood3dTerrainEnabled, flood3dManifestInfo])
+
+	const flood3dDeckLayer = useMemo(() => {
+		if (!flood3dEnabled) {
+			return null
+		}
+		if (!flood3dActiveMesh || !flood3dActiveMesh.indices?.length) {
+			return null
+		}
+		const verticalOffsetM = flood3dTerrainEnabled ? terrainOffsetForManifest(flood3dManifestInfo!.manifest) : 0
+		return buildWaterSurfaceMeshLayer("inundation-3d-water-surface", flood3dActiveMesh, {
+			visible: true,
+			verticalOffsetM,
+		})
+	}, [flood3dEnabled, flood3dActiveMesh, flood3dManifestInfo, flood3dTerrainEnabled])
+
+	const flood3dFrameCount = manifestFrameCount(flood3dManifestInfo?.manifest)
+	const prevFlood3dEnabledRef = useRef(false)
+
+	useEffect(() => {
+		if (!flood3dPlaybackActive || !flood3dEnabled) {
+			return
+		}
+		// Single-frame snapshot (e.g. a return-period Q): there are no frames to
+		// advance, so "Play" gently orbits the basin for a cinematic reveal.
+		if (flood3dFrameCount <= 1) {
+			const orbit = window.setInterval(() => {
+				setViewState((prev) => ({
+					...prev,
+					bearing: ((prev.bearing ?? 0) + 0.5) % 360,
+					transitionDuration: 0,
+				}))
+			}, 60)
+			return () => window.clearInterval(orbit)
+		}
+		// Hydrograph: advance frames at a slower, cinematic cadence.
+		const timer = window.setInterval(() => {
+			setFlood3dFrameIndex((current) => {
+				const next = current + 1
+				if (next >= flood3dFrameCount) {
+					setFlood3dPlaybackActive(false)
+					return flood3dFrameCount - 1
+				}
+				return next
+			})
+		}, 1300)
+		return () => window.clearInterval(timer)
+	}, [flood3dPlaybackActive, flood3dEnabled, flood3dFrameCount])
+
+	useEffect(() => {
+		if (!flood3dEnabled || !flood3dCinematicCamera || !flood3dManifestInfo?.manifest) {
+			return
+		}
+		const kf = cameraKeyframeForFrame(flood3dManifestInfo.manifest, flood3dFrameIndex, Math.max(flood3dFrameCount, 1))
+		if (!kf) {
+			return
+		}
+		setViewState((prev) => ({
+			...prev,
+			longitude: kf.longitude,
+			latitude: kf.latitude,
+			pitch: kf.pitch ?? 52,
+			bearing: kf.bearing ?? prev.bearing ?? 0,
+			zoom: kf.zoom ?? prev.zoom,
+			transitionDuration: flood3dPlaybackActive ? 750 : 450,
+		}))
+	}, [flood3dEnabled, flood3dCinematicCamera, flood3dFrameIndex, flood3dFrameCount, flood3dPlaybackActive, flood3dManifestInfo])
+
+	useEffect(() => {
+		if (prevFlood3dEnabledRef.current && !flood3dEnabled) {
+			for (const layer of layers) {
+				if (
+					layer.metadata?.tool === "map_flood_inundation_hydrograph" &&
+					layer.metadata?.hydrograph_frame !== undefined
+				) {
+					if (!visibleLayerIds.has(layer.id)) {
+						handleVisibilityChange(layer.id, true)
+					}
+				}
+			}
+		}
+		prevFlood3dEnabledRef.current = flood3dEnabled
+	}, [flood3dEnabled, layers, visibleLayerIds])
+
 	const dataLayers = useMemo(
 		() =>
 			sortedLayers
 				.filter((layer) => visibleLayerIds.has(layer.id))
+				.filter((layer) => layer.layerType !== "inundation_3d")
 				.map((layer) => {
 					try {
+						// In 3D mode: hide noisy extent polygons and the 2D depth raster
+						// only when the 3D water mesh has enough geometry to replace them.
+						// Watershed, gauge, and reference layers stay visible for context.
+						if (flood3dEnabled) {
+							const meta = layer.metadata ?? {}
+							const isExtentPolygon = meta.uncertainty_band != null || layer.id.includes("_extent_")
+							const isFloodDepthRaster =
+								layer.layerType === "raster" &&
+								(meta.tool === "map_flood_inundation" ||
+									meta.tool === "map_flood_inundation_hydrograph" ||
+									meta.source === "HAND+SRC")
+							if (isExtentPolygon) {
+								return null
+							}
+							if (isFloodDepthRaster && flood3dMeshTriangles >= 8) {
+								return null
+							}
+						}
 						if (layer.layerType === "gee_tile") {
 							const tileUrl = layer.metadata?.gee_tile_url_template || layer.metadata?.tile_url
 							if (!tileUrl) {
@@ -1618,7 +2118,25 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 											return null
 										}
 										const blob = await resp.blob()
-										return createImageBitmap(blob)
+										try {
+											return await createImageBitmap(blob)
+										} catch {
+											// createImageBitmap can fail in some Electron webview contexts;
+											// fall back to an HTMLImageElement which deck.gl BitmapLayer also accepts.
+											const objectUrl = URL.createObjectURL(blob)
+											return await new Promise<HTMLImageElement>((resolve, reject) => {
+												const img = new Image()
+												img.onload = () => {
+													URL.revokeObjectURL(objectUrl)
+													resolve(img)
+												}
+												img.onerror = () => {
+													URL.revokeObjectURL(objectUrl)
+													reject(new Error(`Tile image load failed: ${tile.url}`))
+												}
+												img.src = objectUrl
+											})
+										}
 									} catch {
 										return null
 									}
@@ -1700,11 +2218,18 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 								pickable: false,
 							})
 						}
-						let geojson = getParsedGeojson(layer.id, layer.geojson)
+						let geojson = layer.geojson?.trim()
+							? getParsedGeojson(layer.id, layer.geojson)
+							: geojsonFileCacheRef.current.get(layer.id)
+						if (!geojson) {
+							return null
+						}
+						const rawFeatureCount = Array.isArray((geojson as any)?.features) ? (geojson as any).features.length : 0
+						const largeVectorLayer = rawFeatureCount > 15_000 && layer.metadata?.symbology_user_override !== "true"
 						const style = layer.style
 						// Apply point clustering for dense networks at low zoom
 						if (clusterLayerIds.has(layer.id) && zoomBucket < 8) {
-							const featureCount = geojson?.features?.length ?? geojson?.coordinates?.length ?? 0
+							const featureCount = rawFeatureCount || geojson?.coordinates?.length || 0
 							const cacheKey = `${layer.id}|${zoomBucket}|${featureCount}`
 							const cachedCluster = clusterCacheRef.current.get(cacheKey)
 							if (cachedCluster) {
@@ -1761,14 +2286,14 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						return new GeoJsonLayer({
 							id: layer.id,
 							data: geojson,
-							pickable: true,
-							stroked: true,
+							pickable: !largeVectorLayer,
+							stroked: !largeVectorLayer,
 							filled: true,
 							extruded: false,
 							lineWidthUnits: "pixels" as const,
 							lineWidthMinPixels: 1,
 							lineWidthMaxPixels: 20,
-							autoHighlight: true,
+							autoHighlight: !largeVectorLayer,
 							highlightColor: [255, 213, 79, Math.round(190 * layerOpacity)],
 							// data reference is stable across recomputes (parsed cache), so
 							// deck.gl won't re-evaluate accessors unless these triggers change.
@@ -1854,7 +2379,18 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		// when async raster preloads finish so the BitmapLayer instantiates after
 		// the image is ready. zoomBucket (integer, only varies when clustering is on)
 		// and clusterLayerIds drive clustering without rebuilding on every zoom frame.
-		[sortedLayers, visibleLayerIds, rasterReadyTick, layerOpacities, zoomBucket, clusterLayerIds, getParsedGeojson],
+		[
+			sortedLayers,
+			visibleLayerIds,
+			rasterReadyTick,
+			geojsonReadyTick,
+			layerOpacities,
+			zoomBucket,
+			clusterLayerIds,
+			getParsedGeojson,
+			flood3dEnabled,
+			flood3dMeshTriangles,
+		],
 	)
 
 	// Measure overlay layer — renders live measurement geometry on the map
@@ -2200,42 +2736,82 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		})
 	}, [transectHoverCoord])
 
-	const allLayers = [
-		basemapLayer,
-		...dataLayers,
-		inspectHighlightLayer,
-		measureLayer,
-		drawLayer,
-		savedTransectsLayer,
-		transectLayer,
-		annotationsLayer,
-		transectHoverLayer,
-		...measureLabels,
-		...searchPinLayers,
-	].filter(Boolean) as any[]
+	const deckViewState = useMemo(() => sanitizeViewStateForDeck(viewState), [viewState])
 
-	// Swipe: separate data layers from shared overlay layers
-	// Data layers go only to the side that selects them;
-	// basemap, annotations, measure, draw, pins etc appear on BOTH sides.
-	const sharedLayers = [
-		basemapLayer,
-		inspectHighlightLayer,
-		measureLayer,
-		drawLayer,
-		savedTransectsLayer,
-		transectLayer,
-		annotationsLayer,
-		transectHoverLayer,
-		...measureLabels,
-		...searchPinLayers,
-	].filter(Boolean) as any[]
+	// Shared overlay layers: basemap + non-data overlays that appear on both swipe sides.
+	// Memoized so that rightLayers/leftLayers stay stable between renders.
+	const sharedLayers = useMemo(
+		() =>
+			[
+				basemapLayer,
+				flood3dTerrainLayer,
+				flood3dDeckLayer,
+				inspectHighlightLayer,
+				measureLayer,
+				drawLayer,
+				savedTransectsLayer,
+				transectLayer,
+				annotationsLayer,
+				transectHoverLayer,
+				...measureLabels,
+				...searchPinLayers,
+			].filter(Boolean) as any[],
+		[
+			basemapLayer,
+			flood3dTerrainLayer,
+			flood3dDeckLayer,
+			inspectHighlightLayer,
+			measureLayer,
+			drawLayer,
+			savedTransectsLayer,
+			transectLayer,
+			annotationsLayer,
+			transectHoverLayer,
+			measureLabels,
+			searchPinLayers,
+		],
+	)
+
+	const allLayers = useMemo(
+		() =>
+			[
+				basemapLayer,
+				...dataLayers,
+				flood3dTerrainLayer,
+				flood3dDeckLayer,
+				inspectHighlightLayer,
+				measureLayer,
+				drawLayer,
+				savedTransectsLayer,
+				transectLayer,
+				annotationsLayer,
+				transectHoverLayer,
+				...measureLabels,
+				...searchPinLayers,
+			].filter(Boolean) as any[],
+		[
+			basemapLayer,
+			dataLayers,
+			flood3dTerrainLayer,
+			flood3dDeckLayer,
+			inspectHighlightLayer,
+			measureLayer,
+			drawLayer,
+			savedTransectsLayer,
+			transectLayer,
+			annotationsLayer,
+			transectHoverLayer,
+			measureLabels,
+			searchPinLayers,
+		],
+	)
 
 	const rightLayers = useMemo(() => {
 		if (!swipeMode) {
 			return allLayers
 		}
-		// Right side: show the right-selected data layer + shared overlays
-		const rightData = swipeLayerRight ? dataLayers.filter((l) => l?.id === swipeLayerRight) : [] // no selection = basemap only
+		// Right side: selected right data layer + shared overlays (basemap, annotations, etc.)
+		const rightData = swipeLayerRight ? dataLayers.filter((l) => l?.id === swipeLayerRight) : []
 		return [...sharedLayers, ...rightData].filter(Boolean)
 	}, [swipeMode, allLayers, sharedLayers, dataLayers, swipeLayerRight])
 
@@ -2243,10 +2819,14 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		if (!swipeMode) {
 			return []
 		}
-		// Left side: show the left-selected data layer + shared overlays
-		const leftData = swipeLayerLeft ? dataLayers.filter((l) => l?.id === swipeLayerLeft) : [] // no selection = basemap only
+		// Left side: selected left data layer + shared overlays.
+		// Uses a separate sharedLayers spread so deck.gl creates independent layer
+		// state for each DeckGL instance instead of sharing internal WebGL objects.
+		const leftData = swipeLayerLeft ? dataLayers.filter((l) => l?.id === swipeLayerLeft) : []
 		return [...sharedLayers, ...leftData].filter(Boolean)
-	}, [swipeMode, allLayers, sharedLayers, dataLayers, swipeLayerLeft])
+	}, [swipeMode, sharedLayers, dataLayers, swipeLayerLeft])
+
+	const readyLayerIds = useMemo(() => new Set(dataLayers.map((l: any) => l?.id).filter(Boolean) as string[]), [dataLayers])
 
 	const saveFeaturesToWorkspace = useCallback(async (features: ClickedFeature[], format: "geojson" | "shapefile") => {
 		const exportable = features.filter((feature) => feature.geometry)
@@ -2402,7 +2982,13 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			}}>
 			{/* RIGHT MAP (or single map when not swiping) */}
 			<DeckGL
-				controller={{ doubleClickZoom: false }}
+				controller={{
+					doubleClickZoom: false,
+					dragRotate: flood3dEnabled,
+					touchRotate: flood3dEnabled,
+					maxPitch: flood3dEnabled ? 85 : 0,
+				}}
+				effects={flood3dLighting}
 				getCursor={({ isDragging }: { isDragging: boolean }) => {
 					if (isDragging) {
 						return "grabbing"
@@ -2416,6 +3002,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					return "grab"
 				}}
 				getTooltip={layers.length > 0 && clickedFeatures.length === 0 ? getTooltip : undefined}
+				key={`deck-main-${glEpoch}`}
 				layers={rightLayers}
 				onClick={handleMapClick}
 				onHover={({ coordinate }: any) => {
@@ -2433,13 +3020,13 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						setToolHoverCoord(null)
 					}
 				}}
-				onViewStateChange={({ viewState }: any) => {
-					setViewState(viewState)
+				onViewStateChange={({ viewState: nextViewState }: { viewState: MapViewState }) => {
+					setViewState(sanitizeViewStateForDeck(nextViewState, deckViewState))
 					setContextMenu(null)
 				}}
 				pickingRadius={8}
 				style={{ position: "absolute", inset: "0" }}
-				viewState={viewState}
+				viewState={deckViewState}
 			/>
 
 			{/* LEFT MAP (clipped) */}
@@ -2453,9 +3040,10 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					}}>
 					<DeckGL
 						controller={false}
+						key={`deck-swipe-${glEpoch}`}
 						layers={leftLayers}
 						style={{ position: "absolute", inset: "0" }}
-						viewState={viewState}
+						viewState={deckViewState}
 					/>
 				</div>
 			)}
@@ -2752,12 +3340,35 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				currentBasemap={selectedBaseMap}
 				drawMode={drawMode}
 				exportOpen={exportOpen}
+				floodPanel={
+					<>
+						{!flood3dEnabled && (
+							<InundationScrubberPanel layers={layers} mapStyle={mapStyle === "dark" ? "dark" : "light"} />
+						)}
+						<Inundation3DControls
+							cinematicCamera={flood3dCinematicCamera}
+							enabled={flood3dEnabled}
+							frameCount={flood3dFrameCount}
+							frameIndex={flood3dFrameIndex}
+							layers={layers}
+							mapStyle={mapStyle === "dark" ? "dark" : "light"}
+							meshTriangleCount={flood3dMeshTriangles}
+							onCinematicCameraChange={setFlood3dCinematicCamera}
+							onEnabledChange={handleFlood3dEnabledChange}
+							onFrameIndexChange={setFlood3dFrameIndex}
+							onPlaybackActiveChange={setFlood3dPlaybackActive}
+							onTerrainEnabledChange={setFlood3dTerrainEnabled}
+							playbackActive={flood3dPlaybackActive}
+							terrainEnabled={flood3dTerrainEnabled}
+						/>
+					</>
+				}
 				galleryOpen={galleryOpen}
 				galleryPanel={(() => {
 					const galleryImportCallbacks: GalleryImportCallbacks = {
 						onImportScene: (item) => {
 							const p = item.payload as MapScenePayload
-							if (p.viewState) setViewState((v) => ({ ...v, ...p.viewState }))
+							if (p.viewState) setViewState(sanitizeViewState(p.viewState))
 							if (p.basemap) setSelectedBaseMap(p.basemap)
 							if (Array.isArray(p.visibleLayerIds)) setVisibleLayerIds(new Set(p.visibleLayerIds))
 							if (p.layerOpacities) setLayerOpacities((prev) => ({ ...prev, ...p.layerOpacities }))
@@ -2906,6 +3517,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				swipePanel={
 					<SwipePanel
 						layers={layers}
+						readyLayerIds={readyLayerIds}
 						setSwipeLayerLeft={setSwipeLayerLeft}
 						setSwipeLayerRight={setSwipeLayerRight}
 						setSwipeMode={setSwipeMode}
@@ -2914,6 +3526,17 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						swipeLayerRight={swipeLayerRight}
 						swipeMode={swipeMode}
 						swipeX={swipeX}
+						visibleLayerIds={visibleLayerIds}
+					/>
+				}
+				timeSliderPanel={
+					<TimeSliderPanel
+						hydrographFrameCount={flood3dEnabled ? flood3dFrameCount : 0}
+						hydrographFrameIndex={flood3dEnabled ? flood3dFrameIndex : undefined}
+						layers={layers}
+						mapStyle={mapStyle === "dark" ? "dark" : "light"}
+						onHydrographFrameChange={flood3dEnabled ? setFlood3dFrameIndex : undefined}
+						onVisibilityChange={handleVisibilityChange}
 						visibleLayerIds={visibleLayerIds}
 					/>
 				}

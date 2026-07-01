@@ -8,6 +8,7 @@ import { MapServiceClient } from "../services/grpc-client"
 interface MapContextType {
 	layers: MapLayer[]
 	activeRoi: ActiveRoi | undefined
+	boundClaimId: string | undefined
 	addLayer: (layer: MapLayer) => void
 	removeLayer: (layerId: string) => void
 	clearLayers: () => void
@@ -34,6 +35,7 @@ function protoToActiveRoi(roi?: MapRoi): ActiveRoi | undefined {
 export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [layers, setLayers] = useState<MapLayer[]>([])
 	const [activeRoi, setActiveRoi] = useState<ActiveRoi | undefined>()
+	const [boundClaimId, setBoundClaimId] = useState<string | undefined>()
 	const layerSubRef = useRef<(() => void) | null>(null)
 	const sessionSubRef = useRef<(() => void) | null>(null)
 
@@ -69,6 +71,7 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		MapServiceClient.getMapSession(EmptyRequest.create({}))
 			.then((session) => {
 				setActiveRoi(protoToActiveRoi(session.activeRoi))
+				setBoundClaimId(session.claimId || undefined)
 			})
 			.catch((error) => {
 				console.error("[MapContext] Failed to fetch map session:", error)
@@ -87,6 +90,7 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		sessionSubRef.current = MapServiceClient.subscribeToMapSession(EmptyRequest.create({}), {
 			onResponse: (session) => {
 				setActiveRoi(protoToActiveRoi(session.activeRoi))
+				setBoundClaimId(session.claimId || undefined)
 			},
 			onError: (error) => {
 				console.error("[MapContext] Error in map session subscription:", error)
@@ -158,6 +162,7 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			value={{
 				layers,
 				activeRoi,
+				boundClaimId,
 				addLayer,
 				removeLayer,
 				clearLayers,

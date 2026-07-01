@@ -16,9 +16,9 @@ export interface CursorRasterReading {
 
 const GEOJSON_LAYER_TYPES = new Set(["vector", "point", "line", "polygon", "geojson"])
 
-/** True when the layer has inspectable vector geometry (geemap-style inspector). */
+/** True when the layer is vector geometry, including file-backed stubs whose GeoJSON is lazy-loaded. */
 export function isGeoJsonLayer(layer: MapLayer): boolean {
-	return GEOJSON_LAYER_TYPES.has(layer.layerType) && Boolean(layer.geojson?.trim())
+	return GEOJSON_LAYER_TYPES.has(layer.layerType)
 }
 
 export function isRasterLikeLayer(layer: MapLayer): boolean {
@@ -33,9 +33,7 @@ export function sampleTopRasterAtPoint(
 	lon: number,
 	lat: number,
 	rasterCache?: {
-		get(
-			id: string,
-		):
+		get(id: string):
 			| {
 					bounds?: LayerBounds
 					rawPixels?: { data: Float32Array | number[]; width: number; height: number; min: number; max: number }
@@ -70,9 +68,7 @@ function sampleRasterAtPoint(
 	lon: number,
 	lat: number,
 	rasterCache?: {
-		get(
-			id: string,
-		):
+		get(id: string):
 			| {
 					bounds?: LayerBounds
 					rawPixels?: { data: Float32Array | number[]; width: number; height: number; min: number; max: number }
@@ -124,9 +120,7 @@ export function sampleAllRastersAtPoint(
 	lon: number,
 	lat: number,
 	rasterCache?: {
-		get(
-			id: string,
-		):
+		get(id: string):
 			| {
 					bounds?: LayerBounds
 					rawPixels?: { data: Float32Array | number[]; width: number; height: number; min: number; max: number }

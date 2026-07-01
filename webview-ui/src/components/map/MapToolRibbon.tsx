@@ -39,6 +39,8 @@ export type RibbonTool =
 	| "transect"
 	| "annotations"
 	| "swipe"
+	| "flood"
+	| "time"
 	| "export"
 	| null
 
@@ -56,6 +58,8 @@ const TOOL_PANEL_SIZE: Record<
 	transect: { width: 320, height: 160, minWidth: 260, minHeight: 120, maxWidth: 420, maxHeightRatio: 0.45 },
 	annotations: { width: 360, height: 420, minWidth: 300, minHeight: 250, maxWidth: 480, maxHeightRatio: 0.8 },
 	swipe: { width: 300, height: 200, minWidth: 260, minHeight: 160, maxWidth: 400, maxHeightRatio: 0.5 },
+	flood: { width: 320, height: 280, minWidth: 280, minHeight: 200, maxWidth: 420, maxHeightRatio: 0.55 },
+	time: { width: 320, height: 180, minWidth: 260, minHeight: 140, maxWidth: 480, maxHeightRatio: 0.45 },
 	export: { width: 620, height: 540, minWidth: 460, minHeight: 360, maxWidth: 980, maxHeightRatio: 0.88 },
 }
 
@@ -102,6 +106,12 @@ interface MapToolRibbonProps {
 	transectsPanel?: React.ReactNode
 	/** Gallery UI rendered inside the Gallery ribbon panel */
 	galleryPanel?: React.ReactNode
+	/** Time slider UI rendered inside the Time ribbon panel */
+	timeSliderPanel?: React.ReactNode
+	/** Flood inundation stage scrubber */
+	floodPanel?: React.ReactNode
+	/** Claim ID this map state is bound to — shows a chip in the ribbon */
+	boundClaimId?: string
 }
 
 interface RibbonButtonProps {
@@ -164,6 +174,9 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	onTransectToggle,
 	transectsPanel,
 	galleryPanel,
+	timeSliderPanel,
+	floodPanel,
+	boundClaimId,
 }) => {
 	const persisted = loadMapWorkspace()
 	const [active, setActive] = useState<RibbonTool>(null)
@@ -361,9 +374,11 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 													? "✏️"
 													: active === "hydrography"
 														? "🌊"
-														: active === "export"
-															? "🖼️"
-															: ""}
+														: active === "flood"
+															? "💧"
+															: active === "export"
+																? "🖼️"
+																: ""}
 						</span>
 						<span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>
 							{active === "basemap"
@@ -380,9 +395,11 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 													? "Create vector"
 													: active === "hydrography"
 														? "Reference vectors"
-														: active === "export"
-															? "Export"
-															: ""}
+														: active === "flood"
+															? "Flood inundation"
+															: active === "export"
+																? "Export"
+																: ""}
 						</span>
 						{active === "export" && (
 							<span style={{ fontSize: 10, opacity: 0.68, marginRight: 8 }}>
@@ -455,6 +472,8 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 						{active === "search" && <div style={{ padding: 8 }}>{searchPanel}</div>}
 						{active === "annotations" && <div style={{ padding: 8 }}>{annotationsPanel}</div>}
 						{active === "swipe" && <div style={{ padding: 12 }}>{swipePanel}</div>}
+						{active === "flood" && <div style={{ padding: 12 }}>{floodPanel}</div>}
+						{active === "time" && <div style={{ padding: 12 }}>{timeSliderPanel}</div>}
 						{active === "gallery" && (
 							<div style={{ padding: 8 }}>
 								{galleryPanel ?? (
@@ -606,6 +625,28 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 				</div>
 			)}
 
+			{/* Bound-claim chip — floats above ribbon when set */}
+			{boundClaimId && (
+				<div
+					style={{
+						position: "absolute",
+						top: 10,
+						right: ribbonWidth + 14,
+						zIndex: 5,
+						background: "rgba(80,200,120,0.18)",
+						border: "1px solid rgba(80,200,120,0.45)",
+						borderRadius: 12,
+						padding: "3px 9px",
+						fontSize: 10,
+						color: "var(--vscode-charts-green, #89d185)",
+						pointerEvents: "none",
+						whiteSpace: "nowrap",
+					}}
+					title={`Map state is linked to claim ${boundClaimId}`}>
+					📎 {boundClaimId}
+				</div>
+			)}
+
 			{/* Icon ribbon — compact strip at top-right */}
 			<div
 				style={{
@@ -729,6 +770,28 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					icon="◧"
 					label="Swipe / Compare layers"
 					onClick={() => toggle("swipe")}
+				/>
+				<RibbonButton
+					accent={accent}
+					active={active === "flood"}
+					badge={
+						layers?.filter(
+							(l) =>
+								l.metadata?.tool === "map_flood_inundation" ||
+								l.metadata?.source === "HAND+SRC" ||
+								l.metadata?.stage_lookup_json,
+						).length || undefined
+					}
+					icon="💧"
+					label="Flood inundation — stage scrubber & 3D view"
+					onClick={() => toggle("flood")}
+				/>
+				<RibbonButton
+					accent={accent}
+					active={active === "time"}
+					icon="🕐"
+					label="Time slider — filter layers by date range"
+					onClick={() => toggle("time")}
 				/>
 				<RibbonButton
 					accent={accent}

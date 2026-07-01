@@ -108,6 +108,13 @@ const HIDDEN_KEYS = new Set([
 	"source_derived_from",
 	"converted_artifact_path",
 	"conversion",
+	"display_geojson_path",
+	"display_mode",
+	"full_geojson_embedded",
+	"original_feature_count",
+	"preview_feature_count",
+	"preview_coord_count",
+	"preview_bytes",
 ])
 
 const niceMetadata = (layer: MapLayer): Array<[string, string]> => {
@@ -307,7 +314,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	onShowAllLayers,
 	onHideAllLayers,
 }) => {
-	const { layers } = useMapContext()
+	const { layers, addLayer, removeLayer, clearLayers } = useMapContext()
 	const persisted = useMemo(() => loadMapWorkspace(), [])
 	const [showDetails, setShowDetails] = useState<boolean>(persisted.layerPanel?.showDetails ?? false)
 	const [layerAliases, setLayerAliases] = useState<Record<string, string>>(persisted.layerAliases ?? {})
@@ -320,6 +327,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const [confirmingClear, setConfirmingClear] = useState(false)
 	const [loadStatus, setLoadStatus] = useState<{ kind: "idle" | "ok" | "err"; msg: string }>({ kind: "idle", msg: "" })
 	const [savingLayerId, setSavingLayerId] = useState<string | null>(null)
+	const [removingLayerIds, setRemovingLayerIds] = useState<Set<string>>(new Set())
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
 	// Subscribe to platform load events.
@@ -450,20 +458,62 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		})
 
 	const handleRemove = async (id: string) => {
+		const removedLayer = layers.find((layer) => layer.id === id)
+		setRemovingLayerIds((prev) => new Set(prev).add(id))
+		removeLayer(id)
+		rasterCache.delete(id)
+		onVisibilityChange(id, false)
+		onReorder(
+			(layerOrder.length > 0 ? layerOrder : orderedLayers.map((layer) => layer.id)).filter((layerId) => layerId !== id),
+		)
+		setExpandedRows((prev) => {
+			const next = new Set(prev)
+			next.delete(id)
+			return next
+		})
+		if (attrTableFor === id) setAttrTableFor(null)
+		if (symbologyFor === id) setSymbologyFor(null)
+		if (renamingId === id) setRenamingId(null)
 		try {
 			await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId: id }))
+			setLoadStatus({ kind: "ok", msg: "Layer removed." })
+			window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 2500)
 		} catch (err) {
 			console.error("Failed to remove layer:", err)
+			if (removedLayer) {
+				addLayer(removedLayer)
+			}
+			setLoadStatus({ kind: "err", msg: err instanceof Error ? err.message : "Failed to remove layer." })
+		} finally {
+			setRemovingLayerIds((prev) => {
+				const next = new Set(prev)
+				next.delete(id)
+				return next
+			})
 		}
 	}
 
 	const handleClearAll = async () => {
+		const previousLayers = [...layers]
+		setConfirmingClear(false)
+		clearLayers()
+		for (const layer of previousLayers) {
+			rasterCache.delete(layer.id)
+		}
+		onReorder([])
+		onHideAllLayers?.()
+		setExpandedRows(new Set())
+		setAttrTableFor(null)
+		setSymbologyFor(null)
+		setRenamingId(null)
 		try {
 			await MapServiceClient.clearMapLayers({})
+			setLoadStatus({ kind: "ok", msg: `Removed ${previousLayers.length} layers.` })
+			window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 2500)
 		} catch (err) {
 			console.error("Failed to clear layers:", err)
-		} finally {
-			setConfirmingClear(false)
+			previousLayers.forEach(addLayer)
+			setLoadStatus({ kind: "err", msg: err instanceof Error ? err.message : "Failed to clear layers." })
 		}
 	}
 
@@ -859,6 +909,20 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 												⚠
 											</span>
 										)}
+										{layer.metadata?.display_mode === "preview" && (
+											<span
+												style={{
+													fontSize: 9,
+													padding: "1px 5px",
+													borderRadius: 3,
+													background: "rgba(100,180,255,0.12)",
+													color: "var(--vscode-textLink-foreground, #4da3ff)",
+													flexShrink: 0,
+												}}
+												title={`Rendering preview: ${Number(layer.metadata.preview_feature_count ?? 0).toLocaleString()} of ${Number(layer.metadata.original_feature_count ?? 0).toLocaleString()} features. Full data is retained for export/provenance.`}>
+												preview
+											</span>
+										)}
 										{layer.metadata?.simplified === "true" && (
 											<span
 												style={{
@@ -871,6 +935,28 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 												}}
 												title={`Auto-simplified: ${Number(layer.metadata.original_coord_count ?? 0).toLocaleString()} → ${Number(layer.metadata.simplified_coord_count ?? 0).toLocaleString()} coordinates (file was very large)`}>
 												simplified
+											</span>
+										)}
+										{(layer.metadata?._run_id || layer.metadata?.tool_name) && (
+											<span
+												style={{
+													fontSize: 9,
+													padding: "1px 5px",
+													borderRadius: 3,
+													background: "rgba(80,200,120,0.12)",
+													color: "var(--vscode-charts-green, #89d185)",
+													flexShrink: 0,
+													fontFamily: "var(--vscode-editor-font-family, monospace)",
+												}}
+												title={[
+													layer.metadata?.tool_name && `Tool: ${layer.metadata.tool_name}`,
+													layer.metadata?._run_id && `Run: ${layer.metadata._run_id}`,
+													layer.metadata?.agent_step && `Step: ${layer.metadata.agent_step}`,
+													layer.metadata?.timestamp && `At: ${layer.metadata.timestamp}`,
+												]
+													.filter(Boolean)
+													.join("\n")}>
+												🐍 {layer.metadata._run_id?.split(".")[0] ?? layer.metadata.tool_name}
 											</span>
 										)}
 
@@ -1131,15 +1217,17 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 										<div style={{ flex: 1 }} />
 										<IconBtn
 											border={border}
+											disabled={removingLayerIds.has(layer.id)}
 											fg={fg}
 											onClick={() => handleRemove(layer.id)}
 											style={{
 												color: danger,
 												borderColor: "rgba(220,53,69,0.35)",
 												background: "rgba(220,53,69,0.08)",
+												opacity: removingLayerIds.has(layer.id) ? 0.55 : 1,
 											}}
 											title="Remove layer">
-											✕
+											{removingLayerIds.has(layer.id) ? "…" : "✕"}
 										</IconBtn>
 									</div>
 
@@ -1595,6 +1683,12 @@ const LayerInspector: React.FC<{
 							["Citation", intelligence.citation ?? meta.dataset ?? meta.gee_dataset_id ?? "No citation recorded"],
 							["License", intelligence.license ?? "No license recorded"],
 							["Path", meta.path ?? meta.raster_source_path ?? meta.raster_path ?? "No local source path recorded"],
+							["MCP tool", meta.tool_name ?? "Not created by a tool"],
+							["Run ID", meta._run_id ?? "No run ID"],
+							["Agent step", meta.agent_step ?? "—"],
+							["Computed at", meta.timestamp ?? "—"],
+							["Time range", meta.time_start ? `${meta.time_start} – ${meta.time_end ?? "present"}` : "—"],
+							["Linked claim", meta.claim_id ?? "—"],
 							["Metadata fields", String(all.length)],
 						]}
 					/>
@@ -1632,9 +1726,11 @@ const IconBtn: React.FC<{
 	fg: string
 	border: string
 	active?: boolean
+	disabled?: boolean
 	style?: React.CSSProperties
-}> = ({ onClick, title, children, fg, border, active, style }) => (
+}> = ({ onClick, title, children, fg, border, active, disabled, style }) => (
 	<button
+		disabled={disabled}
 		onClick={onClick}
 		style={{
 			background: active ? "rgba(255,255,255,0.12)" : "transparent",
@@ -1642,7 +1738,7 @@ const IconBtn: React.FC<{
 			border: `1px solid ${active ? border : "transparent"}`,
 			borderRadius: 3,
 			padding: "2px 5px",
-			cursor: "pointer",
+			cursor: disabled ? "default" : "pointer",
 			fontSize: 12,
 			lineHeight: 1,
 			fontFamily: "inherit",

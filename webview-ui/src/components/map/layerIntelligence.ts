@@ -105,6 +105,9 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 
 	if (layerType === "raster") {
 		capabilities.add("export_image")
+		const hasSourceFile = Boolean(
+			meta.raster_source_path || meta.source_raster_path || meta.source_tif_path || meta.twi_raster_path,
+		)
 		if (hasRawRaster) {
 			capabilities.add("style_raster")
 			capabilities.add("raster_probe")
@@ -116,6 +119,23 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 				capabilities,
 				warnings,
 				provenancePath,
+				citation,
+				license,
+				sourceLabel: sourceLabel(layer),
+			}
+		}
+		if (hasSourceFile) {
+			capabilities.add("style_raster")
+			capabilities.add("raster_probe")
+			return {
+				dataState: "visual_preview_raster",
+				typeLabel: "Raster",
+				statusLabel: "Preview (GeoTIFF on disk)",
+				statusDetail:
+					"Map shows a rendered PNG overlay aligned to WGS84. Open Symbology → Load source to enable value probing and colormap editing from the workspace GeoTIFF.",
+				capabilities,
+				warnings,
+				provenancePath: provenancePath || meta.raster_source_path || meta.workspace_path,
 				citation,
 				license,
 				sourceLabel: sourceLabel(layer),

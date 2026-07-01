@@ -1,6 +1,8 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
+import { hydrateInundation3dLayers } from "@/core/map/inundation3dLayer"
+import { sanitizeMapLayerForWebview } from "@/core/map/sanitizeMapLayerForWebview"
 import type { Controller } from ".."
 
 // Keep track of active map layer subscriptions
@@ -51,7 +53,7 @@ export async function subscribeToMapLayers(
 	const existingLayers = controller.getMapLayers()
 	for (const layer of existingLayers) {
 		try {
-			await responseStream(layer, false)
+			await responseStream(sanitizeMapLayerForWebview(layer), false)
 		} catch (error) {
 			console.error("[subscribeToMapLayers] Error sending existing layer:", error)
 			activeMapLayerSubscriptions.delete(responseStream)
@@ -61,4 +63,5 @@ export async function subscribeToMapLayers(
 	}
 
 	console.log(`[subscribeToMapLayers] Sent ${existingLayers.length} existing layers to subscriber`)
+	void hydrateInundation3dLayers(controller)
 }

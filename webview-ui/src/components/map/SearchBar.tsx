@@ -117,9 +117,9 @@ const SOURCE_ICON: Record<SearchResult["source"], string> = {
 	nominatim: "🌍",
 }
 
-const fg = "var(--vscode-foreground, #ccc)"
-const border = "rgba(255,255,255,0.12)"
-const subtle = "rgba(255,255,255,0.04)"
+const fg = "var(--vscode-foreground)"
+const border = "var(--vscode-input-border, rgba(128,128,128,0.3))"
+const subtle = "var(--vscode-list-hoverBackground, rgba(128,128,128,0.06))"
 const accent = "var(--vscode-button-background, #0e639c)"
 
 const smallBtn = (active?: boolean): React.CSSProperties => ({
@@ -205,7 +205,7 @@ const BookmarksPanel: React.FC<{
 							flex: 1,
 							fontSize: 11,
 							padding: "3px 6px",
-							background: "rgba(255,255,255,0.07)",
+							background: "var(--vscode-input-background)",
 							color: fg,
 							border: `1px solid ${border}`,
 							borderRadius: 3,

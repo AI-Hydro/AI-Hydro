@@ -2,10 +2,14 @@ import type { MapLayer } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 
 export const MAP_LAYER_CATALOG_FILE = path.join(os.homedir(), ".aihydro", "map_layer_catalog.json")
 const MAP_LAYER_GEOJSON_CACHE_DIR = path.join(os.homedir(), ".aihydro", "map_layer_geojson_cache")
-const MAX_GEOJSON_CACHE_BYTES = 512_000
+// Tool-pushed layers may be arbitrarily large (>512 KB). We always cache them
+// so they can be restored on extension reload. User-loaded layers keep the old cap.
+const MAX_GEOJSON_CACHE_BYTES_USER = 512_000
+const MAX_GEOJSON_CACHE_BYTES_TOOL = 20_000_000 // 20 MB
 
 export interface NumericAttributeSummary {
 	name: string
@@ -30,11 +34,21 @@ export interface MapLayerCatalogEntry {
 	workspace_path: string
 	/** Absolute path to cached geojson when layer has no workspace file (tool-pushed). */
 	geojson_cache_path: string
+	/** Absolute path to the PNG on disk (raster layers). Used for hydration on reload. */
+	raster_path: string
+	/** JSON string of [west, south, east, north] bounds for raster layers. */
+	raster_bounds: string
+	raster_colormap: string
+	raster_opacity: string
+	/** Absolute path to inundation_3d manifest JSON (inundation_3d layers). */
+	inundation_3d_manifest_path: string
 	style: Record<string, number | string>
 	symbology_mode: "basic" | "graduated" | "raster" | "none"
 	graduated?: GraduatedSummary
 	numeric_attributes: NumericAttributeSummary[]
 	feature_count: number
+	/** All raw layer metadata — used to reconstruct MapLayer on hydration. */
+	metadata_snapshot: Record<string, string>
 }
 
 export interface MapLayerCatalog {
@@ -173,9 +187,24 @@ function styleToRecord(layer: MapLayer): Record<string, number | string> {
 	return out
 }
 
-export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = ""): MapLayerCatalogEntry {
+export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = "", displayGeojsonPath = ""): MapLayerCatalogEntry {
 	const meta = layer.metadata ?? {}
 	const workspacePath = meta.path || meta.workspace_path || ""
+	// Strip large blobs from the metadata snapshot — raster_data_url can be
+	// several MB and is reproduced from raster_path on hydration.
+	const metaSnapshot: Record<string, string> = {}
+	for (const [k, v] of Object.entries(meta)) {
+		if (k === "raster_data_url" || k === "inundation_3d_manifest_json") {
+			continue
+		}
+		if (typeof v === "string") {
+			metaSnapshot[k] = v
+		}
+	}
+	if (displayGeojsonPath) {
+		metaSnapshot.display_geojson_path = displayGeojsonPath
+		metaSnapshot.display_mode = "preview"
+	}
 	return {
 		id: layer.id,
 		name: meta.display_name || layer.name || layer.id,
@@ -184,21 +213,41 @@ export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = ""): Map
 		source: resolveLayerSource(layer),
 		workspace_path: workspacePath,
 		geojson_cache_path: geojsonCachePath,
+		raster_path: meta.raster_path || "",
+		raster_bounds: meta.raster_bounds || "",
+		raster_colormap: meta.raster_colormap || "viridis",
+		raster_opacity: meta.raster_opacity || "0.75",
+		inundation_3d_manifest_path: meta.inundation_3d_manifest_path || "",
 		style: styleToRecord(layer),
 		symbology_mode: resolveSymbologyMode(layer),
 		graduated: buildGraduatedSummary(layer),
 		numeric_attributes: extractNumericAttributes(layer.geojson || ""),
 		feature_count: countFeatures(layer.geojson || ""),
+		metadata_snapshot: metaSnapshot,
 	}
+}
+
+function isToolPushedLayer(layer: MapLayer): boolean {
+	const meta = layer.metadata ?? {}
+	return !!(meta.tool || meta._run_id || meta.source === "HAND+SRC")
+}
+
+function isUsableAbsolutePath(filePath: string | undefined): boolean {
+	return Boolean(filePath && path.isAbsolute(filePath))
 }
 
 async function cacheLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 	const meta = layer.metadata ?? {}
-	if (meta.path || meta.workspace_path) {
+	if (isUsableAbsolutePath(meta.path) || isUsableAbsolutePath(meta.workspace_path)) {
 		return ""
 	}
 	const geojson = layer.geojson?.trim()
-	if (!geojson || Buffer.byteLength(geojson, "utf8") > MAX_GEOJSON_CACHE_BYTES) {
+	if (!geojson) {
+		return ""
+	}
+	const bytes = Buffer.byteLength(geojson, "utf8")
+	const cap = isToolPushedLayer(layer) ? MAX_GEOJSON_CACHE_BYTES_TOOL : MAX_GEOJSON_CACHE_BYTES_USER
+	if (bytes > cap) {
 		return ""
 	}
 	try {
@@ -207,6 +256,23 @@ async function cacheLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 		const cachePath = path.join(MAP_LAYER_GEOJSON_CACHE_DIR, `${safeId}.geojson`)
 		await fs.writeFile(cachePath, geojson, "utf8")
 		return cachePath
+	} catch {
+		return ""
+	}
+}
+
+async function previewLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
+	const meta = layer.metadata ?? {}
+	if (meta.display_geojson_path) {
+		return meta.display_geojson_path
+	}
+	const geojson = layer.geojson?.trim()
+	if (!geojson) {
+		return ""
+	}
+	try {
+		const preview = await ensureGeoJsonPreviewArtifact(layer.id, geojson)
+		return preview?.previewPath ?? ""
 	} catch {
 		return ""
 	}
@@ -226,7 +292,8 @@ export async function buildMapLayerCatalogAsync(layers: MapLayer[], layerOrder: 
 			continue
 		}
 		const cachePath = await cacheLayerGeojsonIfNeeded(layer)
-		entries.push(layerToCatalogEntry(layer, cachePath))
+		const previewPath = await previewLayerGeojsonIfNeeded(layer)
+		entries.push(layerToCatalogEntry(layer, cachePath, previewPath))
 	}
 	return {
 		updated_at_ms: Date.now(),

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { type ExportFormat, exportAnnotations } from "./annotationExport"
 import {
 	type AnnotationCollection,
@@ -112,6 +112,9 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 	const [expandedId, setExpandedId] = useState<string | null>(null)
 	const [agentBusy, setAgentBusy] = useState<string | false>(false)
 	const [agentError, setAgentError] = useState<string | null>(null)
+	const [agentStatus, setAgentStatus] = useState<string | null>(null)
+	// Per-annotation tag input draft (controlled input; keyed by annotation id)
+	const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({})
 	const [batchOpen, setBatchOpen] = useState(false)
 	const [batchInstruction, setBatchInstruction] = useState("")
 	const [gallerySaveOpen, setGallerySaveOpen] = useState(false)
@@ -125,6 +128,18 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 	const [showExportMenu, setShowExportMenu] = useState(false)
 	const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
 	const exportBtnRef = useRef<HTMLDivElement>(null)
+
+	// Close export dropdown when user clicks outside it
+	useEffect(() => {
+		if (!showExportMenu) return
+		const handler = (e: MouseEvent) => {
+			if (exportBtnRef.current && !exportBtnRef.current.contains(e.target as Node)) {
+				setShowExportMenu(false)
+			}
+		}
+		document.addEventListener("mousedown", handler)
+		return () => document.removeEventListener("mousedown", handler)
+	}, [showExportMenu])
 
 	// ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -392,8 +407,9 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 					<button
 						onClick={() => {
 							setAgentError(null)
+							setAgentStatus(null)
 							const msg = onSeedFromLayer()
-							setAgentError(msg)
+							setAgentStatus(msg)
 						}}
 						style={{
 							fontSize: 10,
@@ -638,6 +654,38 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 							background: "none",
 							border: "none",
 							color: "#f87171",
+							cursor: "pointer",
+							fontSize: 12,
+							padding: 0,
+						}}
+						type="button">
+						✕
+					</button>
+				</div>
+			)}
+
+			{/* ── Status banner (success/info) ── */}
+			{agentStatus && (
+				<div
+					style={{
+						marginBottom: 8,
+						padding: "5px 8px",
+						background: "rgba(34,197,94,0.1)",
+						border: "1px solid rgba(34,197,94,0.3)",
+						borderRadius: 4,
+						fontSize: 10,
+						color: "#4ade80",
+						display: "flex",
+						alignItems: "center",
+						gap: 6,
+					}}>
+					<span style={{ flex: 1 }}>✓ {agentStatus}</span>
+					<button
+						onClick={() => setAgentStatus(null)}
+						style={{
+							background: "none",
+							border: "none",
+							color: "#4ade80",
 							cursor: "pointer",
 							fontSize: 12,
 							padding: 0,
@@ -1014,20 +1062,22 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													</span>
 												))}
 												<input
+													onChange={(e) =>
+														setTagDrafts((prev) => ({ ...prev, [ann.id]: e.target.value }))
+													}
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === ",") {
-															const v = (e.target as HTMLInputElement).value
-																.trim()
-																.replace(/,/g, "")
+															const v = (tagDrafts[ann.id] ?? "").trim().replace(/,/g, "")
 															if (v && !ann.tags.includes(v)) {
 																updateAnnotation(ann.id, { tags: [...ann.tags, v] })
 															}
-															;(e.target as HTMLInputElement).value = ""
+															setTagDrafts((prev) => ({ ...prev, [ann.id]: "" }))
 															e.preventDefault()
 														}
 													}}
 													placeholder="+ tag"
 													style={{ ...inputStyle, width: 60, padding: "2px 6px", fontSize: 9 }}
+													value={tagDrafts[ann.id] ?? ""}
 												/>
 											</div>
 										</div>

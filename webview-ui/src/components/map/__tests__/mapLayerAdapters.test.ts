@@ -18,6 +18,19 @@ describe("isGeoJsonLayer", () => {
 		expect(isGeoJsonLayer(mkLayer({ id: "r", layerType: "raster", geojson: "" }))).toBe(false)
 		expect(isGeoJsonLayer(mkLayer({ id: "g", layerType: "geojson", geojson: "{}" }))).toBe(true)
 	})
+
+	it("recognizes path-backed vector stubs so the map can lazy-load their files", () => {
+		expect(
+			isGeoJsonLayer(
+				mkLayer({
+					id: "large-vector",
+					layerType: "polygon",
+					geojson: "",
+					metadata: { geojson_cache_path: "/tmp/large-vector.geojson" },
+				}),
+			),
+		).toBe(true)
+	})
 })
 
 describe("getLayerBounds", () => {

@@ -24,6 +24,27 @@ function expandHomePath(filePath: string): string {
 	return filePath
 }
 
+async function resolveMapFilePath(filePath: string): Promise<string> {
+	const expanded = expandHomePath(filePath)
+	const candidates = [expanded]
+	if (!path.isAbsolute(expanded)) {
+		candidates.push(path.join(os.homedir(), ".aihydro", "map_layer_geojson_cache", expanded))
+		candidates.push(path.join(os.homedir(), ".aihydro", expanded))
+		for (const folder of vscode.workspace.workspaceFolders ?? []) {
+			candidates.push(path.join(folder.uri.fsPath, expanded))
+		}
+	}
+	for (const candidate of candidates) {
+		try {
+			await vscode.workspace.fs.stat(vscode.Uri.file(candidate))
+			return candidate
+		} catch {
+			/* try next candidate */
+		}
+	}
+	return expanded
+}
+
 const MAP_SUPPORTED_EXTENSIONS = new Set([
 	".geojson",
 	".json",
@@ -794,7 +815,7 @@ export class VscodeMapPanelProvider {
 					}
 					case "aihydro-resolve-file-uri": {
 						const requestId = message.requestId
-						const filePath = typeof message.path === "string" ? expandHomePath(message.path) : ""
+						const filePath = typeof message.path === "string" ? await resolveMapFilePath(message.path) : ""
 						try {
 							if (!filePath) {
 								throw new Error("Missing file path")

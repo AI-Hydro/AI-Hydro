@@ -18,10 +18,12 @@
  */
 
 import type { Controller } from "@core/controller"
+import { buildInundation3dLayerFromPath, hydrateInundation3dLayers } from "@core/map/inundation3dLayer"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 
 const MAP_EVENTS_DIR = path.join(os.homedir(), ".aihydro", "map_events")
 const POLL_INTERVAL_MS = 200
@@ -39,6 +41,7 @@ interface MapEventPayload {
 	geojson: string
 	layerType?: string
 	raster?: RasterPayload
+	inundation3d?: { manifest_path: string }
 	style?: {
 		fillColor?: string
 		fillOpacity?: number
@@ -128,28 +131,40 @@ export class MapEventWatcher {
 			return
 		}
 
-		await this.deleteFile(filePath) // delete before apply — prevents reprocessing on error
-
 		try {
 			await this.applyEvent(event)
+			// Delete only after successful apply so a transient failure (e.g. PNG
+			// temporarily missing) doesn't permanently discard the layer.
+			await this.deleteFile(filePath)
 		} catch (err) {
 			console.error("[MapEventWatcher] Failed to apply event:", event.id, err)
+			// Move to a failed/ sub-directory for inspection rather than dropping.
+			await this.quarantineFile(filePath)
 		}
 	}
 
 	private async applyEvent(event: MapEventPayload): Promise<void> {
 		const isRaster = event.layerType === "raster" && event.raster != null
+		const isInundation3d = event.layerType === "inundation_3d" && event.inundation3d != null
 
 		let layer: MapLayer
 
 		if (isRaster) {
 			layer = await this.buildRasterLayer(event)
+		} else if (isInundation3d) {
+			layer = await this.buildInundation3dLayer(event)
 		} else {
-			layer = this.buildVectorLayer(event)
+			layer = await this.buildVectorLayer(event)
 		}
 
-		console.log(`[MapEventWatcher] Applying ${isRaster ? "raster" : "vector"} layer: ${event.id}`)
+		console.log(
+			`[MapEventWatcher] Applying ${isRaster ? "raster" : isInundation3d ? "inundation_3d" : "vector"} layer: ${event.id}`,
+		)
 		this.controller.addMapLayer(layer)
+
+		if (isRaster && (event.metadata?.tool === "map_flood_inundation" || event.metadata?.source === "HAND+SRC")) {
+			void hydrateInundation3dLayers(this.controller)
+		}
 
 		if (event.openMap) {
 			// Try standalone side-panel first; fall back to in-chat map tab
@@ -174,7 +189,7 @@ export class MapEventWatcher {
 		}
 	}
 
-	private buildVectorLayer(event: MapEventPayload): MapLayer {
+	private async buildVectorLayer(event: MapEventPayload): Promise<MapLayer> {
 		const style = event.style ?? {}
 		const mapLayerStyle = MapLayerStyle.create({
 			fillColor: style.fillColor ?? "#0066CC",
@@ -186,15 +201,60 @@ export class MapEventWatcher {
 			opacity: style.opacity ?? 1.0,
 		})
 
+		const geojson = event.geojson ?? ""
+		const metadata: Record<string, string> = {
+			...(event.metadata ?? {}),
+			...(event.timestamp ? { addedAt: event.timestamp } : {}),
+		}
+		if (geojson) {
+			try {
+				const preview = await ensureGeoJsonPreviewArtifact(event.id, geojson)
+				if (preview) {
+					metadata.display_geojson_path = preview.previewPath
+					metadata.full_geojson_embedded = "true"
+					metadata.display_mode = "preview"
+					metadata.original_feature_count = String(preview.stats.featureCount)
+					metadata.preview_feature_count = String(preview.previewStats.featureCount)
+					metadata.original_coord_count = String(preview.stats.coordCount)
+					metadata.preview_coord_count = String(preview.previewStats.coordCount)
+					metadata.preview_bytes = String(preview.previewBytes)
+				}
+			} catch (err) {
+				console.warn(`[MapEventWatcher] Could not build GeoJSON preview for ${event.id}:`, err)
+			}
+		}
+
 		return MapLayer.create({
 			id: event.id,
 			name: event.name,
-			geojson: event.geojson ?? "",
+			geojson,
 			layerType: event.layerType ?? "polygon",
 			style: mapLayerStyle,
 			visible: true,
+			metadata,
+		})
+	}
+
+	private async buildInundation3dLayer(event: MapEventPayload): Promise<MapLayer> {
+		const manifestPath = event.inundation3d!.manifest_path
+		const built = await buildInundation3dLayerFromPath(event.id, event.name, manifestPath, {
+			...(event.metadata ?? {}),
+			...(event.timestamp ? { addedAt: event.timestamp } : {}),
+		})
+		if (built) {
+			return built
+		}
+
+		return MapLayer.create({
+			id: event.id,
+			name: event.name,
+			geojson: "",
+			layerType: "inundation_3d",
+			visible: true,
 			metadata: {
 				...(event.metadata ?? {}),
+				inundation_3d_manifest_json: "",
+				inundation_3d_manifest_path: manifestPath,
 				...(event.timestamp ? { addedAt: event.timestamp } : {}),
 			},
 		})
@@ -204,8 +264,10 @@ export class MapEventWatcher {
 		const raster = event.raster!
 		const opacity = raster.opacity ?? 0.75
 
-		// Read the tile PNG and encode as a data URL so the webview can render it
-		// without needing file:// URI access (blocked by webview CSP).
+		// Store raster_path as the source of truth. The webview resolves it to a
+		// webview URI via aihydro-resolve-file-uri. We still include a base64
+		// data URL as a fallback for the first render (avoids a resolve round-trip),
+		// but the catalog will persist raster_path so reloads don't need it.
 		let dataUrl = ""
 		try {
 			const pngBuffer = await fs.readFile(raster.path)
@@ -217,13 +279,13 @@ export class MapEventWatcher {
 		return MapLayer.create({
 			id: event.id,
 			name: event.name,
-			geojson: "", // unused for raster layers
+			geojson: "",
 			layerType: "raster",
 			visible: true,
 			metadata: {
 				...(event.metadata ?? {}),
 				raster_data_url: dataUrl,
-				raster_bounds: JSON.stringify(raster.bounds), // "[west,south,east,north]"
+				raster_bounds: JSON.stringify(raster.bounds),
 				raster_opacity: String(opacity),
 				raster_colormap: raster.colormap ?? "viridis",
 				raster_path: raster.path,
@@ -237,6 +299,18 @@ export class MapEventWatcher {
 			await fs.unlink(filePath)
 		} catch {
 			// Already deleted or inaccessible — safe to ignore
+		}
+	}
+
+	private async quarantineFile(filePath: string): Promise<void> {
+		try {
+			const failedDir = path.join(MAP_EVENTS_DIR, "failed")
+			await fs.mkdir(failedDir, { recursive: true })
+			const dest = path.join(failedDir, path.basename(filePath))
+			await fs.rename(filePath, dest)
+		} catch {
+			// If rename fails, at least delete so we don't loop forever.
+			await this.deleteFile(filePath)
 		}
 	}
 }

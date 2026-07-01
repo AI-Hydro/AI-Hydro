@@ -1,9 +1,11 @@
 import type { MapLayer } from "@shared/proto/cline/map"
-import React from "react"
+import React, { useState } from "react"
 
 interface SwipePanelProps {
 	layers: MapLayer[]
 	visibleLayerIds: Set<string>
+	/** IDs of layers that are currently in the deck.gl render pipeline (data loaded). */
+	readyLayerIds: Set<string>
 	swipeMode: boolean
 	setSwipeMode: (v: boolean) => void
 	swipeLayerLeft: string | null
@@ -17,6 +19,7 @@ interface SwipePanelProps {
 export const SwipePanel: React.FC<SwipePanelProps> = ({
 	layers,
 	visibleLayerIds,
+	readyLayerIds,
 	swipeMode,
 	setSwipeMode,
 	swipeLayerLeft,
@@ -26,7 +29,20 @@ export const SwipePanel: React.FC<SwipePanelProps> = ({
 	swipeX,
 	setSwipeX,
 }) => {
-	const visibleLayers = layers.filter((l) => visibleLayerIds.has(l.id))
+	const [runTaggedOnly, setRunTaggedOnly] = useState(false)
+
+	const allVisibleLayers = layers.filter((l) => visibleLayerIds.has(l.id))
+	const runTaggedLayers = allVisibleLayers.filter((l) => l.metadata?._run_id)
+	const visibleLayers = runTaggedOnly ? runTaggedLayers : allVisibleLayers
+
+	const layerLabel = (l: MapLayer): string => {
+		const runId = l.metadata?._run_id
+		return runId ? `${l.name} [${runId}]` : l.name
+	}
+
+	const isLayerLoading = (id: string | null): boolean => id !== null && !readyLayerIds.has(id)
+	const leftLoading = swipeMode && isLayerLoading(swipeLayerLeft)
+	const rightLoading = swipeMode && isLayerLoading(swipeLayerRight)
 
 	const handleSwap = () => {
 		const tmp = swipeLayerLeft
@@ -65,6 +81,20 @@ export const SwipePanel: React.FC<SwipePanelProps> = ({
 				<input checked={swipeMode} onChange={(e) => setSwipeMode(e.target.checked)} type="checkbox" />
 				Enable Swipe Tool
 			</label>
+			{swipeMode && runTaggedLayers.length > 0 && (
+				<label
+					style={{
+						display: "flex",
+						alignItems: "center",
+						gap: 6,
+						cursor: "pointer",
+						fontSize: 10,
+						opacity: 0.85,
+					}}>
+					<input checked={runTaggedOnly} onChange={(e) => setRunTaggedOnly(e.target.checked)} type="checkbox" />🐍
+					Run-tagged layers only ({runTaggedLayers.length})
+				</label>
+			)}
 
 			{swipeMode && (
 				<div
@@ -78,7 +108,19 @@ export const SwipePanel: React.FC<SwipePanelProps> = ({
 					}}>
 					{/* Left layer */}
 					<div>
-						<span style={labelStyle}>◀ Left Layer</span>
+						<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+							<span style={{ ...labelStyle, marginBottom: 0 }}>◀ Left Layer</span>
+							{leftLoading && (
+								<span
+									style={{
+										fontSize: 9,
+										color: "var(--vscode-notificationsWarningIcon-foreground, #cca700)",
+										opacity: 0.9,
+									}}>
+									⏳ loading…
+								</span>
+							)}
+						</div>
 						<select
 							onChange={(e) => setSwipeLayerLeft(e.target.value || null)}
 							style={selectStyle}
@@ -86,7 +128,7 @@ export const SwipePanel: React.FC<SwipePanelProps> = ({
 							<option value="">(Basemap only)</option>
 							{visibleLayers.map((l) => (
 								<option key={l.id} value={l.id}>
-									{l.name}
+									{layerLabel(l)}
 								</option>
 							))}
 						</select>
@@ -117,7 +159,19 @@ export const SwipePanel: React.FC<SwipePanelProps> = ({
 
 					{/* Right layer */}
 					<div>
-						<span style={labelStyle}>Right Layer ▶</span>
+						<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+							<span style={{ ...labelStyle, marginBottom: 0 }}>Right Layer ▶</span>
+							{rightLoading && (
+								<span
+									style={{
+										fontSize: 9,
+										color: "var(--vscode-notificationsWarningIcon-foreground, #cca700)",
+										opacity: 0.9,
+									}}>
+									⏳ loading…
+								</span>
+							)}
+						</div>
 						<select
 							onChange={(e) => setSwipeLayerRight(e.target.value || null)}
 							style={selectStyle}
@@ -125,7 +179,7 @@ export const SwipePanel: React.FC<SwipePanelProps> = ({
 							<option value="">(Basemap only)</option>
 							{visibleLayers.map((l) => (
 								<option key={l.id} value={l.id}>
-									{l.name}
+									{layerLabel(l)}
 								</option>
 							))}
 						</select>

@@ -210,7 +210,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 				width: "max-content",
 				minWidth: 200,
 				maxWidth: 260,
-				maxHeight: 280,
+				maxHeight: 360,
 				display: "flex",
 				flexDirection: "column",
 				background: bg,

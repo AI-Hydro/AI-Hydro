@@ -8,6 +8,8 @@ import { promisify } from "util"
 
 const MAP_SESSION_FILE = path.join(os.homedir(), ".aihydro", "map_session.json")
 const OUTBOUND_EVENTS_DIR = path.join(os.homedir(), ".aihydro", "map_events", "outbound")
+const ACTIVE_WORKSPACE_FILE = path.join(os.homedir(), ".aihydro", "active_workspace.json")
+const OUTBOUND_MAX_FILES = 500
 const MAX_EVENTS = 100
 const execFileAsync = promisify(execFile)
 
@@ -63,6 +65,19 @@ export class MapSessionService {
 		if (root && root !== this.workspaceRoot) {
 			this.workspaceRoot = root
 			this.touch()
+			// Keep active_workspace.json in sync so Python MCP tools and the 3D
+			// manifest lookup always see the same workspace as the map session.
+			void this.syncActiveWorkspaceFile(root)
+		}
+	}
+
+	private async syncActiveWorkspaceFile(root: string): Promise<void> {
+		try {
+			await fs.mkdir(path.dirname(ACTIVE_WORKSPACE_FILE), { recursive: true })
+			const content = JSON.stringify({ workspace: root, updated_at: new Date().toISOString() }, null, 2)
+			await fs.writeFile(ACTIVE_WORKSPACE_FILE, content, "utf-8")
+		} catch {
+			// Non-fatal
 		}
 	}
 
@@ -409,8 +424,28 @@ with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED) as zf:
 			await fs.mkdir(OUTBOUND_EVENTS_DIR, { recursive: true })
 			const file = path.join(OUTBOUND_EVENTS_DIR, `${event.timestampMs ?? Date.now()}.json`)
 			await fs.writeFile(file, JSON.stringify(event), "utf8")
+			// Rotate: keep only the most recent OUTBOUND_MAX_FILES files.
+			void this.rotateOutboundEvents()
 		} catch {
 			/* non-fatal */
+		}
+	}
+
+	private _rotateInProgress = false
+	private async rotateOutboundEvents(): Promise<void> {
+		if (this._rotateInProgress) return
+		this._rotateInProgress = true
+		try {
+			const files = await fs.readdir(OUTBOUND_EVENTS_DIR)
+			const jsonFiles = files.filter((f) => f.endsWith(".json")).sort()
+			if (jsonFiles.length > OUTBOUND_MAX_FILES) {
+				const toDelete = jsonFiles.slice(0, jsonFiles.length - OUTBOUND_MAX_FILES)
+				await Promise.all(toDelete.map((f) => fs.unlink(path.join(OUTBOUND_EVENTS_DIR, f)).catch(() => {})))
+			}
+		} catch {
+			/* non-fatal */
+		} finally {
+			this._rotateInProgress = false
 		}
 	}
 }

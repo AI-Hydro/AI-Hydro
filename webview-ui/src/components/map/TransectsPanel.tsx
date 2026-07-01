@@ -272,10 +272,22 @@ export default function TransectsPanel({
 	const [expandedId, setExpandedId] = useState<string | null>(null)
 	const [agentBusy, setAgentBusy] = useState<string | false>(false)
 	const [agentError, setAgentError] = useState<string | null>(null)
+	const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({})
 	const [batchOpen, setBatchOpen] = useState(false)
 	const [batchInstruction, setBatchInstruction] = useState("")
 	const [showExportMenu, setShowExportMenu] = useState(false)
 	const exportBtnRef = useRef<HTMLDivElement>(null)
+
+	useEffect(() => {
+		if (!showExportMenu) return
+		const handler = (e: MouseEvent) => {
+			if (exportBtnRef.current && !exportBtnRef.current.contains(e.target as Node)) {
+				setShowExportMenu(false)
+			}
+		}
+		document.addEventListener("mousedown", handler)
+		return () => document.removeEventListener("mousedown", handler)
+	}, [showExportMenu])
 	const [gallerySaveOpen, setGallerySaveOpen] = useState(false)
 	const [galleryTitle, setGalleryTitle] = useState("")
 	const [galleryDesc, setGalleryDesc] = useState("")
@@ -379,11 +391,7 @@ export default function TransectsPanel({
 
 	// Use expanded single profile (or first series) for metrics + agent
 	const activeProfileData = isOverlay ? (expandedMultiProfiles[0]?.data ?? []) : expandedProfile.data
-	const expandedMetrics = useMemo(
-		() => computeGeomorphicMetrics(activeProfileData),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[activeProfileData.length, activeProfileData[0]?.distKm],
-	)
+	const expandedMetrics = useMemo(() => computeGeomorphicMetrics(activeProfileData), [activeProfileData])
 
 	const handleAskAgent = async (t: MapTransect, profileData: (ProfilePoint & { lon: number; lat: number })[]) => {
 		if (agentBusy) return
@@ -1000,19 +1008,21 @@ export default function TransectsPanel({
 													</span>
 												))}
 												<input
+													onChange={(e) =>
+														setTagDrafts((prev) => ({ ...prev, [t.id]: e.target.value }))
+													}
 													onKeyDown={(e) => {
 														if (e.key === "Enter" || e.key === ",") {
-															const v = (e.target as HTMLInputElement).value
-																.trim()
-																.replace(/,/g, "")
+															const v = (tagDrafts[t.id] ?? "").trim().replace(/,/g, "")
 															if (v && !t.tags.includes(v))
 																updateTransect(t.id, { tags: [...t.tags, v] })
-															;(e.target as HTMLInputElement).value = ""
+															setTagDrafts((prev) => ({ ...prev, [t.id]: "" }))
 															e.preventDefault()
 														}
 													}}
 													placeholder="+ tag"
 													style={{ ...inputStyle, width: 60, padding: "2px 6px", fontSize: 9 }}
+													value={tagDrafts[t.id] ?? ""}
 												/>
 											</div>
 										</div>
