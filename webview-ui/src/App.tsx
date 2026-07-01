@@ -4,6 +4,7 @@ import ChatView from "./components/chat/ChatView"
 import ConnectorsView from "./components/connectors/ConnectorsView"
 import HistoryView from "./components/history/HistoryView"
 import HtmlPreviewPanel from "./components/html_preview/HtmlPreviewPanel"
+import { clearMapWorkspace } from "./components/map/mapWorkspace"
 
 const EvidenceBoard = lazy(() =>
 	import("./components/evidence-board/EvidenceBoard").then((mod) => ({ default: mod.EvidenceBoard })),
@@ -11,6 +12,7 @@ const EvidenceBoard = lazy(() =>
 const ExperimentTable = lazy(() =>
 	import("./components/experiment-table/ExperimentTable").then((mod) => ({ default: mod.ExperimentTable })),
 )
+const ReplayPanel = lazy(() => import("./components/replay-panel/ReplayPanel").then((mod) => ({ default: mod.ReplayPanel })))
 const MapPanel = lazy(() => import("./components/map/MapPanel"))
 const MapView = lazy(() => import("./components/map/MapView"))
 
@@ -81,6 +83,11 @@ const isStandaloneEvidenceBoardMode = () => {
 // Check if running in standalone Experiment Table mode (separate panel)
 const isStandaloneExperimentTableMode = () => {
 	return typeof window !== "undefined" && (window as any).AIHYDRO_EXPERIMENT_TABLE_STANDALONE === true
+}
+
+// Check if running in standalone Session Replay mode (separate panel)
+const isStandaloneReplayMode = () => {
+	return typeof window !== "undefined" && (window as any).AIHYDRO_REPLAY_PANEL_STANDALONE === true
 }
 
 const AppContent = () => {
@@ -163,16 +170,98 @@ const AppContent = () => {
 	)
 }
 
+class MapViewErrorBoundary extends Component<
+	{ children: ReactNode },
+	{ hasError: boolean; error: Error | null; cleared: boolean }
+> {
+	constructor(props: { children: ReactNode }) {
+		super(props)
+		this.state = { hasError: false, error: null, cleared: false }
+	}
+
+	static getDerivedStateFromError(error: Error) {
+		return { hasError: true, error }
+	}
+
+	componentDidCatch(error: Error, info: React.ErrorInfo) {
+		console.error("[MapViewErrorBoundary] React crash:", error, info)
+		clearMapWorkspace()
+		this.setState({ cleared: true })
+	}
+
+	render() {
+		if (this.state.hasError) {
+			const msg = this.state.error?.message ?? "Unknown error"
+			const stack = this.state.error?.stack ?? ""
+			return (
+				<div
+					style={{
+						padding: 24,
+						color: "var(--vscode-editor-foreground, #ddd)",
+						background: "var(--vscode-editor-background, #1e1e1e)",
+						height: "100%",
+						fontFamily: "monospace",
+						overflowY: "auto",
+					}}>
+					<h2 style={{ color: "#dc3545", marginBottom: 8, fontSize: 15 }}>Map panel failed to render</h2>
+					<p style={{ fontSize: 12, marginBottom: 12, opacity: 0.8 }}>
+						{this.state.cleared ? "Corrupted map state has been cleared." : "Map workspace state may be corrupted."}{" "}
+						Reload VS Code to recover.
+					</p>
+					<button
+						onClick={() => {
+							clearMapWorkspace()
+							// Post a message asking VS Code to reload the window
+							try {
+								const vscode = (window as any).acquireVsCodeApi?.()
+								vscode?.postMessage?.({ type: "reloadWindow" })
+							} catch {
+								// fallback: just clear state and let them reload manually
+							}
+							this.setState({ hasError: false, error: null, cleared: false })
+						}}
+						style={{
+							marginBottom: 16,
+							padding: "6px 14px",
+							background: "#0e639c",
+							color: "#fff",
+							border: "none",
+							borderRadius: 4,
+							cursor: "pointer",
+							fontSize: 12,
+						}}
+						type="button">
+						Clear map state &amp; retry
+					</button>
+					<pre
+						style={{ fontSize: 11, opacity: 0.85, whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: 8 }}>
+						{msg}
+					</pre>
+					{stack && (
+						<pre style={{ fontSize: 10, opacity: 0.55, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+							{stack}
+						</pre>
+					)}
+				</div>
+			)
+		}
+		return this.props.children
+	}
+}
+
 const App = () => {
 	// Check if in standalone map mode and render directly with Providers
 	if (isStandaloneMapMode()) {
 		return (
 			<Providers>
-				<div className="flex h-screen w-full">
-					<Suspense fallback={null}>
-						<MapView height={window.innerHeight} width={window.innerWidth} />
-					</Suspense>
-				</div>
+				<MapViewErrorBoundary>
+					<div className="flex h-screen w-full">
+						<Suspense
+							fallback={<div style={{ padding: 24, color: "var(--vscode-foreground, #ccc)" }}>Loading map…</div>}>
+							<MapView />
+						</Suspense>
+					</div>
+				</MapViewErrorBoundary>
 			</Providers>
 		)
 	}
@@ -205,6 +294,17 @@ const App = () => {
 			<Providers>
 				<Suspense fallback={null}>
 					<EvidenceBoard />
+				</Suspense>
+			</Providers>
+		)
+	}
+
+	// Check if in standalone Session Replay mode and render directly with Providers
+	if (isStandaloneReplayMode()) {
+		return (
+			<Providers>
+				<Suspense fallback={null}>
+					<ReplayPanel />
 				</Suspense>
 			</Providers>
 		)

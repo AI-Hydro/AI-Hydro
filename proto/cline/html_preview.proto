@@ -157,6 +157,22 @@ message RunArtifactCodeResponse {
     string provenance_id = 11;
 }
 
+// Phase 3.5 — reactive parameters.
+// Fired by the HTML preview bridge when the user changes a parameter widget
+// (slider, dropdown, etc.) in an artifact's rendered output.
+// The handler re-executes only the affected cell so the output updates live.
+message NotifyParamChangedRequest {
+    string artifact_id = 1;   // Artifact the param belongs to
+    string cell_id = 2;       // Cell whose widget was changed
+    string param_name = 3;    // Widget/variable name
+    string param_value_json = 4; // New value, JSON-encoded
+}
+
+message NotifyParamChangedResponse {
+    bool triggered = 1;       // True when a re-execution was queued
+    string error = 2;         // Non-empty on failure
+}
+
 message RestartArtifactKernelRequest {
     string artifact_id = 1;
     string profile_id = 2;
@@ -388,4 +404,8 @@ service HtmlPreviewService {
 
     // Star or unstar a module in AI-Hydro recognition.
     rpc starModule(MarketplaceStarRequest) returns (MarketplaceStarResponse);
+
+    // Phase 3.5 — reactive parameters.
+    // Re-executes a cell when a parameter widget value changes in the artifact preview.
+    rpc notifyParamChanged(NotifyParamChangedRequest) returns (NotifyParamChangedResponse);
 }

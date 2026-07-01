@@ -1156,8 +1156,25 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
       };
       binding.sync = sync;
       boundInputs.push(binding);
-      input.addEventListener("input", function() { sync(); persistModuleState(); });
-      input.addEventListener("change", function() { sync(); persistModuleState(); });
+      function emitParamChanged() {
+        if (!opts.notifyHostOnChange) return;
+        var rawVal = input.value;
+        var paramValueJson;
+        if (input.type === "range" || input.type === "number") {
+          var n = parseFloat(rawVal);
+          paramValueJson = isNaN(n) ? JSON.stringify(rawVal) : String(n);
+        } else {
+          paramValueJson = JSON.stringify(rawVal);
+        }
+        postToParent(artifactPayload({
+          type: "artifact/paramChanged",
+          paramName: opts.name,
+          paramValueJson: paramValueJson,
+          cellId: opts.cellId
+        }));
+      }
+      input.addEventListener("input", function() { sync(); persistModuleState(); emitParamChanged(); });
+      input.addEventListener("change", function() { sync(); persistModuleState(); emitParamChanged(); });
       // Restore a persisted value if the host already sent one for this key.
       if (pendingRestore && Object.prototype.hasOwnProperty.call(pendingRestore, key)) {
         input.value = pendingRestore[key];
