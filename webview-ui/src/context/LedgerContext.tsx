@@ -11,6 +11,10 @@ interface LedgerContextType {
 	sessionId: string
 	/** Reload claims for a specific session id. Empty string → most recent. */
 	loadSession: (sessionId: string) => Promise<void>
+	/** True while a ledger snapshot request is in flight. */
+	loading: boolean
+	/** Last ledger load/subscription error shown in evidence surfaces. */
+	error: string | null
 	/** Look up a single claim by id. */
 	getClaim: (claimId: string) => ClaimRecord | undefined
 }
@@ -20,9 +24,13 @@ const LedgerContext = createContext<LedgerContextType | undefined>(undefined)
 export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [claims, setClaims] = useState<Record<string, ClaimRecord>>({})
 	const [sessionId, setSessionId] = useState<string>("")
+	const [loading, setLoading] = useState(false)
+	const [error, setError] = useState<string | null>(null)
 	const subRef = useRef<(() => void) | null>(null)
 
 	const loadSession = useCallback(async (sid: string) => {
+		setLoading(true)
+		setError(null)
 		try {
 			const req = GetLedgerStateRequestMsg.create({ sessionId: sid })
 			const resp = await LedgerServiceClient.getLedgerState(req)
@@ -33,7 +41,11 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 			setClaims(byId)
 			setSessionId(resp.sessionId)
 		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
 			console.error("[LedgerContext] Failed to load session claims:", error)
+			setError(message)
+		} finally {
+			setLoading(false)
 		}
 	}, [])
 
@@ -61,7 +73,9 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 				}
 			},
 			onError: (error) => {
+				const message = error instanceof Error ? error.message : String(error)
 				console.error("[LedgerContext] Subscription error:", error)
+				setError(message)
 			},
 			onComplete: () => {},
 		})
@@ -74,7 +88,11 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 
 	const getClaim = useCallback((claimId: string) => claims[claimId], [claims])
 
-	return <LedgerContext.Provider value={{ claims, sessionId, loadSession, getClaim }}>{children}</LedgerContext.Provider>
+	return (
+		<LedgerContext.Provider value={{ claims, sessionId, loadSession, loading, error, getClaim }}>
+			{children}
+		</LedgerContext.Provider>
+	)
 }
 
 export const useLedgerContext = () => {

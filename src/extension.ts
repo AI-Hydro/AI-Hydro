@@ -20,6 +20,7 @@ import { VscodeEvidenceBoardProvider } from "./hosts/vscode/VscodeEvidenceBoardP
 import { VscodeExperimentTableProvider } from "./hosts/vscode/VscodeExperimentTableProvider"
 import { VscodeHtmlPreviewProvider } from "./hosts/vscode/VscodeHtmlPreviewProvider"
 import { VscodeMapPanelProvider } from "./hosts/vscode/VscodeMapPanelProvider"
+import { VscodeReplayProvider } from "./hosts/vscode/VscodeReplayProvider"
 import { GeeService } from "./services/gee/GeeService"
 import { GeeTileProxyService } from "./services/gee/GeeTileProxyService"
 import type { GeeProjectInfo, GeeStatusResult } from "./services/gee/types"
@@ -282,6 +283,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Initialize Experiment Table panel provider with controller
 	VscodeExperimentTableProvider.initialize(context, webview.controller)
 
+	// Initialize Session Replay panel provider with controller
+	VscodeReplayProvider.initialize(context, webview.controller)
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.MapButton, async () => {
 			console.log("[DEBUG] aihydro.mapButtonClicked - opening side-by-side map panel")
@@ -321,6 +325,16 @@ export async function activate(context: vscode.ExtensionContext) {
 			console.log("[DEBUG] aihydro.experimentTableButtonClicked - opening Experiment Table panel")
 			telemetryService.captureButtonClick("aihydro_experimentTableButton", webview.controller?.task?.ulid)
 			await VscodeExperimentTableProvider.createOrShow()
+		}),
+	)
+
+	// Register AI-Hydro: Session Replay command
+	// Opens the session replay panel to step through recorded tool invocations.
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.SessionReplayButton, async () => {
+			console.log("[DEBUG] aihydro.sessionReplayButtonClicked - opening Session Replay panel")
+			telemetryService.captureButtonClick("aihydro_sessionReplayButton", webview.controller?.task?.ulid)
+			await VscodeReplayProvider.createOrShow()
 		}),
 	)
 

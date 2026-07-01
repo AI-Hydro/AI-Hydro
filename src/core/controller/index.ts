@@ -5,6 +5,7 @@ import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
 import { buildMapLayerCatalogAsync, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
 import { type MapLayerPatch, mergeMapLayerPatch } from "@core/map/mergeMapLayerPatch"
+import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
 import { FileScanner, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
@@ -201,6 +202,13 @@ export class Controller {
 		this.mapEventWatcher.start()
 		this.mapSessionService = new MapSessionService()
 		void this.mapSessionService.initialize()
+		// Restore layers from the persisted catalog so Python-pushed layers
+		// survive VS Code window reloads without re-running MCP tools.
+		void import("@core/map/hydrateMapLayers").then(({ hydrateMapLayersFromCatalog }) => {
+			hydrateMapLayersFromCatalog(this).catch((err) =>
+				console.warn("[Controller] Layer hydration failed (non-fatal):", err),
+			)
+		})
 		// Phase 1: PreviewSessionService mirrors events to ~/.aihydro/preview_session/
 		// and ~/.aihydro/preview_events/ for MCP-tool consumption.
 		// PreviewCommandWatcher polls ~/.aihydro/preview_commands/ for agent commands
@@ -1386,9 +1394,10 @@ export class Controller {
 	}
 
 	private notifyMapLayerSubscribers(layer: MapLayer): void {
+		const payload = sanitizeMapLayerForWebview(layer)
 		this.mapLayerSubscribers.forEach((subscriber) => {
 			try {
-				subscriber(layer)
+				subscriber(payload)
 			} catch (error) {
 				console.error("[Controller] Error notifying layer subscriber:", error)
 			}

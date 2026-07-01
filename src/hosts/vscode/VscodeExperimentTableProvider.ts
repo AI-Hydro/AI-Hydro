@@ -1,8 +1,6 @@
-import * as fs from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
 import type { Controller } from "@core/controller"
 import * as vscode from "vscode"
+import { listSessionIds, loadExperimentSurface } from "@/integrations/aihydro-session/sessionSurfaces"
 
 /**
  * Owns the single AI-Hydro Experiment Table webview panel.
@@ -88,8 +86,9 @@ export class VscodeExperimentTableProvider {
 
 		const mainWebview = WebviewProvider.getInstance()
 		if (!mainWebview) {
-			console.error("[VscodeExperimentTableProvider] No main webview instance — cannot route gRPC")
-			return
+			console.warn(
+				"[VscodeExperimentTableProvider] No main webview instance — local experiment loading still works; gRPC forwarding disabled",
+			)
 		}
 
 		panel.webview.onDidReceiveMessage(
@@ -97,7 +96,7 @@ export class VscodeExperimentTableProvider {
 				const postMessageToWebview = (response: unknown) => panel.webview.postMessage(response)
 				switch (message.type) {
 					case "grpc_request":
-						if (message.grpc_request) {
+						if (message.grpc_request && mainWebview) {
 							await handleGrpcRequest(mainWebview.controller, postMessageToWebview, message.grpc_request)
 						}
 						break
@@ -106,8 +105,23 @@ export class VscodeExperimentTableProvider {
 							await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
 						}
 						break
+					case "list_sessions":
+						panel.webview.postMessage({ type: "session_list", sessions: listSessionIds() })
+						break
 					case "load_experiment":
 						VscodeExperimentTableProvider.handleLoadExperiment(panel, message.session_id, message.experiment_id)
+						break
+					case "open_replay":
+						{
+							const { VscodeReplayProvider } = require("@/hosts/vscode/VscodeReplayProvider")
+							void VscodeReplayProvider.openWithSession(
+								String(message.session_id ?? ""),
+								String(message.run_id ?? "") || undefined,
+							)
+						}
+						break
+					case "highlight_experiment_feature":
+						VscodeExperimentTableProvider.handleHighlightFeature(message.feature_id)
 						break
 					default:
 						break
@@ -118,59 +132,88 @@ export class VscodeExperimentTableProvider {
 		)
 	}
 
-	private static handleLoadExperiment(panel: vscode.WebviewPanel, sessionId: string, experimentId: string): void {
+	private static handleHighlightFeature(featureId: string | null | undefined): void {
+		const controller = VscodeExperimentTableProvider.controller
+		if (!controller) {
+			return
+		}
+
+		// Clear selection when featureId is null/undefined
+		if (!featureId) {
+			controller.mapSessionService.appendEvent({
+				type: "command.fit_extent",
+				payloadJson: "{}",
+				timestampMs: Date.now(),
+				source: "user",
+			})
+			return
+		}
+
+		// Find the best matching layer: prefer one whose metadata.feature_id or name
+		// contains the featureId string (gauge IDs like "01109000" are substrings of
+		// layer names like "Watershed 01109000").
+		const layers = controller.getMapLayers()
+		const match = layers.find(
+			(l) => l.metadata?.feature_id === featureId || l.name?.includes(featureId) || l.id?.includes(featureId),
+		)
+
+		if (match) {
+			controller.mapSessionService.appendEvent({
+				type: "command.fit_layer",
+				payloadJson: JSON.stringify({ layerId: match.id }),
+				timestampMs: Date.now(),
+				source: "user",
+			})
+		} else {
+			// No matching layer — open the map and fit all layers so the user at least
+			// sees the map workspace and can load the relevant session.
+			controller.mapSessionService.appendEvent({
+				type: "command.fit_extent",
+				payloadJson: "{}",
+				timestampMs: Date.now(),
+				source: "user",
+			})
+		}
+
+		// Ensure the map panel is visible
 		try {
-			if (!sessionId || !experimentId) {
+			const { VscodeMapPanelProvider } = require("@/hosts/vscode/VscodeMapPanelProvider")
+			void VscodeMapPanelProvider.createOrShow()
+		} catch {
+			/* map panel may not exist in test builds */
+		}
+	}
+
+	private static handleLoadExperiment(panel: vscode.WebviewPanel, sessionId: string, experimentId?: string): void {
+		try {
+			if (!sessionId?.trim()) {
 				panel.webview.postMessage({
 					type: "experiment_table_error",
-					message: "session_id and experiment_id are required.",
+					message:
+						"Enter a session_id/path. Experiment id is optional; the first available experiment will load automatically.",
 				})
 				return
 			}
 
-			const sessionPath = path.join(os.homedir(), ".aihydro", "sessions", `${sessionId}.json`)
-			if (!fs.existsSync(sessionPath)) {
-				panel.webview.postMessage({
-					type: "experiment_table_error",
-					message: `Session '${sessionId}' not found at ${sessionPath}`,
-				})
-				return
-			}
-
-			const raw = JSON.parse(fs.readFileSync(sessionPath, "utf8"))
-
-			// Session slot may be at top level or in a nested feature dict
-			const expSlot = raw["_experiments"]
-			if (!expSlot) {
-				panel.webview.postMessage({
-					type: "experiment_table_error",
-					message: `No experiments found in session '${sessionId}'.`,
-				})
-				return
-			}
-
-			// Slot is stored as {data: {...}, meta: {...}}
-			const expsMap: Record<string, unknown> =
-				typeof expSlot === "object" && "data" in expSlot ? (expSlot as any).data : expSlot
-
-			if (!expsMap[experimentId]) {
-				const available = Object.keys(expsMap).join(", ") || "(none)"
-				panel.webview.postMessage({
-					type: "experiment_table_error",
-					message: `Experiment '${experimentId}' not found. Available: ${available}`,
-				})
-				return
-			}
-
-			const exp = expsMap[experimentId] as { defn: unknown; results: unknown }
+			const exp = loadExperimentSurface(sessionId.trim(), String(experimentId ?? "").trim())
 			panel.webview.postMessage({
 				type: "experiment_table_data",
-				experiment_id: experimentId,
+				session_id: exp.session_id,
+				experiment_id: exp.experiment_id,
 				defn: exp.defn,
 				results: exp.results,
+				available_experiment_ids: exp.availableExperimentIds,
+				session_path: exp.sessionPath,
 			})
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err)
+			if (msg.startsWith("No experiments found")) {
+				panel.webview.postMessage({
+					type: "experiment_table_empty",
+					message: `${msg} This is normal for single-gauge analyses that have replay runs/signatures but no explicit experiment matrix yet.`,
+				})
+				return
+			}
 			console.error("[VscodeExperimentTableProvider] load_experiment error:", msg)
 			panel.webview.postMessage({
 				type: "experiment_table_error",

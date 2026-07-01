@@ -83,8 +83,9 @@ export class VscodeEvidenceBoardProvider {
 
 		const mainWebview = WebviewProvider.getInstance()
 		if (!mainWebview) {
-			console.error("[VscodeEvidenceBoardProvider] No main webview instance — cannot route gRPC")
-			return
+			console.warn(
+				"[VscodeEvidenceBoardProvider] No main webview instance — ledger gRPC disabled; cross-panel navigation still works",
+			)
 		}
 
 		panel.webview.onDidReceiveMessage(
@@ -92,13 +93,22 @@ export class VscodeEvidenceBoardProvider {
 				const postMessageToWebview = (response: unknown) => panel.webview.postMessage(response)
 				switch (message.type) {
 					case "grpc_request":
-						if (message.grpc_request) {
+						if (message.grpc_request && mainWebview) {
 							await handleGrpcRequest(mainWebview.controller, postMessageToWebview, message.grpc_request)
 						}
 						break
 					case "grpc_request_cancel":
 						if (message.grpc_request_cancel) {
 							await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
+						}
+						break
+					case "open_replay":
+						{
+							const { VscodeReplayProvider } = require("@/hosts/vscode/VscodeReplayProvider")
+							void VscodeReplayProvider.openWithSession(
+								String(message.session_id ?? ""),
+								String(message.run_id ?? "") || undefined,
+							)
 						}
 						break
 					default:
