@@ -93,4 +93,27 @@ describe("ToolInputRepair — Domain B (MCP arguments JSON)", () => {
 		value.should.equal(raw)
 		repairs.length.should.equal(0)
 	})
+
+	it("escapes raw newlines inside a multi-line code string (run_python case)", () => {
+		// A weak model emits multi-line Python with literal newlines — invalid JSON.
+		const raw = '{"code": "import json\nprint(json.dumps({\\"a\\": 1}))\nx = 5"}'
+		const { value, repairs } = repairMcpArgumentsString(raw)
+		const parsed = JSON.parse(value)
+		parsed.code.should.equal('import json\nprint(json.dumps({"a": 1}))\nx = 5')
+		repairs.map((r) => r.kind).should.containEql("json_control_char_escape")
+	})
+
+	it("escapes raw tabs and carriage returns inside strings", () => {
+		const raw = '{"code": "def f():\n\treturn 1\r\n"}'
+		const { value, repairs } = repairMcpArgumentsString(raw)
+		JSON.parse(value).code.should.equal("def f():\n\treturn 1\r\n")
+		repairs.map((r) => r.kind).should.containEql("json_control_char_escape")
+	})
+
+	it("does NOT touch already-valid JSON with escaped newlines", () => {
+		const raw = '{"code":"a\\nb"}'
+		const { value, repairs } = repairMcpArgumentsString(raw)
+		value.should.equal(raw)
+		repairs.length.should.equal(0)
+	})
 })

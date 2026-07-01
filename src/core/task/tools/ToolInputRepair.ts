@@ -26,6 +26,7 @@ export type RepairKind =
 	| "json_single_arg_unwrap"
 	| "json_string_to_array"
 	| "json_text_fix"
+	| "json_control_char_escape"
 
 export interface RepairRecord {
 	kind: RepairKind
@@ -140,6 +141,52 @@ function applyTextFixes(s: string): string {
 		.replace(/,(\s*[}\]])/g, "$1") // trailing commas
 }
 
+// Escape raw control characters (newlines, tabs, …) left UNescaped inside a
+// JSON string literal. This is the dominant failure when a weaker model emits
+// a multi-line value (e.g. run_python's `code`) without JSON-escaping it:
+//   {"code": "import x\n print(x)"}   <- real newline, invalid JSON
+// We walk the text tracking in-string state and escape only control chars that
+// fall inside a string. Only run AFTER a strict parse has already failed, so
+// well-formed input (which has no raw control chars in strings) is never seen.
+function escapeControlCharsInStrings(s: string): string {
+	let out = ""
+	let inString = false
+	let afterBackslash = false
+	for (let i = 0; i < s.length; i++) {
+		const ch = s[i]
+		const code = s.charCodeAt(i)
+		if (afterBackslash) {
+			out += ch
+			afterBackslash = false
+			continue
+		}
+		if (ch === "\\") {
+			out += ch
+			afterBackslash = true
+			continue
+		}
+		if (ch === '"') {
+			inString = !inString
+			out += ch
+			continue
+		}
+		if (inString && code < 0x20) {
+			if (ch === "\n") {
+				out += "\\n"
+			} else if (ch === "\r") {
+				out += "\\r"
+			} else if (ch === "\t") {
+				out += "\\t"
+			} else {
+				out += "\\u" + code.toString(16).padStart(4, "0")
+			}
+			continue
+		}
+		out += ch
+	}
+	return out
+}
+
 function repairObjectShape(
 	obj: Record<string, unknown>,
 	schema: JsonSchemaLike | undefined,
@@ -222,7 +269,16 @@ export function repairMcpArgumentsString(raw: string, schema?: JsonSchemaLike): 
 			parsed = JSON.parse(fixed)
 			repairs.push({ kind: "json_text_fix" })
 		} catch {
-			return { value: raw, repairs: [] } // give up; let caller error
+			// Final fallback: a multi-line value (commonly code) with raw
+			// newlines/tabs left unescaped inside a string literal. Escape them
+			// and re-parse once.
+			const escaped = escapeControlCharsInStrings(fixed)
+			try {
+				parsed = JSON.parse(escaped)
+				repairs.push({ kind: "json_control_char_escape" })
+			} catch {
+				return { value: raw, repairs: [] } // give up; let caller error
+			}
 		}
 	}
 

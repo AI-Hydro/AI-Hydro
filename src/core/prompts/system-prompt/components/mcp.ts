@@ -77,66 +77,100 @@ function renderFullTool(tool: McpTool): string {
 	return `- ${tool.name}: ${tool.description}\n${schemaStr}`
 }
 
-function formatMcpServersList(servers: McpServer[]): string {
-	return servers
-		.filter((server) => server.status === "connected")
-		.map((server) => {
-			const allTools = server.tools ?? []
+// A server is "native" (the host platform) when it opts into the progressive
+// disclosure protocol — i.e. it marks at least one tool hot via `_meta.hot`.
+// This is a general, content-based discriminator: any server that adopts the
+// protocol gets primacy; every third-party server the user happens to connect
+// is treated as supplementary. It names no specific server.
+export function isNativeServer(server: McpServer): boolean {
+	return (server.tools ?? []).some((t) => isHotTool(t))
+}
 
-			// Disclosure is active only when the server opts in by marking at
-			// least one tool hot. Otherwise render every tool fully (legacy).
-			const disclosureActive = allTools.some((t) => isHotTool(t))
+const NATIVE_GROUP_PREAMBLE =
+	"These are the host platform's own capabilities — your default instrument for tasks in its domain. " +
+	"Prefer them, and browse what exists by domain before reaching for any other server. " +
+	"Do not infer another server's abilities from its name."
 
-			const hotTools = disclosureActive ? allTools.filter((t) => isHotTool(t)) : allTools
-			const summaryTools = disclosureActive ? allTools.filter((t) => !isHotTool(t)) : []
+const ADDITIONAL_GROUP_PREAMBLE =
+	"Third-party MCP servers the user has also connected. Use one only when a task explicitly requires its " +
+	"specialty; they are not the default path for capabilities the native platform already provides above."
 
-			// Full schemas for the hot set.
-			const fullBlock = hotTools.map(renderFullTool).join("\n\n")
+export function formatMcpServersList(servers: McpServer[]): string {
+	const connected = servers.filter((server) => server.status === "connected")
 
-			// Summary lines for everything else, grouped by domain.
-			const byDomain = new Map<string, McpTool[]>()
-			for (const tool of summaryTools) {
-				const d = toolDomain(tool)
-				if (!byDomain.has(d)) byDomain.set(d, [])
-				byDomain.get(d)!.push(tool)
-			}
-			const summaryBlock = Array.from(byDomain.entries())
-				.sort((a, b) => a[0].localeCompare(b[0]))
-				.map(([domain, toolsInDomain]) => {
-					const lines = toolsInDomain
-						.sort((a, b) => a.name.localeCompare(b.name))
-						.map((t) => `- ${t.name} — ${summaryLine(t)}`)
-						.join("\n")
-					return `**${domain}**\n${lines}`
-				})
-				.join("\n\n")
+	// Partition into the native platform vs. supplementary third-party servers.
+	// Framing only activates when BOTH groups are present (so the distinction is
+	// meaningful); otherwise output is byte-identical to plain rendering.
+	const native = connected.filter(isNativeServer)
+	const additional = connected.filter((server) => !isNativeServer(server))
 
-			const summaryAdvisory =
-				summaryTools.length > 0
-					? `\n\n#### More Tools (names only)\nThe tools below are listed by name and summary only. Before calling one for the first time, call \`describe_tool(name)\` to get its exact parameters and a worked example — do NOT guess parameter names. Use \`aihydro_describe_capability(domain)\` to browse a domain.\n\n${summaryBlock}`
-					: ""
+	if (native.length > 0 && additional.length > 0) {
+		const nativeBlock = native.map(renderServerBlock).join("\n\n")
+		const additionalBlock = additional.map(renderServerBlock).join("\n\n")
+		return (
+			`# Native Platform (primary toolset)\n${NATIVE_GROUP_PREAMBLE}\n\n${nativeBlock}\n\n` +
+			`# Additional Connected Servers (supplementary)\n${ADDITIONAL_GROUP_PREAMBLE}\n\n${additionalBlock}`
+		)
+	}
 
-			const tools = `${fullBlock}${summaryAdvisory}`
+	return connected.map(renderServerBlock).join("\n\n")
+}
 
-			const templates = server.resourceTemplates
-				?.map((template) => `- ${template.uriTemplate} (${template.name}): ${template.description}`)
+function renderServerBlock(server: McpServer): string {
+	const allTools = server.tools ?? []
+
+	// Disclosure is active only when the server opts in by marking at
+	// least one tool hot. Otherwise render every tool fully (legacy).
+	const disclosureActive = allTools.some((t) => isHotTool(t))
+
+	const hotTools = disclosureActive ? allTools.filter((t) => isHotTool(t)) : allTools
+	const summaryTools = disclosureActive ? allTools.filter((t) => !isHotTool(t)) : []
+
+	// Full schemas for the hot set.
+	const fullBlock = hotTools.map(renderFullTool).join("\n\n")
+
+	// Summary lines for everything else, grouped by domain.
+	const byDomain = new Map<string, McpTool[]>()
+	for (const tool of summaryTools) {
+		const d = toolDomain(tool)
+		if (!byDomain.has(d)) byDomain.set(d, [])
+		byDomain.get(d)!.push(tool)
+	}
+	const summaryBlock = Array.from(byDomain.entries())
+		.sort((a, b) => a[0].localeCompare(b[0]))
+		.map(([domain, toolsInDomain]) => {
+			const lines = toolsInDomain
+				.sort((a, b) => a.name.localeCompare(b.name))
+				.map((t) => `- ${t.name} — ${summaryLine(t)}`)
 				.join("\n")
-
-			const resources = server.resources
-				?.map((resource) => `- ${resource.uri} (${resource.name}): ${resource.description}`)
-				.join("\n")
-
-			const config = JSON.parse(server.config)
-
-			return (
-				`## ${server.name}` +
-				(config.command
-					? ` (\`${config.command}${config.args && Array.isArray(config.args) ? ` ${config.args.join(" ")}` : ""}\`)`
-					: "") +
-				(tools ? `\n\n### Available Tools\n${tools}` : "") +
-				(templates ? `\n\n### Resource Templates\n${templates}` : "") +
-				(resources ? `\n\n### Direct Resources\n${resources}` : "")
-			)
+			return `**${domain}**\n${lines}`
 		})
 		.join("\n\n")
+
+	const summaryAdvisory =
+		summaryTools.length > 0
+			? `\n\n#### More Tools (names only)\nThe tools below are listed by name and summary only. Before calling one for the first time, call \`describe_tool(name)\` to get its exact parameters and a worked example — do NOT guess parameter names. Use \`aihydro_describe_capability(domain)\` to browse a domain.\n\n${summaryBlock}`
+			: ""
+
+	const tools = `${fullBlock}${summaryAdvisory}`
+
+	const templates = server.resourceTemplates
+		?.map((template) => `- ${template.uriTemplate} (${template.name}): ${template.description}`)
+		.join("\n")
+
+	const resources = server.resources
+		?.map((resource) => `- ${resource.uri} (${resource.name}): ${resource.description}`)
+		.join("\n")
+
+	const config = JSON.parse(server.config)
+
+	return (
+		`## ${server.name}` +
+		(config.command
+			? ` (\`${config.command}${config.args && Array.isArray(config.args) ? ` ${config.args.join(" ")}` : ""}\`)`
+			: "") +
+		(tools ? `\n\n### Available Tools\n${tools}` : "") +
+		(templates ? `\n\n### Resource Templates\n${templates}` : "") +
+		(resources ? `\n\n### Direct Resources\n${resources}` : "")
+	)
 }
