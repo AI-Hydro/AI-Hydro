@@ -1625,27 +1625,36 @@ export const azureOpenAiDefaultApiVersion = "2024-08-01-preview"
 
 // DeepSeek
 // https://api-docs.deepseek.com/quick_start/pricing
-// Catalog refreshed for the V4 series (deepseek-v4-flash / deepseek-v4-pro).
-// The legacy ``deepseek-chat`` and ``deepseek-reasoner`` identifiers are now
-// deprecated aliases that route to v4-flash's non-thinking and thinking
-// modes respectively — we keep them so existing user configurations don't
-// break, but the default points to the new explicit identifier.
+// Catalog refreshed 2026-09-17 against the published Models & Pricing table.
+// `deepseek-flash` is the current canonical identifier (model version
+// DeepSeek-V4.1-Flash) and is the only DeepSeek model that accepts images.
+// `deepseek-v4-flash` is RETIRED as a distinct model: the API still accepts
+// the name but serves those requests with DeepSeek-V4.1-Flash at the Flash
+// price, so its capabilities/pricing mirror `deepseek-flash`. `deepseek-chat`
+// and `deepseek-reasoner` remain deprecated aliases. Every retired/deprecated
+// id is kept so existing user configurations keep working; the default points
+// at the canonical identifier.
+//
+// Prices below are DeepSeek's PEAK (list) rates. Off-peak — every hour outside
+// 01:00-04:00 and 06:00-10:00 UTC, Mon-Fri — is exactly half. We list peak so
+// the cost estimate never understates the bill.
 export type DeepSeekModelId = keyof typeof deepSeekModels
-export const deepSeekDefaultModelId: DeepSeekModelId = "deepseek-v4-flash"
+export const deepSeekDefaultModelId: DeepSeekModelId = "deepseek-flash"
 export const deepSeekModels = {
-	"deepseek-v4-flash": {
+	"deepseek-flash": {
 		maxTokens: 384_000,
 		contextWindow: 1_000_000,
-		supportsImages: false,
+		// DeepSeek-V4.1-Flash accepts image input; V4 Pro does not.
+		supportsImages: true,
 		// DeepSeek reports input as cache reads + cache writes in a single usage
 		// report — set inputPrice: 0 so ApiOptions doesn't double-count.
 		supportsPromptCache: true,
 		inputPrice: 0,
-		outputPrice: 0.28,
-		cacheWritesPrice: 0.14,
-		cacheReadsPrice: 0.0028,
+		outputPrice: 1.2,
+		cacheWritesPrice: 0.3,
+		cacheReadsPrice: 0.006,
 		description:
-			"DeepSeek V4 Flash — 1M-token context, fast inference, optional thinking mode. The current default chat model on the DeepSeek API.",
+			"DeepSeek V4.1 Flash — 1M-token context, vision, fast inference, thinking mode on by default. The current default model on the DeepSeek API. Peak pricing shown; off-peak is half.",
 	},
 	"deepseek-v4-pro": {
 		maxTokens: 384_000,
@@ -1653,39 +1662,54 @@ export const deepSeekModels = {
 		supportsImages: false,
 		supportsPromptCache: true,
 		inputPrice: 0,
-		// Promotional pricing (75% off) — adjust when the promo ends.
-		outputPrice: 0.87,
-		cacheWritesPrice: 0.435,
-		cacheReadsPrice: 0.003625,
+		outputPrice: 3.96,
+		cacheWritesPrice: 1.32,
+		cacheReadsPrice: 0.044,
 		description:
-			"DeepSeek V4 Pro — premium V4 model with thinking mode for complex reasoning, coding, and multi-step analysis. 1M-token context.",
+			"DeepSeek V4 Pro (V4-Pro-0813) — premium model with thinking mode for complex reasoning, coding, and multi-step analysis. 1M-token context, no image input. Peak pricing shown; off-peak is half.",
+	},
+	"deepseek-v4-flash": {
+		// Retired name — the API serves DeepSeek-V4.1-Flash for it at the Flash
+		// price, so capabilities and pricing mirror `deepseek-flash` exactly.
+		maxTokens: 384_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0,
+		outputPrice: 1.2,
+		cacheWritesPrice: 0.3,
+		cacheReadsPrice: 0.006,
+		description:
+			"Retired identifier — served by DeepSeek-V4.1-Flash at the Flash price. Prefer deepseek-flash for new configurations.",
 	},
 	"deepseek-chat": {
-		// Deprecated alias → v4-flash (non-thinking mode). Pricing mirrors
-		// v4-flash so the user sees accurate numbers in the model picker.
+		// Deprecated alias → Flash (non-thinking mode). Pricing mirrors
+		// deepseek-flash so the user sees accurate numbers in the model picker.
+		// Left at supportsImages: false — image routing through this legacy
+		// alias isn't documented, and deepseek-flash is the supported path.
 		maxTokens: 384_000,
 		contextWindow: 1_000_000,
 		supportsImages: false,
 		supportsPromptCache: true,
 		inputPrice: 0,
-		outputPrice: 0.28,
-		cacheWritesPrice: 0.14,
-		cacheReadsPrice: 0.0028,
+		outputPrice: 1.2,
+		cacheWritesPrice: 0.3,
+		cacheReadsPrice: 0.006,
 		description:
-			"Deprecated alias — routes to deepseek-v4-flash (non-thinking mode). Prefer deepseek-v4-flash directly for new configurations.",
+			"Deprecated alias — routes to DeepSeek Flash (non-thinking mode). Prefer deepseek-flash directly for new configurations.",
 	},
 	"deepseek-reasoner": {
-		// Deprecated alias → v4-flash (thinking mode). Same pricing tier.
+		// Deprecated alias → Flash (thinking mode). Same pricing tier.
 		maxTokens: 384_000,
 		contextWindow: 1_000_000,
 		supportsImages: false,
 		supportsPromptCache: true,
 		inputPrice: 0,
-		outputPrice: 0.28,
-		cacheWritesPrice: 0.14,
-		cacheReadsPrice: 0.0028,
+		outputPrice: 1.2,
+		cacheWritesPrice: 0.3,
+		cacheReadsPrice: 0.006,
 		description:
-			"Deprecated alias — routes to deepseek-v4-flash (thinking mode). Prefer deepseek-v4-flash or deepseek-v4-pro directly for new configurations.",
+			"Deprecated alias — routes to DeepSeek Flash (thinking mode). Prefer deepseek-flash or deepseek-v4-pro directly for new configurations.",
 	},
 } as const satisfies Record<string, ModelInfo>
 
