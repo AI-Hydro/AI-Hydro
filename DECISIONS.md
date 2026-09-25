@@ -59,3 +59,20 @@ recent major version, plausibly already past the CVE window), but
 `body-parser`/`qs`/`tar` don't appear as direct dependencies — they may be
 transitive (would need a `package-lock.json` / `npm audit` pass, not done in
 this session, to confirm). Treat this as unverified, not resolved.
+
+
+## 2026-09-07 — Research panels consume backend-owned snapshots
+
+Replay, Experiment Table and Evidence Board use the versioned MCP resource
+`aihydro://research/snapshot/{reference}` advertised by the connected AI-Hydro
+backend. Python owns SQLite, legacy and capsule storage interpretation. This
+replaces JSON-only readers and synthetic current-slot history, which could
+lose actual run IDs and hide repeated executions. No second store, interpreter
+discovery mechanism or Node SQLite schema is introduced.
+
+Missing/ambiguous/incompatible backends fail visibly; old completed snapshots
+are not reused as fresh. Claim events stay within the selected study. Replay
+shows absent validation as not checked and exposes retained evidence. The
+resource provides inspection, not scientific recomputation or an atomic
+cross-store transaction. Contract: ecosystem
+`MCP/aihydro-tools/docs/research-snapshots.md`.

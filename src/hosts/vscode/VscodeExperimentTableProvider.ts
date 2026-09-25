@@ -1,5 +1,6 @@
 import type { Controller } from "@core/controller"
 import * as vscode from "vscode"
+import { LatestResearchRequest, readResearchSnapshot } from "@/integrations/aihydro-session/researchSnapshot"
 import { listSessionIds, loadExperimentSurface } from "@/integrations/aihydro-session/sessionSurfaces"
 
 /**
@@ -15,9 +16,9 @@ import { listSessionIds, loadExperimentSurface } from "@/integrations/aihydro-se
  *   │  App.tsx to render <ExperimentTable> instead of the chat UI.     │
  *   │                                                                  │
  *   │  gRPC messages are forwarded to the main webview controller.     │
- *   │  A custom "load_experiment" message type reads the session JSON  │
- *   │  at ~/.aihydro/sessions/<session_id>.json and returns the        │
- *   │  experiment design + results without a Python round-trip.        │
+ *   │  A custom "load_experiment" message reads a backend snapshot  │
+ *   │  with Python-owned slot resolution and returns the        │
+ *   │  persisted experiment design + results.        │
  *   └──────────────────────────────────────────────────────────────────┘
  */
 export class VscodeExperimentTableProvider {
@@ -26,6 +27,7 @@ export class VscodeExperimentTableProvider {
 	private static controller: Controller | undefined
 	private static disposables: vscode.Disposable[] = []
 	private static tableWebviewReady = false
+	private static loads = new LatestResearchRequest()
 	private static pendingInitialLoad: { sessionId: string; experimentId?: string } | undefined
 
 	public static initialize(context: vscode.ExtensionContext, controller: Controller): void {
@@ -226,12 +228,13 @@ export class VscodeExperimentTableProvider {
 		}
 	}
 
-	private static handleLoadExperiment(
+	private static async handleLoadExperiment(
 		panel: vscode.WebviewPanel,
 		sessionId: string,
 		experimentId?: string,
 		requestTag?: string,
-	): void {
+	): Promise<void> {
+		const isLatest = VscodeExperimentTableProvider.loads.start(requestTag || "primary")
 		// request_tag round-trips whatever the webview sent (e.g. "compare") so
 		// it can route this response to a different piece of state (comparing
 		// a second experiment) without a second message type or touching the
@@ -248,7 +251,12 @@ export class VscodeExperimentTableProvider {
 				return
 			}
 
-			const exp = loadExperimentSurface(sessionId.trim(), String(experimentId ?? "").trim())
+			const backend = VscodeExperimentTableProvider.controller?.mcpHub
+			if (!backend) throw new Error("AI-Hydro backend is not initialized.")
+			const exp = await loadExperimentSurface(sessionId.trim(), String(experimentId ?? "").trim(), (reference) =>
+				readResearchSnapshot(backend, reference),
+			)
+			if (!isLatest() || VscodeExperimentTableProvider.currentPanel !== panel) return
 			panel.webview.postMessage({
 				type: "experiment_table_data",
 				session_id: exp.session_id,
@@ -260,6 +268,7 @@ export class VscodeExperimentTableProvider {
 				...tag,
 			})
 		} catch (err) {
+			if (!isLatest() || VscodeExperimentTableProvider.currentPanel !== panel) return
 			const msg = err instanceof Error ? err.message : String(err)
 			if (msg.startsWith("No experiments found")) {
 				panel.webview.postMessage({

@@ -1,6 +1,7 @@
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+import type { ResearchSnapshot, SnapshotReader } from "./researchSnapshot"
 
 export interface EvidenceSpanSurface {
 	sourceType: string
@@ -71,6 +72,8 @@ export interface RunEntry {
 	session_id: string
 	timestamp: string
 	key_outputs: Record<string, unknown>
+	inputs?: Record<string, unknown>
+	evidence?: Record<string, unknown>
 	diff_status?: "match" | "mismatch" | "missing"
 	diff_notes?: string[]
 }
@@ -81,6 +84,8 @@ export interface ReplaySurface {
 	entries: RunEntry[]
 	sessionPath: string
 	capsule_path?: string
+	warnings: string[]
+	run_log_source: ResearchSnapshot["run_log_source"]
 }
 
 export function defaultAiHydroHome(): string {
@@ -89,30 +94,6 @@ export function defaultAiHydroHome(): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === "object" && !Array.isArray(value)
-}
-
-function unwrapSlot(value: unknown): unknown {
-	if (isRecord(value) && "data" in value) {
-		return value.data
-	}
-	return value
-}
-
-function sanitizeNonStandardJsonNumbers(text: string): string {
-	return text.replace(/(:\s*|[[,]{1}\s*)(?:NaN|Infinity|-Infinity)(\s*[,}\]])/g, "$1null$2")
-}
-
-function readJsonFile(filePath: string): unknown {
-	const text = fs.readFileSync(filePath, "utf8")
-	try {
-		return JSON.parse(text)
-	} catch (err) {
-		const sanitized = sanitizeNonStandardJsonNumbers(text)
-		if (sanitized !== text) {
-			return JSON.parse(sanitized)
-		}
-		throw err
-	}
 }
 
 export function resolveSessionJsonPath(sessionIdOrPath: string, home = defaultAiHydroHome()): string | undefined {
@@ -131,23 +112,6 @@ export function resolveSessionJsonPath(sessionIdOrPath: string, home = defaultAi
 	candidates.push(path.join(home, "capsules", value, "session.json"))
 
 	return candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile())
-}
-
-export function readSessionJson(
-	sessionIdOrPath: string,
-	home = defaultAiHydroHome(),
-): { path: string; raw: Record<string, unknown> } {
-	const sessionPath = resolveSessionJsonPath(sessionIdOrPath, home)
-	if (!sessionPath) {
-		throw new Error(
-			`Session '${sessionIdOrPath}' not found. Checked ~/.aihydro/sessions/<id>.json, capsule exports, and explicit paths.`,
-		)
-	}
-	const raw = readJsonFile(sessionPath)
-	if (!isRecord(raw)) {
-		throw new Error(`Session '${sessionIdOrPath}' is not a JSON object: ${sessionPath}`)
-	}
-	return { path: sessionPath, raw }
 }
 
 export function listSessionIds(home = defaultAiHydroHome(), limit = 20): string[] {
@@ -202,15 +166,16 @@ function normalizeExperimentResults(results: unknown): ExperimentResults | null 
 	}
 }
 
-export function loadExperimentSurface(
+export async function loadExperimentSurface(
 	sessionIdOrPath: string,
 	experimentId: string,
-	home = defaultAiHydroHome(),
-): ExperimentSurface {
-	const { path: sessionPath, raw } = readSessionJson(sessionIdOrPath, home)
-	const sessionId = String(raw.session_id ?? raw.gauge_id ?? path.basename(sessionPath, ".json"))
-	const experiments = unwrapSlot(raw._experiments)
-	if (!isRecord(experiments)) {
+	readSnapshot: SnapshotReader,
+): Promise<ExperimentSurface> {
+	const snapshot = await readSnapshot(sessionIdOrPath)
+	const sessionPath = snapshot.session_path
+	const sessionId = snapshot.session_id
+	const experiments = snapshot.experiments
+	if (Object.keys(experiments).length === 0) {
 		throw new Error(`No experiments found in session '${sessionIdOrPath}'.`)
 	}
 	const availableExperimentIds = Object.keys(experiments).sort()
@@ -244,6 +209,8 @@ function normalizeRunEntry(value: unknown, fallbackRunId: string, fallbackSessio
 		session_id: String(value.session_id ?? fallbackSessionId),
 		timestamp: String(value.timestamp ?? value.created_at ?? (isRecord(value.meta) ? value.meta.computed_at : "") ?? ""),
 		key_outputs: keyOutputs,
+		inputs: isRecord(value.inputs) ? value.inputs : undefined,
+		evidence: isRecord(value.evidence) ? value.evidence : undefined,
 		diff_status: ["match", "mismatch", "missing"].includes(String(value.diff_status))
 			? (String(value.diff_status) as RunEntry["diff_status"])
 			: undefined,
@@ -251,61 +218,16 @@ function normalizeRunEntry(value: unknown, fallbackRunId: string, fallbackSessio
 	}
 }
 
-function looksLikeRunEntry(value: unknown): boolean {
-	return (
-		isRecord(value) &&
-		("run_id" in value ||
-			"tool_name" in value ||
-			"tool" in value ||
-			"key_outputs" in value ||
-			("data" in value && isRecord(value.meta) && "tool" in value.meta))
-	)
-}
-
-function collectRunEntries(value: unknown, fallbackSessionId: string): RunEntry[] {
-	if (Array.isArray(value)) {
-		return value
-			.map((entry, index) => normalizeRunEntry(entry, `run_${index + 1}`, fallbackSessionId))
-			.filter((entry): entry is RunEntry => !!entry)
-	}
-	if (!isRecord(value)) {
-		return []
-	}
-	if (looksLikeRunEntry(value)) {
-		const fallbackRunId = String(value.run_id ?? "run")
-		const normalized = normalizeRunEntry(value, fallbackRunId, fallbackSessionId)
-		return normalized ? [normalized] : []
-	}
-	const collected: RunEntry[] = []
-	for (const [key, child] of Object.entries(value)) {
-		if (looksLikeRunEntry(child)) {
-			const normalized = normalizeRunEntry(child, key, fallbackSessionId)
-			if (normalized) {
-				collected.push(normalized)
-			}
-		} else {
-			collected.push(...collectRunEntries(child, fallbackSessionId))
-		}
-	}
-	return collected
-}
-
-export function loadClaimSurface(sessionIdOrPath: string, home = defaultAiHydroHome()): ClaimSurface {
-	const { path: sessionPath, raw } = readSessionJson(sessionIdOrPath, home)
-	const sessionId = String(raw.session_id ?? raw.gauge_id ?? path.basename(sessionPath, ".json"))
-	const mergedClaims: Record<string, unknown> = {}
-	for (const slot of [raw.claims, unwrapSlot(raw._claims)]) {
-		if (isRecord(slot)) {
-			for (const [claimId, claim] of Object.entries(slot)) {
-				mergedClaims[claimId] = claim
-			}
-		}
-	}
+export async function loadClaimSurface(sessionIdOrPath: string, readSnapshot: SnapshotReader): Promise<ClaimSurface> {
+	const snapshot = await readSnapshot(sessionIdOrPath)
+	const sessionPath = snapshot.session_path
+	const sessionId = snapshot.session_id
+	const mergedClaims = snapshot.claims
 	const claims = Object.entries(mergedClaims)
 		.map(([claimId, claim]) => normalizeClaimRecord(claimId, claim, sessionId))
 		.filter((claim): claim is ClaimSurfaceRecord => !!claim)
 		.sort((a, b) => a.claimId.localeCompare(b.claimId))
-	const runEntries = buildReplayEntries(raw, sessionId)
+	const runEntries = snapshot.runs.map((run) => normalizeRunEntry(run, String(run.run_id), sessionId)!)
 	const linkedRunIds = new Set(
 		claims.flatMap((claim) => claim.evidenceSpans.filter((span) => span.sourceType === "run").map((span) => span.sourceId)),
 	)
@@ -382,67 +304,15 @@ function synthesizeEvidenceCandidates(entries: RunEntry[], sessionId: string): C
 	}))
 }
 
-function synthesizeRunsFromAnalysisSlots(raw: Record<string, unknown>, sessionId: string): RunEntry[] {
-	const ignored = new Set([
-		"claims",
-		"assumptions",
-		"extra",
-		"artifact_manifest",
-		"notes",
-		"_features",
-		"_claims",
-		"_run_log",
-		"_experiments",
-		"_citations",
-		"_site_name_history",
-	])
-	const entries: RunEntry[] = []
-	for (const [slotName, slotValue] of Object.entries(raw)) {
-		if (ignored.has(slotName) || slotName.startsWith("active_") || slotName.endsWith("_at") || slotName.endsWith("_id")) {
-			continue
-		}
-		for (const entry of collectRunEntries(slotValue, sessionId)) {
-			const syntheticId = entry.run_id && entry.run_id !== "run" ? entry.run_id : `${slotName}.stored`
-			entries.push({
-				...entry,
-				run_id: syntheticId,
-				tool_name: entry.tool_name === "unknown" ? slotName : entry.tool_name,
-			})
-		}
-	}
-	return entries
-}
-
-function toolKey(toolName: string): string {
-	const parts = toolName.split(/[.:/]/).filter(Boolean)
-	return parts.at(-1) ?? toolName
-}
-
-function buildReplayEntries(raw: Record<string, unknown>, sessionId: string): RunEntry[] {
-	const runLog = unwrapSlot(raw._run_log)
-	const loggedEntries = collectRunEntries(runLog, sessionId)
-	const storedEntries = synthesizeRunsFromAnalysisSlots(raw, sessionId)
-	const loggedToolKeys = new Set(loggedEntries.map((entry) => toolKey(entry.tool_name)))
-	const entries = [
-		...loggedEntries,
-		...storedEntries.filter(
-			(entry) =>
-				!loggedToolKeys.has(toolKey(entry.tool_name)) && !loggedEntries.some((logged) => logged.run_id === entry.run_id),
-		),
-	]
-	entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.run_id.localeCompare(b.run_id))
-	return entries
-}
-
-export function loadReplaySurface(sessionIdOrPath: string, home = defaultAiHydroHome()): ReplaySurface {
-	const { path: sessionPath, raw } = readSessionJson(sessionIdOrPath, home)
-	const sessionId = String(raw.session_id ?? raw.gauge_id ?? path.basename(sessionPath, ".json"))
-	const entries = buildReplayEntries(raw, sessionId)
+export async function loadReplaySurface(sessionIdOrPath: string, readSnapshot: SnapshotReader): Promise<ReplaySurface> {
+	const snapshot = await readSnapshot(sessionIdOrPath)
 	return {
-		session_id: sessionId,
-		source: sessionPath.endsWith(`${path.sep}session.json`) ? "capsule" : "session",
-		entries,
-		sessionPath,
-		capsule_path: sessionPath.endsWith(`${path.sep}session.json`) ? path.dirname(sessionPath) : undefined,
+		session_id: snapshot.session_id,
+		source: snapshot.source,
+		entries: snapshot.runs.map((run) => normalizeRunEntry(run, String(run.run_id), snapshot.session_id)!),
+		sessionPath: snapshot.session_path,
+		capsule_path: snapshot.source === "capsule" ? path.dirname(snapshot.session_path) : undefined,
+		warnings: snapshot.warnings,
+		run_log_source: snapshot.run_log_source,
 	}
 }

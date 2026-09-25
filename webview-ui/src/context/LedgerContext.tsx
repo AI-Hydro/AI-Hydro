@@ -27,13 +27,20 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const subRef = useRef<(() => void) | null>(null)
+	const loadVersion = useRef(0)
+	const activeSession = useRef("")
+	const loadPending = useRef(false)
 
 	const loadSession = useCallback(async (sid: string) => {
+		const version = ++loadVersion.current
+		loadPending.current = true
 		setLoading(true)
 		setError(null)
 		try {
 			const req = GetLedgerStateRequestMsg.create({ sessionId: sid })
 			const resp = await LedgerServiceClient.getLedgerState(req)
+			if (version !== loadVersion.current) return
+			activeSession.current = resp.sessionId
 			const byId: Record<string, ClaimRecord> = {}
 			for (const c of resp.claims) {
 				byId[c.claimId] = c
@@ -41,11 +48,15 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 			setClaims(byId)
 			setSessionId(resp.sessionId)
 		} catch (error) {
+			if (version !== loadVersion.current) return
 			const message = error instanceof Error ? error.message : String(error)
 			console.error("[LedgerContext] Failed to load session claims:", error)
 			setError(message)
 		} finally {
-			setLoading(false)
+			if (version === loadVersion.current) {
+				loadPending.current = false
+				setLoading(false)
+			}
 		}
 	}, [])
 
@@ -60,6 +71,7 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 					return
 				}
 				const c = update.claim
+				if (loadPending.current || !activeSession.current || c.sessionId !== activeSession.current) return
 				setClaims((prev) => {
 					if (update.changeType === "removed") {
 						const next = { ...prev }
@@ -68,9 +80,6 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 					}
 					return { ...prev, [c.claimId]: c }
 				})
-				if (c.sessionId && !sessionId) {
-					setSessionId(c.sessionId)
-				}
 			},
 			onError: (error) => {
 				const message = error instanceof Error ? error.message : String(error)
@@ -81,6 +90,7 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 		})
 
 		return () => {
+			loadVersion.current++
 			subRef.current?.()
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
