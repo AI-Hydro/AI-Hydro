@@ -51,6 +51,9 @@ UPSTREAM_SYNC.md
 .youtube/
 .cache/
 local-docs/
+# Internal engineering plans and local test caches
+plans/
+.pytest_cache/
 
 # MkDocs build artefacts
 site/
