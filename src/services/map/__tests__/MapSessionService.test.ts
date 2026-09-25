@@ -156,6 +156,10 @@ describe("MapSessionService", () => {
 			releaseFirstWrite = resolve
 		})
 		let sessionWrites = 0
+		let signalFirstWriteStarted!: () => void
+		const firstWriteStarted = new Promise<void>((resolve) => {
+			signalFirstWriteStarted = resolve
+		})
 		const io: MapSessionPersistenceIo = {
 			mkdir: async () => undefined,
 			readFile: async () => {
@@ -166,7 +170,10 @@ describe("MapSessionService", () => {
 			writeFile: async (file, data) => {
 				if (file.startsWith(`${sessionFile}.`)) {
 					sessionWrites += 1
-					if (sessionWrites === 1) await firstWriteGate
+					if (sessionWrites === 1) {
+						signalFirstWriteStarted()
+						await firstWriteGate
+					}
 				}
 				files.set(file, data)
 			},
@@ -188,8 +195,11 @@ describe("MapSessionService", () => {
 		svc.setActiveRoi(
 			MapRoi.create({ id: "second", name: "Second", source: "user", geojson: '{"type":"Point","coordinates":[1,1]}' }),
 		)
-		await Promise.resolve()
-		await Promise.resolve()
+		// Wait until the first write is genuinely in flight (the queue passes
+		// through initialize() and mkdir() first), then yield a full macrotask:
+		// an unserialized second write would have started by now.
+		await firstWriteStarted
+		await new Promise<void>((resolve) => setImmediate(resolve))
 		expect(sessionWrites).to.equal(1)
 
 		releaseFirstWrite()

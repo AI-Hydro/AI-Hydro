@@ -22,11 +22,18 @@ describe("setActiveRoi handler ordering", () => {
 				releaseFirstRefresh = resolve
 			})
 			let refreshCalls = 0
+			let signalFirstRefreshStarted!: () => void
+			const firstRefreshStarted = new Promise<void>((resolve) => {
+				signalFirstRefreshStarted = resolve
+			})
 			const controller = {
 				mapSessionService: service,
 				refreshMapSessionWorkspaceRoot: async () => {
 					refreshCalls += 1
-					if (refreshCalls === 1) await firstRefresh
+					if (refreshCalls === 1) {
+						signalFirstRefreshStarted()
+						await firstRefresh
+					}
 				},
 			} as unknown as Controller
 			const first = setActiveRoi(
@@ -41,8 +48,10 @@ describe("setActiveRoi handler ordering", () => {
 				}),
 			)
 			const second = setActiveRoi(controller, SetActiveRoiRequest.create({}))
-			await Promise.resolve()
-			await Promise.resolve()
+			// Wait until the first refresh is genuinely running, then yield a
+			// full macrotask: an unserialized second call would have started.
+			await firstRefreshStarted
+			await new Promise<void>((resolve) => setImmediate(resolve))
 			expect(refreshCalls).to.equal(1)
 
 			releaseFirstRefresh()
