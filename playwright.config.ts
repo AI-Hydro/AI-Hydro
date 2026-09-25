@@ -9,7 +9,10 @@ export default defineConfig({
 	forbidOnly: isCI,
 	testDir: "src/test/e2e",
 	testMatch: /.*\.test\.ts/,
-	timeout: isCI || isWindow ? 60000 : 20000,
+	// The whole-test budget includes cold VSIX install/activation plus each
+	// test's narrower phase-level bounds. A cold Windows host may legitimately
+	// use the full 60-second readiness probe before interactions begin.
+	timeout: isCI || isWindow ? 180_000 : 20_000,
 	expect: {
 		timeout: isCI || isWindow ? 5000 : 2000,
 	},

@@ -302,7 +302,11 @@ export class E2ETestHelper {
 						return 0
 					}
 				},
-				{ timeout: 30_000 },
+				// The first extension host on a cold Windows runner can spend
+				// more than 30 seconds installing and activating the VSIX. This
+				// endpoint is the readiness probe, so give cold activation its
+				// own bounded startup budget.
+				{ timeout: 60_000 },
 			)
 			.toBe(200)
 
