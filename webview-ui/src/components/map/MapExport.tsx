@@ -6,6 +6,8 @@ import React, { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { MapServiceClient } from "../../services/grpc-client"
 import { BASE_MAP_STYLES } from "./BaseMapSelector"
+import { rasterCache, rasterColorStops } from "./formats/rasterCache"
+import { exportLayerMetadata, freezeMapCanvas } from "./mapCapture"
 import { reportMapEvent } from "./mapSessionBridge"
 
 type ExportTemplate =
@@ -28,6 +30,10 @@ type ExportQuality = "verified" | "with-warnings" | "blocked"
 type GraticuleMode = "none" | "grid" | "ticks"
 
 interface MapExportProps {
+	layerOpacities?: Record<string, number>
+	rasterRevision?: number
+	getMapCanvas?: () => HTMLCanvasElement | null
+	renderIssues?: string[]
 	mapStyle?: "dark" | "light"
 	onClose?: () => void
 	layers?: MapLayer[]
@@ -108,7 +114,7 @@ interface MapSceneSnapshot {
 		id: string
 		label: string
 		kind: string
-		geom: "polygon" | "line" | "point" | "raster"
+		geom: "polygon" | "line" | "point" | "raster" | "unknown"
 		color?: string
 		visible: boolean
 		opacity?: number
@@ -136,7 +142,7 @@ interface MapExportRenderState {
 	requestedPixelDimensions: { width: number; height: number }
 	actualPixelDimensions: { width: number; height: number }
 	renderCompleted: boolean
-	basemapReady: boolean
+	basemapReady: boolean | null
 	layerStates: Array<{ layerId: string; state: "ready" | "warning" | "failed" | "excluded"; message?: string }>
 	resolutionDowngraded: boolean
 	warnings: ExportWarning[]
@@ -471,56 +477,37 @@ function layerKind(layer: MapLayer): string {
 	return type || "vector"
 }
 
-/** Infer the geometry class of a layer for legend swatch rendering. */
-function layerGeom(layer: MapLayer): "polygon" | "line" | "point" | "raster" {
-	const kind = layerKind(layer)
-	if (kind === "raster" || kind === "gee") return "raster"
-	const name = layer.name.toLowerCase()
-	const type = (layer.layerType || "").toLowerCase()
-	// Area features win first — basin/watershed names also contain "pour point" etc.
-	if (
-		name.includes("watershed") ||
-		name.includes("basin") ||
-		name.includes("catchment") ||
-		name.includes("subbasin") ||
-		name.includes("boundary") ||
-		name.includes("polygon") ||
-		type.includes("polygon") ||
-		type.includes("fill")
-	) {
-		return "polygon"
+/** Use geometry, never layer names, to describe legend symbols. */
+function layerGeom(layer: MapLayer): MapSceneSnapshot["layers"][number]["geom"] {
+	if (layerKind(layer) === "raster" || layerKind(layer) === "gee") return "raster"
+	try {
+		const data = JSON.parse(layer.geojson)
+		const kinds = new Set<string>()
+		const visit = (item: any): void => {
+			if (item?.type === "FeatureCollection") item.features.forEach(visit)
+			else if (item?.type === "Feature") visit(item.geometry)
+			else if (item?.type === "GeometryCollection") item.geometries.forEach(visit)
+			else if (["Polygon", "MultiPolygon"].includes(item?.type)) kinds.add("polygon")
+			else if (["LineString", "MultiLineString"].includes(item?.type)) kinds.add("line")
+			else if (["Point", "MultiPoint"].includes(item?.type)) kinds.add("point")
+			else kinds.add("unknown")
+		}
+		visit(data)
+		if (kinds.size === 1) return [...kinds][0] as MapSceneSnapshot["layers"][number]["geom"]
+	} catch {
+		/* Missing/mixed geometry cannot support a single symbol. */
 	}
-	if (
-		name.includes("river") ||
-		name.includes("stream") ||
-		name.includes("flowline") ||
-		name.includes("reach") ||
-		name.includes("network") ||
-		kind === "hydrography" ||
-		type.includes("line") ||
-		type.includes("path")
-	) {
-		return "line"
-	}
-	if (
-		name.includes("gauge") ||
-		name.includes("station") ||
-		name.includes("outlet") ||
-		name.includes("pour point") ||
-		type.includes("point") ||
-		type.includes("circle") ||
-		type.includes("marker")
-	) {
-		return "point"
-	}
-	return "polygon"
+	return "unknown"
 }
 
 /** Pull the real styled colour off a layer so the legend matches the rendered map. */
 function layerColor(layer: MapLayer): string | undefined {
 	const style = layer.style
-	if (!style) return undefined
-	return style.fillColor || style.color || style.strokeColor || undefined
+	if (!style || layer.metadata?.graduated_attr || layer.metadata?.merit_kind) return undefined
+	const geom = layerGeom(layer)
+	if (geom === "line") return style.strokeColor || style.color || undefined
+	if (geom === "polygon" || geom === "point") return style.fillColor || undefined
+	return undefined
 }
 
 function layerSupport(layer: MapLayer): "verified" | "capture-only" | "unsupported" {
@@ -540,10 +527,32 @@ function layerSupport(layer: MapLayer): "verified" | "capture-only" | "unsupport
 }
 
 function visibleLayers(layers: MapLayer[], visibleLayerIds?: Set<string>): MapLayer[] {
-	return layers.filter((layer) => layer.visible !== false && (!visibleLayerIds || visibleLayerIds.has(layer.id)))
+	return layers.filter((layer) => (visibleLayerIds ? visibleLayerIds.has(layer.id) : layer.visible !== false))
 }
 
-function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSceneSnapshot {
+function captureLayerMetadata(layer: MapLayer): Record<string, string> {
+	const meta = exportLayerMetadata(layer.metadata)
+	const cached = rasterCache.get(layer.id)
+	if (
+		cached?.rawPixels &&
+		cached.sourceDataUrl === layer.metadata?.raster_data_url &&
+		cached.sourceBounds === layer.metadata?.raster_bounds
+	) {
+		const stops = rasterColorStops(cached.colormap ?? "")
+		if (stops && Number.isFinite(cached.rawPixels.min) && Number.isFinite(cached.rawPixels.max)) {
+			meta.legend = JSON.stringify({
+				type: "continuous",
+				stops: stops.map((color, i) => [i / (stops.length - 1), color]),
+				min: cached.rawPixels.min,
+				max: cached.rawPixels.max,
+				units: meta.units,
+			})
+		}
+	}
+	return meta
+}
+
+export function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSceneSnapshot {
 	const basemap = BASE_MAP_STYLES.find((style) => style.id === props.currentBasemap) ?? BASE_MAP_STYLES[0]
 	const visible = visibleLayers(props.layers ?? [], props.visibleLayerIds)
 	const citations = [
@@ -553,21 +562,11 @@ function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSceneSnaps
 			text: "AI-Hydro Map Plate Composer; generated with visible map layers and saved provenance sidecar.",
 		},
 	]
-	if (
-		visible.some(
-			(layer) =>
-				layer.name.toLowerCase().includes("merit") ||
-				String(layer.metadata?.source || "")
-					.toLowerCase()
-					.includes("merit"),
-		)
-	) {
-		citations.push({
-			id: "merit",
-			label: "MERIT Hydro / MERIT-Basins",
-			text: "MERIT Hydro and MERIT-Basins derived layers require source citation and license compliance.",
-		})
+	for (const layer of visible) {
+		const text = layer.metadata?.citation || layer.metadata?.dataset_citation
+		if (text) citations.push({ id: layer.id, label: layer.name || layer.id, text })
 	}
+
 	return {
 		snapshotId: exportId(),
 		capturedAtUtc: new Date().toISOString(),
@@ -592,22 +591,35 @@ function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSceneSnaps
 			geom: layerGeom(layer),
 			color: layerColor(layer),
 			visible: true,
-			opacity: layer.style?.opacity ?? layer.style?.fillOpacity,
+			opacity:
+				props.layerOpacities?.[layer.id] ??
+				(layer.layerType === "raster" || layer.layerType === "gee_tile"
+					? Number(layer.metadata?.raster_opacity ?? "0.75")
+					: 1),
 			exportSupport: layerSupport(layer),
-			sourceRef: typeof layer.metadata?.source === "string" ? layer.metadata.source : undefined,
+			sourceRef: layer.metadata?.provenance_path || layer.metadata?.source_uri || layer.metadata?.source_path,
+			metadata: captureLayerMetadata(layer),
 		})),
 		citations,
 		renderWarnings: [],
 	}
 }
 
-function evaluateReadiness(
+export function evaluateReadiness(
 	spec: MapPlateSpec,
 	snapshot: MapSceneSnapshot,
 	canvas: HTMLCanvasElement | null,
+	renderIssues?: string[],
 ): ExportReadinessReport {
-	const warnings: ExportWarning[] = []
-	const blockingReasons: string[] = []
+	const warnings: ExportWarning[] = [
+		{
+			code: "RENDER_COMPLETENESS_UNVERIFIED",
+			severity: "warning",
+			message:
+				"This export captures the displayed frame; complete tile coverage and scientific validity are not independently verified.",
+		},
+	]
+	const blockingReasons: string[] = renderIssues ? [...renderIssues] : ["Map render status is unavailable."]
 	const supportedLayers = snapshot.layers.filter((layer) => layer.exportSupport === "verified").map((layer) => layer.id)
 	const captureOnlyLayers = snapshot.layers.filter((layer) => layer.exportSupport === "capture-only").map((layer) => layer.id)
 	const unsupportedLayers = snapshot.layers.filter((layer) => layer.exportSupport === "unsupported").map((layer) => layer.id)
@@ -632,6 +644,15 @@ function evaluateReadiness(
 			message: "Some raster/GEE layers are captured from the rendered scene and cannot yet be tile-completeness verified.",
 			severity: "warning",
 		})
+	}
+	for (const layer of snapshot.layers) {
+		if ((layer.kind === "raster" || layer.kind === "gee") && !inferColorRamp(layer)) {
+			warnings.push({
+				code: "RASTER_LEGEND_UNAVAILABLE",
+				message: `${layer.label}: no supported, recorded numeric color scale; export omits its ramp.`,
+				severity: "warning",
+			})
+		}
 	}
 	if (unsupportedLayers.length) {
 		blockingReasons.push("One or more visible layers are unsupported for research export.")
@@ -719,22 +740,6 @@ function truncateLabel(ctx: CanvasRenderingContext2D, text: string, maxPx: numbe
 	return text.slice(0, lo) + "…"
 }
 
-/** Derive a semantically appropriate legend swatch colour from layer metadata (fallback only). */
-function legendSwatchColor(layer: { label: string; kind: string }): string {
-	const lbl = layer.label.toLowerCase()
-	const knd = layer.kind.toLowerCase()
-	if (lbl.includes("river") || lbl.includes("stream") || lbl.includes("flow")) return "#0ea5e9"
-	if (lbl.includes("watershed") || lbl.includes("catchment") || lbl.includes("basin") || lbl.includes("boundary"))
-		return "#0d9488"
-	if (lbl.includes("ndwi") || lbl.includes("ndvi") || lbl.includes("ndbi") || lbl.includes("nbr")) return "#16a34a"
-	if (lbl.includes("dem") || lbl.includes("elevation") || lbl.includes("terrain")) return "#b45309"
-	if (lbl.includes("flood")) return "#2563eb"
-	if (lbl.includes("urban") || lbl.includes("built") || lbl.includes("impervious")) return "#6b21a8"
-	if (knd === "raster" || knd === "gee") return "#7c3aed"
-	if (knd === "hydrography") return "#0ea5e9"
-	return "#64748b" // neutral slate for unrecognised layers
-}
-
 /** Trace a rounded-rect path (with a manual fallback for runtimes lacking roundRect). */
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
 	ctx.beginPath()
@@ -801,112 +806,62 @@ function cleanLabel(raw: string): string {
 		.trim()
 }
 
-/** Colour stops keyed by the colormap name used in layer.metadata.raster_colormap */
-const COLORMAP_STOPS: Record<string, string[]> = {
-	viridis: ["#440154", "#31688e", "#35b779", "#fde725"],
-	viridis_r: ["#fde725", "#35b779", "#31688e", "#440154"],
-	plasma: ["#0d0887", "#cc4778", "#f0f921"],
-	magma: ["#000004", "#b73779", "#fcfdbf"],
-	cividis: ["#00224e", "#7c7b78", "#fde737"],
-	YlOrRd: ["#ffffb2", "#fecc5c", "#fd8d3c", "#e31a1c"],
-	Blues: ["#f7fbff", "#6baed6", "#2171b5", "#084594"],
-	RdYlGn: ["#d73027", "#fee08b", "#1a9850"],
-	chirps: ["#081d58", "#225ea8", "#41b6c4", "#a1dab4", "#ffffcc"],
-	inferno: ["#000004", "#bc3754", "#f98e09", "#fcffa4"],
-	coolwarm: ["#3b4cc0", "#dddddd", "#b40426"],
-	BrBG: ["#543005", "#f5f5f5", "#003c30"],
-	PiYG: ["#8e0152", "#f7f7f7", "#276419"],
-	spectral: ["#9e0142", "#fee08b", "#3288bd"],
-	jet: ["#00007f", "#0000ff", "#00ffff", "#ffff00", "#ff0000", "#7f0000"],
-	gray: ["#000000", "#ffffff"],
-	gray_r: ["#ffffff", "#000000"],
-	terrain: ["#3d6b35", "#8fbc6b", "#f5deb3", "#c8a46e", "#ffffff"],
-	RdBu: ["#67001f", "#f7f7f7", "#053061"],
-}
-
-function inferColorRamp(layer: MapSceneSnapshot["layers"][number]): {
+/** Read only recorded continuous styling; unknown or malformed legends stay unavailable. */
+export function inferColorRamp(layer: MapSceneSnapshot["layers"][number]): {
 	stops: string[]
+	positions?: number[]
 	label: string
 	min?: number
 	max?: number
 	units?: string
 } | null {
 	const meta = layer.metadata ?? {}
-	const lbl = layer.label.toLowerCase()
-	// Use the layer name exactly as the user named it in the map panel
-	const displayLabel = layer.label
-
-	// ── 1. Try metadata.legend (JSON LegendSpec) ─────────────────────────────
 	if (meta.legend) {
 		try {
-			const spec = JSON.parse(meta.legend) as {
-				type?: string
-				min?: number
-				max?: number
-				units?: string
-				colormap?: string
-				stops?: Array<[number, string]>
+			const spec = JSON.parse(meta.legend)
+			if (spec?.type !== "continuous") return null
+			const stops = spec.stops === undefined ? rasterColorStops(spec.colormap ?? "") : undefined
+			let colors = stops
+			let positions: number[] | undefined
+			if (spec.stops !== undefined) {
+				if (
+					!Array.isArray(spec.stops) ||
+					spec.stops.length < 2 ||
+					!spec.stops.every(
+						(stop: unknown, i: number) =>
+							Array.isArray(stop) &&
+							stop.length === 2 &&
+							Number.isFinite(stop[0]) &&
+							stop[0] >= 0 &&
+							stop[0] <= 1 &&
+							typeof stop[1] === "string" &&
+							/^#[0-9a-f]{6}$/i.test(stop[1]) &&
+							(i === 0 || stop[0] > spec.stops[i - 1][0]),
+					)
+				)
+					return null
+				colors = spec.stops.map((stop: [number, string]) => stop[1])
+				positions = spec.stops.map((stop: [number, string]) => stop[0])
 			}
-			if (spec.type === "continuous") {
-				const colormapStops = spec.colormap ? COLORMAP_STOPS[spec.colormap] : undefined
-				const gradStops = spec.stops?.map(([, c]) => c) ?? colormapStops ?? ["#f7f7f7", "#7c3aed", "#4c1d95"]
-				return {
-					stops: gradStops,
-					label: spec.units ? `${displayLabel} (${spec.units})` : displayLabel,
-					min: spec.min,
-					max: spec.max,
-					units: spec.units,
-				}
+			if (!colors || !Number.isFinite(spec.min) || !Number.isFinite(spec.max) || spec.min > spec.max) return null
+			const units = typeof spec.units === "string" ? spec.units : undefined
+			return {
+				stops: colors,
+				positions,
+				label: units ? `${layer.label} (${units})` : layer.label,
+				min: spec.min,
+				max: spec.max,
+				units,
 			}
 		} catch {
-			/* fall through */
+			return null
 		}
 	}
-
-	// ── 2. metadata.raster_colormap + metadata.min/max ───────────────────────
-	if (meta.raster_colormap || meta.min || meta.max) {
-		const colormapKey = meta.raster_colormap ?? ""
-		const stops = COLORMAP_STOPS[colormapKey] ?? ["#f7f7f7", "#7c3aed", "#4c1d95"]
-		const minV = meta.min ? parseFloat(meta.min) : undefined
-		const maxV = meta.max ? parseFloat(meta.max) : undefined
-		const units = meta.units
-		return {
-			stops,
-			label: units ? `${displayLabel} (${units})` : displayLabel,
-			min: Number.isFinite(minV) ? minV : undefined,
-			max: Number.isFinite(maxV) ? maxV : undefined,
-			units,
-		}
-	}
-
-	// ── 3. Name-based palette heuristics ───────────────────────────────────
-	if (lbl.includes("ndvi"))
-		return {
-			stops: ["#a50026", "#d73027", "#f46d43", "#fdae61", "#fee08b", "#a6d96a", "#1a9850"],
-			label: displayLabel,
-			min: -1,
-			max: 1,
-		}
-	if (lbl.includes("ndwi") || (lbl.includes("water") && !lbl.includes("watershed")))
-		return { stops: ["#fff7fb", "#ece7f2", "#9ecae1", "#4292c6", "#08519c", "#08306b"], label: displayLabel, min: -1, max: 1 }
-	if (lbl.includes("ndbi") || lbl.includes("built") || lbl.includes("urban"))
-		return { stops: ["#f7fbff", "#c6dbef", "#9ecae1", "#6baed6", "#2171b5", "#08306b"], label: displayLabel }
-	if (lbl.includes("nbr") || lbl.includes("burn"))
-		return { stops: ["#1a9850", "#fee08b", "#a50026"], label: displayLabel, min: -1, max: 1 }
-	if (lbl.includes("dem") || lbl.includes("elevation") || lbl.includes("terrain") || lbl.includes("srtm"))
-		return { stops: ["#3d6b35", "#8fbc6b", "#f5deb3", "#c8a46e", "#9b6e3d", "#ffffff"], label: displayLabel }
-	if (lbl.includes("flood") || lbl.includes("inundation"))
-		return { stops: ["#ffffff", "#c6e2ff", "#4292c6", "#08306b"], label: displayLabel }
-	if (lbl.includes("twi") || lbl.includes("wetness")) return { stops: ["#d73027", "#fee090", "#4575b4"], label: displayLabel }
-	if (lbl.includes("slope")) return { stops: ["#ffffcc", "#a1dab4", "#41b6c4", "#2c7fb8", "#253494"], label: displayLabel }
-	if (lbl.includes("rainfall") || lbl.includes("precip") || lbl.includes("chirps"))
-		return { stops: ["#ffffff", "#c6e9f7", "#41b6c4", "#1d91c0", "#225ea8", "#0c2c84"], label: displayLabel }
-	if (lbl.includes("temperature") || lbl.includes("lst") || lbl.includes("heat"))
-		return { stops: ["#313695", "#74add1", "#fee090", "#f46d43", "#a50026"], label: displayLabel }
-	// Generic raster — purple ramp
-	if (layer.kind === "raster" || layer.kind === "gee")
-		return { stops: ["#f7f7f7", "#d9d9d9", "#bababa", "#7c3aed", "#4c1d95"], label: displayLabel }
-	return null
+	const stops = rasterColorStops(meta.raster_colormap ?? "")
+	const min = meta.min?.trim() ? Number(meta.min) : NaN
+	const max = meta.max?.trim() ? Number(meta.max) : NaN
+	if (!stops || !Number.isFinite(min) || !Number.isFinite(max) || min > max) return null
+	return { stops, label: meta.units ? `${layer.label} (${meta.units})` : layer.label, min, max, units: meta.units }
 }
 
 /**
@@ -979,7 +934,7 @@ function drawColorRampLegend(
 		const barY = cardY + pad + labelH
 		const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0)
 		const stops = ramp.stops
-		stops.forEach((color, i) => grad.addColorStop(i / (stops.length - 1), color))
+		stops.forEach((color, i) => grad.addColorStop(ramp.positions?.[i] ?? i / (stops.length - 1), color))
 		ctx.fillStyle = grad
 		const barRadius = Math.round(barH * 0.3)
 		roundRectPath(ctx, barX, barY, barW, barH, barRadius)
@@ -1158,7 +1113,7 @@ function drawLegend(
 	const labelMaxPx = Math.max(fs * 4, maxWidth - pad * 2 - swatchW - gap)
 	ctx.font = labelFont
 	const items = layers.map((layer) => {
-		const text = truncateLabel(ctx, layer.label, labelMaxPx)
+		const text = truncateLabel(ctx, layer.color ? layer.label : `${layer.label} (style not recorded)`, labelMaxPx)
 		return { layer, text, w: ctx.measureText(text).width }
 	})
 	ctx.font = headFont
@@ -1205,7 +1160,7 @@ function drawLegend(
 		const swX = x + pad
 		const swY = rowTop + Math.round((lineH - swatchH) / 2)
 		const midY = swY + swatchH / 2
-		const color = layer.color || legendSwatchColor(layer)
+		const color = layer.color || "#64748b"
 
 		if (layer.geom === "line") {
 			ctx.strokeStyle = color
@@ -1742,14 +1697,11 @@ async function composePlate(
 			requestedPixelDimensions: { width: dims.width, height: dims.height },
 			actualPixelDimensions: { width: canvas.width, height: canvas.height },
 			renderCompleted: true,
-			basemapReady: true,
+			basemapReady: null,
 			layerStates: snapshot.layers.map((layer) => ({
 				layerId: layer.id,
-				state: layer.exportSupport === "verified" ? "ready" : "warning",
-				message:
-					layer.exportSupport === "capture-only"
-						? "Captured from rendered scene; tile completeness not independently verified."
-						: undefined,
+				state: "warning",
+				message: "Captured from rendered scene; rendering completeness is not independently verified.",
 			})),
 			resolutionDowngraded: false,
 			warnings,
@@ -1805,6 +1757,7 @@ function buildManifest(
 			role: "visible-map-layer",
 		})),
 		warnings: [...readiness.warnings, ...renderState.warnings],
+		blockingReasons: readiness.blockingReasons,
 		transport: {
 			mode: "protobuf-json-base64-artifact-bridge",
 			note: "Base64 is used only as the VS Code webview transport encoding; exported files are decoded and written by the extension host.",
@@ -1828,6 +1781,10 @@ function pdfBytesFromCanvas(canvas: HTMLCanvasElement, spec: MapPlateSpec): Uint
 }
 
 export const MapExport: React.FC<MapExportProps> = ({
+	layerOpacities,
+	rasterRevision,
+	getMapCanvas,
+	renderIssues,
 	mapStyle = "dark",
 	onClose,
 	layers = [],
@@ -1917,12 +1874,12 @@ export const MapExport: React.FC<MapExportProps> = ({
 			elements,
 		],
 	)
-	const mapCanvas = () => document.querySelector("canvas.deckgl-overlay, canvas") as HTMLCanvasElement | null
+	const mapCanvas = () => getMapCanvas?.() ?? null
 	const snapshot = useMemo(
-		() => buildSnapshot(spec, { layers, visibleLayerIds, viewState, currentBasemap }),
-		[spec, layers, visibleLayerIds, viewState, currentBasemap],
+		() => buildSnapshot(spec, { layers, visibleLayerIds, viewState, currentBasemap, layerOpacities }),
+		[spec, layers, visibleLayerIds, viewState, currentBasemap, layerOpacities, rasterRevision],
 	)
-	const readiness = useMemo(() => evaluateReadiness(spec, snapshot, mapCanvas()), [spec, snapshot])
+	const readiness = useMemo(() => evaluateReadiness(spec, snapshot, mapCanvas(), renderIssues), [spec, snapshot, renderIssues])
 	const dims = pagePixels(template, dpi)
 
 	const isDark = mapStyle === "dark"
@@ -1949,7 +1906,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 		try {
 			const previewSpec: MapPlateSpec = { ...spec, dpi: 150, formats: ["png"] }
 			const previewSnapshot = { ...snapshot, snapshotId: "preview", capturedAtUtc: new Date().toISOString() }
-			const previewReadiness = evaluateReadiness(previewSpec, previewSnapshot, canvas)
+			const previewReadiness = evaluateReadiness(previewSpec, previewSnapshot, canvas, renderIssues)
 			const composed = await composePlate(canvas, previewSpec, previewSnapshot, previewReadiness)
 			const blob = await canvasToBlob(composed.canvas, "image/jpeg", 0.82)
 			const nextUrl = URL.createObjectURL(blob)
@@ -1966,7 +1923,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 	const writeExport = async (quick: boolean) => {
 		try {
 			const canvas = mapCanvas()
-			const currentReadiness = evaluateReadiness(spec, snapshot, canvas)
+			const currentReadiness = evaluateReadiness(spec, snapshot, canvas, renderIssues)
 			if (!canvas) {
 				setStatus({ kind: "err", msg: "Map canvas not found." })
 				return
@@ -1979,7 +1936,12 @@ export const MapExport: React.FC<MapExportProps> = ({
 			const activeSpec = quick
 				? { ...spec, template: "clean" as ExportTemplate, formats: requestedFormats }
 				: { ...spec, formats: requestedFormats }
-			const activeSnapshot = { ...snapshot, snapshotId: exportId(), capturedAtUtc: new Date().toISOString() }
+			const activeSnapshot = {
+				...structuredClone(snapshot),
+				snapshotId: exportId(),
+				capturedAtUtc: new Date().toISOString(),
+			}
+			const frozenCanvas = freezeMapCanvas(canvas)
 			const baseName = `${activeSpec.template}-map-${activeSnapshot.capturedAtUtc.slice(0, 19).replace(/[:T]/g, "-")}`
 
 			setStatus({ kind: "busy", msg: "Step 1/4: choosing destination..." })
@@ -2005,7 +1967,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 			})
 
 			setStatus({ kind: "busy", msg: "Step 2/4: composing map plate..." })
-			const composed = await composePlate(canvas, activeSpec, activeSnapshot, currentReadiness)
+			const composed = await composePlate(frozenCanvas, activeSpec, activeSnapshot, currentReadiness)
 			const artifacts = []
 			if (requestedFormats.includes("png")) {
 				setStatus({ kind: "busy", msg: "Step 3/4: encoding PNG..." })
@@ -2135,8 +2097,8 @@ export const MapExport: React.FC<MapExportProps> = ({
 							: "Ready with warnings"}
 				</div>
 				<div style={{ opacity: 0.78, marginTop: 4 }}>
-					{readiness.supportedLayers.length} verified layer(s), {readiness.captureOnlyLayers.length} capture-only,{" "}
-					{readiness.unsupportedLayers.length} unsupported.
+					{readiness.supportedLayers.length} supported vector layer(s), {readiness.captureOnlyLayers.length}{" "}
+					capture-only, {readiness.unsupportedLayers.length} unsupported.
 				</div>
 				{readiness.blockingReasons.map((reason) => (
 					<div key={reason} style={{ color: "#f87171", marginTop: 4 }}>
@@ -2144,7 +2106,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 					</div>
 				))}
 				{readiness.warnings.slice(0, 3).map((warning) => (
-					<div key={warning.code} style={{ color: "#fbbf24", marginTop: 4 }}>
+					<div key={`${warning.code}:${warning.message}`} style={{ color: "#fbbf24", marginTop: 4 }}>
 						{warning.message}
 					</div>
 				))}

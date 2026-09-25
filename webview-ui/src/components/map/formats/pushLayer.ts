@@ -67,6 +67,8 @@ export async function pushLayerSpec(spec: LayerSpec): Promise<void> {
 	// only a tiny sentinel travels through gRPC.
 	const image = await dataUrlToImage(spec.dataUrl)
 	rasterCache.set(spec.id, {
+		sourceDataUrl: spec.dataUrl,
+		sourceBounds: JSON.stringify(spec.bounds),
 		image,
 		bounds: spec.bounds as [number, number, number, number],
 		colormap: spec.colormap ?? "viridis",

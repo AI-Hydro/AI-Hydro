@@ -23,6 +23,29 @@ export interface LastMapInspect {
 	featureCount?: number
 }
 
+export interface MapSessionPersistenceIo {
+	mkdir(directory: string, options: { recursive: true }): Promise<unknown>
+	readFile(file: string, encoding: "utf8"): Promise<string>
+	writeFile(file: string, data: string, encoding: "utf8"): Promise<unknown>
+	rename(oldPath: string, newPath: string): Promise<void>
+	rm(file: string, options: { force: true }): Promise<unknown>
+}
+
+export interface MapSessionServiceOptions {
+	workspaceRoot?: string
+	sessionFile?: string
+	outboundEventsDir?: string
+	persistenceIo?: MapSessionPersistenceIo
+}
+
+const defaultPersistenceIo: MapSessionPersistenceIo = {
+	mkdir: (directory, options) => fs.mkdir(directory, options),
+	readFile: (file, encoding) => fs.readFile(file, encoding),
+	writeFile: (file, data, encoding) => fs.writeFile(file, data, encoding),
+	rename: (oldPath, newPath) => fs.rename(oldPath, newPath),
+	rm: (file, options) => fs.rm(file, options),
+}
+
 function slugify(name: string): string {
 	return (
 		name
@@ -48,22 +71,55 @@ export class MapSessionService {
 	private lastInspect: LastMapInspect | undefined
 	private sessionSubscribers = new Set<MapSessionSubscriber>()
 	private eventSubscribers = new Set<MapEventSubscriber>()
+	private readonly sessionFile: string
+	private readonly outboundEventsDir: string
+	private readonly persistenceIo: MapSessionPersistenceIo
+	private initializationPromise: Promise<void> | undefined
+	private stateRevision = 0
+	private persistenceTail: Promise<void> = Promise.resolve()
+	private latestPersistence: Promise<void> = Promise.resolve()
+	private eventPersistenceTail: Promise<void> = Promise.resolve()
+	private tempFileSequence = 0
+	private roiOperationTail: Promise<void> = Promise.resolve()
 
-	constructor(workspaceRoot?: string) {
-		if (workspaceRoot) {
-			this.workspaceRoot = workspaceRoot
+	constructor(workspaceRootOrOptions?: string | MapSessionServiceOptions) {
+		const options =
+			typeof workspaceRootOrOptions === "string" ? { workspaceRoot: workspaceRootOrOptions } : workspaceRootOrOptions
+		this.sessionFile = options?.sessionFile ?? MAP_SESSION_FILE
+		this.outboundEventsDir = options?.outboundEventsDir ?? OUTBOUND_EVENTS_DIR
+		this.persistenceIo = options?.persistenceIo ?? defaultPersistenceIo
+		if (options?.workspaceRoot) {
+			this.workspaceRoot = this.normalizeWorkspaceRoot(options.workspaceRoot)
 		}
 	}
 
 	async initialize(): Promise<void> {
-		await this.loadFromDisk()
+		this.initializationPromise ??= this.loadFromDisk()
+		await this.initializationPromise
 	}
 
 	setWorkspaceRoot(root: string): void {
-		if (root && root !== this.workspaceRoot) {
-			this.workspaceRoot = root
+		const normalizedRoot = this.normalizeWorkspaceRoot(root)
+		if (normalizedRoot && normalizedRoot !== this.normalizeWorkspaceRoot(this.workspaceRoot)) {
+			this.workspaceRoot = normalizedRoot
+			this.activeRoi = undefined
+			this.visibleLayerIds = []
 			this.touch()
+			this.notifySession()
+			this.schedulePersist()
 		}
+	}
+
+	serializeRoiOperation<T>(operation: () => Promise<T>): Promise<T> {
+		const result = this.roiOperationTail.then(async () => {
+			await this.initialize()
+			return operation()
+		})
+		this.roiOperationTail = result.then(
+			() => undefined,
+			() => undefined,
+		)
+		return result
 	}
 
 	getActiveRoi(): MapRoi | undefined {
@@ -78,7 +134,7 @@ export class MapSessionService {
 		this.activeRoi = roi
 		this.touch()
 		this.notifySession()
-		void this.persist()
+		this.schedulePersist()
 		this.appendEvent({
 			type: "roi.set",
 			payloadJson: JSON.stringify({ name: roi.name, source: roi.source, areaHa: roi.areaHa }),
@@ -94,7 +150,7 @@ export class MapSessionService {
 		this.activeRoi = undefined
 		this.touch()
 		this.notifySession()
-		void this.persist()
+		this.schedulePersist()
 		this.appendEvent({
 			type: "roi.cleared",
 			payloadJson: "{}",
@@ -107,14 +163,14 @@ export class MapSessionService {
 		this.view = view
 		this.touch()
 		this.notifySession()
-		void this.persist()
+		this.schedulePersist()
 	}
 
 	setVisibleLayerIds(ids: string[]): void {
 		this.visibleLayerIds = ids
 		this.touch()
 		this.notifySession()
-		void this.persist()
+		this.schedulePersist()
 	}
 
 	getBasemap(): { id: string; name: string } | undefined {
@@ -136,7 +192,7 @@ export class MapSessionService {
 		this.basemapName = name?.trim() || id
 		this.touch()
 		this.notifySession()
-		void this.persist()
+		this.schedulePersist()
 	}
 
 	appendEvent(event: MapEvent): void {
@@ -151,7 +207,9 @@ export class MapSessionService {
 				console.error("[MapSessionService] event subscriber error:", err)
 			}
 		}
-		void this.mirrorEventToDisk(event)
+		this.eventPersistenceTail = this.eventPersistenceTail
+			.then(() => this.mirrorEventToDisk(event))
+			.catch((err) => console.warn("[MapSessionService] event persistence failed:", err))
 	}
 
 	getRecentEvents(limit = 20): MapEvent[] {
@@ -297,7 +355,7 @@ with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED) as zf:
 		}
 		this.touch()
 		this.notifySession()
-		await this.persist()
+		await this.enqueuePersistence()
 		this.appendEvent({
 			type: "roi.saved",
 			payloadJson: JSON.stringify({ path: relGeo, name: pointer.name }),
@@ -347,6 +405,7 @@ with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED) as zf:
 	}
 
 	private touch(): void {
+		this.stateRevision += 1
 		this.updatedAtMs = Date.now()
 	}
 
@@ -360,27 +419,65 @@ with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED) as zf:
 		}
 	}
 
-	private async persist(): Promise<void> {
-		try {
-			await fs.mkdir(path.dirname(MAP_SESSION_FILE), { recursive: true })
-			const payload = {
+	private normalizeWorkspaceRoot(root: string): string {
+		return root?.trim() ? path.resolve(root) : ""
+	}
+
+	private persistenceSnapshot(): string {
+		return JSON.stringify(
+			{
 				activeRoi: this.activeRoi,
 				view: this.view,
-				visibleLayerIds: this.visibleLayerIds,
+				visibleLayerIds: [...this.visibleLayerIds],
 				basemapId: this.basemapId,
 				basemapName: this.basemapName,
 				workspaceRoot: this.workspaceRoot,
 				updatedAtMs: this.updatedAtMs,
+			},
+			null,
+			2,
+		)
+	}
+
+	private schedulePersist(): void {
+		void this.enqueuePersistence().catch((err) => console.warn("[MapSessionService] persist failed:", err))
+	}
+
+	private enqueuePersistence(): Promise<void> {
+		const payload = this.persistenceSnapshot()
+		const operation = this.persistenceTail.then(async () => {
+			await this.initialize()
+			await this.persistenceIo.mkdir(path.dirname(this.sessionFile), { recursive: true })
+			const temporaryFile = `${this.sessionFile}.${process.pid}.${++this.tempFileSequence}.tmp`
+			try {
+				await this.persistenceIo.writeFile(temporaryFile, payload, "utf8")
+				await this.persistenceIo.rename(temporaryFile, this.sessionFile)
+			} catch (error) {
+				try {
+					await this.persistenceIo.rm(temporaryFile, { force: true })
+				} catch {
+					// Preserve the original durability failure.
+				}
+				throw error
 			}
-			await fs.writeFile(MAP_SESSION_FILE, JSON.stringify(payload, null, 2), "utf8")
-		} catch (err) {
-			console.warn("[MapSessionService] persist failed:", err)
-		}
+		})
+		this.persistenceTail = operation.then(
+			() => undefined,
+			() => undefined,
+		)
+		this.latestPersistence = operation
+		return operation
+	}
+
+	async flushPersistence(): Promise<void> {
+		await this.initialize()
+		await this.latestPersistence
+		await this.eventPersistenceTail
 	}
 
 	private async loadFromDisk(): Promise<void> {
 		try {
-			const raw = await fs.readFile(MAP_SESSION_FILE, "utf8")
+			const raw = await this.persistenceIo.readFile(this.sessionFile, "utf8")
 			const data = JSON.parse(raw) as {
 				activeRoi?: MapRoi
 				view?: MapSessionView
@@ -390,27 +487,33 @@ with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED) as zf:
 				workspaceRoot?: string
 				updatedAtMs?: number
 			}
-			this.activeRoi = data.activeRoi
+			if (this.stateRevision !== 0) {
+				return
+			}
+			const requestedWorkspace = this.workspaceRoot
+			const persistedWorkspace = this.normalizeWorkspaceRoot(data.workspaceRoot ?? "")
+			const workspaceMatches = !requestedWorkspace || requestedWorkspace === persistedWorkspace
+			this.activeRoi = workspaceMatches ? data.activeRoi : undefined
 			this.view = data.view
-			this.visibleLayerIds = data.visibleLayerIds ?? []
+			this.visibleLayerIds = workspaceMatches ? (data.visibleLayerIds ?? []) : []
 			this.basemapId = data.basemapId ?? ""
 			this.basemapName = data.basemapName ?? ""
-			if (data.workspaceRoot) {
-				this.workspaceRoot = data.workspaceRoot
+			if (!requestedWorkspace && persistedWorkspace) {
+				this.workspaceRoot = persistedWorkspace
 			}
 			this.updatedAtMs = data.updatedAtMs ?? Date.now()
-		} catch {
-			/* first run */
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+				return
+			}
+			const detail = error instanceof Error ? error.message : String(error)
+			throw new Error(`Could not initialize map session from ${this.sessionFile}: ${detail}`)
 		}
 	}
 
 	private async mirrorEventToDisk(event: MapEvent): Promise<void> {
-		try {
-			await fs.mkdir(OUTBOUND_EVENTS_DIR, { recursive: true })
-			const file = path.join(OUTBOUND_EVENTS_DIR, `${event.timestampMs ?? Date.now()}.json`)
-			await fs.writeFile(file, JSON.stringify(event), "utf8")
-		} catch {
-			/* non-fatal */
-		}
+		await this.persistenceIo.mkdir(this.outboundEventsDir, { recursive: true })
+		const file = path.join(this.outboundEventsDir, `${event.timestampMs ?? Date.now()}.json`)
+		await this.persistenceIo.writeFile(file, JSON.stringify(event), "utf8")
 	}
 }

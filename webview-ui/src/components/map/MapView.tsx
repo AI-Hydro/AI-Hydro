@@ -11,10 +11,13 @@ import { MapServiceClient } from "../../services/grpc-client"
 import { BASE_MAP_STYLES } from "./BaseMapSelector"
 import FeatureIdentifier, { type ClickedFeature, type MapInspectPoint } from "./FeatureIdentifier"
 import { loadAndPushFileEntries, loadAndPushFiles } from "./formats"
-import { applyColormap, dataUrlToImage, rasterCache, rasterRecolorInFlight } from "./formats/rasterCache"
+import { rasterCache } from "./formats/rasterCache"
 import { collectFeaturesAtPoint } from "./geoInspect"
 import { fmtDist, haversineKm } from "./geoMeasureMath"
+import { clusterGeoJSON, LayerClusterCache } from "./layerClusterCache"
+import { MapConnectionStatus } from "./MapConnectionStatus"
 import MapLegend from "./MapLegend"
+import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
 import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext } from "./mapAgentBridge"
@@ -24,6 +27,7 @@ import { type CursorRasterReading, getLayerBounds, isGeoJsonLayer, sampleTopRast
 import { reportBasemapChanged, reportMapEvent, reportVisibleLayers } from "./mapSessionBridge"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import SearchBar from "./SearchBar"
+import { loadMapTile, type ResourceState, useRasterResources } from "./useRasterResources"
 import VectorDrawTool, { type CompletedVectorDraw, type VectorDrawMode } from "./VectorDrawTool"
 import VectorSavePanel from "./VectorSavePanel"
 
@@ -338,56 +342,6 @@ const pointInPolygon = (point: [number, number], polygon: number[][][]): boolean
  * feature whose radius reflects the count. Returns standard GeoJSON so
  * deck.gl GeoJsonLayer can render it directly.
  */
-const clusterGeoJSON = (geojson: any, zoom: number): any => {
-	if (zoom >= 8) {
-		return geojson
-	}
-	const gridSize = Math.max(0.08, Math.min(1.5, 2 ** (4 - zoom)))
-
-	const points: Array<{ lon: number; lat: number; props: any }> = []
-	const extract = (obj: any) => {
-		if (!obj) {
-			return
-		}
-		if (obj.type === "Point" && Array.isArray(obj.coordinates)) {
-			points.push({ lon: obj.coordinates[0], lat: obj.coordinates[1], props: obj.properties })
-		} else if (obj.type === "MultiPoint" && Array.isArray(obj.coordinates)) {
-			obj.coordinates.forEach((c: number[]) => points.push({ lon: c[0], lat: c[1], props: obj.properties }))
-		} else if (obj.type === "FeatureCollection" && Array.isArray(obj.features)) {
-			obj.features.forEach((f: any) => extract(f.geometry))
-		} else if (obj.type === "Feature") {
-			extract(obj.geometry)
-		}
-	}
-	extract(geojson)
-	if (points.length === 0) {
-		return geojson
-	}
-
-	const clusters = new Map<string, { lon: number; lat: number; count: number; sampleProps: any }>()
-	for (const pt of points) {
-		const gx = Math.floor(pt.lon / gridSize)
-		const gy = Math.floor(pt.lat / gridSize)
-		const key = `${gx},${gy}`
-		const existing = clusters.get(key)
-		if (existing) {
-			existing.lon += pt.lon
-			existing.lat += pt.lat
-			existing.count += 1
-		} else {
-			clusters.set(key, { lon: pt.lon, lat: pt.lat, count: 1, sampleProps: pt.props })
-		}
-	}
-
-	const features = Array.from(clusters.values()).map((c) => ({
-		type: "Feature" as const,
-		geometry: { type: "Point" as const, coordinates: [c.lon / c.count, c.lat / c.count] as [number, number] },
-		properties: { _clusterCount: c.count, _clustered: true, ...c.sampleProps },
-	}))
-
-	return { type: "FeatureCollection" as const, features }
-}
-
 const featureContainsPoint = (feature: any, lon: number, lat: number): boolean => {
 	const point: [number, number] = [lon, lat]
 	const geometry = feature?.geometry
@@ -563,7 +517,41 @@ const useEscToClosePanels = ({
 }
 
 export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
-	const { layers } = useMapContext()
+	const { layers, connectionStatus, connectionError, reconnect } = useMapContext()
+	const [resourceRetry, setResourceRetry] = useState(0)
+	const { states: rasterStates, revision: rasterResourceRevision } = useRasterResources(layers, resourceRetry)
+	const [rendererError, setRendererError] = useState<string | null>(null)
+	const [tileErrors, setTileErrors] = useState<Record<string, string>>({})
+	const resourceGeneration = useRef(0)
+	const resourcesMounted = useRef(true)
+	const currentLayers = useRef(layers)
+	currentLayers.current = layers
+	const reportTileError = useCallback((id: string, source: string, generation: number, error: unknown) => {
+		if (!resourcesMounted.current || generation !== resourceGeneration.current || (error as any)?.name === "AbortError")
+			return
+		if (
+			id !== "basemap" &&
+			!currentLayers.current.some(
+				(layer) => layer.id === id && (layer.metadata?.gee_tile_url_template || layer.metadata?.tile_url) === source,
+			)
+		)
+			return
+		const message = error instanceof Error ? error.message : String(error)
+		setTileErrors((previous) => (previous[id] === message ? previous : { ...previous, [id]: message }))
+	}, [])
+	const retryResources = useCallback(() => {
+		resourceGeneration.current += 1
+		setTileErrors({})
+		setRendererError(null)
+		setResourceRetry((value) => value + 1)
+	}, [])
+	useEffect(() => {
+		resourcesMounted.current = true
+		return () => {
+			resourcesMounted.current = false
+		}
+	}, [])
+
 	const knownLayerIdsRef = useRef<Set<string>>(new Set())
 	const pendingAutoFitLayerIdsRef = useRef<string[]>([])
 	const lastAutoFitKeyRef = useRef<string>("")
@@ -576,7 +564,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// Bumped after each successful raster preload so dataLayers recomputes.
 	// (rasterCache is a module singleton, not React state — we need to trigger
 	// re-renders manually after async preloads complete.)
-	const [rasterReadyTick, setRasterReadyTick] = useState(0)
+	// Raster resource revision drives rendering and inspection after async loads.
 
 	// Persistent state — restore on mount, save on change
 	const persisted = useMemo(() => loadMapWorkspace(), [])
@@ -909,27 +897,15 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				? baseMapConfig.url
 				: (BASE_MAP_STYLES.find((s) => !s.url.startsWith("mapbox://"))?.url ?? BASE_MAP_STYLES[0].url)
 
+		const generation = resourceGeneration.current
 		return new TileLayer({
-			id: "basemap",
+			id: `basemap-${resourceRetry}`,
 			data: tileUrl,
 			minZoom: 0,
 			maxZoom: 19,
 			tileSize: 256,
-			getTileData: async (tile: any) => {
-				if (!tile.url) {
-					return null
-				}
-				try {
-					const resp = await fetch(tile.url)
-					if (!resp.ok) {
-						return null
-					}
-					const blob = await resp.blob()
-					return createImageBitmap(blob)
-				} catch {
-					return null
-				}
-			},
+			getTileData: loadMapTile,
+			onTileError: (error: unknown) => reportTileError("basemap", tileUrl, generation, error),
 			renderSubLayers: (props: any) => {
 				const {
 					bbox: { west, south, east, north },
@@ -945,7 +921,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				})
 			},
 		})
-	}, [selectedBaseMap])
+	}, [selectedBaseMap, resourceRetry, reportTileError])
 
 	useEffect(() => {
 		const previousLayerIds = knownLayerIdsRef.current
@@ -969,50 +945,6 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			return nextVisibleLayers
 		})
 		knownLayerIdsRef.current = new Set(layers.map((layer) => layer.id))
-	}, [layers])
-
-	// Preload raster images that arrived via gRPC (Python-pushed via
-	// MapEventWatcher) into the rasterCache. User-loaded rasters are populated
-	// directly by pushLayer.ts, so they skip this path.
-	useEffect(() => {
-		let cancelled = false
-		for (const layer of layers) {
-			if (layer.layerType !== "raster") {
-				continue
-			}
-			if (rasterCache.has(layer.id)) {
-				continue
-			}
-			const dataUrl = layer.metadata?.raster_data_url
-			const boundsRaw = layer.metadata?.raster_bounds
-			if (!dataUrl || !boundsRaw) {
-				console.error(
-					`[MapView] Raster layer "${layer.name}" (${layer.id}) is missing image data or bounds in metadata. PNG path read may have failed in MapEventWatcher.`,
-				)
-				continue
-			}
-			let bounds: [number, number, number, number]
-			try {
-				bounds = JSON.parse(boundsRaw)
-			} catch (err) {
-				console.error(`[MapView] Bad raster_bounds for layer ${layer.id}:`, err)
-				continue
-			}
-			dataUrlToImage(dataUrl)
-				.then((image) => {
-					if (cancelled) {
-						return
-					}
-					rasterCache.set(layer.id, { image, bounds, colormap: layer.metadata?.raster_colormap ?? "pre-rendered" })
-					setRasterReadyTick((t) => t + 1)
-				})
-				.catch((err) => {
-					console.error(`[MapView] Failed to decode raster image for layer ${layer.id}:`, err)
-				})
-		}
-		return () => {
-			cancelled = true
-		}
 	}, [layers])
 
 	const handleOpacityChange = (layerId: string, opacity: number) => {
@@ -1197,8 +1129,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			}
 		}
 		return null
-		// rasterReadyTick included so the reading refreshes after async colormap/preload updates
-	}, [cursorCoord, layers, visibleLayerIds, layerOrder, rasterReadyTick])
+		// rasterResourceRevision included so the reading refreshes after async colormap/preload updates
+	}, [cursorCoord, layers, visibleLayerIds, layerOrder, rasterResourceRevision])
 
 	// Sort layers by custom order for deck.gl (last = on top)
 	const sortedLayers = useMemo(() => {
@@ -1292,14 +1224,24 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		[sortedLayers, visibleLayerIds, measureMode, drawMode, pendingDraw, layerOrder],
 	) // Per-layer clustered GeoJSON cache — keyed by `layerId|floor(zoom)` so we
 	// only re-cluster when crossing an integer zoom level, not on every frame.
-	const clusterCacheRef = useRef<Map<string, any>>(new Map())
+	const clusterCacheRef = useRef(new LayerClusterCache())
+	useEffect(() => {
+		setInspectRasterReading(
+			inspectPoint
+				? sampleTopRasterAtPoint(layers, visibleLayerIds, layerOrder, inspectPoint.lon, inspectPoint.lat, rasterCache)
+				: null,
+		)
+	}, [inspectPoint, layers, visibleLayerIds, layerOrder, rasterResourceRevision])
 
-	const dataLayers = useMemo(
-		() =>
-			sortedLayers
+	const layerBuild = useMemo(
+		() => {
+			const errors: Record<string, ResourceState> = {}
+			clusterCacheRef.current.retain(new Set(sortedLayers.map((layer) => layer.id)))
+			const rendered = sortedLayers
 				.filter((layer) => visibleLayerIds.has(layer.id))
 				.map((layer) => {
 					try {
+						if (rasterStates[layer.id]?.status === "error") return null
 						if (layer.layerType === "gee_tile") {
 							const tileUrl = layer.metadata?.gee_tile_url_template || layer.metadata?.tile_url
 							if (!tileUrl) {
@@ -1318,23 +1260,15 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 								}
 							}
 							const opacity = layerOpacities[layer.id] ?? parseFloat(layer.metadata?.raster_opacity ?? "0.75")
+							const generation = resourceGeneration.current
 							return new TileLayer({
-								id: layer.id,
+								id: `${layer.id}-tiles-${resourceRetry}`,
 								data: tileUrl,
 								minZoom: 0,
 								maxZoom: 18,
 								tileSize: 256,
-								getTileData: async (tile: any) => {
-									if (!tile.url) return null
-									try {
-										const resp = await fetch(tile.url)
-										if (!resp.ok) return null
-										const blob = await resp.blob()
-										return createImageBitmap(blob)
-									} catch {
-										return null
-									}
-								},
+								getTileData: loadMapTile,
+								onTileError: (error: unknown) => reportTileError(layer.id, tileUrl, generation, error),
 								renderSubLayers: (props: any) => {
 									const {
 										bbox: { west, south, east, north },
@@ -1358,28 +1292,17 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							// the VS Code webview — its CSP forbids `data:` in connect-src,
 							// so deck.gl's loader-based fetch fails silently.
 							const cached = rasterCache.get(layer.id)
-							if (!cached) {
+							if (
+								!cached ||
+								(cached.rawPixels && cached.colormap !== (layer.metadata?.raster_colormap ?? "viridis")) ||
+								(layer.metadata?.raster_data_url &&
+									(cached.sourceDataUrl !== layer.metadata.raster_data_url ||
+										cached.sourceBounds !== layer.metadata.raster_bounds))
+							) {
 								// Python-pushed rasters arrive with `raster_data_url` in
 								// metadata; the preload effect below converts that into an
 								// HTMLImageElement and re-renders. First render returns null.
 								return null
-							}
-
-							// Detect colormap change and trigger async re-render.
-							// rawPixels is only available for user-loaded GeoTIFFs.
-							const targetColormap = layer.metadata?.raster_colormap ?? "viridis"
-							if (cached.colormap !== targetColormap && cached.rawPixels && !rasterRecolorInFlight.has(layer.id)) {
-								rasterRecolorInFlight.add(layer.id)
-								applyColormap(cached.rawPixels, targetColormap)
-									.then((image) => {
-										rasterCache.set(layer.id, { ...cached, image, colormap: targetColormap })
-										rasterRecolorInFlight.delete(layer.id)
-										setRasterReadyTick((t) => t + 1)
-									})
-									.catch((err) => {
-										rasterRecolorInFlight.delete(layer.id)
-										console.error(`[MapView] Colormap re-render failed for ${layer.id}:`, err)
-									})
 							}
 
 							const opacity = layerOpacities[layer.id] ?? parseFloat(layer.metadata?.raster_opacity ?? "0.75")
@@ -1395,15 +1318,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						const style = layer.style
 						// Apply point clustering for dense networks at low zoom
 						if (clusterLayerIds.has(layer.id) && viewState.zoom < 8) {
-							const featureCount = geojson?.features?.length ?? geojson?.coordinates?.length ?? 0
-							const cacheKey = `${layer.id}|${Math.floor(viewState.zoom)}|${featureCount}`
-							const cachedCluster = clusterCacheRef.current.get(cacheKey)
-							if (cachedCluster) {
-								geojson = cachedCluster
-							} else {
-								geojson = clusterGeoJSON(geojson, viewState.zoom)
-								clusterCacheRef.current.set(cacheKey, geojson)
-							}
+							geojson = clusterCacheRef.current.get(layer.id, layer.geojson, viewState.zoom, () =>
+								clusterGeoJSON(geojson, Math.floor(viewState.zoom)),
+							)
 						}
 						const fillColor = style?.fillColor ? hexToRgb(style.fillColor) : [0, 102, 204]
 						// Stroke color: prefer the explicit strokeColor, then color (legacy), then derive
@@ -1514,16 +1431,31 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							},
 						})
 					} catch (error) {
-						console.error(`Error creating layer ${layer.id}:`, error)
+						errors[layer.id] = { status: "error", message: error instanceof Error ? error.message : String(error) }
 						return null
 					}
 				})
-				.filter(Boolean) as any[],
-		// sortedLayers already depends on layers+layerOrder; rasterReadyTick bumps
+				.filter(Boolean) as any[]
+			return { rendered, errors }
+		},
+		// sortedLayers already depends on layers+layerOrder; rasterResourceRevision bumps
 		// when async raster preloads finish so the BitmapLayer instantiates after
 		// the image is ready. viewState.zoom and clusterLayerIds drive clustering.
-		[sortedLayers, visibleLayerIds, rasterReadyTick, layerOpacities, viewState.zoom, clusterLayerIds],
+		[
+			sortedLayers,
+			visibleLayerIds,
+			rasterResourceRevision,
+			rasterStates,
+			resourceRetry,
+			reportTileError,
+			layerOpacities,
+			viewState.zoom,
+			clusterLayerIds,
+		],
 	)
+
+	const dataLayers = layerBuild.rendered
+	const displayStates = { ...rasterStates, ...layerBuild.errors }
 
 	// Measure overlay layer — renders live measurement geometry on the map
 	const measureLayer = useMemo(() => {
@@ -1814,6 +1746,15 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				background: bgColor,
 				overflow: "hidden",
 			}}>
+			<MapConnectionStatus error={connectionError} onReconnect={reconnect} status={connectionStatus} />
+			<MapResourceStatus
+				layers={layers}
+				onRetry={retryResources}
+				rasterStates={displayStates}
+				rendererError={rendererError}
+				tileErrors={tileErrors}
+				visibleLayerIds={visibleLayerIds}
+			/>
 			<DeckGL
 				controller={true}
 				getCursor={({ isDragging }: { isDragging: boolean }) => {
@@ -1829,8 +1770,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					return "grab"
 				}}
 				getTooltip={layers.length > 0 && clickedFeatures.length === 0 ? getTooltip : undefined}
+				id="ai-hydro-research-map"
+				key={resourceRetry}
 				layers={allLayers}
 				onClick={handleMapClick}
+				onError={(error) => setRendererError(error.message)}
 				onHover={({ coordinate }: any) => {
 					if (coordinate && Array.isArray(coordinate) && coordinate.length >= 2) {
 						const lon = coordinate[0]
@@ -1959,6 +1903,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				drawMode={drawMode}
 				exportOpen={exportOpen}
 				galleryOpen={galleryOpen}
+				getMapCanvas={() =>
+					containerRef.current?.querySelector<HTMLCanvasElement>("canvas#ai-hydro-research-map") ?? null
+				}
 				layerCount={layers.length}
 				layerOpacities={layerOpacities}
 				layerOrder={layerOrder}
@@ -1986,6 +1933,17 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				onShowAllLayers={() => setVisibleLayerIds(new Set(layers.map((l) => l.id)))}
 				onVisibilityChange={handleVisibilityChange}
 				onZoomToLayer={handleZoomToLayer}
+				rasterRevision={rasterResourceRevision}
+				renderIssues={[
+					...(rendererError ? [`Map renderer failed: ${rendererError}`] : []),
+					...(connectionStatus !== "connected" ? ["Map state is not synchronized."] : []),
+					...Object.entries(displayStates)
+						.filter(([id]) => visibleLayerIds.has(id))
+						.map(([id, state]) => `${id}: ${state.message}`),
+					...Object.entries(tileErrors)
+						.filter(([id]) => id === "basemap" || visibleLayerIds.has(id))
+						.map(([id, message]) => `${id}: ${message}`),
+				]}
 				searchOpen={searchOpen}
 				searchPanel={
 					<SearchBar

@@ -45,6 +45,9 @@ const TOOL_PANEL_SIZE: Record<
 }
 
 interface MapToolRibbonProps {
+	rasterRevision?: number
+	getMapCanvas?: () => HTMLCanvasElement | null
+	renderIssues?: string[]
 	mapStyle: "dark" | "light"
 	currentBasemap: string
 	onBasemapChange: (id: string) => void
@@ -79,6 +82,9 @@ interface MapToolRibbonProps {
 }
 
 export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
+	rasterRevision,
+	getMapCanvas,
+	renderIssues,
 	mapStyle,
 	currentBasemap,
 	onBasemapChange,
@@ -520,9 +526,13 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 							<div style={{ padding: 10 }}>
 								<MapExport
 									currentBasemap={currentBasemap}
+									getMapCanvas={getMapCanvas}
+									layerOpacities={layerOpacities}
 									layers={layers}
 									mapStyle={mapStyle}
 									onClose={() => toggle("export")}
+									rasterRevision={rasterRevision}
+									renderIssues={renderIssues}
 									viewState={viewState}
 									visibleLayerIds={visibleLayerIds}
 								/>

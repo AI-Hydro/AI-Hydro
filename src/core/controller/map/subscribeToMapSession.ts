@@ -3,8 +3,6 @@ import type { MapSessionState } from "@shared/proto/cline/map"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import type { Controller } from ".."
 
-const activeSubscriptions = new Set<StreamingResponseHandler<MapSessionState>>()
-
 export async function subscribeToMapSession(
 	controller: Controller,
 	_request: EmptyRequest,
@@ -12,37 +10,34 @@ export async function subscribeToMapSession(
 	requestId?: string,
 ): Promise<void> {
 	await controller.refreshMapSessionWorkspaceRoot()
-	activeSubscriptions.add(responseStream)
-
-	const unsubscribe = controller.mapSessionService.subscribeToSession(async (state) => {
-		if (!activeSubscriptions.has(responseStream)) {
-			return
-		}
-		try {
-			const full = controller.mapSessionService.buildSnapshot(controller.getMapLayers())
-			full.activeRoi = state.activeRoi ?? full.activeRoi
-			full.view = state.view ?? full.view
-			full.visibleLayerIds = state.visibleLayerIds?.length ? state.visibleLayerIds : full.visibleLayerIds
-			await responseStream(full, false)
-		} catch (error) {
-			console.error("[subscribeToMapSession] stream error:", error)
-			activeSubscriptions.delete(responseStream)
-			unsubscribe()
-		}
-	})
-
+	let active = true
+	let unsubscribe = () => {}
+	let tail = Promise.resolve()
 	const cleanup = () => {
-		activeSubscriptions.delete(responseStream)
+		if (!active) return
+		active = false
 		unsubscribe()
 	}
-	if (requestId) {
-		getRequestRegistry().registerRequest(requestId, cleanup, { type: "map_session_subscription" }, responseStream)
+	const send = (state: MapSessionState) => {
+		tail = tail
+			.then(async () => {
+				if (active) await responseStream(state, false)
+			})
+			.catch((error) => {
+				console.error("[subscribeToMapSession] stream failed:", error)
+				cleanup()
+			})
 	}
-
-	try {
-		await responseStream(controller.mapSessionService.buildSnapshot(controller.getMapLayers()), false)
-	} catch (error) {
-		console.error("[subscribeToMapSession] initial send failed:", error)
-		cleanup()
-	}
+	// Queue initial state before subscribing, without yielding between these operations.
+	send(controller.mapSessionService.buildSnapshot(controller.getMapLayers()))
+	unsubscribe = controller.mapSessionService.subscribeToSession((state) => {
+		if (!active) return
+		const full = controller.mapSessionService.buildSnapshot(controller.getMapLayers())
+		full.activeRoi = state.activeRoi ?? full.activeRoi
+		full.view = state.view ?? full.view
+		full.visibleLayerIds = state.visibleLayerIds ?? full.visibleLayerIds
+		send(full)
+	})
+	if (requestId) getRequestRegistry().registerRequest(requestId, cleanup, { type: "map_session_subscription" }, responseStream)
+	await tail
 }
