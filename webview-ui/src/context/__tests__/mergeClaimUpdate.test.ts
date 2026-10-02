@@ -16,6 +16,14 @@ const base = (over: Partial<ClaimRecord> = {}): ClaimRecord =>
 		approvalReason: "",
 		approvalRecordedState: "",
 		approvalLiveDigest: "",
+		revision: 0,
+		revisionDigest: "",
+		historyLen: 0,
+		revisionError: "",
+		driftState: "",
+		driftReason: "",
+		driftChangedFields: [],
+		driftEvidenceChecked: false,
 		...over,
 	}) as ClaimRecord
 
@@ -55,5 +63,42 @@ describe("mergeClaimUpdate", () => {
 
 	it("stays unreported when nothing was reported before", () => {
 		expect(mergeClaimUpdate(base(), base()).approvalState).toBe("")
+	})
+
+	it("keeps the snapshot revision group when the event carries none", () => {
+		const prev = base({ revision: 3, revisionDigest: "rd", historyLen: 3, revisionError: "e" })
+		const out = mergeClaimUpdate(prev, base({ statement: "edited" }))
+		expect(out).toMatchObject({ revision: 3, revisionDigest: "rd", historyLen: 3, revisionError: "e" })
+		expect(out.statement).toBe("edited")
+	})
+
+	it("lets an explicit revisionDigest replace the whole revision group", () => {
+		const prev = base({ revision: 3, revisionDigest: "rd", historyLen: 3, revisionError: "e" })
+		const out = mergeClaimUpdate(prev, base({ revision: 4, revisionDigest: "rd2" }))
+		expect(out).toMatchObject({ revision: 4, revisionDigest: "rd2", historyLen: 0, revisionError: "" })
+	})
+
+	it("keeps the snapshot drift group when the event carries none", () => {
+		const prev = base({
+			driftState: "drifted",
+			driftReason: "r",
+			driftChangedFields: ["statement"],
+			driftEvidenceChecked: true,
+		})
+		const out = mergeClaimUpdate(prev, base())
+		expect(out).toMatchObject({
+			driftState: "drifted",
+			driftReason: "r",
+			driftChangedFields: ["statement"],
+			driftEvidenceChecked: true,
+		})
+	})
+
+	it("lets an explicit driftState win and groups are independent", () => {
+		const prev = base({ driftState: "drifted", driftChangedFields: ["x"], approvalState: "approved" })
+		const out = mergeClaimUpdate(prev, base({ driftState: "clean" }))
+		expect(out.driftState).toBe("clean")
+		expect(out.driftChangedFields).toEqual([])
+		expect(out.approvalState).toBe("approved")
 	})
 })

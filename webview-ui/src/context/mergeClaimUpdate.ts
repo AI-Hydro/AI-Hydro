@@ -1,37 +1,59 @@
 import type { ClaimRecord } from "@shared/proto/cline/ledger"
 
 /**
- * Approval fields on ClaimRecord. Ledger events (LedgerEventWatcher) never
- * carry these, so an event arriving after a snapshot load reports them as "".
- * Empty means "unreported", not "revoked".
+ * Field groups that ledger events (LedgerEventWatcher) never carry: an event
+ * reports them as zero values. Absence is not revocation, so when an incoming
+ * record's group is unreported, the previously-known group is kept. A group is
+ * "reported" when its primary field is non-empty; then the incoming group wins
+ * wholesale (including its empty secondary fields).
  */
-const APPROVAL_FIELDS = [
-	"approvalState",
-	"approvalForRevisionDigest",
-	"approvalChannel",
-	"approvalTrustRoot",
-	"approvalPrincipal",
-	"approvalPolicy",
-	"approvalReason",
-	"approvalRecordedState",
-	"approvalLiveDigest",
-] as const satisfies readonly (keyof ClaimRecord)[]
+interface FieldGroup {
+	primary: keyof ClaimRecord
+	fields: readonly (keyof ClaimRecord)[]
+}
+
+const FIELD_GROUPS: readonly FieldGroup[] = [
+	{
+		primary: "revisionDigest",
+		fields: ["revision", "revisionDigest", "historyLen", "revisionError"],
+	},
+	{
+		primary: "driftState",
+		fields: ["driftState", "driftReason", "driftChangedFields", "driftEvidenceChecked"],
+	},
+	{
+		primary: "approvalState",
+		fields: [
+			"approvalState",
+			"approvalForRevisionDigest",
+			"approvalChannel",
+			"approvalTrustRoot",
+			"approvalPrincipal",
+			"approvalPolicy",
+			"approvalReason",
+			"approvalRecordedState",
+			"approvalLiveDigest",
+		],
+	},
+]
 
 /**
  * Merge a live claim update into the existing view state for that claim.
- * If the incoming record carries no approval fields (absence is not
- * revocation), the previously-known approval fields are kept. An incoming
- * record that explicitly reports an approvalState wins wholesale.
+ * Each field group (revision, drift, approval) is carried over from `prev`
+ * unless the incoming record explicitly reports that group's primary field.
  */
 export function mergeClaimUpdate(prev: ClaimRecord | undefined, incoming: ClaimRecord): ClaimRecord {
-	if (!prev || incoming.approvalState) {
+	if (!prev) {
 		return incoming
 	}
-	const merged: ClaimRecord = { ...incoming }
-	for (const field of APPROVAL_FIELDS) {
-		if (!incoming[field] && prev[field]) {
+	const merged: Record<string, unknown> = { ...incoming }
+	for (const group of FIELD_GROUPS) {
+		if (incoming[group.primary]) {
+			continue
+		}
+		for (const field of group.fields) {
 			merged[field] = prev[field]
 		}
 	}
-	return merged
+	return merged as unknown as ClaimRecord
 }
