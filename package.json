@@ -619,8 +619,13 @@
 				},
 				"aihydro.gee.pythonPath": {
 					"type": "string",
-					"default": "python3",
-					"description": "Python executable used to run the AI-Hydro GEE adapter CLI."
+					"default": "",
+					"description": "Python executable used to run the AI-Hydro GEE adapter CLI. Leave empty to use the interpreter of the registered ai-hydro MCP server, then python3/python on PATH."
+				},
+				"aihydro.hydro.pythonPath": {
+					"type": "string",
+					"default": "",
+					"description": "Python executable (with aihydro-tools installed) used by the map's hydrology CLI. Leave empty to use the interpreter of the registered ai-hydro MCP server, then python3/python on PATH."
 				}
 			}
 		}

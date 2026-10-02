@@ -1,12 +1,10 @@
-import { exec, spawn } from "node:child_process"
-import { promisify } from "node:util"
-
-const execAsync = promisify(exec)
-
+import { spawn } from "node:child_process"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
+import { resolveAiHydroPythonRuntime } from "../hydrology/aiHydroPythonRuntime"
+import type { ResolveResult } from "../hydrology/resolveAiHydroPython"
 import type { GeeProjectsResult, GeeStatusResult, GeeTileLayerResult } from "./types"
 
 interface GeeRunResult {
@@ -16,124 +14,45 @@ interface GeeRunResult {
 	raw?: string
 }
 
-const PYTHON_CACHE_FILE = path.join(process.env.HOME ?? process.env.USERPROFILE ?? "/tmp", ".aihydro", "cache", "python_path.txt")
-
 export class GeeService {
 	// Cached after the first async detection — subsequent calls return instantly.
 	private static _cachedPythonCmd: string | undefined
 	// Single in-flight detection promise so concurrent calls share one probe.
-	private static _detectingPromise: Promise<string> | undefined
+	private static _detectingPromise: Promise<ResolveResult> | undefined
 
-	private static getConfiguredPythonCommand(): string {
+	private static getConfiguredPythonCommand(): string | undefined {
 		const config = vscode.workspace.getConfiguration("aihydro.gee")
-		return config.get<string>("pythonPath") || "python3"
-	}
-
-	private static async canImportEarthEngineAsync(pythonCmd: string): Promise<boolean> {
-		try {
-			await execAsync(`"${pythonCmd}" -c "import ai_hydro.gee; import ee"`, { timeout: 6000 })
-			return true
-		} catch {
-			return false
-		}
-	}
-
-	private static async commandExistsAsync(pythonCmd: string): Promise<boolean> {
-		try {
-			await execAsync(`"${pythonCmd}" -c "import sys"`, { timeout: 3000 })
-			return true
-		} catch {
-			return false
-		}
+		return config.get<string>("pythonPath") || undefined
 	}
 
 	// Invalidate cache when settings change (e.g. user sets aihydro.gee.pythonPath)
 	static invalidatePythonCache(): void {
 		GeeService._cachedPythonCmd = undefined
 		GeeService._detectingPromise = undefined
-		fs.unlink(PYTHON_CACHE_FILE).catch(() => {})
 	}
 
-	private static async loadCachedPythonPath(): Promise<string | undefined> {
-		try {
-			const cached = (await fs.readFile(PYTHON_CACHE_FILE, "utf-8")).trim()
-			if (cached && (await GeeService.canImportEarthEngineAsync(cached))) {
-				return cached
-			}
-		} catch {
-			// no cache or stale
-		}
-		return undefined
-	}
-
-	private static async saveCachedPythonPath(cmd: string): Promise<void> {
-		try {
-			await fs.mkdir(path.dirname(PYTHON_CACHE_FILE), { recursive: true })
-			await fs.writeFile(PYTHON_CACHE_FILE, cmd, "utf-8")
-		} catch {
-			// best-effort
-		}
-	}
-
-	private static resolvePythonCommandAsync(): Promise<string> {
+	private static resolvePythonCommandAsync(): Promise<ResolveResult> {
 		if (GeeService._cachedPythonCmd) {
-			return Promise.resolve(GeeService._cachedPythonCmd)
+			return Promise.resolve({ ok: true, command: GeeService._cachedPythonCmd, source: "cache" })
 		}
 		// Coalesce concurrent callers onto one probe
 		if (GeeService._detectingPromise) {
 			return GeeService._detectingPromise
 		}
-		GeeService._detectingPromise = (async () => {
-			// Check disk cache first — avoids 4s+ import probe on every extension restart
-			const cached = await GeeService.loadCachedPythonPath()
-			if (cached) {
-				GeeService._cachedPythonCmd = cached
-				GeeService._detectingPromise = undefined
-				return cached
+		// Failures are not cached, so installing the package and retrying works without a reload.
+		const promise = resolveAiHydroPythonRuntime({
+			configuredPath: GeeService.getConfiguredPythonCommand(),
+			modules: ["ai_hydro.gee", "ee"],
+			settingName: "aihydro.gee.pythonPath",
+		}).then((result) => {
+			if (result.ok) {
+				GeeService._cachedPythonCmd = result.command
 			}
-
-			const configured = GeeService.getConfiguredPythonCommand().trim()
-			// Known-good absolute paths first — avoids 6s × N timeout cascade on systems
-			// where the PATH-based shims don't have ai_hydro.gee / ee installed.
-			const rawCandidates = [
-				"/opt/miniconda3/bin/python",
-				"/opt/homebrew/bin/python3",
-				process.env.VIRTUAL_ENV ? path.join(process.env.VIRTUAL_ENV, "bin", "python") : undefined,
-				configured,
-				"python3",
-				"python",
-				"/usr/bin/python3",
-			]
-			// Deduplicate while preserving order
-			const seen = new Set<string>()
-			const candidates = rawCandidates.filter((v): v is string => {
-				if (!v?.trim()) return false
-				if (seen.has(v)) return false
-				seen.add(v)
-				return true
-			})
-
-			for (const candidate of candidates) {
-				if (await GeeService.canImportEarthEngineAsync(candidate)) {
-					GeeService._cachedPythonCmd = candidate
-					GeeService._detectingPromise = undefined
-					GeeService.saveCachedPythonPath(candidate)
-					return candidate
-				}
-			}
-			for (const candidate of candidates) {
-				if (await GeeService.commandExistsAsync(candidate)) {
-					GeeService._cachedPythonCmd = candidate
-					GeeService._detectingPromise = undefined
-					return candidate
-				}
-			}
-			const fallback = configured || "python3"
-			GeeService._cachedPythonCmd = fallback
 			GeeService._detectingPromise = undefined
-			return fallback
-		})()
-		return GeeService._detectingPromise
+			return result
+		})
+		GeeService._detectingPromise = promise
+		return promise
 	}
 
 	private static getProjectId(provided?: string): string | undefined {
@@ -179,10 +98,12 @@ export class GeeService {
 	}
 
 	private static async runGeeCli(args: string[], timeoutMs = 15_000): Promise<GeeRunResult> {
-		const pythonCmd = await GeeService.resolvePythonCommandAsync()
+		const resolved = await GeeService.resolvePythonCommandAsync()
+		if (!resolved.ok) {
+			return { ok: false, error: resolved.error }
+		}
+		const pythonCmd = resolved.command
 		const extensionRoot = HostProvider.get().extensionFsPath
-		const pyPath = path.join(extensionRoot, "python")
-		const pythonPath = [pyPath, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
 
 		return new Promise((resolve) => {
 			let settled = false
@@ -195,10 +116,7 @@ export class GeeService {
 
 			const child = spawn(pythonCmd, ["-m", "ai_hydro.gee.cli", ...args], {
 				cwd: extensionRoot,
-				env: {
-					...process.env,
-					PYTHONPATH: pythonPath,
-				},
+				env: process.env,
 				stdio: ["ignore", "pipe", "pipe"],
 			})
 

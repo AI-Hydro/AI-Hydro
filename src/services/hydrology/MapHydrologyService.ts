@@ -1,8 +1,8 @@
-import { exec, spawn } from "node:child_process"
-import * as path from "node:path"
-import { promisify } from "node:util"
+import { spawn } from "node:child_process"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
+import { resolveAiHydroPythonRuntime } from "./aiHydroPythonRuntime"
+import type { ResolveResult } from "./resolveAiHydroPython"
 import type {
 	DelineatePointResult,
 	HucAtPointResult,
@@ -14,8 +14,6 @@ import type {
 	SearchHydrologyResult,
 } from "./types"
 
-const execAsync = promisify(exec)
-
 interface HydroRunResult<T = Record<string, unknown>> {
 	ok: boolean
 	result?: T
@@ -23,15 +21,13 @@ interface HydroRunResult<T = Record<string, unknown>> {
 	raw?: string
 }
 
-const AIHYDRO_TOOLS_SRC = path.join(process.env.HOME || "", "Documents", "AI-Hydro", "MCP", "aihydro-tools")
-
 export class MapHydrologyService {
 	private static _cachedPythonCmd: string | undefined
-	private static _detectingPromise: Promise<string> | undefined
+	private static _detectingPromise: Promise<ResolveResult> | undefined
 
-	private static getConfiguredPythonCommand(): string {
+	private static getConfiguredPythonCommand(): string | undefined {
 		const config = vscode.workspace.getConfiguration("aihydro.hydro")
-		return config.get<string>("pythonPath") || "python3"
+		return config.get<string>("pythonPath") || undefined
 	}
 
 	static invalidatePythonCache(): void {
@@ -39,41 +35,27 @@ export class MapHydrologyService {
 		MapHydrologyService._detectingPromise = undefined
 	}
 
-	private static async canImportAiHydro(pythonCmd: string): Promise<boolean> {
-		try {
-			await execAsync(`"${pythonCmd}" -c "import ai_hydro.hydro_map_cli"`, { timeout: 8000 })
-			return true
-		} catch {
-			return false
-		}
-	}
-
-	private static resolvePythonCommandAsync(): Promise<string> {
+	private static resolvePythonCommandAsync(): Promise<ResolveResult> {
 		if (MapHydrologyService._cachedPythonCmd) {
-			return Promise.resolve(MapHydrologyService._cachedPythonCmd)
+			return Promise.resolve({ ok: true, command: MapHydrologyService._cachedPythonCmd, source: "cache" })
 		}
 		if (MapHydrologyService._detectingPromise) {
 			return MapHydrologyService._detectingPromise
 		}
-		MapHydrologyService._detectingPromise = (async () => {
-			const configured = MapHydrologyService.getConfiguredPythonCommand().trim()
-			const candidates = ["/opt/miniconda3/bin/python", "/opt/homebrew/bin/python3", configured, "python3", "python"]
-			const seen = new Set<string>()
-			for (const c of candidates) {
-				if (!c || seen.has(c)) continue
-				seen.add(c)
-				if (await MapHydrologyService.canImportAiHydro(c)) {
-					MapHydrologyService._cachedPythonCmd = c
-					MapHydrologyService._detectingPromise = undefined
-					return c
-				}
+		// Failures are not cached, so installing the package and retrying works without a reload.
+		const promise = resolveAiHydroPythonRuntime({
+			configuredPath: MapHydrologyService.getConfiguredPythonCommand(),
+			modules: ["ai_hydro.hydro_map_cli"],
+			settingName: "aihydro.hydro.pythonPath",
+		}).then((result) => {
+			if (result.ok) {
+				MapHydrologyService._cachedPythonCmd = result.command
 			}
-			const fallback = configured || "python3"
-			MapHydrologyService._cachedPythonCmd = fallback
 			MapHydrologyService._detectingPromise = undefined
-			return fallback
-		})()
-		return MapHydrologyService._detectingPromise
+			return result
+		})
+		MapHydrologyService._detectingPromise = promise
+		return promise
 	}
 
 	private static async getWorkspaceRoot(): Promise<string> {
@@ -86,11 +68,12 @@ export class MapHydrologyService {
 	}
 
 	private static async runHydroCli(args: string[], timeoutMs = 600_000): Promise<HydroRunResult> {
-		const pythonCmd = await MapHydrologyService.resolvePythonCommandAsync()
+		const resolved = await MapHydrologyService.resolvePythonCommandAsync()
+		if (!resolved.ok) {
+			return { ok: false, error: resolved.error }
+		}
+		const pythonCmd = resolved.command
 		const extensionRoot = HostProvider.get().extensionFsPath
-		const pyPath = path.join(extensionRoot, "python")
-		const toolsSrc = AIHYDRO_TOOLS_SRC
-		const pythonPath = [toolsSrc, pyPath, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
 
 		return new Promise((resolve) => {
 			let settled = false
@@ -103,7 +86,7 @@ export class MapHydrologyService {
 
 			const child = spawn(pythonCmd, ["-m", "ai_hydro.hydro_map_cli", "--json", ...args], {
 				cwd: extensionRoot,
-				env: { ...process.env, PYTHONPATH: pythonPath },
+				env: process.env,
 				stdio: ["ignore", "pipe", "pipe"],
 			})
 

@@ -11,6 +11,18 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Fixed — Author-machine hard-codes in Python interpreter resolution (vision-2040 G0, ADR-006)
+
+- Map hydrology (`MapHydrologyService`) and GEE (`GeeService`) CLIs no longer probe
+  `/opt/miniconda3` / `/opt/homebrew` first and no longer inject
+  `PYTHONPATH=~/Documents/AI-Hydro/MCP/aihydro-tools`. They share one resolver
+  (`resolveAiHydroPython`): explicit `aihydro.hydro.pythonPath` / `aihydro.gee.pythonPath`
+  setting, then the interpreter behind the registered `ai-hydro` MCP server (command or
+  `aihydro-mcp` shebang), then `VIRTUAL_ENV`, then `python3`/`python` on PATH; the first that
+  can import the package wins. If none can, the error says to `pip install aihydro-tools` or
+  set the setting. New setting `aihydro.hydro.pythonPath`; `aihydro.gee.pythonPath` now
+  defaults to empty. Failed resolutions are not cached.
+
 ### Fixed — Skill installer integrity (vision-2040 slice 1c, ADR-005)
 
 Skill `SKILL.md` text is concatenated into the system prompt, so the install
