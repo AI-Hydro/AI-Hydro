@@ -27,7 +27,17 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - When a tool result is `APPROVAL_REQUIRED`, an "Approve in terminal" action
   opens a terminal with the backend-provided `approval_command` typed but not
   run; a human presses Enter. The extension never signs, holds keys, or
-  writes approvals.
+  writes approvals. The command is rebuilt client-side as
+  `aihydro-approve <session_id> <claim_id>` from the top-level refusal
+  envelope of an ai-hydro result only, after charset validation; the
+  backend-supplied `approval_command` is never used, and invalid ids show an
+  explanation with no pre-filled command.
+- Approved styling requires a `system` or `supplied` trust root, no
+  `unsigned_opt_out` policy and no same-user channel; everything else the gate
+  accepts renders as "Accepted (integrity only)" with the policy shown. New
+  backend states `stale_evidence`, `stale_revision`, `evidence_unchecked`
+  (and drift `evidence_unchecked`) are labelled explicitly as not approved.
+  Hidden minimal rows with a `record_error` still count as failed.
 
 ### Fixed — Skill installer integrity (vision-2040 slice 1c, ADR-005)
 

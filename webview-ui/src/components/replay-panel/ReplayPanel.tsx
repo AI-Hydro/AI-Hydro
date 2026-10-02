@@ -417,6 +417,11 @@ export const ReplayPanel: React.FC = () => {
 		[data, showMinimal],
 	)
 
+	const minimalErrorCount = React.useMemo(
+		() => (data?.entries ?? []).filter((entry) => entry.minimal && entry.record_error).length,
+		[data],
+	)
+
 	const filteredEntries = React.useMemo(() => {
 		if (!data?.entries) {
 			return []
@@ -481,7 +486,12 @@ export const ReplayPanel: React.FC = () => {
 		// inflate "need review"; they are reported separately via the toggle.
 		const total = shownEntries.length
 		const needsReview = shownEntries.filter((entry) => reviewState(entry).needsReview).length
-		const failed = shownEntries.filter((entry) => reviewState(entry).failures > 0 || entry.diff_status === "mismatch").length
+		// Integrity problems are never hidden by the display filter: rows with a
+		// record_error count as failed even when they are hidden minimal rows.
+		const failed = (data?.entries ?? []).filter(
+			(entry) =>
+				!!entry.record_error || (!entry.minimal && (reviewState(entry).failures > 0 || entry.diff_status === "mismatch")),
+		).length
 		const tools = Array.from(new Set(shownEntries.map((entry) => entry.tool_name))).sort()
 		return { total, needsReview, failed, tools }
 	}, [data, shownEntries])
@@ -610,6 +620,7 @@ export const ReplayPanel: React.FC = () => {
 								title="Calls that were recorded without an analysis payload"
 								type="button">
 								{showMinimal ? "Hide" : "Show"} {minimalCount} recorded call{minimalCount !== 1 ? "s" : ""}
+								{minimalErrorCount > 0 ? ` (${minimalErrorCount} with record errors)` : ""}
 							</button>
 						)}
 						<input

@@ -251,6 +251,8 @@ describe("EvidenceBoard", () => {
 			approvalPrincipal: "",
 			approvalPolicy: "",
 			approvalReason: "",
+			approvalRecordedState: "",
+			approvalLiveDigest: "",
 		}
 
 		async function renderWith(fields: Record<string, unknown>) {
@@ -276,7 +278,7 @@ describe("EvidenceBoard", () => {
 			expect(screen.getByTestId("claim-revision").textContent).toBe("r2")
 		})
 
-		for (const state of ["unverifiable", "none", "consumed", ""]) {
+		for (const state of ["unverifiable", "none", "consumed", "stale_evidence", "stale_revision", "evidence_unchecked", ""]) {
 			it(`never renders approval state ${JSON.stringify(state)} as approved`, async () => {
 				await renderWith({ approvalState: state, approvalChannel: "ssh_sig", approvalTrustRoot: "system" })
 				expect(screen.getByTestId("claim-approval")).toHaveAttribute("data-approved", "false")
@@ -284,6 +286,19 @@ describe("EvidenceBoard", () => {
 				expect(screen.queryByText(/^Approved/)).not.toBeInTheDocument()
 			})
 		}
+
+		it("renders user-trust and opt-out approvals as integrity only, with policy, not approved", async () => {
+			await renderWith({
+				approvalState: "approved",
+				approvalForRevisionDigest: "sha256:abc",
+				approvalChannel: "ssh_sig_user_trust",
+				approvalTrustRoot: "user_writable",
+				approvalPolicy: "unsigned_opt_out",
+			})
+			expect(screen.getByTestId("claim-approval")).toHaveAttribute("data-approved", "false")
+			expect(screen.getByTestId("claim-approval").textContent).toContain("Accepted (integrity only)")
+			expect(screen.getByTestId("approval-line").textContent).toContain("policy: unsigned_opt_out")
+		})
 
 		it("surfaces drift and refuses approval issued for a different revision digest", async () => {
 			await renderWith({

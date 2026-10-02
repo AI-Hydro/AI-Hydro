@@ -46,6 +46,8 @@ message ClaimRecord {
     string approval_principal = 23;
     string approval_policy = 24;
     string approval_reason = 25;
+    string approval_recorded_state = 26;  // state recorded at approval time (backend may report)
+    string approval_live_digest = 27;     // digest recomputed from live data (backend may report)
 }
 
 // One claim event pushed from the MCP server via ~/.aihydro/ledger_events/.

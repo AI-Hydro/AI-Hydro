@@ -9,7 +9,7 @@
  * This module deliberately does not import `vscode`; the window API is
  * injected so core code stays host-agnostic and tests can mock it.
  */
-import { type ApprovalRequired, parseApprovalRequired } from "@shared/aihydro/claimApproval"
+import { type ApprovalRequiredResult, parseApprovalRequired } from "@shared/aihydro/claimApproval"
 
 export interface TerminalLike {
 	show(): void
@@ -25,7 +25,6 @@ export const APPROVE_IN_TERMINAL = "Approve in terminal"
 
 /** A command containing any control character (notably CR/LF) could auto-execute when typed. */
 export function isSafeApprovalCommand(command: string): boolean {
-	// biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point
 	return command.trim().length > 0 && !/[\u0000-\u001f\u007f]/.test(command)
 }
 
@@ -40,7 +39,7 @@ export function openApprovalTerminal(command: string, host: Pick<ApprovalWindow,
 	return true
 }
 
-export type ApprovalPrompter = (approval: ApprovalRequired) => void
+export type ApprovalPrompter = (result: ApprovalRequiredResult) => void
 
 let prompter: ApprovalPrompter | undefined
 
@@ -50,30 +49,31 @@ export function setApprovalPrompter(next: ApprovalPrompter | undefined): void {
 
 /** Prompter that offers the action as a notification; the user must click, then press Enter in the terminal. */
 export function createApprovalPrompter(host: ApprovalWindow): ApprovalPrompter {
-	return (approval) => {
-		if (!isSafeApprovalCommand(approval.approvalCommand)) {
-			void host.showWarningMessage("AI-Hydro: approval is required, but the suggested command was not safe to pre-fill.")
+	return (result) => {
+		if (!result.ok) {
+			void host.showWarningMessage(`AI-Hydro: ${result.message}`)
 			return
 		}
+		const { approvalCommand } = result.approval
 		void host
 			.showWarningMessage(
-				`Claim promotion needs your approval. This opens a terminal with \`${approval.approvalCommand}\` typed but not run; review it and press Enter yourself.`,
+				`Claim promotion needs your approval. This opens a terminal with \`${approvalCommand}\` typed but not run; review it and press Enter yourself.`,
 				APPROVE_IN_TERMINAL,
 			)
 			.then((choice) => {
 				if (choice === APPROVE_IN_TERMINAL) {
-					openApprovalTerminal(approval.approvalCommand, host)
+					openApprovalTerminal(approvalCommand, host)
 				}
 			})
 	}
 }
 
-/** Called by the MCP tool handler with a tool result's text; no-op unless it is an APPROVAL_REQUIRED refusal. */
-export function notifyApprovalRequired(resultText: string): void {
+/** Called by the MCP tool handler with a tool result's text and server name; no-op unless it is an APPROVAL_REQUIRED refusal. */
+export function notifyApprovalRequired(resultText: string, serverName: string): void {
 	try {
-		const approval = parseApprovalRequired(resultText)
-		if (approval && prompter) {
-			prompter(approval)
+		const result = parseApprovalRequired(resultText, serverName)
+		if (result && prompter) {
+			prompter(result)
 		}
 	} catch (error) {
 		console.error("[approvalTerminal] prompt failed:", error)

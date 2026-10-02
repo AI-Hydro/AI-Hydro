@@ -7,13 +7,14 @@
  * explicit `approved` state is rendered as NOT approved (fail closed).
  */
 
-export type ApprovalTone = "approved" | "pending" | "untrusted" | "unknown"
+export type ApprovalTone = "approved" | "integrity" | "pending" | "untrusted" | "unknown"
 
 export interface ApprovalInput {
 	state?: string
 	channel?: string
 	trustRoot?: string
 	principal?: string
+	policy?: string
 	reason?: string
 	/** Digest the approval was issued for, and the claim's current revision digest. */
 	forRevisionDigest?: string
@@ -58,12 +59,33 @@ export function describeApproval(input: ApprovalInput): ApprovalDisplay {
 			}
 			const channel = (input.channel ?? "").trim()
 			const trustRoot = (input.trustRoot ?? "").trim()
+			const policy = (input.policy ?? "").trim()
 			const parts = [channel ? channelLabel(channel) : "channel not reported", trustRoot ? `${trustRoot} trust` : ""]
+			const how = parts.filter(Boolean).join(" · ")
+			// Human-verified styling only for a system or supplied trust root, never an opt-out
+			// policy or same-user channel (ADR-002: user_writable trust is integrity-only).
+			const verified =
+				(trustRoot === "system" || trustRoot === "supplied") &&
+				policy !== "unsigned_opt_out" &&
+				channel !== "cli_same_user"
+			if (!verified) {
+				return {
+					approved: false,
+					tone: "integrity",
+					label: "Accepted (integrity only)",
+					detail: [how, policy ? `policy: ${policy}` : "", input.principal ? `principal: ${input.principal}` : ""]
+						.filter(Boolean)
+						.join(" · "),
+				}
+			}
 			return {
 				approved: true,
 				tone: "approved",
-				label: `Approved (${parts.filter(Boolean).join(" · ")})`,
-				detail: input.principal ? `principal: ${input.principal}` : undefined,
+				label: `Approved (${how})`,
+				detail:
+					[policy ? `policy: ${policy}` : "", input.principal ? `principal: ${input.principal}` : ""]
+						.filter(Boolean)
+						.join(" · ") || undefined,
 			}
 		}
 		case "consumed":
@@ -79,6 +101,27 @@ export function describeApproval(input: ApprovalInput): ApprovalDisplay {
 				tone: "untrusted",
 				label: "Approval unverifiable",
 				detail: input.reason || "The approval record could not be verified; treated as not approved.",
+			}
+		case "stale_evidence":
+			return {
+				approved: false,
+				tone: "untrusted",
+				label: "Approval stale: cited evidence changed",
+				detail: input.reason || "The evidence this claim cites changed after it was approved; re-approve.",
+			}
+		case "stale_revision":
+			return {
+				approved: false,
+				tone: "untrusted",
+				label: "Approval stale: claim edited after approval",
+				detail: input.reason || "Claim fields were edited after approval; re-approve the current revision.",
+			}
+		case "evidence_unchecked":
+			return {
+				approved: false,
+				tone: "unknown",
+				label: "Approval unchecked: evidence cannot be verified",
+				detail: input.reason || "Some cited evidence cannot be checked read-only; treated as not approved.",
 			}
 		case "none":
 			return { approved: false, tone: "pending", label: "Not approved", detail: input.reason }
@@ -109,9 +152,11 @@ export function describeDrift(input: DriftInput): DriftDisplay {
 	switch ((input.state ?? "").trim()) {
 		case "in_sync":
 			return {
-				label: "In sync with sealed revision",
-				tone: "ok",
-				detail: input.evidenceChecked === false ? "Linked evidence was not re-checked." : undefined,
+				label:
+					input.evidenceChecked === false
+						? "In sync (fields only; evidence not re-checked)"
+						: "In sync with sealed revision",
+				tone: input.evidenceChecked === false ? "unknown" : "ok",
 			}
 		case "drifted": {
 			const fields = (input.changedFields ?? []).filter(Boolean)
@@ -123,6 +168,12 @@ export function describeDrift(input: DriftInput): DriftDisplay {
 					undefined,
 			}
 		}
+		case "evidence_unchecked":
+			return {
+				label: "Fields in sync; some evidence cannot be checked",
+				tone: "unknown",
+				detail: input.reason,
+			}
 		case "no_history":
 			return { label: "No sealed revision yet", tone: "unknown", detail: input.reason }
 		default:
@@ -144,56 +195,54 @@ export function partitionMinimalRuns<T extends MinimalRunLike>(
 }
 
 export interface ApprovalRequired {
+	sessionId: string
+	claimId: string
+	/** Built client-side from validated ids; never copied from the tool result. */
 	approvalCommand: string
-	message?: string
 }
+
+export type ApprovalRequiredResult = { ok: true; approval: ApprovalRequired } | { ok: false; message: string }
+
+export const APPROVAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 
 /**
- * Detect an APPROVAL_REQUIRED refusal in a tool result's text and extract the
- * backend-provided `approval_command`. Returns undefined for anything else.
- * The command is only ever shown / typed into a terminal; never executed here.
+ * Detect an APPROVAL_REQUIRED refusal. Only the TOP-LEVEL envelope of a result
+ * from the ai-hydro server is considered (no nested search): tool results can
+ * echo agent- or document-supplied data, so a nested refusal is untrusted.
+ * `approval_command` is never used; the command is rebuilt from `session_id`
+ * and `claim_id` after charset validation. Returns undefined when the result
+ * is not a refusal envelope.
  */
-export function parseApprovalRequired(resultText: string): ApprovalRequired | undefined {
-	const text = resultText.replace(/^Error:\n/, "").trim()
-	if (!text.includes("APPROVAL_REQUIRED")) {
+export function parseApprovalRequired(resultText: string, serverName: string): ApprovalRequiredResult | undefined {
+	if (serverName !== "ai-hydro") {
 		return undefined
 	}
-	const candidates: unknown[] = []
+	let value: unknown
 	try {
-		candidates.push(JSON.parse(text))
+		value = JSON.parse(resultText.replace(/^Error:\n/, "").trim())
 	} catch {
-		const start = text.indexOf("{")
-		const end = text.lastIndexOf("}")
-		if (start >= 0 && end > start) {
-			try {
-				candidates.push(JSON.parse(text.slice(start, end + 1)))
-			} catch {
-				// not JSON; fall through
-			}
-		}
-	}
-	for (const candidate of candidates) {
-		const found = findApprovalCommand(candidate, 0)
-		if (found) {
-			return found
-		}
-	}
-	return undefined
-}
-
-function findApprovalCommand(value: unknown, depth: number): ApprovalRequired | undefined {
-	if (depth > 4 || !value || typeof value !== "object" || Array.isArray(value)) {
 		return undefined
 	}
-	const obj = value as Record<string, unknown>
-	if (obj.code === "APPROVAL_REQUIRED" && typeof obj.approval_command === "string" && obj.approval_command.trim()) {
-		return { approvalCommand: obj.approval_command, message: typeof obj.message === "string" ? obj.message : undefined }
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return undefined
 	}
-	for (const nested of Object.values(obj)) {
-		const found = findApprovalCommand(nested, depth + 1)
-		if (found) {
-			return found
+	const envelope = value as Record<string, unknown>
+	if (envelope.code !== "APPROVAL_REQUIRED") {
+		return undefined
+	}
+	const sessionId = envelope.session_id
+	const claimId = envelope.claim_id
+	if (
+		typeof sessionId !== "string" ||
+		typeof claimId !== "string" ||
+		!APPROVAL_ID_PATTERN.test(sessionId) ||
+		!APPROVAL_ID_PATTERN.test(claimId)
+	) {
+		return {
+			ok: false,
+			message:
+				"Approval is required, but the session or claim id is missing or has unexpected characters, so no terminal command was pre-filled. Run aihydro-approve yourself after checking the ids.",
 		}
 	}
-	return undefined
+	return { ok: true, approval: { sessionId, claimId, approvalCommand: `aihydro-approve ${sessionId} ${claimId}` } }
 }

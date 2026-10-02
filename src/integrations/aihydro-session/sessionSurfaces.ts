@@ -38,6 +38,8 @@ export interface ClaimSurfaceRecord {
 	approvalPrincipal: string
 	approvalPolicy: string
 	approvalReason: string
+	approvalRecordedState: string
+	approvalLiveDigest: string
 }
 
 export interface ClaimSurface {
@@ -338,6 +340,8 @@ function normalizeRevisionFields(
 	| "approvalPrincipal"
 	| "approvalPolicy"
 	| "approvalReason"
+	| "approvalRecordedState"
+	| "approvalLiveDigest"
 > {
 	const drift = isRecord(value.revision_drift) ? value.revision_drift : {}
 	const approval = isRecord(value.approval) ? value.approval : {}
@@ -357,6 +361,8 @@ function normalizeRevisionFields(
 		approvalPrincipal: str(approval.principal),
 		approvalPolicy: str(approval.policy),
 		approvalReason: str(approval.reason),
+		approvalRecordedState: str(approval.recorded_state),
+		approvalLiveDigest: str(approval.live_digest),
 	}
 }
 

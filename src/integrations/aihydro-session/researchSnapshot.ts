@@ -6,7 +6,9 @@ export interface ResearchSnapshot {
 	session_id: string
 	session_path: string
 	source: "session" | "capsule"
-	run_log_source: "sqlite" | "legacy_json" | "capsule_json" | "absent"
+	run_log_source: "sqlite" | "sqlite_immutable" | "legacy_json" | "capsule_json" | "absent"
+	/** Where claim revisions were read from; absent on older backends. */
+	revision_source?: "sqlite" | "sqlite_immutable" | "absent" | "capsule" | "error"
 	claims: Record<string, unknown>
 	experiments: Record<string, unknown>
 	runs: Record<string, unknown>[]
@@ -41,7 +43,7 @@ export function parseResearchSnapshot(text: string): ResearchSnapshot {
 		!value.session_id ||
 		typeof value.session_path !== "string" ||
 		!["session", "capsule"].includes(String(value.source)) ||
-		!["sqlite", "legacy_json", "capsule_json", "absent"].includes(String(value.run_log_source)) ||
+		!["sqlite", "sqlite_immutable", "legacy_json", "capsule_json", "absent"].includes(String(value.run_log_source)) ||
 		!isRecord(value.claims) ||
 		!isRecord(value.experiments) ||
 		!Array.isArray(value.runs) ||

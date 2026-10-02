@@ -102,7 +102,7 @@ describe("Replay minimal rows", () => {
 						entries: [
 							row("full1", { key_outputs: { nse: 0.8 } }),
 							row("min1", { minimal: true }),
-							row("min2", { minimal: true }),
+							row("min2", { minimal: true, record_error: "output_digest_missing" }),
 						],
 					},
 				}),
@@ -114,7 +114,13 @@ describe("Replay minimal rows", () => {
 		showRows()
 		expect(screen.getAllByText("tool_full1").length).toBeGreaterThan(0)
 		expect(screen.queryByText("tool_min1")).not.toBeInTheDocument()
-		expect(screen.getByTestId("toggle-minimal-runs").textContent).toBe("Show 2 recorded calls")
+		expect(screen.getByTestId("toggle-minimal-runs").textContent).toBe("Show 2 recorded calls (1 with record errors)")
+	})
+
+	it("counts hidden minimal rows with record_error as failed", () => {
+		showRows()
+		expect(screen.queryByText("tool_min2")).not.toBeInTheDocument()
+		expect(screen.getByText("1 failed")).toBeInTheDocument()
 	})
 
 	it("reveals minimal rows on toggle and labels them as recorded calls", () => {
@@ -122,6 +128,6 @@ describe("Replay minimal rows", () => {
 		fireEvent.click(screen.getByTestId("toggle-minimal-runs"))
 		expect(screen.getAllByText("tool_min1").length).toBeGreaterThan(0)
 		expect(screen.getAllByText("recorded call").length).toBe(2)
-		expect(screen.getByTestId("toggle-minimal-runs").textContent).toBe("Hide 2 recorded calls")
+		expect(screen.getByTestId("toggle-minimal-runs").textContent).toBe("Hide 2 recorded calls (1 with record errors)")
 	})
 })

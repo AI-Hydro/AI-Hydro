@@ -79,6 +79,7 @@ async function copyText(text: string): Promise<void> {
 
 const APPROVAL_TONE_COLOR: Record<ApprovalTone, string> = {
 	approved: "var(--vscode-testing-iconPassed)",
+	integrity: "var(--vscode-foreground)",
 	pending: "var(--vscode-disabledForeground)",
 	untrusted: "var(--vscode-testing-iconFailed)",
 	unknown: "var(--vscode-testing-iconQueued)",
@@ -96,6 +97,7 @@ function claimApproval(claim: ClaimRecord) {
 		channel: claim.approvalChannel,
 		trustRoot: claim.approvalTrustRoot,
 		principal: claim.approvalPrincipal,
+		policy: claim.approvalPolicy,
 		reason: claim.approvalReason,
 		forRevisionDigest: claim.approvalForRevisionDigest,
 		currentRevisionDigest: claim.revisionDigest,
@@ -331,6 +333,13 @@ const RevisionDetail: React.FC<{ claim: ClaimRecord }> = ({ claim }) => {
 					{approval.label}
 					{approval.detail && <span className="opacity-75"> — {approval.detail}</span>}
 				</div>
+				{(claim.approvalRecordedState || claim.approvalLiveDigest) && (
+					<div className="font-mono text-[10px] opacity-70 break-all" data-testid="approval-forensics">
+						{claim.approvalRecordedState && `recorded: ${claim.approvalRecordedState}`}
+						{claim.approvalRecordedState && claim.approvalLiveDigest && " · "}
+						{claim.approvalLiveDigest && `live digest: ${claim.approvalLiveDigest}`}
+					</div>
+				)}
 			</div>
 		</section>
 	)

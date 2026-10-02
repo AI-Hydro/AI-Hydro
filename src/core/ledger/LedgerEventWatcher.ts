@@ -120,6 +120,8 @@ export class LedgerEventWatcher {
 			approvalPrincipal: "",
 			approvalPolicy: "",
 			approvalReason: "",
+			approvalRecordedState: "",
+			approvalLiveDigest: "",
 		}
 
 		const update: ClaimUpdate = {
