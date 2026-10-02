@@ -11,6 +11,28 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Fixed — Skill installer integrity (vision-2040 slice 1c, ADR-005)
+
+Skill `SKILL.md` text is concatenated into the system prompt, so the install
+path is now verified before any content reaches disk or a prompt.
+
+- `installSkill` validates `skillId` against `^[a-z0-9][a-z0-9-_]{0,63}$` and
+  proves the resolved directory stays inside `~/.aihydro/skills/marketplace`
+  (path traversal such as `../x` is rejected before any network or disk work).
+- `skillUrl` must pass the marketplace origin allowlist (the same
+  `assertTrustedMarketplaceUrl` used by modules/courses). Because the live
+  Skills catalog serves `skill_url` from `raw.githubusercontent.com/AI-Hydro/*`
+  (not a GitHub Pages origin), that host is accepted only over https and only
+  under the `AI-Hydro` owner path. Redirects are re-checked against the same
+  policy.
+- Digest: the install request and `Skills/api/skills.json` carry no sha256 yet,
+  so installs are recorded in `installed.json` with the downloaded `sha256` and
+  `verified: false` (and logged as UNVERIFIED). The installer already verifies
+  a supplied digest and refuses a mismatch before writing; it activates when a
+  catalog provides one.
+- `deleteSkill` and `saveSkill` now also refuse ids that resolve outside their
+  source directory (`deleteSkill` previously `rm -rf`'d an unvalidated path).
+
 ### Added — AI-Hydro Studio naming (ADR-004)
 
 - The HTML Preview panel's VS Code tab now reads **AI-Hydro Studio**.

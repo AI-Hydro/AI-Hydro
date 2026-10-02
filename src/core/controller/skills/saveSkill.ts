@@ -1,10 +1,10 @@
 import type { SaveSkillRequest } from "@shared/proto/cline/skills"
 import { SaveSkillResponse, SkillSource } from "@shared/proto/cline/skills"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import type { Controller } from "../index"
 import { updateInstalledRegistry } from "./installSkill"
+import { resolveSkillDir } from "./skillPaths"
 
 function slugify(name: string): string {
 	return name
@@ -19,7 +19,7 @@ export async function saveSkill(_controller: Controller, request: SaveSkillReque
 	const sourceDir = source === SkillSource.AGENT_CREATED ? "agent-created" : "manual"
 
 	try {
-		const skillDir = path.join(os.homedir(), ".aihydro", "skills", sourceDir, skillId)
+		const skillDir = resolveSkillDir(sourceDir, skillId)
 		await fs.mkdir(skillDir, { recursive: true })
 		const localPath = path.join(skillDir, "SKILL.md")
 

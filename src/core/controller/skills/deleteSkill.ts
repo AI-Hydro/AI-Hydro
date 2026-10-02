@@ -5,6 +5,7 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import type { Controller } from "../index"
+import { resolveSkillDir } from "./skillPaths"
 
 export async function deleteSkill(_controller: Controller, request: DeleteSkillRequest): Promise<Empty> {
 	const { skillId, source } = request
@@ -12,7 +13,7 @@ export async function deleteSkill(_controller: Controller, request: DeleteSkillR
 		source === SkillSource.AGENT_CREATED ? "agent-created" : source === SkillSource.MARKETPLACE ? "marketplace" : "manual"
 
 	try {
-		const skillDir = path.join(os.homedir(), ".aihydro", "skills", sourceDir, skillId)
+		const skillDir = resolveSkillDir(sourceDir, skillId)
 		await fs.rm(skillDir, { recursive: true, force: true })
 
 		// Remove from installed.json
