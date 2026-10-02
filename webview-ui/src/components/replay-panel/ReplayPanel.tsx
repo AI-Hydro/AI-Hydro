@@ -1,3 +1,4 @@
+import { partitionMinimalRuns } from "@shared/aihydro/claimApproval"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 
@@ -16,6 +17,9 @@ interface RunEntry {
 	evidence?: Record<string, unknown>
 	diff_status?: "match" | "mismatch" | "missing"
 	diff_notes?: string[]
+	/** Recorded call without an analysis payload (key_outputs is always {}). */
+	minimal?: boolean
+	record_error?: string
 }
 
 interface ReplayData {
@@ -94,6 +98,9 @@ function statusColor(status: string): string {
 }
 
 function runStatus(entry: RunEntry): { icon: string; label: string; color: string } {
+	if (entry.minimal) {
+		return { icon: "codicon-circle-outline", label: "recorded call", color: "var(--vscode-disabledForeground)" }
+	}
 	const state = reviewState(entry)
 	if (state.failures > 0 || entry.diff_status === "mismatch") {
 		return { icon: "codicon-error", label: "failed", color: "var(--vscode-testing-iconFailed)" }
@@ -232,6 +239,17 @@ const RunDetail: React.FC<{ entry: RunEntry | null; data: ReplayData }> = ({ ent
 				</div>
 			</div>
 
+			{entry.minimal && (
+				<p className="mb-3 opacity-70" data-testid="minimal-run-note">
+					Recorded call only: no analysis outputs were stored for this row.
+				</p>
+			)}
+			{entry.record_error && (
+				<p className="mb-3 text-[var(--vscode-testing-iconFailed)]" data-testid="record-error">
+					Record error: {entry.record_error}
+				</p>
+			)}
+
 			{outputs.length > 0 && (
 				<section className="mb-3">
 					<div className="text-[9px] font-semibold uppercase tracking-wide opacity-60 mb-1">Key outputs</div>
@@ -317,6 +335,7 @@ export const ReplayPanel: React.FC = () => {
 	const [statusFilter, setStatusFilter] = useState<ReviewFilter>("all")
 	const [recentSessions, setRecentSessions] = useState<string[]>([])
 	const [focusRunId, setFocusRunId] = useState<string | null>(null)
+	const [showMinimal, setShowMinimal] = useState(false)
 	const containerRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
@@ -338,10 +357,13 @@ export const ReplayPanel: React.FC = () => {
 				setLoading(false)
 				setError(null)
 				const targetRun = String(msg.focus_run_id ?? focusRunId ?? "")
+				if (entries.some((entry: RunEntry) => entry.run_id === targetRun && entry.minimal === true)) {
+					setShowMinimal(true)
+				}
 				setSelectedRunId(
 					targetRun && entries.some((entry: RunEntry) => entry.run_id === targetRun)
 						? targetRun
-						: (entries[0]?.run_id ?? null),
+						: (entries.find((entry: RunEntry) => entry.minimal !== true)?.run_id ?? null),
 				)
 			} else if (msg.type === "replay_error") {
 				setError(msg.message ?? "Unknown error")
@@ -390,12 +412,17 @@ export const ReplayPanel: React.FC = () => {
 		postMessage({ type: "load_replay", session_id: "demo-reproducibility-cockpit" })
 	}, [])
 
+	const { visible: shownEntries, minimalCount } = React.useMemo(
+		() => partitionMinimalRuns(data?.entries ?? [], showMinimal),
+		[data, showMinimal],
+	)
+
 	const filteredEntries = React.useMemo(() => {
 		if (!data?.entries) {
 			return []
 		}
 		const q = filterTool.toLowerCase().trim()
-		return data.entries.filter((entry) => {
+		return shownEntries.filter((entry) => {
 			const state = reviewState(entry)
 			if (statusFilter === "failed" && state.failures === 0 && entry.diff_status !== "mismatch") {
 				return false
@@ -414,7 +441,7 @@ export const ReplayPanel: React.FC = () => {
 					.includes(q)
 			)
 		})
-	}, [data, filterTool, statusFilter])
+	}, [data, shownEntries, filterTool, statusFilter])
 
 	useEffect(() => {
 		if (selectedRunId && filteredEntries.some((entry) => entry.run_id === selectedRunId)) {
@@ -450,14 +477,16 @@ export const ReplayPanel: React.FC = () => {
 		if (!data?.entries.length) {
 			return null
 		}
-		const total = data.entries.length
-		const needsReview = data.entries.filter((entry) => reviewState(entry).needsReview).length
-		const failed = data.entries.filter((entry) => reviewState(entry).failures > 0 || entry.diff_status === "mismatch").length
-		const tools = Array.from(new Set(data.entries.map((entry) => entry.tool_name))).sort()
+		// Summary counts follow the visible rows so hidden minimal calls never
+		// inflate "need review"; they are reported separately via the toggle.
+		const total = shownEntries.length
+		const needsReview = shownEntries.filter((entry) => reviewState(entry).needsReview).length
+		const failed = shownEntries.filter((entry) => reviewState(entry).failures > 0 || entry.diff_status === "mismatch").length
+		const tools = Array.from(new Set(shownEntries.map((entry) => entry.tool_name))).sort()
 		return { total, needsReview, failed, tools }
-	}, [data])
+	}, [data, shownEntries])
 
-	const selectedEntry = data?.entries.find((entry) => entry.run_id === selectedRunId) ?? null
+	const selectedEntry = filteredEntries.find((entry) => entry.run_id === selectedRunId) ?? null
 
 	return (
 		<div
@@ -572,6 +601,17 @@ export const ReplayPanel: React.FC = () => {
 								{mode === "all" ? "All" : mode === "review" ? "Needs review" : "Failed"}
 							</button>
 						))}
+						{minimalCount > 0 && (
+							<button
+								aria-pressed={showMinimal}
+								className={`${BUTTON_BASE} ${showMinimal ? "border-[var(--vscode-focusBorder)] shadow-[0_0_0_1px_var(--vscode-focusBorder)]" : ""}`}
+								data-testid="toggle-minimal-runs"
+								onClick={() => setShowMinimal((v) => !v)}
+								title="Calls that were recorded without an analysis payload"
+								type="button">
+								{showMinimal ? "Hide" : "Show"} {minimalCount} recorded call{minimalCount !== 1 ? "s" : ""}
+							</button>
+						)}
 						<input
 							className="text-[10px] rounded border border-[var(--vscode-panel-border)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] px-1.5 py-0.5 flex-1"
 							onChange={(e) => setFilterTool(e.target.value)}

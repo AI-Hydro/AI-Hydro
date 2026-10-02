@@ -22,6 +22,7 @@ import { VscodeExperimentTableProvider } from "./hosts/vscode/VscodeExperimentTa
 import { VscodeHtmlPreviewProvider } from "./hosts/vscode/VscodeHtmlPreviewProvider"
 import { VscodeMapPanelProvider } from "./hosts/vscode/VscodeMapPanelProvider"
 import { VscodeReplayProvider } from "./hosts/vscode/VscodeReplayProvider"
+import { createApprovalPrompter, setApprovalPrompter } from "./integrations/aihydro-session/approvalTerminal"
 import { GeeService } from "./services/gee/GeeService"
 import { GeeTileProxyService } from "./services/gee/GeeTileProxyService"
 import type { GeeProjectInfo, GeeStatusResult } from "./services/gee/types"
@@ -267,6 +268,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	VscodeExperimentTableProvider.initialize(context, webview.controller)
 	VscodeReplayProvider.initialize(context, webview.controller)
 	VscodeEvidenceBoardProvider.initialize(context, webview.controller)
+
+	// ADR-002b A4: offer "Approve in terminal" on APPROVAL_REQUIRED refusals (types the command; human presses Enter).
+	setApprovalPrompter(createApprovalPrompter(vscode.window))
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.MapButton, async () => {

@@ -11,6 +11,24 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Added — Revision/approval surfaces and MCP context `_meta` (vision-2040 slice 2 P4, ADR-002b A4)
+
+- Evidence Board shows each claim's sealed revision, drift state and approval
+  state. Only an explicit `approved` state is styled as approved (with
+  channel and trust root, e.g. "signed · system trust"); `none`, `consumed`,
+  `unverifiable`, unreported, or an approval issued for a different revision
+  digest are never shown as approved.
+- Session Replay hides minimal recorded-call rows by default behind a
+  "Show N recorded calls" toggle; run/claim normalisation carries the new
+  backend fields additively and tolerates their absence.
+- ai-hydro tool calls now also send MCP request `_meta["aihydro/context"]`
+  (`chat_id`, `workspace`, `client: "vscode"`); the legacy hidden
+  `_chat_id`/`_workspace` arguments are kept for one release.
+- When a tool result is `APPROVAL_REQUIRED`, an "Approve in terminal" action
+  opens a terminal with the backend-provided `approval_command` typed but not
+  run; a human presses Enter. The extension never signs, holds keys, or
+  writes approvals.
+
 ### Fixed — Skill installer integrity (vision-2040 slice 1c, ADR-005)
 
 Skill `SKILL.md` text is concatenated into the system prompt, so the install

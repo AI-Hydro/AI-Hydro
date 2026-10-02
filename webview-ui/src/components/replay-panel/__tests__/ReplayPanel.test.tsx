@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ReplayPanel } from "../ReplayPanel"
 
@@ -78,5 +78,50 @@ describe("Replay recorded evidence", () => {
 		)
 		expect(screen.getByText(/No retained run log/)).toBeInTheDocument()
 		expect(screen.queryByText("recorded checks passed")).not.toBeInTheDocument()
+	})
+})
+
+describe("Replay minimal rows", () => {
+	function showRows() {
+		render(<ReplayPanel />)
+		const row = (run_id: string, extra: Record<string, unknown>) => ({
+			run_id,
+			session_id: "synthetic",
+			tool_name: `tool_${run_id}`,
+			timestamp: "2026-01-01T12:00:00Z",
+			key_outputs: {},
+			...extra,
+		})
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: {
+						type: "replay_data",
+						session_id: "synthetic",
+						source: "session",
+						entries: [
+							row("full1", { key_outputs: { nse: 0.8 } }),
+							row("min1", { minimal: true }),
+							row("min2", { minimal: true }),
+						],
+					},
+				}),
+			),
+		)
+	}
+
+	it("hides minimal rows by default and offers a counted toggle", () => {
+		showRows()
+		expect(screen.getAllByText("tool_full1").length).toBeGreaterThan(0)
+		expect(screen.queryByText("tool_min1")).not.toBeInTheDocument()
+		expect(screen.getByTestId("toggle-minimal-runs").textContent).toBe("Show 2 recorded calls")
+	})
+
+	it("reveals minimal rows on toggle and labels them as recorded calls", () => {
+		showRows()
+		fireEvent.click(screen.getByTestId("toggle-minimal-runs"))
+		expect(screen.getAllByText("tool_min1").length).toBeGreaterThan(0)
+		expect(screen.getAllByText("recorded call").length).toBe(2)
+		expect(screen.getByTestId("toggle-minimal-runs").textContent).toBe("Hide 2 recorded calls")
 	})
 })

@@ -233,4 +233,70 @@ describe("EvidenceBoard", () => {
 		)
 		expect(await screen.findByText("No main webview instance — cannot start an agent task")).toBeInTheDocument()
 	})
+
+	describe("revision and approval state", () => {
+		const REVISION_FIELDS = {
+			revision: 2,
+			revisionDigest: "sha256:abc",
+			historyLen: 2,
+			revisionError: "",
+			driftState: "in_sync",
+			driftReason: "",
+			driftChangedFields: [],
+			driftEvidenceChecked: true,
+			approvalState: "",
+			approvalForRevisionDigest: "",
+			approvalChannel: "",
+			approvalTrustRoot: "",
+			approvalPrincipal: "",
+			approvalPolicy: "",
+			approvalReason: "",
+		}
+
+		async function renderWith(fields: Record<string, unknown>) {
+			getLedgerStateMock.mockResolvedValue({
+				sessionId: "demo-reproducibility-cockpit",
+				claims: [{ ...SUPPORTED_CLAIM, ...REVISION_FIELDS, ...fields }],
+				updatedAtMs: Date.now(),
+			})
+			renderBoard()
+			await screen.findByTestId("claim-approval")
+		}
+
+		it("shows signed approval with channel and trust root, plus the revision", async () => {
+			await renderWith({
+				approvalState: "approved",
+				approvalForRevisionDigest: "sha256:abc",
+				approvalChannel: "ssh_sig",
+				approvalTrustRoot: "system",
+			})
+			const card = screen.getByTestId("claim-approval")
+			expect(card).toHaveAttribute("data-approved", "true")
+			expect(card.textContent).toContain("signed · system trust")
+			expect(screen.getByTestId("claim-revision").textContent).toBe("r2")
+		})
+
+		for (const state of ["unverifiable", "none", "consumed", ""]) {
+			it(`never renders approval state ${JSON.stringify(state)} as approved`, async () => {
+				await renderWith({ approvalState: state, approvalChannel: "ssh_sig", approvalTrustRoot: "system" })
+				expect(screen.getByTestId("claim-approval")).toHaveAttribute("data-approved", "false")
+				expect(screen.getByTestId("approval-line")).toHaveAttribute("data-approved", "false")
+				expect(screen.queryByText(/^Approved/)).not.toBeInTheDocument()
+			})
+		}
+
+		it("surfaces drift and refuses approval issued for a different revision digest", async () => {
+			await renderWith({
+				driftState: "drifted",
+				driftChangedFields: ["statement"],
+				approvalState: "approved",
+				approvalForRevisionDigest: "sha256:old",
+				approvalChannel: "ssh_sig",
+				approvalTrustRoot: "system",
+			})
+			expect(screen.getByTestId("claim-drift")).toBeInTheDocument()
+			expect(screen.getByTestId("drift-line").textContent).toContain("changed: statement")
+			expect(screen.getByTestId("approval-line")).toHaveAttribute("data-approved", "false")
+		})
+	})
 })

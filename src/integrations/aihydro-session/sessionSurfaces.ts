@@ -21,6 +21,23 @@ export interface ClaimSurfaceRecord {
 	updatedAt: string
 	evidenceSpans: EvidenceSpanSurface[]
 	limitations: string[]
+	// Revision / drift / approval (slice 2 + ADR-002b). Flat to match the
+	// ClaimRecord proto. Empty / 0 / false = backend did not report the field.
+	revision: number
+	revisionDigest: string
+	historyLen: number
+	revisionError: string
+	driftState: string
+	driftReason: string
+	driftChangedFields: string[]
+	driftEvidenceChecked: boolean
+	approvalState: string
+	approvalForRevisionDigest: string
+	approvalChannel: string
+	approvalTrustRoot: string
+	approvalPrincipal: string
+	approvalPolicy: string
+	approvalReason: string
 }
 
 export interface ClaimSurface {
@@ -76,6 +93,11 @@ export interface RunEntry {
 	evidence?: Record<string, unknown>
 	diff_status?: "match" | "mismatch" | "missing"
 	diff_notes?: string[]
+	/** Recorded call with no analysis payload; key_outputs is always {} for these. */
+	minimal?: boolean
+	record_error?: string
+	/** Full persisted record as reported by the backend (display only). */
+	record?: Record<string, unknown>
 }
 
 export interface ReplaySurface {
@@ -215,6 +237,11 @@ function normalizeRunEntry(value: unknown, fallbackRunId: string, fallbackSessio
 			? (String(value.diff_status) as RunEntry["diff_status"])
 			: undefined,
 		diff_notes: Array.isArray(value.diff_notes) ? value.diff_notes.map(String) : undefined,
+		minimal: value.minimal === true ? true : undefined,
+		// Minimal rows carry no outputs by contract; never surface stale ones.
+		...(value.minimal === true ? { key_outputs: {} } : {}),
+		record_error: typeof value.record_error === "string" && value.record_error ? value.record_error : undefined,
+		record: isRecord(value.record) ? value.record : undefined,
 	}
 }
 
@@ -279,6 +306,57 @@ function normalizeClaimRecord(claimId: string, value: unknown, fallbackSessionId
 		updatedAt: String(value.updated_at ?? value.updatedAt ?? ""),
 		evidenceSpans: normalizedSpans,
 		limitations,
+		...normalizeRevisionFields(value),
+	}
+}
+
+function str(value: unknown): string {
+	return typeof value === "string" ? value : ""
+}
+
+function count(value: unknown): number {
+	return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
+}
+
+/** Tolerant of absence: older backends report none of these. */
+function normalizeRevisionFields(
+	value: Record<string, unknown>,
+): Pick<
+	ClaimSurfaceRecord,
+	| "revision"
+	| "revisionDigest"
+	| "historyLen"
+	| "revisionError"
+	| "driftState"
+	| "driftReason"
+	| "driftChangedFields"
+	| "driftEvidenceChecked"
+	| "approvalState"
+	| "approvalForRevisionDigest"
+	| "approvalChannel"
+	| "approvalTrustRoot"
+	| "approvalPrincipal"
+	| "approvalPolicy"
+	| "approvalReason"
+> {
+	const drift = isRecord(value.revision_drift) ? value.revision_drift : {}
+	const approval = isRecord(value.approval) ? value.approval : {}
+	return {
+		revision: count(value.revision),
+		revisionDigest: str(value.revision_digest),
+		historyLen: count(value.history_len),
+		revisionError: str(value.revision_error),
+		driftState: str(drift.state),
+		driftReason: str(value.revision_drift_reason) || str(drift.reason),
+		driftChangedFields: Array.isArray(drift.changed_fields) ? drift.changed_fields.map(String) : [],
+		driftEvidenceChecked: drift.evidence_checked === true,
+		approvalState: str(approval.state),
+		approvalForRevisionDigest: str(approval.for_revision_digest),
+		approvalChannel: str(approval.channel),
+		approvalTrustRoot: str(approval.trust_root),
+		approvalPrincipal: str(approval.principal),
+		approvalPolicy: str(approval.policy),
+		approvalReason: str(approval.reason),
 	}
 }
 
@@ -301,6 +379,7 @@ function synthesizeEvidenceCandidates(entries: RunEntry[], sessionId: string): C
 			},
 		],
 		limitations: ["Auto-generated evidence candidate; not a user-authored scientific claim."],
+		...normalizeRevisionFields({}),
 	}))
 }
 

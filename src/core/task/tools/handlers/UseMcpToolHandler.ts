@@ -1,7 +1,9 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { AiHydroAsk, AiHydroAskUseMcpServer } from "@shared/ExtensionMessage"
+import { buildAiHydroCallContext } from "@/core/mcp/aihydroContext"
 import { HostProvider } from "@/hosts/host-provider"
+import { notifyApprovalRequired } from "@/integrations/aihydro-session/approvalTerminal"
 import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
@@ -136,6 +138,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			// Both fields are stripped server-side before reaching any tool parameter;
 			// they never appear in tool schemas or LLM context.
 			let argsWithChatId = parsedArguments
+			let callMeta: Record<string, unknown> | undefined
 			if (server_name === "ai-hydro" && config.ulid) {
 				// Workspace: use HostProvider abstraction (VS Code workspace folder
 				// visible in the Explorer), fall back to the task cwd.
@@ -148,15 +151,21 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 				} catch {
 					// HostProvider unavailable (test env, non-VS Code host) — keep cwd
 				}
-				argsWithChatId = {
-					...(parsedArguments ?? {}),
-					_chat_id: config.ulid,
-					...(workspaceRoot ? { _workspace: workspaceRoot } : {}),
-				}
+				// Also sent as MCP request _meta["aihydro/context"]; the legacy
+				// arguments stay for one release (slice 2 P4 / ADR-004 amendment).
+				const callContext = buildAiHydroCallContext(parsedArguments, config.ulid, workspaceRoot)
+				argsWithChatId = callContext.args
+				callMeta = callContext.meta
 			}
 
 			// Execute the MCP tool
-			const toolResult = await config.services.mcpHub.callTool(server_name, tool_name, argsWithChatId, config.ulid)
+			const toolResult = await config.services.mcpHub.callTool(
+				server_name,
+				tool_name,
+				argsWithChatId,
+				config.ulid,
+				callMeta,
+			)
 
 			// Check for any pending notifications after the tool call
 			const notificationsAfter = config.services.mcpHub.getPendingNotifications()
@@ -185,6 +194,12 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 						})
 						.filter(Boolean)
 						.join("\n\n") || "(No response)"
+
+			// ADR-002b A4: an APPROVAL_REQUIRED refusal offers "Approve in
+			// terminal" (types the command; the human presses Enter). No signing here.
+			if (server_name === "ai-hydro") {
+				notifyApprovalRequired(toolResultText)
+			}
 
 			// webview extracts images from the text response to display in the UI
 			const toolResultToDisplay = toolResultText + toolResultImages?.map((image: any) => `\n\n${image}`).join("")
