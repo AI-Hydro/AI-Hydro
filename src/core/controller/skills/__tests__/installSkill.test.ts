@@ -1,11 +1,13 @@
 import { expect } from "chai"
 import { createHash } from "crypto"
 import * as fs from "fs/promises"
+import * as http from "http"
 import { afterEach, beforeEach, describe, it } from "mocha"
+import type { AddressInfo } from "net"
 import * as os from "os"
 import * as path from "path"
-import { installSkillVerified } from "../installSkill"
-import { resolveSkillDir } from "../skillPaths"
+import { fetchSkillText, installSkillVerified } from "../installSkill"
+import { MAX_SKILL_BYTES, resolveSkillDir } from "../skillPaths"
 
 const GOOD_URL = "https://raw.githubusercontent.com/AI-Hydro/Skills/main/skills/baseflow-separation/SKILL.md"
 const SKILLS_PAGES_URL = "https://ai-hydro.github.io/Skills/skills/baseflow-separation/SKILL.md"
@@ -136,24 +138,78 @@ describe("installSkillVerified", () => {
 		}
 	})
 
-	for (const bad of [
-		"https://raw.githubusercontent.com/evil-org/Skills/main/SKILL.md",
-		"https://raw.githubusercontent.com/AI-Hydro-evil/Skills/main/SKILL.md",
-		"http://raw.githubusercontent.com/AI-Hydro/Skills/main/SKILL.md",
-		"https://AI-Hydro@raw.githubusercontent.com/evil/x/main/SKILL.md",
-		"https://raw.githubusercontent.com.evil.com/AI-Hydro/Skills/main/SKILL.md",
-	]) {
-		it(`rejects raw.githubusercontent lookalike ${bad}`, async () => {
-			let err: Error | undefined
-			try {
-				await installSkillVerified("baseflow-separation", bad, "x", undefined, { homeDir: home, fetchText })
-			} catch (e) {
-				err = e as Error
+	it("rejects a fork-SHA raw URL (unmerged PR content) before any fetch or write", async () => {
+		const url = "https://raw.githubusercontent.com/AI-Hydro/Skills/0123456789abcdef0123456789abcdef01234567/evil/SKILL.md"
+		let err: Error | undefined
+		try {
+			await installSkillVerified("baseflow-separation", url, "x", undefined, { homeDir: home, fetchText })
+		} catch (e) {
+			err = e as Error
+		}
+		expect(err?.message).to.match(/allowlist/)
+		expect(fetched).to.deep.equal([])
+	})
+
+	it("rejects an oversized SKILL.md and writes nothing", async () => {
+		const huge = async () => "x".repeat(MAX_SKILL_BYTES + 1)
+		let err: Error | undefined
+		try {
+			await installSkillVerified("baseflow-separation", SKILLS_PAGES_URL, "x", undefined, {
+				homeDir: home,
+				fetchText: huge,
+			})
+		} catch (e) {
+			err = e as Error
+		}
+		expect(err?.message).to.match(/exceeds/)
+		expect(await exists(path.join(home, ".aihydro"))).to.equal(false)
+	})
+})
+
+describe("fetchSkillText (real axios against a local server)", () => {
+	let server: http.Server
+	let base: string
+	beforeEach(async () => {
+		server = http.createServer((req, res) => {
+			if (req.url === "/redirect") {
+				res.writeHead(302, { Location: "https://evil.example.com/SKILL.md" })
+				res.end()
+			} else if (req.url === "/big") {
+				res.writeHead(200, { "Content-Type": "text/plain" })
+				res.end("x".repeat(MAX_SKILL_BYTES + 1024))
+			} else {
+				res.writeHead(200, { "Content-Type": "text/plain" })
+				res.end("small body")
 			}
-			expect(err?.message).to.match(/allowlist/)
-			expect(fetched).to.deep.equal([])
 		})
-	}
+		await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+		base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+	})
+	afterEach(async () => {
+		await new Promise((resolve) => server.close(resolve))
+	})
+
+	it("returns a small body", async () => {
+		expect(await fetchSkillText(`${base}/ok`)).to.equal("small body")
+	})
+	it("refuses a redirect that leaves the allowlist (redirect hook is live)", async () => {
+		let err: Error | undefined
+		try {
+			await fetchSkillText(`${base}/redirect`)
+		} catch (e) {
+			err = e as Error
+		}
+		expect(err?.message).to.match(/installSkill redirect: origin not in the marketplace allowlist/)
+	})
+	it("aborts a response above the size cap", async () => {
+		let err: Error | undefined
+		try {
+			await fetchSkillText(`${base}/big`)
+		} catch (e) {
+			err = e as Error
+		}
+		expect(err?.message).to.match(/maxContentLength/)
+	})
 })
 
 describe("resolveSkillDir", () => {

@@ -21,15 +21,27 @@ path is now verified before any content reaches disk or a prompt.
   (path traversal such as `../x` is rejected before any network or disk work).
 - `skillUrl` must pass the marketplace origin allowlist (the same
   `assertTrustedMarketplaceUrl` used by modules/courses). Because the live
-  Skills catalog serves `skill_url` from `raw.githubusercontent.com/AI-Hydro/*`
-  (not a GitHub Pages origin), that host is accepted only over https and only
-  under the `AI-Hydro` owner path. Redirects are re-checked against the same
-  policy.
+  Skills catalog serves `skill_url` from `raw.githubusercontent.com`, that
+  host is accepted only under an explicit repo + named-branch table:
+  `AI-Hydro/Skills/main/` and `AI-Hydro/swatplus-builder/main/`. Other repos,
+  other refs (including 40-hex SHAs, which GitHub serves for unmerged fork
+  PRs under the upstream path), percent-encoding, dot segments, ports,
+  userinfo, queries and fragments are rejected. Redirects are re-checked
+  against the same policy (fail closed), and downloads are capped at 1 MiB.
 - Digest: the install request and `Skills/api/skills.json` carry no sha256 yet,
   so installs are recorded in `installed.json` with the downloaded `sha256` and
   `verified: false` (and logged as UNVERIFIED). The installer already verifies
   a supplied digest and refuses a mismatch before writing; it activates when a
   catalog provides one.
+- Injection-time re-check (`skills.ts`): before a skill's text enters the
+  system prompt its file must resolve (symlinks included) inside
+  `~/.aihydro/skills/<source>/`, and if `installed.json` recorded a `sha256`
+  the file must still hash to it; otherwise the skill is skipped and logged.
+  Skills installed without a catalog digest (`verified: false`, i.e. all
+  installs until the Skills catalog ships sha256) are still injected, with a
+  one-time UNVERIFIED log line per skill. This is integrity against later
+  tampering, not authenticity: an unverified download is only as trusted as
+  its origin.
 - `deleteSkill` and `saveSkill` now also refuse ids that resolve outside their
   source directory (`deleteSkill` previously `rm -rf`'d an unvalidated path).
 

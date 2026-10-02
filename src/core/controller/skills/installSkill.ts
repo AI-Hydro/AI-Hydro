@@ -1,12 +1,11 @@
 import type { InstallSkillRequest } from "@shared/proto/cline/skills"
 import { InstallSkillResponse, SkillSource } from "@shared/proto/cline/skills"
 import axios from "axios"
-import { createHash } from "crypto"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
 import type { Controller } from "../index"
-import { assertValidMarketplaceSkillId, resolveSkillDir, skillsRoot } from "./skillPaths"
+import { assertValidMarketplaceSkillId, MAX_SKILL_BYTES, resolveSkillDir, sha256Digest, skillsRoot } from "./skillPaths"
 import { assertTrustedSkillUrl } from "./skillUrlPolicy"
 
 export interface SkillIntegrity {
@@ -22,10 +21,6 @@ export interface InstallSkillDeps {
 	fetchText?: (url: string) => Promise<string>
 }
 
-function sha256Of(text: string): string {
-	return `sha256:${createHash("sha256").update(text, "utf-8").digest("hex")}`
-}
-
 function normalizeDigest(digest: string): string {
 	const hex = digest
 		.trim()
@@ -37,15 +32,16 @@ function normalizeDigest(digest: string): string {
 	return `sha256:${hex}`
 }
 
-async function defaultFetchText(url: string): Promise<string> {
+export async function fetchSkillText(url: string): Promise<string> {
 	const response = await axios.get(url, {
 		responseType: "text",
 		timeout: 30000,
+		maxContentLength: MAX_SKILL_BYTES,
+		maxBodyLength: MAX_SKILL_BYTES,
 		// A redirect must not carry the download off the allowlisted origins.
 		beforeRedirect: (options: { href?: string }) => {
-			if (options.href) {
-				assertTrustedSkillUrl(options.href, "installSkill redirect")
-			}
+			// Fail closed: a redirect whose target cannot be read is refused.
+			assertTrustedSkillUrl(options.href ?? "", "installSkill redirect")
 		},
 	})
 	return typeof response.data === "string" ? response.data : String(response.data)
@@ -70,8 +66,11 @@ export async function installSkillVerified(
 	assertTrustedSkillUrl(skillUrl, "installSkill skillUrl")
 	const expected = expectedSha256 ? normalizeDigest(expectedSha256) : undefined
 
-	const content = await (deps.fetchText ?? defaultFetchText)(skillUrl)
-	const actual = sha256Of(content)
+	const content = await (deps.fetchText ?? fetchSkillText)(skillUrl)
+	if (Buffer.byteLength(content, "utf-8") > MAX_SKILL_BYTES) {
+		throw new Error(`SKILL.md for ${skillId} exceeds the ${MAX_SKILL_BYTES} byte limit`)
+	}
+	const actual = sha256Digest(content)
 	if (expected && expected !== actual) {
 		throw new Error(`SKILL.md digest mismatch for ${skillId}: expected ${expected}, got ${actual}`)
 	}
