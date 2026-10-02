@@ -277,6 +277,9 @@ stateCourseE2E(
 		let shell = await waitForShell(page)
 		let artifact = await waitForCellFrame(page, "fixture-state-create")
 
+		// PR 5: module metadata header — status badge from course.json (module 2 has none).
+		await expect(shell.getByTitle("Editorial status: Canonical")).toBeVisible()
+
 		const lockedNext = shell.getByTitle(/Locked — complete prerequisite/)
 		await expect(lockedNext).toBeDisabled()
 		await setStorage(artifact, "125")

@@ -1,5 +1,23 @@
+import type { HtmlPreviewItem } from "@shared/proto/cline/html_preview"
 import { describe, expect, it } from "vitest"
-import { applyInstalledPackCsp, buildInstalledPackCsp, INSTALLED_PACK_CSP } from "../installedPackCsp"
+import { applyInstalledPackCsp, buildInstalledPackCsp, INSTALLED_PACK_CSP, learningPackScopeFromItem } from "../installedPackCsp"
+
+function makeItem(overrides: Partial<HtmlPreviewItem> = {}): HtmlPreviewItem {
+	return {
+		id: "file_x",
+		title: "module.html",
+		htmlContent: "",
+		filePath: "/packs/hmfp/modules/one/module.html",
+		interactive: false,
+		metadata: {},
+		webviewUri: "",
+		dirUri: "",
+		contentHash: "",
+		// HtmlPreviewMode.INTERACTIVE is the generated protobuf value 2.
+		resolvedMode: 2 as HtmlPreviewItem["resolvedMode"],
+		...overrides,
+	}
+}
 
 describe("installed Learning Pack CSP", () => {
 	it("blocks every external resource class while retaining inline bridge and embedded assets", () => {
@@ -43,8 +61,54 @@ describe("installed Learning Pack CSP", () => {
 		expect(csp).to.contain("img-src data: blob: https://file+.vscode-resource.vscode-cdn.net")
 		expect(csp).to.contain("connect-src 'none'")
 		expect(csp).not.to.contain("evil.invalid")
-		const secured = applyInstalledPackCsp("<html><head><base href=\"https://evil.invalid/\"></head></html>", dirUri)
+		const secured = applyInstalledPackCsp('<html><head><base href="https://evil.invalid/"></head></html>', dirUri)
 		expect(secured).to.contain(`<base href="${dirUri}/">`)
 		expect(secured).not.to.contain("evil.invalid")
+	})
+
+	it("threads optional version and provenance metadata into the scope when present", () => {
+		const withProvenance = makeItem({
+			metadata: {
+				artifactKind: "learning-pack-v1",
+				learningPackId: "hmfp",
+				learningPackCourseId: "hydrologic-modeling",
+				learningPackEdition: "student",
+				learningPackModuleId: "water-balance",
+				learningPackVersion: "1.2.0",
+				learningPackSourceCommit: "a".repeat(40),
+				learningPackBuildKind: "release",
+			},
+		})
+		expect(learningPackScopeFromItem(withProvenance)).to.deep.equal({
+			packId: "hmfp",
+			courseId: "hydrologic-modeling",
+			edition: "student",
+			moduleId: "water-balance",
+			version: "1.2.0",
+			sourceCommit: "a".repeat(40),
+			buildKind: "release",
+		})
+	})
+
+	it("omits version and provenance fields for packs registered before this metadata existed", () => {
+		const legacy = makeItem({
+			metadata: {
+				artifactKind: "learning-pack-v1",
+				learningPackId: "hmfp",
+				learningPackCourseId: "hydrologic-modeling",
+				learningPackEdition: "student",
+				learningPackModuleId: "water-balance",
+			},
+		})
+		const scope = learningPackScopeFromItem(legacy)
+		expect(scope).to.deep.equal({
+			packId: "hmfp",
+			courseId: "hydrologic-modeling",
+			edition: "student",
+			moduleId: "water-balance",
+		})
+		expect(scope).not.to.have.property("version")
+		expect(scope).not.to.have.property("sourceCommit")
+		expect(scope).not.to.have.property("buildKind")
 	})
 })

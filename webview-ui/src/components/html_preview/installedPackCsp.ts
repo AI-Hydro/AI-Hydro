@@ -8,6 +8,10 @@ export interface LearningPackScope {
 	courseId: string
 	edition: "student" | "instructor"
 	moduleId: string
+	/** Optional chrome-display fields — absent on packs registered before this metadata existed. */
+	version?: string
+	sourceCommit?: string
+	buildKind?: string
 }
 
 /**
@@ -72,6 +76,9 @@ export function learningPackScopeFromItem(item?: HtmlPreviewItem): LearningPackS
 		courseId: metadata.learningPackCourseId,
 		edition,
 		moduleId: metadata.learningPackModuleId,
+		...(metadata.learningPackVersion ? { version: metadata.learningPackVersion } : {}),
+		...(metadata.learningPackSourceCommit ? { sourceCommit: metadata.learningPackSourceCommit } : {}),
+		...(metadata.learningPackBuildKind ? { buildKind: metadata.learningPackBuildKind } : {}),
 	}
 }
 
