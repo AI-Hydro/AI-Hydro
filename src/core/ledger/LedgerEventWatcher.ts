@@ -31,6 +31,9 @@ interface LedgerEventPayload {
 	}>
 	limitations?: string[]
 	created_at?: string
+	/** The claim's sealed revision after the write (backend >= ledger-event-rev). */
+	revision?: number
+	revision_digest?: string
 }
 
 export class LedgerEventWatcher {
@@ -103,10 +106,10 @@ export class LedgerEventWatcher {
 				description: e.description ?? "",
 			})),
 			limitations: event.limitations ?? [],
-			// Ledger events do not carry revision/approval state; unreported
-			// is displayed as "not reported" (never as approved).
-			revision: 0,
-			revisionDigest: "",
+			// Events carry the new revision when the backend reports it; they never
+			// carry drift/approval state (the merge marks those pending refresh).
+			revision: event.revision ?? 0,
+			revisionDigest: event.revision_digest ?? "",
 			historyLen: 0,
 			revisionError: "",
 			driftState: "",

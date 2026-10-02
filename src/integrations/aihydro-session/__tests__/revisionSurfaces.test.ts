@@ -119,6 +119,14 @@ describe("minimal-run filter", () => {
 })
 
 describe("approval-state rendering logic", () => {
+
+	it("renders the pending_refresh sentinel as pending, never approved", () => {
+		const a = describeApproval({ state: "pending_refresh" })
+		expect(a.approved).to.equal(false)
+		expect(a.tone).to.equal("pending")
+		expect(a.label).to.equal("Approval pending refresh")
+		expect(describeDrift({ state: "pending_refresh" }).label).to.equal("Drift pending refresh")
+	})
 	it("styles only an explicit approved state as approved, with channel and trust root", () => {
 		const d = describeApproval({ state: "approved", channel: "ssh_sig", trustRoot: "system" })
 		expect(d.approved).to.equal(true)

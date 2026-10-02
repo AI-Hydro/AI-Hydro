@@ -34,71 +34,67 @@ const approved = base({
 	approvalPrincipal: "alice",
 })
 
+const snapshot = base({
+	revision: 3,
+	revisionDigest: "d1",
+	historyLen: 3,
+	approvalState: "approved",
+	approvalForRevisionDigest: "d1",
+	approvalChannel: "ssh_sig",
+	approvalPrincipal: "alice",
+	driftState: "in_sync",
+	driftEvidenceChecked: true,
+})
+
 describe("mergeClaimUpdate", () => {
 	it("returns incoming when there is no previous record", () => {
 		const inc = base({ statement: "new" })
 		expect(mergeClaimUpdate(undefined, inc)).toBe(inc)
 	})
 
-	it("keeps snapshot approval fields when the event carries none", () => {
-		const out = mergeClaimUpdate(approved, base({ statement: "edited" }))
+	it("an event with no revision never shows approved or in_sync (pending_refresh)", () => {
+		const out = mergeClaimUpdate(snapshot, base({ statement: "edited" }))
 		expect(out.statement).toBe("edited")
-		expect(out.approvalState).toBe("approved")
-		expect(out.approvalForRevisionDigest).toBe("d1")
-		expect(out.approvalChannel).toBe("cli")
-		expect(out.approvalPrincipal).toBe("alice")
+		expect(out.approvalState).toBe("pending_refresh")
+		expect(out.approvalPrincipal).toBe("")
+		expect(out.approvalForRevisionDigest).toBe("")
+		expect(out.driftState).toBe("pending_refresh")
+		expect(out.driftEvidenceChecked).toBe(false)
+		// Revision group is kept as a display aid only.
+		expect(out.revisionDigest).toBe("d1")
+		expect(out.revision).toBe(3)
 	})
 
-	it("lets an event that explicitly carries approvalState win", () => {
-		const out = mergeClaimUpdate(approved, base({ approvalState: "none" }))
+	it("an event for a different revision is not carried as approved", () => {
+		const out = mergeClaimUpdate(snapshot, base({ revision: 4, revisionDigest: "d2" }))
+		expect(out.revisionDigest).toBe("d2")
+		expect(out.revision).toBe(4)
+		expect(out.approvalState).toBe("pending_refresh")
+		expect(out.driftState).toBe("pending_refresh")
+	})
+
+	it("an event reporting the same revision keeps approval and drift", () => {
+		const out = mergeClaimUpdate(snapshot, base({ revision: 3, revisionDigest: "d1", statement: "x" }))
+		expect(out.approvalState).toBe("approved")
+		expect(out.approvalForRevisionDigest).toBe("d1")
+		expect(out.approvalPrincipal).toBe("alice")
+		expect(out.driftState).toBe("in_sync")
+		expect(out.driftEvidenceChecked).toBe(true)
+	})
+
+	it("an explicit approvalState or driftState on the event wins", () => {
+		const out = mergeClaimUpdate(snapshot, base({ revisionDigest: "d2", approvalState: "none", driftState: "drifted" }))
 		expect(out.approvalState).toBe("none")
-		expect(out.approvalPrincipal).toBe("")
+		expect(out.driftState).toBe("drifted")
 	})
 
 	it("does not mutate the previous record", () => {
-		const prev = approved
-		mergeClaimUpdate(prev, base())
-		expect(prev.approvalState).toBe("approved")
+		mergeClaimUpdate(snapshot, base())
+		expect(snapshot.approvalState).toBe("approved")
+		expect(snapshot.driftState).toBe("in_sync")
 	})
 
-	it("stays unreported when nothing was reported before", () => {
-		expect(mergeClaimUpdate(base(), base()).approvalState).toBe("")
-	})
-
-	it("keeps the snapshot revision group when the event carries none", () => {
-		const prev = base({ revision: 3, revisionDigest: "rd", historyLen: 3, revisionError: "e" })
-		const out = mergeClaimUpdate(prev, base({ statement: "edited" }))
-		expect(out).toMatchObject({ revision: 3, revisionDigest: "rd", historyLen: 3, revisionError: "e" })
-		expect(out.statement).toBe("edited")
-	})
-
-	it("lets an explicit revisionDigest replace the whole revision group", () => {
-		const prev = base({ revision: 3, revisionDigest: "rd", historyLen: 3, revisionError: "e" })
-		const out = mergeClaimUpdate(prev, base({ revision: 4, revisionDigest: "rd2" }))
-		expect(out).toMatchObject({ revision: 4, revisionDigest: "rd2", historyLen: 0, revisionError: "" })
-	})
-
-	it("keeps the snapshot drift group when the event carries none", () => {
-		const prev = base({
-			driftState: "drifted",
-			driftReason: "r",
-			driftChangedFields: ["statement"],
-			driftEvidenceChecked: true,
-		})
-		const out = mergeClaimUpdate(prev, base())
-		expect(out).toMatchObject({
-			driftState: "drifted",
-			driftReason: "r",
-			driftChangedFields: ["statement"],
-			driftEvidenceChecked: true,
-		})
-	})
-
-	it("lets an explicit driftState win and groups are independent", () => {
-		const prev = base({ driftState: "drifted", driftChangedFields: ["x"], approvalState: "approved" })
-		const out = mergeClaimUpdate(prev, base({ driftState: "clean" }))
-		expect(out.driftState).toBe("clean")
-		expect(out.driftChangedFields).toEqual([])
-		expect(out.approvalState).toBe("approved")
+	it("is pending_refresh (not approved) even when nothing was reported before", () => {
+		expect(mergeClaimUpdate(base(), base()).approvalState).toBe("pending_refresh")
 	})
 })

@@ -20,6 +20,9 @@ interface LedgerContextType {
 	getClaim: (claimId: string) => ClaimRecord | undefined
 }
 
+/** Quiet period after the last claim event before the active snapshot is re-read. */
+const EVENT_RELOAD_DEBOUNCE_MS = 500
+
 const LedgerContext = createContext<LedgerContextType | undefined>(undefined)
 
 export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -31,6 +34,7 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 	const loadVersion = useRef(0)
 	const activeSession = useRef("")
 	const loadPending = useRef(false)
+	const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
 	const loadSession = useCallback(async (sid: string) => {
 		const version = ++loadVersion.current
@@ -72,7 +76,14 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 					return
 				}
 				const c = update.claim
-				if (loadPending.current || !activeSession.current || c.sessionId !== activeSession.current) return
+				if (!activeSession.current || c.sessionId !== activeSession.current) return
+				// Events are invalidation signals; the snapshot is truth. Debounce one reload.
+				if (reloadTimer.current) clearTimeout(reloadTimer.current)
+				reloadTimer.current = setTimeout(() => {
+					reloadTimer.current = null
+					void loadSession(activeSession.current)
+				}, EVENT_RELOAD_DEBOUNCE_MS)
+				if (loadPending.current) return
 				setClaims((prev) => {
 					if (update.changeType === "removed") {
 						const next = { ...prev }
@@ -92,6 +103,7 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 
 		return () => {
 			loadVersion.current++
+			if (reloadTimer.current) clearTimeout(reloadTimer.current)
 			subRef.current?.()
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps

@@ -80,4 +80,37 @@ describe("Ledger session isolation", () => {
 		)
 		expect(await screen.findByText("RUN_LOG_UNREADABLE")).toBeInTheDocument()
 	})
+
+	it("reloads the active snapshot exactly once, debounced, after a burst of events", async () => {
+		let onResponse!: (event: unknown) => void
+		mocks.load.mockResolvedValue({ sessionId: "selected", claims: [{ claimId: "kept", sessionId: "selected" }] })
+		mocks.subscribe.mockImplementation((_request, handlers) => {
+			onResponse = handlers.onResponse
+			return () => {}
+		})
+		render(
+			<LedgerContextProvider>
+				<Inspector />
+			</LedgerContextProvider>,
+		)
+		await waitFor(() => expect(screen.getByTestId("claims")).toHaveTextContent("kept"))
+		expect(mocks.load).toHaveBeenCalledTimes(1)
+		vi.useFakeTimers()
+		try {
+			act(() => onResponse({ changeType: "updated", claim: { claimId: "kept", sessionId: "selected" } }))
+			act(() => onResponse({ changeType: "updated", claim: { claimId: "kept", sessionId: "selected" } }))
+			act(() => onResponse({ changeType: "updated", claim: { claimId: "kept", sessionId: "other" } }))
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(499)
+			})
+			expect(mocks.load).toHaveBeenCalledTimes(1)
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2)
+			})
+			expect(mocks.load).toHaveBeenCalledTimes(2)
+			expect(mocks.load.mock.calls[1][0]).toMatchObject({ sessionId: "selected" })
+		} finally {
+			vi.useRealTimers()
+		}
+	})
 })

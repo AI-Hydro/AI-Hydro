@@ -7,6 +7,9 @@
  * explicit `approved` state is rendered as NOT approved (fail closed).
  */
 
+/** Client-side approval/drift state meaning "claim changed; awaiting an authoritative snapshot". */
+export const PENDING_REFRESH = "pending_refresh"
+
 export type ApprovalTone = "approved" | "integrity" | "pending" | "untrusted" | "unknown"
 
 export interface ApprovalInput {
@@ -125,6 +128,15 @@ export function describeApproval(input: ApprovalInput): ApprovalDisplay {
 			}
 		case "none":
 			return { approved: false, tone: "pending", label: "Not approved", detail: input.reason }
+		case PENDING_REFRESH:
+			// Client-side sentinel: a live event proved the claim changed but carries no approval.
+			// Neither approved nor revoked; the next snapshot is authoritative.
+			return {
+				approved: false,
+				tone: "pending",
+				label: "Approval pending refresh",
+				detail: "The claim changed; approval state is being re-read from the ledger.",
+			}
 		default:
 			return {
 				approved: false,
@@ -174,6 +186,8 @@ export function describeDrift(input: DriftInput): DriftDisplay {
 				tone: "unknown",
 				detail: input.reason,
 			}
+		case PENDING_REFRESH:
+			return { label: "Drift pending refresh", tone: "unknown", detail: "The claim changed; drift is being re-read." }
 		case "no_history":
 			return { label: "No sealed revision yet", tone: "unknown", detail: input.reason }
 		default:
