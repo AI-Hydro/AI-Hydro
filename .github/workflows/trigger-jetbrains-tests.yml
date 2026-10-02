@@ -15,6 +15,7 @@ jobs:
     steps:
       - name: Generate GitHub App Token
         id: app-token
+        if: ${{ secrets.CLINE_JETBRAINS_WORKFLOW_KEY != '' }}
         uses: actions/create-github-app-token@v1
         with:
           app-id: 1998650
@@ -23,6 +24,7 @@ jobs:
           repositories: intellij-plugin
 
       - name: Trigger IntelliJ Plugin Integration Test
+        if: ${{ secrets.CLINE_JETBRAINS_WORKFLOW_KEY != '' }}
         run: |
           curl -X POST \
             -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
@@ -45,6 +47,7 @@ jobs:
           EOF
 
       - name: Log trigger details
+        if: ${{ secrets.CLINE_JETBRAINS_WORKFLOW_KEY != '' }}
         run: |
           echo "Triggered IntelliJ Plugin integration test for:"
           echo "  PR #${{ github.event.number }}: ${{ github.event.pull_request.title }}"
