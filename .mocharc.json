@@ -1,9 +1,11 @@
 {
 	"extension": [
-		"ts"
+		"ts",
+		"cts"
 	],
 	"spec": [
-		"src/**/__tests__/*.ts"
+		"src/**/__tests__/*.ts",
+		"src/**/__tests__/*.cts"
 	],
 	"require": [
 		"ts-node/register",

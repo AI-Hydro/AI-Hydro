@@ -1,11 +1,10 @@
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import * as path from "node:path"
-import { fileURLToPath } from "node:url"
 import { expect } from "chai"
 import { describe, it } from "mocha"
 
-const RUNNER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "artifact_kernel_runner.py")
+const RUNNER = path.resolve(__dirname, "..", "artifact_kernel_runner.py")
 
 function runKernel(lines: string[]): Promise<Record<string, unknown>[]> {
 	return new Promise((resolve, reject) => {
