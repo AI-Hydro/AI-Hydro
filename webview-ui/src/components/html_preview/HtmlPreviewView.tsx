@@ -19,18 +19,23 @@ import { AIHYDRO_BRIDGE_CORE_SCRIPT } from "@/integrations/aihydro-bridge/core"
 import { AIHYDRO_BRIDGE_EDITOR_SCRIPT } from "@/integrations/aihydro-bridge/editor-adapter"
 import { AIHYDRO_BRIDGE_LEAFLET_SCRIPT } from "@/integrations/aihydro-bridge/leaflet-adapter"
 import { FileServiceClient, HtmlPreviewServiceClient, UiServiceClient } from "@/services/grpc-client"
-import { AIHYDRO_DESIGN_SYSTEM_FONTS, AIHYDRO_PREVIEW_STYLE, CELL_BRIDGE_SCRIPT, usesAihydroDesignSystem } from "./aihydroCellBridge"
-import { CourseHeader } from "./CourseHeader"
-import { resolveAgentCourseNavigation } from "./courseAgentNavigation"
+import {
+	AIHYDRO_DESIGN_SYSTEM_FONTS,
+	AIHYDRO_PREVIEW_STYLE,
+	CELL_BRIDGE_SCRIPT,
+	usesAihydroDesignSystem,
+} from "./aihydroCellBridge"
 import { applyArtifactBaseHref, FRAGMENT_NAV_GUARD_SCRIPT } from "./artifactBaseHref"
 import { isStaticDocument } from "./artifactIdentity"
+import { CourseHeader } from "./CourseHeader"
+import { resolveAgentCourseNavigation } from "./courseAgentNavigation"
 import { EditContextRibbon } from "./EditContextRibbon"
 import { HtmlPreviewToolbar } from "./HtmlPreviewToolbar"
 import {
 	applyInstalledPackCsp,
 	isInstalledLearningPack,
-	learningPackScopeFromItem,
 	type LearningPackScope,
+	learningPackScopeFromItem,
 } from "./installedPackCsp"
 import { LEAFLET_NORMALIZER_SCRIPT, LEAFLET_NORMALIZER_STYLE } from "./leafletNormalizer"
 import { reportPreviewEvent, requestSaveDocument, startPreviewAgentTask } from "./previewBridge"
@@ -434,7 +439,9 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				withHeadAssets.slice(closeIdx + 1)
 			const bodyCloseAfterDiag = withDiag.search(/<\/body\s*>/i)
 			if (bodyCloseAfterDiag >= 0) {
-				return finalize(withDiag.slice(0, bodyCloseAfterDiag) + LEAFLET_NORMALIZER_SCRIPT + withDiag.slice(bodyCloseAfterDiag))
+				return finalize(
+					withDiag.slice(0, bodyCloseAfterDiag) + LEAFLET_NORMALIZER_SCRIPT + withDiag.slice(bodyCloseAfterDiag),
+				)
 			}
 			if (bodyCloseIdx >= 0) {
 				return finalize(withDiag + LEAFLET_NORMALIZER_SCRIPT)
@@ -443,15 +450,15 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		}
 		return finalize(
 			artifactContext +
-			DIAG_SCRIPT +
-			FRAGMENT_NAV_GUARD_SCRIPT +
-			AIHYDRO_BRIDGE_CORE_SCRIPT +
-			AIHYDRO_BRIDGE_LEAFLET_SCRIPT +
-			AIHYDRO_BRIDGE_CITATION_SCRIPT +
-			AIHYDRO_BRIDGE_EDITOR_SCRIPT +
-			CELL_BRIDGE_SCRIPT +
-			withHeadAssets +
-			LEAFLET_NORMALIZER_SCRIPT,
+				DIAG_SCRIPT +
+				FRAGMENT_NAV_GUARD_SCRIPT +
+				AIHYDRO_BRIDGE_CORE_SCRIPT +
+				AIHYDRO_BRIDGE_LEAFLET_SCRIPT +
+				AIHYDRO_BRIDGE_CITATION_SCRIPT +
+				AIHYDRO_BRIDGE_EDITOR_SCRIPT +
+				CELL_BRIDGE_SCRIPT +
+				withHeadAssets +
+				LEAFLET_NORMALIZER_SCRIPT,
 		)
 	}, [renderPath, item?.htmlContent, item?.id, item?.filePath, item?.dirUri, item?.metadata?.artifactKind])
 
@@ -1173,6 +1180,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 					course={course}
 					currentModuleId={currentModuleId}
 					onNavigate={handleCourseNavigate}
+					packScope={learningPackScope}
 					progress={courseProgress}
 				/>
 			)}
@@ -1474,8 +1482,8 @@ const StaticDocumentNotice: React.FC<{ onDismiss: () => void }> = ({ onDismiss }
 			ℹ️
 		</span>
 		<span style={{ flex: 1, minWidth: 0 }}>
-			<strong>This is a static document.</strong> It has no AI-Hydro executable module manifest, so Python cells can't
-			run here. Open an AI-Hydro-profile render of this page, or install its Learning Pack, to run cells.
+			<strong>This is a static document.</strong> It has no AI-Hydro executable module manifest, so Python cells can't run
+			here. Open an AI-Hydro-profile render of this page, or install its Learning Pack, to run cells.
 		</span>
 		<button
 			aria-label="Dismiss static-document notice"

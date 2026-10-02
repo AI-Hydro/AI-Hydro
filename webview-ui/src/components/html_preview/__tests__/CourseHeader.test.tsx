@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CourseHeader } from "../CourseHeader"
+import type { LearningPackScope } from "../installedPackCsp"
 import type { CourseManifest } from "../useCourse"
 import type { CourseProgress, CourseProgressHook } from "../useCourseProgress"
 
@@ -124,5 +125,69 @@ describe("CourseHeader completion navigation", () => {
 		await markCompleteAndFlush()
 		act(() => vi.advanceTimersByTime(350))
 		expect(onNavigate).not.toHaveBeenCalled()
+	})
+})
+describe("CourseHeader module metadata", () => {
+	const courseWithStatus: CourseManifest = {
+		...course,
+		modules: [{ ...course.modules[0], status: "draft" }, course.modules[1]],
+	}
+
+	it("renders the module status badge when the current module has one", () => {
+		render(
+			<CourseHeader
+				course={courseWithStatus}
+				currentModuleId="module-1"
+				onNavigate={vi.fn()}
+				progress={progressHook(vi.fn().mockResolvedValue(null))}
+			/>,
+		)
+		expect(screen.getByText("Draft")).toBeInTheDocument()
+	})
+
+	it("renders no status badge when the module omits status", () => {
+		render(
+			<CourseHeader
+				course={course}
+				currentModuleId="module-1"
+				onNavigate={vi.fn()}
+				progress={progressHook(vi.fn().mockResolvedValue(null))}
+			/>,
+		)
+		expect(screen.queryByText("Draft")).not.toBeInTheDocument()
+		expect(screen.queryByText("Reviewed")).not.toBeInTheDocument()
+		expect(screen.queryByText("Canonical")).not.toBeInTheDocument()
+	})
+
+	it("renders an installed-edition chip with version when packScope is present", () => {
+		const packScope: LearningPackScope = {
+			packId: "hmfp",
+			courseId: course.courseId,
+			edition: "student",
+			moduleId: "module-1",
+			version: "1.2.0",
+		}
+		render(
+			<CourseHeader
+				course={course}
+				currentModuleId="module-1"
+				onNavigate={vi.fn()}
+				packScope={packScope}
+				progress={progressHook(vi.fn().mockResolvedValue(null))}
+			/>,
+		)
+		expect(screen.getByText("Student Edition · v1.2.0")).toBeInTheDocument()
+	})
+
+	it("renders no installed-edition chip for a generic (non-pack) course", () => {
+		render(
+			<CourseHeader
+				course={course}
+				currentModuleId="module-1"
+				onNavigate={vi.fn()}
+				progress={progressHook(vi.fn().mockResolvedValue(null))}
+			/>,
+		)
+		expect(screen.queryByText(/Edition/)).not.toBeInTheDocument()
 	})
 })

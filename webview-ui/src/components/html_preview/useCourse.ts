@@ -21,6 +21,8 @@ export interface CourseAuthor {
 	orcid?: string
 }
 
+export type CourseModuleStatus = "draft" | "reviewed" | "canonical"
+
 export interface CourseModuleEntry {
 	id: string
 	/** path relative to courseRoot, e.g. "01-intro/module.html" */
@@ -29,6 +31,8 @@ export interface CourseModuleEntry {
 	abstract?: string
 	estimatedMinutes?: number
 	prerequisites?: string[]
+	/** Editorial status shown in the module metadata header. Absent = no badge (older course.json files stay valid). */
+	status?: CourseModuleStatus
 }
 
 export interface CourseManifest {
