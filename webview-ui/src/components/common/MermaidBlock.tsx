@@ -97,8 +97,8 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 			}
 			mermaid
 				.parse(code, { suppressErrors: true })
-				.then((isValid) => {
-					if (!isValid) {
+				.then((parseResult) => {
+					if (!parseResult) {
 						throw new Error("Invalid or incomplete Mermaid code")
 					}
 					const id = `mermaid-${Math.random().toString(36).substring(2)}`

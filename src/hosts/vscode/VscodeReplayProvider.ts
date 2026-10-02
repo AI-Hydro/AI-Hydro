@@ -1,5 +1,6 @@
 import type { Controller } from "@core/controller"
 import * as vscode from "vscode"
+import { LatestResearchRequest, readResearchSnapshot } from "@/integrations/aihydro-session/researchSnapshot"
 import { listSessionIds, loadReplaySurface } from "@/integrations/aihydro-session/sessionSurfaces"
 
 /**
@@ -14,8 +15,8 @@ import { listSessionIds, loadReplaySurface } from "@/integrations/aihydro-sessio
  *   │  window.AIHYDRO_REPLAY_PANEL_STANDALONE = true tells             │
  *   │  App.tsx to render <ReplayPanel> instead of the chat UI.         │
  *   │                                                                  │
- *   │  A custom "load_replay" message reads the session JSON at        │
- *   │  ~/.aihydro/sessions/<session_id>.json and extracts _run_log,    │
+ *   │  A custom "load_replay" message reads a backend snapshot;        │
+ *   │  Python resolves SQLite/legacy/capsule run history,    │
  *   │  returning a "replay_data" payload to the webview.               │
  *   └──────────────────────────────────────────────────────────────────┘
  */
@@ -25,6 +26,7 @@ export class VscodeReplayProvider {
 	private static controller: Controller | undefined
 	private static disposables: vscode.Disposable[] = []
 	private static replayWebviewReady = false
+	private static loads = new LatestResearchRequest()
 	private static pendingInitialLoad: { sessionId: string; runId?: string } | undefined
 
 	public static initialize(context: vscode.ExtensionContext, controller: Controller): void {
@@ -150,7 +152,8 @@ export class VscodeReplayProvider {
 		)
 	}
 
-	private static handleLoadReplay(panel: vscode.WebviewPanel, sessionId: string, focusRunId?: string): void {
+	private static async handleLoadReplay(panel: vscode.WebviewPanel, sessionId: string, focusRunId?: string): Promise<void> {
+		const isLatest = VscodeReplayProvider.loads.start()
 		const messageFocusRunId = focusRunId ? String(focusRunId) : undefined
 		try {
 			if (!sessionId?.trim()) {
@@ -158,7 +161,10 @@ export class VscodeReplayProvider {
 				return
 			}
 
-			const replay = loadReplaySurface(sessionId.trim())
+			const backend = VscodeReplayProvider.controller?.mcpHub
+			if (!backend) throw new Error("AI-Hydro backend is not initialized.")
+			const replay = await loadReplaySurface(sessionId.trim(), (reference) => readResearchSnapshot(backend, reference))
+			if (!isLatest() || VscodeReplayProvider.currentPanel !== panel) return
 			panel.webview.postMessage({
 				type: "replay_data",
 				session_id: replay.session_id,
@@ -167,8 +173,11 @@ export class VscodeReplayProvider {
 				focus_run_id: messageFocusRunId,
 				session_path: replay.sessionPath,
 				capsule_path: replay.capsule_path,
+				warnings: replay.warnings,
+				run_log_source: replay.run_log_source,
 			})
 		} catch (err) {
+			if (!isLatest() || VscodeReplayProvider.currentPanel !== panel) return
 			const msg = err instanceof Error ? err.message : String(err)
 			console.error("[VscodeReplayProvider] load_replay error:", msg)
 			panel.webview.postMessage({ type: "replay_error", message: `Failed to load replay: ${msg}` })

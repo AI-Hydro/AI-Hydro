@@ -11,6 +11,7 @@ const watch = process.argv.includes("--watch")
 const standalone = process.argv.includes("--standalone")
 const e2eBuild = process.argv.includes("--e2e-build")
 const destDir = standalone ? "dist-standalone" : "dist"
+const metafilePath = process.env.AIHYDRO_ESBUILD_METAFILE
 
 /**
  * @type {import('esbuild').Plugin}
@@ -196,6 +197,7 @@ if (process.env.OTEL_METRIC_EXPORT_INTERVAL) {
 // Base configuration shared between extension and standalone builds
 const baseConfig = {
 	bundle: true,
+	metafile: Boolean(metafilePath),
 	minify: production,
 	sourcemap: !production,
 	logLevel: "silent",
@@ -251,7 +253,12 @@ async function main() {
 	if (watch) {
 		await extensionCtx.watch()
 	} else {
-		await extensionCtx.rebuild()
+		const result = await extensionCtx.rebuild()
+		if (metafilePath) {
+			const resolvedMetafilePath = path.resolve(__dirname, metafilePath)
+			fs.mkdirSync(path.dirname(resolvedMetafilePath), { recursive: true })
+			fs.writeFileSync(resolvedMetafilePath, `${JSON.stringify(result.metafile, null, 2)}\n`)
+		}
 		await extensionCtx.dispose()
 	}
 }

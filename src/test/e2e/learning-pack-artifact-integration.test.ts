@@ -140,7 +140,36 @@ async function waitForCourseShell(page: Page): Promise<Frame> {
 }
 
 async function waitForCellFrame(page: Page, cellId: string): Promise<Frame> {
-	return waitForFrame(page, async (frame) => (await frame.locator(`[data-aihydro-cell-id="${cellId}"]`).count()) === 1)
+	const selector = `[data-aihydro-cell-id="${cellId}"]`
+	const deadline = Date.now() + 60_000
+	while (Date.now() < deadline) {
+		for (const frame of page.frames()) {
+			if (frame.isDetached()) continue
+			try {
+				const count = await frame.locator(selector).count()
+				if (count !== 1) continue
+				let ancestor = frame.parentFrame()
+				let belongsToActivePreview = false
+				while (ancestor && !ancestor.isDetached()) {
+					if (
+						(await ancestor.title()) === "AI-Hydro HTML Preview" &&
+						(await ancestor.getByTitle("Course options").count()) === 1
+					) {
+						belongsToActivePreview = true
+						break
+					}
+					ancestor = ancestor.parentFrame()
+				}
+				if (belongsToActivePreview && !frame.isDetached() && (await frame.locator(selector).count()) === 1) {
+					return frame
+				}
+			} catch {
+				// VS Code may replace either the shell or srcdoc frame while navigation settles.
+			}
+		}
+		await page.waitForTimeout(100)
+	}
+	throw new Error(`Timed out waiting for one active executable cell: ${cellId}`)
 }
 
 async function runCell(frame: Frame, cellId: string): Promise<Locator> {
@@ -163,6 +192,10 @@ interface BookModuleRuntimeContract {
 	title: string
 	stateCellId: string
 	stateOutput: (string | RegExp)[]
+	setupCells?: readonly {
+		id: string
+		output: readonly (string | RegExp)[]
+	}[]
 	plotCellId: string
 	plotOutput?: (string | RegExp)[]
 	errorCellId: string
@@ -306,6 +339,296 @@ const BOOK_MODULES: readonly BookModuleRuntimeContract[] = [
 			"one_step_loss_decreased=True",
 		],
 	},
+	{
+		id: "hmfp.event-regime-residuals.08",
+		title: "Diagnose Event, Regime, and Residual Patterns",
+		stateCellId: "hmfp.event-regime-residuals.08.state-create",
+		stateOutput: [
+			"high_flow_threshold_mm_per_day=3.0",
+			"residuals_mm_per_day=[0.0, 0.0, -2.0, 2.0, 0.0, 0.0, 0.0, -2.0, 2.0, 0.0, 0.0, 0.0]",
+			"overall_mean_residual_mm_per_day=0.000000",
+			"overall_mae_mm_per_day=0.666667",
+			"overall_rmse_mm_per_day=1.154701",
+			"event_A_volume_bias_mm=0.000000",
+			"event_A_peak_timing_error_days=1.0",
+			"event_B_volume_bias_mm=0.000000",
+			"event_B_peak_timing_error_days=1.0",
+			"below_threshold_count=9",
+			"below_threshold_mean_residual_mm_per_day=0.222222",
+			"below_threshold_rmse_mm_per_day=0.666667",
+			"at_or_above_threshold_count=3",
+			"at_or_above_threshold_mean_residual_mm_per_day=-0.666667",
+			"at_or_above_threshold_rmse_mm_per_day=2.000000",
+		],
+		plotCellId: "hmfp.event-regime-residuals.08.state-read-plot",
+		plotOutput: ["largest_residual_interval=D03"],
+		errorCellId: "hmfp.event-regime-residuals.08.intentional-error",
+		errorOutput: ["intentional alignment diagnostic", "false_sorted_mse=0.000000"],
+		recoveryCellId: "hmfp.event-regime-residuals.08.error-recovery",
+		recoveryOutput: [
+			"alignment_restored=True",
+			"false_sorted_mse=0.000000",
+			"correct_chronological_mse=1.333333",
+			"regime_recomposition_passed=True",
+			"event_volume_identity_passed=True",
+			"event_peak_timing_errors_days=[1.0, 1.0]",
+		],
+	},
+	{
+		id: "hmfp.basin-specific-lstm.09",
+		title: "Build a Basin-Specific LSTM Without Future Leakage",
+		stateCellId: "hmfp.basin-specific-lstm.09.state-create",
+		stateOutput: [
+			"scaler_fit_ids=['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'D11', 'D12']",
+			"training_mean=[2.166667, 1.0]",
+			"training_scale=[2.823512, 0.177951]",
+			"train_shape=(9, 4, 2); validation_shape=(3, 4, 2); test_shape=(3, 4, 2)",
+			"train_target_ids=['D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'D11', 'D12']",
+			"validation_target_ids=['D16', 'D17', 'D18']",
+			"test_target_ids=['D22', 'D23', 'D24']",
+		],
+		setupCells: [
+			{
+				id: "hmfp.basin-specific-lstm.09.state-encode",
+				output: [
+					"inspection_target_id=D08",
+					"inspection_window_ids=['D05', 'D06', 'D07', 'D08']",
+					"inspection_input_gate=[0.461467, 0.486913]",
+					"inspection_forget_gate=[0.773701, 0.76003]",
+					"inspection_candidate=[-0.020196, 0.411314]",
+					"inspection_output_gate=[0.627937, 0.65897]",
+					"inspection_hidden_dimensionless=[0.191348, 0.209111]",
+					"inspection_memory_dimensionless=[0.31472, 0.328675]",
+					"train_hidden_shape=(9, 2); words=samples by hidden features",
+				],
+			},
+			{
+				id: "hmfp.basin-specific-lstm.09.state-fit",
+				output: [
+					"model_contract=fixed-weight LSTM encoder plus train-only fitted ridge readout",
+					"end_to_end_lstm_training=False",
+					"readout_coefficients=[1.095217, 4.410821, -2.329272]",
+					"train_rmse_mm_per_day=0.142380",
+					"validation_rmse_mm_per_day=0.223108",
+					"test_rmse_mm_per_day=0.521080",
+					"chronological_split_passed=True",
+					"train_only_scaler_passed=True",
+					"future_target_excluded=True",
+				],
+			},
+		],
+		plotCellId: "hmfp.basin-specific-lstm.09.state-read-plot",
+		plotOutput: [
+			"test_prediction_table=id,reference,prediction,residual_mm_per_day",
+			"D22,2.603725,1.839639,-0.764086",
+			"D23,2.079082,1.652615,-0.426467",
+			"D24,1.510939,1.289866,-0.221073",
+		],
+		errorCellId: "hmfp.basin-specific-lstm.09.intentional-error",
+		errorOutput: [
+			"intentional leakage diagnostic",
+			"overlap=['D22', 'D23', 'D24']",
+			"leaked_test_rmse_mm_per_day=0.000000000000",
+		],
+		recoveryCellId: "hmfp.basin-specific-lstm.09.error-recovery",
+		recoveryOutput: [
+			"fit_test_overlap=[]",
+			"heldout_target_perturbation_invariant=True",
+			"chronological_split_passed=True",
+			"train_only_scaler_passed=True",
+			"future_target_excluded=True",
+			"held_out_recomputation_passed=True",
+			"clean_test_rmse_mm_per_day=0.521080",
+		],
+	},
+	{
+		id: "hmfp.differentiable-state-space.10",
+		title: "Differentiate a Mass-Closing State-Space Reservoir",
+		stateCellId: "hmfp.differentiable-state-space.10.state-create",
+		stateOutput: [
+			"fit_target_ids=['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08']",
+			"validation_target_ids=['D09', 'D10', 'D11', 'D12']",
+			"precipitation_shape=(12,); words=daily interval depths",
+			"target_contract=synthetic generator trace plus disclosed deterministic adjustments",
+		],
+		setupCells: [
+			{
+				id: "hmfp.differentiable-state-space.10.state-simulate",
+				output: [
+					"initial_release_fraction=0.200000",
+					"D01_runoff_mm=0.200000",
+					"D02_runoff_mm=0.960000",
+					"D02_next_storage_mm=3.840000",
+					"D02_runoff_sensitivity_mm=0.736000",
+					"initial_training_mse_mm2=0.384374",
+					"initial_training_gradient_mm2=-0.975490",
+				],
+			},
+			{
+				id: "hmfp.differentiable-state-space.10.state-fit",
+				output: [
+					"model_contract=mass-closing one-store state transition plus exact forward sensitivity",
+					"automatic_differentiation_framework=False",
+					"fit_validation_overlap=[]",
+					"fitted_release_fraction=0.353099",
+					"training_rmse_mm=0.020817",
+					"validation_rmse_mm=0.030870",
+					"heldout_targets_excluded=True",
+					"training_loss_decreased=True",
+				],
+			},
+		],
+		plotCellId: "hmfp.differentiable-state-space.10.state-read-plot",
+		plotOutput: [
+			"validation_table=id,reference,prediction,residual_mm",
+			"D09,1.921903,1.959509,+0.037606",
+			"D10,1.645237,1.620708,-0.024529",
+			"D11,4.256404,4.226325,-0.030079",
+			"D12,2.704163,2.734016,+0.029853",
+		],
+		errorCellId: "hmfp.differentiable-state-space.10.intentional-error",
+		errorOutput: [
+			"intentional stopped-state diagnostic",
+			"local_only=-1.363850 mm2",
+			"finite_difference=-0.975490 mm2",
+			"absolute_error=0.388361 mm2",
+		],
+		recoveryCellId: "hmfp.differentiable-state-space.10.error-recovery",
+		recoveryOutput: [
+			"gradient_check_passed=True",
+			"heldout_target_perturbation_invariant=True",
+			"mass_closure_passed=True",
+			"derivative_closure_passed=True",
+			"fitted_release_fraction=0.353099",
+			"validation_rmse_mm=0.030870",
+		],
+	},
+	{
+		id: "hmfp.metrics-fdc-signatures-uncertainty.11",
+		title: "Evaluate Metrics, Flow-Duration Curves, Signatures, and Spread",
+		stateCellId: "hmfp.metrics-fdc-signatures-uncertainty.11.state-create",
+		stateOutput: [
+			"interval_ids=['D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'D11', 'D12']",
+			"alignment_contract=simulated minus reference on identical daily interval IDs",
+			"delta_time_days=1.0",
+			"reference_total_depth_mm=23.000000",
+			"simulated_total_depth_mm=23.000000",
+			"residuals_mm_per_day=[0.0, 0.0, -2.0, 2.0, 0.0, 0.0, 0.0, -2.0, 2.0, 0.0, 0.0, 0.0]",
+		],
+		setupCells: [
+			{
+				id: "hmfp.metrics-fdc-signatures-uncertainty.11.state-metrics",
+				output: [
+					"rmse_mm_per_day=1.154701",
+					"nse=0.235060",
+					"kge_2009=0.617530",
+					"kge_correlation=0.617530",
+					"kge_variability_ratio=1.000000",
+					"kge_mean_ratio=1.000000",
+					"volume_bias_fraction=0.000000",
+				],
+			},
+			{
+				id: "hmfp.metrics-fdc-signatures-uncertainty.11.state-fdc-signatures",
+				output: [
+					"fdc_values_identical=True",
+					"reference_Q10_mm_per_day=4.700000",
+					"reference_Q50_mm_per_day=1.000000",
+					"reference_Q90_mm_per_day=1.000000",
+				],
+			},
+			{
+				id: "hmfp.metrics-fdc-signatures-uncertainty.11.state-envelope",
+				output: [
+					"scenario_spread_fraction=0.25",
+					"scenario_factors=[0.75, 0.875, 1.0, 1.125, 1.25]",
+					"scenario_coverage_fraction=0.666667",
+					"scenario_mean_width_mm_per_day=0.958333",
+					"scenario_contract=deterministic sensitivity members, not probability samples",
+				],
+			},
+		],
+		plotCellId: "hmfp.metrics-fdc-signatures-uncertainty.11.state-read-plot",
+		plotOutput: ["covered_interval_ids=['D01', 'D02', 'D05', 'D06', 'D07', 'D10', 'D11', 'D12']"],
+		errorCellId: "hmfp.metrics-fdc-signatures-uncertainty.11.intentional-error",
+		errorOutput: ["intentional sorted-metric diagnostic", "false_sorted_nse=1.000000"],
+		recoveryCellId: "hmfp.metrics-fdc-signatures-uncertainty.11.error-recovery",
+		recoveryOutput: [
+			"false_sorted_nse=1.000000",
+			"chronological_nse=0.235060",
+			"chronology_guard_passed=True",
+			"fdc_identity_passed=True",
+			"kge_component_diagnostic_passed=True",
+			"scenario_coverage_fraction=0.666667",
+			"scenario_mean_width_mm_per_day=0.958333",
+			"comparison_spread_fraction=0.35",
+			"comparison_coverage_fraction=0.666667",
+			"comparison_mean_width_mm_per_day=1.341667",
+			"scenario_tradeoff_passed=True",
+		],
+	},
+	{
+		id: "hmfp.hydro-atoms-interpretation-audit.12",
+		title: "Interpret and Audit Static HYDRO-ATOMS Behavior",
+		stateCellId: "hmfp.hydro-atoms-interpretation-audit.12.state-create",
+		stateOutput: [
+			"provenance=authored synthetic logits; not learned and not checkpoint-derived",
+			"representative_parameter_bounds=",
+			"'f_cn': (0.5, 1.5, 'dimensionless')",
+			"'alpha_gw': (0.001, 0.5, 'day^-1')",
+		],
+		setupCells: [
+			{
+				id: "hmfp.hydro-atoms-interpretation-audit.12.state-compose",
+				output: [
+					"forest_sandy_gentle: total_logit=-0.750000, synthetic_f_cn=0.820821",
+					"crop_sandy_gentle: total_logit=0.450000, synthetic_f_cn=1.110639",
+					"composition_contract=six dimensionless terms summed before bounded mapping",
+				],
+			},
+			{
+				id: "hmfp.hydro-atoms-interpretation-audit.12.state-manipulate",
+				output: [
+					"selected_land_use_logit=0.40",
+					"selected_total_logit=0.450000",
+					"selected_f_cn=1.110639",
+					"monotonic_parameter_mapping_passed=True",
+					"interpretation=parameter direction only; basin runoff direction is untested",
+				],
+			},
+			{
+				id: "hmfp.hydro-atoms-interpretation-audit.12.state-unknown-type",
+				output: [
+					"known_type_atom_residual_logit=0.200000",
+					"unknown_type_atom_residual_logit=0.000000",
+					"unknown_type_total_logit=0.250000",
+					"unknown_type_synthetic_f_cn=1.062177",
+					"fallback_contract=only the exact-combination residual is zeroed",
+					"claim_boundary=computable output does not prove transfer",
+				],
+			},
+		],
+		plotCellId: "hmfp.hydro-atoms-interpretation-audit.12.state-aggregate-plot",
+		plotOutput: [
+			"area_fractions=[0.7, 0.3]",
+			"area_fraction_sum=1.000000",
+			"authored_hru_runoff_mm_per_day=[2.0, 5.0]",
+			"basin_runoff_depth_mm_per_day=2.900000",
+			"Figure text alternative:",
+		],
+		errorCellId: "hmfp.hydro-atoms-interpretation-audit.12.intentional-error",
+		errorOutput: ["intentional area-weight diagnostic", "invalid_sum=1.200000", "Do not silently normalize"],
+		recoveryCellId: "hmfp.hydro-atoms-interpretation-audit.12.error-recovery",
+		recoveryOutput: [
+			"authored_component_sum_passed=True",
+			"bounded_parameter_passed=True",
+			"unknown_type_residual_only_passed=True",
+			"monotonic_parameter_mapping_passed=True",
+			"area_weight_contract_passed=True",
+			"recovered_basin_runoff_mm_per_day=2.900000",
+			"claim_status=code behavior verified on authored synthetic values only",
+		],
+	},
 ] as const
 
 const expectedModuleIndex = BOOK_MODULES.findIndex(({ id }) => id === expectedBookModuleId)
@@ -332,6 +655,7 @@ async function executeBookModule(
 	for (const expected of contract.stateOutput) {
 		await expect(stateOutput).toContainText(expected, { timeout: 60_000 })
 	}
+	await executeSetupCells(artifact, contract)
 
 	const plotOutput = await runCell(artifact, contract.plotCellId)
 	for (const expected of contract.plotOutput ?? []) {
@@ -349,6 +673,15 @@ async function executeBookModule(
 		await expect(recoveryOutput).toContainText(expected, { timeout: 30_000 })
 	}
 	return { artifact, plotCell }
+}
+
+async function executeSetupCells(artifact: Frame, contract: BookModuleRuntimeContract): Promise<void> {
+	for (const setup of contract.setupCells ?? []) {
+		const output = await runCell(artifact, setup.id)
+		for (const expected of setup.output) {
+			await expect(output).toContainText(expected, { timeout: 60_000 })
+		}
+	}
 }
 
 async function blockExternalNetwork(page: Page): Promise<void> {
@@ -499,13 +832,16 @@ artifactIntegrationE2E(
 			completed: [courseEntryModuleId, ...BOOK_MODULES.slice(0, expectedModuleIndex).map(({ id }) => id)].sort(),
 		}
 		await expect
-			.poll(() => {
-				const progress = readOnlyCourseProgress(homeDir)
-				return {
-					currentModuleId: progress.currentModuleId,
-					completed: Object.keys(progress.completed).sort(),
-				}
-			})
+			.poll(
+				() => {
+					const progress = readOnlyCourseProgress(homeDir)
+					return {
+						currentModuleId: progress.currentModuleId,
+						completed: Object.keys(progress.completed).sort(),
+					}
+				},
+				{ timeout: 30_000 },
+			)
 			.toEqual(expectedProgress)
 
 		const firstPid = app.process().pid
@@ -532,6 +868,7 @@ artifactIntegrationE2E(
 		for (const expected of resumedContract.stateOutput) {
 			await expect(recreatedAfterRestart).toContainText(expected, { timeout: 60_000 })
 		}
+		await executeSetupCells(resumedArtifact, resumedContract)
 		await runCell(resumedArtifact, resumedContract.plotCellId)
 		await expectPng(resumedArtifact.locator(`[data-aihydro-cell-id="${resumedContract.plotCellId}"]`))
 		await interruptInstalledModule(page, resumedContract, workspaceDir)

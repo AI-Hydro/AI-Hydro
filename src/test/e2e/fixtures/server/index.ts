@@ -551,7 +551,7 @@ export class AiHydroApiServerMock {
 		})
 
 		await new Promise<void>((resolve, reject) => {
-			server.listen(E2E_API_SERVER_PORT, (error?: Error) => {
+			server.listen(E2E_API_SERVER_PORT, "127.0.0.1", (error?: Error) => {
 				if (error) {
 					console.error(`Failed to start server on port ${E2E_API_SERVER_PORT}:`, error)
 					reject(error)

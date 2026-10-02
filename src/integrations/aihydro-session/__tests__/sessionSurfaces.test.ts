@@ -1,283 +1,300 @@
+import { execFileSync } from "node:child_process"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { expect } from "chai"
-import * as fs from "fs"
-import { afterEach, beforeEach, describe, it } from "mocha"
-import * as os from "os"
-import * as path from "path"
 import {
-	listSessionIds,
-	loadClaimSurface,
-	loadExperimentSurface,
-	loadReplaySurface,
-	resolveSessionJsonPath,
-} from "../sessionSurfaces"
+	LatestResearchRequest,
+	parseResearchSnapshot,
+	RESEARCH_SNAPSHOT_TEMPLATE,
+	type ResearchSnapshot,
+	readResearchSnapshot,
+	type SnapshotBackend,
+} from "../researchSnapshot"
+import { loadClaimSurface, loadExperimentSurface, loadReplaySurface, resolveSessionJsonPath } from "../sessionSurfaces"
 
-describe("sessionSurfaces", () => {
-	let home: string
-
-	beforeEach(() => {
-		home = fs.mkdtempSync(path.join(os.tmpdir(), "aihydro-surfaces-"))
-		fs.mkdirSync(path.join(home, "sessions"), { recursive: true })
-	})
-
-	afterEach(() => {
-		fs.rmSync(home, { recursive: true, force: true })
-	})
-
-	function writeSession(id: string, raw: Record<string, unknown>) {
-		const file = path.join(home, "sessions", `${id}.json`)
-		fs.writeFileSync(file, JSON.stringify(raw, null, 2))
-		return file
+function snapshot(): ResearchSnapshot {
+	return {
+		schema_version: 1,
+		session_id: "study",
+		session_path: "/tmp/study.json",
+		source: "session",
+		run_log_source: "sqlite",
+		claims: {},
+		experiments: {},
+		warnings: [],
+		runs: ["first", "second"].map((id, index) => ({
+			run_id: id,
+			session_id: "study",
+			tool_name: "evaluate",
+			timestamp: `2026-01-0${index + 1}`,
+			key_outputs: { nse: index ? 0.8 : 0.5 },
+			inputs: { period: "2000-2001" },
+			evidence: { schema_version: 1, uncertainty: { nse: { value: index ? 0.8 : 0.5 } } },
+		})),
 	}
+}
 
-	it("resolves canonical session files and explicit capsule paths", () => {
-		const canonical = writeSession("01031500", { session_id: "01031500" })
-		const capsuleDir = path.join(home, "exports", "capsule_02000000")
-		fs.mkdirSync(capsuleDir, { recursive: true })
-		const capsule = path.join(capsuleDir, "session.json")
-		fs.writeFileSync(capsule, JSON.stringify({ session_id: "02000000" }))
+function backend(value = snapshot()): SnapshotBackend {
+	return {
+		getServers: () => [
+			{
+				name: "configured-hydrology",
+				status: "connected",
+				resourceTemplates: [{ uriTemplate: RESEARCH_SNAPSHOT_TEMPLATE }],
+			},
+		],
+		readResource: async (_name, uri) => ({ contents: [{ uri, text: JSON.stringify(value) }] }),
+	}
+}
 
-		expect(resolveSessionJsonPath("01031500", home)).to.equal(canonical)
-		expect(resolveSessionJsonPath(capsuleDir, home)).to.equal(capsule)
-		expect(resolveSessionJsonPath("missing", home)).to.equal(undefined)
+async function rejects(promise: Promise<unknown>, message: string) {
+	let failure: unknown
+	try {
+		await promise
+	} catch (error) {
+		failure = error
+	}
+	expect(failure).to.be.instanceOf(Error)
+	expect(String(failure)).to.contain(message)
+}
+
+describe("backend research surfaces", () => {
+	it("preserves actual repeated-tool run IDs, inputs and evidence", async () => {
+		const replay = await loadReplaySurface("study", async () => snapshot())
+		expect(replay.entries.map((run) => run.run_id)).to.deep.equal(["first", "second"])
+		expect(replay.entries.map((run) => run.key_outputs.nse)).to.deep.equal([0.5, 0.8])
+		expect(replay.entries[0].inputs?.period).to.equal("2000-2001")
+		expect(replay.entries[1].evidence?.uncertainty).to.deep.equal({ nse: { value: 0.8 } })
 	})
 
-	it("loads experiments from wrapped session slots and reports available ids", () => {
-		writeSession("s1", {
-			session_id: "s1",
-			_experiments: {
-				data: {
-					exp_b: { defn: { name: "B", tool: "run_model", features: ["f2"], metrics: ["nse"] }, results: null },
-					exp_a: {
-						defn: {
-							experiment_id: "exp_a",
-							name: "A",
-							tool: "score_model",
-							features: ["f1"],
-							metrics: ["kge"],
-							params: { alpha: 1 },
-							params_hash: "abc",
-							created_at: "2026-06-25T00:00:00Z",
-						},
-						results: {
-							status: "complete",
-							run_ids: { f1: "run.f1" },
-							cells: { f1: { kge: { value: 0.73, ci_low: 0.7, ci_high: 0.76 } } },
-							errors: {},
-							n_success: 1,
-							n_error: 0,
-							completed_at: "2026-06-25T00:10:00Z",
-						},
-					},
-				},
-			},
-		})
-
-		const surface = loadExperimentSurface("s1", "", home)
-		expect(surface.experiment_id).to.equal("exp_a")
-		expect(surface.availableExperimentIds).to.deep.equal(["exp_a", "exp_b"])
-		expect(surface.defn.name).to.equal("A")
-		expect(surface.results?.status).to.equal("complete")
-		expect(surface.results?.cells.f1.kge.value).to.equal(0.73)
+	it("does not invent history when the backend has no run log", async () => {
+		const value = { ...snapshot(), runs: [], run_log_source: "absent" as const, warnings: ["No retained run log"] }
+		const replay = await loadReplaySurface("study", async () => value)
+		expect(replay.entries).to.deep.equal([])
+		expect(replay.warnings).to.deep.equal(["No retained run log"])
 	})
 
-	it("normalizes replay maps into chronological timeline entries", () => {
-		writeSession("s2", {
-			session_id: "s2",
-			_run_log: {
-				data: {
-					run2: { tool_name: "fetch", timestamp: "2026-06-25T00:02:00Z", key_outputs: { q: 2 } },
-					run1: { tool: "delineate", timestamp: "2026-06-25T00:01:00Z", key_outputs: { area_km2: 10 } },
+	it("uses normalized backend experiment definitions and results", async () => {
+		const value = snapshot()
+		value.experiments = {
+			exp_b: { defn: { name: "B" } },
+			exp_a: {
+				defn: { name: "A", metrics: ["nse"] },
+				results: {
+					status: "complete",
+					cells: { basin: { nse: { value: 0.8, run_id: "second" } } },
 				},
 			},
-		})
-
-		const replay = loadReplaySurface("s2", home)
-		expect(replay.source).to.equal("session")
-		expect(replay.entries.map((entry) => entry.run_id)).to.deep.equal(["run1", "run2"])
-		expect(replay.entries[0].tool_name).to.equal("delineate")
-		expect(replay.entries[1].key_outputs.q).to.equal(2)
+		}
+		const experiment = await loadExperimentSurface("study", "", async () => value)
+		expect(experiment.experiment_id).to.equal("exp_a")
+		expect(experiment.availableExperimentIds).to.deep.equal(["exp_a", "exp_b"])
+		expect(experiment.results?.cells.basin.nse.run_id).to.equal("second")
 	})
 
-	it("normalizes nested legacy replay maps from hydro slot storage", () => {
-		writeSession("legacy", {
-			session_id: "legacy",
-			_run_log: {
-				__legacy__: {
-					"": {
-						"q.1": {
-							run_id: "q.1",
-							tool_name: "fetch_streamflow_data",
-							timestamp: "2026-06-27T21:38:05Z",
-							key_outputs: { n_days: 7671 },
-						},
-						"sigs.1": {
-							run_id: "sigs.1",
-							tool_name: "extract_hydrological_signatures",
-							timestamp: "2026-06-27T21:38:15Z",
-							key_outputs: { baseflow_index: 0.44 },
-						},
-					},
-				},
-			},
-		})
-
-		const replay = loadReplaySurface("legacy", home)
-		expect(replay.entries.map((entry) => entry.run_id)).to.deep.equal(["q.1", "sigs.1"])
-		expect(replay.entries.map((entry) => entry.tool_name)).to.deep.equal([
-			"fetch_streamflow_data",
-			"extract_hydrological_signatures",
-		])
-	})
-
-	it("backfills replay with stored slot results when run_log is partial", () => {
-		writeSession("partial-replay", {
-			session_id: "partial-replay",
-			_run_log: {
-				data: {
-					"q.1": { run_id: "q.1", tool_name: "fetch_streamflow_data", timestamp: "2024-01-01T00:00:00Z" },
-				},
-			},
-			streamflow: {
-				__legacy__: {
-					"": { data: { n_days: 10 }, meta: { tool: "fetch_streamflow_data", computed_at: "2024-01-01T00:00:00Z" } },
-				},
-			},
-			baseflow: {
-				__legacy__: {
-					"": { data: { bfi: 0.44 }, meta: { tool: "separate_baseflow", computed_at: "2024-01-02T00:00:00Z" } },
-				},
-			},
-		})
-
-		const surface = loadReplaySurface("partial-replay", home)
-		expect(surface.entries.map((entry) => entry.tool_name)).to.deep.equal(["fetch_streamflow_data", "separate_baseflow"])
-		expect(surface.entries[1].run_id).to.equal("baseflow.stored")
-	})
-
-	it("loads replay entries from capsule session.json", () => {
-		const capsuleDir = path.join(home, "exports", "capsule_s3")
-		fs.mkdirSync(capsuleDir, { recursive: true })
-		fs.writeFileSync(
-			path.join(capsuleDir, "session.json"),
-			JSON.stringify({
-				session_id: "s3",
-				_run_log: [{ run_id: "r1", tool_name: "tool", timestamp: "t", key_outputs: {} }],
+	it("distinguishes no experiments from a backend failure", async () => {
+		await rejects(
+			loadExperimentSurface("study", "", async () => snapshot()),
+			"No experiments found",
+		)
+		await rejects(
+			loadExperimentSurface("study", "", async () => {
+				throw new Error("backend unavailable")
 			}),
+			"backend unavailable",
 		)
+	})
 
-		const replay = loadReplaySurface(capsuleDir, home)
+	it("preserves formal links and generates candidates only for actual unlinked runs", async () => {
+		const value = snapshot()
+		value.claims = {
+			c1: { claim: "Synthetic result", status: "tested", evidence_spans: [{ source_type: "run", source_id: "first" }] },
+		}
+		const claims = await loadClaimSurface("study", async () => value)
+		expect(claims.claims.map((claim) => claim.claimId)).to.deep.equal(["c1", "candidate:second"])
+		expect(claims.claims[0].evidenceSpans[0].sourceId).to.equal("first")
+	})
+
+	it("keeps supported claims without evidence visibly flagged for review", async () => {
+		const value = snapshot()
+		value.claims = { c1: { claim: "Unsupported assertion", status: "supported" } }
+		const surface = await loadClaimSurface("study", async () => value)
+		expect(surface.claims[0].status).to.equal("weakly_supported")
+		expect(surface.claims[0].limitations.join(" ")).to.contain("No evidence spans")
+	})
+
+	it("preserves capsule provenance supplied by the backend", async () => {
+		const value = {
+			...snapshot(),
+			source: "capsule" as const,
+			session_path: "/tmp/capsule/session.json",
+			run_log_source: "capsule_json" as const,
+		}
+		const replay = await loadReplaySurface("/tmp/capsule", async () => value)
+		expect(replay.capsule_path).to.equal("/tmp/capsule")
 		expect(replay.source).to.equal("capsule")
-		expect(replay.capsule_path).to.equal(capsuleDir)
-		expect(replay.entries).to.have.length(1)
 	})
 
-	it("loads persisted claims from canonical and wrapped claim slots", () => {
-		writeSession("claims", {
-			session_id: "claims",
-			claims: {
-				"claim-a": {
-					statement: "KGE is acceptable in two basins.",
-					claim_type: "model_performance",
-					status: "tested",
-					confidence: "medium",
-					evidence_spans: [{ source_type: "run", source_id: "run.01031500.calibration", metric_ref: "kge" }],
-					limitations: ["single smoke fixture"],
-				},
-			},
-			_claims: {
-				data: {
-					"claim-b": {
-						claim: "RMSE differs across basins.",
-						claim_type: "empirical_result",
-						status: "weakly_supported",
-						confidence: "low",
-					},
-				},
-			},
+	it("selects the backend by advertised capability, not server name", async () => {
+		const value = await readResearchSnapshot(backend(), "study")
+		expect(value.runs).to.have.length(2)
+	})
+
+	it("preserves path and Unicode through the resource reference", async () => {
+		const client = backend()
+		const target = "/tmp/हाइड्रो study/session.json"
+		client.readResource = async (_name, uri) => {
+			expect(Buffer.from(uri.split("/").at(-1)!, "base64url").toString("utf8")).to.equal(target)
+			return { contents: [{ uri, text: JSON.stringify(snapshot()) }] }
+		}
+		await readResearchSnapshot(client, target)
+	})
+
+	it("does not silently select between multiple authoritative backends", async () => {
+		const client = backend()
+		const servers = client.getServers()
+		client.getServers = () => [...servers, { ...servers[0], name: "other" }]
+		await rejects(readResearchSnapshot(client, "study"), "Multiple")
+	})
+
+	it("reports disconnected or incompatible backends instead of empty results", async () => {
+		const client = backend()
+		client.getServers = () => []
+		await rejects(readResearchSnapshot(client, "study"), "Connect or restart")
+		expect(() => parseResearchSnapshot(JSON.stringify({ ...snapshot(), schema_version: 2 }))).to.throw("Incompatible")
+	})
+
+	it("surfaces storage errors and rejects mismatched resource URIs", async () => {
+		const client = backend()
+		client.readResource = async (_name, uri) => ({
+			contents: [{ uri, text: JSON.stringify({ error: true, code: "RUN_LOG_UNREADABLE", message: "corrupt" }) }],
 		})
-
-		const surface = loadClaimSurface("claims", home)
-		expect(surface.claims.map((claim) => claim.claimId)).to.deep.equal(["claim-a", "claim-b"])
-		expect(surface.claims[0].evidenceSpans[0].sourceId).to.equal("run.01031500.calibration")
-		expect(surface.claims[1].statement).to.equal("RMSE differs across basins.")
+		await rejects(readResearchSnapshot(client, "study"), "RUN_LOG_UNREADABLE")
+		client.readResource = async () => ({ contents: [{ uri: "wrong", text: JSON.stringify(snapshot()) }] })
+		await rejects(readResearchSnapshot(client, "study"), "matching research snapshot")
 	})
 
-	it("synthesizes evidence candidates from replay runs when no formal claims exist", () => {
-		writeSession("candidate", {
-			session_id: "candidate",
-			claims: {},
-			_run_log: {
-				data: {
-					"q.1": {
-						run_id: "q.1",
-						tool_name: "fetch_streamflow_data",
-						timestamp: "2026-06-27T21:38:05Z",
-						key_outputs: { n_days: 7671 },
-					},
-				},
-			},
-		})
-
-		const surface = loadClaimSurface("candidate", home)
-		expect(surface.claims).to.have.length(1)
-		expect(surface.claims[0].claimId).to.equal("candidate:q.1")
-		expect(surface.claims[0].claimType).to.equal("evidence_candidate")
-		expect(surface.claims[0].evidenceSpans[0].sourceId).to.equal("q.1")
+	it("rejects duplicate or foreign run IDs", () => {
+		const duplicate = snapshot()
+		duplicate.runs.push(duplicate.runs[0])
+		expect(() => parseResearchSnapshot(JSON.stringify(duplicate))).to.throw("Invalid persisted run")
+		const foreign = snapshot()
+		foreign.runs[0].session_id = "other"
+		expect(() => parseResearchSnapshot(JSON.stringify(foreign))).to.throw("Invalid persisted run")
 	})
 
-	it("flags supported claims without evidence and still shows unlinked run candidates", () => {
-		writeSession("claim-gap", {
-			session_id: "claim-gap",
-			claims: {
-				c1: {
-					id: "c1",
-					claim: "This should not be citable without evidence.",
-					claim_type: "empirical_result",
-					status: "supported",
-					confidence: "medium",
-					evidence_spans: [],
-					limitations: [],
-				},
-			},
-			_run_log: {
-				data: {
-					"run.1": {
-						run_id: "run.1",
-						tool_name: "extract_hydrological_signatures",
-						timestamp: "2024-01-01T00:00:00Z",
-						key_outputs: { baseflow_index: 0.44 },
-					},
-				},
-			},
-		})
-
-		const surface = loadClaimSurface("claim-gap", home)
-		const claim = surface.claims.find((item) => item.claimId === "c1")
-		expect(claim?.status).to.equal("weakly_supported")
-		expect(claim?.limitations.join(" ")).to.contain("No evidence spans")
-		expect(surface.claims.map((item) => item.claimId)).to.include("candidate:run.1")
+	it("coalesces in-flight reads but refreshes completed snapshots", async () => {
+		const client = backend()
+		let calls = 0
+		client.readResource = async (_name, uri) => {
+			calls++
+			return { contents: [{ uri, text: JSON.stringify(snapshot()) }] }
+		}
+		const first = readResearchSnapshot(client, "study")
+		const second = readResearchSnapshot(client, "study")
+		expect(first).to.equal(second)
+		await Promise.all([first, second])
+		await readResearchSnapshot(client, "study")
+		expect(calls).to.equal(2)
 	})
 
-	it("loads legacy sessions containing non-standard NaN tokens", () => {
-		const dir = path.join(home, "sessions")
-		fs.mkdirSync(dir, { recursive: true })
-		fs.writeFileSync(
-			path.join(dir, "nan-session.json"),
-			'{"session_id":"nan-session","inundation":{"__legacy__":{"":{"data":{"channel_slope_est":NaN},"meta":{"tool":"compute_inundation","computed_at":"2026-01-01T00:00:00Z"}}}}}',
+	it("ignores late requests while keeping comparison and primary lanes separate", () => {
+		const requests = new LatestResearchRequest()
+		const old = requests.start()
+		const compare = requests.start("compare")
+		const current = requests.start()
+		expect(old()).to.equal(false)
+		expect(current()).to.equal(true)
+		expect(compare()).to.equal(true)
+	})
+})
+
+const python = process.env.AIHYDRO_SURFACE_TEST_PYTHON
+;(python ? describe : describe.skip)("Python-to-extension persisted snapshot integration", () => {
+	let home: string
+	beforeEach(() => {
+		home = fs.mkdtempSync(path.join(os.tmpdir(), "aihydro-cross-language-"))
+	})
+	afterEach(() => fs.rmSync(home, { recursive: true, force: true }))
+
+	it("loads a Python-written current session, SQLite history and nested experiments", async () => {
+		const script = `
+import json, sys
+from pathlib import Path
+from ai_hydro.session import store
+from ai_hydro.session.surfaces import read_research_snapshot
+store._SESSIONS_DIR = Path(sys.argv[1]) / "sessions"
+store._REPO_ROOT = Path(sys.argv[1])
+s = store.HydroSession("actual")
+for rid, score in [("run.one", 0.5), ("run.two", 0.8)]:
+    s.put_result("model", "basin", "same", {"run_id": rid, "data": {"nse": score}, "meta": {"tool": "evaluate", "computed_at": rid}})
+s.set("_experiments", {"exp": {"defn": {"name": "Actual nested experiment", "metrics": ["nse"]}, "results": {"status": "complete", "cells": {"basin": {"nse": {"value": 0.8, "run_id": "run.two"}}}}}})
+s.claims["c1"] = {"claim": "Synthetic claim", "status": "tested", "evidence_spans": [{"source_type": "run", "source_id": "run.one"}]}
+s.save()
+print(json.dumps(read_research_snapshot("actual"), allow_nan=False))
+`
+		const text = execFileSync(python!, ["-c", script, home], { encoding: "utf8", timeout: 15000 })
+		const value = parseResearchSnapshot(text)
+		expect(resolveSessionJsonPath("actual", home)).to.equal(path.join(home, "sessions", "actual.json"))
+		const reader = async () => value
+		const replay = await loadReplaySurface("actual", reader)
+		expect(replay.entries.filter((entry) => entry.tool_name === "evaluate").map((entry) => entry.run_id)).to.deep.equal([
+			"run.one",
+			"run.two",
+		])
+		const experiment = await loadExperimentSurface("actual", "exp", reader)
+		expect(experiment.results?.cells.basin.nse.run_id).to.equal("run.two")
+		const claims = await loadClaimSurface("actual", reader)
+		expect(claims.claims[0].evidenceSpans[0].sourceId).to.equal("run.one")
+	})
+})
+
+describe("research panel host integration", () => {
+	it("does not post a late replay response over a newer selection", async () => {
+		const { VscodeReplayProvider } = await import("../../../hosts/vscode/VscodeReplayProvider")
+		const messages: Record<string, unknown>[] = []
+		const panel = { webview: { postMessage: (message: Record<string, unknown>) => messages.push(message) } }
+		const client = backend()
+		let finishOld!: () => void
+		client.readResource = async (_name, uri) => {
+			const sid = Buffer.from(uri.split("/").at(-1)!, "base64url").toString("utf8")
+			const value = snapshot()
+			value.session_id = sid
+			value.runs = value.runs.map((run) => ({ ...run, session_id: sid }))
+			const response = { contents: [{ uri, text: JSON.stringify(value) }] }
+			if (sid === "old")
+				return new Promise((resolve) => {
+					finishOld = () => resolve(response)
+				})
+			return response
+		}
+		const provider = VscodeReplayProvider as unknown as {
+			controller: unknown
+			currentPanel: unknown
+			handleLoadReplay(panel: unknown, sessionId: string): Promise<void>
+		}
+		provider.controller = { mcpHub: client }
+		provider.currentPanel = panel
+		try {
+			const old = provider.handleLoadReplay(panel, "old")
+			await provider.handleLoadReplay(panel, "new")
+			finishOld()
+			await old
+			expect(messages.map((message) => message.session_id)).to.deep.equal(["new"])
+		} finally {
+			provider.controller = undefined
+			provider.currentPanel = undefined
+		}
+	})
+
+	it("propagates ledger backend errors to the UI instead of an empty successful ledger", async () => {
+		const { getLedgerState } = await import("../../../core/controller/ledger/getLedgerState")
+		const client = backend()
+		client.getServers = () => []
+		await rejects(
+			getLedgerState({ mcpHub: client } as Parameters<typeof getLedgerState>[0], { sessionId: "study" }),
+			"Connect or restart",
 		)
-
-		const surface = loadReplaySurface("nan-session", home)
-
-		expect(surface.session_id).to.equal("nan-session")
-		expect(surface.entries).to.have.length(1)
-		expect(surface.entries[0].key_outputs.channel_slope_est).to.equal(null)
-	})
-
-	it("lists recent session ids by mtime", () => {
-		writeSession("old", { session_id: "old" })
-		writeSession("new", { session_id: "new" })
-		fs.utimesSync(path.join(home, "sessions", "old.json"), new Date(1000), new Date(1000))
-		fs.utimesSync(path.join(home, "sessions", "new.json"), new Date(2000), new Date(2000))
-		expect(listSessionIds(home)).to.deep.equal(["new", "old"])
 	})
 })

@@ -30,6 +30,7 @@ describe("Learning Pack approval presentation", () => {
 		assert.match(prompts[0].message, /not role-protected/)
 		assert.deepEqual(prompts[0].items, ["Continue"])
 		assert.match(prompts[0].detail, /terminal-equivalent, not sandboxed/)
+		assert.match(prompts[0].detail, /environment metadata path:/i)
 	})
 
 	it("cancels without showing installation choices when the instructor warning is declined", async () => {
@@ -47,6 +48,8 @@ describe("Learning Pack approval presentation", () => {
 		const student = await inspection("student")
 		const untrusted = createLearningPackApprovalPresentation(student, false)
 		assert.equal(untrusted.instructorWarning, undefined)
+		assert.match(untrusted.installPrompt.message, /pack signature .* is valid/i)
+		assert.match(untrusted.installPrompt.message, /signing key is not trusted/i)
 		assert.equal(await requestLearningPackApproval(untrusted, async () => "Install Once"), "install-once")
 		assert.equal(await requestLearningPackApproval(untrusted, async () => "Trust Publisher and Install"), "trust-publisher")
 		const trusted = createLearningPackApprovalPresentation(student, true)

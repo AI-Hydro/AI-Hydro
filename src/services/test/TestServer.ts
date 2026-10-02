@@ -12,6 +12,7 @@ import { Controller } from "@/core/controller"
 import { ExtensionRegistryInfo } from "@/registry"
 import { getCwd } from "@/utils/path"
 import { calculateToolSuccessRate, getFileChanges, initializeGitRepository, validateWorkspacePath } from "./GitHelper"
+import { isIsolatedLocalE2E } from "./isIsolatedLocalE2E"
 
 /**
  * Creates a tracker to monitor tool calls and failures during task execution
@@ -41,6 +42,7 @@ function createTaskCompletionTracker(): Promise<void> {
 
 let testServer: http.Server | undefined
 let messageCatcherDisposable: vscode.Disposable | undefined
+const E2E_LOCAL_API_BASE_URL = "http://127.0.0.1:7777/api/v1"
 
 /**
  * Updates the auto approval settings to enable all actions
@@ -126,9 +128,47 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 
 		// Test-only command injection is restricted to Learning Pack lifecycle
 		// commands so CI can exercise approval decisions without automating native
-		// file pickers or modal dialogs. This server exists only in evals.env mode.
+		// file pickers or modal dialogs. This server exists only in explicit test mode.
 		const commandEndpoint = req.method === "POST" && req.url === "/learning-pack-command"
-		if (req.method !== "POST" || (req.url !== "/task" && !commandEndpoint)) {
+		const localProviderEndpoint = req.method === "POST" && req.url === "/e2e/local-provider"
+		const localProviderStatusEndpoint = req.method === "GET" && req.url === "/e2e/local-provider-status"
+		const focusSidebarEndpoint = req.method === "POST" && req.url === "/e2e/focus-sidebar"
+
+		if (localProviderStatusEndpoint) {
+			if (!isIsolatedLocalE2E()) {
+				res.writeHead(403, { "Content-Type": "application/json" })
+				res.end(JSON.stringify({ error: "Local provider status is available only to isolated E2E tests" }))
+				return
+			}
+
+			const visibleWebview = WebviewProvider.getVisibleInstance()
+			if (!visibleWebview?.controller) {
+				res.writeHead(409, { "Content-Type": "application/json" })
+				res.end(JSON.stringify({ error: "No visible AI-Hydro instance found" }))
+				return
+			}
+
+			const testController = visibleWebview.controller
+			const currentConfig = testController.stateManager.getApiConfiguration()
+			res.writeHead(200, { "Content-Type": "application/json" })
+			res.end(
+				JSON.stringify({
+					planModeApiProvider: currentConfig.planModeApiProvider,
+					actModeApiProvider: currentConfig.actModeApiProvider,
+					openAiBaseUrl: currentConfig.openAiBaseUrl,
+					openAiApiKeyConfigured: Boolean(currentConfig.openAiApiKey),
+					planModeOpenAiModelId: currentConfig.planModeOpenAiModelId,
+					actModeOpenAiModelId: currentConfig.actModeOpenAiModelId,
+					mode: testController.stateManager.getGlobalSettingsKey("mode"),
+				}),
+			)
+			return
+		}
+
+		if (
+			req.method !== "POST" ||
+			(req.url !== "/task" && !commandEndpoint && !localProviderEndpoint && !focusSidebarEndpoint)
+		) {
 			res.writeHead(404)
 			res.end(JSON.stringify({ error: "Not found" }))
 			return
@@ -144,6 +184,57 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 			try {
 				// Parse the JSON body
 				const parsedBody = JSON.parse(body)
+				if (focusSidebarEndpoint) {
+					if (!isIsolatedLocalE2E()) {
+						res.writeHead(403, { "Content-Type": "application/json" })
+						res.end(JSON.stringify({ error: "Sidebar focus is available only to isolated E2E tests" }))
+						return
+					}
+					await vscode.commands.executeCommand(`${ExtensionRegistryInfo.views.Sidebar}.focus`)
+					res.writeHead(200, { "Content-Type": "application/json" })
+					res.end(JSON.stringify({ focused: true }))
+					return
+				}
+
+				if (localProviderEndpoint) {
+					// The broad Playwright suite must execute through a real API
+					// handler without reaching an external model provider. Keep
+					// this fixed configuration unavailable to evals.env users.
+					if (!isIsolatedLocalE2E()) {
+						res.writeHead(403, { "Content-Type": "application/json" })
+						res.end(JSON.stringify({ error: "Local provider setup is available only to isolated E2E tests" }))
+						return
+					}
+
+					const visibleWebview = WebviewProvider.getVisibleInstance()
+					if (!visibleWebview?.controller) {
+						res.writeHead(409, { "Content-Type": "application/json" })
+						res.end(JSON.stringify({ error: "No visible AI-Hydro instance found" }))
+						return
+					}
+
+					const testController = visibleWebview.controller
+					const currentConfig = testController.stateManager.getApiConfiguration()
+					testController.stateManager.setApiConfiguration({
+						...currentConfig,
+						planModeApiProvider: "openai",
+						actModeApiProvider: "openai",
+						openAiBaseUrl: E2E_LOCAL_API_BASE_URL,
+						openAiApiKey: "test-personal-token",
+						planModeOpenAiModelId: "mock-model",
+						actModeOpenAiModelId: "mock-model",
+					})
+					testController.stateManager.setGlobalStateBatch({
+						welcomeViewCompleted: true,
+						mode: "act",
+					})
+					await testController.postStateToWebview()
+
+					res.writeHead(200, { "Content-Type": "application/json" })
+					res.end(JSON.stringify({ configured: true }))
+					return
+				}
+
 				if (commandEndpoint) {
 					const allowedCommands = new Set([
 						ExtensionRegistryInfo.commands.LearningPacksInstall,
@@ -444,7 +535,7 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 		})
 	})
 
-	testServer.listen(PORT, () => {
+	testServer.listen(PORT, "127.0.0.1", () => {
 		Logger.log(`Test server listening on port ${PORT}`)
 	})
 

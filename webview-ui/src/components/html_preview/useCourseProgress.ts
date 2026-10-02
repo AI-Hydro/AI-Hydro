@@ -107,7 +107,7 @@ export interface CourseProgressHook {
 	markComplete: (moduleId: string, timeSpentMs?: number) => Promise<CourseProgress | null>
 	markUncomplete: (moduleId: string) => Promise<void>
 	reset: () => Promise<void>
-	setCurrent: (moduleId: string | null) => Promise<void>
+	setCurrent: (moduleId: string | null) => Promise<CourseProgress | null>
 	/** Force-refresh from disk (e.g. after agent updates progress out-of-band) */
 	refresh: () => Promise<void>
 }
@@ -218,15 +218,16 @@ export function useCourseProgress(
 	}, [courseId, scope])
 
 	const setCurrent = useCallback(
-		async (moduleId: string | null) => {
+		async (moduleId: string | null): Promise<CourseProgress | null> => {
 			if (!courseId) {
-				return
+				return null
 			}
 			const fresh = await sendProgress({ action: "set-current", courseId, moduleId, learningPackScope: scope })
 			if (fresh) {
 				setProgress(fresh)
 				publishProgress(fresh)
 			}
+			return fresh
 		},
 		[courseId, scope],
 	)

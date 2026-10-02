@@ -90,16 +90,16 @@ import { expect } from "@playwright/test"
 import { e2e } from "./utils/helpers"
 
 e2e("Test description", async ({ sidebar, helper, page }) => {
-  // Sign in to Cline
+  // Configure the isolated AI-Hydro test provider
   await helper.signin(sidebar)
   
   // Test interactions
   const inputbox = sidebar.getByTestId("chat-input")
-  await inputbox.fill("Hello, Cline!")
+  await inputbox.fill("Hello, AI-Hydro!")
   await sidebar.getByTestId("send-button").click()
   
-  // Assertions
-  await expect(sidebar.getByText("API Request...")).toBeVisible()
+  // Assert the stable outcome, not a transient loading frame
+  await expect(sidebar.getByText("Hello! I'm a mock AI-Hydro API response.")).toBeVisible()
 })
 ```
 
@@ -232,8 +232,7 @@ The test environment includes:
 
 4. **Handle async operations:**
    ```typescript
-   // Wait for API responses
-   await expect(sidebar.getByText("API Request...")).toBeVisible()
+   // Wait for the stable response rather than a transient loading state
    await expect(sidebar.getByText("Response received")).toBeVisible()
    ```
 

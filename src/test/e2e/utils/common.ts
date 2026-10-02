@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test"
+import type { Frame, Page } from "@playwright/test"
 
 export const openTab = async (_page: Page, tabName: string) => {
 	await _page
@@ -35,19 +35,7 @@ export const toggleNotifications = async (_page: Page) => {
 	return _page
 }
 
-export const closeBanners = async (sidebar: Page) => {
-	const banners = ["Get Started for Free", "Close banner and enable"]
-
-	for (const banner of banners) {
-		await sidebar.getByRole("button", { name: banner }).click({ delay: 100 })
-	}
-}
-
-export async function cleanChatView(sidebar: Page): Promise<Page> {
-	const signUpBtn = sidebar.getByRole("button", { name: "Get Started for Free" })
-	if (await signUpBtn.isVisible()) {
-		await signUpBtn.click({ delay: 50 })
-	}
+export async function cleanChatView(sidebar: Page | Frame): Promise<Page | Frame> {
 	// Verify the help improve banner is visible and can be closed.
 	const helpBanner = sidebar.getByText("Help Improve AI-Hydro")
 	if (await helpBanner.isVisible()) {

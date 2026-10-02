@@ -22,7 +22,7 @@ function inspectionDetails(inspection: LearningPackArchiveInspection): string {
 		`Signer: ${inspection.contract.signerFingerprint}`,
 		`AI-Hydro compatibility: ${manifest.compatibility.aiHydro}`,
 		`Local Python: ${manifest.capabilities.localPython} (terminal-equivalent, not sandboxed)`,
-		`Environment metadata: ${manifest.environmentPath}`,
+		`Environment metadata path: ${manifest.environmentPath}`,
 		`External web origins: none`,
 	].join("\n")
 }
@@ -52,7 +52,7 @@ export function createLearningPackApprovalPresentation(
 						items: Object.freeze(["Install"]),
 					}
 				: {
-						message: `The publisher key for ${manifest.title} is signed but not trusted.`,
+						message: `The pack signature for ${manifest.title} is valid, but this signing key is not trusted.`,
 						detail,
 						items: Object.freeze(["Install Once", "Trust Publisher and Install"]),
 					},

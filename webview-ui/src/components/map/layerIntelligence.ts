@@ -103,8 +103,9 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 			return {
 				dataState: "analysis_ready_raster",
 				typeLabel: "Raster",
-				statusLabel: "Analysis-ready raster",
-				statusDetail: "Raw raster values are loaded; colormap editing and value probing are available.",
+				statusLabel: "Raster values available",
+				statusDetail:
+					"Raw raster values are available for styling and probing. Scientific validity, units and coverage require separate checks.",
 				capabilities,
 				warnings,
 				provenancePath,
@@ -187,4 +188,28 @@ function sourceLabel(layer: MapLayer): string {
 	if (meta.tool) return meta.tool
 	if (meta.path) return meta.path.split(/[\\/]/).pop() ?? meta.path
 	return "Map session"
+}
+
+export function sourceStatusText(status?: string): string {
+	if (!status) return "Not checked"
+	if (status === "source_changed") return "Source changed — reload recommended"
+	if (status === "current") return "Reported current (not scientific validation)"
+	return `Reported source status: ${status}`
+}
+
+export function layerResearchDetails(layer: MapLayer): Array<[string, string]> {
+	const meta = layer.metadata ?? {}
+	return [
+		["Source status", sourceStatusText(meta.source_status)],
+		["Units", meta.units || "Not recorded"],
+		["CRS", meta.crs || "Not recorded"],
+		[
+			"Product identity",
+			meta.product_identity || meta.source_dataset_id || meta.gee_dataset_id || meta.dataset || "Not recorded",
+		],
+		["Run", meta._run_id || meta.run_id || "Not linked"],
+		["Validation", meta.validation_status || "Not assessed"],
+		["Uncertainty", meta.uncertainty || "Not recorded"],
+		["Coverage", meta.coverage_status || "Not recorded"],
+	]
 }

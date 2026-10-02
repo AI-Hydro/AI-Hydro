@@ -17,8 +17,10 @@
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import { KeyedAsyncQueue } from "./keyedAsyncQueue"
 
 const PROGRESS_DIR = path.join(os.homedir(), ".aihydro", "course_progress")
+const mutationQueue = new KeyedAsyncQueue()
 
 export interface ModuleCompletion {
 	completedAt: number
@@ -77,39 +79,52 @@ async function saveProgress(progress: CourseProgress): Promise<void> {
 	await fs.rename(tmp, file) // atomic on POSIX, near-atomic on Win
 }
 
+/** Prevent concurrent read-modify-write operations from losing newer progress. */
+async function serializeMutation<T>(courseId: string, mutation: () => Promise<T>): Promise<T> {
+	return mutationQueue.run(courseId, mutation)
+}
+
 export async function markComplete(courseId: string, moduleId: string, timeSpentMs?: number): Promise<CourseProgress> {
-	const progress = await loadProgress(courseId)
-	progress.completed[moduleId] = {
-		completedAt: Date.now(),
-		timeSpentMs: timeSpentMs ?? progress.completed[moduleId]?.timeSpentMs,
-	}
-	progress.lastVisitedAt = Date.now()
-	await saveProgress(progress)
-	return progress
+	return serializeMutation(courseId, async () => {
+		const progress = await loadProgress(courseId)
+		progress.completed[moduleId] = {
+			completedAt: Date.now(),
+			timeSpentMs: timeSpentMs ?? progress.completed[moduleId]?.timeSpentMs,
+		}
+		progress.lastVisitedAt = Date.now()
+		await saveProgress(progress)
+		return progress
+	})
 }
 
 export async function markUncomplete(courseId: string, moduleId: string): Promise<CourseProgress> {
-	const progress = await loadProgress(courseId)
-	delete progress.completed[moduleId]
-	progress.lastVisitedAt = Date.now()
-	await saveProgress(progress)
-	return progress
+	return serializeMutation(courseId, async () => {
+		const progress = await loadProgress(courseId)
+		delete progress.completed[moduleId]
+		progress.lastVisitedAt = Date.now()
+		await saveProgress(progress)
+		return progress
+	})
 }
 
 export async function setCurrentModule(courseId: string, moduleId: string | null): Promise<CourseProgress> {
-	const progress = await loadProgress(courseId)
-	progress.currentModuleId = moduleId
-	progress.lastVisitedAt = Date.now()
-	await saveProgress(progress)
-	return progress
+	return serializeMutation(courseId, async () => {
+		const progress = await loadProgress(courseId)
+		progress.currentModuleId = moduleId
+		progress.lastVisitedAt = Date.now()
+		await saveProgress(progress)
+		return progress
+	})
 }
 
 export async function resetProgress(courseId: string): Promise<CourseProgress> {
-	const fresh = emptyProgress(courseId)
-	try {
-		await fs.unlink(progressFilePath(courseId))
-	} catch {
-		// File didn't exist — nothing to remove
-	}
-	return fresh
+	return serializeMutation(courseId, async () => {
+		const fresh = emptyProgress(courseId)
+		try {
+			await fs.unlink(progressFilePath(courseId))
+		} catch {
+			// File didn't exist — nothing to remove
+		}
+		return fresh
+	})
 }

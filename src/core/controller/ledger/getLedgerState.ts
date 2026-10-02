@@ -2,7 +2,8 @@ import type { GetLedgerStateRequest, LedgerStateResponse } from "@shared/proto/c
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
-import { loadClaimSurface, resolveSessionJsonPath } from "@/integrations/aihydro-session/sessionSurfaces"
+import { readResearchSnapshot } from "@/integrations/aihydro-session/researchSnapshot"
+import { loadClaimSurface } from "@/integrations/aihydro-session/sessionSurfaces"
 import type { Controller } from ".."
 
 const SESSIONS_DIR = path.join(os.homedir(), ".aihydro", "sessions")
@@ -27,7 +28,7 @@ async function mostRecentSessionId(): Promise<string> {
  * Load claims for a session from persisted AI-Hydro session/capsule state.
  * If session_id is empty, reads the most recently modified session file.
  */
-export async function getLedgerState(_controller: Controller, request: GetLedgerStateRequest): Promise<LedgerStateResponse> {
+export async function getLedgerState(controller: Controller, request: GetLedgerStateRequest): Promise<LedgerStateResponse> {
 	let sessionIdOrPath = request.sessionId?.trim() || ""
 	try {
 		if (!sessionIdOrPath) {
@@ -37,8 +38,8 @@ export async function getLedgerState(_controller: Controller, request: GetLedger
 			}
 		}
 
-		const surface = loadClaimSurface(sessionIdOrPath)
-		const sessionPath = resolveSessionJsonPath(sessionIdOrPath)
+		const surface = await loadClaimSurface(sessionIdOrPath, (reference) => readResearchSnapshot(controller.mcpHub, reference))
+		const sessionPath = surface.sessionPath
 		const stat = sessionPath ? await fs.stat(sessionPath).catch(() => null) : null
 		return {
 			sessionId: surface.session_id,
@@ -47,6 +48,6 @@ export async function getLedgerState(_controller: Controller, request: GetLedger
 		}
 	} catch (error) {
 		console.error("[getLedgerState] Error:", error)
-		return { sessionId: request.sessionId ?? "", claims: [], updatedAtMs: 0 }
+		throw error
 	}
 }

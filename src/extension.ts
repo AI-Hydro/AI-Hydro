@@ -16,6 +16,7 @@ import { sendSettingsButtonClickedEvent } from "./core/controller/ui/subscribeTo
 import { sendSkillsButtonClickedEvent } from "./core/controller/ui/subscribeToSkillsButtonClicked"
 import { WebviewProvider } from "./core/webview"
 import { createAiHydroAPI } from "./exports"
+import { registerLearningPackCommands } from "./hosts/vscode/registerLearningPackCommands"
 import { VscodeEvidenceBoardProvider } from "./hosts/vscode/VscodeEvidenceBoardProvider"
 import { VscodeExperimentTableProvider } from "./hosts/vscode/VscodeExperimentTableProvider"
 import { VscodeHtmlPreviewProvider } from "./hosts/vscode/VscodeHtmlPreviewProvider"
@@ -27,7 +28,6 @@ import type { GeeProjectInfo, GeeStatusResult } from "./services/gee/types"
 import { Logger } from "./services/logging/Logger"
 import { cleanupTestMode, initializeTestMode } from "./services/test/TestMode"
 import { PreviewHtmlRequest } from "./shared/proto/cline/html_preview"
-import { registerLearningPackCommands } from "./hosts/vscode/registerLearningPackCommands"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
 
 import path from "node:path"
@@ -300,7 +300,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	)
 
 	// Register "AI-Hydro: Experiment Table" — reads a session's _experiments
-	// slot and renders the metric matrix; no Python round-trip required.
+	// slot through the backend snapshot and renders the metric matrix.
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.ExperimentTableButton, async () => {
 			telemetryService.captureButtonClick("aihydro_experimentTableButton", webview.controller?.task?.ulid)
@@ -317,7 +317,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	)
 
-	// Register "AI-Hydro: Session Replay" — reads a session's _run_log slot
+	// Register "AI-Hydro: Session Replay" — reads the backend's persisted run log
 	// and renders it as a chronological audit timeline.
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.SessionReplayButton, async () => {

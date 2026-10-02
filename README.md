@@ -188,6 +188,26 @@ A Jupyter-like execution environment embedded directly in VS Code, purpose-built
 - **Animated kernel status chip** — colour-coded pill shows Ready (green) / Busy (pulsing blue) / Dirty (amber + ✎) / Error (red) at a glance
 - **Per-artifact kernel isolation** — each module gets its own kernel session; variables do not leak between artifacts
 
+#### Install a local Learning Pack
+
+Learning Packs require a build that actually declares the `aihydro.learningPacks.*`
+commands; Marketplace or Releases presence alone is not compatibility proof.
+Use the exact pack-capable runtime commit and VSIX digest named by a controlled
+handoff.
+
+Open the VS Code Command Palette and run **AI-Hydro: Install Learning Pack**, or
+right-click a local `.aihydropack` file and choose **Install Learning Pack**.
+Review the edition, signer fingerprint, compatibility, environment metadata
+path, and terminal-equivalent Python warning. For an untrusted signer, select
+**Install Once** or **Trust Publisher and Install**; an already trusted signer
+offers **Install**. A successful install opens the active course module in the
+existing Studio runtime.
+
+Learning Packs are local signed archives, not sandboxed applications. Package
+approval does not override VS Code workspace trust or Python execution
+permission. See the [Learning Pack v1 contract and lifecycle](docs/learning-pack-v1.md)
+for integrity, trust, rollback, removal, CSP, and nonclaim details.
+
 ### Skills — Workflow Playbooks
 
 The agent discovers and follows domain-specific workflow playbooks before planning any multi-step task.
@@ -250,7 +270,7 @@ Search for **"AI-Hydro"** in VS Code Extensions, or install from the [Marketplac
 
 **Option B — Install from `.vsix`**
 
-1. Download the latest `.vsix` from [Releases](https://github.com/AI-Hydro/AI-Hydro/releases)
+1. Download a compatible `.vsix` from [Releases](https://github.com/AI-Hydro/AI-Hydro/releases). Release assets may lag the Marketplace, so verify the extension version required by any Learning Pack before installation.
 2. In VS Code: `Extensions` > `...` > `Install from VSIX...`
 
 **Option C — Build from source**
@@ -258,9 +278,20 @@ Search for **"AI-Hydro"** in VS Code Extensions, or install from the [Marketplac
 ```bash
 git clone https://github.com/AI-Hydro/AI-Hydro.git
 cd AI-Hydro
-npm run install:all
-npm run package          # produces ai-hydro-*.vsix
+nvm use                  # Node.js 22
+npm ci
+(cd webview-ui && npm ci)
+npm run package:vsix     # emits a development VSIX, SHA256SUMS, and provenance under dist/
 ```
+
+This path uses the lock-installed VSIX tool and refuses nonempty publishing or build-time telemetry values. The
+VSIX secret scanner retains one documented exception for a benign `sendgrid` prompt example; the resulting archive
+is independently checked for common key formats and an explicit runtime-file inventory.
+
+This is a development build, and CI copies have finite retention. It is not a Marketplace release, durable
+distribution, publisher-identity attestation, functional extension-host test, or byte-reproducible-build proof. Its
+version may also be lower than the Marketplace version; use it only in the isolated profile/workspace specified by
+the controlled Learning Pack handoff, not as a general-user upgrade. `SHA256SUMS` covers the raw VSIX bytes only.
 
 ### Step 3 — Configure Your AI Provider
 

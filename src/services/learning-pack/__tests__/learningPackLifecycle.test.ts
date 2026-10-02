@@ -81,6 +81,16 @@ describe("Learning Pack transactional lifecycle", () => {
 		expect((await loadTrustedPublishers(root)).fingerprints).to.deep.equal([`sha256:${"2".repeat(64)}`])
 	})
 
+	it("persists a trust-publisher decision for identical installed content", async () => {
+		const pack = inspection()
+		expect((await installLearningPack(root, pack, "install-once")).status).to.equal("installed")
+		expect(await derivePackTrustState(root, pack)).to.equal("signed-untrusted")
+
+		expect((await installLearningPack(root, pack, "trust-publisher")).status).to.equal("noop")
+		expect(await derivePackTrustState(root, pack)).to.equal("trusted-publisher")
+		expect((await loadLearningPackRegistry(root)).packs.hmfp.active.archiveSha256).to.equal(pack.archiveSha256)
+	})
+
 	it("enforces collisions, SemVer precedence, prerelease opt-in, and edition switching", async () => {
 		const key = generateKeyPairSync("ed25519").privateKey
 		const stable = inspection({ version: "1.0.0", privateKey: key })

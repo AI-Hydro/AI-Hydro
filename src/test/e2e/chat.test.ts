@@ -1,7 +1,15 @@
 import { expect } from "@playwright/test"
 import { e2e } from "./utils/helpers"
 
-e2e("Chat - can send messages and switch between modes", async ({ helper, sidebar, page }) => {
+// The outer bound includes VS Code fixtures and provider stabilization. The
+// request-arrival and rendered-response phases retain their tighter bounds.
+e2e.setTimeout(240_000)
+
+e2e("Chat - can send messages and switch between modes", async ({ helper, sidebar, page, server }) => {
+	if (!server) {
+		throw new Error("The deterministic loopback API server did not start")
+	}
+
 	// Sign in
 	await helper.signin(sidebar)
 
@@ -10,14 +18,20 @@ e2e("Chat - can send messages and switch between modes", async ({ helper, sideba
 	await expect(inputbox).toBeVisible()
 	await inputbox.fill("Hello, AI-Hydro!")
 	await expect(inputbox).toHaveValue("Hello, AI-Hydro!")
+	const generationBefore = server.generationCounter
 	await sidebar.getByTestId("send-button").click({ delay: 100 })
 	await expect(inputbox).toHaveValue("")
 
-	// Loading State initially
-	await expect(sidebar.getByText("API Request...")).toBeVisible()
+	// On loaded Windows hosts, task initialization can take longer than the
+	// response render itself. Prove the request reached the deterministic
+	// loopback provider before asserting its stable rendered response.
+	await expect.poll(() => server.generationCounter, { timeout: 60_000 }).toBeGreaterThan(generationBefore)
+	await expect(sidebar.getByText("Hello! I'm a mock AI-Hydro API response.").first()).toBeVisible({
+		timeout: 30_000,
+	})
 
 	// Starting a new task should clear the current chat view and show the recent tasks
-	await sidebar.getByRole("button", { name: "New Task" }).click()
+	await sidebar.getByRole("button", { name: "Start a New Task", exact: true }).click()
 	await expect(sidebar.getByText("Recent Tasks")).toBeVisible()
 	await expect(sidebar.getByText("Hello, AI-Hydro!")).toBeVisible()
 

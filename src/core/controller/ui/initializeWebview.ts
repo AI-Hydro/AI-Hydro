@@ -2,6 +2,7 @@ import { Empty, EmptyRequest } from "@shared/proto/cline/common"
 import { OpenRouterCompatibleModelInfo } from "@shared/proto/cline/models"
 import { readMcpMarketplaceCatalogFromCache } from "@/core/storage/disk"
 import { telemetryService } from "@/services/telemetry"
+import { shouldInitializeRemoteCatalogs } from "@/services/test/isIsolatedLocalE2E"
 import type { Controller } from "../index"
 import { sendMcpMarketplaceCatalogEvent } from "../mcp/subscribeToMcpMarketplaceCatalog"
 import { refreshBasetenModels } from "../models/refreshBasetenModels"
@@ -26,6 +27,13 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 		const lastCachedModels = await controller.readOpenRouterModels()
 		if (lastCachedModels) {
 			sendOpenRouterModelsEvent(OpenRouterCompatibleModelInfo.create({ models: lastCachedModels }))
+		}
+
+		// The isolated Playwright contract forbids extension-host requests to
+		// external providers. Tests use fixed local fixtures instead of model or
+		// marketplace catalogs; normal and evals.env runtime behavior is unchanged.
+		if (!shouldInitializeRemoteCatalogs()) {
+			return Empty.create({})
 		}
 
 		// Refresh OpenRouter models from API

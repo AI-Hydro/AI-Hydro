@@ -1,64 +1,50 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
-import type { MapLayer } from "@shared/proto/cline/map"
+import { MapLayer } from "@shared/proto/cline/map"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import type { Controller } from ".."
 
-// Keep track of active map layer subscriptions
-const activeMapLayerSubscriptions = new Set<StreamingResponseHandler<MapLayer>>()
-
-/**
- * Subscribes to map layer updates via streaming
- * This is a server-to-client streaming RPC
- */
+/** One ordered snapshot followed by live mutations; never interleave the two. */
 export async function subscribeToMapLayers(
 	controller: Controller,
 	_request: EmptyRequest,
 	responseStream: StreamingResponseHandler<MapLayer>,
 	requestId?: string,
 ): Promise<void> {
-	console.log("[subscribeToMapLayers] Client subscribed to map layer updates", requestId)
-
-	// Add this subscription to the active subscriptions
-	activeMapLayerSubscriptions.add(responseStream)
-
-	// Register cleanup when the connection is closed
+	let active = true
+	let initializing = true
+	let unsubscribe = () => {}
+	const pending: MapLayer[] = []
+	let tail = Promise.resolve()
 	const cleanup = () => {
-		activeMapLayerSubscriptions.delete(responseStream)
-		console.log("[subscribeToMapLayers] Cleaned up layer subscription")
+		if (!active) return
+		active = false
+		pending.length = 0
+		unsubscribe()
 	}
-
-	// Register the cleanup function with the request registry
-	if (requestId) {
-		getRequestRegistry().registerRequest(requestId, cleanup, { type: "map_layer_subscription" }, responseStream)
+	const send = (layer: MapLayer) => {
+		tail = tail
+			.then(async () => {
+				if (active) await responseStream(layer, false)
+			})
+			.catch((error) => {
+				console.error("[subscribeToMapLayers] stream failed:", error)
+				cleanup()
+			})
+		return tail
 	}
-
-	// Subscribe to layer updates from controller
-	const unsubscribe = controller.subscribeToMapLayerUpdates(async (layer: MapLayer) => {
-		// Only send to this specific subscription if it's still active
-		if (activeMapLayerSubscriptions.has(responseStream)) {
-			console.log(`[subscribeToMapLayers] Streaming layer to client: ${layer.id}`)
-			try {
-				await responseStream(layer, false) // Not the last message
-			} catch (error) {
-				console.error("[subscribeToMapLayers] Error streaming layer:", error)
-				activeMapLayerSubscriptions.delete(responseStream)
-				unsubscribe()
-			}
-		}
+	unsubscribe = controller.subscribeToMapLayerUpdates((layer) => {
+		if (!active) return
+		if (initializing) pending.push(layer)
+		else void send(layer)
 	})
-
-	// Send all existing layers to the new subscriber
-	const existingLayers = controller.getMapLayers()
-	for (const layer of existingLayers) {
-		try {
-			await responseStream(layer, false)
-		} catch (error) {
-			console.error("[subscribeToMapLayers] Error sending existing layer:", error)
-			activeMapLayerSubscriptions.delete(responseStream)
-			unsubscribe()
-			return
-		}
-	}
-
-	console.log(`[subscribeToMapLayers] Sent ${existingLayers.length} existing layers to subscriber`)
+	if (requestId) getRequestRegistry().registerRequest(requestId, cleanup, { type: "map_layer_subscription" }, responseStream)
+	const marker = (operation: string) => MapLayer.create({ id: "__map_sync__", metadata: { __operation: operation } })
+	// Capture synchronously after subscribing, before any asynchronous delivery.
+	const snapshot = [...controller.getMapLayers()]
+	await send(marker("snapshot_start"))
+	for (const layer of snapshot) await send(layer)
+	await send(marker("snapshot_complete"))
+	initializing = false
+	for (const layer of pending.splice(0)) void send(layer)
+	await tail
 }

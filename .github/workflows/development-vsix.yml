@@ -1,0 +1,84 @@
+name: Development VSIX Artifact
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/development-vsix.yml"
+      - ".nvmrc"
+      - ".vscodeignore"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/build-development-vsix.mjs"
+      - "scripts/verify-development-vsix.mjs"
+      - "scripts/verify-development-vsix.test.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and inspect development VSIX
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact source revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        shell: bash
+        run: |
+          npm ci
+          cd webview-ui
+          npm ci
+
+      - name: Test the VSIX inspection contract
+        run: npm run test:vsix-contract
+
+      - name: Build commit-labelled development VSIX
+        id: source
+        shell: bash
+        run: |
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          mkdir -p artifacts/vsix
+          npm run package:vsix -- --out "artifacts/vsix/ai-hydro-${SOURCE_SHA}.vsix"
+
+      - name: Verify the evidence allowlist
+        shell: bash
+        run: |
+          test "$(find artifacts/vsix -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
+          test -f artifacts/vsix/SHA256SUMS
+          test -f artifacts/vsix/vsix-provenance.json
+          test -f "artifacts/vsix/ai-hydro-${{ steps.source.outputs.sha }}.vsix"
+          grep -F '"buildKind": "development"' artifacts/vsix/vsix-provenance.json
+          grep -F '"commit": "${{ steps.source.outputs.sha }}"' artifacts/vsix/vsix-provenance.json
+          (cd artifacts/vsix && shasum -a 256 -c SHA256SUMS)
+
+      - name: Upload inspected development artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ai-hydro-development-vsix-${{ steps.source.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/vsix/ai-hydro-${{ steps.source.outputs.sha }}.vsix
+            artifacts/vsix/SHA256SUMS
+            artifacts/vsix/vsix-provenance.json
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: false

@@ -12,6 +12,8 @@ interface RunEntry {
 	session_id: string
 	timestamp: string
 	key_outputs: Record<string, unknown>
+	inputs?: Record<string, unknown>
+	evidence?: Record<string, unknown>
 	diff_status?: "match" | "mismatch" | "missing"
 	diff_notes?: string[]
 }
@@ -22,6 +24,7 @@ interface ReplayData {
 	entries: RunEntry[]
 	session_path?: string
 	capsule_path?: string
+	warnings?: string[]
 }
 
 type ReviewFilter = "all" | "review" | "failed"
@@ -41,31 +44,31 @@ function postMessage(msg: unknown) {
 }
 
 function fmtTimestamp(ts: string): string {
-	try {
-		return `${ts.replace("T", " ").slice(0, 19)} UTC`
-	} catch {
-		return ts
-	}
+	if (!ts) return "Time not recorded"
+	if (!/(Z|[+-]\d{2}:?\d{2})$/.test(ts)) return `${ts.replace("T", " ")} (timezone not recorded)`
+	const date = new Date(ts)
+	return Number.isNaN(date.getTime()) ? ts : `${date.toISOString().replace("T", " ").slice(0, 19)} UTC`
 }
 
-function flagsFromOutputs(keyOutputs: Record<string, unknown>): QualityFlag[] {
-	const raw = keyOutputs._quality_flags
-	if (!Array.isArray(raw)) {
-		return []
-	}
-	return raw as QualityFlag[]
+function flagsFromEntry(entry: RunEntry): QualityFlag[] {
+	const raw = entry.evidence?.quality_flags ?? entry.key_outputs._quality_flags
+	if (!Array.isArray(raw)) return []
+	return raw.filter((flag) => flag && typeof flag === "object" && typeof flag.status === "string")
 }
 
 function reviewState(entry: RunEntry): RunReviewState {
-	const flags = flagsFromOutputs(entry.key_outputs)
-	const warnings = flags.filter((f) => f.status === "warn" || f.status === "advisory").length
-	const failures = flags.filter((f) => f.status === "fail" || f.status === "error").length
+	const flags = flagsFromEntry(entry)
+	const warnings = flags.filter((f) => ["warn", "warning", "advisory"].includes(f.status)).length
+	const resultFailed =
+		entry.evidence?.error === true || ["fail", "failed", "error", "invalid"].includes(String(entry.evidence?.status))
+	const failures =
+		flags.filter((f) => ["fail", "failed", "error", "invalid"].includes(f.status)).length + (resultFailed ? 1 : 0)
 	const diffNeedsReview = entry.diff_status === "mismatch" || entry.diff_status === "missing"
 	return {
 		checks: flags.length,
 		warnings,
 		failures,
-		needsReview: warnings > 0 || failures > 0 || diffNeedsReview,
+		needsReview: flags.length === 0 || flags.some((flag) => flag.status !== "pass") || diffNeedsReview,
 	}
 }
 
@@ -75,10 +78,13 @@ function statusColor(status: string): string {
 		case "match":
 			return "var(--vscode-testing-iconPassed)"
 		case "warn":
+		case "warning":
 		case "advisory":
 		case "missing":
 			return "var(--vscode-testing-iconQueued)"
 		case "fail":
+		case "failed":
+		case "invalid":
 		case "error":
 		case "mismatch":
 			return "var(--vscode-testing-iconFailed)"
@@ -92,10 +98,13 @@ function runStatus(entry: RunEntry): { icon: string; label: string; color: strin
 	if (state.failures > 0 || entry.diff_status === "mismatch") {
 		return { icon: "codicon-error", label: "failed", color: "var(--vscode-testing-iconFailed)" }
 	}
+	if (state.checks === 0 && !entry.diff_status) {
+		return { icon: "codicon-question", label: "not checked", color: "var(--vscode-disabledForeground)" }
+	}
 	if (state.needsReview) {
 		return { icon: "codicon-warning", label: "needs review", color: "var(--vscode-testing-iconQueued)" }
 	}
-	return { icon: "codicon-pass-filled", label: "ok", color: "var(--vscode-testing-iconPassed)" }
+	return { icon: "codicon-pass-filled", label: "recorded checks passed", color: "var(--vscode-testing-iconPassed)" }
 }
 
 function runShortId(runId: string): string {
@@ -114,6 +123,8 @@ function provenanceSnippet(entry: RunEntry, data: ReplayData): string {
 		`source: ${sourceLabel(data)}`,
 		`timestamp: ${fmtTimestamp(entry.timestamp)}`,
 		`outputs: ${JSON.stringify(entry.key_outputs)}`,
+		`recorded_inputs: ${JSON.stringify(entry.inputs ?? null)}`,
+		`recorded_evidence: ${JSON.stringify(entry.evidence ?? null)}`,
 	].join("\n")
 }
 
@@ -180,7 +191,7 @@ const RunDetail: React.FC<{ entry: RunEntry | null; data: ReplayData }> = ({ ent
 		)
 	}
 
-	const flags = flagsFromOutputs(entry.key_outputs)
+	const flags = flagsFromEntry(entry)
 	const outputs = Object.entries(entry.key_outputs).filter(([k]) => k !== "_quality_flags")
 	const state = reviewState(entry)
 	const status = runStatus(entry)
@@ -239,6 +250,19 @@ const RunDetail: React.FC<{ entry: RunEntry | null; data: ReplayData }> = ({ ent
 						))}
 					</div>
 				</section>
+			)}
+
+			{entry.inputs && (
+				<details className="mb-3">
+					<summary>Recorded inputs</summary>
+					<pre className="whitespace-pre-wrap break-all">{JSON.stringify(entry.inputs, null, 2)}</pre>
+				</details>
+			)}
+			{entry.evidence?.uncertainty != null && (
+				<details className="mb-3">
+					<summary>Recorded uncertainty</summary>
+					<pre className="whitespace-pre-wrap break-all">{JSON.stringify(entry.evidence.uncertainty, null, 2)}</pre>
+				</details>
 			)}
 
 			{flags.length > 0 && (
@@ -309,6 +333,7 @@ export const ReplayPanel: React.FC = () => {
 					entries,
 					session_path: msg.session_path,
 					capsule_path: msg.capsule_path,
+					warnings: msg.warnings,
 				})
 				setLoading(false)
 				setError(null)
@@ -471,6 +496,12 @@ export const ReplayPanel: React.FC = () => {
 				</div>
 			</div>
 
+			<div className="px-3 py-1 text-[10px] opacity-65">Recorded history and checks; analyses are not recomputed here.</div>
+			{data?.warnings?.map((warning) => (
+				<p className="px-3 text-[11px]" key={warning}>
+					{warning}
+				</p>
+			))}
 			{error && (
 				<div className="mx-3 mt-2 px-2 py-1.5 rounded border border-[var(--vscode-testing-iconFailed)] text-[11px] text-[var(--vscode-testing-iconFailed)]">
 					<span className="codicon codicon-error text-[10px] mr-1" />

@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AccordionSection } from "@/components/common/AccordionSection"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 import { useHtmlPreviewContext } from "../../context/HtmlPreviewContext"
 import { type ArtifactIdentity, deriveArtifactIdentity } from "./artifactIdentity"
 import { CommentSidebar } from "./CommentSidebar"
 import { CourseNavigator } from "./CourseNavigator"
+import { courseNavigationKey, persistThenLoadCourseModule } from "./courseAgentNavigation"
 import HtmlPreviewView from "./HtmlPreviewView"
+import { learningPackScopeFromItem } from "./installedPackCsp"
 import ModulesMarketplaceView from "./marketplace/ModulesMarketplaceView"
 import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
@@ -41,11 +43,13 @@ export const HtmlPreviewPanel: React.FC = () => {
 	} = useHtmlPreviewContext()
 	const { workspaceHtmlFiles } = useExtensionState()
 	const activeItem = items.find((i) => i.id === activeItemId) || items[items.length - 1]
+	const learningPackScope = useMemo(() => learningPackScopeFromItem(activeItem), [activeItem?.id, activeItem?.metadata])
 	// Phase A: load course manifest for the active item's file (if any)
 	const { course, courseRoot, currentModuleId } = useCourse(activeItem?.filePath)
-	const courseProgress = useCourseProgress(course)
+	const courseProgress = useCourseProgress(course, learningPackScope)
+	const navigationKey = courseNavigationKey(course?.courseId ?? "", learningPackScope)
 	const handleCourseNavigate = useCallback(
-		(moduleId: string) => {
+		async (moduleId: string) => {
 			if (!course || !courseRoot) return
 			const target = course.modules.find((m) => m.id === moduleId)
 			if (!target) return
@@ -53,9 +57,30 @@ export const HtmlPreviewPanel: React.FC = () => {
 			// have prevented the click already (disabled button) but defence in depth.
 			if (!courseProgress.canAccess(target)) return
 			const fullPath = resolveModuleFilePath(courseRoot, target.path)
-			void loadWorkspaceFile(fullPath, target.title)
+			try {
+				const loaded = await persistThenLoadCourseModule(
+					navigationKey,
+					moduleId,
+					currentModuleId,
+					courseProgress.setCurrent,
+					() => loadWorkspaceFile(fullPath, target.title),
+				)
+				if (!loaded) {
+					console.warn("[HtmlPreviewPanel] Course navigation cancelled because progress could not be persisted")
+				}
+			} catch (error) {
+				console.warn("[HtmlPreviewPanel] Course navigation failed:", error)
+			}
 		},
-		[course, courseRoot, loadWorkspaceFile, courseProgress],
+		[
+			course,
+			courseRoot,
+			loadWorkspaceFile,
+			courseProgress.canAccess,
+			courseProgress.setCurrent,
+			currentModuleId,
+			navigationKey,
+		],
 	)
 
 	const fileInputRef = useRef<HTMLInputElement>(null)

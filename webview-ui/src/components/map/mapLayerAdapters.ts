@@ -29,6 +29,8 @@ interface RasterCacheReader {
 	get(id: string):
 		| {
 				bounds?: LayerBounds
+				sourceDataUrl?: string
+				sourceBounds?: string
 				rawPixels?: { data: Float32Array | number[]; width: number; height: number; min: number; max: number }
 		  }
 		| undefined
@@ -78,6 +80,11 @@ function sampleRasterAtPoint(
 	if (!cached?.rawPixels) {
 		return null
 	}
+	if (
+		layer.metadata?.raster_data_url &&
+		(cached.sourceDataUrl !== layer.metadata.raster_data_url || cached.sourceBounds !== layer.metadata.raster_bounds)
+	)
+		return null
 	const { data, width, height, min, max } = cached.rawPixels
 	const bounds = cached.bounds ?? parseBoundsJson(layer.metadata?.raster_bounds)
 	if (!bounds) {

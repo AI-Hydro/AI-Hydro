@@ -59,3 +59,43 @@ recent major version, plausibly already past the CVE window), but
 `body-parser`/`qs`/`tar` don't appear as direct dependencies — they may be
 transitive (would need a `package-lock.json` / `npm audit` pass, not done in
 this session, to confirm). Treat this as unverified, not resolved.
+
+
+## 2026-09-07 — Research panels consume backend-owned snapshots
+
+Replay, Experiment Table and Evidence Board use the versioned MCP resource
+`aihydro://research/snapshot/{reference}` advertised by the connected AI-Hydro
+backend. Python owns SQLite, legacy and capsule storage interpretation. This
+replaces JSON-only readers and synthetic current-slot history, which could
+lose actual run IDs and hide repeated executions. No second store, interpreter
+discovery mechanism or Node SQLite schema is introduced.
+
+Missing/ambiguous/incompatible backends fail visibly; old completed snapshots
+are not reused as fresh. Claim events stay within the selected study. Replay
+shows absent validation as not checked and exposes retained evidence. The
+resource provides inspection, not scientific recomputation or an atomic
+cross-store transaction. Contract: ecosystem
+`MCP/aihydro-tools/docs/research-snapshots.md`.
+
+
+## 2026-09-08 — Map capability is not scientific validity
+
+Raw raster access now describes value availability rather than analysis readiness. Unrecorded freshness is not checked; dataset IDs cannot substitute for missing citations. Inspector lists recorded scientific support and identity explicitly. Metadata remains producer-declared, not independently validated by the UI. Keep existing runtime/layer storage; the major Map workflow plan is plans/map-research-workspace-2026-09-08.md.
+
+## 2026-09-08 — Ordered Map initialization and explicit recovery
+
+The layer subscription now owns initialization: snapshot_start, retained layers, snapshot_complete, then buffered live mutations. The host serializes sends and removes controller listeners on disposal/failure. The UI stages the snapshot and only replaces layers after completion; it no longer races a unary snapshot request against live events. Session ROI also uses its initial streamed state and ordered delivery, including explicit empty visible-layer lists.
+
+Loading, detected interruption and completion-before-readiness are visible. A 15-second initialization timeout and Reconnect action recover with a new snapshot; disposed connection callbacks cannot mutate state. Previous complete layers remain visible during incomplete refresh with a stale warning. This is transport synchronization, not scientific validity or proof that all raster tiles rendered. No heartbeat/liveness proof or cross-stream atomic transaction is provided. Host and webview require the matching extension build; the protocol markers use existing reserved __operation metadata.
+
+Next: raster/tile loading and error propagation; avoid equating connection readiness with data/render readiness. Canonical plan: plans/map-stream-lifecycle-2026-09-08.md.
+
+
+## 2026-09-08 — Map captures preserve uncertainty about rendering
+
+A captured canvas cannot certify tile completeness or scientific validation. Known load/render/transport failures block research plates; diagnostic captures retain limitations. Raster legend scales come only from recorded metadata or the current raw raster renderer, never layer-name heuristics. Freeze pixels and metadata before asynchronous destination selection. Display clusters must not present a single member's measurements as an aggregate; source identity must participate in cache validity.
+
+
+## 2026-09-08 — Coordinated renderer versions and StrictMode acceptance
+
+Pin all direct deck.gl modules to 9.3.11 and retain the resolved luma.gl 9.3.6 lock graph. Actual MapView StrictMode testing reproduced the old observer/device initialization failure; upstream fix: https://github.com/visgl/luma.gl/pull/2540. Do not suppress browser errors or disable StrictMode. The browser harness must verify settled recovery and actual rendered pixels, not merely the transient disappearance of an alert or existence of a canvas.

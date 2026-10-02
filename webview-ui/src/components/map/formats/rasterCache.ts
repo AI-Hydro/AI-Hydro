@@ -29,6 +29,8 @@ export interface RasterPixels {
 }
 
 interface RasterEntry {
+	sourceDataUrl?: string
+	sourceBounds?: string
 	image: HTMLImageElement
 	bounds: [number, number, number, number]
 	colormap?: string
@@ -197,4 +199,9 @@ export const rasterRecolorInFlight = {
 	delete: (id: string): void => {
 		recolorInFlight.delete(id)
 	},
+}
+
+/** Use the renderer's actual ramp for exported legends. Unknown ramps stay unknown. */
+export function rasterColorStops(name: string): string[] | undefined {
+	return COLORMAPS[name]?.map((rgb) => `#${rgb.map((value) => value.toString(16).padStart(2, "0")).join("")}`)
 }

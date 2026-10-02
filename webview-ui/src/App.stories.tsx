@@ -5,7 +5,7 @@ import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useMemo } from "react"
-import { expect, userEvent, within } from "storybook/test"
+import { expect, within } from "storybook/test"
 import { ExtensionStateContext, useExtensionState } from "@/context/ExtensionStateContext"
 import ChatView from "./components/chat/ChatView"
 import WelcomeView from "./components/welcome/WelcomeView"
@@ -251,14 +251,9 @@ export const WelcomeScreen: Story = {
 	// More on component testing: https://storybook.js.org/docs/writing-tests/interaction-testing
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement)
-		// Button has vscode-button element name
-		const getStartedButton = canvas.getByText("Get Started for Free")
-		const byokButton = canvas.getByText("Use your own API key")
-		await expect(getStartedButton).toBeInTheDocument()
-		await expect(byokButton).toBeInTheDocument()
-		await userEvent.click(byokButton)
-		await expect(getStartedButton).toBeInTheDocument()
-		await expect(byokButton).not.toBeInTheDocument()
+		await expect(canvas.getByText("Hi, I'm AI-Hydro")).toBeInTheDocument()
+		await expect(canvas.getByTestId("provider-selector-input")).toBeInTheDocument()
+		await expect(canvas.getByText("Let's go!")).toBeInTheDocument()
 	},
 }
 

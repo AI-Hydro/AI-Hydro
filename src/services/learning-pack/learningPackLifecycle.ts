@@ -336,6 +336,9 @@ export async function installLearningPack(
 			assertInstallVersion(priorRegistry.packs[manifest.packId]?.active, active, options.prereleaseOptIn ?? false) ===
 			"noop"
 		) {
+			if (approval === "trust-publisher" && !trustBefore.fingerprints.includes(inspection.contract.signerFingerprint)) {
+				await saveTrustedPublishers(root, [...trustBefore.fingerprints, inspection.contract.signerFingerprint])
+			}
 			return lifecycleResult("noop", undefined, priorRegistry.packs[manifest.packId].active)
 		}
 		if (await pathExists(absoluteStoragePath(root, activationPath)))

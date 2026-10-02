@@ -1,10 +1,13 @@
 import { readFile } from "fs/promises"
+import { parse } from "jsonc-parser"
 import { after, describe, it } from "mocha"
 import path from "path"
 import "should"
 import * as vscode from "vscode"
+import { ExtensionRegistryInfo } from "../registry"
 
 const packagePath = path.join(__dirname, "..", "..", "package.json")
+const launchConfigPath = path.join(__dirname, "..", "..", "..", ".vscode", "launch.json")
 
 describe("AI-Hydro Extension", () => {
 	after(() => {
@@ -20,8 +23,28 @@ describe("AI-Hydro Extension", () => {
 	})
 
 	it("should successfully execute the plus button command", async () => {
+		const packageJSON = JSON.parse(await readFile(packagePath, "utf8"))
+		const contributedCommands = packageJSON.contributes.commands.map((command: { command: string }) => command.command)
+
+		contributedCommands.should.containEql(ExtensionRegistryInfo.commands.PlusButton)
 		await new Promise((resolve) => setTimeout(resolve, 400))
-		await vscode.commands.executeCommand("cline.plusButtonClicked")
+		await vscode.commands.executeCommand(ExtensionRegistryInfo.commands.PlusButton)
+	})
+
+	it("should isolate secret storage in every extension development launch", async () => {
+		const launchConfig = parse(await readFile(launchConfigPath, "utf8")) as {
+			configurations: Array<{ type: string; args?: string[] }>
+		}
+		const extensionHostConfigurations = launchConfig.configurations.filter(
+			(configuration) => configuration.type === "extensionHost",
+		)
+
+		extensionHostConfigurations.length.should.be.above(0)
+		for (const configuration of extensionHostConfigurations) {
+			should.exist(configuration.args)
+			configuration.args?.should.containEql("--password-store=basic")
+			configuration.args?.should.containEql("--use-inmemory-secretstorage")
+		}
 	})
 
 	// New test to verify xvfb and webview functionality

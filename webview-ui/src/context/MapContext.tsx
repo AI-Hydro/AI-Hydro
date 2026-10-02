@@ -6,6 +6,9 @@ import type { ActiveRoi } from "../components/map/mapWorkspace"
 import { MapServiceClient } from "../services/grpc-client"
 
 interface MapContextType {
+	connectionStatus: "loading" | "connected" | "stale"
+	connectionError: string | undefined
+	reconnect: () => void
 	layers: MapLayer[]
 	activeRoi: ActiveRoi | undefined
 	addLayer: (layer: MapLayer) => void
@@ -18,6 +21,7 @@ interface MapContextType {
 
 const MapContext = createContext<MapContextType | undefined>(undefined)
 const MAP_OPERATION_KEY = "__operation"
+export const MAP_SYNC_TIMEOUT_MS = 15000
 
 function protoToActiveRoi(roi?: MapRoi): ActiveRoi | undefined {
 	if (!roi?.name && !roi?.geojson) {
@@ -34,8 +38,17 @@ function protoToActiveRoi(roi?: MapRoi): ActiveRoi | undefined {
 export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [layers, setLayers] = useState<MapLayer[]>([])
 	const [activeRoi, setActiveRoi] = useState<ActiveRoi | undefined>()
-	const layerSubRef = useRef<(() => void) | null>(null)
-	const sessionSubRef = useRef<(() => void) | null>(null)
+	const [connectionStatus, setConnectionStatus] = useState<"loading" | "connected" | "stale">("loading")
+	const [connectionError, setConnectionError] = useState<string>()
+	const [attempt, setAttempt] = useState(0)
+	const roiGeneration = useRef(0)
+	const roiLifecycleEpoch = useRef(0)
+	const roiMutationQueue = useRef<Promise<void>>(Promise.resolve())
+	const reconnect = useCallback(() => {
+		roiGeneration.current += 1
+		roiLifecycleEpoch.current += 1
+		setAttempt((value) => value + 1)
+	}, [])
 
 	const applyIncomingLayer = useCallback((prevLayers: MapLayer[], incomingLayer: MapLayer): MapLayer[] => {
 		const operation = incomingLayer.metadata?.[MAP_OPERATION_KEY]
@@ -58,76 +71,134 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 	}, [])
 
 	useEffect(() => {
-		MapServiceClient.getMapState(EmptyRequest.create({}))
-			.then((response) => {
-				setLayers(response.layers || [])
-			})
-			.catch((error) => {
-				console.error("[MapContext] Failed to fetch initial map state:", error)
-			})
-
-		MapServiceClient.getMapSession(EmptyRequest.create({}))
-			.then((session) => {
-				setActiveRoi(protoToActiveRoi(session.activeRoi))
-			})
-			.catch((error) => {
-				console.error("[MapContext] Failed to fetch map session:", error)
-			})
-
-		layerSubRef.current = MapServiceClient.subscribeToMapLayers(EmptyRequest.create({}), {
-			onResponse: (layer: MapLayer) => {
-				setLayers((prevLayers) => applyIncomingLayer(prevLayers, layer))
-			},
-			onError: (error) => {
-				console.error("[MapContext] Error in layer subscription:", error)
-			},
-			onComplete: () => {},
-		})
-
-		sessionSubRef.current = MapServiceClient.subscribeToMapSession(EmptyRequest.create({}), {
-			onResponse: (session) => {
-				setActiveRoi(protoToActiveRoi(session.activeRoi))
-			},
-			onError: (error) => {
-				console.error("[MapContext] Error in map session subscription:", error)
-			},
-			onComplete: () => {},
-		})
-
-		return () => {
-			layerSubRef.current?.()
-			sessionSubRef.current?.()
+		roiGeneration.current += 1
+		roiLifecycleEpoch.current += 1
+		let active = true
+		let layersReady = false
+		let sessionReady = false
+		let staged: MapLayer[] | undefined
+		let unsubscribeLayers = () => {}
+		let unsubscribeSession = () => {}
+		setConnectionStatus("loading")
+		setConnectionError(undefined)
+		const fail = (reason: unknown) => {
+			if (!active) return
+			active = false
+			roiGeneration.current += 1
+			roiLifecycleEpoch.current += 1
+			clearTimeout(timer)
+			unsubscribeLayers()
+			unsubscribeSession()
+			setConnectionStatus("stale")
+			setConnectionError(reason instanceof Error ? reason.message : String(reason))
 		}
-	}, [applyIncomingLayer])
+		const timer = setTimeout(
+			() => fail(new Error("Map synchronization timed out. Reconnect to refresh.")),
+			MAP_SYNC_TIMEOUT_MS,
+		)
+		const ready = () => {
+			if (active && layersReady && sessionReady) {
+				clearTimeout(timer)
+				setConnectionStatus("connected")
+			}
+		}
+		try {
+			unsubscribeLayers = MapServiceClient.subscribeToMapLayers(EmptyRequest.create({}), {
+				onResponse: (layer: MapLayer) => {
+					if (!active) return
+					const operation = layer.metadata?.[MAP_OPERATION_KEY]
+					if (operation === "snapshot_start") {
+						staged = []
+						layersReady = false
+						return
+					}
+					if (operation === "snapshot_complete") {
+						if (!staged) {
+							fail(new Error("Map snapshot completion arrived without a start."))
+							return
+						}
+						setLayers(staged)
+						staged = undefined
+						layersReady = true
+						ready()
+						return
+					}
+					if (staged) staged = applyIncomingLayer(staged, layer)
+					else if (layersReady) setLayers((previous) => applyIncomingLayer(previous, layer))
+					else fail(new Error("Map host lacks ordered synchronization. Reopen with a matching extension build."))
+				},
+				onError: fail,
+				onComplete: () => fail(new Error("Map layer connection closed.")),
+			})
+			if (!active) {
+				unsubscribeLayers()
+				return () => clearTimeout(timer)
+			}
+			unsubscribeSession = MapServiceClient.subscribeToMapSession(EmptyRequest.create({}), {
+				onResponse: (session) => {
+					if (!active) return
+					roiGeneration.current += 1
+					setActiveRoi(protoToActiveRoi(session.activeRoi))
+					sessionReady = true
+					ready()
+				},
+				onError: fail,
+				onComplete: () => fail(new Error("Map session connection closed.")),
+			})
+			if (!active) unsubscribeSession()
+		} catch (error) {
+			fail(error)
+		}
+		return () => {
+			active = false
+			roiGeneration.current += 1
+			roiLifecycleEpoch.current += 1
+			clearTimeout(timer)
+			unsubscribeLayers()
+			unsubscribeSession()
+		}
+	}, [applyIncomingLayer, attempt])
 
-	const setActiveRoiOnHost = useCallback(async (roi: ActiveRoi | undefined, geojson?: string) => {
+	const setActiveRoiOnHost = useCallback((roi: ActiveRoi | undefined, geojson?: string): Promise<void> => {
 		// `!roi` must be part of this guard, not just `!roi?.name`: the old
 		// check let a call with roi=undefined and a truthy geojson fall
 		// through to `roi.id` below and throw. No current caller passes
 		// geojson without roi, but the exported type allows it.
-		if (!roi || (!roi.name && !geojson)) {
-			await MapServiceClient.setActiveRoi(SetActiveRoiRequest.create({}))
-			setActiveRoi(undefined)
-			return
-		}
-		await MapServiceClient.setActiveRoi(
-			SetActiveRoiRequest.create({
-				roi: {
-					id: roi.id || `roi_${Date.now()}`,
-					name: roi.name || "ROI",
-					source: roi.source || "map_draw",
-					geojson: geojson || "",
-					areaHa: roi.areaHa ?? 0,
-					workspacePath: "",
-				},
-			}),
-		)
-		setActiveRoi(roi)
+		const request =
+			!roi || (!roi.name && !geojson)
+				? SetActiveRoiRequest.create({})
+				: SetActiveRoiRequest.create({
+						roi: {
+							id: roi.id || `roi_${Date.now()}`,
+							name: roi.name || "ROI",
+							source: roi.source || "map_draw",
+							geojson: geojson || "",
+							areaHa: roi.areaHa ?? 0,
+							workspacePath: "",
+						},
+					})
+
+		// The host RPC returns only Empty, so completion is not evidence that
+		// this request is still canonical. Serialize this provider's writes and
+		// let the authoritative session stream update visible ROI.
+		roiGeneration.current += 1
+		const lifecycleEpoch = roiLifecycleEpoch.current
+		const mutation = roiMutationQueue.current.then(async () => {
+			if (lifecycleEpoch !== roiLifecycleEpoch.current) {
+				throw new Error("Map ROI mutation cancelled because the map connection changed.")
+			}
+			await MapServiceClient.setActiveRoi(request)
+		})
+		roiMutationQueue.current = mutation.catch(() => {})
+		return mutation
 	}, [])
 
 	const refreshSessionRoi = useCallback(async () => {
+		const revision = ++roiGeneration.current
 		const session = await MapServiceClient.getMapSession(EmptyRequest.create({}))
-		setActiveRoi(protoToActiveRoi(session.activeRoi))
+		if (revision === roiGeneration.current) {
+			setActiveRoi(protoToActiveRoi(session.activeRoi))
+		}
 	}, [])
 
 	const addLayer = useCallback((layer: MapLayer) => {
@@ -160,6 +231,9 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 	return (
 		<MapContext.Provider
 			value={{
+				connectionStatus,
+				connectionError,
+				reconnect,
 				layers,
 				activeRoi,
 				addLayer,

@@ -14,5 +14,5 @@ export default defineConfig({
 	workspaceFolder: "test-workspace",
 	version: "stable",
 	extensionDevelopmentPath: path.resolve("./"),
-	launchArgs: ["--disable-extensions"],
+	launchArgs: ["--disable-extensions", "--password-store=basic", "--use-inmemory-secretstorage"],
 })

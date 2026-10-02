@@ -24,7 +24,7 @@ import { FileServiceClient, MapServiceClient } from "../../services/grpc-client"
 import { ACCEPTED_EXTENSIONS, loadAndPushFileEntries, loadAndPushFiles } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
 import GraduatedSymbologyEditor from "./GraduatedSymbologyEditor"
-import { deriveLayerIntelligence, type LayerIntelligence, warningText } from "./layerIntelligence"
+import { deriveLayerIntelligence, type LayerIntelligence, layerResearchDetails, warningText } from "./layerIntelligence"
 import { geeDisplayLines } from "./mapLayerAdapters"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { SymbologyEditor } from "./SymbologyEditor"
@@ -1407,10 +1407,7 @@ const LayerInspector: React.FC<{
 						border={border}
 						rows={[
 							["Source", intelligence.sourceLabel],
-							[
-								"Source status",
-								meta.source_status === "source_changed" ? "Source changed — reload recommended" : "Current",
-							],
+							...layerResearchDetails(layer),
 							[
 								"Source file",
 								meta.source_display_path ?? meta.source_path ?? meta.path ?? "No local source path recorded",
@@ -1418,7 +1415,7 @@ const LayerInspector: React.FC<{
 							["Source format", meta.source_format ?? meta.format ?? "Unknown"],
 							["Converted artifact", meta.converted_artifact_path ?? "Not a converted vector layer"],
 							["Provenance", intelligence.provenancePath ?? "No provenance record linked"],
-							["Citation", intelligence.citation ?? meta.dataset ?? meta.gee_dataset_id ?? "No citation recorded"],
+							["Citation", intelligence.citation ?? "No citation recorded"],
 							["License", intelligence.license ?? "No license recorded"],
 							["Path", meta.path ?? meta.raster_source_path ?? meta.raster_path ?? "No local source path recorded"],
 							["Metadata fields", String(all.length)],

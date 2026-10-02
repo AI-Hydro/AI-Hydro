@@ -193,11 +193,13 @@ export class Controller {
 		this.artifactKernelService = new ArtifactKernelService(context)
 		context.subscriptions.push({ dispose: () => this.artifactKernelService.dispose() })
 
+		this.mapSessionService = new MapSessionService()
+		void this.mapSessionService
+			.initialize()
+			.catch((error) => console.error("[Controller] Map session initialization failed:", error))
 		// Start watching ~/.aihydro/map_events/ for layers pushed by Python tools
 		this.mapEventWatcher = new MapEventWatcher(this)
 		this.mapEventWatcher.start()
-		this.mapSessionService = new MapSessionService()
-		void this.mapSessionService.initialize()
 		// Phase 1: PreviewSessionService mirrors events to ~/.aihydro/preview_session/
 		// and ~/.aihydro/preview_events/ for MCP-tool consumption.
 		// PreviewCommandWatcher polls ~/.aihydro/preview_commands/ for agent commands
@@ -270,7 +272,13 @@ export class Controller {
 
 		// Stop map event watcher
 		this.mapEventWatcher.stop()
+		this.mapCommandWatcher.stop()
 		this.ledgerEventWatcher.stop()
+		try {
+			await this.mapSessionService.flushPersistence()
+		} catch (error) {
+			console.error("[Controller] Map session persistence flush failed:", error)
+		}
 
 		// Dispose file scanner
 		if (this.fileScanner) {
@@ -1439,6 +1447,7 @@ export class Controller {
 
 	/** Refresh workspace root used for ROI persistence. */
 	async refreshMapSessionWorkspaceRoot(): Promise<void> {
+		await this.mapSessionService.initialize()
 		const cwd = this.workspaceManager?.getPrimaryRoot()?.path || (await getCwd(getDesktopDir()))
 		this.mapSessionService.setWorkspaceRoot(cwd)
 	}

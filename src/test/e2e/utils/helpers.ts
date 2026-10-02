@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, type PathLike, type RmOptions, rmSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, type PathLike, type RmOptions, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ElectronApplication, expect, type Frame, type Page, test } from "@playwright/test"
@@ -114,7 +114,7 @@ export class E2ETestHelper {
 			return null
 		}
 
-		await E2ETestHelper.waitUntil(async () => (await findSidebarFrame()) !== null)
+		await E2ETestHelper.waitUntil(async () => (await findSidebarFrame()) !== null, 30_000)
 		return (await findSidebarFrame()) || page.mainFrame()
 	}
 
@@ -134,43 +134,181 @@ export class E2ETestHelper {
 		}
 	}
 
+	public static async useTemporaryDirectory(
+		prefix: string,
+		use: (directory: string) => Promise<void>,
+		stableAbsenceMs = 1_000,
+	): Promise<void> {
+		const directory = mkdtempSync(path.join(os.tmpdir(), prefix))
+		let useFailure: unknown
+		try {
+			await use(directory)
+		} catch (error) {
+			useFailure = error
+		}
+
+		let cleanupFailure: unknown
+		try {
+			for (let attempt = 1; attempt <= 3; attempt++) {
+				if (existsSync(directory)) {
+					await E2ETestHelper.rmForRetries(directory, { recursive: true, force: true })
+				}
+				// Electron child processes can finish flushing storage just after
+				// the main process exits. Require a stable absent interval rather
+				// than accepting a directory that is immediately recreated.
+				await new Promise((resolve) => setTimeout(resolve, stableAbsenceMs))
+				if (!existsSync(directory)) {
+					break
+				}
+				if (attempt === 3) {
+					throw new Error(`Temporary E2E directory was recreated after cleanup: ${directory}`)
+				}
+			}
+		} catch (error) {
+			cleanupFailure = error
+		}
+
+		if (useFailure) {
+			throw useFailure
+		}
+		if (cleanupFailure) {
+			throw cleanupFailure
+		}
+	}
+
 	public static async closeElectronApp(app: ElectronApplication, timeoutMs = 15_000): Promise<void> {
+		const process = app.process()
+		const hasExited = () => process.exitCode !== null || process.signalCode !== null
 		let timer: NodeJS.Timeout | undefined
-		const closed = await Promise.race([
+		const closeCompleted = await Promise.race([
 			app
 				.close()
 				.then(() => true)
-				.catch(() => true),
+				.catch(() => false),
 			new Promise<boolean>((resolve) => {
 				timer = setTimeout(() => resolve(false), timeoutMs)
 			}),
 		])
-		if (timer) clearTimeout(timer)
-		if (!closed && app.process().exitCode === null) app.process().kill()
+		if (timer) {
+			clearTimeout(timer)
+		}
+
+		if (closeCompleted && !hasExited()) {
+			try {
+				await E2ETestHelper.waitUntil(hasExited, Math.min(2_000, timeoutMs))
+			} catch {
+				// Fall through to the bounded forced shutdown below.
+			}
+		}
+		if (!hasExited()) {
+			process.kill()
+		}
+		await E2ETestHelper.waitUntil(hasExited, timeoutMs)
 	}
 
 	public async signin(webview: Frame): Promise<void> {
-		const byokButton = webview.getByRole("button", {
-			name: "Use your own API key",
-		})
-		await expect(byokButton).toBeVisible()
+		const welcomeHeading = webview.getByRole("heading", { name: "Hi, I'm AI-Hydro" })
+		const providerSelector = webview.getByTestId("provider-selector-input")
+		await expect(welcomeHeading).toBeVisible()
+		await expect(providerSelector).toBeVisible()
 
-		await byokButton.click()
+		// Configure the normal OpenAI-compatible handler atomically through the
+		// E2E-only local control endpoint. The public provider form is covered by
+		// auth.test.ts; execution tests must never reach a real provider.
+		const applyLocalProvider = async (): Promise<number> => {
+			try {
+				const response = await fetch("http://127.0.0.1:9876/e2e/local-provider", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: "{}",
+				})
+				return response.status
+			} catch {
+				return 0
+			}
+		}
+		await expect.poll(applyLocalProvider, { timeout: 30_000 }).toBe(200)
 
-		// Complete setup with OpenRouter
-		const apiKeyInput = webview.getByRole("textbox", {
-			name: "OpenRouter API Key",
-		})
-		await apiKeyInput.fill("test-api-key")
-		await webview.getByRole("button", { name: "Let's go!" }).click()
+		// Verify the welcome page is no longer visible
+		await expect(welcomeHeading).not.toBeVisible()
+		await expect(providerSelector).not.toBeVisible()
 
-		// Verify start up page is no longer visible
-		await expect(webview.locator("#api-provider div").first()).not.toBeVisible()
-		await expect(byokButton).not.toBeVisible()
+		// The welcome form writes whole provider snapshots through debounced
+		// inputs. Reapply after it unmounts so an in-flight stale form write
+		// cannot replace the loopback provider, then require the redacted
+		// effective state to remain exact for a stable interval.
+		await expect.poll(applyLocalProvider, { timeout: 30_000 }).toBe(200)
+
+		let stableSince = 0
+		await expect
+			.poll(
+				async () => {
+					try {
+						const response = await fetch("http://127.0.0.1:9876/e2e/local-provider-status")
+						if (!response.ok) {
+							stableSince = 0
+							return false
+						}
+						const status = (await response.json()) as {
+							planModeApiProvider?: string
+							actModeApiProvider?: string
+							openAiBaseUrl?: string
+							openAiApiKeyConfigured?: boolean
+							planModeOpenAiModelId?: string
+							actModeOpenAiModelId?: string
+							mode?: string
+						}
+						const matches =
+							status.planModeApiProvider === "openai" &&
+							status.actModeApiProvider === "openai" &&
+							status.openAiBaseUrl === "http://127.0.0.1:7777/api/v1" &&
+							status.openAiApiKeyConfigured === true &&
+							status.planModeOpenAiModelId === "mock-model" &&
+							status.actModeOpenAiModelId === "mock-model" &&
+							status.mode === "act"
+						if (!matches) {
+							stableSince = 0
+							await applyLocalProvider()
+							return false
+						}
+						if (stableSince === 0) {
+							stableSince = Date.now()
+						}
+						return Date.now() - stableSince >= 1_000
+					} catch {
+						stableSince = 0
+						return false
+					}
+				},
+				{ timeout: 30_000 },
+			)
+			.toBe(true)
 	}
 
 	public static async openAiHydroSidebar(page: Page): Promise<void> {
-		await page.getByRole("tab", { name: "AI-Hydro", exact: true }).locator("a").click()
+		// Focus through the extension host after activation instead of depending
+		// on activity-bar icon timing or overflow layout on hosted runners.
+		await expect
+			.poll(
+				async () => {
+					try {
+						const response = await fetch("http://127.0.0.1:9876/e2e/focus-sidebar", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: "{}",
+						})
+						return response.status
+					} catch {
+						return 0
+					}
+				},
+				{ timeout: 30_000 },
+			)
+			.toBe(200)
+
+		await expect(page.getByRole("tab", { name: "AI-Hydro", exact: true })).toHaveAttribute("aria-selected", "true", {
+			timeout: 30_000,
+		})
 	}
 
 	public static async runCommandPalette(page: Page, command: string): Promise<void> {
@@ -203,7 +341,7 @@ export class E2ETestHelper {
  * @extends test - Base Playwright test with multiple fixture extensions
  *
  * Fixtures provided:
- * - `server`: Shared AiHydroApiServerMock instance for API mocking (reused across all tests)
+ * - `server`: Per-worker AiHydroApiServerMock instance with deterministic teardown
  * - `workspaceDir`: Path to the test workspace directory
  * - `userDataDir`: Temporary directory for VS Code user data
  * - `extensionsDir`: Temporary directory for VS Code extensions
@@ -239,14 +377,20 @@ export class E2ETestHelper {
  * - Configures VS Code with disabled updates, workspace trust, and welcome screens
  */
 export const e2e = test
-	.extend<{ server: AiHydroApiServerMock | null }>({
-		server: async ({}, use) => {
-			// Start server if it doesn't exist
-			if (!AiHydroApiServerMock.globalSharedServer) {
-				await AiHydroApiServerMock.startGlobalServer()
-			}
-			await use(AiHydroApiServerMock.globalSharedServer)
-		},
+	.extend<{}, { server: AiHydroApiServerMock | null }>({
+		server: [
+			async ({}, use) => {
+				if (!AiHydroApiServerMock.globalSharedServer) {
+					await AiHydroApiServerMock.startGlobalServer()
+				}
+				try {
+					await use(AiHydroApiServerMock.globalSharedServer)
+				} finally {
+					await AiHydroApiServerMock.stopGlobalServer()
+				}
+			},
+			{ scope: "worker" },
+		],
 	})
 	.extend<E2ETestDirectories>({
 		workspaceDir: async ({}, use) => {
@@ -257,13 +401,16 @@ export const e2e = test
 			await use(path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "multiroots.code-workspace"))
 		},
 		userDataDir: async ({}, use) => {
-			await use(mkdtempSync(path.join(os.tmpdir(), "vsce")))
+			await E2ETestHelper.useTemporaryDirectory("vsce", use)
 		},
 		extensionsDir: async ({}, use) => {
-			await use(mkdtempSync(path.join(os.tmpdir(), "vsce")))
+			await E2ETestHelper.useTemporaryDirectory("vsce", use)
 		},
 		homeDir: async ({}, use) => {
-			await use(mkdtempSync(path.join(os.tmpdir(), "aihydro-e2e-home-")))
+			// Python/MCP children may flush a tiny version cache shortly after
+			// Electron exits. A longer HOME-only stability window catches and
+			// removes that delayed synthetic write without slowing other roots.
+			await E2ETestHelper.useTemporaryDirectory("aihydro-e2e-home-", use, 3_000)
 		},
 	})
 	.extend<E2ETestConfigs>({
@@ -327,23 +474,20 @@ export const e2e = test
 		},
 	})
 	.extend<{ app: ElectronApplication }>({
-		app: async (
-			{ openVSCode, userDataDir, extensionsDir, homeDir, workspaceType, workspaceDir, multiRootWorkspaceDir },
-			use,
-		) => {
+		app: async ({ openVSCode, workspaceType, workspaceDir, multiRootWorkspaceDir }, use) => {
 			const workspacePath = workspaceType === "single" ? workspaceDir : multiRootWorkspaceDir
 			const app = await openVSCode(workspacePath)
 
+			let testFailure: unknown
 			try {
 				await use(app)
-			} finally {
-				await E2ETestHelper.closeElectronApp(app)
-				// Cleanup in parallel
-				await Promise.allSettled([
-					E2ETestHelper.rmForRetries(userDataDir, { recursive: true }),
-					E2ETestHelper.rmForRetries(extensionsDir, { recursive: true }),
-					E2ETestHelper.rmForRetries(homeDir, { recursive: true }),
-				])
+			} catch (error) {
+				testFailure = error
+			}
+
+			await E2ETestHelper.closeElectronApp(app)
+			if (testFailure) {
+				throw testFailure
 			}
 		},
 	})
@@ -368,7 +512,7 @@ export const e2e = test
 		},
 	})
 	.extend<{ sidebar: Frame }>({
-		sidebar: async ({ page, helper, server }, use) => {
+		sidebar: async ({ page, helper, server: _server }, use) => {
 			await E2ETestHelper.openAiHydroSidebar(page)
 			const sidebar = await helper.getSidebar(page)
 			await use(sidebar)

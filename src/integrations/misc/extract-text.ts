@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs"
+import type { Cell, Workbook as ExcelWorkbook } from "exceljs"
 import fs from "fs/promises"
 import * as iconv from "iconv-lite"
 import { isBinaryFile } from "isbinaryfile"
@@ -7,6 +7,13 @@ import mammoth from "mammoth"
 import * as path from "path"
 // @ts-ignore-next-line
 import pdf from "pdf-parse/lib/pdf-parse"
+
+// ExcelJS's package root eagerly imports its streaming reader and writer. Those
+// paths are not used here and pull a second archive stack into the extension
+// bundle. Pin ExcelJS and load the document workbook implementation directly so
+// extraction keeps the public ExcelJS types without shipping unused writers.
+const Workbook = require("exceljs/lib/doc/workbook") as typeof ExcelWorkbook
+const MAX_EXCEL_ROWS_PER_SHEET = 50_000
 
 export async function detectEncoding(fileBuffer: Buffer, fileExtension?: string): Promise<string> {
 	const detected = chardet.detect(fileBuffer)
@@ -91,7 +98,7 @@ async function extractTextFromIPYNB(filePath: string): Promise<string> {
 /**
  * Format the data inside Excel cells
  */
-function formatCellValue(cell: ExcelJS.Cell): string {
+function formatCellValue(cell: Cell): string {
 	const value = cell.value
 	if (value === null || value === undefined) {
 		return ""
@@ -133,7 +140,7 @@ function formatCellValue(cell: ExcelJS.Cell): string {
  * Extract and format text from xlsx files
  */
 async function extractTextFromExcel(filePath: string): Promise<string> {
-	const workbook = new ExcelJS.Workbook()
+	const workbook = new Workbook()
 	let excelText = ""
 
 	try {
@@ -147,11 +154,11 @@ async function extractTextFromExcel(filePath: string): Promise<string> {
 
 			excelText += `--- Sheet: ${worksheet.name} ---\n`
 
-			worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-				// Optional: limit processing for very large sheets
-				if (rowNumber > 50000) {
-					excelText += `[... truncated at row ${rowNumber} ...]\n`
-					return false
+			const lastRow = Math.min(worksheet.rowCount, MAX_EXCEL_ROWS_PER_SHEET)
+			for (let rowNumber = 1; rowNumber <= lastRow; rowNumber++) {
+				const row = worksheet.getRow(rowNumber)
+				if (!row.hasValues) {
+					continue
 				}
 
 				const rowTexts: string[] = []
@@ -169,9 +176,11 @@ async function extractTextFromExcel(filePath: string): Promise<string> {
 				if (hasContent) {
 					excelText += rowTexts.join("\t") + "\n"
 				}
+			}
 
-				return true
-			})
+			if (worksheet.rowCount > MAX_EXCEL_ROWS_PER_SHEET) {
+				excelText += `[... truncated after row ${MAX_EXCEL_ROWS_PER_SHEET} ...]\n`
+			}
 
 			excelText += "\n" // Blank line between sheets
 		})

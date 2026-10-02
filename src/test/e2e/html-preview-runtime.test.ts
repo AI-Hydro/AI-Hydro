@@ -59,42 +59,36 @@ async function openWorkspaceFile(page: Page, relativePath: string, confirmPlainH
 	await page.locator(".monaco-workbench").waitFor({ state: "visible", timeout: 20_000 })
 	await E2ETestHelper.openAiHydroSidebar(page)
 	await waitForFrame(page, async (frame) => (await frame.title()).startsWith("AI-Hydro"))
-	await page.keyboard.press(process.platform === "darwin" ? "Meta+Shift+E" : "Control+Shift+E")
-	const explorer = page.locator(".part.sidebar.left")
-	await explorer.waitFor({ state: "visible", timeout: 10_000 })
-	const workspaceRoot = explorer.locator('[role="treeitem"][aria-level="1"]').first()
-	if ((await workspaceRoot.count()) > 0 && (await workspaceRoot.getAttribute("aria-expanded")) !== "true") {
-		await workspaceRoot.click()
-		await page.keyboard.press("ArrowRight")
-	}
-	const segments = relativePath.split("/")
-	for (const segment of segments.slice(0, -1)) {
-		const item = explorer.getByRole("treeitem", { name: segment, exact: true }).last()
-		await item.waitFor({ state: "visible", timeout: 10_000 })
-		if ((await item.getAttribute("aria-expanded")) !== "true") {
-			await item.click()
-			await page.keyboard.press("ArrowRight")
-		}
-	}
-	const file = explorer.getByRole("treeitem", { name: segments.at(-1), exact: true }).last()
-	await file.waitFor({ state: "visible", timeout: 10_000 })
+	await page.keyboard.press(process.platform === "darwin" ? "Meta+P" : "Control+P")
+	const quickOpenInput = page.locator(".quick-input-widget input:visible").last()
+	await quickOpenInput.waitFor({ state: "visible", timeout: 30_000 })
+	await quickOpenInput.fill(relativePath)
+	const file = page
+		.locator(".quick-input-list .monaco-list-row")
+		.filter({ hasText: path.basename(relativePath) })
+		.first()
+	await expect(file).toBeVisible({ timeout: 30_000 })
+	// Keyboard acceptance is the stable Quick Open contract across hosted
+	// platforms. A synthetic row click can select the result without opening
+	// the document on Windows, so the extension never observes the HTML file.
+	await page.keyboard.press("Enter")
+	await expect(quickOpenInput).not.toBeVisible({ timeout: 10_000 })
 	if (confirmPlainHtml) {
-		await file.dblclick()
 		await page.keyboard.press("F1")
-		const commandInput = page.locator(".quick-input-widget input")
+		const commandInput = page.locator(".quick-input-widget input:visible").last()
 		await commandInput.waitFor({ state: "visible", timeout: 10_000 })
-		await page.keyboard.type("Add to AI-Hydro HTML Preview")
+		await commandInput.fill(">Add to AI-Hydro HTML Preview")
+		const addToPreviewCommand = page
+			.locator(".quick-input-list .monaco-list-row")
+			.filter({ hasText: "Add to AI-Hydro HTML Preview" })
+			.first()
+		await expect(addToPreviewCommand).toBeVisible({ timeout: 30_000 })
 		await page.keyboard.press("Enter")
-	} else {
-		await file.dblclick()
+		await expect(commandInput).not.toBeVisible({ timeout: 10_000 })
 	}
 }
 
-async function waitForFrame(
-	page: Page,
-	predicate: (frame: Frame) => Promise<boolean>,
-	timeout = 30_000,
-): Promise<Frame> {
+async function waitForFrame(page: Page, predicate: (frame: Frame) => Promise<boolean>, timeout = 30_000): Promise<Frame> {
 	let match: Frame | undefined
 	await expect
 		.poll(
@@ -246,7 +240,7 @@ runtimeE2E("HTML Preview executes the golden runtime matrix @phase0-full", async
 
 	await openWorkspaceFile(page, "index.html", true)
 	await waitForFrame(page, async (frame) => (await frame.getByRole("heading", { name: "Test Workspace" }).count()) === 1)
-	await expect.poll(async () => countCourseOptions(page)).toBe(0)
+	await expect.poll(async () => countCourseOptions(page), { timeout: 30_000 }).toBe(0)
 	// A plain static doc (no executable module manifest) shows the
 	// static-document explanation in the shell (PR 3 / brief §8.2). The notice
 	// lives in the React shell frame, not the artifact iframe.
@@ -260,7 +254,7 @@ runtimeE2E("HTML Preview executes the golden runtime matrix @phase0-full", async
 	await openWorkspaceFile(page, "phase0/standalone-module.html")
 	artifact = await waitForCellFrame(page, "standalone-python")
 	await waitForShellWithSrcdoc(page, "standalone-runtime-fixture")
-	await expect.poll(async () => countCourseOptions(page)).toBe(0)
+	await expect.poll(async () => countCourseOptions(page), { timeout: 30_000 }).toBe(0)
 	await runCell(artifact, "standalone-python")
 	const standaloneOutput = artifact.locator('[data-aihydro-cell-id="standalone-python"] .aihydro-output')
 	await expect(standaloneOutput).toContainText("standalone_execution=ok", { timeout: 30_000 })
@@ -272,34 +266,42 @@ runtimeE2E("HTML Preview starts and executes a standalone module @phase0-smoke",
 	await openWorkspaceFile(page, "phase0/standalone-module.html")
 	const artifact = await waitForCellFrame(page, "standalone-python")
 	await waitForShellWithSrcdoc(page, "standalone-runtime-fixture")
-	await expect.poll(async () => countCourseOptions(page)).toBe(0)
+	await expect.poll(async () => countCourseOptions(page), { timeout: 30_000 }).toBe(0)
 	await runCell(artifact, "standalone-python")
 	const output = artifact.locator('[data-aihydro-cell-id="standalone-python"] .aihydro-output')
 	await expect(output).toContainText("standalone_execution=ok", { timeout: 60_000 })
 	await expect(output).toContainText("42")
 })
 
-runtimeE2E(
-	"AI-Hydro: Show Studio opens the panel with the Studio tab label @phase0-smoke",
-	async ({ page }) => {
-		await page.waitForLoadState("domcontentloaded")
-		await page.locator(".monaco-workbench").waitFor({ state: "visible", timeout: 20_000 })
+runtimeE2E("AI-Hydro: Show Studio opens the panel with the Studio tab label @phase0-smoke", async ({ page }) => {
+	await page.waitForLoadState("domcontentloaded")
+	await page.locator(".monaco-workbench").waitFor({ state: "visible", timeout: 20_000 })
+	// Activate the development extension before querying its contributed
+	// command. Hosted runners can display the workbench before extension
+	// contributions have reached the command palette.
+	await E2ETestHelper.openAiHydroSidebar(page)
+	await waitForFrame(page, async (frame) => (await frame.title()).startsWith("AI-Hydro"))
 
-		await page.keyboard.press("F1")
-		const commandInput = page.locator(".quick-input-widget input")
-		await commandInput.waitFor({ state: "visible", timeout: 10_000 })
-		await page.keyboard.type("AI-Hydro: Show Studio")
-		await page.keyboard.press("Enter")
+	await page.keyboard.press("F1")
+	const commandInput = page.locator(".quick-input-widget input:visible").last()
+	await commandInput.waitFor({ state: "visible", timeout: 10_000 })
+	await commandInput.fill(">AI-Hydro: Show Studio")
+	const showStudioCommand = page
+		.locator(".quick-input-list .monaco-list-row")
+		.filter({ hasText: "AI-Hydro: Show Studio" })
+		.first()
+	await expect(showStudioCommand).toBeVisible({ timeout: 30_000 })
+	await page.keyboard.press("Enter")
+	await expect(commandInput).not.toBeVisible({ timeout: 10_000 })
 
-		// The command is a display-title alias for the same reveal-or-create
-		// handler as the "HTML Preview" toolbar button — verify it actually
-		// opens the panel. waitForShell's poll already tolerates system-load
-		// variance under a full serial suite run; check that first so a slow
-		// but successful launch doesn't fail on the tab-label assertion alone.
-		await waitForShell(page)
-		await expect(page.getByRole("tab", { name: "AI-Hydro Studio", exact: false })).toBeVisible({ timeout: 30_000 })
-	},
-)
+	// The command is a display-title alias for the same reveal-or-create
+	// handler as the "HTML Preview" toolbar button — verify it actually
+	// opens the panel. waitForShell's poll already tolerates system-load
+	// variance under a full serial suite run; check that first so a slow
+	// but successful launch doesn't fail on the tab-label assertion alone.
+	await waitForShell(page)
+	await expect(page.getByRole("tab", { name: "AI-Hydro Studio", exact: false })).toBeVisible({ timeout: 30_000 })
+})
 
 runtimeE2E("HTML Preview injects a correct base href for a multi-file Quarto site @phase0-smoke", async ({ page }) => {
 	await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, (route) => route.abort())
@@ -334,7 +336,28 @@ runtimeE2E("HTML Preview injects a correct base href for a multi-file Quarto sit
 	// Fragment links must stay in-document under the injected <base>: without
 	// the document-level guard, a bare <base> turns "#section-two" into a
 	// navigation away from the srcdoc document instead of an in-page scroll.
-	await artifact.locator("#toc-link").click()
-	await expect(artifact.locator("#section-two")).toBeInViewport()
+	// Nested srcdoc geometry is not reported consistently by hosted browsers.
+	// Observe the guard's target resolution directly while preserving its
+	// intentional invariant: it scrolls the target without mutating the
+	// cross-origin location hash or navigating away from the document.
+	const fragmentTargetWasScrolled = await artifact.locator("#toc-link").evaluate((link: HTMLAnchorElement) => {
+		const target = document.getElementById("section-two")
+		if (!target) {
+			return false
+		}
+		let called = false
+		const originalScrollIntoView = target.scrollIntoView
+		target.scrollIntoView = () => {
+			called = true
+		}
+		try {
+			link.click()
+			return called
+		} finally {
+			target.scrollIntoView = originalScrollIntoView
+		}
+	})
+	expect(fragmentTargetWasScrolled).toBe(true)
+	expect(await artifact.evaluate(() => window.location.hash)).toBe("")
 	await expect(artifact.locator("h1#title")).toHaveCount(1)
 })
