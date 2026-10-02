@@ -22,6 +22,11 @@ The companion Python package (`aihydro-tools`) has its own changelog at
   can import the package wins. If none can, the error says to `pip install aihydro-tools` or
   set the setting. New setting `aihydro.hydro.pythonPath`; `aihydro.gee.pythonPath` now
   defaults to empty. Failed resolutions are not cached.
+- Security hardening: both interpreter settings are `"scope": "machine"` and are read from
+  user/machine scope only (workspace `.vscode/settings.json` values are ignored with a logged
+  note), so an opened repository cannot choose the executable the extension spawns. Bare
+  interpreter names are resolved to absolute paths through PATH entries only (never the cwd, no
+  relative PATH entries), closing Windows' implicit current-directory lookup.
 
 ### Fixed — Skill installer integrity (vision-2040 slice 1c, ADR-005)
 

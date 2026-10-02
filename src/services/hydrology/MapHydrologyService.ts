@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { resolveAiHydroPythonRuntime } from "./aiHydroPythonRuntime"
-import type { ResolveResult } from "./resolveAiHydroPython"
+import { type ResolveResult, trustedPythonSetting } from "./resolveAiHydroPython"
 import type {
 	DelineatePointResult,
 	HucAtPointResult,
@@ -27,7 +27,7 @@ export class MapHydrologyService {
 
 	private static getConfiguredPythonCommand(): string | undefined {
 		const config = vscode.workspace.getConfiguration("aihydro.hydro")
-		return config.get<string>("pythonPath") || undefined
+		return trustedPythonSetting(config.inspect<string>("pythonPath"), "aihydro.hydro.pythonPath")
 	}
 
 	static invalidatePythonCache(): void {

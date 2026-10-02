@@ -83,40 +83,75 @@ export async function pythonFromMcpServer(
 	return undefined
 }
 
+/** Path flavour for the (possibly mocked) target platform. */
+function pathFor(platform: NodeJS.Platform): typeof path.posix {
+	return platform === "win32" ? path.win32 : path.posix
+}
+
+/**
+ * Resolve a bare executable name to an absolute path using only the PATH entries. The current
+ * working directory is never searched (Windows' CreateProcess does that implicitly, which would let
+ * a workspace-planted python.exe run), and relative PATH entries are ignored. Returns undefined if
+ * the name is not found.
+ */
+export async function resolveOnPath(
+	name: string,
+	deps: Pick<ResolveDeps, "exists" | "platform" | "env">,
+): Promise<string | undefined> {
+	const p = pathFor(deps.platform)
+	const win = deps.platform === "win32"
+	const pathVar = (win ? (deps.env.Path ?? deps.env.PATH) : deps.env.PATH) ?? ""
+	const exts = win ? (deps.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean) : [""]
+	const hasExt = win && exts.some((e) => name.toLowerCase().endsWith(e.toLowerCase()))
+	for (const dir of pathVar.split(win ? ";" : ":")) {
+		if (!dir || !p.isAbsolute(dir)) continue
+		// Only .exe can be spawned directly by execFile without a shell.
+		for (const ext of win ? (hasExt ? [""] : [".exe"]) : [""]) {
+			const candidate = p.join(dir, name + ext)
+			if (await deps.exists(candidate)) return candidate
+		}
+	}
+	return undefined
+}
+
 /**
  * Resolve the Python interpreter to run the required modules with. Order:
  *   1. the explicit `pythonPath` setting
  *   2. the interpreter behind the registered `ai-hydro` MCP server
- *   3. the active virtualenv, then `python3` / `python` on PATH
- * The first candidate that can import every required module wins. No machine-specific paths are probed and
+ *   3. the active virtualenv, then `python3` / `python` found via PATH
+ * Bare names are resolved to absolute paths through PATH entries only (never the cwd). The first
+ * candidate that can import every required module wins. No machine-specific paths are probed and
  * PYTHONPATH is never injected: the package must be installed in the chosen environment.
  */
 export async function resolveAiHydroPython(input: ResolveInput, deps: ResolveDeps): Promise<ResolveResult> {
+	const p = pathFor(deps.platform)
 	const candidates: PythonCandidate[] = []
 	const seen = new Set<string>()
-	const add = (command: string | undefined, source: string) => {
-		const c = command?.trim()
-		if (!c || seen.has(c)) return
+	const add = async (command: string | undefined, source: string) => {
+		let c = command?.trim()
+		if (!c) return
+		if (!p.isAbsolute(c)) {
+			// Bare name -> PATH lookup. Relative paths with separators are cwd-relative: refuse.
+			if (/[\\/]/.test(c)) return
+			c = await resolveOnPath(c, deps)
+			if (!c) return
+		}
+		if (seen.has(c)) return
 		seen.add(c)
 		candidates.push({ command: c, source })
 	}
 
-	add(input.configuredPath, `setting ${input.settingName}`)
-	add(await pythonFromMcpServer(input.mcpServer, deps), "ai-hydro MCP server config")
+	await add(input.configuredPath, `setting ${input.settingName}`)
+	await add(await pythonFromMcpServer(input.mcpServer, deps), "ai-hydro MCP server config")
 	const venv = deps.env.VIRTUAL_ENV
 	if (venv) {
-		add(
-			deps.platform === "win32" ? path.join(venv, "Scripts", "python.exe") : path.join(venv, "bin", "python"),
+		await add(
+			deps.platform === "win32" ? p.join(venv, "Scripts", "python.exe") : p.join(venv, "bin", "python"),
 			"VIRTUAL_ENV",
 		)
 	}
-	if (deps.platform === "win32") {
-		add("python", "PATH")
-		add("python3", "PATH")
-		add("py", "PATH")
-	} else {
-		add("python3", "PATH")
-		add("python", "PATH")
+	for (const name of deps.platform === "win32" ? ["python", "python3", "py"] : ["python3", "python"]) {
+		await add(name, "PATH")
 	}
 
 	for (const c of candidates) {
@@ -169,4 +204,28 @@ export const nodeResolveDeps: ResolveDeps = {
 	},
 	platform: process.platform,
 	env: process.env,
+}
+
+/** Minimal shape of `WorkspaceConfiguration.inspect()` needed to pick a trusted value. */
+export interface InspectedSetting {
+	globalValue?: string
+	workspaceValue?: string
+	workspaceFolderValue?: string
+}
+
+/**
+ * Pick the interpreter setting from user/machine scope only. Workspace and folder values live in
+ * the repository's `.vscode/settings.json`, so honouring them would let an opened project choose
+ * the executable we spawn; they are ignored and reported via `log`.
+ */
+export function trustedPythonSetting(
+	inspected: InspectedSetting | undefined,
+	settingName: string,
+	log: (msg: string) => void = console.warn,
+): string | undefined {
+	const ignored = inspected?.workspaceFolderValue ?? inspected?.workspaceValue
+	if (ignored) {
+		log(`[AI-Hydro] Ignoring workspace-scoped ${settingName} ("${ignored}"): set it in user settings instead.`)
+	}
+	return inspected?.globalValue?.trim() || undefined
 }

@@ -4,7 +4,7 @@ import * as path from "node:path"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { resolveAiHydroPythonRuntime } from "../hydrology/aiHydroPythonRuntime"
-import type { ResolveResult } from "../hydrology/resolveAiHydroPython"
+import { type ResolveResult, trustedPythonSetting } from "../hydrology/resolveAiHydroPython"
 import type { GeeProjectsResult, GeeStatusResult, GeeTileLayerResult } from "./types"
 
 interface GeeRunResult {
@@ -22,7 +22,7 @@ export class GeeService {
 
 	private static getConfiguredPythonCommand(): string | undefined {
 		const config = vscode.workspace.getConfiguration("aihydro.gee")
-		return config.get<string>("pythonPath") || undefined
+		return trustedPythonSetting(config.inspect<string>("pythonPath"), "aihydro.gee.pythonPath")
 	}
 
 	// Invalidate cache when settings change (e.g. user sets aihydro.gee.pythonPath)
