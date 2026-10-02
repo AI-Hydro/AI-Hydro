@@ -33,11 +33,14 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 	const subRef = useRef<(() => void) | null>(null)
 	const loadVersion = useRef(0)
 	const activeSession = useRef("")
+	/** Session id of the most recent load request ("" = most recent session). */
+	const requestedSession = useRef("")
 	const loadPending = useRef(false)
 	const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
 	const loadSession = useCallback(async (sid: string) => {
 		const version = ++loadVersion.current
+		requestedSession.current = sid
 		loadPending.current = true
 		setLoading(true)
 		setError(null)
@@ -76,21 +79,25 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 					return
 				}
 				const c = update.claim
-				if (!activeSession.current || c.sessionId !== activeSession.current) return
+				// Before the first snapshot lands there is no active session to compare
+				// against; any event is then an invalidation for the pending request.
+				const known = activeSession.current !== ""
+				if (known && c.sessionId !== activeSession.current) return
+				if (!known && !loadPending.current) return
 				// Events are invalidation signals; the snapshot is truth. Debounce one reload.
 				if (reloadTimer.current) clearTimeout(reloadTimer.current)
 				reloadTimer.current = setTimeout(() => {
 					reloadTimer.current = null
-					void loadSession(activeSession.current)
+					void loadSession(activeSession.current || requestedSession.current)
 				}, EVENT_RELOAD_DEBOUNCE_MS)
-				if (loadPending.current) return
+				if (loadPending.current || !known) return
 				setClaims((prev) => {
 					if (update.changeType === "removed") {
 						const next = { ...prev }
 						delete next[c.claimId]
 						return next
 					}
-					return { ...prev, [c.claimId]: mergeClaimUpdate(prev[c.claimId], c) }
+					return { ...prev, [c.claimId]: mergeClaimUpdate(prev[c.claimId], c, update.changeType) }
 				})
 			},
 			onError: (error) => {

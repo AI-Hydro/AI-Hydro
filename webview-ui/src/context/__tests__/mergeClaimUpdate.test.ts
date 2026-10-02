@@ -82,6 +82,18 @@ describe("mergeClaimUpdate", () => {
 		expect(out.driftEvidenceChecked).toBe(true)
 	})
 
+	it("a promoted event never carries approval forward, even with the same digest", () => {
+		const out = mergeClaimUpdate(snapshot, base({ revision: 3, revisionDigest: "d1" }), "promoted")
+		expect(out.approvalState).toBe("pending_refresh")
+		expect(out.approvalPrincipal).toBe("")
+		expect(out.driftState).toBe("pending_refresh")
+	})
+
+	it("an explicit approvalState on a promoted event still wins", () => {
+		const out = mergeClaimUpdate(snapshot, base({ revisionDigest: "d1", approvalState: "consumed" }), "promoted")
+		expect(out.approvalState).toBe("consumed")
+	})
+
 	it("an explicit approvalState or driftState on the event wins", () => {
 		const out = mergeClaimUpdate(snapshot, base({ revisionDigest: "d2", approvalState: "none", driftState: "drifted" }))
 		expect(out.approvalState).toBe("none")

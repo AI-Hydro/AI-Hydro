@@ -113,4 +113,67 @@ describe("Ledger session isolation", () => {
 			vi.useRealTimers()
 		}
 	})
+
+	it("still reloads after an event that arrives during the initial load", async () => {
+		let onResponse!: (event: unknown) => void
+		let resolveFirst!: (value: unknown) => void
+		mocks.load
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveFirst = resolve
+					}),
+			)
+			.mockResolvedValue({ sessionId: "selected", claims: [{ claimId: "fresh", sessionId: "selected" }] })
+		mocks.subscribe.mockImplementation((_request, handlers) => {
+			onResponse = handlers.onResponse
+			return () => {}
+		})
+		render(
+			<LedgerContextProvider>
+				<Inspector />
+			</LedgerContextProvider>,
+		)
+		vi.useFakeTimers()
+		try {
+			// Initial snapshot is still in flight: no active session yet.
+			act(() => onResponse({ changeType: "updated", claim: { claimId: "kept", sessionId: "selected" } }))
+			await act(async () => {
+				resolveFirst({ sessionId: "selected", claims: [{ claimId: "stale", sessionId: "selected" }] })
+			})
+			expect(mocks.load).toHaveBeenCalledTimes(1)
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(501)
+			})
+			expect(mocks.load).toHaveBeenCalledTimes(2)
+		} finally {
+			vi.useRealTimers()
+		}
+		await waitFor(() => expect(screen.getByTestId("claims")).toHaveTextContent("fresh"))
+	})
+
+	it("treats a promoted event as an invalidation that reloads the snapshot", async () => {
+		let onResponse!: (event: unknown) => void
+		mocks.load.mockResolvedValue({ sessionId: "selected", claims: [{ claimId: "kept", sessionId: "selected" }] })
+		mocks.subscribe.mockImplementation((_request, handlers) => {
+			onResponse = handlers.onResponse
+			return () => {}
+		})
+		render(
+			<LedgerContextProvider>
+				<Inspector />
+			</LedgerContextProvider>,
+		)
+		await waitFor(() => expect(screen.getByTestId("claims")).toHaveTextContent("kept"))
+		vi.useFakeTimers()
+		try {
+			act(() => onResponse({ changeType: "promoted", claim: { claimId: "kept", sessionId: "selected" } }))
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(501)
+			})
+			expect(mocks.load).toHaveBeenCalledTimes(2)
+		} finally {
+			vi.useRealTimers()
+		}
+	})
 })

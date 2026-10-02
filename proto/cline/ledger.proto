@@ -53,7 +53,7 @@ message ClaimRecord {
 // One claim event pushed from the MCP server via ~/.aihydro/ledger_events/.
 message ClaimUpdate {
     ClaimRecord claim = 1;
-    string change_type = 2;  // added | updated | removed
+    string change_type = 2;  // added | updated | removed | promoted (approval consumed; invalidation only)
     int64 timestamp_ms = 3;
 }
 

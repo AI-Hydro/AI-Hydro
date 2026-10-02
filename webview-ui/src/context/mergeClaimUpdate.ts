@@ -14,6 +14,9 @@ import type { ClaimRecord } from "@shared/proto/cline/ledger"
  *    Otherwise the group becomes an explicit `pending_refresh` state: not
  *    approved, not revoked, awaiting the next snapshot.
  *  - an event that explicitly reports a group's primary field wins for it.
+ *  - a `promoted` event (an approval was just consumed) never carries approval
+ *    forward, even if it reports the unchanged digest: promotion is outside the
+ *    revision digest, so only a snapshot can say what the approval became.
  */
 const REVISION_FIELDS = ["revision", "revisionDigest", "historyLen", "revisionError"] as const
 
@@ -31,7 +34,10 @@ const APPROVAL_FIELDS = [
 
 const DRIFT_FIELDS = ["driftState", "driftReason", "driftChangedFields", "driftEvidenceChecked"] as const
 
-export function mergeClaimUpdate(prev: ClaimRecord | undefined, incoming: ClaimRecord): ClaimRecord {
+/** Change types that invalidate approval/drift without moving the revision digest. */
+const APPROVAL_INVALIDATING_CHANGES = new Set(["promoted"])
+
+export function mergeClaimUpdate(prev: ClaimRecord | undefined, incoming: ClaimRecord, changeType = ""): ClaimRecord {
 	if (!prev) {
 		return incoming
 	}
@@ -42,7 +48,8 @@ export function mergeClaimUpdate(prev: ClaimRecord | undefined, incoming: ClaimR
 			merged[field] = prev[field]
 		}
 	}
-	const sameRevision = reportedDigest !== "" && reportedDigest === (prev.revisionDigest || "")
+	const sameRevision =
+		reportedDigest !== "" && reportedDigest === (prev.revisionDigest || "") && !APPROVAL_INVALIDATING_CHANGES.has(changeType)
 
 	if (!incoming.approvalState) {
 		for (const field of APPROVAL_FIELDS) {
