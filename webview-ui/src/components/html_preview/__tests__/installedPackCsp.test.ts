@@ -1,4 +1,4 @@
-import { type HtmlPreviewItem, HtmlPreviewMode } from "@shared/proto/cline/html_preview"
+import type { HtmlPreviewItem } from "@shared/proto/cline/html_preview"
 import { describe, expect, it } from "vitest"
 import { applyInstalledPackCsp, buildInstalledPackCsp, INSTALLED_PACK_CSP, learningPackScopeFromItem } from "../installedPackCsp"
 
@@ -13,7 +13,8 @@ function makeItem(overrides: Partial<HtmlPreviewItem> = {}): HtmlPreviewItem {
 		webviewUri: "",
 		dirUri: "",
 		contentHash: "",
-		resolvedMode: HtmlPreviewMode.INTERACTIVE,
+		// HtmlPreviewMode.INTERACTIVE is the generated protobuf value 2.
+		resolvedMode: 2 as HtmlPreviewItem["resolvedMode"],
 		...overrides,
 	}
 }

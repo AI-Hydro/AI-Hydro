@@ -45,9 +45,6 @@ jobs:
         # resolved versions while materializing the runner-specific optional set.
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Generate protobuf TypeScript sources
-        run: npm run protos
-
       - name: Validate archive and signed-contract boundaries
         env:
           TS_NODE_PROJECT: ./tsconfig.unit-test.json
