@@ -27,6 +27,33 @@ The companion Python package (`aihydro-tools`) has its own changelog at
   note), so an opened repository cannot choose the executable the extension spawns. Bare
   interpreter names are resolved to absolute paths through PATH entries only (never the cwd, no
   relative PATH entries), closing Windows' implicit current-directory lookup.
+### Added — Revision/approval surfaces and MCP context `_meta` (vision-2040 slice 2 P4, ADR-002b A4)
+
+- Evidence Board shows each claim's sealed revision, drift state and approval
+  state. Only an explicit `approved` state is styled as approved (with
+  channel and trust root, e.g. "signed · system trust"); `none`, `consumed`,
+  `unverifiable`, unreported, or an approval issued for a different revision
+  digest are never shown as approved.
+- Session Replay hides minimal recorded-call rows by default behind a
+  "Show N recorded calls" toggle; run/claim normalisation carries the new
+  backend fields additively and tolerates their absence.
+- ai-hydro tool calls now also send MCP request `_meta["aihydro/context"]`
+  (`chat_id`, `workspace`, `client: "vscode"`); the legacy hidden
+  `_chat_id`/`_workspace` arguments are kept for one release.
+- When a tool result is `APPROVAL_REQUIRED`, an "Approve in terminal" action
+  opens a terminal with the backend-provided `approval_command` typed but not
+  run; a human presses Enter. The extension never signs, holds keys, or
+  writes approvals. The command is rebuilt client-side as
+  `aihydro-approve <session_id> <claim_id>` from the top-level refusal
+  envelope of an ai-hydro result only, after charset validation; the
+  backend-supplied `approval_command` is never used, and invalid ids show an
+  explanation with no pre-filled command.
+- Approved styling requires a `system` or `supplied` trust root, no
+  `unsigned_opt_out` policy and no same-user channel; everything else the gate
+  accepts renders as "Accepted (integrity only)" with the policy shown. New
+  backend states `stale_evidence`, `stale_revision`, `evidence_unchecked`
+  (and drift `evidence_unchecked`) are labelled explicitly as not approved.
+  Hidden minimal rows with a `record_error` still count as failed.
 
 ### Fixed — Skill installer integrity (vision-2040 slice 1c, ADR-005)
 

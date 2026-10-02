@@ -103,6 +103,25 @@ export class LedgerEventWatcher {
 				description: e.description ?? "",
 			})),
 			limitations: event.limitations ?? [],
+			// Ledger events do not carry revision/approval state; unreported
+			// is displayed as "not reported" (never as approved).
+			revision: 0,
+			revisionDigest: "",
+			historyLen: 0,
+			revisionError: "",
+			driftState: "",
+			driftReason: "",
+			driftChangedFields: [],
+			driftEvidenceChecked: false,
+			approvalState: "",
+			approvalForRevisionDigest: "",
+			approvalChannel: "",
+			approvalTrustRoot: "",
+			approvalPrincipal: "",
+			approvalPolicy: "",
+			approvalReason: "",
+			approvalRecordedState: "",
+			approvalLiveDigest: "",
 		}
 
 		const update: ClaimUpdate = {

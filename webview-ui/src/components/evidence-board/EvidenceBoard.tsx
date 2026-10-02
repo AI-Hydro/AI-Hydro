@@ -1,3 +1,4 @@
+import { type ApprovalTone, describeApproval, describeDrift } from "@shared/aihydro/claimApproval"
 import type { ClaimRecord, EvidenceSpanRecord } from "@shared/proto/cline/ledger"
 import React, { useEffect, useMemo, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
@@ -76,7 +77,81 @@ async function copyText(text: string): Promise<void> {
 	}
 }
 
+const APPROVAL_TONE_COLOR: Record<ApprovalTone, string> = {
+	approved: "var(--vscode-testing-iconPassed)",
+	integrity: "var(--vscode-foreground)",
+	pending: "var(--vscode-disabledForeground)",
+	untrusted: "var(--vscode-testing-iconFailed)",
+	unknown: "var(--vscode-testing-iconQueued)",
+}
+
+const DRIFT_TONE_COLOR = {
+	ok: "var(--vscode-testing-iconPassed)",
+	warn: "var(--vscode-testing-iconQueued)",
+	unknown: "var(--vscode-disabledForeground)",
+}
+
+function claimApproval(claim: ClaimRecord) {
+	return describeApproval({
+		state: claim.approvalState,
+		channel: claim.approvalChannel,
+		trustRoot: claim.approvalTrustRoot,
+		principal: claim.approvalPrincipal,
+		policy: claim.approvalPolicy,
+		reason: claim.approvalReason,
+		forRevisionDigest: claim.approvalForRevisionDigest,
+		currentRevisionDigest: claim.revisionDigest,
+	})
+}
+
+function claimDrift(claim: ClaimRecord) {
+	return describeDrift({
+		state: claim.driftState,
+		reason: claim.driftReason,
+		changedFields: claim.driftChangedFields,
+		evidenceChecked: claim.driftEvidenceChecked,
+	})
+}
+
+/** Compact revision / approval chips. Only an explicit `approved` state gets the approved icon. */
+const RevisionChips: React.FC<{ claim: ClaimRecord }> = ({ claim }) => {
+	const approval = claimApproval(claim)
+	const drift = claimDrift(claim)
+	return (
+		<>
+			{claim.revision > 0 && (
+				<span className="text-[9px] font-mono opacity-75" data-testid="claim-revision" title={claim.revisionDigest}>
+					r{claim.revision}
+				</span>
+			)}
+			{claim.driftState === "drifted" && (
+				<span
+					className="inline-flex items-center gap-0.5 text-[9px]"
+					data-testid="claim-drift"
+					style={{ color: DRIFT_TONE_COLOR[drift.tone] }}
+					title={drift.detail ?? drift.label}>
+					<span className="codicon codicon-diff text-[9px]" />
+					drifted
+				</span>
+			)}
+			<span
+				className="inline-flex items-center gap-0.5 text-[9px]"
+				data-approved={approval.approved ? "true" : "false"}
+				data-testid="claim-approval"
+				style={{ color: APPROVAL_TONE_COLOR[approval.tone] }}
+				title={approval.detail ?? approval.label}>
+				<span
+					className={`codicon ${approval.approved ? "codicon-verified-filled" : approval.tone === "untrusted" ? "codicon-error" : "codicon-circle-outline"} text-[9px]`}
+				/>
+				{approval.label}
+			</span>
+		</>
+	)
+}
+
 function claimMarkdown(claim: ClaimRecord): string {
+	const approval = claimApproval(claim)
+	const drift = claimDrift(claim)
 	const evidence = claim.evidenceSpans
 		.map(
 			(span) =>
@@ -90,6 +165,9 @@ function claimMarkdown(claim: ClaimRecord): string {
 		`Status: ${claim.status}`,
 		`Confidence: ${claim.confidence}`,
 		`Type: ${claim.claimType}`,
+		`Revision: ${claim.revision > 0 ? `r${claim.revision} (${claim.revisionDigest || "digest not reported"})` : "not reported"}`,
+		`Drift: ${drift.label}`,
+		`Approval: ${approval.label}`,
 		"",
 		"Evidence:",
 		evidence || "- none",
@@ -171,6 +249,7 @@ const ClaimCard: React.FC<{ claim: ClaimRecord; selected: boolean; onSelect: () 
 						{claim.confidence}
 					</span>
 				)}
+				<RevisionChips claim={claim} />
 				{linkedRuns > 0 && (
 					<span className="inline-flex items-center gap-0.5 text-[9px] opacity-75">
 						<span className="codicon codicon-debug-rerun text-[9px]" />
@@ -220,6 +299,49 @@ const StatusLane: React.FC<{
 				))}
 			</div>
 		</div>
+	)
+}
+
+const RevisionDetail: React.FC<{ claim: ClaimRecord }> = ({ claim }) => {
+	const approval = claimApproval(claim)
+	const drift = claimDrift(claim)
+	return (
+		<section className="mb-3" data-testid="revision-detail">
+			<div className="text-[9px] font-semibold uppercase tracking-wide opacity-60 mb-1">Revision &amp; approval</div>
+			<div className="rounded border border-[var(--vscode-panel-border)] px-2 py-1.5 flex flex-col gap-1">
+				<div className="font-mono text-[10px]">
+					revision:{" "}
+					{claim.revision > 0
+						? `r${claim.revision}${claim.historyLen ? ` of ${claim.historyLen}` : ""}`
+						: "not reported"}
+					{claim.revisionDigest && <span className="opacity-60 break-all"> · {claim.revisionDigest}</span>}
+				</div>
+				{claim.revisionError && (
+					<div className="text-[10px]" style={{ color: "var(--vscode-testing-iconFailed)" }}>
+						Revision error: {claim.revisionError}
+					</div>
+				)}
+				<div className="text-[10px]" data-testid="drift-line" style={{ color: DRIFT_TONE_COLOR[drift.tone] }}>
+					{drift.label}
+					{drift.detail && <span className="opacity-75"> — {drift.detail}</span>}
+				</div>
+				<div
+					className="text-[10px]"
+					data-approved={approval.approved ? "true" : "false"}
+					data-testid="approval-line"
+					style={{ color: APPROVAL_TONE_COLOR[approval.tone] }}>
+					{approval.label}
+					{approval.detail && <span className="opacity-75"> — {approval.detail}</span>}
+				</div>
+				{(claim.approvalRecordedState || claim.approvalLiveDigest) && (
+					<div className="font-mono text-[10px] opacity-70 break-all" data-testid="approval-forensics">
+						{claim.approvalRecordedState && `recorded: ${claim.approvalRecordedState}`}
+						{claim.approvalRecordedState && claim.approvalLiveDigest && " · "}
+						{claim.approvalLiveDigest && `live digest: ${claim.approvalLiveDigest}`}
+					</div>
+				)}
+			</div>
+		</section>
 	)
 }
 
@@ -283,6 +405,8 @@ const ClaimDetail: React.FC<{ claim: ClaimRecord | null }> = ({ claim }) => {
 					</div>
 				)}
 			</section>
+
+			<RevisionDetail claim={claim} />
 
 			{claim.limitations.length > 0 && (
 				<section className="mb-3">

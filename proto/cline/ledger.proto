@@ -28,6 +28,26 @@ message ClaimRecord {
     string updated_at = 8;
     repeated EvidenceSpanRecord evidence_spans = 9;
     repeated string limitations = 10;
+    // Revision / drift / approval surface (vision-2040 slice 2 + ADR-002b).
+    // All additive; empty/zero means the backend did not report the field.
+    // The extension only displays these — it never signs or writes approvals.
+    int32 revision = 11;
+    string revision_digest = 12;
+    int32 history_len = 13;
+    string revision_error = 14;
+    string drift_state = 15;              // no_history | in_sync | drifted | "" (unreported)
+    string drift_reason = 16;
+    repeated string drift_changed_fields = 17;
+    bool drift_evidence_checked = 18;
+    string approval_state = 19;           // none | approved | consumed | unverifiable | "" (unreported)
+    string approval_for_revision_digest = 20;
+    string approval_channel = 21;
+    string approval_trust_root = 22;
+    string approval_principal = 23;
+    string approval_policy = 24;
+    string approval_reason = 25;
+    string approval_recorded_state = 26;  // state recorded at approval time (backend may report)
+    string approval_live_digest = 27;     // digest recomputed from live data (backend may report)
 }
 
 // One claim event pushed from the MCP server via ~/.aihydro/ledger_events/.

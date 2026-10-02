@@ -874,6 +874,7 @@ export class McpHub {
 		toolName: string,
 		toolArguments: Record<string, unknown> | undefined,
 		ulid: string,
+		meta?: Record<string, unknown>,
 	): Promise<McpToolCallResponse> {
 		const connection = this.connections.find((conn) => conn.server.name === serverName)
 		if (!connection) {
@@ -912,6 +913,7 @@ export class McpHub {
 					params: {
 						name: toolName,
 						arguments: toolArguments,
+						...(meta ? { _meta: meta } : {}),
 					},
 				},
 				CallToolResultSchema,
