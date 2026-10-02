@@ -3,6 +3,7 @@ import type { ClaimRecord, ClaimUpdate } from "@shared/proto/cline/ledger"
 import { GetLedgerStateRequest as GetLedgerStateRequestMsg } from "@shared/proto/cline/ledger"
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { LedgerServiceClient } from "../services/grpc-client"
+import { mergeClaimUpdate } from "./mergeClaimUpdate"
 
 interface LedgerContextType {
 	/** All known claims keyed by claim_id. */
@@ -78,7 +79,7 @@ export const LedgerContextProvider: React.FC<{ children: React.ReactNode }> = ({
 						delete next[c.claimId]
 						return next
 					}
-					return { ...prev, [c.claimId]: c }
+					return { ...prev, [c.claimId]: mergeClaimUpdate(prev[c.claimId], c) }
 				})
 			},
 			onError: (error) => {
