@@ -11,6 +11,10 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Fixed — `q5` / `q95` documentation follows CAMELS (defect P2-D0)
+
+- `docs/tools/analysis.md` and `docs/glossary.md` described `q5` as the high flow and `q95` as the low flow. CAMELS (Addor et al. 2017, Table 3) defines `q5` as the 5% flow quantile (low flow) and `q95` as the 95% flow quantile (high flow); `aihydro-tools` computed them the other way round until the matching fix (branch `vision2040/q5-q95` in aihydro-watershed, aihydro-tools, aihydro-lsh, camels-attrs). Documentation only; no extension code reads `q5`/`q95`.
+
 ### Fixed — Author-machine hard-codes in Python interpreter resolution (vision-2040 G0, ADR-006)
 
 - Map hydrology (`MapHydrologyService`) and GEE (`GeeService`) CLIs no longer probe

@@ -42,7 +42,7 @@ Spatial grid of SCS Curve Numbers used in event-based runoff modelling. AI-Hydro
 
 ### Flow duration curve (FDC)
 
-Cumulative-frequency curve of daily flows. Several signatures derive from it: `q5`, `q95`, `slope_fdc` (the slope between Q33 and Q66 on log-flow vs. exceedance probability — a flashiness indicator).
+Cumulative-frequency curve of daily flows. Several signatures derive from it: `q5` (CAMELS 5% flow quantile, low flow), `q95` (CAMELS 95% flow quantile, high flow), `slope_fdc` (the slope between Q33 and Q66 on log-flow vs. exceedance probability — a flashiness indicator).
 
 ### `flow_variability`
 

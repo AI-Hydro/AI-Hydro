@@ -105,7 +105,7 @@ Compute 15+ flow statistics from the session's streamflow record.
 | `runoff_ratio` | Mean annual runoff / mean annual precipitation |
 | `q_mean` | Mean daily discharge (mm/day) |
 | `flow_variability` | Coefficient of variation of daily discharge (σ/μ) |
-| `q5`, `q95` | High-flow (5% exceedance) and low-flow (95% exceedance) |
+| `q5`, `q95` | CAMELS 5% and 95% flow quantiles (mm/day): `q5` is the low flow (exceeded on 95% of days), `q95` the high flow (exceeded on 5% of days). Results from aihydro-tools before the 2026-10 fix (P2-D0) have the two swapped; newer results carry `_flow_quantile_convention`. |
 | `slope_fdc` | Slope of FDC between Q33 and Q66 — flashiness indicator |
 | `high_q_freq` | Days per year above 9× median flow |
 | `low_q_freq` | Days per year below 0.2× mean flow |
