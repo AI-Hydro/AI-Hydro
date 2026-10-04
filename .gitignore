@@ -64,3 +64,6 @@ FEATURE_DELIVERY_SUMMARY.md
 
 # Course modules — live in github.com/AI-Hydro/Modules, not here
 examples/courses/
+
+# Ad-hoc spike artifacts — never durable, per AGENT.md doc hygiene
+scratch/
