@@ -15,9 +15,17 @@ export interface InstalledLearningPackScope {
 	readonly moduleId: string
 }
 
+export interface InstalledLearningPackProvenance {
+	readonly sourceCommit: string
+	readonly buildKind: string
+}
+
 export interface InstalledLearningPackArtifact {
 	readonly scope: InstalledLearningPackScope
 	readonly installationRoot: string
+	readonly version: string
+	/** null when provenance/provenance.json is missing or malformed — a badge omission, not a load failure. */
+	readonly provenance: InstalledLearningPackProvenance | null
 }
 
 export function parseInstalledLearningPackScope(value: unknown): InstalledLearningPackScope | null {
@@ -52,6 +60,31 @@ function activeRoot(root: string, active: InstalledLearningPackVersion): string 
 	return path.resolve(learningPackStoragePaths(root).root, ...active.relativePath.split("/"))
 }
 
+/**
+ * Best-effort read of the pack's own provenance/provenance.json for chrome
+ * display (edition/version/source-commit badge). Deliberately tolerant —
+ * a missing or malformed file just omits the badge, it must never block
+ * rendering the module itself. Full signature/schema verification already
+ * happened at install time (validateLearningPack.ts); this is redisplay,
+ * not re-verification.
+ */
+async function readProvenance(installationRoot: string): Promise<InstalledLearningPackProvenance | null> {
+	try {
+		const raw = JSON.parse(await fs.readFile(path.join(installationRoot, "provenance", "provenance.json"), "utf8")) as Record<
+			string,
+			unknown
+		>
+		const sourceCommit = raw.sourceCommit
+		const buildKind = raw.buildKind
+		if (typeof sourceCommit !== "string" || typeof buildKind !== "string" || !sourceCommit || !buildKind) {
+			return null
+		}
+		return { sourceCommit, buildKind }
+	} catch {
+		return null
+	}
+}
+
 export async function resolveInstalledLearningPackArtifact(
 	filePath: string,
 	root = defaultLearningPackRoot(),
@@ -72,6 +105,8 @@ export async function resolveInstalledLearningPackArtifact(
 			if (!module) return null
 			return Object.freeze({
 				installationRoot: installation,
+				version: record.active.version,
+				provenance: await readProvenance(installation),
 				scope: Object.freeze({
 					packId,
 					courseId: record.active.courseId,
@@ -93,13 +128,23 @@ export async function resolveInstalledLearningPackScope(
 	return (await resolveInstalledLearningPackArtifact(filePath, root))?.scope ?? null
 }
 
-export function learningPackArtifactMetadata(scope: InstalledLearningPackScope): Readonly<Record<string, string>> {
+export function learningPackArtifactMetadata(
+	scope: InstalledLearningPackScope,
+	provenanceInfo?: { version?: string; provenance?: InstalledLearningPackProvenance | null },
+): Readonly<Record<string, string>> {
 	return Object.freeze({
 		artifactKind: LEARNING_PACK_ARTIFACT_KIND,
 		learningPackId: scope.packId,
 		learningPackCourseId: scope.courseId,
 		learningPackEdition: scope.edition,
 		learningPackModuleId: scope.moduleId,
+		...(provenanceInfo?.version ? { learningPackVersion: provenanceInfo.version } : {}),
+		...(provenanceInfo?.provenance
+			? {
+					learningPackSourceCommit: provenanceInfo.provenance.sourceCommit,
+					learningPackBuildKind: provenanceInfo.provenance.buildKind,
+				}
+			: {}),
 	})
 }
 

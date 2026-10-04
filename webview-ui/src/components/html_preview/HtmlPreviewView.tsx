@@ -1222,6 +1222,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 					course={course}
 					currentModuleId={currentModuleId}
 					onNavigate={handleCourseNavigate}
+					packScope={learningPackScope}
 					progress={courseProgress}
 				/>
 			)}

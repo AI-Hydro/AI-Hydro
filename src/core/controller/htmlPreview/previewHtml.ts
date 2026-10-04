@@ -81,7 +81,10 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 				preferredMode,
 				...(packArtifact
 					? {
-							metadata: learningPackArtifactMetadata(packArtifact.scope),
+							metadata: learningPackArtifactMetadata(packArtifact.scope, {
+								version: packArtifact.version,
+								provenance: packArtifact.provenance,
+							}),
 							localResourceRoot: packArtifact.installationRoot,
 						}
 					: {}),

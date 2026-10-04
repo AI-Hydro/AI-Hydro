@@ -13,7 +13,8 @@
 			"title": "Runtime Contract",
 			"abstract": "Exercises executable cells, outputs, state persistence, errors, and a self-check.",
 			"estimatedMinutes": 10,
-			"prerequisites": []
+			"prerequisites": [],
+			"status": "canonical"
 		},
 		{
 			"id": "runtime-contract-02",

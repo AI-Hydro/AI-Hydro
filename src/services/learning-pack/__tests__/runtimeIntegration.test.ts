@@ -11,12 +11,15 @@ import {
 	learningPackProgressKey,
 	resolveActiveLearningPackEntry,
 	resolveActiveLearningPackLaunch,
+	resolveInstalledLearningPackArtifact,
 	resolveInstalledLearningPackScope,
 } from "../runtimeIntegration"
 
 const roots: string[] = []
 
-async function fixture(): Promise<{ root: string; module: string; secondModule: string }> {
+async function fixture(
+	options: { provenance?: Record<string, unknown> | null } = {},
+): Promise<{ root: string; module: string; secondModule: string }> {
 	const root = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-runtime-"))
 	roots.push(root)
 	const relativePath = "packs/hmfp/versions/archive-sha"
@@ -28,6 +31,12 @@ async function fixture(): Promise<{ root: string; module: string; secondModule: 
 	await fs.writeFile(module, "<!doctype html><title>Water balance</title>", "utf8")
 	await fs.writeFile(secondModule, "<!doctype html><title>Routing</title>", "utf8")
 	await atomicWriteJson(path.join(installation, "pack.json"), { entryModuleId: "water-balance" })
+	if (options.provenance !== null) {
+		await atomicWriteJson(
+			path.join(installation, "provenance", "provenance.json"),
+			options.provenance ?? { sourceCommit: "a".repeat(40), buildKind: "release", schemaSha256: "b".repeat(64) },
+		)
+	}
 	await atomicWriteJson(path.join(installation, "course.json"), {
 		courseId: "hydrologic-modeling",
 		title: "Hydrologic Modeling",
@@ -100,5 +109,38 @@ describe("Learning Pack runtime integration", () => {
 		const fallback = await resolveActiveLearningPackLaunch(root, "hmfp", "removed-module")
 		assert.equal(fallback.filePath, module)
 		assert.equal(fallback.scope.moduleId, "water-balance")
+	})
+
+	it("surfaces installed-edition version and provenance for chrome display", async () => {
+		const { root, module } = await fixture()
+		const artifact = await resolveInstalledLearningPackArtifact(module, root)
+		assert.equal(artifact?.version, "1.0.0")
+		assert.deepEqual(artifact?.provenance, { sourceCommit: "a".repeat(40), buildKind: "release" })
+
+		const metadata = learningPackArtifactMetadata(artifact!.scope, {
+			version: artifact!.version,
+			provenance: artifact!.provenance,
+		})
+		assert.equal(metadata.learningPackVersion, "1.0.0")
+		assert.equal(metadata.learningPackSourceCommit, "a".repeat(40))
+		assert.equal(metadata.learningPackBuildKind, "release")
+	})
+
+	it("omits provenance fields rather than failing when provenance.json is missing or malformed", async () => {
+		const missing = await fixture({ provenance: null })
+		const missingArtifact = await resolveInstalledLearningPackArtifact(missing.module, missing.root)
+		assert.equal(missingArtifact?.provenance, null)
+		assert.equal(missingArtifact?.version, "1.0.0")
+		const missingMetadata = learningPackArtifactMetadata(missingArtifact!.scope, {
+			version: missingArtifact!.version,
+			provenance: missingArtifact!.provenance,
+		})
+		assert.equal("learningPackSourceCommit" in missingMetadata, false)
+		assert.equal("learningPackBuildKind" in missingMetadata, false)
+		assert.equal(missingMetadata.learningPackVersion, "1.0.0")
+
+		const malformed = await fixture({ provenance: { sourceCommit: 12345, buildKind: "release" } })
+		const malformedArtifact = await resolveInstalledLearningPackArtifact(malformed.module, malformed.root)
+		assert.equal(malformedArtifact?.provenance, null)
 	})
 })

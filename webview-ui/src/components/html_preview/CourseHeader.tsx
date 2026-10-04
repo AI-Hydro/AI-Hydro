@@ -16,7 +16,8 @@
  */
 
 import React, { useState } from "react"
-import type { CourseManifest } from "./useCourse"
+import type { LearningPackScope } from "./installedPackCsp"
+import type { CourseManifest, CourseModuleStatus } from "./useCourse"
 import { type CourseProgressHook, canAccessCourseModule } from "./useCourseProgress"
 
 interface CourseHeaderProps {
@@ -24,13 +25,79 @@ interface CourseHeaderProps {
 	currentModuleId: string | null
 	progress: CourseProgressHook
 	onNavigate: (moduleId: string) => void
+	/** Set when the active module comes from an installed Learning Pack; renders an edition/provenance chip. */
+	packScope?: LearningPackScope | null
 }
 
 const ACCENT = "#00DDFF"
 const ACCENT_DIM = "rgba(0,221,255,0.35)"
 const GREEN = "#4ade80"
 
-export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModuleId, progress, onNavigate }) => {
+const STATUS_LABEL: Record<CourseModuleStatus, string> = {
+	draft: "Draft",
+	reviewed: "Reviewed",
+	canonical: "Canonical",
+}
+
+const STATUS_COLOR: Record<CourseModuleStatus, string> = {
+	draft: "#f59e0b",
+	reviewed: "#00A3FF",
+	canonical: GREEN,
+}
+
+const StatusBadge: React.FC<{ status: CourseModuleStatus }> = ({ status }) => (
+	<span
+		style={{
+			display: "inline-flex",
+			alignItems: "center",
+			marginLeft: 8,
+			padding: "1px 7px",
+			borderRadius: 8,
+			fontSize: 9,
+			fontWeight: 700,
+			letterSpacing: 0.3,
+			textTransform: "uppercase",
+			color: STATUS_COLOR[status],
+			border: `1px solid ${STATUS_COLOR[status]}55`,
+			background: `${STATUS_COLOR[status]}18`,
+			flexShrink: 0,
+		}}
+		title={`Editorial status: ${STATUS_LABEL[status]}`}>
+		{STATUS_LABEL[status]}
+	</span>
+)
+
+const PackProvenanceChip: React.FC<{ scope: LearningPackScope }> = ({ scope }) => {
+	const editionLabel = scope.edition === "instructor" ? "Instructor Edition" : "Student Edition"
+	const versionLabel = scope.version ? ` · v${scope.version}` : ""
+	const title = [
+		`Installed Learning Pack: ${scope.packId}`,
+		scope.buildKind ? `build: ${scope.buildKind}` : null,
+		scope.sourceCommit ? `source: ${scope.sourceCommit}` : null,
+	]
+		.filter(Boolean)
+		.join(" · ")
+	return (
+		<span
+			style={{
+				opacity: 0.8,
+				fontSize: 11,
+				display: "inline-flex",
+				alignItems: "center",
+				gap: 3,
+				flexShrink: 0,
+			}}
+			title={title}>
+			<span className="codicon codicon-verified-filled" style={{ fontSize: 11, color: GREEN }} />
+			<span style={{ color: "var(--vscode-descriptionForeground, #999)" }}>
+				{editionLabel}
+				{versionLabel}
+			</span>
+		</span>
+	)
+}
+
+export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModuleId, progress, onNavigate, packScope }) => {
 	const total = course.modules.length
 	const idx = currentModuleId ? course.modules.findIndex((m) => m.id === currentModuleId) : -1
 	const currentIdx = idx
@@ -107,6 +174,7 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 				{course.estimatedHours !== undefined && (
 					<span style={{ opacity: 0.6, fontSize: 11 }}>· ⏱ {course.estimatedHours}h</span>
 				)}
+				{packScope && <PackProvenanceChip scope={packScope} />}
 				<div style={{ flex: 1 }} />
 				{/* Progress count */}
 				<span
@@ -283,6 +351,7 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 						)}
 						Module <strong>{currentIdx + 1}</strong> of <strong>{total}</strong>
 						<span style={{ marginLeft: 8, opacity: 0.85 }}>· {currentModule.title}</span>
+						{currentModule.status && <StatusBadge status={currentModule.status} />}
 					</div>
 					<button
 						onClick={handleMarkComplete}
