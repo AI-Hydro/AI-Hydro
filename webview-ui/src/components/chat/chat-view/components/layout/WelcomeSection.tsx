@@ -4,13 +4,13 @@ import CliInstallBanner, { CURRENT_CLI_BANNER_VERSION } from "@/components/commo
 import InfoBanner, { CURRENT_INFO_BANNER_VERSION } from "@/components/common/InfoBanner"
 import HistoryPreview from "@/components/history/HistoryPreview"
 import HomeHeader from "@/components/welcome/HomeHeader"
-import { SuggestedTasks } from "@/components/welcome/SuggestedTasks"
+import { StarterInvestigations } from "@/components/welcome/StarterInvestigations"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { WelcomeSectionProps } from "../../types/chatTypes"
 
 /**
  * Welcome section shown when there's no active task
- * Includes info banner, announcements, home header, and history preview
+ * Includes info banner, announcements, home header, starter investigations and history preview
  */
 export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	showAnnouncement,
@@ -19,7 +19,6 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	telemetrySetting,
 	version,
 	taskHistory,
-	shouldShowQuickWins,
 }) => {
 	const { lastDismissedInfoBannerVersion, lastDismissedCliBannerVersion } = useExtensionState()
 
@@ -36,10 +35,10 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 				{showAnnouncement && <Announcement hideAnnouncement={hideAnnouncement} version={version} />}
 				{/* {shouldShowNewModelBanner && <NewModelBanner />} */}
 				{shouldShowCliBanner && <CliInstallBanner />}
-				<HomeHeader shouldShowQuickWins={shouldShowQuickWins} />
-				{!shouldShowQuickWins && taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
+				<HomeHeader />
+				<StarterInvestigations />
+				{taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
 			</div>
-			<SuggestedTasks shouldShowQuickWins={shouldShowQuickWins} />
 		</div>
 	)
 }

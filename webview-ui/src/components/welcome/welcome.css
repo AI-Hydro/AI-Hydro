@@ -1,0 +1,53 @@
+/* Chat-home / first-run welcome layout. Tokens only. */
+.starter-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-3);
+	padding: 0 var(--aih-space-5) var(--aih-space-4);
+	max-width: 32rem;
+	margin: 0 auto;
+	width: 100%;
+	box-sizing: border-box;
+}
+.starter-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-2);
+	padding: var(--aih-space-3);
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-md);
+	background: var(--aih-surface-raised);
+}
+.starter-card__footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--aih-space-2);
+}
+.welcome-brand {
+	display: flex;
+	align-items: center;
+	gap: var(--aih-space-3);
+	padding: var(--aih-space-4) var(--aih-space-5) var(--aih-space-3);
+}
+.welcome-brand__logo {
+	width: 32px;
+	height: 32px;
+	flex: none;
+}
+.welcome-setup {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-4);
+	max-width: 36rem;
+	margin: 0 auto;
+	padding: var(--aih-space-5);
+	box-sizing: border-box;
+}
+.welcome-panel {
+	padding: var(--aih-space-4);
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-md);
+	background: var(--aih-surface-raised);
+}
