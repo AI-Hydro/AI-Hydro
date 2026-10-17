@@ -293,20 +293,38 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [didHydrateState, setDidHydrateState] = useState(false)
 	const [showWelcome, setShowWelcome] = useState(false)
 
-	// Add timeout fallback for infinite loading - using ref to avoid stale closure
+	// True once the first state (or a state error) has been handled. The fallback timer below reads this ref, so a
+	// state that arrives in time is never overridden by the timeout (the old copy of didHydrateState was stale).
+	const hydratedRef = useRef(false)
+	const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+	const markHydrated = useCallback(() => {
+		hydratedRef.current = true
+		if (fallbackTimerRef.current !== undefined) {
+			clearTimeout(fallbackTimerRef.current)
+			fallbackTimerRef.current = undefined
+		}
+	}, [])
+
+	// Fallback against an infinite loading screen: if no state arrives within 2 seconds, show the chat view.
+	// It does nothing once state has hydrated, so the first-run welcome view is not hidden after 2 seconds.
 	useEffect(() => {
-		console.log("[DEBUG] ExtensionStateContext: Initializing with timeout fallback")
-
-		const _didHydrateRef = { current: didHydrateState }
-
-		// Set a timeout to force didHydrateState to true after 2 seconds
-		const timeout = setTimeout(() => {
+		fallbackTimerRef.current = setTimeout(() => {
+			fallbackTimerRef.current = undefined
+			if (hydratedRef.current) {
+				return
+			}
 			console.warn("[DEBUG] ExtensionStateContext: Forcing didHydrateState to true due to timeout")
+			hydratedRef.current = true
 			setDidHydrateState(true)
 			setShowWelcome(false) // Default to chat view on timeout
 		}, 2000)
 
-		return () => clearTimeout(timeout)
+		return () => {
+			if (fallbackTimerRef.current !== undefined) {
+				clearTimeout(fallbackTimerRef.current)
+				fallbackTimerRef.current = undefined
+			}
+		}
 	}, []) // Empty deps array - run only once on mount
 	const [openRouterModels, setOpenRouterModels] = useState<Record<string, ModelInfo>>({
 		[openRouterAutoModelId]: openRouterAutoModelInfo,
@@ -368,6 +386,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		// Set up state subscription
 		stateSubscriptionRef.current = StateServiceClient.subscribeToState(EmptyRequest.create({}), {
 			onResponse: (response) => {
+				markHydrated()
 				if (response.stateJson) {
 					try {
 						const stateData = JSON.parse(response.stateJson) as ExtensionState
@@ -414,6 +433,7 @@ export const ExtensionStateContextProvider: React.FC<{
 				console.error("Error in state subscription:", error)
 				// Always force hydration on error to prevent infinite loading
 				console.warn("[DEBUG] Forcing didHydrateState to true due to subscription error")
+				markHydrated()
 				setDidHydrateState(true)
 				setShowWelcome(false)
 			},

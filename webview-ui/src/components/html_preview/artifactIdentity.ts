@@ -100,10 +100,7 @@ function deriveCapability(
 	return { capability: "static", capabilityLabel: "Static" }
 }
 
-export function deriveArtifactIdentity(
-	item: HtmlPreviewItem,
-	manifest: AiHydroModuleManifest | undefined,
-): ArtifactIdentity {
+export function deriveArtifactIdentity(item: HtmlPreviewItem, manifest: AiHydroModuleManifest | undefined): ArtifactIdentity {
 	const sourcePath = item.filePath || ""
 	const buildProfile = profileFromBuildPath(sourcePath)
 	const packEdition = isInstalledLearningPack(item) ? item.metadata?.learningPackEdition : undefined

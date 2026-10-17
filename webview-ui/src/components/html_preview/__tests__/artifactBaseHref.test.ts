@@ -55,8 +55,8 @@ describe("applyArtifactBaseHref", () => {
 		// mechanism itself). A whole-document regex scan would mistake that
 		// text for an authored tag and silently suppress injection.
 		const html =
-			'<html><head><title>t</title></head><body>' +
-			'<!-- docs: injects a <base href> element into the page --></body></html>'
+			"<html><head><title>t</title></head><body>" +
+			"<!-- docs: injects a <base href> element into the page --></body></html>"
 		const out = applyArtifactBaseHref(html, DIR)
 		expect(out).to.contain(`<base href="${DIR}/">`)
 		expect(out.indexOf("<base")).to.be.lessThan(out.indexOf("<title>"))
@@ -81,7 +81,7 @@ describe("applyArtifactBaseHref", () => {
 
 describe("FRAGMENT_NAV_GUARD_SCRIPT", () => {
 	it("is a capture-phase, base-gated document listener", () => {
-		expect(FRAGMENT_NAV_GUARD_SCRIPT).to.contain('document.addEventListener')
+		expect(FRAGMENT_NAV_GUARD_SCRIPT).to.contain("document.addEventListener")
 		expect(FRAGMENT_NAV_GUARD_SCRIPT).to.contain("true,")
 		expect(FRAGMENT_NAV_GUARD_SCRIPT).to.contain('document.querySelector("base")')
 		expect(FRAGMENT_NAV_GUARD_SCRIPT).to.contain("preventDefault")

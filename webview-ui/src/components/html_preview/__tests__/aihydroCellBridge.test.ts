@@ -7,11 +7,7 @@ describe("usesAihydroDesignSystem", () => {
 	})
 
 	it("is true when the HTML embeds a module manifest", () => {
-		expect(
-			usesAihydroDesignSystem(
-				'<script type="application/vnd.aihydro.module+json">{"id":"m"}</script>',
-			),
-		).to.equal(true)
+		expect(usesAihydroDesignSystem('<script type="application/vnd.aihydro.module+json">{"id":"m"}</script>')).to.equal(true)
 	})
 
 	it("is false for a generic artifact using neither", () => {

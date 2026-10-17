@@ -101,7 +101,8 @@ describe("HtmlPreviewView", () => {
 	})
 
 	it("applies the host-owned CSP only to installed Learning Pack srcdoc", () => {
-		const authored = '<html><head><meta http-equiv="Content-Security-Policy" content="default-src *"></head><body>pack</body></html>'
+		const authored =
+			'<html><head><meta http-equiv="Content-Security-Policy" content="default-src *"></head><body>pack</body></html>'
 		const packItem = {
 			...inlineItem,
 			htmlContent: authored,

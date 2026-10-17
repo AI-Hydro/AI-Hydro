@@ -1,12 +1,7 @@
 import { type HtmlPreviewItem, HtmlPreviewMode } from "@shared/proto/cline/html_preview"
 import { describe, expect, it } from "vitest"
 import type { AiHydroModuleManifest } from "@/context/HtmlPreviewContext"
-import {
-	deriveArtifactIdentity,
-	isStaticDocument,
-	profileFromBuildPath,
-	shortSourceLabel,
-} from "../artifactIdentity"
+import { deriveArtifactIdentity, isStaticDocument, profileFromBuildPath, shortSourceLabel } from "../artifactIdentity"
 
 function makeItem(overrides: Partial<HtmlPreviewItem> = {}): HtmlPreviewItem {
 	return {

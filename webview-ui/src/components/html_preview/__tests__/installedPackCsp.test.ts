@@ -43,7 +43,7 @@ describe("installed Learning Pack CSP", () => {
 		expect(csp).to.contain("img-src data: blob: https://file+.vscode-resource.vscode-cdn.net")
 		expect(csp).to.contain("connect-src 'none'")
 		expect(csp).not.to.contain("evil.invalid")
-		const secured = applyInstalledPackCsp("<html><head><base href=\"https://evil.invalid/\"></head></html>", dirUri)
+		const secured = applyInstalledPackCsp('<html><head><base href="https://evil.invalid/"></head></html>', dirUri)
 		expect(secured).to.contain(`<base href="${dirUri}/">`)
 		expect(secured).not.to.contain("evil.invalid")
 	})
