@@ -76,5 +76,5 @@ ancestor of `main`. That merge is the nearest anchor to the published 0.3.0 and
 is **not** claimed to be byte-identical to it.
 
 Open owner decisions before the next release: the version number (must be
-above 0.3.0; `package.json` still reads 0.2.7 pending that decision), whether to
+above 0.3.0; `package.json` set to 0.4.0 by the owner on 2026-10-17; not yet published), whether to
 add a retroactive `aihydro-v0.3.0` tag at `ba06b214f`, and whether to publish.

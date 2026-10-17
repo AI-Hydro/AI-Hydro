@@ -9,7 +9,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [Unreleased]
+## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
 ### Fixed — `q5` / `q95` documentation follows CAMELS (defect P2-D0)
 
