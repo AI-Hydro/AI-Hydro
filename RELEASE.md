@@ -66,8 +66,9 @@ The Marketplace serves `0.3.0`, and no `aihydro-v0.3.*` tag exists. Evidence
 from an uncommitted working tree on the `feat/deepseek-harness-hardening`
 line: it contains the native-platform-primacy prompt grouping, multi-line JSON
 repair, `fly_to` / `set_time_range` host handling and WebGL context-loss
-recovery, but not the Inundation 3D or time-slider UI. Nothing on `main` was
-ever published under 0.2.6 or 0.2.7 (the Marketplace rejects lower versions).
+recovery, but not the Inundation 3D or time-slider UI. By inference (not
+verified against the publisher page), nothing on `main` was published under 0.2.6 or
+0.2.7: the Marketplace rejects versions lower than 0.3.0 once that is live.
 
 Branch `feat/deepseek-harness-hardening` (head `ba06b214f`) was merged into
 `main` by `reconcile/release-0.3-into-main` so that every shipped commit is an
