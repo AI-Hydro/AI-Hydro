@@ -77,6 +77,7 @@ function createHandlerForProvider(
 				apiKey: options.apiKey,
 				anthropicBaseUrl: options.anthropicBaseUrl,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				thinkingBudgetTokens:
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 			})
@@ -111,6 +112,7 @@ function createHandlerForProvider(
 					mode === "plan" ? options.planModeAwsBedrockCustomSelected : options.actModeAwsBedrockCustomSelected,
 				awsBedrockCustomModelBaseId:
 					mode === "plan" ? options.planModeAwsBedrockCustomModelBaseId : options.actModeAwsBedrockCustomModelBaseId,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				thinkingBudgetTokens:
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 			})
@@ -120,6 +122,7 @@ function createHandlerForProvider(
 				vertexProjectId: options.vertexProjectId,
 				vertexRegion: options.vertexRegion,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				thinkingBudgetTokens:
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 				geminiApiKey: options.geminiApiKey,

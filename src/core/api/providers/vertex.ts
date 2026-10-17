@@ -1,16 +1,19 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { AnthropicVertex } from "@anthropic-ai/vertex-sdk"
-import { ModelInfo, VertexModelId, vertexDefaultModelId, vertexModels } from "@shared/api"
+import { ClaudeModelInfo, VertexModelId, vertexDefaultModelId, vertexModels } from "@shared/api"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
+import { buildAnthropicStreamRequest } from "../transform/anthropic-request"
 import { ApiStream } from "../transform/stream"
 import { GeminiHandler } from "./gemini"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface VertexHandlerOptions extends CommonApiHandlerOptions {
 	vertexProjectId?: string
 	vertexRegion?: string
 	apiModelId?: string
 	thinkingBudgetTokens?: number
+	reasoningEffort?: string
 	geminiApiKey?: string
 	geminiBaseUrl?: string
 	ulid?: string
@@ -64,6 +67,7 @@ export class VertexHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("Vertex AI", this.options.apiModelId, vertexModels)
 		const model = this.getModel()
 		const modelId = model.id
 
@@ -76,129 +80,23 @@ export class VertexHandler implements ApiHandler {
 
 		const clientAnthropic = this.ensureAnthropicClient()
 
-		// Claude implementation
-		const budget_tokens = this.options.thinkingBudgetTokens || 0
-		const reasoningOn = !!(
-			(modelId.includes("3-7") ||
-				modelId.includes("sonnet-4") ||
-				modelId.includes("opus-4") ||
-				modelId.includes("haiku-4-5")) &&
-			budget_tokens !== 0
-		)
-		let stream
-
-		switch (modelId) {
-			case "claude-haiku-4-5@20251001":
-			case "claude-sonnet-4-5@20250929":
-			case "claude-sonnet-4@20250514":
-			case "claude-opus-4-1@20250805":
-			case "claude-opus-4@20250514":
-			case "claude-3-7-sonnet@20250219":
-			case "claude-3-5-sonnet-v2@20241022":
-			case "claude-3-5-sonnet@20240620":
-			case "claude-3-5-haiku@20241022":
-			case "claude-3-opus@20240229":
-			case "claude-3-haiku@20240307": {
-				// Find indices of user messages for cache control
-				const userMsgIndices = messages.reduce(
-					(acc, msg, index) => (msg.role === "user" ? [...acc, index] : acc),
-					[] as number[],
-				)
-				const lastUserMsgIndex = userMsgIndices[userMsgIndices.length - 1] ?? -1
-				const secondLastMsgUserIndex = userMsgIndices[userMsgIndices.length - 2] ?? -1
-				stream = await clientAnthropic.beta.messages.create(
-					{
-						model: modelId,
-						max_tokens: model.info.maxTokens || 8192,
-						thinking: reasoningOn ? { type: "enabled", budget_tokens: budget_tokens } : undefined,
-						temperature: reasoningOn ? undefined : 0,
-						system: [
-							{
-								text: systemPrompt,
-								type: "text",
-								cache_control: { type: "ephemeral" },
-							},
-						],
-						messages: messages.map((message, index) => {
-							if (index === lastUserMsgIndex || index === secondLastMsgUserIndex) {
-								return {
-									...message,
-									content:
-										typeof message.content === "string"
-											? [
-													{
-														type: "text",
-														text: message.content,
-														cache_control: {
-															type: "ephemeral",
-														},
-													},
-												]
-											: message.content.map((content, contentIndex) =>
-													contentIndex === message.content.length - 1
-														? {
-																...content,
-																cache_control: {
-																	type: "ephemeral",
-																},
-															}
-														: content,
-												),
-								}
-							}
-							return {
-								...message,
-								content:
-									typeof message.content === "string"
-										? [
-												{
-													type: "text",
-													text: message.content,
-												},
-											]
-										: message.content,
-							}
-						}),
-						stream: true,
-					},
-					{
-						headers: {},
-					},
-				)
-				break
-			}
-			default: {
-				stream = await clientAnthropic.beta.messages.create({
-					model: modelId,
-					max_tokens: model.info.maxTokens || 8192,
-					temperature: 0,
-					system: [
-						{
-							text: systemPrompt,
-							type: "text",
-						},
-					],
-					messages: messages.map((message) => ({
-						...message,
-						content:
-							typeof message.content === "string"
-								? [
-										{
-											type: "text",
-											text: message.content,
-										},
-									]
-								: message.content,
-					})),
-					stream: true,
-				})
-				break
-			}
-		}
+		// Claude implementation: request shape is driven by ModelInfo capability flags.
+		const request = buildAnthropicStreamRequest({
+			modelId,
+			info: model.info,
+			systemPrompt,
+			messages,
+			thinkingBudgetTokens: this.options.thinkingBudgetTokens,
+			reasoningEffort: this.options.reasoningEffort,
+		})
+		const stream = await clientAnthropic.beta.messages.create(request as Anthropic.Beta.Messages.MessageCreateParamsStreaming)
 
 		for await (const chunk of stream) {
 			switch (chunk?.type) {
 				case "message_start":
+					if (chunk.message.model) {
+						yield { type: "response_model", modelId: chunk.message.model }
+					}
 					const usage = chunk.message.usage
 					yield {
 						type: "usage",
@@ -269,15 +167,11 @@ export class VertexHandler implements ApiHandler {
 		}
 	}
 
-	getModel(): { id: VertexModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in vertexModels) {
-			const id = modelId as VertexModelId
-			return { id, info: vertexModels[id] }
-		}
-		return {
-			id: vertexDefaultModelId,
-			info: vertexModels[vertexDefaultModelId],
-		}
+	getModel(): { id: VertexModelId; info: ClaudeModelInfo } {
+		return resolveRegistryModel({
+			registry: vertexModels,
+			defaultId: vertexDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

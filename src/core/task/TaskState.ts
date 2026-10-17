@@ -37,6 +37,9 @@ export class TaskState {
 	didAlreadyUseTool = false
 	didEditFile: boolean = false
 
+	// Model id the provider reported serving for the most recent API request (provenance; surfaced in MCP _meta)
+	lastResponseModelId?: string
+
 	// Consecutive request tracking
 	consecutiveAutoApprovedRequestsCount: number = 0
 

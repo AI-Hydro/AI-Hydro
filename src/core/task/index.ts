@@ -2617,12 +2617,16 @@ export class Task {
 			const antThinkingContent: (Anthropic.Messages.RedactedThinkingBlock | Anthropic.Messages.ThinkingBlock)[] = []
 			this.taskState.isStreaming = true
 			let didReceiveUsageChunk = false
+			this.taskState.lastResponseModelId = undefined
 			try {
 				for await (const chunk of stream) {
 					if (!chunk) {
 						continue
 					}
 					switch (chunk.type) {
+						case "response_model":
+							this.taskState.lastResponseModelId = chunk.modelId
+							break
 						case "usage":
 							didReceiveUsageChunk = true
 							inputTokens += chunk.inputTokens

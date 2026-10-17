@@ -4,6 +4,7 @@ import { CerebrasModelId, cerebrasDefaultModelId, cerebrasModels, ModelInfo } fr
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface CerebrasHandlerOptions extends CommonApiHandlerOptions {
 	cerebrasApiKey?: string
@@ -45,6 +46,7 @@ export class CerebrasHandler implements ApiHandler {
 		maxDelay: 60000, // Allow up to 60 second delays to respect rate limits
 	})
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("Cerebras", this.options.apiModelId, cerebrasModels)
 		const client = this.ensureClient()
 
 		// Convert Anthropic messages to Cerebras format
@@ -199,20 +201,14 @@ export class CerebrasHandler implements ApiHandler {
 
 	getModel(): { id: string; info: ModelInfo } {
 		const originalModelId = this.options.apiModelId
-		let apiModelId = originalModelId
 		if (originalModelId === "qwen-3-coder-480b-free") {
-			apiModelId = "qwen-3-coder-480b"
-			return { id: apiModelId, info: cerebrasModels[originalModelId as CerebrasModelId] }
+			return { id: "qwen-3-coder-480b", info: cerebrasModels[originalModelId as CerebrasModelId] }
 		}
-
-		if (originalModelId && originalModelId in cerebrasModels) {
-			const id = originalModelId as CerebrasModelId
-			return { id, info: cerebrasModels[id] }
-		}
-		return {
-			id: cerebrasDefaultModelId,
-			info: cerebrasModels[cerebrasDefaultModelId],
-		}
+		return resolveRegistryModel({
+			registry: cerebrasModels,
+			defaultId: cerebrasDefaultModelId,
+			requestedId: originalModelId,
+		})
 	}
 
 	/**

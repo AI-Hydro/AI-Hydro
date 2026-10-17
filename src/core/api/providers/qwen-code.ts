@@ -8,6 +8,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 // --- Constants for Qwen OAuth2 ---
 const QWEN_OAUTH_BASE_URL = "https://chat.qwen.ai"
@@ -175,6 +176,7 @@ export class QwenCodeHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("Qwen Code", this.options.apiModelId, qwenCodeModels)
 		await this.ensureAuthenticated()
 		const client = this.ensureClient()
 		const model = this.getModel()
@@ -259,14 +261,10 @@ export class QwenCodeHandler implements ApiHandler {
 	}
 
 	getModel(): { id: QwenCodeModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in qwenCodeModels) {
-			const id = modelId as QwenCodeModelId
-			return { id, info: qwenCodeModels[id] }
-		}
-		return {
-			id: qwenCodeDefaultModelId,
-			info: qwenCodeModels[qwenCodeDefaultModelId],
-		}
+		return resolveRegistryModel<QwenCodeModelId>({
+			registry: qwenCodeModels,
+			defaultId: qwenCodeDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

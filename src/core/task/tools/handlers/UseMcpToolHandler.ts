@@ -171,7 +171,12 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 				}
 				// Also sent as MCP request _meta["aihydro/context"]; the legacy
 				// arguments stay for one release (slice 2 P4 / ADR-004 amendment).
-				const callContext = buildAiHydroCallContext(parsedArguments, config.ulid, workspaceRoot)
+				const callContext = buildAiHydroCallContext(
+					parsedArguments,
+					config.ulid,
+					workspaceRoot,
+					config.taskState.lastResponseModelId,
+				)
 				argsWithChatId = callContext.args
 				callMeta = callContext.meta
 			}

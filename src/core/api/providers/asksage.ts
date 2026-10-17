@@ -1,8 +1,9 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import { AskSageModelId, askSageDefaultModelId, askSageDefaultURL, askSageModels, ModelInfo } from "@shared/api"
+import { askSageDefaultModelId, askSageDefaultURL, askSageModels, ModelInfo } from "@shared/api"
 import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface AskSageHandlerOptions extends CommonApiHandlerOptions {
 	asksageApiKey?: string
@@ -47,6 +48,7 @@ export class AskSageHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("AskSage", this.options.apiModelId, askSageModels)
 		try {
 			const model = this.getModel()
 
@@ -103,14 +105,10 @@ export class AskSageHandler implements ApiHandler {
 	}
 
 	getModel(): { id: string; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in askSageModels) {
-			const id = modelId as AskSageModelId
-			return { id, info: askSageModels[id] }
-		}
-		return {
-			id: askSageDefaultModelId,
-			info: askSageModels[askSageDefaultModelId],
-		}
+		return resolveRegistryModel<string>({
+			registry: askSageModels,
+			defaultId: askSageDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

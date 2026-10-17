@@ -5,6 +5,7 @@ import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface FireworksHandlerOptions extends CommonApiHandlerOptions {
 	fireworksApiKey?: string
@@ -40,6 +41,7 @@ export class FireworksHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("Fireworks", this.options.fireworksModelId, fireworksModels)
 		const client = this.ensureClient()
 		const modelId = this.options.fireworksModelId ?? ""
 
@@ -96,14 +98,10 @@ export class FireworksHandler implements ApiHandler {
 	}
 
 	getModel(): { id: FireworksModelId; info: ModelInfo } {
-		const modelId = this.options.fireworksModelId
-		if (modelId && modelId in fireworksModels) {
-			const id = modelId as FireworksModelId
-			return { id, info: fireworksModels[id] }
-		}
-		return {
-			id: fireworksDefaultModelId,
-			info: fireworksModels[fireworksDefaultModelId],
-		}
+		return resolveRegistryModel<FireworksModelId>({
+			registry: fireworksModels,
+			defaultId: fireworksDefaultModelId,
+			requestedId: this.options.fireworksModelId,
+		})
 	}
 }

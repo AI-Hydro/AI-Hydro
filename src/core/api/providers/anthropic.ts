@@ -1,15 +1,18 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Stream as AnthropicStream } from "@anthropic-ai/sdk/streaming"
-import { AnthropicModelId, anthropicDefaultModelId, anthropicModels, CLAUDE_SONNET_1M_SUFFIX, ModelInfo } from "@shared/api"
+import { AnthropicModelId, anthropicDefaultModelId, anthropicModels, CLAUDE_SONNET_1M_SUFFIX, ClaudeModelInfo } from "@shared/api"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
+import { buildAnthropicStreamRequest } from "../transform/anthropic-request"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface AnthropicHandlerOptions extends CommonApiHandlerOptions {
 	apiKey?: string
 	anthropicBaseUrl?: string
 	apiModelId?: string
 	thinkingBudgetTokens?: number
+	reasoningEffort?: string
 }
 
 export class AnthropicHandler implements ApiHandler {
@@ -40,6 +43,7 @@ export class AnthropicHandler implements ApiHandler {
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
 		const client = this.ensureClient()
+		assertKnownModel("Anthropic", this.options.apiModelId, anthropicModels)
 
 		const model = this.getModel()
 		let stream: AnthropicStream<Anthropic.RawMessageStreamEvent>
@@ -47,117 +51,29 @@ export class AnthropicHandler implements ApiHandler {
 		const modelId = model.id.endsWith(CLAUDE_SONNET_1M_SUFFIX) ? model.id.slice(0, -CLAUDE_SONNET_1M_SUFFIX.length) : model.id
 		const enable1mContextWindow = model.id.endsWith(CLAUDE_SONNET_1M_SUFFIX)
 
-		const budget_tokens = this.options.thinkingBudgetTokens || 0
-		const reasoningOn = !!(
-			(modelId.includes("3-7") || modelId.includes("4-") || modelId.includes("4-5")) &&
-			budget_tokens !== 0
+		const request = buildAnthropicStreamRequest({
+			modelId,
+			info: model.info,
+			systemPrompt,
+			messages,
+			thinkingBudgetTokens: this.options.thinkingBudgetTokens,
+			reasoningEffort: this.options.reasoningEffort,
+		})
+		// 1m context window beta header
+		stream = await client.messages.create(
+			request,
+			enable1mContextWindow ? { headers: { "anthropic-beta": "context-1m-2025-08-07" } } : undefined,
 		)
-
-		switch (modelId) {
-			// 'latest' alias does not support cache_control
-			case "claude-haiku-4-5-20251001":
-			case "claude-sonnet-4-5-20250929":
-			case "claude-sonnet-4-20250514":
-			case "claude-3-7-sonnet-20250219":
-			case "claude-3-5-sonnet-20241022":
-			case "claude-3-5-haiku-20241022":
-			case "claude-opus-4-20250514":
-			case "claude-opus-4-1-20250805":
-			case "claude-3-opus-20240229":
-			case "claude-3-haiku-20240307": {
-				/*
-				The latest message will be the new user message, one before will be the assistant message from a previous request, and the user message before that will be a previously cached user message. So we need to mark the latest user message as ephemeral to cache it for the next request, and mark the second to last user message as ephemeral to let the server know the last message to retrieve from the cache for the current request..
-				*/
-				const userMsgIndices = messages.reduce(
-					(acc, msg, index) => (msg.role === "user" ? [...acc, index] : acc),
-					[] as number[],
-				)
-				const lastUserMsgIndex = userMsgIndices[userMsgIndices.length - 1] ?? -1
-				const secondLastMsgUserIndex = userMsgIndices[userMsgIndices.length - 2] ?? -1
-				stream = await client.messages.create(
-					{
-						model: modelId,
-						thinking: reasoningOn ? { type: "enabled", budget_tokens: budget_tokens } : undefined,
-						max_tokens: model.info.maxTokens || 8192,
-						// "Thinking isn’t compatible with temperature, top_p, or top_k modifications as well as forced tool use."
-						// (https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#important-considerations-when-using-extended-thinking)
-						temperature: reasoningOn ? undefined : 0,
-						system: [
-							{
-								text: systemPrompt,
-								type: "text",
-								cache_control: { type: "ephemeral" },
-							},
-						], // setting cache breakpoint for system prompt so new tasks can reuse it
-						messages: messages.map((message, index) => {
-							if (index === lastUserMsgIndex || index === secondLastMsgUserIndex) {
-								return {
-									...message,
-									content:
-										typeof message.content === "string"
-											? [
-													{
-														type: "text",
-														text: message.content,
-														cache_control: {
-															type: "ephemeral",
-														},
-													},
-												]
-											: message.content.map((content, contentIndex) =>
-													contentIndex === message.content.length - 1
-														? {
-																...content,
-																cache_control: {
-																	type: "ephemeral",
-																},
-															}
-														: content,
-												),
-								}
-							}
-							return message
-						}),
-						// tools, // cache breakpoints go from tools > system > messages, and since tools dont change, we can just set the breakpoint at the end of system (this avoids having to set a breakpoint at the end of tools which by itself does not meet min requirements for haiku caching)
-						// tool_choice: { type: "auto" },
-						// tools: tools,
-						stream: true,
-					},
-					(() => {
-						// 1m context window beta header
-						if (enable1mContextWindow) {
-							return {
-								headers: {
-									"anthropic-beta": "context-1m-2025-08-07",
-								},
-							}
-						} else {
-							return undefined
-						}
-					})(),
-				)
-				break
-			}
-			default: {
-				stream = await client.messages.create({
-					model: modelId,
-					max_tokens: model.info.maxTokens || 8192,
-					temperature: 0,
-					system: [{ text: systemPrompt, type: "text" }],
-					messages,
-					// tools,
-					// tool_choice: { type: "auto" },
-					stream: true,
-				})
-				break
-			}
-		}
 
 		let thinkingDeltaAccumulator = ""
 
 		for await (const chunk of stream) {
 			switch (chunk?.type) {
 				case "message_start":
+					// The provider-reported model id (may differ from the requested alias); surfaced so it can be recorded in provenance.
+					if (chunk.message.model) {
+						yield { type: "response_model", modelId: chunk.message.model }
+					}
 					// tells us cache reads/writes/input/output
 					const usage = chunk.message.usage
 					yield {
@@ -258,15 +174,11 @@ export class AnthropicHandler implements ApiHandler {
 		}
 	}
 
-	getModel(): { id: AnthropicModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in anthropicModels) {
-			const id = modelId as AnthropicModelId
-			return { id, info: anthropicModels[id] }
-		}
-		return {
-			id: anthropicDefaultModelId,
-			info: anthropicModels[anthropicDefaultModelId],
-		}
+	getModel(): { id: AnthropicModelId; info: ClaudeModelInfo } {
+		return resolveRegistryModel({
+			registry: anthropicModels,
+			defaultId: anthropicDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

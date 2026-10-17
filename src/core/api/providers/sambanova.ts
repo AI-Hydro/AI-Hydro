@@ -1,11 +1,12 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import { ModelInfo, SambanovaModelId, sambanovaDefaultModelId, sambanovaModels } from "@shared/api"
+import { ModelInfo, sambanovaDefaultModelId, sambanovaModels } from "@shared/api"
 import OpenAI from "openai"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface SambanovaHandlerOptions extends CommonApiHandlerOptions {
 	sambanovaApiKey?: string
@@ -39,6 +40,7 @@ export class SambanovaHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("SambaNova", this.options.apiModelId, sambanovaModels)
 		const client = this.ensureClient()
 		const model = this.getModel()
 
@@ -81,14 +83,10 @@ export class SambanovaHandler implements ApiHandler {
 	}
 
 	getModel(): { id: string; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in sambanovaModels) {
-			const id = modelId as SambanovaModelId
-			return { id, info: sambanovaModels[id] }
-		}
-		return {
-			id: sambanovaDefaultModelId,
-			info: sambanovaModels[sambanovaDefaultModelId],
-		}
+		return resolveRegistryModel<string>({
+			registry: sambanovaModels,
+			defaultId: sambanovaDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

@@ -5,6 +5,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface MoonshotHandlerOptions extends CommonApiHandlerOptions {
 	moonshotApiKey?: string
@@ -37,6 +38,7 @@ export class MoonshotHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("Moonshot", this.options.apiModelId, moonshotModels)
 		const client = this.ensureClient()
 		const model = this.getModel()
 
@@ -80,12 +82,10 @@ export class MoonshotHandler implements ApiHandler {
 	}
 
 	getModel(): { id: MoonshotModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-
-		if (modelId && modelId in moonshotModels) {
-			const id = modelId as MoonshotModelId
-			return { id, info: moonshotModels[id] }
-		}
-		return { id: moonshotDefaultModelId, info: moonshotModels[moonshotDefaultModelId] }
+		return resolveRegistryModel<MoonshotModelId>({
+			registry: moonshotModels,
+			defaultId: moonshotDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

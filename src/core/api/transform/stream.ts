@@ -6,6 +6,7 @@ export type ApiStreamChunk =
 	| ApiStreamAnthropicThinkingChunk
 	| ApiStreamAnthropicRedactedThinkingChunk
 	| ApiStreamUsageChunk
+	| ApiStreamResponseModelChunk
 
 export interface ApiStreamTextChunk {
 	type: "text"
@@ -41,4 +42,10 @@ export interface ApiStreamUsageChunk {
 	cacheReadTokens?: number
 	thoughtsTokenCount?: number // openrouter
 	totalCost?: number // openrouter
+}
+
+/** The model id the provider reports it actually served (e.g. Anthropic message_start.message.model). */
+export interface ApiStreamResponseModelChunk {
+	type: "response_model"
+	modelId: string
 }

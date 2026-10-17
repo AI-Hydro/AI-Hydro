@@ -1,11 +1,12 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import { type ModelInfo, type NebiusModelId, nebiusDefaultModelId, nebiusModels } from "@shared/api"
+import { type ModelInfo, nebiusDefaultModelId, nebiusModels } from "@shared/api"
 import OpenAI from "openai"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface NebiusHandlerOptions extends CommonApiHandlerOptions {
 	nebiusApiKey?: string
@@ -36,6 +37,7 @@ export class NebiusHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("Nebius", this.options.apiModelId, nebiusModels)
 		const client = this.ensureClient()
 		const model = this.getModel()
 
@@ -77,11 +79,10 @@ export class NebiusHandler implements ApiHandler {
 	}
 
 	getModel(): { id: string; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-
-		if (modelId !== undefined && modelId in nebiusModels) {
-			return { id: modelId, info: nebiusModels[modelId as NebiusModelId] }
-		}
-		return { id: nebiusDefaultModelId, info: nebiusModels[nebiusDefaultModelId] }
+		return resolveRegistryModel<string>({
+			registry: nebiusModels,
+			defaultId: nebiusDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

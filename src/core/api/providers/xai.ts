@@ -7,6 +7,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface XAIHandlerOptions extends CommonApiHandlerOptions {
 	xaiApiKey?: string
@@ -41,6 +42,7 @@ export class XAIHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("xAI", this.options.apiModelId, xaiModels)
 		const client = this.ensureClient()
 		const modelId = this.getModel().id
 		// ensure reasoning effort is either "low" or "high" for grok-3-mini
@@ -96,14 +98,10 @@ export class XAIHandler implements ApiHandler {
 	}
 
 	getModel(): { id: XAIModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in xaiModels) {
-			const id = modelId as XAIModelId
-			return { id, info: xaiModels[id] }
-		}
-		return {
-			id: xaiDefaultModelId,
-			info: xaiModels[xaiDefaultModelId],
-		}
+		return resolveRegistryModel<XAIModelId>({
+			registry: xaiModels,
+			defaultId: xaiDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

@@ -18,7 +18,7 @@ export function shouldSkipReasoningForModel(modelId?: string): boolean {
 }
 
 export function isAnthropicModelId(modelId: string): modelId is AnthropicModelId {
-	return modelId in anthropicModels || isClaude4ModelFamily(modelId)
+	return modelId in anthropicModels || isClaude4ModelFamily(modelId) || isClaude5ModelFamily(modelId)
 }
 
 export function isClaude4ModelFamily(id: string): boolean {
@@ -34,9 +34,26 @@ export function isClaude4ModelFamily(id: string): boolean {
 	)
 }
 
+/**
+ * Claude 5.x line (fable-5-1, opus-5-5, sonnet-5-5, haiku-5-5, ... and dotted OpenRouter-style ids such
+ * as "anthropic/claude-opus-5.5"). Substring matching, like the 4.x check, so it also covers dated,
+ * region-prefixed and "anthropic."-prefixed ids. "claude-3-5-sonnet" does not match ("sonnet-5" only
+ * appears in the 5.x naming).
+ */
+export function isClaude5ModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return /(?:fable|mythos|opus|sonnet|haiku)-5(?![0-9])/.test(modelId)
+}
+
 export function isGemini2dot5ModelFamily(id: string): boolean {
 	const modelId = normalize(id)
 	return modelId.includes("gemini-2.5")
+}
+
+/** Gemini 3.x (e.g. gemini-3.1-pro-preview, the registry's Gemini default). */
+export function isGemini3ModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return /gemini-3(?![0-9])/.test(modelId)
 }
 
 export function isGrok4ModelFamily(id: string): boolean {
@@ -63,7 +80,9 @@ export function isNextGenModelFamily(id: string): boolean {
 	const modelId = normalize(id)
 	return (
 		isClaude4ModelFamily(modelId) ||
+		isClaude5ModelFamily(modelId) ||
 		isGemini2dot5ModelFamily(modelId) ||
+		isGemini3ModelFamily(modelId) ||
 		isGrok4ModelFamily(modelId) ||
 		isGPT5ModelFamily(modelId)
 	)
