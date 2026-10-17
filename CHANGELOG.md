@@ -9,7 +9,17 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [Unreleased]
+## [0.4.0] — unreleased (version set 2026-10-17; not published)
+
+### Added / Fixed — Harness quick wins (vision-2040, branch `vision2040/harness-quickwins`)
+
+- **Model layer honesty.** An unknown model id no longer silently falls back to the provider default: static-registry providers raise a clear error naming the id (and how to select or add a model); dynamic-list providers (OpenRouter, Requesty, Groq, Baseten, Hugging Face, Huawei MaaS, Vercel AI Gateway, AI-Hydro) send the id you chose.
+- **New model ids** `claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` (Anthropic, Bedrock; Opus/Sonnet 5.5 on Vertex). Prices and limits are not verified, so cost shows "cost unavailable (pricing not verified)" for them. See `docs/model-config/claude-5x-models.md`.
+- **Prompt caching and thinking are driven by model flags**, not a hard-coded id list: caching now applies to the default model and all 4.5+ models; 4.6+ uses adaptive thinking + effort instead of `budget_tokens`; no explicit temperature when thinking is on or the model rejects it. Cost display marks a lower bound when a cache price is unknown.
+- The provider-reported model id is passed to ai-hydro MCP calls as `_meta["aihydro/context"].model_id_returned`. Claude 5.x and Gemini 3.x are recognised as next-gen families.
+- **Prompts.** Removed "assume the terminal executed the command successfully" (all variants incl. compact), unified the skills policy (consult when relevant, not a mandatory pre-flight), removed web-development advice, added a shared "Scientific conduct" section to every variant. Removed the unused `system-prompt-legacy/` copy.
+- **Explorer subagent is now genuinely read-only**: tool allowlist, and MCP tools only if annotated `readOnlyHint=true`.
+- **Final-answer audit** (Settings > Features > "Audit final answers", default on): on completion the answer is checked by the connected AI-Hydro server's `audit_interpretation` against the study bound to the chat and the result is shown (display only; "audit unavailable" on failure). The answer text is sent to that server (see PRIVACY.md).
 
 ### Added — UI screen harness and design-system foundation (UI-W S0/S1)
 

@@ -120,6 +120,7 @@ export interface ExtensionState {
 	hooksEnabled?: AiHydroFeatureSetting
 	remoteConfigSettings?: Partial<GlobalStateAndSettings>
 	subagentsEnabled?: boolean
+	finalAnswerAuditEnabled?: boolean
 	/** Discovered workspace HTML files (path + name) for the HTML Preview file browser */
 	workspaceHtmlFiles: Array<{ path: string; name: string }>
 	/** Incremented whenever HTML preview items change — used as a reliable signal for the webview to refresh */
@@ -270,6 +271,8 @@ export interface AiHydroApiReqInfo {
 	cacheWrites?: number
 	cacheReads?: number
 	cost?: number
+	/** "unavailable": pricing not verified, no cost number; "lower-bound": cost excludes unpriced cache tokens. */
+	costStatus?: "unavailable" | "lower-bound"
 	cancelReason?: AiHydroApiReqCancelReason
 	streamingFailedMessage?: string
 	retryStatus?: {

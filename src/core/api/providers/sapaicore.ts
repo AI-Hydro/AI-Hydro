@@ -12,6 +12,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface SapAiCoreHandlerOptions extends CommonApiHandlerOptions {
 	sapAiCoreClientId?: string
@@ -457,6 +458,7 @@ export class SapAiCoreHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("SAP AI Core", this.options.apiModelId, sapAiCoreModels)
 		if (this.options.sapAiCoreUseOrchestrationMode) {
 			yield* this.createMessageWithOrchestration(systemPrompt, messages)
 		} else {
@@ -1027,12 +1029,11 @@ export class SapAiCoreHandler implements ApiHandler {
 	}
 
 	getModel(): { id: SapAiCoreModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in sapAiCoreModels) {
-			const id = modelId as SapAiCoreModelId
-			return { id, info: sapAiCoreModels[id] }
-		}
-		return { id: sapAiCoreDefaultModelId, info: sapAiCoreModels[sapAiCoreDefaultModelId] }
+		return resolveRegistryModel<SapAiCoreModelId>({
+			registry: sapAiCoreModels,
+			defaultId: sapAiCoreDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 	private convertMessageParamToSAPMessages(messages: Anthropic.Messages.MessageParam[]): ChatMessages {
 		// Use the existing OpenAI converter since the logic is identical

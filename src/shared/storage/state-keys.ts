@@ -109,6 +109,7 @@ export interface Settings {
 	ocaMode: string | undefined
 	hooksEnabled: boolean
 	subagentsEnabled: boolean
+	finalAnswerAuditEnabled: boolean
 
 	// Plan mode configurations
 	planModeApiProvider: ApiProvider

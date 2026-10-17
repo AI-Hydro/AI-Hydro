@@ -228,6 +228,23 @@ export interface ModelInfo {
 	}[]
 }
 
+/**
+ * Claude capability flags. These replace per-model-id switches/substring checks in the Anthropic,
+ * Vertex and Bedrock handlers: add a model to the registry with the right flags and the request
+ * builder (core/api/transform/anthropic-request.ts) does the right thing.
+ *
+ * Kept off the base ModelInfo on purpose: ModelInfo is mirrored by generated proto types
+ * (OpenRouter model cache etc.) that must not grow handler-only fields.
+ */
+export interface ClaudeModelInfo extends ModelInfo {
+	supportsAdaptiveThinking?: boolean // thinking: { type: "adaptive" } (budget_tokens deprecated/rejected)
+	supportsThinkingBudget?: boolean // legacy thinking: { type: "enabled", budget_tokens } is accepted
+	supportsEffort?: boolean // output_config.effort is accepted
+	supportsXhighEffort?: boolean // effort "xhigh" is accepted (otherwise clamped to "high")
+	supportsTemperature?: boolean // false = any explicit temperature is rejected (default true)
+	pricingUnverified?: boolean // prices not sourced: cost display must say "unavailable", never $0 or a guess
+}
+
 export interface OpenAiCompatibleModelInfo extends ModelInfo {
 	temperature?: number
 	isR1FormatRequired?: boolean
@@ -260,16 +277,42 @@ export const CLAUDE_SONNET_1M_TIERS = [
 
 // Anthropic
 // https://docs.anthropic.com/en/docs/about-claude/models // prices updated 2025-01-02
+/** Shared, deliberately minimal ModelInfo for Claude 5.x models whose pricing/limits are not sourced here. */
+const CLAUDE_5X_UNVERIFIED = {
+	maxTokens: 8192,
+	contextWindow: 200_000,
+	supportsImages: true,
+	supportsPromptCache: true,
+	supportsTemperature: false,
+	pricingUnverified: true,
+	description: "Pricing, context window and capability limits not verified in this repo; cost is not shown.",
+} as const satisfies ClaudeModelInfo
+
 export type AnthropicModelId = keyof typeof anthropicModels
 export const anthropicDefaultModelId: AnthropicModelId = "claude-sonnet-4-6"
 export const ANTHROPIC_MIN_THINKING_BUDGET = 1_024
 export const ANTHROPIC_MAX_THINKING_BUDGET = 6_000
 export const anthropicModels = {
+	// Claude 5.x line. The model IDs are as listed in the Claude Code environment's own model list
+	// (2026-10-17; see docs/model-config/claude-5x-models.md). NOTHING else about these models is
+	// sourced in this repo, so: prices are left undefined and `pricingUnverified` makes the cost
+	// display say "cost unavailable" instead of showing $0 or a guess; the context window is the
+	// smallest window documented for any model in this registry (200K) and maxTokens follows the
+	// registry-wide default; capability flags are limited to the conservative ones (no explicit
+	// temperature, prompt cache markers). Adaptive thinking / effort flags are deliberately unset
+	// until they can be traced to a committed source.
+	"claude-fable-5-1": CLAUDE_5X_UNVERIFIED,
+	"claude-opus-5-5": CLAUDE_5X_UNVERIFIED,
+	"claude-sonnet-5-5": CLAUDE_5X_UNVERIFIED,
+	"claude-haiku-5-5": CLAUDE_5X_UNVERIFIED,
 	"claude-opus-4-7": {
 		maxTokens: 8192,
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsAdaptiveThinking: true,
+		supportsEffort: true,
+		supportsTemperature: false,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
@@ -280,6 +323,8 @@ export const anthropicModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsAdaptiveThinking: true,
+		supportsEffort: true,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
@@ -290,6 +335,8 @@ export const anthropicModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsAdaptiveThinking: true,
+		supportsEffort: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -300,6 +347,7 @@ export const anthropicModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
@@ -310,6 +358,7 @@ export const anthropicModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -320,6 +369,7 @@ export const anthropicModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -331,6 +381,7 @@ export const anthropicModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 1,
 		outputPrice: 5.0,
 		cacheWritesPrice: 1.25,
@@ -341,6 +392,7 @@ export const anthropicModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -351,6 +403,7 @@ export const anthropicModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -362,6 +415,7 @@ export const anthropicModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 15.0,
 		outputPrice: 75.0,
 		cacheWritesPrice: 18.75,
@@ -372,6 +426,7 @@ export const anthropicModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 15.0,
 		outputPrice: 75.0,
 		cacheWritesPrice: 18.75,
@@ -383,6 +438,7 @@ export const anthropicModels = {
 		supportsImages: true,
 
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -429,7 +485,7 @@ export const anthropicModels = {
 		cacheWritesPrice: 0.3,
 		cacheReadsPrice: 0.03,
 	},
-} as const satisfies Record<string, ModelInfo> // as const assertion makes the object deeply readonly
+} as const satisfies Record<string, ClaudeModelInfo> // as const assertion makes the object deeply readonly
 
 // Claude Code
 export type ClaudeCodeModelId = keyof typeof claudeCodeModels
@@ -507,11 +563,34 @@ export const claudeCodeModels = {
 export type BedrockModelId = keyof typeof bedrockModels
 export const bedrockDefaultModelId: BedrockModelId = "anthropic.claude-sonnet-4-6"
 export const bedrockModels = {
+	"anthropic.claude-fable-5-1": {
+		...anthropicModels["claude-fable-5-1"],
+		description:
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
+	},
+	"anthropic.claude-opus-5-5": {
+		...anthropicModels["claude-opus-5-5"],
+		description:
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
+	},
+	"anthropic.claude-sonnet-5-5": {
+		...anthropicModels["claude-sonnet-5-5"],
+		description:
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
+	},
+	"anthropic.claude-haiku-5-5": {
+		...anthropicModels["claude-haiku-5-5"],
+		description:
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
+	},
 	"anthropic.claude-opus-4-7-v1": {
 		maxTokens: 8192,
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsAdaptiveThinking: true,
+		supportsEffort: true,
+		supportsTemperature: false,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
@@ -522,6 +601,8 @@ export const bedrockModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsAdaptiveThinking: true,
+		supportsEffort: true,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
@@ -532,6 +613,8 @@ export const bedrockModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsAdaptiveThinking: true,
+		supportsEffort: true,
 		supportsGlobalEndpoint: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
@@ -543,6 +626,7 @@ export const bedrockModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
@@ -553,6 +637,7 @@ export const bedrockModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		supportsGlobalEndpoint: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
@@ -564,6 +649,7 @@ export const bedrockModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		supportsGlobalEndpoint: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
@@ -576,6 +662,7 @@ export const bedrockModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 1,
 		outputPrice: 5.0,
 		cacheWritesPrice: 1.25,
@@ -586,6 +673,7 @@ export const bedrockModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		supportsGlobalEndpoint: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
@@ -597,6 +685,7 @@ export const bedrockModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		supportsGlobalEndpoint: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
@@ -609,6 +698,7 @@ export const bedrockModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 15.0,
 		outputPrice: 75.0,
 		cacheWritesPrice: 18.75,
@@ -619,6 +709,7 @@ export const bedrockModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 15.0,
 		outputPrice: 75.0,
 		cacheWritesPrice: 18.75,
@@ -672,6 +763,7 @@ export const bedrockModels = {
 		supportsImages: true,
 
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -758,7 +850,7 @@ export const bedrockModels = {
 		description:
 			"A compact 20B open-weight Mixture-of-Experts language model designed for strong reasoning and tool use, ideal for edge devices and local inference.",
 	},
-} as const satisfies Record<string, ModelInfo>
+} as const satisfies Record<string, ClaudeModelInfo>
 
 // OpenRouter
 // https://openrouter.ai/models?order=newest&supported_parameters=tools
@@ -804,11 +896,24 @@ export const aihydroCodeSupernovaModelInfo: ModelInfo = {
 export type VertexModelId = keyof typeof vertexModels
 export const vertexDefaultModelId: VertexModelId = "claude-sonnet-4-6"
 export const vertexModels = {
+	"claude-opus-5-5": {
+		...anthropicModels["claude-opus-5-5"],
+		description:
+			"Vertex id is the bare model id; availability not verified in this repo. Pricing and limits not verified; cost is not shown.",
+	},
+	"claude-sonnet-5-5": {
+		...anthropicModels["claude-sonnet-5-5"],
+		description:
+			"Vertex id is the bare model id; availability not verified in this repo. Pricing and limits not verified; cost is not shown.",
+	},
 	"claude-opus-4-7": {
 		maxTokens: 8192,
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsAdaptiveThinking: true,
+		supportsEffort: true,
+		supportsTemperature: false,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
@@ -819,6 +924,8 @@ export const vertexModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsAdaptiveThinking: true,
+		supportsEffort: true,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
@@ -829,6 +936,8 @@ export const vertexModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsAdaptiveThinking: true,
+		supportsEffort: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -839,6 +948,7 @@ export const vertexModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
 		cacheWritesPrice: 6.25,
@@ -849,6 +959,7 @@ export const vertexModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -859,6 +970,7 @@ export const vertexModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -869,6 +981,7 @@ export const vertexModels = {
 		contextWindow: 200_000,
 		supportsImages: false,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 1.0,
 		outputPrice: 5.0,
 		cacheWritesPrice: 1.25,
@@ -879,6 +992,7 @@ export const vertexModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 15.0,
 		outputPrice: 75.0,
 		cacheWritesPrice: 18.75,
@@ -889,6 +1003,7 @@ export const vertexModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 15.0,
 		outputPrice: 75.0,
 		cacheWritesPrice: 18.75,
@@ -899,6 +1014,7 @@ export const vertexModels = {
 		contextWindow: 200_000,
 		supportsImages: true,
 		supportsPromptCache: true,
+		supportsThinkingBudget: true,
 		inputPrice: 3.0,
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
@@ -1212,7 +1328,7 @@ export const vertexModels = {
 		inputPrice: 0,
 		outputPrice: 0,
 	},
-} as const satisfies Record<string, ModelInfo>
+} as const satisfies Record<string, ClaudeModelInfo>
 
 export const vertexGlobalModels: Record<string, ModelInfo> = Object.fromEntries(
 	Object.entries(vertexModels).filter(([_k, v]) => Object.hasOwn(v, "supportsGlobalEndpoint")),

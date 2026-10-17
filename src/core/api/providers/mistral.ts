@@ -5,6 +5,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToMistralMessages } from "../transform/mistral-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface MistralHandlerOptions extends CommonApiHandlerOptions {
 	mistralApiKey?: string
@@ -37,6 +38,7 @@ export class MistralHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("Mistral", this.options.apiModelId, mistralModels)
 		const client = this.ensureClient()
 		const stream = await client.chat
 			.stream({
@@ -82,14 +84,10 @@ export class MistralHandler implements ApiHandler {
 	}
 
 	getModel(): { id: MistralModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in mistralModels) {
-			const id = modelId as MistralModelId
-			return { id, info: mistralModels[id] }
-		}
-		return {
-			id: mistralDefaultModelId,
-			info: mistralModels[mistralDefaultModelId],
-		}
+		return resolveRegistryModel<MistralModelId>({
+			registry: mistralModels,
+			defaultId: mistralDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

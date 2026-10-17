@@ -1206,6 +1206,7 @@ export class Controller {
 		const lastDismissedModelBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedModelBannerVersion") || 0
 		const lastDismissedCliBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedCliBannerVersion") || 0
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
+		const finalAnswerAuditEnabled = this.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled")
 
 		const localAiHydroRulesToggles = this.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
 		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
@@ -1306,6 +1307,7 @@ export class Controller {
 			remoteConfigSettings: this.stateManager.getRemoteConfigSettings(),
 			lastDismissedCliBannerVersion,
 			subagentsEnabled,
+			finalAnswerAuditEnabled,
 			workspaceHtmlFiles: this.workspaceHtmlFiles.map((f) => ({
 				path: f.relativePath,
 				name: f.name,

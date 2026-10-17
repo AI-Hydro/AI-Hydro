@@ -924,8 +924,8 @@ export class Task {
 		const lastApiReqStartedIndex = findLastIndex(savedAiHydroMessages, (m) => m.type === "say" && m.say === "api_req_started")
 		if (lastApiReqStartedIndex !== -1) {
 			const lastApiReqStarted = savedAiHydroMessages[lastApiReqStartedIndex]
-			const { cost, cancelReason }: AiHydroApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
-			if (cost === undefined && cancelReason === undefined) {
+			const { cost, costStatus, cancelReason }: AiHydroApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
+			if (cost === undefined && costStatus === undefined && cancelReason === undefined) {
 				savedAiHydroMessages.splice(lastApiReqStartedIndex, 1)
 			}
 		}
@@ -2617,12 +2617,16 @@ export class Task {
 			const antThinkingContent: (Anthropic.Messages.RedactedThinkingBlock | Anthropic.Messages.ThinkingBlock)[] = []
 			this.taskState.isStreaming = true
 			let didReceiveUsageChunk = false
+			this.taskState.lastResponseModelId = undefined
 			try {
 				for await (const chunk of stream) {
 					if (!chunk) {
 						continue
 					}
 					switch (chunk.type) {
+						case "response_model":
+							this.taskState.lastResponseModelId = chunk.modelId
+							break
 						case "usage":
 							didReceiveUsageChunk = true
 							inputTokens += chunk.inputTokens

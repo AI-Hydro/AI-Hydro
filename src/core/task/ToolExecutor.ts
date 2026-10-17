@@ -49,6 +49,7 @@ import { WriteToFileToolHandler } from "./tools/handlers/WriteToFileToolHandler"
 import { IPartialBlockHandler, SharedToolHandler, ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator"
 import { repairToolParams } from "./tools/ToolInputRepair"
 import { ToolValidator } from "./tools/ToolValidator"
+import { explorerBlockReason } from "./explorerPolicy"
 import { TaskConfig, validateTaskConfig } from "./tools/types/TaskConfig"
 import { createUIHelpers } from "./tools/types/UIHelpers"
 import { ToolDisplayUtils } from "./tools/utils/ToolDisplayUtils"
@@ -317,27 +318,6 @@ export class ToolExecutor {
 		AiHydroDefaultTool.NEW_RULE,
 	]
 
-	/**
-	 * Tools blocked in the `explorer` subagent profile.
-	 *
-	 * The explorer profile is a capability-enforced read-only mode for research
-	 * subagents (AGENT_EXECUTION_MODEL §4, gap #3). It is activated by setting
-	 * AIHYDRO_PROFILE=explorer in the subagent's environment (injected by
-	 * prepareSubagentCommand in subagent_command.ts via a shell env prefix).
-	 *
-	 * Allowed: FILE_READ, SEARCH, LIST_FILES, LIST_CODE_DEF, MCP_USE,
-	 *          MCP_ACCESS, MCP_DOCS, ASK, ATTEMPT, WEB_FETCH, CONDENSE.
-	 */
-	private static readonly EXPLORER_RESTRICTED_TOOLS: AiHydroDefaultTool[] = [
-		AiHydroDefaultTool.BASH, // execute_command
-		AiHydroDefaultTool.FILE_NEW, // write_to_file
-		AiHydroDefaultTool.FILE_EDIT, // replace_in_file
-		AiHydroDefaultTool.MULTI_FILE_EDIT, // edit_files
-		AiHydroDefaultTool.NEW_RULE, // new_rule
-		AiHydroDefaultTool.BROWSER, // browser_action (has side effects)
-		AiHydroDefaultTool.NEW_TASK, // new_task (no sub-spawning from explorer)
-	]
-
 	/** True when running as an explorer-profile subagent. */
 	private static isExplorerProfile(): boolean {
 		return process.env.AIHYDRO_PROFILE === "explorer"
@@ -388,16 +368,17 @@ export class ToolExecutor {
 
 			// Explorer-profile capability enforcement (read-only subagent).
 			// Activated via AIHYDRO_PROFILE=explorer in the subagent's environment.
-			// This is NOT a prompt convention — it physically blocks the tool call.
-			if (ToolExecutor.isExplorerProfile() && block.name && this.isExplorerRestricted(block.name)) {
-				const errorMessage =
-					`Tool '${block.name}' is not available in EXPLORER profile. ` +
-					`This is a read-only research subagent. Use only read_file, search_files, ` +
-					`list_files, list_code_definition_names, use_mcp_tool, or web_fetch.`
-				await this.say("error", errorMessage)
-				this.pushToolResult(formatResponse.toolError(errorMessage), block)
-				await this.saveCheckpoint()
-				return true
+			// This is NOT a prompt convention — it physically blocks the tool call, including MCP
+			// tools that are not declared read-only.
+			if (ToolExecutor.isExplorerProfile() && block.name) {
+				// Built-in write tools by name; MCP tools only when annotated readOnlyHint=true (see explorerPolicy.ts).
+				const explorerBlock = explorerBlockReason(block.name, block.params, this.mcpHub)
+				if (explorerBlock) {
+					await this.say("error", explorerBlock)
+					this.pushToolResult(formatResponse.toolError(explorerBlock), block)
+					await this.saveCheckpoint()
+					return true
+				}
 			}
 
 			// Close browser for non-browser tools
@@ -427,13 +408,6 @@ export class ToolExecutor {
 	 */
 	private isPlanModeToolRestricted(toolName: AiHydroDefaultTool): boolean {
 		return ToolExecutor.PLAN_MODE_RESTRICTED_TOOLS.includes(toolName)
-	}
-
-	/**
-	 * Check if a tool is restricted in explorer profile (read-only subagent).
-	 */
-	private isExplorerRestricted(toolName: AiHydroDefaultTool): boolean {
-		return ToolExecutor.EXPLORER_RESTRICTED_TOOLS.includes(toolName)
 	}
 
 	/**

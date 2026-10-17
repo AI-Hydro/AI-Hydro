@@ -7,6 +7,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface DeepSeekHandlerOptions extends CommonApiHandlerOptions {
 	deepSeekApiKey?: string
@@ -72,6 +73,7 @@ export class DeepSeekHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("DeepSeek", this.options.apiModelId, deepSeekModels)
 		const client = this.ensureClient()
 		const model = this.getModel()
 
@@ -119,14 +121,10 @@ export class DeepSeekHandler implements ApiHandler {
 	}
 
 	getModel(): { id: DeepSeekModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in deepSeekModels) {
-			const id = modelId as DeepSeekModelId
-			return { id, info: deepSeekModels[id] }
-		}
-		return {
-			id: deepSeekDefaultModelId,
-			info: deepSeekModels[deepSeekDefaultModelId],
-		}
+		return resolveRegistryModel<DeepSeekModelId>({
+			registry: deepSeekModels,
+			defaultId: deepSeekDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

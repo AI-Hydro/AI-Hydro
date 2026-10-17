@@ -16,7 +16,7 @@ export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 
 **execute_command** — Run CLI in {{CWD}}.  
 Params: command, requires_approval.  
-Key: If output doesn’t stream, assume success unless critical; else ask user to paste via ask_followup_question.  
+Key: If no output appears, never assume success; ask the user to paste it via ask_followup_question.  
 *Example:*
 <execute_command>
 <command>npm run build</command>

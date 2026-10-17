@@ -6,6 +6,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { standInModel } from "./model-resolution"
 
 interface HuggingFaceHandlerOptions extends CommonApiHandlerOptions {
 	huggingFaceApiKey?: string
@@ -126,6 +127,9 @@ export class HuggingFaceHandler implements ApiHandler {
 			const id = modelId as HuggingFaceModelId
 			const modelInfo = huggingFaceModels[id]
 			result = { id, info: modelInfo }
+		} else if (modelId) {
+			// Selected but not in the static list: keep the user's id with flagged stand-in info.
+			result = standInModel<HuggingFaceModelId>(modelId, huggingFaceModels[huggingFaceDefaultModelId])
 		} else {
 			const defaultInfo = huggingFaceModels[huggingFaceDefaultModelId]
 			result = {

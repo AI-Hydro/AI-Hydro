@@ -1,4 +1,28 @@
-import { ModelInfo } from "@shared/api"
+import { ClaudeModelInfo, ModelInfo } from "@shared/api"
+
+export type ApiCostStatus = "ok" | "unavailable" | "lower-bound"
+
+/**
+ * How trustworthy a computed cost is for this model/usage.
+ *  - "unavailable": the model's prices are not verified (pricingUnverified); show no number.
+ *  - "lower-bound": the model caches but a cache price needed for this usage is undefined, so the
+ *    computed number silently treats those tokens as $0 and the true cost is at least this much.
+ */
+export function assessApiCost(modelInfo: ModelInfo, cacheWriteTokens = 0, cacheReadTokens = 0): ApiCostStatus {
+	const info = modelInfo as ClaudeModelInfo
+	if (info.pricingUnverified) {
+		return "unavailable"
+	}
+	if (info.supportsPromptCache) {
+		if (cacheWriteTokens > 0 && info.cacheWritesPrice === undefined) {
+			return "lower-bound"
+		}
+		if (cacheReadTokens > 0 && info.cacheReadsPrice === undefined) {
+			return "lower-bound"
+		}
+	}
+	return "ok"
+}
 
 function calculateApiCostInternal(
 	modelInfo: ModelInfo,

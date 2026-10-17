@@ -300,6 +300,8 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 		const openTelemetryLogMaxQueueSize =
 			context.globalState.get<GlobalStateAndSettings["openTelemetryLogMaxQueueSize"]>("openTelemetryLogMaxQueueSize")
 		const subagentsEnabled = context.globalState.get<GlobalStateAndSettings["subagentsEnabled"]>("subagentsEnabled")
+		const finalAnswerAuditEnabled =
+			context.globalState.get<GlobalStateAndSettings["finalAnswerAuditEnabled"]>("finalAnswerAuditEnabled")
 		const skillToggles = context.globalState.get<GlobalStateAndSettings["skillToggles"]>("skillToggles")
 
 		// Get mode-related configurations
@@ -626,6 +628,8 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			// Hooks require explicit user opt-in
 			hooksEnabled: hooksEnabled ?? false,
 			subagentsEnabled: subagentsEnabled ?? false,
+			// Final-answer audit is default-on; it never blocks or alters the answer
+			finalAnswerAuditEnabled: finalAnswerAuditEnabled ?? true,
 			lastDismissedInfoBannerVersion: lastDismissedInfoBannerVersion ?? 0,
 			lastDismissedModelBannerVersion: lastDismissedModelBannerVersion ?? 0,
 			lastDismissedCliBannerVersion: lastDismissedCliBannerVersion ?? 0,

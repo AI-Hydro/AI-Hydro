@@ -344,10 +344,10 @@ export const ChatRowContent = memo(
 		// Long shell commands collapse to a one-line summary by default to keep the chat compact.
 		const [isCommandExpanded, setIsCommandExpanded] = useState(false)
 		const prevCommandExecutingRef = useRef<boolean>(false)
-		const [cost, apiReqCancelReason, apiReqStreamingFailedMessage, retryStatus] = useMemo(() => {
+		const [cost, apiReqCancelReason, apiReqStreamingFailedMessage, retryStatus, costStatus] = useMemo(() => {
 			if (message.text != null && message.say === "api_req_started") {
 				const info: AiHydroApiReqInfo = JSON.parse(message.text)
-				return [info.cost, info.cancelReason, info.streamingFailedMessage, info.retryStatus]
+				return [info.cost, info.cancelReason, info.streamingFailedMessage, info.retryStatus, info.costStatus]
 			}
 			return [undefined, undefined, undefined, undefined, undefined]
 		}, [message.text, message.say])
@@ -1382,9 +1382,13 @@ export const ChatRowContent = memo(
 										{/* Need to render this every time since it affects height of row by 2px */}
 										<VSCodeBadge
 											style={{
-												opacity: cost != null && cost > 0 ? 1 : 0,
+												opacity: costStatus === "unavailable" || (cost != null && cost > 0) ? 1 : 0,
 											}}>
-											${Number(cost || 0)?.toFixed(4)}
+											{costStatus === "unavailable"
+												? "cost unavailable (pricing not verified)"
+												: costStatus === "lower-bound"
+													? `\u2265$${Number(cost || 0).toFixed(4)} (cache tokens unpriced)`
+													: `$${Number(cost || 0)?.toFixed(4)}`}
 										</VSCodeBadge>
 									</div>
 									<span className={`codicon codicon-chevron-${isExpanded ? "up" : "down"}`}></span>

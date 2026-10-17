@@ -5,6 +5,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { ApiStream } from "../transform/stream"
 import { createVercelAIGatewayStream } from "../transform/vercel-ai-gateway-stream"
+import { standInModel } from "./model-resolution"
 
 interface VercelAIGatewayHandlerOptions extends CommonApiHandlerOptions {
 	vercelAiGatewayApiKey?: string
@@ -97,6 +98,10 @@ export class VercelAIGatewayHandler implements ApiHandler {
 		const modelInfo = this.options.vercelAiGatewayModelInfo
 		if (modelId && modelInfo) {
 			return { id: modelId, info: modelInfo }
+		}
+		if (modelId) {
+			// A model was selected but its info is not loaded: keep the user's id, never swap in the default.
+			return standInModel(modelId, vercelAiGatewayDefaultModelInfo)
 		}
 		return { id: vercelAiGatewayDefaultModelId, info: vercelAiGatewayDefaultModelInfo }
 	}

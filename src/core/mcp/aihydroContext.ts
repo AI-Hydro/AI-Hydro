@@ -15,6 +15,7 @@ export function buildAiHydroCallContext(
 	args: Record<string, unknown> | undefined,
 	chatId: string,
 	workspaceRoot: string | undefined,
+	modelIdReturned?: string,
 ): AiHydroCallContext {
 	return {
 		args: {
@@ -27,6 +28,9 @@ export function buildAiHydroCallContext(
 				chat_id: chatId,
 				...(workspaceRoot ? { workspace: workspaceRoot } : {}),
 				client: "vscode",
+				// Model id the provider reported actually serving the turn that issued this call (may differ
+				// from the requested alias); omitted when the provider does not report one.
+				...(modelIdReturned ? { model_id_returned: modelIdReturned } : {}),
 			},
 		},
 	}

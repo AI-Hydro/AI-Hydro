@@ -6,6 +6,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { standInModel } from "./model-resolution"
 
 interface GroqHandlerOptions extends CommonApiHandlerOptions {
 	groqApiKey?: string
@@ -291,7 +292,11 @@ export class GroqHandler implements ApiHandler {
 			return { id, info: groqModels[id] }
 		}
 
-		// Default fallback
+		// A model was selected but is not in the static list and has no loaded info: keep the user's id.
+		const requested = groqModelId || apiModelId
+		if (requested) {
+			return standInModel(requested, groqModels[groqDefaultModelId])
+		}
 		return {
 			id: groqDefaultModelId,
 			info: groqModels[groqDefaultModelId],

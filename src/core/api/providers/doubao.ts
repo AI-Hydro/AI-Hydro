@@ -5,6 +5,7 @@ import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface DoubaoHandlerOptions extends CommonApiHandlerOptions {
 	doubaoApiKey?: string
@@ -36,19 +37,16 @@ export class DoubaoHandler implements ApiHandler {
 	}
 
 	getModel(): { id: DoubaoModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in doubaoModels) {
-			const id = modelId as DoubaoModelId
-			return { id, info: doubaoModels[id] }
-		}
-		return {
-			id: doubaoDefaultModelId,
-			info: doubaoModels[doubaoDefaultModelId],
-		}
+		return resolveRegistryModel<DoubaoModelId>({
+			registry: doubaoModels,
+			defaultId: doubaoDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("Doubao", this.options.apiModelId, doubaoModels)
 		const client = this.ensureClient()
 		const model = this.getModel()
 		const openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [

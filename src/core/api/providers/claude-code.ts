@@ -1,10 +1,11 @@
 import type { Anthropic } from "@anthropic-ai/sdk"
 import { filterMessagesForClaudeCode } from "@/integrations/claude-code/message-filter"
 import { runClaudeCode } from "@/integrations/claude-code/run"
-import { ClaudeCodeModelId, claudeCodeDefaultModelId, claudeCodeModels } from "@/shared/api"
+import { claudeCodeDefaultModelId, claudeCodeModels } from "@/shared/api"
 import { type ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { type ApiStream, ApiStreamUsageChunk } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface ClaudeCodeHandlerOptions extends CommonApiHandlerOptions {
 	claudeCodePath?: string
@@ -25,6 +26,7 @@ export class ClaudeCodeHandler implements ApiHandler {
 		maxDelay: 15000,
 	})
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("Claude Code", this.options.apiModelId, claudeCodeModels)
 		// Filter out image blocks since Claude Code doesn't support them
 		const filteredMessages = filterMessagesForClaudeCode(messages)
 
@@ -147,15 +149,10 @@ export class ClaudeCodeHandler implements ApiHandler {
 	}
 
 	getModel() {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in claudeCodeModels) {
-			const id = modelId as ClaudeCodeModelId
-			return { id, info: claudeCodeModels[id] }
-		}
-
-		return {
-			id: claudeCodeDefaultModelId,
-			info: claudeCodeModels[claudeCodeDefaultModelId],
-		}
+		return resolveRegistryModel({
+			registry: claudeCodeModels,
+			defaultId: claudeCodeDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

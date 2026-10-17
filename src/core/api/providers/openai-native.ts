@@ -7,6 +7,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface OpenAiNativeHandlerOptions extends CommonApiHandlerOptions {
 	openAiNativeApiKey?: string
@@ -57,6 +58,7 @@ export class OpenAiNativeHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		assertKnownModel("OpenAI", this.options.apiModelId, openAiNativeModels)
 		const client = this.ensureClient()
 		const model = this.getModel()
 
@@ -158,14 +160,10 @@ export class OpenAiNativeHandler implements ApiHandler {
 	}
 
 	getModel(): { id: OpenAiNativeModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in openAiNativeModels) {
-			const id = modelId as OpenAiNativeModelId
-			return { id, info: openAiNativeModels[id] }
-		}
-		return {
-			id: openAiNativeDefaultModelId,
-			info: openAiNativeModels[openAiNativeDefaultModelId],
-		}
+		return resolveRegistryModel<OpenAiNativeModelId>({
+			registry: openAiNativeModels,
+			defaultId: openAiNativeDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 }

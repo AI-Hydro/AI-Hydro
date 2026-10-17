@@ -5,9 +5,11 @@ import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { findLastIndex } from "@shared/array"
 import { COMPLETION_RESULT_CHANGES_FLAG } from "@shared/ExtensionMessage"
+import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
 import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
+import { formatFinalAnswerAudit, runFinalAnswerAudit } from "../../finalAnswerAudit"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -36,6 +38,31 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				undefined,
 				undefined,
 				block.partial,
+			)
+		}
+	}
+
+	private async showFinalAnswerAudit(config: TaskConfig, answer: string): Promise<void> {
+		try {
+			if (config.services.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled") === false) {
+				return
+			}
+			const outcome = await runFinalAnswerAudit({
+				hub: config.services.mcpHub,
+				ulid: config.ulid,
+				workspaceRoot: await resolveWorkspaceRoot(config.cwd),
+				answer,
+				modelIdReturned: config.taskState.lastResponseModelId,
+			})
+			const message = formatFinalAnswerAudit(outcome)
+			if (message) {
+				await config.callbacks.say("text", message)
+			}
+		} catch (error) {
+			// Never let the audit affect completion; surface that it did not run.
+			await config.callbacks.say(
+				"text",
+				`**Answer audit unavailable** (${error instanceof Error ? error.message : String(error)}). The final answer above was NOT checked against the evidence ledger. Display only: the answer above is unchanged.`,
 			)
 		}
 	}
@@ -130,6 +157,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		if (!block.partial && config.focusChainSettings.enabled) {
 			await config.callbacks.updateFCListFromToolResponse(block.params.task_progress)
 		}
+
+		// Final-answer audit: display-only evidence check of the answer the user is about to read.
+		// Runs before the completion ask (a say after a pending ask would hide the ask's buttons) and
+		// is time-bounded; it can never block or change the answer.
+		await this.showFinalAnswerAudit(config, result)
 
 		const { response, text, images, files: completionFiles } = await config.callbacks.ask("completion_result", "", false)
 		if (response === "yesButtonClicked") {

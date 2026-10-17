@@ -2,7 +2,7 @@ import { ApiHandler } from "@core/api"
 import { execSync } from "child_process"
 import { showSystemNotification } from "@/integrations/notifications"
 import { AiHydroApiReqCancelReason, AiHydroApiReqInfo } from "@/shared/ExtensionMessage"
-import { calculateApiCostAnthropic } from "@/utils/cost"
+import { assessApiCost, calculateApiCostAnthropic } from "@/utils/cost"
 import { MessageStateHandler } from "./message-state"
 
 export const showNotificationForApprovalIfAutoApprovalEnabled = (
@@ -39,6 +39,16 @@ export const updateApiReqMsg = async (params: UpdateApiReqMsgParams) => {
 	const currentApiReqInfo: AiHydroApiReqInfo = JSON.parse(aihydroMessages[params.lastApiReqIndex].text || "{}")
 	delete currentApiReqInfo.retryStatus // Clear retry status when request is finalized
 
+	const modelInfo = params.api.getModel().info
+	const costStatus = assessApiCost(modelInfo, params.cacheWriteTokens, params.cacheReadTokens)
+	const computedCost = calculateApiCostAnthropic(
+		modelInfo,
+		params.inputTokens,
+		params.outputTokens,
+		params.cacheWriteTokens,
+		params.cacheReadTokens,
+	)
+
 	await params.messageStateHandler.updateAiHydroMessage(params.lastApiReqIndex, {
 		text: JSON.stringify({
 			...currentApiReqInfo, // Spread the modified info (with retryStatus removed)
@@ -46,15 +56,8 @@ export const updateApiReqMsg = async (params: UpdateApiReqMsgParams) => {
 			tokensOut: params.outputTokens,
 			cacheWrites: params.cacheWriteTokens,
 			cacheReads: params.cacheReadTokens,
-			cost:
-				params.totalCost ??
-				calculateApiCostAnthropic(
-					params.api.getModel().info,
-					params.inputTokens,
-					params.outputTokens,
-					params.cacheWriteTokens,
-					params.cacheReadTokens,
-				),
+			cost: costStatus === "unavailable" ? undefined : (params.totalCost ?? computedCost),
+			costStatus: costStatus === "ok" ? undefined : costStatus,
 			cancelReason: params.cancelReason,
 			streamingFailedMessage: params.streamingFailedMessage,
 		} satisfies AiHydroApiReqInfo),

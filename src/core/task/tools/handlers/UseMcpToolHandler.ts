@@ -2,7 +2,7 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { AiHydroAsk, AiHydroAskUseMcpServer } from "@shared/ExtensionMessage"
 import { buildAiHydroCallContext } from "@/core/mcp/aihydroContext"
-import { HostProvider } from "@/hosts/host-provider"
+import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
 import { notifyApprovalRequired } from "@/integrations/aihydro-session/approvalTerminal"
 import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
@@ -158,20 +158,16 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			let argsWithChatId = parsedArguments
 			let callMeta: Record<string, unknown> | undefined
 			if (isAiHydroServerName(server_name) && config.ulid) {
-				// Workspace: use HostProvider abstraction (VS Code workspace folder
-				// visible in the Explorer), fall back to the task cwd.
-				let workspaceRoot: string | undefined = config.cwd
-				try {
-					const workspacePaths = await HostProvider.workspace.getWorkspacePaths({})
-					if (workspacePaths.paths && workspacePaths.paths.length > 0) {
-						workspaceRoot = workspacePaths.paths[0]
-					}
-				} catch {
-					// HostProvider unavailable (test env, non-VS Code host) — keep cwd
-				}
+				// Workspace: HostProvider workspace folder, falling back to the task cwd.
+				const workspaceRoot = await resolveWorkspaceRoot(config.cwd)
 				// Also sent as MCP request _meta["aihydro/context"]; the legacy
 				// arguments stay for one release (slice 2 P4 / ADR-004 amendment).
-				const callContext = buildAiHydroCallContext(parsedArguments, config.ulid, workspaceRoot)
+				const callContext = buildAiHydroCallContext(
+					parsedArguments,
+					config.ulid,
+					workspaceRoot,
+					config.taskState.lastResponseModelId,
+				)
 				argsWithChatId = callContext.args
 				callMeta = callContext.meta
 			}

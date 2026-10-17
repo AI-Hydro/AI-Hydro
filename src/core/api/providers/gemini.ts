@@ -7,6 +7,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { RetriableError, withRetry } from "../retry"
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 // Define a default TTL for the cache (e.g., 15 minutes in seconds)
 const _DEFAULT_CACHE_TTL_SECONDS = 900
@@ -103,6 +104,9 @@ export class GeminiHandler implements ApiHandler {
 		maxDelay: 15000,
 	})
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		if (!this.options.isVertex) {
+			assertKnownModel("Gemini", this.options.apiModelId, geminiModels)
+		}
 		const client = this.ensureClient()
 		const { id: modelId, info } = this.getModel()
 		const contents = messages.map(convertAnthropicMessageToGemini)
@@ -370,15 +374,11 @@ export class GeminiHandler implements ApiHandler {
 	 * Get the model ID and info for the current configuration
 	 */
 	getModel(): { id: GeminiModelId; info: ModelInfo } {
-		const modelId = this.options.apiModelId
-		if (modelId && modelId in geminiModels) {
-			const id = modelId as GeminiModelId
-			return { id, info: geminiModels[id] }
-		}
-		return {
-			id: geminiDefaultModelId,
-			info: geminiModels[geminiDefaultModelId],
-		}
+		return resolveRegistryModel<GeminiModelId>({
+			registry: geminiModels,
+			defaultId: geminiDefaultModelId,
+			requestedId: this.options.apiModelId,
+		})
 	}
 
 	/**

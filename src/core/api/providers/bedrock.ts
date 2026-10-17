@@ -9,16 +9,26 @@ import {
 	InvokeModelWithResponseStreamCommand,
 } from "@aws-sdk/client-bedrock-runtime"
 import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
-import { BedrockModelId, bedrockDefaultModelId, bedrockModels, CLAUDE_SONNET_1M_SUFFIX, ModelInfo } from "@shared/api"
+import {
+	BedrockModelId,
+	bedrockDefaultModelId,
+	bedrockModels,
+	CLAUDE_SONNET_1M_SUFFIX,
+	ClaudeModelInfo,
+	ModelInfo,
+} from "@shared/api"
 import { calculateApiCostOpenAI } from "@utils/cost"
 import { ExtensionRegistryInfo } from "@/registry"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
+import { planAnthropicReasoning } from "../transform/anthropic-request"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
+import { assertKnownModel } from "./model-resolution"
 
 export interface AwsBedrockHandlerOptions extends CommonApiHandlerOptions {
 	apiModelId?: string
+	reasoningEffort?: string
 	awsAccessKey?: string
 	awsSecretKey?: string
 	awsSessionToken?: string
@@ -122,6 +132,10 @@ export class AwsBedrockHandler implements ApiHandler {
 
 	@withRetry({ maxRetries: 4 })
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		// Custom ARNs / inference profiles carry the user's own id; everything else must be a registry model.
+		if (!this.options.awsBedrockCustomSelected) {
+			assertKnownModel("AWS Bedrock", this.options.apiModelId, bedrockModels)
+		}
 		// cross region inference requires prefixing the model id with the region
 		const rawModelId = await this.getModelId()
 
@@ -170,7 +184,7 @@ export class AwsBedrockHandler implements ApiHandler {
 		const customSelected = this.options.awsBedrockCustomSelected
 		const baseModel = this.options.awsBedrockCustomModelBaseId
 
-		// Handle custom models
+		// Handle custom models (ARNs / inference profiles): the id is the user's own, only capabilities are borrowed
 		if (customSelected && modelId) {
 			// If base model is provided and valid, use its capabilities
 			if (baseModel && baseModel in bedrockModels) {
@@ -186,8 +200,10 @@ export class AwsBedrockHandler implements ApiHandler {
 			}
 		}
 
+		// Never substitute another model's id: report the requested id (default info as stand-in);
+		// assertKnownModel() in createMessage refuses the request.
 		return {
-			id: bedrockDefaultModelId,
+			id: modelId || bedrockDefaultModelId,
 			info: bedrockModels[bedrockDefaultModelId],
 		}
 	}
@@ -729,17 +745,20 @@ export class AwsBedrockHandler implements ApiHandler {
 	 * Gets inference configuration for different model types
 	 */
 	private getInferenceConfig(modelInfo: ModelInfo, modelType: "anthropic" | "nova"): any {
-		// For Anthropic models with thinking enabled, temperature must be 1
 		if (modelType === "anthropic") {
-			const budget_tokens = this.options.thinkingBudgetTokens || 0
-			const baseModelId =
-				(this.options.awsBedrockCustomSelected ? this.options.awsBedrockCustomModelBaseId : this.getModel().id) ||
-				this.getModel().id
-			const reasoningOn = this.shouldEnableReasoning(baseModelId, budget_tokens)
-
+			const plan = this.getReasoningPlan()
+			// Models flagged supportsTemperature === false reject any explicit temperature (even 1 with thinking).
+			const rejectsTemperature = (modelInfo as ClaudeModelInfo).supportsTemperature === false
 			return {
 				maxTokens: modelInfo.maxTokens || 8192,
-				temperature: reasoningOn ? 1 : 0,
+				// Thinking requires temperature 1; otherwise 0.
+				...(rejectsTemperature
+					? {}
+					: plan.sendTemperature
+						? { temperature: 0 }
+						: plan.thinkingRequested
+							? { temperature: 1 }
+							: {}),
 			}
 		}
 
@@ -750,17 +769,14 @@ export class AwsBedrockHandler implements ApiHandler {
 	}
 
 	/**
-	 * Determines if reasoning should be enabled for Claude models
+	 * Reasoning request plan from the selected (or custom-base) model's capability flags,
+	 * replacing the former model-id substring checks.
 	 */
-	private shouldEnableReasoning(baseModelId: string, budgetTokens: number): boolean {
-		return (
-			(baseModelId.includes("3-7") ||
-				baseModelId.includes("sonnet-4") ||
-				baseModelId.includes("opus-4") ||
-				baseModelId.includes("haiku-4-5") ||
-				baseModelId.includes("sonnet-4-5")) &&
-			budgetTokens !== 0
-		)
+	private getReasoningPlan() {
+		const baseId = this.options.awsBedrockCustomSelected ? this.options.awsBedrockCustomModelBaseId : undefined
+		const info: ClaudeModelInfo =
+			baseId && baseId in bedrockModels ? bedrockModels[baseId as BedrockModelId] : this.getModel().info
+		return planAnthropicReasoning(info, this.options.thinkingBudgetTokens, this.options.reasoningEffort)
 	}
 
 	/**
@@ -790,12 +806,8 @@ export class AwsBedrockHandler implements ApiHandler {
 		// Prepare system message with caching support
 		const systemMessages = this.prepareSystemMessages(systemPrompt, this.options.awsBedrockUsePromptCache || false)
 
-		// Get thinking configuration
-		const budget_tokens = this.options.thinkingBudgetTokens || 0
-		const baseModelId =
-			(this.options.awsBedrockCustomSelected ? this.options.awsBedrockCustomModelBaseId : this.getModel().id) ||
-			this.getModel().id
-		const reasoningOn = this.shouldEnableReasoning(baseModelId, budget_tokens)
+		// Get thinking configuration (capability-flag driven)
+		const reasoningPlan = this.getReasoningPlan()
 
 		// Prepare request for Anthropic model using Converse API
 		const command = new ConverseStreamCommand({
@@ -804,13 +816,9 @@ export class AwsBedrockHandler implements ApiHandler {
 			system: systemMessages,
 			inferenceConfig: this.getInferenceConfig(model.info, "anthropic"),
 			additionalModelRequestFields: {
-				// Add thinking configuration as per LangChain documentation
-				...(reasoningOn && {
-					thinking: {
-						type: "enabled",
-						budget_tokens: budget_tokens,
-					},
-				}),
+				...(reasoningPlan.budgetThinking && { thinking: { ...reasoningPlan.budgetThinking } }),
+				...(reasoningPlan.extraBody.thinking && { thinking: reasoningPlan.extraBody.thinking as Record<string, string> }),
+				...(reasoningPlan.extraBody.output_config && { output_config: { ...reasoningPlan.extraBody.output_config } }),
 				...(enable1mContextWindow && {
 					anthropic_beta: ["context-1m-2025-08-07"],
 				}),
