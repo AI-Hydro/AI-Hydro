@@ -20,6 +20,18 @@ export type McpTool = {
 	inputSchema?: object
 	autoApprove?: boolean
 	/**
+	 * MCP tool annotations as advertised by the server (spec 2025-03-26+). Hints, not guarantees; the
+	 * explorer subagent profile only trusts `readOnlyHint === true` and treats absence as NOT read-only.
+	 * Present at runtime on tools fetched by McpHub; not carried through the proto conversion.
+	 */
+	annotations?: {
+		title?: string
+		readOnlyHint?: boolean
+		destructiveHint?: boolean
+		idempotentHint?: boolean
+		openWorldHint?: boolean
+	}
+	/**
 	 * MCP `_meta` field — arbitrary server-side metadata about the tool.
 	 * AI-Hydro uses `{ tier: 1|2|3, domain: string }` for tier-based
 	 * context filtering (Wave 1.5).

@@ -26,7 +26,7 @@ aihydro "your prompt here" --profile explorer
 
 **Available profiles:**
 
-- **\`explorer\`** — Read-only research subagent. Write tools (\`write_to_file\`, \`replace_in_file\`, \`execute_command\`, \`browser_action\`, \`new_task\`) are physically blocked — not just discouraged. Use this when you want a safe, read-only research pass over a codebase or file tree.
+- **\`explorer\`** — Read-only research subagent. Write tools (\`write_to_file\`, \`replace_in_file\`, \`execute_command\`, \`browser_action\`, \`new_task\`) are physically blocked — not just discouraged — and so is every MCP tool that is not annotated read-only (\`run_python\` included). Use this when you want a safe, read-only research pass over a codebase or file tree.
 - **\`data-runner\`** — (future) Adds data-fetching and MCP tool access to the read-only base.
 
 If no \`--profile\` is given, the subagent runs with the default toolset (same as the parent agent's allowed tools).
