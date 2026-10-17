@@ -53,6 +53,15 @@ separate system with its own documented abuse-control posture — see
 `recognition-worker/README.md` in this repo. It records a server-derived
 daily-deduplicated hash, not raw identifiers.
 
+**Final-answer audit.** When you complete a task and an AI-Hydro MCP server is
+connected, the final answer text (plus the chat id, workspace path and the
+provider-reported model id, as for any AI-Hydro MCP call) is sent to that
+server's `audit_interpretation` tool to check numbers and claims against the
+evidence ledger. For the default local stdio server this stays on your machine;
+if you registered a *remote* AI-Hydro server, the answer text is sent to it
+(egress). Not telemetry; on by default; turn it off in Settings > Features >
+"Audit final answers" (`finalAnswerAuditEnabled`).
+
 ## What was removed as part of this audit
 
 `@sentry/browser` was declared in `package.json` but had zero imports

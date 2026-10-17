@@ -4,6 +4,33 @@ Append-only. Newest first. One entry per non-obvious choice, with the **why**.
 
 ---
 
+## 2026-10-17 — Harness quick wins: honest models, display-only answer audit, explorer allowlist
+
+Branch `vision2040/harness-quickwins` (from the SOTA harness/model audit, items C/D/F).
+
+- **Unknown model ids fail loudly.** A silent fallback to the default model is a
+  provenance defect (the model that produced a result must be the one the user chose).
+  Static-registry providers throw `UnknownModelError` at request time; dynamic-list
+  providers send the user's id verbatim with flagged stand-in info (cost "unavailable").
+  `getModel()` stays non-throwing and never reports a different model's id.
+- **Prompt caching is default-on for every model flagged `supportsPromptCache`** (previously
+  only 10 hard-coded ids; the default `claude-sonnet-4-6` and 4.6/4.7 were uncached).
+  Cost: where a cache price is undefined the cost is shown as a lower bound, never as an
+  exact figure.
+- **Adaptive thinking on 4.6+** (`supportsAdaptiveThinking`), `budget_tokens` only on models
+  that require it, no explicit temperature with thinking or on models that reject it.
+  Capability flags for the Claude 5.x ids are intentionally NOT set (not traceable to a
+  committed source); only the ids are (see `docs/model-config/claude-5x-models.md`).
+- **Final-answer audit is display-only, default-on, opt-out** (`finalAnswerAuditEnabled`).
+  Mechanism over prompt: it never blocks or alters the answer; failures show as "audit
+  unavailable"; it audits only the study bound to the current chat (it will not fall back to
+  the most recent study on disk). The server-side `recent_fallback` in `_resolve_session`
+  remains and should be disabled for `audit_interpretation` in aihydro-tools.
+- **Explorer subagent is an allowlist**, with `use_mcp_tool` gated on `readOnlyHint === true`
+  (unannotated = not read-only). New tools are closed by default.
+
+---
+
 ## 2026-07-08 — Cline-fork sync cadence: quarterly batches + a security fast-path
 
 **Context.** AI-Hydro's VS Code extension is a fork of Cline. `UPSTREAM_SYNC.md`
