@@ -46,6 +46,9 @@ const workers = Number(opt("workers", "4"))
 const baselineDir = resolve(opt("baseline", join(root, "webview-ui/screens-baseline", process.platform)))
 const budgetPath = resolve(opt("budget", join(root, "webview-ui/screens-baseline/checker-budget.json")))
 const diffThreshold = Number(opt("diff-threshold", "0.002"))
+const trace = process.env.UI_SCREENS_TRACE
+	? (label) => process.stderr.write(`\n  [trace ${Date.now() % 100000}] ${label}`)
+	: () => {}
 const resume = flag("resume")
 const freeze = !flag("no-freeze")
 const check = flag("check")
@@ -198,9 +201,11 @@ async function worker() {
 					timeout: 120000,
 				})
 				await page.waitForFunction(() => window.__screenReady === true, null, { timeout: 60000 })
-				await page.locator("#root > *").first().waitFor({ timeout: 60000 })
+				trace("ready")
+				await page.locator("#root > *").first().waitFor({ state: "attached", timeout: 60000 })
 				if (screen.ready) await page.locator(screen.ready).first().waitFor({ timeout: 60000 })
 				await page.waitForTimeout(screen.hasMapCanvas ? 1500 : 350)
+				trace("waited1")
 				const steps = await page.evaluate(() => window.__screenSteps ?? [])
 				for (const step of steps) {
 					if (step.click)
@@ -244,13 +249,16 @@ async function worker() {
 					if (!pinned) throw new Error(`ASSERT scroll not pinned to end: ${screen.scrollPinned}`)
 				}
 				await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {})
+				trace("idle2")
 				await page.waitForTimeout(screen.hasMapCanvas ? 800 : 200)
-				await settle(page)
 				if (freeze) {
 					await page.addStyleTag({ content: FREEZE_CSS })
 					await page.waitForTimeout(150)
 				}
+				await settle(page)
+				trace("settled1")
 				record.checker = await page.evaluate(pageChecker)
+				trace("checked")
 				if (axe) {
 					await page.evaluate(axe)
 					record.axe = await page.evaluate(async () => {
@@ -446,6 +454,12 @@ html += "</table>"
 writeFileSync(join(outDir, "index.html"), html)
 
 const errorCells = results.filter((r) => r.errors.length)
+const pixelRequiredFailure = check && !noPixel && !updateBaseline && (diffs.missingBaseline > 0 || Boolean(diffs.note))
+const failed =
+	errorCells.length > 0 ||
+	unrouted > 0 ||
+	(check && (budgetFailures.length > 0 || diffs.overThreshold.length > 0)) ||
+	pixelRequiredFailure
 const summary = {
 	screens: screens.length,
 	cells: results.length,
@@ -465,10 +479,4 @@ const summary = {
 }
 writeFileSync(join(outDir, "summary.json"), JSON.stringify({ ...summary, results }, null, 2))
 console.log(JSON.stringify({ ...summary, perScreen: undefined }, null, 2))
-const pixelRequiredFailure = check && !noPixel && !updateBaseline && (diffs.missingBaseline > 0 || Boolean(diffs.note))
-const failed =
-	summary.errors > 0 ||
-	unrouted > 0 ||
-	(check && (budgetFailures.length > 0 || diffs.overThreshold.length > 0)) ||
-	pixelRequiredFailure
 process.exit(failed ? 1 : 0)
