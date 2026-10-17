@@ -12,6 +12,7 @@ import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/e
 import { featureLayers, framedWorkspace, MAP_STORAGE_KEY, basinPolygon } from "./fixtures/map"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
 import { courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
+import { PrimitivesScreen } from "./PrimitivesScreen"
 import type { ScreenDef } from "./types"
 
 const app = () => <App />
@@ -94,6 +95,15 @@ const approvalScreen = (key: keyof typeof approvalClaims): ScreenDef =>
 	})
 
 export const screens: ScreenDef[] = [
+	// ── Design system ───────────────────────────────────────────────
+	{
+		id: "design-primitives",
+		title: "Design system primitives",
+		group: "design",
+		surface: "panel",
+		render: () => <PrimitivesScreen />,
+	},
+
 	// ── Chat (sidebar) ──────────────────────────────────────────────
 	chatScreen("chat-welcome", "Welcome / first run", { state: { welcomeViewCompleted: false } }),
 	chatScreen("chat-home-history", "Chat home with history cards and auto-approve bar"),

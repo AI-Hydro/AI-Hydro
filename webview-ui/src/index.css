@@ -21,6 +21,9 @@ The correct order is:
 @import url("../../node_modules/@vscode/codicons/dist/codicon.css");
 @import url("../node_modules/@fontsource/azeret-mono/index.css");
 
+/* AI-Hydro design tokens (custom properties only; no visual change by itself) */
+@import "./design/tokens.css";
+
 /* Tailwind imports come after external imports */
 @import "tailwindcss/theme.css" layer(theme);
 /* Disable Tailwind's CSS reset to preserve existing styles */

@@ -1,0 +1,129 @@
+{
+	"_note": "Per-file counts of text-[8px|9px|10px] and emoji in guarded component dirs. May shrink, never grow.",
+	"totals": {
+		"smallText": 126,
+		"emoji": 172
+	},
+	"files": {
+		"components/evidence-board/EvidenceBoard.tsx": {
+			"smallText": 40,
+			"emoji": 0
+		},
+		"components/experiment-table/ExperimentDeltaView.tsx": {
+			"smallText": 2,
+			"emoji": 0
+		},
+		"components/experiment-table/ExperimentTable.tsx": {
+			"smallText": 33,
+			"emoji": 0
+		},
+		"components/experiment-table/MetricDistributionChart.tsx": {
+			"smallText": 4,
+			"emoji": 0
+		},
+		"components/replay-panel/ReplayPanel.tsx": {
+			"smallText": 27,
+			"emoji": 0
+		},
+		"components/map/AnnotationsPanel.tsx": {
+			"smallText": 0,
+			"emoji": 25
+		},
+		"components/map/BaseMapSelector.tsx": {
+			"smallText": 0,
+			"emoji": 17
+		},
+		"components/map/HydrographyPanel.tsx": {
+			"smallText": 0,
+			"emoji": 2
+		},
+		"components/map/Inundation3DControls.tsx": {
+			"smallText": 0,
+			"emoji": 1
+		},
+		"components/map/LayerPanel.tsx": {
+			"smallText": 0,
+			"emoji": 24
+		},
+		"components/map/MapContextMenu.tsx": {
+			"smallText": 0,
+			"emoji": 25
+		},
+		"components/map/MapExport.tsx": {
+			"smallText": 0,
+			"emoji": 1
+		},
+		"components/map/MapToolRibbon.tsx": {
+			"smallText": 0,
+			"emoji": 25
+		},
+		"components/map/MapView.tsx": {
+			"smallText": 0,
+			"emoji": 6
+		},
+		"components/map/MeasureTool.tsx": {
+			"smallText": 0,
+			"emoji": 2
+		},
+		"components/map/ResearchGalleryPanel.tsx": {
+			"smallText": 0,
+			"emoji": 4
+		},
+		"components/map/SearchBar.tsx": {
+			"smallText": 0,
+			"emoji": 7
+		},
+		"components/map/SwipePanel.tsx": {
+			"smallText": 0,
+			"emoji": 3
+		},
+		"components/map/TransectsPanel.tsx": {
+			"smallText": 0,
+			"emoji": 21
+		},
+		"components/map/VectorDrawTool.tsx": {
+			"smallText": 0,
+			"emoji": 1
+		},
+		"components/chat/ChatRow.tsx": {
+			"smallText": 0,
+			"emoji": 7
+		},
+		"components/chat/ChatTextArea.tsx": {
+			"smallText": 1,
+			"emoji": 0
+		},
+		"components/chat/ClaimChip.tsx": {
+			"smallText": 4,
+			"emoji": 0
+		},
+		"components/chat/OptionsButtons.tsx": {
+			"smallText": 0,
+			"emoji": 1
+		},
+		"components/chat/RunChip.tsx": {
+			"smallText": 5,
+			"emoji": 0
+		},
+		"components/chat/ServersToggleModal.tsx": {
+			"smallText": 1,
+			"emoji": 0
+		},
+		"components/chat/auto-approve-menu/AutoApproveBar.tsx": {
+			"smallText": 1,
+			"emoji": 0
+		},
+		"components/chat/auto-approve-menu/AutoApproveModal.tsx": {
+			"smallText": 1,
+			"emoji": 0
+		},
+		"components/chat/task-header/TaskHeader.tsx": {
+			"smallText": 2,
+			"emoji": 0
+		},
+		"components/history/HistoryPreview.tsx": {
+			"smallText": 5,
+			"emoji": 0
+		}
+	}
+}
