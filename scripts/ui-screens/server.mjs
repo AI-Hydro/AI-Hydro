@@ -43,9 +43,10 @@ function screenHtml(id, query) {
 <title>Screen ${id}</title>
 <link rel="stylesheet" href="/__themes/${theme}.css">
 <style>html,body{background:${bg};color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);margin:0;height:100%}
-/* Reserve a 24px banner strip for the FIXTURE badge. #root is a containing block for fixed descendants and viewport-height
-   declarations are re-based to it, so no control is covered or cut off by the strip. */
-#root{position:fixed;top:24px;left:0;right:0;bottom:0;overflow:hidden;transform:translateZ(0)}
+/* Reserve a 24px banner strip for the FIXTURE badge (a real flex row, see entry.tsx). #root is a containing block for
+   fixed descendants and viewport-height declarations are re-based to it, so the strip covers no control. */
+body{display:flex;flex-direction:column}
+#root{flex:1 1 auto;min-height:0;position:relative;contain:layout}
 #root .h-screen,#root [style*="100vh"]{height:100%!important}
 #root .min-h-screen{min-height:100%!important}</style>
 <script>

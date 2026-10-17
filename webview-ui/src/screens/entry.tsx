@@ -64,8 +64,8 @@ if (!screen) {
 	badge.textContent = "FIXTURE: synthetic data, not a result"
 	// Top banner strip: the layout reserves it (#root starts below it), so it never overlaps a control.
 	badge.style.cssText =
-		"position:fixed;top:0;left:0;right:0;height:24px;box-sizing:border-box;z-index:2147483647;padding:0 8px;display:flex;align-items:center;font:700 12px/1 monospace;background:#b00020;color:#fff;pointer-events:none;white-space:nowrap;overflow:hidden"
-	document.body.appendChild(badge)
+		"flex:none;height:24px;box-sizing:border-box;padding:0 8px;display:flex;align-items:center;font:700 12px/1 monospace;background:#b00020;color:#fff;pointer-events:none;white-space:nowrap;overflow:hidden"
+	document.body.insertBefore(badge, rootEl)
 	createRoot(rootEl).render(screen.render())
 	requestAnimationFrame(() => {
 		window.__screenReady = true
