@@ -4,20 +4,33 @@
  * (telemetry, host providers, etc.).
  */
 
+/** Names the extension itself registers for the first-party aihydro-tools server. */
+const FIRST_PARTY_SERVER_NAMES = new Set(["ai-hydro", "aihydro", "aihydro-tools", "ai-hydro-tools", "aihydro_tools"])
+
+/** Extra trusted names, comma separated, for users who register the server under another alias. */
+export const TRUSTED_SERVER_ENV = "AIHYDRO_TRUSTED_MCP_SERVERS"
+
 /**
- * Whether an MCP server belongs to the ai-hydro family, for which the extension
- * injects `_chat_id` + `_workspace` so the Python session resolver can bind this
- * chat to a study and auto-resolve the workspace for file outputs.
+ * Whether an MCP server is the first-party ai-hydro server, for which the extension
+ * injects `_chat_id` + `_workspace` (and `_meta["aihydro/context"]`) so the Python session
+ * resolver can bind this chat to a study and auto-resolve the workspace for file outputs.
  *
- * Users register the same server under several names (`ai-hydro`, `aihydro-tools`,
- * `aihydro`, `aihydro_core`, …). A strict `=== "ai-hydro"` check silently disabled
- * chat↔study binding for every alias — `aihydro_chat_status` always returned
- * `bound:false`. Match the whole family instead. The injected keys are stripped
- * server-side before any tool sees them, so a false positive here is harmless.
+ * A strict `=== "ai-hydro"` check silently disabled chat-study binding for the aliases the
+ * server is registered under, but a prefix regex also sent the workspace path and chat id to
+ * any third-party server whose name merely started with "aihydro". So: an explicit set of
+ * first-party names, plus an explicit user allowlist (`extraTrusted`, defaulting to the
+ * AIHYDRO_TRUSTED_MCP_SERVERS environment variable).
  */
-export function isAiHydroServerName(serverName: string | undefined): boolean {
-	if (!serverName) {
+export function isAiHydroServerName(
+	serverName: string | undefined,
+	extraTrusted: string[] = (process.env[TRUSTED_SERVER_ENV] ?? "").split(","),
+): boolean {
+	const name = serverName?.trim().toLowerCase()
+	if (!name) {
 		return false
 	}
-	return /^ai-?hydro([-_].*)?$/i.test(serverName.trim())
+	if (FIRST_PARTY_SERVER_NAMES.has(name)) {
+		return true
+	}
+	return extraTrusted.some((entry) => entry.trim().toLowerCase() === name)
 }

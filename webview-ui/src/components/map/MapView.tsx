@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useBrushContext } from "../../context/BrushContext"
 import { useMapContext } from "../../context/MapContext"
 import { MapServiceClient } from "../../services/grpc-client"
+import { claimAgentCommand, escapeHtml } from "./agentCommandDedupe"
 import AnnotationsPanel from "./AnnotationsPanel"
 import {
 	type AnnotationCollection,
@@ -1541,19 +1542,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	handleFitExtentRef.current = handleFitExtent
 	handleZoomToLayerRef.current = handleZoomToLayer
 
+	// Replayed events (the host re-sends recent ones on subscribe) must not re-run across layer changes.
+	const processedCommandKeysRef = useRef(new Set<string>())
+	const layersRef = useRef(layers)
+	layersRef.current = layers
 	// Agent map commands (fit_extent, fit_layer, fly_to, set_time_range) via host event stream
 	useEffect(() => {
-		const processedCommandKeys = new Set<string>()
 		const unsub = MapServiceClient.subscribeToMapEvents(EmptyRequest.create({}), {
 			onResponse: (event) => {
 				if (!event.type?.startsWith("command.")) {
 					return
 				}
-				const key = `${event.type}:${event.timestampMs ?? 0}:${event.payloadJson ?? ""}`
-				if (processedCommandKeys.has(key)) {
+				if (!claimAgentCommand(processedCommandKeysRef.current, event)) {
 					return
 				}
-				processedCommandKeys.add(key)
 				if (event.type === "command.fit_extent") {
 					handleFitExtentRef.current()
 					return
@@ -1569,7 +1571,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					if (!layerId) {
 						return
 					}
-					const layer = layers.find((l) => l.id === layerId)
+					const layer = layersRef.current.find((l) => l.id === layerId)
 					if (layer) {
 						handleZoomToLayerRef.current(layer)
 					}
@@ -1615,7 +1617,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			onComplete: () => {},
 		})
 		return () => unsub()
-	}, [layers, setBrushExtent])
+	}, [setBrushExtent])
 
 	const getTooltip = useCallback(
 		({ object, layer: deckLayer }: any) => {
@@ -1634,8 +1636,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			return {
 				html: [
 					'<div style="font-size:12px;line-height:1.5;max-width:260px">',
-					name ? `<strong style="display:block;margin-bottom:4px;font-size:13px">${name}</strong>` : "",
-					shown.map(([k, v]) => `<div><b>${k}:</b> ${String(v ?? "—")}</div>`).join(""),
+					name ? `<strong style="display:block;margin-bottom:4px;font-size:13px">${escapeHtml(name)}</strong>` : "",
+					shown.map(([k, v]) => `<div><b>${escapeHtml(k)}:</b> ${v == null ? "—" : escapeHtml(v)}</div>`).join(""),
 					extra > 0 ? `<div style="opacity:0.6;margin-top:4px">+${extra} more properties</div>` : "",
 					"</div>",
 				].join(""),

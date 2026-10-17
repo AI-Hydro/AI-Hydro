@@ -47,7 +47,7 @@ const TimeSliderPanel: React.FC<TimeSliderPanelProps> = ({
 		return { minDate: min, maxDate: max }
 	}, [layers])
 
-	const { setBrushExtent } = useBrushContext()
+	const { brushExtent, setBrushExtent } = useBrushContext()
 	const [rangeStart, setRangeStart] = useState<string>("")
 	const [rangeEnd, setRangeEnd] = useState<string>("")
 
@@ -87,6 +87,20 @@ const TimeSliderPanel: React.FC<TimeSliderPanelProps> = ({
 			}
 		}
 	}
+
+	// An externally set brush (agent `set_time_range`, linked hydrograph) drives the slider:
+	// adopt it as the visible range and apply the same layer filter a manual edit would.
+	// Our own applyFilter echoes a date-only extent back here; that equals local state, so it is a no-op.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: applyFilter is re-created each render by design
+	useEffect(() => {
+		if (!brushExtent) return
+		const start = brushExtent[0].slice(0, 10)
+		const end = brushExtent[1].slice(0, 10)
+		if (start === rangeStart && end === rangeEnd) return
+		setRangeStart(start)
+		setRangeEnd(end)
+		applyFilter(start, end)
+	}, [brushExtent])
 
 	const timedLayers = layers.filter((l) => mapLayerToLiveLayer(l).timeStart)
 	const untimedLayers = layers.filter((l) => !mapLayerToLiveLayer(l).timeStart)

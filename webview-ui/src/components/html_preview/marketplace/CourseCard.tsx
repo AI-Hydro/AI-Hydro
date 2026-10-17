@@ -1,3 +1,4 @@
+import { httpUrlOrEmpty } from "./safeUrl"
 import { MarketplaceStarRequest } from "@shared/proto/cline/common"
 import type { CourseCatalogItem } from "@shared/proto/cline/html_preview"
 import { InstallCourseRequest } from "@shared/proto/cline/html_preview"
@@ -41,12 +42,6 @@ function githubProfileUrl(github?: string): string {
 function orcidProfileUrl(orcid?: string): string {
 	const v = String(orcid ?? "").trim()
 	return v ? (v.startsWith("http") ? v : `https://orcid.org/${v}`) : ""
-}
-
-/** Catalog-supplied links are untrusted: only http(s) targets may become anchors. */
-function httpUrlOrEmpty(value?: string): string {
-	const v = String(value ?? "").trim()
-	return /^https?:\/\//i.test(v) ? v : ""
 }
 
 function contributorProfileUrl(c: CourseCatalogItem["contributors"][number]): string {
@@ -503,9 +498,9 @@ const CourseCard = ({ course, setError, onInstalled, onRecognitionChange }: Cour
 									{course.citation}
 								</span>
 							)}
-							{course.citationUrl && (
+							{httpUrlOrEmpty(course.citationUrl) && (
 								<a
-									href={course.citationUrl}
+									href={httpUrlOrEmpty(course.citationUrl)}
 									onClick={(e) => e.stopPropagation()}
 									rel="noopener noreferrer"
 									style={{ color: cyan, textDecoration: "none" }}

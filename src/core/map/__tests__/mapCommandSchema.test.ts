@@ -69,9 +69,9 @@ describe("mapCommandSchema", () => {
 		})
 
 		it("caps fly_to duration", () => {
-			expect(mapCommandSchema.safeParse({ type: "fly_to", longitude: 0, latitude: 0, duration_ms: 60_000 }).success).to.equal(
-				true,
-			)
+			expect(
+				mapCommandSchema.safeParse({ type: "fly_to", longitude: 0, latitude: 0, duration_ms: 60_000 }).success,
+			).to.equal(true)
 			expect(
 				mapCommandSchema.safeParse({ type: "fly_to", longitude: 0, latitude: 0, duration_ms: 60_001 }).success,
 			).to.equal(false)
@@ -92,7 +92,9 @@ describe("mapCommandSchema", () => {
 			})
 			expect(ok.success).to.equal(true)
 			expect(mapCommandSchema.safeParse({ type: "add_layer_from_run", run_id: "x".repeat(257) }).success).to.equal(false)
-			expect(mapCommandSchema.safeParse({ type: "add_layer_from_run", session_id: "x".repeat(257) }).success).to.equal(false)
+			expect(mapCommandSchema.safeParse({ type: "add_layer_from_run", session_id: "x".repeat(257) }).success).to.equal(
+				false,
+			)
 			expect(mapCommandSchema.safeParse({ type: "add_layer_from_run", layer_name: "x".repeat(513) }).success).to.equal(
 				false,
 			)
@@ -110,6 +112,16 @@ describe("mapCommandSchema", () => {
 				expect(ok.data.start_iso).to.equal("2020-01-01T00:00:00Z")
 			}
 			expect(mapCommandSchema.safeParse({ type: "set_time_range", start_iso: "not-a-date" }).success).to.equal(false)
+			expect(
+				mapCommandSchema.safeParse({ type: "set_time_range", start_iso: "2020-01-01T00:00:00+05:30" }).success,
+			).to.equal(true)
+			// Looser formats Date.parse would accept are refused.
+			expect(mapCommandSchema.safeParse({ type: "set_time_range", start_iso: "Jan 5 2020" }).success).to.equal(false)
+			expect(mapCommandSchema.safeParse({ type: "set_time_range", start_iso: "2020-01-01 junk" }).success).to.equal(false)
+			expect(
+				mapCommandSchema.safeParse({ type: "set_time_range", start_iso: "2021-01-01", end_iso: "2020-01-01" }).success,
+			).to.equal(false)
+			expect(mapCommandSchema.safeParse({ type: "fit_layer", layer_id: "x".repeat(257) }).success).to.equal(false)
 			expect(mapCommandSchema.safeParse({ type: "set_time_range", start_iso: "2".repeat(65) }).success).to.equal(false)
 			expect(mapCommandSchema.safeParse({ type: "set_time_range", end_iso: 12345 }).success).to.equal(false)
 		})

@@ -45,7 +45,9 @@ function formatLayers(names?: string[]): string {
 
 /** "## Visible Map Layers" section for prompts built from full MapLayer objects (transect prompts). */
 function formatVisibleLayers(layers: MapLayer[]): string {
-	return ["## Visible Map Layers", formatLayers(layers.map((layer) => layer.metadata?.display_name || layer.name)), ""].join("\n")
+	return ["## Visible Map Layers", formatLayers(layers.map((layer) => layer.metadata?.display_name || layer.name)), ""].join(
+		"\n",
+	)
 }
 
 function formatSelection(ctx: MapAgentInspectContext): string {

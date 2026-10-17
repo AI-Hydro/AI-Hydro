@@ -2,6 +2,7 @@ import { MarketplaceStarRequest } from "@shared/proto/cline/common"
 import type { LearningModuleItem } from "@shared/proto/cline/html_preview"
 import { InstallModuleRequest } from "@shared/proto/cline/html_preview"
 import { useState } from "react"
+import { httpUrlOrEmpty } from "./safeUrl"
 import { HtmlPreviewServiceClient } from "@/services/grpc-client"
 
 interface LearningModuleCardProps {
@@ -175,9 +176,9 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 							<span style={{ marginLeft: item.author ? 8 : 0 }}>· {item.estimatedMinutes} min</span>
 						)}
 					</div>
-					{item.authorUrl && (
+					{httpUrlOrEmpty(item.authorUrl) && (
 						<a
-							href={item.authorUrl}
+							href={httpUrlOrEmpty(item.authorUrl)}
 							onClick={(e) => e.stopPropagation()}
 							rel="noopener noreferrer"
 							style={{
@@ -289,7 +290,7 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 				</span>
 				{item.githubReactions > 0 && (
 					<a
-						href={item.discussionUrl || item.githubUrl}
+						href={httpUrlOrEmpty(item.discussionUrl) || httpUrlOrEmpty(item.githubUrl) || undefined}
 						onClick={(e) => e.stopPropagation()}
 						rel="noopener noreferrer"
 						style={{
@@ -383,9 +384,9 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 						{tag}
 					</span>
 				))}
-				{item.githubUrl && (
+				{httpUrlOrEmpty(item.githubUrl) && (
 					<a
-						href={item.githubUrl}
+						href={httpUrlOrEmpty(item.githubUrl)}
 						onClick={(e) => e.stopPropagation()}
 						rel="noopener noreferrer"
 						style={{ marginLeft: "auto", fontSize: 10, color: cyan, textDecoration: "none" }}
@@ -393,9 +394,9 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 						GitHub ↗
 					</a>
 				)}
-				{item.citationUrl && (
+				{httpUrlOrEmpty(item.citationUrl) && (
 					<a
-						href={item.citationUrl}
+						href={httpUrlOrEmpty(item.citationUrl)}
 						onClick={(e) => e.stopPropagation()}
 						rel="noopener noreferrer"
 						style={{ fontSize: 10, color: cyan, textDecoration: "none" }}

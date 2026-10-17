@@ -157,10 +157,7 @@ function decodeBlobAsImageElement(blob: Blob, tileUrl: string): Promise<HTMLImag
 	})
 }
 
-export async function loadMapTile(tile: {
-	url?: string | null
-	signal?: AbortSignal
-}): Promise<ImageBitmap | HTMLImageElement> {
+export async function loadMapTile(tile: { url?: string | null; signal?: AbortSignal }): Promise<ImageBitmap | HTMLImageElement> {
 	if (!tile.url) throw new Error("Tile URL is missing")
 	const response = await fetch(tile.url, { signal: tile.signal })
 	if (!response.ok) throw new Error(`Tile request failed (HTTP ${response.status})`)

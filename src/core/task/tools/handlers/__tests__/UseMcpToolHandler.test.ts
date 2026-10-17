@@ -11,10 +11,7 @@ describe("isAiHydroServerName", () => {
 		"ai-hydro",
 		"aihydro",
 		"aihydro-tools",
-		"aihydro-core",
-		"aihydro-data",
 		"ai-hydro-tools",
-		"aihydro_core",
 		"AI-Hydro",
 		"AIHYDRO",
 		"  aihydro-tools  ", // tolerant of incidental whitespace
@@ -30,6 +27,8 @@ describe("isAiHydroServerName", () => {
 		"swatplus-builder",
 		"pyhmt2d",
 		"hydromind",
+		"aihydro-evil-fork", // prefix lookalikes must not receive workspace/chat context
+		"aihydro_core", // not a first-party name unless allowlisted
 		"my-aihydro-fork", // does not START with the family prefix
 		"hydro",
 		"",
@@ -41,4 +40,10 @@ describe("isAiHydroServerName", () => {
 			expect(isAiHydroServerName(name)).to.equal(false)
 		})
 	}
+
+	it("honours an explicit allowlist for other aliases", () => {
+		expect(isAiHydroServerName("aihydro-core", ["aihydro-core"])).to.equal(true)
+		expect(isAiHydroServerName("aihydro-core", [""])).to.equal(false)
+		expect(isAiHydroServerName("AIHYDRO-CORE", [" aihydro-core "])).to.equal(true)
+	})
 })

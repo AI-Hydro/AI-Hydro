@@ -14,14 +14,18 @@ const MAX_NAME_LENGTH = 512
 const MAX_RUN_GEOJSON_LENGTH = 25_000_000
 const MAX_FLY_TO_DURATION_MS = 60_000
 
+/** ISO-8601 date (`2020-01-01`) or date-time with optional `Z` / numeric offset; nothing looser than that. */
+const ISO_8601 = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})?)?$/
 const isoTimestamp = z
 	.string()
 	.max(64)
-	.refine((value) => !Number.isNaN(Date.parse(value)), { message: "must be a parseable ISO-8601 timestamp" })
+	.refine((value) => ISO_8601.test(value) && !Number.isNaN(Date.parse(value)), {
+		message: "must be an ISO-8601 date or date-time",
+	})
 
-export const mapCommandSchema = z.object({
+const mapCommandObject = z.object({
 	type: z.string().min(1),
-	layer_id: z.string().optional(),
+	layer_id: z.string().max(MAX_ID_LENGTH).optional(),
 	roi: z
 		.object({
 			id: z.string().optional(),
@@ -54,6 +58,12 @@ export const mapCommandSchema = z.object({
 	// set_time_range
 	start_iso: isoTimestamp.optional(),
 	end_iso: isoTimestamp.optional(),
+})
+
+export const mapCommandSchema = mapCommandObject.superRefine((cmd, ctx) => {
+	if (cmd.start_iso && cmd.end_iso && Date.parse(cmd.end_iso) < Date.parse(cmd.start_iso)) {
+		ctx.addIssue({ code: "custom", path: ["end_iso"], message: "end_iso must not precede start_iso" })
+	}
 })
 
 export type MapCommandPayload = z.infer<typeof mapCommandSchema>

@@ -14,15 +14,16 @@ export const RunChip: React.FC<RunChipProps> = ({ runId, jsonPath }) => {
 				className="
 					inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-medium
 					leading-5 cursor-pointer border-0
-					bg-[var(--vscode-testing-iconPassed)] text-white
+					border border-[var(--vscode-panel-border)] bg-transparent
+					text-[var(--vscode-disabledForeground)]
 					hover:opacity-90 transition-opacity select-none
 				"
 				onClick={() => setOpen((o) => !o)}
 				title={`run:${runId}#${jsonPath}`}
 				type="button">
-				<span className="codicon codicon-check text-[9px]" />
+				<span className="codicon codicon-link text-[9px]" />
 				<span className="font-mono">{runId.split(".")[0]}</span>
-				<span className="opacity-75">· verified</span>
+				<span className="opacity-75">· run reference</span>
 			</button>
 
 			{open && (
@@ -47,7 +48,10 @@ export const RunChip: React.FC<RunChipProps> = ({ runId, jsonPath }) => {
 						<span className="opacity-60">Path: </span>
 						<span className="font-mono">{jsonPath}</span>
 					</p>
-					<p className="mt-1 opacity-60 text-[10px]">Value verified by Answer Auditor against session run-log.</p>
+					<p className="mt-1 opacity-60 text-[10px]">
+						Unverified reference: this chip only echoes the text the model wrote; it does not confirm the value
+						against the run-log.
+					</p>
 				</span>
 			)}
 		</span>
