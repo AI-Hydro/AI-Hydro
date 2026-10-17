@@ -42,7 +42,12 @@ function screenHtml(id, query) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Screen ${id}</title>
 <link rel="stylesheet" href="/__themes/${theme}.css">
-<style>html,body{background:${bg};color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);margin:0;height:100%}#root{height:100%}</style>
+<style>html,body{background:${bg};color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);margin:0;height:100%}
+/* Reserve a 24px banner strip for the FIXTURE badge. #root is a containing block for fixed descendants and viewport-height
+   declarations are re-based to it, so no control is covered or cut off by the strip. */
+#root{position:fixed;top:24px;left:0;right:0;bottom:0;overflow:hidden;transform:translateZ(0)}
+#root .h-screen,#root [style*="100vh"]{height:100%!important}
+#root .min-h-screen{min-height:100%!important}</style>
 <script>
   // Every load starts from empty storage: persisted UI state (expanded sections, map workspace) must not leak
   // between cells that share a browser context. The screen entry installs its own fixture storage afterwards.

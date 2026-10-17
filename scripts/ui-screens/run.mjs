@@ -51,6 +51,8 @@ const freeze = !flag("no-freeze")
 const check = flag("check")
 const writeBudget = flag("write-budget")
 const updateBaseline = flag("update-baseline")
+// Pixel diffs are required by --check unless explicitly skipped (CI has no image baselines).
+const noPixel = flag("no-pixel")
 for (const t of themes) if (!THEMES.includes(t)) throw new Error(`unknown theme ${t}`)
 
 // Production CSS still runs always-on keyframes under prefers-reduced-motion (plan S1/S2 fix that), so the
@@ -227,6 +229,20 @@ async function worker() {
 					else if (step.press) await page.keyboard.press(step.press)
 					else if (step.wait) await page.waitForTimeout(step.wait)
 				}
+				// Structural assertions replace pixel diffs for screens whose scroll offset is load dependent.
+				for (const sel of screen.expectVisible ?? []) {
+					const box = await page.locator(sel).first().boundingBox({ timeout: 20000 })
+					const vp = page.viewportSize()
+					if (!box || box.y + box.height <= 0 || box.y >= vp.height || box.x + box.width <= 0 || box.x >= vp.width)
+						throw new Error(`ASSERT not visible in viewport: ${sel}`)
+				}
+				if (screen.scrollPinned) {
+					const pinned = await page
+						.locator(screen.scrollPinned)
+						.first()
+						.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 2)
+					if (!pinned) throw new Error(`ASSERT scroll not pinned to end: ${screen.scrollPinned}`)
+				}
 				await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {})
 				await page.waitForTimeout(screen.hasMapCanvas ? 800 : 200)
 				await settle(page)
@@ -295,30 +311,68 @@ for (const s of Object.values(perScreen)) {
 
 // ── budget ─────────────────────────────────────────────────────────────────
 const budgetOut = {
-	_note: "Checker baseline budget. Counts may shrink, never grow. Reference cell = dark theme, 13px, native width (sidebar 400, panel 800, editor 1280). Regenerate with --write-budget only when a slice lowers counts.",
+	_note: "Checker baseline budget. Counts may shrink, never grow: --write-budget keeps min(old, new) per rule. Reference cell = dark theme, 13px, native width (sidebar 400, panel 800, editor 1280). cells = matrix size the matrixTotal was measured over (totals are only compared for equal sizes).",
 	reference: { ...REF, widths: refWidth },
-	screens: Object.fromEntries(Object.entries(perScreen).map(([id, s]) => [id, { ref: s.ref, matrixTotal: s.matrixTotal }])),
+	screens: Object.fromEntries(
+		Object.entries(perScreen).map(([id, s]) => [id, { ref: s.ref, matrixTotal: s.matrixTotal, cells: s.cells }]),
+	),
 }
+const RULES_BUDGETED = RULES.filter((r) => r !== "contrastIndeterminate")
+const minRules = (a, b) =>
+	Object.fromEntries(RULES.map((r) => [r, Math.min(a?.[r] ?? Number.POSITIVE_INFINITY, b?.[r] ?? Number.POSITIVE_INFINITY)]))
 if (writeBudget) {
+	// The budget can only shrink: existing entries keep min(old, new) per rule. New screens take the measured values.
+	const old = existsSync(budgetPath) ? JSON.parse(readFileSync(budgetPath, "utf8")) : { screens: {} }
+	for (const [id, s] of Object.entries(budgetOut.screens)) {
+		const prev = old.screens?.[id]
+		if (!prev) {
+			s.cells = perScreen[id].cells
+			continue
+		}
+		s.ref = s.ref && prev.ref ? minRules(prev.ref, s.ref) : (prev.ref ?? s.ref)
+		if (prev.cells === perScreen[id].cells) {
+			s.matrixTotal = minRules(prev.matrixTotal, s.matrixTotal)
+			s.cells = prev.cells
+		} else {
+			s.matrixTotal = prev.matrixTotal
+			s.cells = prev.cells
+		}
+	}
+	// Screens absent from this run (subset run) keep their old entries.
+	for (const [id, prev] of Object.entries(old.screens ?? {})) if (!budgetOut.screens[id]) budgetOut.screens[id] = prev
 	mkdirSync(dirname(budgetPath), { recursive: true })
 	writeFileSync(budgetPath, JSON.stringify(budgetOut, null, "\t") + "\n")
 }
 const budgetFailures = []
-if (check && existsSync(budgetPath) && !writeBudget) {
-	const budget = JSON.parse(readFileSync(budgetPath, "utf8"))
-	for (const [id, s] of Object.entries(perScreen)) {
-		const b = budget.screens?.[id]
-		if (!b) continue
-		for (const rule of RULES.filter((r) => r !== "contrastIndeterminate")) {
-			if (s.ref && b.ref && s.ref[rule] > b.ref[rule])
-				budgetFailures.push(`${id} ref ${rule}: ${s.ref[rule]} > ${b.ref[rule]}`)
+let matrixTotalsChecked = 0
+if (check && !writeBudget) {
+	if (!existsSync(budgetPath)) budgetFailures.push(`budget file missing: ${budgetPath}`)
+	else {
+		const budget = JSON.parse(readFileSync(budgetPath, "utf8"))
+		for (const [id, s] of Object.entries(perScreen)) {
+			const b = budget.screens?.[id]
+			if (!b) {
+				budgetFailures.push(`${id}: rendered screen has no budget entry (add with --write-budget)`)
+				continue
+			}
+			for (const rule of RULES_BUDGETED) {
+				if (s.ref && b.ref && s.ref[rule] > b.ref[rule])
+					budgetFailures.push(`${id} ref ${rule}: ${s.ref[rule]} > ${b.ref[rule]}`)
+			}
+			// Matrix totals are only comparable when the same number of cells was rendered.
+			if (b.cells === s.cells) {
+				matrixTotalsChecked++
+				for (const rule of RULES_BUDGETED)
+					if (s.matrixTotal[rule] > b.matrixTotal[rule])
+						budgetFailures.push(`${id} matrix ${rule}: ${s.matrixTotal[rule]} > ${b.matrixTotal[rule]}`)
+			}
 		}
 	}
 }
 
 // ── pixel diff against baselines ───────────────────────────────────────────
-const diffs = { compared: 0, missingBaseline: 0, overThreshold: [] }
-if (check || updateBaseline) {
+const diffs = { compared: 0, missingBaseline: 0, overThreshold: [], skipped: check && noPixel ? "--no-pixel" : undefined }
+if ((check && !noPixel) || updateBaseline) {
 	let PNG = null
 	try {
 		PNG = require("playwright-core/lib/utilsBundle").PNG
@@ -403,11 +457,18 @@ const summary = {
 	axe: axe ? "ran" : "unavailable (axe-core not installed)",
 	checker: { referenceCellTotals: refTotals, matrixTotals: totals },
 	budgetFailures,
+	matrixTotalsChecked,
+	pixelRequiredFailure,
 	diffs,
 	contactSheet: join(outDir, "index.html"),
 	perScreen,
 }
 writeFileSync(join(outDir, "summary.json"), JSON.stringify({ ...summary, results }, null, 2))
 console.log(JSON.stringify({ ...summary, perScreen: undefined }, null, 2))
-const failed = summary.errors > 0 || unrouted > 0 || (check && (budgetFailures.length > 0 || diffs.overThreshold.length > 0))
+const pixelRequiredFailure = check && !noPixel && !updateBaseline && (diffs.missingBaseline > 0 || Boolean(diffs.note))
+const failed =
+	summary.errors > 0 ||
+	unrouted > 0 ||
+	(check && (budgetFailures.length > 0 || diffs.overThreshold.length > 0)) ||
+	pixelRequiredFailure
 process.exit(failed ? 1 : 0)

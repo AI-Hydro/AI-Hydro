@@ -123,6 +123,9 @@ export function pageChecker() {
 		}
 	}
 
+	const inSentence = (el) =>
+		[...(el.parentElement?.childNodes ?? [])].some((n) => n !== el && n.nodeType === 3 && n.nodeValue.trim())
+
 	// ── target size ─────────────────────────────────────────────────
 	const interactive = new Set(
 		document.querySelectorAll(
@@ -131,16 +134,26 @@ export function pageChecker() {
 	)
 	const INTERACTIVE_SELECTOR =
 		"button, [role=button], a[href], input, select, textarea, [role=tab], vscode-button, vscode-checkbox, vscode-radio"
+	const nativeInteractive = new Set(interactive)
+	const pointerDerived = []
 	for (const el of document.querySelectorAll("body *")) {
 		if (interactive.has(el) || el.closest("[data-harness]")) continue
 		// cursor:pointer is inherited by decorative children (icons) of real controls; the control is the target.
 		if (el.parentElement?.closest(INTERACTIVE_SELECTOR)) continue
-		if (getComputedStyle(el).cursor === "pointer" && visible(el)) interactive.add(el)
+		if (getComputedStyle(el).cursor === "pointer" && visible(el)) pointerDerived.push(el)
+	}
+	// Count only the outermost pointer element (a label and its inner span are one target).
+	for (const el of pointerDerived) {
+		let nested = false
+		for (let a = el.parentElement; a; a = a.parentElement)
+			if (nativeInteractive.has(a) || pointerDerived.includes(a)) nested = true
+		if (!nested) interactive.add(el)
 	}
 	for (const el of interactive) {
 		if (!visible(el)) continue
 		const style = getComputedStyle(el)
-		if (el.tagName === "A" && style.display === "inline") continue // inline-in-text exemption
+		// WCAG 2.5.8 inline exemption: links that sit inside a sentence.
+		if ((el.tagName === "A" || el.tagName === "VSCODE-LINK") && (style.display === "inline" || inSentence(el))) continue
 		if (style.pointerEvents === "none") continue
 		// Skip wrappers whose interactive child carries the target (avoid double counting).
 		if ([...el.querySelectorAll("button, [role=button], a[href], input, select")].some(visible) && el.tagName !== "BUTTON")

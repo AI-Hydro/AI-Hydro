@@ -45,7 +45,11 @@ export interface ScreenDef {
 	ready?: string
 	/** True when the screen contains a WebGL map canvas (pixel diffs are masked). */
 	hasMapCanvas?: boolean
-	/** Per-screen pixel-diff threshold override (fraction of pixels); see registry for why a screen needs one. */
+	/** Per-screen pixel-diff threshold override (fraction of pixels). */
 	pixelDiffThreshold?: number
+	/** Selectors that must be inside the viewport (structural assertion). */
+	expectVisible?: string[]
+	/** Scroller that must be pinned to its end (structural assertion). */
+	scrollPinned?: string
 	render: () => ReactNode
 }

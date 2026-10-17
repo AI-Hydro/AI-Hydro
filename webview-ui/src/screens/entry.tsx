@@ -19,6 +19,8 @@ declare global {
 			hasMapCanvas: boolean
 			ready?: string
 			pixelDiffThreshold?: number
+			expectVisible?: string[]
+			scrollPinned?: string
 		}>
 		__screenSteps?: unknown
 		__screenReady?: boolean
@@ -34,6 +36,8 @@ window.__screens = screens.map((s) => ({
 	hasMapCanvas: !!s.hasMapCanvas,
 	ready: s.ready,
 	pixelDiffThreshold: s.pixelDiffThreshold,
+	expectVisible: s.expectVisible,
+	scrollPinned: s.scrollPinned,
 }))
 
 const screen = findScreen(id)
@@ -58,8 +62,9 @@ if (!screen) {
 	const badge = document.createElement("div")
 	badge.setAttribute("data-harness", "fixture-badge")
 	badge.textContent = "FIXTURE: synthetic data, not a result"
+	// Top banner strip: the layout reserves it (#root starts below it), so it never overlaps a control.
 	badge.style.cssText =
-		"position:fixed;right:0;bottom:0;z-index:2147483647;padding:2px 8px;font:700 12px/1.4 monospace;background:#b00020;color:#fff;pointer-events:none;border-top-left-radius:4px"
+		"position:fixed;top:0;left:0;right:0;height:24px;box-sizing:border-box;z-index:2147483647;padding:0 8px;display:flex;align-items:center;font:700 12px/1 monospace;background:#b00020;color:#fff;pointer-events:none;white-space:nowrap;overflow:hidden"
 	document.body.appendChild(badge)
 	createRoot(rootEl).render(screen.render())
 	requestAnimationFrame(() => {

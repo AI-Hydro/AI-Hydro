@@ -95,10 +95,12 @@ const SCROLL_TO_END: ScreenDef["steps"] = [
 
 /**
  * The virtualised chat list settles to a scroll offset that varies by about 20px with machine load, even after
- * iterating scrollTop until it stops moving. Structural checker counts are unaffected; pixel diffs for these
- * screens use a loose threshold (they still catch missing/overflowing content, not 20px shifts).
+ * iterating scrollTop until it stops moving. These screens therefore skip the pixel diff (threshold 1 = never
+ * fails) and assert structure instead: the final message is inside the viewport and the list is pinned to its end.
+ * Checker counts are unaffected and still gated.
  */
-const UNSTABLE_SCROLL_THRESHOLD = 0.35
+const STRUCTURAL_ONLY = 1
+const PINNED = "[data-virtuoso-scroller=true]"
 
 const taskState = (aihydroMessages: NonNullable<ScreenDef["state"]>["aihydroMessages"]) => ({
 	currentTaskItem: taskItem,
@@ -138,23 +140,31 @@ export const screens: ScreenDef[] = [
 	chatScreen("chat-home-empty-history", "Chat home, no history", { state: { taskHistory: [] } }),
 	chatScreen("chat-task-text", "Task with plain text", {
 		state: taskState(plainTextTask),
+		expectVisible: ["text=Fixture text only"],
 		steps: SCROLL_TO_END,
-		pixelDiffThreshold: UNSTABLE_SCROLL_THRESHOLD,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
 	}),
 	chatScreen("chat-task-mcp", "Task with ai-hydro MCP call and result", {
 		state: taskState(mcpCallTask),
+		expectVisible: ["text=delineate_watershed"],
 		steps: SCROLL_TO_END,
-		pixelDiffThreshold: UNSTABLE_SCROLL_THRESHOLD,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
 	}),
 	chatScreen("chat-task-refusal", "Task with structured refusal (GAUGE_AMBIGUOUS)", {
 		state: taskState(refusalTask),
+		expectVisible: ["text=Which gauge do you mean?"],
 		steps: SCROLL_TO_END,
-		pixelDiffThreshold: UNSTABLE_SCROLL_THRESHOLD,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
 	}),
 	chatScreen("chat-task-answer", "Final answer with run and claim chips", {
 		steps: SCROLL_TO_END,
-		pixelDiffThreshold: UNSTABLE_SCROLL_THRESHOLD,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
 		state: taskState(finalAnswerTask),
+		expectVisible: ["text=Fixture answer: no value here is a result."],
 		ledger: { sessionId: FIXTURE_SESSION, claims: statusClaims },
 	}),
 	{

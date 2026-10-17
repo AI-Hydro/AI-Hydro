@@ -5,7 +5,7 @@ All screens are synthetic FIXTURE renders from `webview-ui/src/screens/registry.
 - Screens: 42; cells rendered: 1680 (themes dark, light, hc-dark, hc-light; widths 320, 400, 800, 1280, 1920; font px 13, 20; motion reduce).
 - Uncaught page errors: 0. Unrouted external requests: 0. External hosts the app tried to reach (all answered from fixtures): server.arcgisonline.com (1549), basemap.nationalmap.gov (8717), fonts.googleapis.com (40).
 - axe-core: unavailable (axe-core not installed).
-- Budget file: `webview-ui/screens-baseline/checker-budget.json`. Counts may shrink, never grow (enforced by `--check`).
+- Budget file: `webview-ui/screens-baseline/checker-budget.json`. Counts can only shrink: `--write-budget` keeps min(old, new) per rule and `--check` fails above the budget.
 - Reference cell: dark theme, 13 px, native width (sidebar 400, panel 800, editor 1280). Matrix total = sum over every cell of that screen.
 - Rules: noName = button/link without accessible name; smallTarget = interactive target under 24x24 px; smallText = text under 11 px; contrast = WCAG ratio below 4.5 (3 for large text). Text over canvas/gradients is counted separately as indeterminate and excluded here.
 
@@ -79,7 +79,7 @@ All screens are synthetic FIXTURE renders from `webview-ui/src/screens/registry.
 ## Notes recorded with the baseline
 
 - The "before" gallery was rendered from the S0 harness commit plus the determinism fixes listed in `git log` (settle/freeze/resume, storage reset, scroll-to-end, welcome mounted directly). Contact sheet and PNGs are not committed (owner decision pending); regenerate with `npm run ui:screens`.
-- After S1 (`design/tokens.css` wired into `index.css`), the full matrix was re-rendered (43 screens, 1720 cells): 0 page errors, 0 unrouted requests, checker totals identical to this baseline, budget check passed, and pixel diffs against the baseline within threshold for every compared cell. The four `chat-task-*` screens use a loose pixel threshold because the virtualised chat list settles about 20 px apart depending on machine load.
+- After S1 (`design/tokens.css` wired into `index.css`), the full matrix was re-rendered (43 screens, 1720 cells): 0 page errors, 0 unrouted requests, checker totals identical to this baseline, budget check passed, and pixel diffs against the baseline within threshold for every compared cell except the four `chat-task-*` screens, which now assert structure (final message visible, list pinned to its end) instead of pixels because the virtualised chat list settles about 20 px apart depending on machine load.
 - `design-primitives` (added in S1) has 0 violations in every cell of the matrix.
 - Findings surfaced while building the harness (not fixed here):
   - `ExtensionStateContext` force-sets `showWelcome=false` two seconds after mount (the "ref to avoid stale closure" is never read), so the first-run welcome view disappears after about 2 s when mounted through `App`.

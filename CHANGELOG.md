@@ -11,6 +11,11 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Added — UI screen harness and design-system foundation (UI-W S0/S1)
+
+- Headless screen harness (`npm run ui:screens`, `scripts/ui-screens/`): renders the real webview panels over synthetic, visibly badged FIXTURE data with the host mocked and all non-local traffic answered from fixtures, across themes, widths and font sizes. A built-in checker records missing accessible names, sub-24 px targets, sub-11 px text and contrast; a committed budget (`webview-ui/screens-baseline/checker-budget.json`) can only shrink. `npm run ui:screens:verify-bundle` fails if the harness reaches the production bundle. Dev-only; nothing ships in the VSIX.
+- `webview-ui/src/design/`: theme-derived tokens (`tokens.css`, imported by `index.css` as custom properties only, no visual change), a single evidence-state table (`evidenceStates.ts`: only `approved` can use the success colour, every state has a label, icon and shape) and accessible primitives. A lint guard prevents new sub-11 px text and emoji in science-facing components.
+
 ### Fixed — `q5` / `q95` documentation follows CAMELS (defect P2-D0)
 
 - `docs/tools/analysis.md` and `docs/glossary.md` described `q5` as the high flow and `q95` as the low flow. CAMELS (Addor et al. 2017, Table 3) defines `q5` as the 5% flow quantile (low flow) and `q95` as the 95% flow quantile (high flow); `aihydro-tools` computed them the other way round until the matching fix (branch `vision2040/q5-q95` in aihydro-watershed, aihydro-tools, aihydro-lsh, camels-attrs). Documentation only; no extension code reads `q5`/`q95`.
