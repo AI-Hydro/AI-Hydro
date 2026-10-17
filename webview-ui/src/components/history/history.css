@@ -1,0 +1,47 @@
+/* History cards. Tokens only. */
+.history-preview {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-2);
+	padding: var(--aih-space-2) var(--aih-space-5) var(--aih-space-4);
+	box-sizing: border-box;
+}
+.history-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-1);
+	padding: var(--aih-space-3);
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-md);
+	background: var(--aih-surface-raised);
+}
+.history-card__meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--aih-space-2);
+}
+.history-card__title {
+	min-height: 28px;
+	padding: var(--aih-space-1) 0;
+	border: 0;
+	background: transparent;
+	color: var(--aih-fg);
+	font: inherit;
+	font-size: var(--aih-text-body);
+	line-height: var(--aih-line-height);
+	text-align: left;
+	cursor: pointer;
+	overflow-wrap: anywhere;
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.history-card__title:hover {
+	text-decoration: underline;
+}
+.history-card__title:focus-visible {
+	outline: var(--aih-focus-ring);
+	outline-offset: var(--aih-focus-offset);
+}

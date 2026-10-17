@@ -1,121 +1,88 @@
+import { describeInvestigation, type InvestigationRecord } from "@shared/aihydro/investigationSummary"
 import { StringRequest } from "@shared/proto/cline/common"
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import { memo, useState } from "react"
+import { memo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { Badge, Button, Disclosure, KeyValue, Text } from "@/design"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { formatLargeNumber } from "@/utils/format"
+import { stripMarkdown } from "@/utils/stripMarkdown"
+import "./history.css"
 
 type HistoryPreviewProps = {
 	showHistoryView: () => void
 }
 
+/**
+ * Task to investigation mapping. The host does not yet tell the webview which investigation (session) a past task
+ * belonged to, so every card honestly reads "No investigation record" until it does. The presenter and card are
+ * ready for it: pass a record and the science line shows the basin/gauge and claim counts by state.
+ */
+const investigationFor = (_taskId: string): InvestigationRecord | undefined => undefined
+
+const formatDate = (timestamp: number) =>
+	new Date(timestamp)
+		.toLocaleString("en-US", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })
+		.replace(", ", " ")
+		.replace(" at", ",")
+
 const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 	const { taskHistory } = useExtensionState()
-	const [isExpanded, setIsExpanded] = useState(true)
+	const items = taskHistory.filter((item) => item.ts && item.task).slice(0, 3)
 
-	const handleHistorySelect = (id: string) => {
+	const open = (id: string) => {
 		TaskServiceClient.showTaskWithId(StringRequest.create({ value: id })).catch((error) =>
 			console.error("Error showing task:", error),
 		)
 	}
 
-	const toggleExpanded = () => {
-		setIsExpanded(!isExpanded)
-	}
-
-	const formatDate = (timestamp: number) => {
-		const date = new Date(timestamp)
-		return date
-			?.toLocaleString("en-US", {
-				month: "long",
-				day: "numeric",
-				hour: "numeric",
-				minute: "2-digit",
-				hour12: true,
-			})
-			.replace(", ", " ")
-			.replace(" at", ",")
-			.toUpperCase()
-	}
-
 	return (
-		<div className="shrink-0">
-			<div className="cursor-pointer select-none history-preview-toggle" onClick={toggleExpanded}>
-				{" "}
-				<span className={`codicon codicon-chevron-${isExpanded ? "down" : "right"} mr-1 scale-90 inline-block`} />
-				<span className="codicon codicon-comment-discussion mr-1 scale-90 inline-block" />
-				<span className="font-medium text-[0.85em] uppercase">Recent Tasks</span>
-			</div>
-
-			{isExpanded && (
-				<div className="px-5">
-					{taskHistory.filter((item) => item.ts && item.task).length > 0 ? (
-						<>
-							{taskHistory
-								.filter((item) => item.ts && item.task)
-								.slice(0, 3)
-								.map((item) => (
-									<div
-										className="modern-card cursor-pointer relative overflow-hidden mb-2.5"
-										key={item.id}
-										onClick={() => handleHistorySelect(item.id)}>
-										<div className="p-3">
-											<div className="flex items-center gap-2 mb-2">
-												<span className="timestamp-text">{formatDate(item.ts)}</span>
-												{item.isFavorited && (
-													<span className="chip chip-ocean ml-auto">
-														<span className="codicon codicon-star-full text-[10px]" />
-														Favorited
-													</span>
-												)}
-											</div>{" "}
-											<div className="history-preview-task-text" id={`history-preview-task-${item.id}`}>
-												<span className="ph-no-capture">{item.task}</span>
-											</div>
-											<div className="flex flex-wrap items-center gap-2">
-												<span className="modern-badge">
-													<span className="codicon codicon-arrow-up text-[10px]" />
-													{formatLargeNumber(item.tokensIn || 0)}
-												</span>
-												<span className="modern-badge">
-													<span className="codicon codicon-arrow-down text-[10px]" />
-													{formatLargeNumber(item.tokensOut || 0)}
-												</span>
-												{!!item.cacheWrites && (
-													<span className="modern-badge">
-														<span className="codicon codicon-database text-[10px]" />+
-														{formatLargeNumber(item.cacheWrites || 0)}
-													</span>
-												)}
-												{!!item.totalCost && (
-													<span className="chip chip-teal">
-														<span className="codicon codicon-credit-card text-[10px]" />$
-														{item.totalCost?.toFixed(4)}
-													</span>
-												)}
-											</div>
-										</div>
-									</div>
-								))}
-							<div className="flex items-center justify-center mt-2">
-								<VSCodeButton
-									appearance="icon"
-									aria-label="View all history"
-									className="opacity-90 hover:opacity-100 transition-opacity"
-									onClick={() => showHistoryView()}>
-									<div className="history-preview-view-all">View all history</div>
-								</VSCodeButton>
+		<section aria-labelledby="recent-tasks-title" className="history-preview">
+			<Text as="h2" id="recent-tasks-title" muted variant="label">
+				Recent tasks
+			</Text>
+			{items.length === 0 ? (
+				<Text as="p" muted variant="label">
+					No recent tasks
+				</Text>
+			) : (
+				<>
+					{items.map((item) => (
+						<article className="history-card" key={item.id}>
+							<div className="history-card__meta">
+								<Text muted variant="caption">
+									{formatDate(item.ts)}
+								</Text>
+								{item.isFavorited && <Badge icon="star-full">Favorited</Badge>}
 							</div>
-						</>
-					) : (
-						<div className="modern-card history-preview-empty">
-							<span className="codicon codicon-history mr-1.5" />
-							No recent tasks
-						</div>
-					)}
-				</div>
+							<button className="history-card__title ph-no-capture" onClick={() => open(item.id)} type="button">
+								{stripMarkdown(item.task)}
+							</button>
+							<Text as="p" muted variant="caption">
+								{describeInvestigation(investigationFor(item.id))}
+							</Text>
+							<Disclosure label="Usage">
+								<KeyValue
+									items={[
+										{ label: "Tokens in", value: formatLargeNumber(item.tokensIn || 0) },
+										{ label: "Tokens out", value: formatLargeNumber(item.tokensOut || 0) },
+										{
+											label: "Cache writes",
+											value: item.cacheWrites ? formatLargeNumber(item.cacheWrites) : undefined,
+										},
+										{ label: "Cost", value: item.totalCost ? `$${item.totalCost.toFixed(4)}` : undefined },
+									]}
+								/>
+							</Disclosure>
+						</article>
+					))}
+					<div>
+						<Button onClick={() => showHistoryView()} variant="ghost">
+							View all history
+						</Button>
+					</div>
+				</>
 			)}
-		</div>
+		</section>
 	)
 }
 

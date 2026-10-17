@@ -6,9 +6,13 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { Virtuoso } from "react-virtuoso"
 import DangerButton from "@/components/common/DangerButton"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { Button, Disclosure, IconButton, KeyValue, Text } from "@/design"
+import { describeInvestigation } from "@shared/aihydro/investigationSummary"
+import { stripMarkdown } from "@/utils/stripMarkdown"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import { formatLargeNumber, formatSize } from "@/utils/format"
+import "./history.css"
 
 type HistoryViewProps = {
 	onDone: () => void
@@ -28,20 +32,11 @@ interface CustomFilterRadioProps {
 
 const CustomFilterRadio = ({ checked, onChange, icon, label }: CustomFilterRadioProps) => {
 	return (
-		<div
-			className="flex items-center cursor-pointer py-[0.3em] px-0 mr-[10px] text-[var(--vscode-font-size)] select-none"
-			onClick={onChange}>
-			<div
-				className={`w-[14px] h-[14px] rounded-full border border-[var(--vscode-checkbox-border)] relative flex justify-center items-center mr-[6px] ${
-					checked ? "bg-[var(--vscode-checkbox-background)]" : "bg-transparent"
-				}`}>
-				{checked && <div className="w-[6px] h-[6px] rounded-full bg-[var(--vscode-checkbox-foreground)]" />}
-			</div>
-			<span className="flex items-center gap-[3px]">
-				<div className={`codicon codicon-${icon} text-[var(--vscode-button-background)] text-base`} />
-				{label}
-			</span>
-		</div>
+		<button aria-checked={checked} className="aih-btn aih-btn--ghost" onClick={onChange} role="checkbox" type="button">
+			<span aria-hidden="true" className={`codicon codicon-${checked ? "check" : "blank"}`} />
+			<span aria-hidden="true" className={`codicon codicon-${icon}`} />
+			{label}
+		</button>
 	)
 }
 
@@ -73,7 +68,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 					currentWorkspaceOnly: showCurrentWorkspaceOnly,
 				}),
 			)
-			setTasks(response.tasks || [])
+			setTasks((response.tasks || []).map((t) => ({ ...t, task: stripMarkdown(t.task ?? "") })))
 		} catch (error) {
 			console.error("Error loading task history:", error)
 		}
@@ -283,15 +278,6 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 					.history-item:hover {
 						background-color: var(--vscode-list-hoverBackground);
 					}
-					.delete-button, .export-button {
-						opacity: 0;
-						pointer-events: none;
-					}
-					.history-item:hover .delete-button,
-					.history-item:hover .export-button {
-						opacity: 1;
-						pointer-events: auto;
-					}
 					.history-item-highlight {
 						background-color: var(--vscode-editor-findMatchHighlightBackground);
 						color: inherit;
@@ -307,7 +293,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 						}}>
 						History
 					</h3>
-					<VSCodeButton onClick={() => onDone()}>Done</VSCodeButton>
+					<Button onClick={() => onDone()}>Done</Button>
 				</div>
 				<div className="history-search-area">
 					<div className="history-search-row">
@@ -371,106 +357,79 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 					<Virtuoso
 						className="flex-grow overflow-y-scroll"
 						data={taskHistorySearchResults}
-						itemContent={(_index, item) => (
-							<div className="history-item modern-card mx-3 my-2 cursor-pointer flex" key={item.id}>
-								<VSCodeCheckbox
-									checked={selectedItems.includes(item.id)}
-									className="pl-3 pr-1"
-									onClick={(e) => {
-										const checked = (e.target as HTMLInputElement).checked
-										handleHistorySelect(item.id, checked)
-										e.stopPropagation()
-									}}
-								/>
-								<div className="history-item-content" onClick={() => handleShowTaskWithId(item.id)}>
-									<div className="history-item-header">
-										<span className="timestamp-text">{formatDate(item.ts)}</span>
-										<div className="flex gap-1">
-											{/* only show delete button if task not favorited */}
-											{!(pendingFavoriteToggles[item.id] ?? item.isFavorited) && (
-												<VSCodeButton
-													appearance="icon"
-													aria-label="Delete"
-													className="delete-button p-0"
-													onClick={(e) => {
-														e.stopPropagation()
-														handleDeleteHistoryItem(item.id)
-													}}>
-													<div className="flex items-center gap-[3px] text-[11px]">
-														<span className="codicon codicon-trash"></span>
+						itemContent={(_index, item) => {
+							const favorited = pendingFavoriteToggles[item.id] ?? item.isFavorited
+							return (
+								<article className="history-item modern-card mx-3 my-2 flex" key={item.id}>
+									<VSCodeCheckbox
+										aria-label={`Select task: ${item.task.replace(/<[^>]*>/g, "")}`}
+										checked={selectedItems.includes(item.id)}
+										className="pl-3 pr-1"
+										onClick={(e) => {
+											const checked = (e.target as HTMLInputElement).checked
+											handleHistorySelect(item.id, checked)
+											e.stopPropagation()
+										}}
+									/>
+									<div className="history-item-content">
+										<div className="history-item-header">
+											<Text muted variant="caption">
+												{formatDate(item.ts)}
+											</Text>
+											<div className="flex gap-1">
+												{/* only show delete button if task not favorited */}
+												{!favorited && (
+													<Button
+														aria-label={`Delete task (${formatSize(item.size)})`}
+														icon="trash"
+														onClick={() => handleDeleteHistoryItem(item.id)}
+														variant="ghost">
 														{formatSize(item.size)}
-													</div>
-												</VSCodeButton>
-											)}
-											<VSCodeButton
-												appearance="icon"
-												aria-label={item.isFavorited ? "Remove from favorites" : "Add to favorites"}
-												className="p-0"
-												onClick={(e) => {
-													e.stopPropagation()
-													toggleFavorite(item.id, item.isFavorited || false)
-												}}>
-												<span
-													className={`codicon ${
-														pendingFavoriteToggles[item.id] !== undefined
-															? pendingFavoriteToggles[item.id]
-																? "codicon-star-full"
-																: "codicon-star-empty"
-															: item.isFavorited
-																? "codicon-star-full"
-																: "codicon-star-empty"
-													}`}
-													style={{
-														color:
-															(pendingFavoriteToggles[item.id] ?? item.isFavorited)
-																? "var(--vscode-button-background)"
-																: "inherit",
-														opacity: (pendingFavoriteToggles[item.id] ?? item.isFavorited) ? 1 : 0.7,
-													}}
+													</Button>
+												)}
+												<IconButton
+													active={Boolean(favorited)}
+													icon={favorited ? "star-full" : "star-empty"}
+													label={favorited ? "Remove from favorites" : "Add to favorites"}
+													onClick={() => toggleFavorite(item.id, item.isFavorited || false)}
 												/>
-											</VSCodeButton>
-										</div>
-									</div>
-									<div className="history-item-body">
-										<div className="history-item-text">
-											<span
-												className="ph-no-capture"
-												dangerouslySetInnerHTML={{
-													__html: item.task,
-												}}
-											/>
-										</div>
-									</div>{" "}
-									<div className="history-item-meta">
-										<div className="history-item-meta-row">
-											<div className="history-item-badges">
-												<span className="modern-badge">
-													<i className="codicon codicon-arrow-up" style={{ fontSize: "10px" }} />
-													{formatLargeNumber(item.tokensIn || 0)}
-												</span>
-												<span className="modern-badge">
-													<i className="codicon codicon-arrow-down" style={{ fontSize: "10px" }} />
-													{formatLargeNumber(item.tokensOut || 0)}
-												</span>
-												{!!(item.cacheWrites || item.cacheReads) && (
-													<span className="modern-badge chip-teal">
-														<i className="codicon codicon-database" style={{ fontSize: "10px" }} />
-														{formatLargeNumber((item.cacheWrites || 0) + (item.cacheReads || 0))}
-													</span>
-												)}
-												{!!item.totalCost && (
-													<span className="modern-badge chip-emerald">
-														<i className="codicon codicon-credit-card" style={{ fontSize: "10px" }} />
-														${item.totalCost?.toFixed(4)}
-													</span>
-												)}
 											</div>
-											{!item.totalCost && <ExportButton itemId={item.id} />}
 										</div>
+										<button
+											className="history-card__title"
+											onClick={() => handleShowTaskWithId(item.id)}
+											type="button">
+											<span className="ph-no-capture" dangerouslySetInnerHTML={{ __html: item.task }} />
+										</button>
+										<Text as="p" muted variant="caption">
+											{describeInvestigation(undefined)}
+										</Text>
+										<Disclosure label="Usage">
+											<KeyValue
+												items={[
+													{ label: "Tokens in", value: formatLargeNumber(item.tokensIn || 0) },
+													{ label: "Tokens out", value: formatLargeNumber(item.tokensOut || 0) },
+													{
+														label: "Cache",
+														value:
+															item.cacheWrites || item.cacheReads
+																? formatLargeNumber(
+																		(item.cacheWrites || 0) + (item.cacheReads || 0),
+																	)
+																: undefined,
+													},
+													{
+														label: "Cost",
+														value: item.totalCost ? `$${item.totalCost.toFixed(4)}` : undefined,
+													},
+												]}
+											/>
+											{!item.totalCost && <ExportButton itemId={item.id} />}
+										</Disclosure>
 									</div>
-								</div>
-							</div>
-						)}
+								</article>
+							)
+						}}
 					/>
 				</div>
 				<div className="history-footer">
@@ -506,18 +465,16 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 }
 
 const ExportButton = ({ itemId }: { itemId: string }) => (
-	<VSCodeButton
-		appearance="icon"
-		aria-label="Export"
-		className="export-button"
-		onClick={(e) => {
-			e.stopPropagation()
+	<Button
+		icon="export"
+		onClick={() => {
 			TaskServiceClient.exportTaskWithId(StringRequest.create({ value: itemId })).catch((err) =>
 				console.error("Failed to export task:", err),
 			)
-		}}>
-		<div className="text-[11px] font-medium">EXPORT</div>
-	</VSCodeButton>
+		}}
+		variant="ghost">
+		Export task
+	</Button>
 )
 
 // https://gist.github.com/evenfrost/1ba123656ded32fb7a0cd4651efd4db0
