@@ -387,52 +387,52 @@
 				},
 				{
 					"command": "aihydro.mcpButtonClicked",
-					"group": "navigation@2",
+					"group": "navigation@9",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
 					"command": "aihydro.mapButtonClicked",
-					"group": "navigation@3",
+					"group": "navigation@2",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
 					"command": "aihydro.htmlPreviewButtonClicked",
-					"group": "navigation@3.5",
+					"group": "navigation@3",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
 					"command": "aihydro.historyButtonClicked",
-					"group": "navigation@4",
+					"group": "navigation@7",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
 					"command": "aihydro.connectorsButtonClicked",
-					"group": "navigation@5",
+					"group": "navigation@10",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
 					"command": "aihydro.skillsButtonClicked",
-					"group": "navigation@6",
+					"group": "navigation@8",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
 					"command": "aihydro.experimentTableButtonClicked",
-					"group": "navigation@6.1",
+					"group": "navigation@5",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
 					"command": "aihydro.sessionReplayButtonClicked",
-					"group": "navigation@6.2",
+					"group": "navigation@6",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
 					"command": "aihydro.evidenceBoardButtonClicked",
-					"group": "navigation@6.3",
+					"group": "navigation@4",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
 					"command": "aihydro.settingsButtonClicked",
-					"group": "navigation@7",
+					"group": "navigation@11",
 					"when": "view == aihydro.SidebarProvider"
 				}
 			],
