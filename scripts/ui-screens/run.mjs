@@ -65,9 +65,9 @@ const FREEZE_CSS =
 
 // Layout can still be moving under load (virtualised lists scrolling to the end, late fonts). Take
 // screenshots until two consecutive ones are byte-identical (max 10) and return the last one.
-async function settle(page) {
+async function settle(page, tries = 10) {
 	let previous = null
-	for (let i = 0; i < 10; i++) {
+	for (let i = 0; i < tries; i++) {
 		const shot = await page.screenshot({ timeout: 90000 })
 		if (previous && Buffer.compare(previous, shot) === 0) return shot
 		previous = shot
@@ -255,7 +255,7 @@ async function worker() {
 					await page.addStyleTag({ content: FREEZE_CSS })
 					await page.waitForTimeout(150)
 				}
-				await settle(page)
+				await settle(page, screen.hasMapCanvas ? 2 : 10)
 				trace("settled1")
 				record.checker = await page.evaluate(pageChecker)
 				trace("checked")
@@ -275,7 +275,7 @@ async function worker() {
 						)
 					: []
 				record.mask = mask
-				writeFileSync(join(outDir, "png", file), await settle(page))
+				writeFileSync(join(outDir, "png", file), await settle(page, screen.hasMapCanvas ? 2 : 10))
 			} catch (e) {
 				record.ok = false
 				errors.push(`HARNESS: ${String(e.message ?? e).split("\n")[0]}`)
