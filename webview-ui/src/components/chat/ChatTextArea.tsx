@@ -1,3 +1,4 @@
+import { Badge } from "@/design"
 import { cn } from "@heroui/react"
 import { PulsingBorder } from "@paper-design/shaders-react"
 import { mentionRegex, mentionRegexGlobal } from "@shared/context-mentions"
@@ -155,7 +156,7 @@ const ButtonContainer = styled.div`
 	display: flex;
 	align-items: center;
 	gap: 3px;
-	font-size: 10px;
+	font-size: 11px;
 	white-space: nowrap;
 	min-width: 0;
 	width: 100%;
@@ -216,7 +217,7 @@ const ModelButtonWrapper = styled.div`
 
 const ModelDisplayButton = styled.a<{ isActive?: boolean; disabled?: boolean }>`
 	padding: 0px 0px;
-	height: 20px;
+	height: 24px;
 	width: 100%;
 	min-width: 0;
 	cursor: ${(props) => (props.disabled ? "not-allowed" : "pointer")};
@@ -224,7 +225,7 @@ const ModelDisplayButton = styled.a<{ isActive?: boolean; disabled?: boolean }>`
 	color: ${(props) => (props.isActive ? "var(--vscode-foreground)" : "var(--vscode-descriptionForeground)")};
 	display: flex;
 	align-items: center;
-	font-size: 10px;
+	font-size: 11px;
 	outline: none;
 	user-select: none;
 	opacity: ${(props) => (props.disabled ? 0.5 : 1)};
@@ -1612,7 +1613,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						value={inputValue}
 					/>
 					{!inputValue && selectedImages.length === 0 && selectedFiles.length === 0 && (
-						<div className="text-[10px] absolute bottom-5 left-5 right-16 text-[var(--vscode-input-placeholderForeground)]/50 whitespace-nowrap overflow-hidden text-ellipsis pointer-events-none z-1">
+						<div className="text-[11px] absolute bottom-5 left-5 right-16 text-[var(--vscode-input-placeholderForeground)]/50 whitespace-nowrap overflow-hidden text-ellipsis pointer-events-none z-1">
 							Type @ for context, / for slash commands & workflows, hold shift to drag in files/images
 						</div>
 					)}
@@ -1699,9 +1700,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				</div>
 				<div className="flex justify-between items-center -mt-1 px-3 pb-2">
 					{/* Always render both components, but control visibility with CSS */}
-					<div className="relative flex-1 min-w-0 h-5">
+					<div className="relative flex-1 min-w-0 h-6">
 						{/* ButtonGroup - always in DOM but visibility controlled */}
-						<ButtonGroup className="absolute top-0 left-0 right-0 ease-in-out w-full h-5 z-10 flex items-center">
+						<ButtonGroup className="absolute top-0 left-0 right-0 ease-in-out w-full h-6 z-10 flex items-center">
 							<Tooltip style={{ left: 0 }} tipText="Add Context">
 								<VSCodeButton
 									appearance="icon"
@@ -1740,10 +1741,13 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 										disabled={false}
 										isActive={showModelSelector}
 										onClick={handleModelButtonClick}
+										aria-label={`Model as configured: ${modelDisplayName}. Select model or API provider`}
 										role="button"
 										tabIndex={0}
-										title="Select Model / API Provider">
-										<ModelButtonContent>{modelDisplayName}</ModelButtonContent>
+										title="Model as configured (the provider-returned model id is not recorded yet). Select model / API provider">
+										<Badge icon="hubot" title="Model as configured">
+											<ModelButtonContent>{modelDisplayName}</ModelButtonContent>
+										</Badge>
 									</ModelDisplayButton>
 								</ModelButtonWrapper>
 								{showModelSelector && (

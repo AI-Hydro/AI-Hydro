@@ -139,9 +139,9 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 				<div className="overflow-y-auto p-3 flex-1 min-h-0 overscroll-contain">
 					<div className="flex justify-between items-center mb-3">
 						<HeroTooltip
-							content="Auto-approve allows AI-Hydro to perform the following actions without asking for permission. Please use with caution and only enable if you understand the risks."
+							content="Tool auto-run lets AI-Hydro perform the following actions without asking each time. It never covers claim approval, which is signed outside the agent. Use with caution and only enable what you understand."
 							placement="top">
-							<div className="text-base font-semibold mb-1">Auto-approve Settings</div>
+							<div className="text-base font-semibold mb-1">Tool auto-run settings</div>
 						</HeroTooltip>
 						<VSCodeButton appearance="icon" onClick={() => setIsVisible(false)}>
 							<span className="codicon codicon-close text-[10px]"></span>

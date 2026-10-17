@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react"
 import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { IconButton, Text } from "@/design"
 import { useAutoApproveActions } from "@/hooks/useAutoApproveActions"
 import { getAsVar, VSC_TITLEBAR_INACTIVE_FOREGROUND } from "@/utils/vscStyles"
 import AutoApproveMenuItem from "./AutoApproveMenuItem"
@@ -59,7 +60,7 @@ const AutoApproveBar = ({ style }: AutoApproveBarProps) => {
 			...favorites.map((favId) => renderFavoritedItem(favId)),
 			minusFavorites.length > 0 ? (
 				<span className="chip chip-emerald" key="separator">
-					<span className="codicon codicon-check" style={{ fontSize: "9px" }} />
+					<span aria-hidden="true" className="codicon codicon-check" />
 				</span>
 			) : null,
 			...minusFavorites.map((action) => (
@@ -93,22 +94,24 @@ const AutoApproveBar = ({ style }: AutoApproveBarProps) => {
 						scrollbarWidth: "none",
 						WebkitOverflowScrolling: "touch",
 					}}>
-					<span className="chip text-[10px] font-medium uppercase tracking-wider">Auto-approve</span>
+					<Text strong variant="label">
+						Tool auto-run
+					</Text>
 					<div className="flex flex-nowrap items-center gap-1.5">{getQuickAccessItems()}</div>
 				</div>
-				<button
-					className="modern-badge h-[22px] px-1.5 smooth-transition hover:opacity-80 cursor-pointer border-0"
+				<IconButton
+					aria-expanded={isModalVisible}
+					icon={isModalVisible ? "chevron-down" : "chevron-up"}
+					label={isModalVisible ? "Hide tool auto-run options" : "Show tool auto-run options"}
 					onClick={(e) => {
 						e.stopPropagation()
 						setIsModalVisible((prev) => !prev)
-					}}>
-					{isModalVisible ? (
-						<span className="codicon codicon-chevron-down" style={{ fontSize: "11px" }} />
-					) : (
-						<span className="codicon codicon-chevron-up" style={{ fontSize: "11px" }} />
-					)}
-				</button>
+					}}
+				/>
 			</div>
+			<Text as="p" className="pb-[6px]" muted variant="caption">
+				Never covers claim approval. Claim approval is signed outside the agent (aihydro-approve).
+			</Text>
 
 			<AutoApproveModal
 				ACTION_METADATA={ACTION_METADATA}

@@ -1,0 +1,17 @@
+/*
+ * Minimum pointer target for the VS Code webview-ui-toolkit controls (WCAG 2.5.8, 24x24 CSS px). The toolkit
+ * draws 16-18px controls; padding the label/control part grows the hit area without changing the glyph.
+ */
+vscode-button::part(control) {
+	min-height: var(--aih-target-min, 24px);
+	min-width: var(--aih-target-min, 24px);
+	box-sizing: border-box;
+}
+vscode-button {
+	min-height: var(--aih-target-min, 24px);
+	min-width: var(--aih-target-min, 24px);
+}
+vscode-checkbox::part(label),
+vscode-radio::part(label) {
+	padding-block: 4px;
+}
