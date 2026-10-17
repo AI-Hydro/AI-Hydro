@@ -1,3 +1,4 @@
+import { TerminalHangStage, telemetryService } from "@services/telemetry"
 import { arePathsEqual } from "@utils/path"
 import { getShellForProfile } from "@utils/shell"
 import pWaitFor from "p-wait-for"
@@ -70,6 +71,15 @@ for terminal command execution.
 Interestingly, some environments like Cursor enable these APIs even without the latest VSCode engine.
 This approach allows us to leverage advanced features when available while ensuring broad compatibility.
 */
+// A terminal can be left marked busy forever if its command's completion event
+// never fires — a known VS Code shell-integration failure mode after long-running
+// or detached commands (or a manual Ctrl-C). Such a terminal would otherwise be
+// reported as an "Actively Running Terminal" for the rest of the session and never
+// reused. If a busy terminal is no longer hot and has produced no output for this
+// long, we treat it as hung and reconcile it (see reconcileBusyTerminals). The
+// window is generous so a genuinely long-running-but-quiet process is not reaped.
+const STALE_BUSY_TIMEOUT_MS = 5 * 60_000
+
 declare module "vscode" {
 	// https://github.com/microsoft/vscode/blob/f0417069c62e20f3667506f4b7e53ca0004b4e3e/src/vscode-dts/vscode.d.ts#L7442
 	interface Terminal {
@@ -161,9 +171,17 @@ export class TerminalManager {
 		console.log(`[TerminalManager] Terminal ${terminalInfo.id} busy state before: ${terminalInfo.busy}`)
 
 		terminalInfo.busy = true
+		terminalInfo.lastActive = Date.now()
 		terminalInfo.lastCommand = command
 		const process = new TerminalProcess()
 		this.processes.set(terminalInfo.id, process)
+
+		// Keep lastActive fresh while the command is genuinely producing output, so
+		// reconcileBusyTerminals() can distinguish a live command from a hung one
+		// whose completion event never fired.
+		process.on("line", () => {
+			terminalInfo.lastActive = Date.now()
+		})
 
 		process.once("completed", () => {
 			console.log(`[TerminalManager] Terminal ${terminalInfo.id} completed, setting busy to false`)
@@ -270,36 +288,71 @@ export class TerminalManager {
 				// Navigate back to the desired directory
 				const cdProcess = this.runCommand(availableTerminal, `cd "${cwd}"`)
 
-				// Wait for the cd command to complete before proceeding
-				await cdProcess
+				// A cd is effectively instantaneous, so completion detection should be too. If the
+				// terminal's shell integration has gone stale (a known VS Code failure mode after
+				// long-running or detached commands), the completion event never fires and this
+				// await would otherwise block forever — freezing the entire agent loop, since no
+				// outer timeout covers terminal acquisition (the per-command timeout only guards
+				// execution AFTER a terminal has been acquired). Bound it, and on timeout quarantine
+				// the suspect terminal and fall through to creating a fresh one.
+				const CD_COMPLETION_TIMEOUT_MS = 5_000
+				let cdTimedOut = false
+				await Promise.race([
+					cdProcess,
+					new Promise<void>((resolve) =>
+						setTimeout(() => {
+							cdTimedOut = true
+							resolve()
+						}, CD_COMPLETION_TIMEOUT_MS),
+					),
+				])
 
-				// Add a small delay to ensure terminal is ready after cd
-				await new Promise((resolve) => setTimeout(resolve, 100))
-
-				// Either resolve immediately if CWD already updated or wait for event/timeout
-				if (this.isCwdMatchingExpected(availableTerminal)) {
-					if (availableTerminal.cwdResolved) {
-						availableTerminal.cwdResolved.resolve()
+				if (cdTimedOut) {
+					console.warn(
+						`[TerminalManager] cd completion not detected within ${CD_COMPLETION_TIMEOUT_MS}ms on terminal ${availableTerminal.id} — shell integration likely stale. Quarantining terminal and creating a fresh one.`,
+					)
+					telemetryService.captureTerminalHang(TerminalHangStage.WAITING_FOR_COMPLETION)
+					// Detach our listener from the stale process and quarantine the terminal:
+					// its shell state is unknown, so it must never be reused.
+					try {
+						cdProcess.continue()
+					} catch {
+						// best-effort detach
 					}
 					availableTerminal.pendingCwdChange = undefined
 					availableTerminal.cwdResolved = undefined
+					TerminalRegistry.removeTerminal(availableTerminal.id)
+					this.terminalIds.delete(availableTerminal.id)
+					this.processes.delete(availableTerminal.id)
 				} else {
-					try {
-						// Wait with a timeout for state change event to resolve
-						await Promise.race([
-							cwdPromise,
-							new Promise<void>((_, reject) =>
-								setTimeout(() => reject(new Error(`CWD timeout: Failed to update to ${cwd}`)), 1000),
-							),
-						])
-					} catch (_err) {
-						// Clear pending state on timeout
+					// Add a small delay to ensure terminal is ready after cd
+					await new Promise((resolve) => setTimeout(resolve, 100))
+
+					// Either resolve immediately if CWD already updated or wait for event/timeout
+					if (this.isCwdMatchingExpected(availableTerminal)) {
+						if (availableTerminal.cwdResolved) {
+							availableTerminal.cwdResolved.resolve()
+						}
 						availableTerminal.pendingCwdChange = undefined
 						availableTerminal.cwdResolved = undefined
+					} else {
+						try {
+							// Wait with a timeout for state change event to resolve
+							await Promise.race([
+								cwdPromise,
+								new Promise<void>((_, reject) =>
+									setTimeout(() => reject(new Error(`CWD timeout: Failed to update to ${cwd}`)), 1000),
+								),
+							])
+						} catch (_err) {
+							// Clear pending state on timeout
+							availableTerminal.pendingCwdChange = undefined
+							availableTerminal.cwdResolved = undefined
+						}
 					}
+					this.terminalIds.add(availableTerminal.id)
+					return availableTerminal
 				}
-				this.terminalIds.add(availableTerminal.id)
-				return availableTerminal
 			}
 		}
 
@@ -309,7 +362,47 @@ export class TerminalManager {
 		return newTerminalInfo
 	}
 
+	/**
+	 * Reconcile busy flags against real process state. A terminal whose completion
+	 * event never fired (stale shell integration after a long/detached command, or a
+	 * manual Ctrl-C) stays marked busy indefinitely — it would then be reported as an
+	 * "Actively Running Terminal" for the rest of the session and never be reused. If a
+	 * busy terminal is no longer hot and has produced no output for STALE_BUSY_TIMEOUT_MS,
+	 * we treat it as hung and remove it from the pool: its shell state is unknown, so —
+	 * like a quarantined terminal — it must never be reused. The threshold is generous
+	 * so a genuinely long-running-but-quiet process is left alone.
+	 */
+	private reconcileBusyTerminals(): void {
+		const now = Date.now()
+		for (const id of Array.from(this.terminalIds)) {
+			const info = TerminalRegistry.getTerminal(id)
+			if (!info || !info.busy) {
+				continue
+			}
+			if (this.isProcessHot(id)) {
+				continue
+			}
+			if (now - info.lastActive < STALE_BUSY_TIMEOUT_MS) {
+				continue
+			}
+			console.warn(
+				`[TerminalManager] Terminal ${id} marked busy but idle for ${Math.round(
+					(now - info.lastActive) / 1000,
+				)}s and not hot — reconciling as hung; removing from pool so it is neither reported as running nor reused.`,
+			)
+			try {
+				this.processes.get(id)?.continue()
+			} catch {
+				// best-effort: resolve the dangling process promise
+			}
+			TerminalRegistry.removeTerminal(id)
+			this.terminalIds.delete(id)
+			this.processes.delete(id)
+		}
+	}
+
 	getTerminals(busy: boolean): { id: number; lastCommand: string }[] {
+		this.reconcileBusyTerminals()
 		return Array.from(this.terminalIds)
 			.map((id) => TerminalRegistry.getTerminal(id))
 			.filter((t): t is TerminalInfo => t !== undefined && t.busy === busy)

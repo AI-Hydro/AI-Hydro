@@ -11,6 +11,7 @@ interface MapContextType {
 	reconnect: () => void
 	layers: MapLayer[]
 	activeRoi: ActiveRoi | undefined
+	boundClaimId: string | undefined
 	addLayer: (layer: MapLayer) => void
 	removeLayer: (layerId: string) => void
 	clearLayers: () => void
@@ -38,6 +39,7 @@ function protoToActiveRoi(roi?: MapRoi): ActiveRoi | undefined {
 export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [layers, setLayers] = useState<MapLayer[]>([])
 	const [activeRoi, setActiveRoi] = useState<ActiveRoi | undefined>()
+	const [boundClaimId, setBoundClaimId] = useState<string | undefined>()
 	const [connectionStatus, setConnectionStatus] = useState<"loading" | "connected" | "stale">("loading")
 	const [connectionError, setConnectionError] = useState<string>()
 	const [attempt, setAttempt] = useState(0)
@@ -139,6 +141,7 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 					if (!active) return
 					roiGeneration.current += 1
 					setActiveRoi(protoToActiveRoi(session.activeRoi))
+					setBoundClaimId(session.claimId || undefined)
 					sessionReady = true
 					ready()
 				},
@@ -198,6 +201,7 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		const session = await MapServiceClient.getMapSession(EmptyRequest.create({}))
 		if (revision === roiGeneration.current) {
 			setActiveRoi(protoToActiveRoi(session.activeRoi))
+			setBoundClaimId(session.claimId || undefined)
 		}
 	}, [])
 
@@ -236,6 +240,7 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				reconnect,
 				layers,
 				activeRoi,
+				boundClaimId,
 				addLayer,
 				removeLayer,
 				clearLayers,

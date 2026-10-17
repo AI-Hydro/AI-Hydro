@@ -68,7 +68,8 @@ import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay } from "@sha
 import { convertAiHydroMessageToProto } from "@shared/proto-conversions/aihydro-message"
 import { AiHydroDefaultTool } from "@shared/tools"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
-import { isLocalModel, isNextGenModelFamily } from "@utils/model-utils"
+import { getModelCapabilityTier, recommendedMaxMistakes, supportsAutoCondense } from "@utils/model-capabilities"
+import { isLocalModel } from "@utils/model-utils"
 import { arePathsEqual, getDesktopDir } from "@utils/path"
 import { filterExistingFiles } from "@utils/tabFiltering"
 import cloneDeep from "clone-deep"
@@ -166,6 +167,12 @@ export class Task {
 			terminate?: () => void
 		}
 		command: string
+	}
+	// The currently-running foreground command in vscodeTerminal mode, so the UI "stop"
+	// button can really interrupt it (send Ctrl+C + detach) instead of being a no-op.
+	private activeForegroundCommand?: {
+		command: string
+		interrupt: () => void
 	}
 
 	// Metadata tracking
@@ -1215,6 +1222,11 @@ export class Task {
 	async executeCommandTool(command: string, timeoutSeconds: number | undefined): Promise<[boolean, ToolResponse]> {
 		// For AI-Hydro CLI subagents: prepare a job (result dir, augmented prompt, flags).
 		const isSubagent = isSubagentCommand(command)
+		// CLI subagents legitimately run for minutes and manage their own job lifecycle,
+		// so the default command timeout must never apply to them.
+		if (isSubagent) {
+			timeoutSeconds = undefined
+		}
 		let subagentJob: SubagentJob | null = null
 		if (isSubagent) {
 			subagentJob = prepareSubagentCommand(command)
@@ -1284,6 +1296,21 @@ export class Task {
 
 		if (this.terminalExecutionMode === "backgroundExec") {
 			this.activeBackgroundCommand = { process: process as any, command }
+		} else {
+			// In vscodeTerminal mode there is no real process handle to kill, so the
+			// interrupt is "Ctrl+C to the terminal + detach our listener". Registering it
+			// here lets the UI stop button work in default mode instead of being a no-op.
+			this.activeForegroundCommand = {
+				command,
+				interrupt: () => {
+					try {
+						terminalInfo.terminal.sendText(String.fromCharCode(3), false)
+					} catch (error) {
+						Logger.error("Failed to interrupt terminal command on cancel", error)
+					}
+					process.continue()
+				},
+			}
 		}
 
 		const clearCommandState = async () => {
@@ -1293,6 +1320,7 @@ export class Task {
 				}
 				this.activeBackgroundCommand = undefined
 			}
+			this.activeForegroundCommand = undefined
 			this.controller.updateBackgroundCommandState(false, this.taskId)
 
 			// Mark the command message as completed
@@ -1364,6 +1392,19 @@ export class Task {
 					telemetryService.captureTerminalUserIntervention(TerminalUserInterventionAction.CANCELLED)
 					didCancelViaUi = true
 					userFeedback = undefined
+					// Real cancel: actually interrupt the running command. Previously this only
+					// stopped our output listener via process.continue(), leaving the command
+					// running in the terminal and forcing the user to kill the whole session.
+					if (this.terminalExecutionMode === "backgroundExec") {
+						this.activeBackgroundCommand?.process?.terminate?.()
+					} else {
+						try {
+							// Send Ctrl+C to the VS Code terminal to interrupt the foreground command.
+							terminalInfo.terminal.sendText(String.fromCharCode(3), false)
+						} catch (error) {
+							Logger.error("Failed to interrupt terminal command on cancel", error)
+						}
+					}
 				} else {
 					userFeedback = { text, images, files }
 				}
@@ -1607,8 +1648,26 @@ export class Task {
 	}
 
 	public async cancelBackgroundCommand(): Promise<boolean> {
+		// In default vscodeTerminal mode there is no killable process handle, so cancel
+		// means "Ctrl+C the terminal + detach our listener" via the registered interrupt.
 		if (this.terminalExecutionMode !== "backgroundExec") {
-			return false
+			if (!this.activeForegroundCommand) {
+				return false
+			}
+			const { interrupt } = this.activeForegroundCommand
+			this.activeForegroundCommand = undefined
+			this.controller.updateBackgroundCommandState(false, this.taskId)
+			try {
+				interrupt()
+			} catch (error) {
+				Logger.error("Failed to interrupt foreground command", error)
+			}
+			try {
+				await this.say("command_output", "Command cancelled.")
+			} catch (error) {
+				Logger.error("Failed to notify command cancellation", error)
+			}
+			return true
 		}
 		if (!this.activeBackgroundCommand) {
 			return false
@@ -2100,54 +2159,88 @@ export class Task {
 			} catch {}
 		}
 
-		if (this.taskState.consecutiveMistakeCount >= this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes")) {
-			const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
-			if (autoApprovalSettings.enabled && autoApprovalSettings.enableNotifications) {
-				showSystemNotification({
-					subtitle: "Error",
-					message: "AI-Hydro is having trouble. Would you like to continue the task?",
-				})
-			}
-			const { response, text, images, files } = await this.ask(
-				"mistake_limit_reached",
-				this.api.getModel().id.includes("claude")
-					? `This may indicate a failure in his thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. "Try breaking down the task into smaller steps").`
-					: "AI-Hydro uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 4 Sonnet for its advanced agentic coding capabilities.",
-			)
-			if (response === "messageResponse") {
-				// Display the user's message in the chat UI
-				await this.say("user_feedback", text, images, files)
-
-				// This userContent is for the *next* API call.
-				const feedbackUserContent: UserContent = []
-				feedbackUserContent.push({
-					type: "text",
-					text: formatResponse.tooManyMistakes(text),
-				})
-				if (images && images.length > 0) {
-					feedbackUserContent.push(...formatResponse.imageBlocks(images))
-				}
-
-				let fileContentString = ""
-				if (files && files.length > 0) {
-					fileContentString = await processFilesIntoText(files)
-				}
-
-				if (fileContentString) {
-					feedbackUserContent.push({
+		// Effective threshold is model-aware: weaker models get more slack to self-correct before
+		// we interrupt the run. We never go below the user's configured value.
+		const effectiveMaxMistakes = Math.max(
+			this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes"),
+			recommendedMaxMistakes(getModelCapabilityTier(this.getCurrentProviderInfo())),
+		)
+		if (this.taskState.consecutiveMistakeCount >= effectiveMaxMistakes) {
+			// First time we hit the limit on this task: try to recover automatically by injecting a
+			// model-agnostic decompose-task nudge and retrying once, instead of dead-ending the user.
+			if (!this.taskState.mistakeNudgeAlreadyInjected) {
+				this.taskState.mistakeNudgeAlreadyInjected = true
+				telemetryService.captureAutoDecomposeNudge(
+					this.ulid,
+					this.api.getModel().id,
+					this.taskState.recentToolErrors.length,
+				)
+				userContent = [
+					{
 						type: "text",
-						text: fileContentString,
+						text: formatResponse.decomposeTaskNudge(this.taskState.recentToolErrors),
+					},
+				]
+				// Reset mistake + loop-detection state so the retried step starts clean.
+				this.taskState.consecutiveMistakeCount = 0
+				this.taskState.autoRetryAttempts = 0
+				this.taskState.consecutiveThinkingOnlyTurns = 0
+				this.taskState.consecutiveIdenticalToolCount = 0
+				this.taskState.lastToolName = ""
+				this.taskState.lastToolParams = ""
+				this.taskState.recentToolErrors = []
+			} else {
+				const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+				if (autoApprovalSettings.enabled && autoApprovalSettings.enableNotifications) {
+					showSystemNotification({
+						subtitle: "Error",
+						message: "AI-Hydro is having trouble. Would you like to continue the task?",
 					})
 				}
+				const { response, text, images, files } = await this.ask(
+					"mistake_limit_reached",
+					`This may indicate a failure in the thought process or an inability to use a tool properly, which can be mitigated with some user guidance (e.g. "Try breaking down the task into smaller steps").`,
+				)
+				if (response === "messageResponse") {
+					// Display the user's message in the chat UI
+					await this.say("user_feedback", text, images, files)
 
-				userContent = feedbackUserContent
+					// This userContent is for the *next* API call.
+					const feedbackUserContent: UserContent = []
+					feedbackUserContent.push({
+						type: "text",
+						text: formatResponse.tooManyMistakes(text),
+					})
+					if (images && images.length > 0) {
+						feedbackUserContent.push(...formatResponse.imageBlocks(images))
+					}
+
+					let fileContentString = ""
+					if (files && files.length > 0) {
+						fileContentString = await processFilesIntoText(files)
+					}
+
+					if (fileContentString) {
+						feedbackUserContent.push({
+							type: "text",
+							text: fileContentString,
+						})
+					}
+
+					userContent = feedbackUserContent
+				}
+				this.taskState.consecutiveMistakeCount = 0
+				this.taskState.autoRetryAttempts = 0 // need to reset this if the user chooses to manually retry after the mistake limit is reached
+				this.taskState.consecutiveThinkingOnlyTurns = 0
+				// Reset loop detection state so it can re-arm if the model continues looping
+				this.taskState.consecutiveIdenticalToolCount = 0
+				this.taskState.lastToolName = ""
+				this.taskState.lastToolParams = ""
+				this.taskState.recentToolErrors = []
+				// Re-arm automatic recovery: after a human turn, a later unrelated stuck-spell
+				// should get its own one-shot decompose nudge before we ask again.
+				this.taskState.mistakeNudgeAlreadyInjected = false
 			}
-			this.taskState.consecutiveMistakeCount = 0
-			this.taskState.autoRetryAttempts = 0 // need to reset this if the user chooses to manually retry after the mistake limit is reached
-			// Reset loop detection state so it can re-arm if the model continues looping
-			this.taskState.consecutiveIdenticalToolCount = 0
-			this.taskState.lastToolName = ""
-			this.taskState.lastToolParams = ""
 		}
 
 		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
@@ -2281,7 +2374,7 @@ export class Task {
 
 		// Separate logic when using the auto-condense context management vs the original context management methods
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
-		if (useAutoCondense && isNextGenModelFamily(this.api.getModel().id)) {
+		if (useAutoCondense && supportsAutoCondense(getModelCapabilityTier(this.getCurrentProviderInfo()))) {
 			// when we initially trigger the context cleanup, we will be increasing the context window size, so we need some state `currentlySummarizing`
 			// to store whether we have already started the context summarization flow, so we don't attempt to summarize again. additionally, immediately
 			// post summarizing we need to increment the conversationHistoryDeletedRange to mask out the summarization-trigger user & assistant response messaages
@@ -2774,7 +2867,19 @@ export class Task {
 						type: "text",
 						text: formatResponse.noToolsUsed(),
 					})
-					this.taskState.consecutiveMistakeCount++
+					// A turn that produced substantive reasoning but no tool call is usually a model
+					// thinking across turns (DeepSeek does this), not a genuine mistake. Grant a small
+					// grace window where such turns are nudged but not counted; beyond it, a model that
+					// keeps thinking without ever acting still trips the mistake guard.
+					const THINKING_ONLY_GRACE = 2
+					const hadSubstantiveReasoning = reasoningMessage.trim().length >= 40
+					if (hadSubstantiveReasoning && this.taskState.consecutiveThinkingOnlyTurns < THINKING_ONLY_GRACE) {
+						this.taskState.consecutiveThinkingOnlyTurns++
+					} else {
+						this.taskState.consecutiveMistakeCount++
+					}
+				} else {
+					this.taskState.consecutiveThinkingOnlyTurns = 0
 				}
 
 				// Reset auto-retry counter for each new API request

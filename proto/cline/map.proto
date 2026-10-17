@@ -83,6 +83,7 @@ message MapSessionState {
     int64 updated_at_ms = 6;
     string basemap_id = 7;     // e.g. esri-imagery, usgs-topo
     string basemap_name = 8;   // human label shown in map UI
+    string claim_id = 9;       // Phase 3.4: claim this map state is linked to (ledger claim_id)
 }
 
 // Outbound telemetry from map webview

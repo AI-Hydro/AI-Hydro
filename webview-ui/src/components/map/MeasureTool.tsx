@@ -59,10 +59,12 @@ export const MeasureTool: React.FC<MeasureToolProps> = ({
 			const pts = pointsRef.current
 			if (mode === "area" && pts.length >= 3) {
 				setPoints([])
+				onCloseRef.current?.()
 				return
 			}
 			if (mode === "distance" && pts.length >= 2) {
 				setPoints([])
+				onCloseRef.current?.()
 			}
 		}
 

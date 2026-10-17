@@ -3,8 +3,8 @@ import axios from "axios"
 import { AiHydroEnv } from "@/config"
 import { getDistinctId } from "@/services/logging/distinctId"
 
-export type RecognitionMarketplace = "gallery" | "skills" | "modules" | "mcp" | "connectors"
-export type RecognitionEventType = "import" | "install" | "open_source" | "copy_citation" | "template_open" | "uninstall"
+export type RecognitionMarketplace = "gallery" | "skills" | "modules" | "mcp" | "connectors" | "courses"
+export type RecognitionEventType = "import" | "install" | "open_source" | "copy_citation" | "template_open" | "uninstall" | "cite"
 
 export interface MarketplaceRecognitionEvent {
 	marketplace: RecognitionMarketplace

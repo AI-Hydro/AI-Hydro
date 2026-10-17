@@ -24,6 +24,27 @@ function expandHomePath(filePath: string): string {
 	return filePath
 }
 
+async function resolveMapFilePath(filePath: string): Promise<string> {
+	const expanded = expandHomePath(filePath)
+	const candidates = [expanded]
+	if (!path.isAbsolute(expanded)) {
+		candidates.push(path.join(os.homedir(), ".aihydro", "map_layer_geojson_cache", expanded))
+		candidates.push(path.join(os.homedir(), ".aihydro", expanded))
+		for (const folder of vscode.workspace.workspaceFolders ?? []) {
+			candidates.push(path.join(folder.uri.fsPath, expanded))
+		}
+	}
+	for (const candidate of candidates) {
+		try {
+			await vscode.workspace.fs.stat(vscode.Uri.file(candidate))
+			return candidate
+		} catch {
+			/* try next candidate */
+		}
+	}
+	return expanded
+}
+
 const MAP_SUPPORTED_EXTENSIONS = new Set([
 	".geojson",
 	".json",
@@ -794,7 +815,7 @@ export class VscodeMapPanelProvider {
 					}
 					case "aihydro-resolve-file-uri": {
 						const requestId = message.requestId
-						const filePath = typeof message.path === "string" ? expandHomePath(message.path) : ""
+						const filePath = typeof message.path === "string" ? await resolveMapFilePath(message.path) : ""
 						try {
 							if (!filePath) {
 								throw new Error("Missing file path")
@@ -833,6 +854,21 @@ export class VscodeMapPanelProvider {
 						}
 						break
 					}
+					case "aihydro-pick-images": {
+						const requestId = message.requestId
+						const picked = await vscode.window.showOpenDialog({
+							title: "AI-Hydro Map: Attach Site Photos",
+							canSelectMany: true,
+							filters: { Images: ["jpg", "jpeg", "png", "gif", "webp", "bmp"] },
+						})
+						const paths = (picked ?? []).map((u) => u.fsPath)
+						await panel.webview.postMessage({
+							type: "aihydro-pick-images-result",
+							requestId,
+							paths,
+						})
+						break
+					}
 					case "aihydro-map-add-url-command": {
 						await VscodeMapPanelProvider.addLayerFromUrl()
 						break
@@ -864,6 +900,47 @@ export class VscodeMapPanelProvider {
 					}
 					case "openExternal": {
 						await VscodeMapPanelProvider.openExternalUrl(String(message.url ?? ""))
+						break
+					}
+					case "aihydro-map-save-annotations": {
+						try {
+							await VscodeMapPanelProvider.context.globalState.update(
+								"aihydro.map.annotations.v2",
+								message.annotations ?? [],
+							)
+							await VscodeMapPanelProvider.context.globalState.update(
+								"aihydro.map.annotation.collections.v1",
+								message.collections ?? [],
+							)
+						} catch (err) {
+							console.error("[Map] Failed to persist annotations to globalState:", err)
+						}
+						break
+					}
+					case "aihydro-map-load-annotations": {
+						const requestId = message.requestId ?? ""
+						try {
+							const annotations =
+								VscodeMapPanelProvider.context.globalState.get<unknown[]>("aihydro.map.annotations.v2") ?? []
+							const collections =
+								VscodeMapPanelProvider.context.globalState.get<unknown[]>(
+									"aihydro.map.annotation.collections.v1",
+								) ?? []
+							await postMessageToWebview({
+								type: "aihydro-map-load-annotations-result",
+								requestId,
+								ok: true,
+								annotations,
+								collections,
+							})
+						} catch (err) {
+							await postMessageToWebview({
+								type: "aihydro-map-load-annotations-result",
+								requestId,
+								ok: false,
+								error: err instanceof Error ? err.message : String(err),
+							})
+						}
 						break
 					}
 					case "aihydro-map-save-scene-command": {
@@ -1101,6 +1178,9 @@ export class VscodeMapPanelProvider {
 <body>
 	<div id="root"></div>
 	<script nonce="${nonce}">
+		if (typeof window.CSSStyleSheet === "undefined") {
+			window.CSSStyleSheet = function CSSStyleSheet() {};
+		}
 		// Set standalone map mode flag
 		window.AIHYDRO_MAP_STANDALONE = true;
 		// See WebviewProvider.ts for why: guards against a documented blank-webview

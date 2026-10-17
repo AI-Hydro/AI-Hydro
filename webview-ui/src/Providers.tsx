@@ -2,6 +2,7 @@ import { HeroUIProvider } from "@heroui/react"
 import { type ReactNode } from "react"
 import { CustomPostHogProvider } from "./CustomPostHogProvider"
 import { AiHydroAuthProvider } from "./context/AiHydroAuthContext"
+import { BrushContextProvider } from "./context/BrushContext"
 import { ExtensionStateContextProvider } from "./context/ExtensionStateContext"
 import { HtmlPreviewContextProvider } from "./context/HtmlPreviewContext"
 import { LedgerContextProvider } from "./context/LedgerContext"
@@ -13,15 +14,17 @@ export function Providers({ children }: { children: ReactNode }) {
 		<PlatformProvider>
 			<ExtensionStateContextProvider>
 				<MapContextProvider>
-					<LedgerContextProvider>
-						<HtmlPreviewContextProvider>
-							<CustomPostHogProvider>
-								<AiHydroAuthProvider>
-									<HeroUIProvider>{children}</HeroUIProvider>
-								</AiHydroAuthProvider>
-							</CustomPostHogProvider>
-						</HtmlPreviewContextProvider>
-					</LedgerContextProvider>
+					<BrushContextProvider>
+						<LedgerContextProvider>
+							<HtmlPreviewContextProvider>
+								<CustomPostHogProvider>
+									<AiHydroAuthProvider>
+										<HeroUIProvider>{children}</HeroUIProvider>
+									</AiHydroAuthProvider>
+								</CustomPostHogProvider>
+							</HtmlPreviewContextProvider>
+						</LedgerContextProvider>
+					</BrushContextProvider>
 				</MapContextProvider>
 			</ExtensionStateContextProvider>
 		</PlatformProvider>

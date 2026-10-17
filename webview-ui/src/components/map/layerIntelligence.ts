@@ -68,8 +68,12 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 		meta.raw_raster_values === "true" ||
 		meta.raster_value_access === "raw"
 
-	if (provenancePath) capabilities.add("provenance")
-	if (!provenancePath && isAnalysisOutput) warnings.push("MISSING_PROVENANCE")
+	if (provenancePath) {
+		capabilities.add("provenance")
+	}
+	if (!provenancePath && isAnalysisOutput) {
+		warnings.push("MISSING_PROVENANCE")
+	}
 
 	if (isVector) {
 		capabilities.add("identify")
@@ -77,8 +81,12 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 		capabilities.add("style_basic")
 		capabilities.add("attributes")
 		capabilities.add("export_geojson")
-		if (layerType !== "point") capabilities.add("style_graduated")
-		if (isMerit && !citation) warnings.push("MISSING_CITATION")
+		if (layerType !== "point") {
+			capabilities.add("style_graduated")
+		}
+		if (isMerit && !citation) {
+			warnings.push("MISSING_CITATION")
+		}
 		return {
 			dataState: isMerit ? "reference_vector" : isAnalysisOutput ? "analysis_output" : "raw_vector",
 			typeLabel: isMerit ? "Reference vector" : "Vector",
@@ -97,6 +105,9 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 
 	if (layerType === "raster") {
 		capabilities.add("export_image")
+		const hasSourceFile = Boolean(
+			meta.raster_source_path || meta.source_raster_path || meta.source_tif_path || meta.twi_raster_path,
+		)
 		if (hasRawRaster) {
 			capabilities.add("style_raster")
 			capabilities.add("raster_probe")
@@ -109,6 +120,23 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 				capabilities,
 				warnings,
 				provenancePath,
+				citation,
+				license,
+				sourceLabel: sourceLabel(layer),
+			}
+		}
+		if (hasSourceFile) {
+			capabilities.add("style_raster")
+			capabilities.add("raster_probe")
+			return {
+				dataState: "visual_preview_raster",
+				typeLabel: "Raster",
+				statusLabel: "Preview (GeoTIFF on disk)",
+				statusDetail:
+					"Map shows a rendered PNG overlay aligned to WGS84. Open Symbology → Load source to enable value probing and colormap editing from the workspace GeoTIFF.",
+				capabilities,
+				warnings,
+				provenancePath: provenancePath || meta.raster_source_path || meta.workspace_path,
 				citation,
 				license,
 				sourceLabel: sourceLabel(layer),
@@ -181,12 +209,24 @@ export function warningText(warning: LayerQualityWarning): string {
 function sourceLabel(layer: MapLayer): string {
 	const meta = layer.metadata ?? {}
 	const source = meta.source
-	if (source === "gee") return "Google Earth Engine"
-	if (source === "workspace") return "Workspace"
-	if (source === "merit") return "MERIT-Basins"
-	if (source === "user") return "Loaded file"
-	if (meta.tool) return meta.tool
-	if (meta.path) return meta.path.split(/[\\/]/).pop() ?? meta.path
+	if (source === "gee") {
+		return "Google Earth Engine"
+	}
+	if (source === "workspace") {
+		return "Workspace"
+	}
+	if (source === "merit") {
+		return "MERIT-Basins"
+	}
+	if (source === "user") {
+		return "Loaded file"
+	}
+	if (meta.tool) {
+		return meta.tool
+	}
+	if (meta.path) {
+		return meta.path.split(/[\\/]/).pop() ?? meta.path
+	}
 	return "Map session"
 }
 

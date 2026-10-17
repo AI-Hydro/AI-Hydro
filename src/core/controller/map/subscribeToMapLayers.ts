@@ -1,6 +1,8 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
 import { MapLayer } from "@shared/proto/cline/map"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
+import { hydrateInundation3dLayers } from "@/core/map/inundation3dLayer"
+import { sanitizeMapLayerForWebview } from "@/core/map/sanitizeMapLayerForWebview"
 import type { Controller } from ".."
 
 /** One ordered snapshot followed by live mutations; never interleave the two. */
@@ -42,9 +44,12 @@ export async function subscribeToMapLayers(
 	// Capture synchronously after subscribing, before any asynchronous delivery.
 	const snapshot = [...controller.getMapLayers()]
 	await send(marker("snapshot_start"))
-	for (const layer of snapshot) await send(layer)
+	// Large inline blobs are stripped from the snapshot; the webview loads them from disk.
+	for (const layer of snapshot) await send(sanitizeMapLayerForWebview(layer))
 	await send(marker("snapshot_complete"))
 	initializing = false
 	for (const layer of pending.splice(0)) void send(layer)
 	await tail
+	// Upgrade flood layers to inline 3D manifests after the ordered snapshot; updates flow via the live path.
+	void hydrateInundation3dLayers(controller)
 }

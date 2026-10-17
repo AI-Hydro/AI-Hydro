@@ -2,7 +2,7 @@ import type { MapViewState } from "@deck.gl/core"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { MapExportArtifact, PrepareMapExportRequest, SaveMapExportRequest } from "@shared/proto/cline/map"
 import { jsPDF } from "jspdf"
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { MapServiceClient } from "../../services/grpc-client"
 import { BASE_MAP_STYLES } from "./BaseMapSelector"
@@ -471,9 +471,15 @@ function pagePixels(template: ExportTemplate, dpi: ExportDpi): { width: number; 
 function layerKind(layer: MapLayer): string {
 	const type = (layer.layerType || "").toLowerCase()
 	const source = String(layer.metadata?.source || "").toLowerCase()
-	if (type.includes("gee") || source.includes("gee")) return "gee"
-	if (type.includes("raster")) return "raster"
-	if (source.includes("merit") || layer.name.toLowerCase().includes("merit")) return "hydrography"
+	if (type.includes("gee") || source.includes("gee")) {
+		return "gee"
+	}
+	if (type.includes("raster")) {
+		return "raster"
+	}
+	if (source.includes("merit") || layer.name.toLowerCase().includes("merit")) {
+		return "hydrography"
+	}
 	return type || "vector"
 }
 
@@ -512,7 +518,9 @@ function layerColor(layer: MapLayer): string | undefined {
 
 function layerSupport(layer: MapLayer): "verified" | "capture-only" | "unsupported" {
 	const kind = layerKind(layer)
-	if (kind === "gee" || kind === "raster") return "capture-only"
+	if (kind === "gee" || kind === "raster") {
+		return "capture-only"
+	}
 	if (
 		layer.geojson ||
 		kind === "hydrography" ||
@@ -690,7 +698,9 @@ function niceScaleKm(rawKm: number): number {
 	const powers = [1, 2, 5]
 	const magnitude = 10 ** Math.floor(Math.log10(Math.max(rawKm, 0.001)))
 	for (const p of powers) {
-		if (p * magnitude >= rawKm) return p * magnitude
+		if (p * magnitude >= rawKm) {
+			return p * magnitude
+		}
 	}
 	return 10 * magnitude
 }
@@ -730,7 +740,9 @@ function drawText(
 
 /** Truncate text to fit within maxPx pixels, appending "…" if needed. */
 function truncateLabel(ctx: CanvasRenderingContext2D, text: string, maxPx: number): string {
-	if (ctx.measureText(text).width <= maxPx) return text
+	if (ctx.measureText(text).width <= maxPx) {
+		return text
+	}
 	let lo = 0
 	let hi = text.length
 	while (lo < hi - 1) {
@@ -775,7 +787,9 @@ function drawImageCover(
 ): void {
 	const sw = img.width
 	const sh = img.height
-	if (!sw || !sh || dw <= 0 || dh <= 0) return
+	if (!sw || !sh || dw <= 0 || dh <= 0) {
+		return
+	}
 	const scale = Math.max(dw / sw, dh / sh)
 	const cw = dw / scale
 	const ch = dh / scale
@@ -799,7 +813,7 @@ type LegendAnchor = "tl" | "tr" | "bl" | "br"
  */
 /** Infer a color ramp for a raster/GEE layer. Returns null if no ramp can be determined. */
 /** Strip common file extensions and underscores to get a clean display label. */
-function cleanLabel(raw: string): string {
+function _cleanLabel(raw: string): string {
 	return raw
 		.replace(/\.(geojson|json|tif|tiff|nc|csv|shp)$/i, "")
 		.replace(/[_-]+/g, " ")
@@ -880,10 +894,14 @@ function drawColorRampLegend(
 	fontFamily: string,
 ): number {
 	const rasterLayers = snapshot.layers.filter((l) => l.geom === "raster").slice(0, 4)
-	if (!rasterLayers.length) return mapY + mapH
+	if (!rasterLayers.length) {
+		return mapY + mapH
+	}
 
 	const ramps = rasterLayers.map((l) => ({ layer: l, ramp: inferColorRamp(l) })).filter((r) => r.ramp !== null)
-	if (!ramps.length) return mapY + mapH
+	if (!ramps.length) {
+		return mapY + mapH
+	}
 
 	const barW = Math.min(Math.round(mapW * 0.28), 200)
 	const barH = Math.max(10, Math.round(fs * 0.9))
@@ -896,7 +914,9 @@ function drawColorRampLegend(
 	let bottomY = mapY + mapH - inset
 
 	for (const { layer, ramp } of ramps.reverse()) {
-		if (!ramp) continue
+		if (!ramp) {
+			continue
+		}
 
 		// Auto-read min/max from metadata (set by Python when raster is loaded)
 		const minLabel = ramp.min != null ? fmtRampValue(ramp.min) : "Min"
@@ -964,10 +984,18 @@ function drawColorRampLegend(
 
 /** Format a ramp value compactly: integers as integers, floats to 3 sig figs. */
 function fmtRampValue(v: number): string {
-	if (!Number.isFinite(v)) return ""
-	if (Number.isInteger(v) || Math.abs(v) >= 1000) return v.toFixed(0)
-	if (Math.abs(v) >= 10) return v.toFixed(2)
-	if (Math.abs(v) >= 1) return v.toFixed(3)
+	if (!Number.isFinite(v)) {
+		return ""
+	}
+	if (Number.isInteger(v) || Math.abs(v) >= 1000) {
+		return v.toFixed(0)
+	}
+	if (Math.abs(v) >= 10) {
+		return v.toFixed(2)
+	}
+	if (Math.abs(v) >= 1) {
+		return v.toFixed(3)
+	}
 	return v.toPrecision(3)
 }
 
@@ -1098,7 +1126,9 @@ function drawLegend(
 	fontFamily = "system-ui, sans-serif",
 ): number {
 	const layers = snapshot.layers.slice(0, 8)
-	if (!layers.length) return ay
+	if (!layers.length) {
+		return ay
+	}
 
 	const pad = Math.round(fs * 0.85)
 	const gap = Math.round(fs * 0.6)
@@ -1264,15 +1294,23 @@ function niceDegreeStep(spanDeg: number, targetLines: number): number {
 	const raw = spanDeg / Math.max(1, targetLines)
 	const steps = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 15, 20, 30, 45]
 	for (const s of steps) {
-		if (s >= raw) return s
+		if (s >= raw) {
+			return s
+		}
 	}
 	return 60
 }
 
 function decimalsForStep(step: number): number {
-	if (step < 0.02) return 3
-	if (step < 0.2) return 2
-	if (step < 2) return 1
+	if (step < 0.02) {
+		return 3
+	}
+	if (step < 0.2) {
+		return 2
+	}
+	if (step < 2) {
+		return 1
+	}
 	return 0
 }
 
@@ -1323,14 +1361,20 @@ function drawGraticule(
 	mode: GraticuleMode,
 	fs: number,
 ): void {
-	if (mode === "none" || !sourceW || !sourceH || mapW <= 0 || mapH <= 0) return
-	if (Math.abs(view.bearing) > 0.1 || Math.abs(view.pitch) > 0.1) return
+	if (mode === "none" || !sourceW || !sourceH || mapW <= 0 || mapH <= 0) {
+		return
+	}
+	if (Math.abs(view.bearing) > 0.1 || Math.abs(view.pitch) > 0.1) {
+		return
+	}
 
 	const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1
 	const worldSize = MERCATOR_TILE * 2 ** view.zoom
 	const coverScale = Math.max(mapW / sourceW, mapH / sourceH)
 	const f = dpr * coverScale // destination px per CSS world-pixel
-	if (!isFinite(f) || f <= 0) return
+	if (!Number.isFinite(f) || f <= 0) {
+		return
+	}
 
 	const cwx = lonToWorldX(view.longitude, worldSize)
 	const cwy = latToWorldY(view.latitude, worldSize)
@@ -1348,7 +1392,9 @@ function drawGraticule(
 	const latSouth = yToLat(mapY + mapH)
 	const lonSpan = Math.abs(lonEast - lonWest)
 	const latSpan = Math.abs(latNorth - latSouth)
-	if (!isFinite(lonSpan) || !isFinite(latSpan) || lonSpan <= 0 || latSpan <= 0) return
+	if (!Number.isFinite(lonSpan) || !Number.isFinite(latSpan) || lonSpan <= 0 || latSpan <= 0) {
+		return
+	}
 
 	const stepLon = niceDegreeStep(lonSpan, 5)
 	const stepLat = niceDegreeStep(latSpan, 5)
@@ -1374,7 +1420,9 @@ function drawGraticule(
 	const lonStart = Math.ceil(Math.min(lonWest, lonEast) / stepLon) * stepLon
 	for (let lon = lonStart; lon <= Math.max(lonWest, lonEast) + 1e-9; lon += stepLon) {
 		const x = lonToX(lon)
-		if (x < mapX - 1 || x > mapX + mapW + 1) continue
+		if (x < mapX - 1 || x > mapX + mapW + 1) {
+			continue
+		}
 		if (mode === "grid") {
 			ctx.strokeStyle = "rgba(15,23,42,0.26)"
 			ctx.beginPath()
@@ -1401,7 +1449,9 @@ function drawGraticule(
 	const latStart = Math.ceil(Math.min(latNorth, latSouth) / stepLat) * stepLat
 	for (let lat = latStart; lat <= Math.max(latNorth, latSouth) + 1e-9; lat += stepLat) {
 		const y = latToY(lat)
-		if (y < mapY - 1 || y > mapY + mapH + 1) continue
+		if (y < mapY - 1 || y > mapY + mapH + 1) {
+			continue
+		}
 		if (mode === "grid") {
 			ctx.strokeStyle = "rgba(15,23,42,0.26)"
 			ctx.beginPath()
@@ -1481,8 +1531,12 @@ function drawNorthArrow(ctx: CanvasRenderingContext2D, cx: number, cy: number, s
 
 /** Resolve canvas x-origin for a given text alignment within the margin-to-margin content width. */
 function alignX(align: TextAlign, marginLeft: number, contentWidth: number): number {
-	if (align === "center") return marginLeft + contentWidth / 2
-	if (align === "right") return marginLeft + contentWidth
+	if (align === "center") {
+		return marginLeft + contentWidth / 2
+	}
+	if (align === "right") {
+		return marginLeft + contentWidth
+	}
 	return marginLeft
 }
 
@@ -1497,7 +1551,9 @@ async function composePlate(
 	canvas.width = dims.width
 	canvas.height = dims.height
 	const ctx = canvas.getContext("2d")
-	if (!ctx) throw new Error("Unable to create export canvas")
+	if (!ctx) {
+		throw new Error("Unable to create export canvas")
+	}
 
 	const cfg = TEMPLATE_CONFIGS[spec.template]
 	ctx.fillStyle = "#ffffff"
@@ -1827,6 +1883,78 @@ export const MapExport: React.FC<MapExportProps> = ({
 	const [previewScale, setPreviewScale] = useState<"fit" | "actual">("fit")
 	const [previewStatus, setPreviewStatus] = useState<{ kind: "idle" | "busy" | "err"; msg: string }>({ kind: "idle", msg: "" })
 
+	// ── Plate template save/load ──────────────────────────────────────────────
+	const TMPL_STORAGE_KEY = "aihydro.map.plate.templates.v1"
+	interface SavedPlateTemplate {
+		id: string
+		name: string
+		createdAt: string
+		template: ExportTemplate
+		formats: ExportFormat[]
+		dpi: ExportDpi
+		graticule: GraticuleMode
+		fontFamily: string
+		textAlign: MapPlateSpec["textAlign"]
+		elements: MapPlateSpec["elements"]
+	}
+	const [savedTemplates, setSavedTemplates] = useState<SavedPlateTemplate[]>(() => {
+		try {
+			const raw = localStorage.getItem(TMPL_STORAGE_KEY)
+			return raw ? (JSON.parse(raw) as SavedPlateTemplate[]) : []
+		} catch {
+			return []
+		}
+	})
+	const [tmplNaming, setTmplNaming] = useState(false)
+	const [tmplName, setTmplName] = useState("")
+
+	const savePlateTemplate = () => {
+		if (!tmplName.trim()) {
+			return
+		}
+		const tmpl: SavedPlateTemplate = {
+			id: `pt_${Date.now()}`,
+			name: tmplName.trim(),
+			createdAt: new Date().toISOString(),
+			template,
+			formats,
+			dpi,
+			graticule,
+			fontFamily,
+			textAlign,
+			elements,
+		}
+		const next = [...savedTemplates, tmpl]
+		setSavedTemplates(next)
+		try {
+			localStorage.setItem(TMPL_STORAGE_KEY, JSON.stringify(next))
+		} catch {
+			/* ignore */
+		}
+		setTmplName("")
+		setTmplNaming(false)
+	}
+
+	const applyPlateTemplate = (tmpl: SavedPlateTemplate) => {
+		setTemplate(tmpl.template)
+		setFormats(tmpl.formats)
+		setDpi(tmpl.dpi)
+		setGraticule(tmpl.graticule)
+		setFontFamily(tmpl.fontFamily)
+		setTextAlign(tmpl.textAlign)
+		setElements(tmpl.elements)
+	}
+
+	const deletePlateTemplate = (id: string) => {
+		const next = savedTemplates.filter((t) => t.id !== id)
+		setSavedTemplates(next)
+		try {
+			localStorage.setItem(TMPL_STORAGE_KEY, JSON.stringify(next))
+		} catch {
+			/* ignore */
+		}
+	}
+
 	useEffect(() => {
 		return () => {
 			if (previewUrl) {
@@ -1836,7 +1964,9 @@ export const MapExport: React.FC<MapExportProps> = ({
 	}, [previewUrl])
 
 	useEffect(() => {
-		if (!previewExpanded) return
+		if (!previewExpanded) {
+			return
+		}
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key === "Escape") {
 				setPreviewExpanded(false)
@@ -1911,14 +2041,39 @@ export const MapExport: React.FC<MapExportProps> = ({
 			const blob = await canvasToBlob(composed.canvas, "image/jpeg", 0.82)
 			const nextUrl = URL.createObjectURL(blob)
 			setPreviewUrl((previous) => {
-				if (previous) URL.revokeObjectURL(previous)
+				if (previous) {
+					URL.revokeObjectURL(previous)
+				}
 				return nextUrl
 			})
+			hasPreviewRef.current = true
 			setPreviewStatus({ kind: "idle", msg: "Preview ready." })
 		} catch (error) {
 			setPreviewStatus({ kind: "err", msg: error instanceof Error ? error.message : String(error) })
 		}
 	}
+
+	// Auto-refresh: re-render the preview 700ms after any spec/snapshot change,
+	// but only when a preview is already shown (don't trigger on first open).
+	const autoRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const hasPreviewRef = useRef(false)
+	useEffect(() => {
+		if (!hasPreviewRef.current) {
+			return
+		}
+		if (autoRefreshTimer.current) {
+			clearTimeout(autoRefreshTimer.current)
+		}
+		autoRefreshTimer.current = setTimeout(() => {
+			void refreshPreview()
+		}, 700)
+		return () => {
+			if (autoRefreshTimer.current) {
+				clearTimeout(autoRefreshTimer.current)
+			}
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [spec, snapshot])
 
 	const writeExport = async (quick: boolean) => {
 		try {
@@ -2153,7 +2308,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 									borderRadius: 4,
 									cursor: previewStatus.kind === "busy" ? "progress" : "pointer",
 								}}>
-								Refresh preview
+								{previewStatus.kind === "busy" ? "Refreshing…" : "Refresh preview"}
 							</button>
 						</div>
 					</div>
@@ -2177,7 +2332,8 @@ export const MapExport: React.FC<MapExportProps> = ({
 							/>
 						) : (
 							<div style={{ padding: 10, textAlign: "center", opacity: 0.74 }}>
-								Click Refresh preview to see the plate layout before exporting.
+								Click <strong>Refresh preview</strong> to generate the first preview. After that it updates
+								automatically when you change settings.
 							</div>
 						)}
 					</div>
@@ -2194,6 +2350,157 @@ export const MapExport: React.FC<MapExportProps> = ({
 				</div>
 
 				<div>
+					{/* ── Saved plate templates ── */}
+					<div
+						style={{
+							marginBottom: 10,
+							padding: "6px 8px",
+							background: subtle,
+							borderRadius: 4,
+							border: `1px solid ${border}`,
+						}}>
+						<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+							<span style={{ fontSize: 10, fontWeight: 600, opacity: 0.8, flex: 1 }}>💾 My Templates</span>
+							{!tmplNaming && (
+								<button
+									onClick={() => setTmplNaming(true)}
+									style={{
+										fontSize: 9,
+										padding: "1px 7px",
+										background: "transparent",
+										color: fg,
+										border: `1px solid ${border}`,
+										borderRadius: 3,
+										cursor: "pointer",
+									}}
+									title="Save current settings as a named template"
+									type="button">
+									＋ Save current
+								</button>
+							)}
+						</div>
+						{tmplNaming && (
+							<div style={{ display: "flex", gap: 5, marginBottom: 6 }}>
+								<input
+									autoFocus
+									maxLength={40}
+									onChange={(e) => setTmplName(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") {
+											savePlateTemplate()
+										}
+										if (e.key === "Escape") {
+											setTmplNaming(false)
+											setTmplName("")
+										}
+									}}
+									placeholder="Template name…"
+									style={{
+										flex: 1,
+										fontSize: 10,
+										padding: "2px 6px",
+										background: "rgba(255,255,255,0.07)",
+										color: fg,
+										border: `1px solid ${border}`,
+										borderRadius: 3,
+									}}
+									type="text"
+									value={tmplName}
+								/>
+								<button
+									onClick={savePlateTemplate}
+									style={{
+										fontSize: 9,
+										padding: "2px 6px",
+										background: accent,
+										color: "#fff",
+										border: "none",
+										borderRadius: 3,
+										cursor: "pointer",
+									}}
+									type="button">
+									✓
+								</button>
+								<button
+									onClick={() => {
+										setTmplNaming(false)
+										setTmplName("")
+									}}
+									style={{
+										fontSize: 9,
+										padding: "2px 6px",
+										background: "transparent",
+										color: fg,
+										border: `1px solid ${border}`,
+										borderRadius: 3,
+										cursor: "pointer",
+									}}
+									type="button">
+									✕
+								</button>
+							</div>
+						)}
+						{savedTemplates.length === 0 ? (
+							<div style={{ fontSize: 9, opacity: 0.45, textAlign: "center" }}>
+								No templates yet. Configure layout settings then click ＋ Save current.
+							</div>
+						) : (
+							<div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+								{savedTemplates.map((t) => (
+									<div
+										key={t.id}
+										style={{
+											display: "flex",
+											alignItems: "center",
+											gap: 5,
+											padding: "2px 5px",
+											background: "rgba(255,255,255,0.04)",
+											border: `1px solid ${border}`,
+											borderRadius: 3,
+										}}>
+										<button
+											onClick={() => applyPlateTemplate(t)}
+											style={{
+												flex: 1,
+												textAlign: "left",
+												background: "transparent",
+												border: "none",
+												color: fg,
+												cursor: "pointer",
+												fontSize: 10,
+												padding: 0,
+												overflow: "hidden",
+												textOverflow: "ellipsis",
+												whiteSpace: "nowrap",
+											}}
+											title={`Apply "${t.name}" (${t.template} · ${t.dpi} dpi)`}
+											type="button">
+											{t.name}
+										</button>
+										<span style={{ fontSize: 9, opacity: 0.4, whiteSpace: "nowrap" }}>
+											{t.template} · {t.dpi}dpi
+										</span>
+										<button
+											onClick={() => deletePlateTemplate(t.id)}
+											style={{
+												background: "transparent",
+												border: "none",
+												color: "rgba(220,53,69,0.7)",
+												cursor: "pointer",
+												fontSize: 12,
+												padding: 0,
+												lineHeight: 1,
+											}}
+											title="Delete template"
+											type="button">
+											✕
+										</button>
+									</div>
+								))}
+							</div>
+						)}
+					</div>
+
 					<label style={{ display: "block", marginBottom: 6 }}>
 						Template
 						<select

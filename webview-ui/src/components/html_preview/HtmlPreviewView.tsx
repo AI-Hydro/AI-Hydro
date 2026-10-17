@@ -5,6 +5,7 @@ import {
 	GetArtifactKernelInfoRequest,
 	type HtmlPreviewItem,
 	InterruptArtifactKernelRequest,
+	NotifyParamChangedRequest,
 	ProbePythonEnvironmentRequest,
 	type PythonEnvironment,
 	RestartArtifactKernelRequest,
@@ -800,6 +801,8 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				score?: number
 				quizId?: string
 				state?: Record<string, string>
+				paramName?: string
+				paramValueJson?: string
 			}
 			if (!data || data.source !== "aihydro-artifact") {
 				return
@@ -886,6 +889,20 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 			}
 			if (data.type === "artifact/stateChanged") {
 				if (moduleKey) void sendModuleState("set", moduleKey, data.state ?? {}, learningPackScope)
+				return
+			}
+			// Phase 3.5b — reactive param widgets: bridge posts this when an input
+			// with notifyHostOnChange=true changes. The RPC injects a Python
+			// assignment and re-executes the cell via the running kernel.
+			if (data.type === "artifact/paramChanged" && item?.id) {
+				void HtmlPreviewServiceClient.notifyParamChanged(
+					NotifyParamChangedRequest.create({
+						artifactId: item.id,
+						cellId: (data.cellId as string) ?? "",
+						paramName: (data.paramName as string) ?? "",
+						paramValueJson: (data.paramValueJson as string) ?? "",
+					}),
+				)
 				return
 			}
 		}

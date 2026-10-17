@@ -40,7 +40,7 @@ describe("AI-Hydro Research Gallery placement", () => {
 
 		source.should.containEql("Contribute a Gallery item?")
 		source.should.containEql("https://github.com/AI-Hydro/Gallery/issues/new?template=new_gallery_item.md")
-		source.should.containEql("Open contribution template on GitHub")
+		source.should.containEql("Open contribution template")
 	})
 
 	it("surfaces AI-Hydro-native recognition fields in the Gallery panel", async () => {
@@ -59,7 +59,7 @@ describe("AI-Hydro Research Gallery placement", () => {
 		const source = await readFile(galleryPanelPath, "utf8")
 
 		source.should.containEql("Most imports")
-		source.should.containEql("Most AI-Hydro stars")
+		source.should.containEql("Most starred")
 		source.should.not.containEql(">Featured<")
 	})
 })

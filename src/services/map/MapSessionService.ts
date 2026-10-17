@@ -8,6 +8,8 @@ import { promisify } from "util"
 
 const MAP_SESSION_FILE = path.join(os.homedir(), ".aihydro", "map_session.json")
 const OUTBOUND_EVENTS_DIR = path.join(os.homedir(), ".aihydro", "map_events", "outbound")
+const ACTIVE_WORKSPACE_FILE = path.join(os.homedir(), ".aihydro", "active_workspace.json")
+const OUTBOUND_MAX_FILES = 500
 const MAX_EVENTS = 100
 const execFileAsync = promisify(execFile)
 
@@ -35,6 +37,8 @@ export interface MapSessionServiceOptions {
 	workspaceRoot?: string
 	sessionFile?: string
 	outboundEventsDir?: string
+	/** Pointer file for Python MCP tools; defaults to ~/.aihydro/active_workspace.json unless a custom sessionFile is injected. */
+	activeWorkspaceFile?: string | null
 	persistenceIo?: MapSessionPersistenceIo
 }
 
@@ -73,6 +77,7 @@ export class MapSessionService {
 	private eventSubscribers = new Set<MapEventSubscriber>()
 	private readonly sessionFile: string
 	private readonly outboundEventsDir: string
+	private readonly activeWorkspaceFile: string | null
 	private readonly persistenceIo: MapSessionPersistenceIo
 	private initializationPromise: Promise<void> | undefined
 	private stateRevision = 0
@@ -87,6 +92,12 @@ export class MapSessionService {
 			typeof workspaceRootOrOptions === "string" ? { workspaceRoot: workspaceRootOrOptions } : workspaceRootOrOptions
 		this.sessionFile = options?.sessionFile ?? MAP_SESSION_FILE
 		this.outboundEventsDir = options?.outboundEventsDir ?? OUTBOUND_EVENTS_DIR
+		this.activeWorkspaceFile =
+			options?.activeWorkspaceFile !== undefined
+				? options.activeWorkspaceFile
+				: options?.sessionFile
+					? null
+					: ACTIVE_WORKSPACE_FILE
 		this.persistenceIo = options?.persistenceIo ?? defaultPersistenceIo
 		if (options?.workspaceRoot) {
 			this.workspaceRoot = this.normalizeWorkspaceRoot(options.workspaceRoot)
@@ -107,6 +118,22 @@ export class MapSessionService {
 			this.touch()
 			this.notifySession()
 			this.schedulePersist()
+			// Keep active_workspace.json in sync so Python MCP tools and the 3D
+			// manifest lookup always see the same workspace as the map session.
+			void this.syncActiveWorkspaceFile(normalizedRoot)
+		}
+	}
+
+	private async syncActiveWorkspaceFile(root: string): Promise<void> {
+		if (!this.activeWorkspaceFile) {
+			return
+		}
+		try {
+			await this.persistenceIo.mkdir(path.dirname(this.activeWorkspaceFile), { recursive: true })
+			const content = JSON.stringify({ workspace: root, updated_at: new Date().toISOString() }, null, 2)
+			await this.persistenceIo.writeFile(this.activeWorkspaceFile, content, "utf8")
+		} catch {
+			// Non-fatal: the map session itself is persisted separately.
 		}
 	}
 
@@ -515,5 +542,25 @@ with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED) as zf:
 		await this.persistenceIo.mkdir(this.outboundEventsDir, { recursive: true })
 		const file = path.join(this.outboundEventsDir, `${event.timestampMs ?? Date.now()}.json`)
 		await this.persistenceIo.writeFile(file, JSON.stringify(event), "utf8")
+		// Rotate: keep only the most recent OUTBOUND_MAX_FILES files (best effort).
+		void this.rotateOutboundEvents()
+	}
+
+	private _rotateInProgress = false
+	private async rotateOutboundEvents(): Promise<void> {
+		if (this._rotateInProgress) return
+		this._rotateInProgress = true
+		try {
+			const files = await fs.readdir(this.outboundEventsDir)
+			const jsonFiles = files.filter((f) => f.endsWith(".json")).sort()
+			if (jsonFiles.length > OUTBOUND_MAX_FILES) {
+				const toDelete = jsonFiles.slice(0, jsonFiles.length - OUTBOUND_MAX_FILES)
+				await Promise.all(toDelete.map((f) => fs.unlink(path.join(this.outboundEventsDir, f)).catch(() => {})))
+			}
+		} catch {
+			/* non-fatal */
+		} finally {
+			this._rotateInProgress = false
+		}
 	}
 }

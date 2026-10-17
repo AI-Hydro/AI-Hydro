@@ -1,12 +1,21 @@
 import type { MapLayer } from "@shared/proto/cline/map"
 import { useEffect, useState } from "react"
 import { applyColormap, dataUrlToImage, rasterCache } from "./formats/rasterCache"
+import { resolveFileUri } from "./resolveFileUri"
 
 export interface ResourceState {
 	status: "loading" | "error"
 	message: string
 }
 export const RASTER_DECODE_TIMEOUT_MS = 15000
+/** Marks a cache entry whose image was decoded from a host file path rather than an inline data URL. */
+const RASTER_PATH_SOURCE_PREFIX = "path:"
+
+function parseStretch(raw: string | undefined): number | undefined {
+	if (!raw) return undefined
+	const value = Number.parseFloat(raw)
+	return Number.isFinite(value) ? value : undefined
+}
 
 export function parseRasterBounds(raw: string): [number, number, number, number] {
 	const b = JSON.parse(raw)
@@ -48,15 +57,26 @@ export function useRasterResources(layers: MapLayer[], retry: number) {
 				continue
 			}
 			if (layer.layerType !== "raster") continue
-			const url = layer.metadata?.raster_data_url
+			const dataUrl = layer.metadata?.raster_data_url
+			// Catalog-hydrated layers carry only a file path (the inline image is
+			// stripped from the stream); the host resolves it to a webview URI.
+			const rasterPath = layer.metadata?.raster_path
+			const url = dataUrl || (rasterPath ? `${RASTER_PATH_SOURCE_PREFIX}${rasterPath}` : undefined)
 			const rawBounds = layer.metadata?.raster_bounds
 			const cached = rasterCache.get(layer.id)
 			const sameSource = Boolean(cached && cached.sourceDataUrl === url && cached.sourceBounds === rawBounds)
 			const targetColormap = layer.metadata?.raster_colormap ?? "viridis"
-			const recolor = sameSource && cached?.rawPixels && cached.colormap !== targetColormap
+			const stretchMin = parseStretch(layer.metadata?.raster_stretch_min)
+			const stretchMax = parseStretch(layer.metadata?.raster_stretch_max)
+			const recolor =
+				sameSource &&
+				cached?.rawPixels &&
+				(cached.colormap !== targetColormap || cached.stretchMin !== stretchMin || cached.stretchMax !== stretchMax)
 			if (sameSource && !recolor) continue
 			// Local loaders without a transported image can own a cache entry.
 			if (cached && !url && !cached.sourceDataUrl) continue
+			// A stream snapshot may carry only the file path for an image already decoded from its data URL.
+			if (cached && !dataUrl && rasterPath && cached.sourceDataUrl && cached.sourceBounds === rawBounds) continue
 			if (!recolor) rasterCache.delete(layer.id)
 			try {
 				if (!url || !rawBounds) throw new Error("Raster image or bounds are missing. Reload the source layer.")
@@ -78,7 +98,11 @@ export function useRasterResources(layers: MapLayer[], retry: number) {
 				)
 				cleanups.push(() => clearTimeout(timer))
 				const imagePromise =
-					recolor && cached?.rawPixels ? applyColormap(cached.rawPixels, targetColormap) : dataUrlToImage(url)
+					recolor && cached?.rawPixels
+						? applyColormap(cached.rawPixels, targetColormap, stretchMin, stretchMax)
+						: dataUrl
+							? dataUrlToImage(dataUrl)
+							: resolveFileUri(rasterPath as string).then(({ uri }) => dataUrlToImage(uri))
 				imagePromise
 					.then((image) => {
 						if (!active || settled) return
@@ -89,6 +113,8 @@ export function useRasterResources(layers: MapLayer[], retry: number) {
 							bounds,
 							colormap: recolor ? targetColormap : (layer.metadata?.raster_colormap ?? "pre-rendered"),
 							rawPixels: sameSource ? cached?.rawPixels : undefined,
+							stretchMin: recolor ? stretchMin : undefined,
+							stretchMax: recolor ? stretchMax : undefined,
 							sourceDataUrl: url,
 							sourceBounds: rawBounds,
 						})
@@ -114,13 +140,39 @@ export function useRasterResources(layers: MapLayer[], retry: number) {
 	return { states, revision }
 }
 
-export async function loadMapTile(tile: { url?: string | null; signal?: AbortSignal }): Promise<ImageBitmap> {
+/** createImageBitmap can fail in some Electron webview contexts; an HTMLImageElement is also accepted by BitmapLayer. */
+function decodeBlobAsImageElement(blob: Blob, tileUrl: string): Promise<HTMLImageElement> {
+	const objectUrl = URL.createObjectURL(blob)
+	return new Promise<HTMLImageElement>((resolve, reject) => {
+		const img = new Image()
+		img.onload = () => {
+			URL.revokeObjectURL(objectUrl)
+			resolve(img)
+		}
+		img.onerror = () => {
+			URL.revokeObjectURL(objectUrl)
+			reject(new Error(`Tile image decode failed: ${tileUrl}`))
+		}
+		img.src = objectUrl
+	})
+}
+
+export async function loadMapTile(tile: {
+	url?: string | null
+	signal?: AbortSignal
+}): Promise<ImageBitmap | HTMLImageElement> {
 	if (!tile.url) throw new Error("Tile URL is missing")
 	const response = await fetch(tile.url, { signal: tile.signal })
 	if (!response.ok) throw new Error(`Tile request failed (HTTP ${response.status})`)
-	const image = await createImageBitmap(await response.blob())
+	const blob = await response.blob()
+	let image: ImageBitmap | HTMLImageElement
+	try {
+		image = await createImageBitmap(blob)
+	} catch {
+		image = await decodeBlobAsImageElement(blob, tile.url)
+	}
 	if (tile.signal?.aborted) {
-		image.close()
+		if ("close" in image) image.close()
 		throw new DOMException("Tile request cancelled", "AbortError")
 	}
 	return image

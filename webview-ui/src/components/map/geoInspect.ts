@@ -140,6 +140,9 @@ export function collectFeaturesAtPoint<L extends { id: string; name: string; geo
 		if (!visibleLayerIds.has(layer.id) || !isVectorLayer(layer)) {
 			continue
 		}
+		if (!layer.geojson?.trim()) {
+			continue
+		}
 		try {
 			const parsed = JSON.parse(layer.geojson)
 			for (const { feature } of featuresFromGeoJson(parsed)) {

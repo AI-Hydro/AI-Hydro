@@ -2,8 +2,8 @@ export interface Env {
 	DB: D1Database
 }
 
-const MARKETPLACES = new Set(["gallery", "skills", "modules", "mcp", "connectors"])
-const EVENT_TYPES = new Set(["import", "install", "open_source", "copy_citation", "template_open", "uninstall"])
+const MARKETPLACES = new Set(["gallery", "skills", "modules", "mcp", "connectors", "courses"])
+const EVENT_TYPES = new Set(["import", "install", "open_source", "copy_citation", "template_open", "uninstall", "cite"])
 
 // events rows older than this are pruned by the scheduled() cron handler.
 // item_counts (the durable aggregate) is never pruned.
@@ -312,11 +312,21 @@ async function getCounts(url: URL, env: Env): Promise<Response> {
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url)
-		if (request.method === "OPTIONS") return json({ ok: true })
-		if (request.method === "GET" && url.pathname === "/v1/health") return json({ ok: true })
-		if (request.method === "POST" && url.pathname === "/v1/events") return recordEvent(request, env)
-		if (request.method === "POST" && url.pathname === "/v1/stars") return setStar(request, env)
-		if (request.method === "GET" && url.pathname === "/v1/counts") return getCounts(url, env)
+		if (request.method === "OPTIONS") {
+			return json({ ok: true })
+		}
+		if (request.method === "GET" && url.pathname === "/v1/health") {
+			return json({ ok: true })
+		}
+		if (request.method === "POST" && url.pathname === "/v1/events") {
+			return recordEvent(request, env)
+		}
+		if (request.method === "POST" && url.pathname === "/v1/stars") {
+			return setStar(request, env)
+		}
+		if (request.method === "GET" && url.pathname === "/v1/counts") {
+			return getCounts(url, env)
+		}
 		return json({ error: "Not found." }, { status: 404 })
 	},
 

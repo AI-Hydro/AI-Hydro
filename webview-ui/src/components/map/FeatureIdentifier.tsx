@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react"
 import type { CursorRasterReading } from "./mapLayerAdapters"
+import { PhotoStrip } from "./PhotoStrip"
+import { extractPhotoPaths } from "./photoPaths"
 
 export interface ClickedFeature {
 	layerId: string
@@ -35,13 +37,19 @@ interface FeatureIdentifierProps {
 const QUICK_DELINEATE_MAX_MERIT_UPAREA_KM2 = 50_000
 
 function numberProp(props: Record<string, unknown> | undefined, keys: string[]): number | undefined {
-	if (!props) return undefined
+	if (!props) {
+		return undefined
+	}
 	for (const key of keys) {
 		const value = props[key]
-		if (typeof value === "number" && Number.isFinite(value)) return value
+		if (typeof value === "number" && Number.isFinite(value)) {
+			return value
+		}
 		if (typeof value === "string") {
 			const parsed = Number(value)
-			if (Number.isFinite(parsed)) return parsed
+			if (Number.isFinite(parsed)) {
+				return parsed
+			}
 		}
 	}
 	return undefined
@@ -58,7 +66,9 @@ function routingBadge(
 			fg: string
 	  }
 	| undefined {
-	if (!point) return undefined
+	if (!point) {
+		return undefined
+	}
 	const conus = point.lat >= 24 && point.lat <= 50 && point.lon >= -125 && point.lon <= -66.5
 	if (conus) {
 		return {
@@ -131,12 +141,16 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 	const muted = isDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.55)"
 	const accentText = isDark ? "#7ec8ff" : "#0e639c"
 
+	const photoPaths = hasFeatures ? extractPhotoPaths(current.properties.photos) : []
+	const PHOTO_KEYS = new Set(["photos", "photo_count"])
 	const entries = hasFeatures
 		? Object.entries(current.properties)
-				.filter(([k]) => !k.startsWith("_"))
+				.filter(([k]) => !k.startsWith("_") && !PHOTO_KEYS.has(k))
 				.slice(0, 6)
 		: []
-	const extra = hasFeatures ? Object.entries(current.properties).filter(([k]) => !k.startsWith("_")).length - entries.length : 0
+	const extra = hasFeatures
+		? Object.entries(current.properties).filter(([k]) => !k.startsWith("_") && !PHOTO_KEYS.has(k)).length - entries.length
+		: 0
 
 	const coordLine =
 		inspectPoint &&
@@ -196,7 +210,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 				width: "max-content",
 				minWidth: 200,
 				maxWidth: 260,
-				maxHeight: 280,
+				maxHeight: 360,
 				display: "flex",
 				flexDirection: "column",
 				background: bg,
@@ -338,6 +352,14 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 						</div>
 					))}
 					{extra > 0 && <div style={{ fontSize: 9, color: muted, fontStyle: "italic" }}>+{extra} more</div>}
+					{photoPaths.length > 0 && (
+						<div style={{ marginTop: 8 }}>
+							<div style={{ fontSize: 9, color: muted, marginBottom: 4 }}>
+								{photoPaths.length} site photo{photoPaths.length > 1 ? "s" : ""}
+							</div>
+							<PhotoStrip paths={photoPaths} />
+						</div>
+					)}
 					{showActions && (
 						<div style={{ marginTop: 8 }}>
 							{onAgentDelineate && (

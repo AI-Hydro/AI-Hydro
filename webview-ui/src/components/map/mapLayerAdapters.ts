@@ -16,9 +16,9 @@ export interface CursorRasterReading {
 
 const GEOJSON_LAYER_TYPES = new Set(["vector", "point", "line", "polygon", "geojson"])
 
-/** True when the layer has inspectable vector geometry (geemap-style inspector). */
+/** True when the layer is vector geometry, including file-backed stubs whose GeoJSON is lazy-loaded. */
 export function isGeoJsonLayer(layer: MapLayer): boolean {
-	return GEOJSON_LAYER_TYPES.has(layer.layerType) && Boolean(layer.geojson?.trim())
+	return GEOJSON_LAYER_TYPES.has(layer.layerType)
 }
 
 export function isRasterLikeLayer(layer: MapLayer): boolean {
@@ -112,6 +112,40 @@ function sampleRasterAtPoint(
 		colormap: layer.metadata?.raster_colormap ?? "viridis",
 		units: layer.metadata?.units,
 	}
+}
+
+/** Sample ALL visible raster layers at a point (not just the topmost). Returns one reading per layer that has pixel data there. */
+export function sampleAllRastersAtPoint(
+	layers: MapLayer[],
+	visibleLayerIds: Set<string>,
+	layerOrder: string[],
+	lon: number,
+	lat: number,
+	rasterCache?: {
+		get(id: string):
+			| {
+					bounds?: LayerBounds
+					rawPixels?: { data: Float32Array | number[]; width: number; height: number; min: number; max: number }
+			  }
+			| undefined
+	},
+): CursorRasterReading[] {
+	const byId = new Map(layers.map((l) => [l.id, l]))
+	const ordered: MapLayer[] = []
+	for (const id of layerOrder) {
+		const layer = byId.get(id)
+		if (layer && visibleLayerIds.has(id) && isRasterLikeLayer(layer)) ordered.push(layer)
+	}
+	for (const layer of layers) {
+		if (visibleLayerIds.has(layer.id) && isRasterLikeLayer(layer) && !ordered.some((o) => o.id === layer.id))
+			ordered.push(layer)
+	}
+	const results: CursorRasterReading[] = []
+	for (const layer of ordered) {
+		const r = sampleRasterAtPoint(layer, lon, lat, rasterCache)
+		if (r) results.push(r)
+	}
+	return results
 }
 
 /** Resolve WGS84 bounds for zoom / fit (raster, gee_tile, geojson). */

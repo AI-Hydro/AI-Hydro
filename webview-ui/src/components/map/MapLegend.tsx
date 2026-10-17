@@ -68,7 +68,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({ layers, visibleLayerIds, m
 	const tickColor = isDark ? "#ffffff" : "#000000"
 
 	if (meritRiverLayer && !legendLayer) {
-		return <MeritRiverLegend bdClr={bdClr} bg={bg} fg={fg} />
+		return <MeritRiverLegend bdClr={bdClr} bg={bg} bottomOffset={42} fg={fg} />
 	}
 
 	if (!legendLayer || !spec) {
@@ -76,7 +76,16 @@ export const MapLegend: React.FC<MapLegendProps> = ({ layers, visibleLayerIds, m
 	}
 
 	if (spec.type === "categorical") {
-		return <CategoricalLegend bdClr={bdClr} bg={bg} fg={fg} layerName={legendLayer.name} spec={spec} />
+		const catEl = <CategoricalLegend bdClr={bdClr} bg={bg} fg={fg} layerName={legendLayer.name} spec={spec} />
+		if (meritRiverLayer) {
+			return (
+				<>
+					<MeritRiverLegend bdClr={bdClr} bg={bg} bottomOffset={200} fg={fg} />
+					{catEl}
+				</>
+			)
+		}
+		return catEl
 	}
 
 	const minRaw =
@@ -96,7 +105,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({ layers, visibleLayerIds, m
 		maxRaw > minRaw
 	const tickPct = showTick ? Math.max(0, Math.min(1, (cursorReading.value - minRaw) / (maxRaw - minRaw))) : 0
 
-	return (
+	const continuousEl = (
 		<div
 			style={{
 				position: "absolute",
@@ -129,20 +138,18 @@ export const MapLegend: React.FC<MapLegendProps> = ({ layers, visibleLayerIds, m
 			<div style={{ position: "relative", marginBottom: 3 }}>
 				<div style={{ height: 10, background: gradient, borderRadius: 2, border: `1px solid ${bdClr}` }} />
 				{showTick && (
-					<>
-						<div
-							style={{
-								position: "absolute",
-								top: -2,
-								left: `calc(${(tickPct * 100).toFixed(2)}% - 1px)`,
-								width: 2,
-								height: 14,
-								background: tickColor,
-								boxShadow: "0 0 0 1px rgba(0,0,0,0.55)",
-								borderRadius: 1,
-							}}
-						/>
-					</>
+					<div
+						style={{
+							position: "absolute",
+							top: -2,
+							left: `calc(${(tickPct * 100).toFixed(2)}% - 1px)`,
+							width: 2,
+							height: 14,
+							background: tickColor,
+							boxShadow: "0 0 0 1px rgba(0,0,0,0.55)",
+							borderRadius: 1,
+						}}
+					/>
 				)}
 			</div>
 			<div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, opacity: 0.78 }}>
@@ -158,13 +165,28 @@ export const MapLegend: React.FC<MapLegendProps> = ({ layers, visibleLayerIds, m
 			)}
 		</div>
 	)
+
+	if (meritRiverLayer) {
+		return (
+			<>
+				<MeritRiverLegend bdClr={bdClr} bg={bg} bottomOffset={200} fg={fg} />
+				{continuousEl}
+			</>
+		)
+	}
+	return continuousEl
 }
 
-const MeritRiverLegend: React.FC<{ bg: string; fg: string; bdClr: string }> = ({ bg, fg, bdClr }) => (
+const MeritRiverLegend: React.FC<{ bg: string; fg: string; bdClr: string; bottomOffset?: number }> = ({
+	bg,
+	fg,
+	bdClr,
+	bottomOffset = 42,
+}) => (
 	<div
 		style={{
 			position: "absolute",
-			bottom: 42,
+			bottom: bottomOffset,
 			left: 12,
 			zIndex: 4,
 			padding: "6px 10px",
@@ -219,6 +241,8 @@ const CategoricalLegend: React.FC<{
 			background: bg,
 			border: `1px solid ${bdClr}`,
 			borderRadius: 5,
+			boxShadow: "0 1px 5px rgba(0,0,0,0.28)",
+			fontFamily: "var(--vscode-font-family, system-ui, sans-serif)",
 			fontSize: 10,
 			color: fg,
 			maxWidth: 220,

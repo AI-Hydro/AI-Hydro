@@ -34,6 +34,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		setIsAtBottom,
 		setShowScrollToBottom,
 		disableAutoScrollRef,
+		isAtBottom,
+		scrollToBottomSmooth,
 	} = scrollBehavior
 
 	const { expandedRows, inputValue, setActiveQuote } = chatState
@@ -64,7 +66,9 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	// Show typing indicator when the last message is from the user (no assistant response yet)
 	// Also show when an API request has started but the assistant hasn't started responding
 	const showTypingIndicator = useMemo(() => {
-		if (groupedMessages.length === 0) return false
+		if (groupedMessages.length === 0) {
+			return false
+		}
 		const last = groupedMessages[groupedMessages.length - 1]
 		if (Array.isArray(last)) return false
 		// User messages are type "say" with say === "user_feedback" (see
@@ -75,12 +79,14 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		// never fire for the user's own message.
 		if (last.type === "say" && last.say === "user_feedback") return true
 		// API request started but no text response yet
-		if (last.type === "say" && last.say === "api_req_started") return true
+		if (last.type === "say" && last.say === "api_req_started") {
+			return true
+		}
 		return false
 	}, [groupedMessages])
 
 	return (
-		<div className="overflow-hidden flex flex-col h-full">
+		<div className="overflow-hidden flex flex-col h-full relative">
 			<div className="flex-grow flex" ref={scrollContainerRef}>
 				<Virtuoso
 					atBottomStateChange={(isAtBottom) => {

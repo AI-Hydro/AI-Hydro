@@ -56,7 +56,7 @@ const server = await createServer({
 				if (id === "\0smoke-context")
 					return `const state = {layers: ${JSON.stringify(fixture)}, connectionStatus: "connected", reconnect: () => {}}; export const useMapContext = () => state;`
 				if (id === "\0smoke-entry")
-					return `import "/src/index.css"; import React from "react"; import {createRoot} from "react-dom/client"; import {MapView} from "/src/components/map/MapView.tsx"; createRoot(document.getElementById("root")).render(React.createElement(React.StrictMode, null, React.createElement(MapView)));`
+					return `import "/src/index.css"; import React from "react"; import {createRoot} from "react-dom/client"; import {MapView} from "/src/components/map/MapView.tsx"; import {BrushContextProvider} from "/src/context/BrushContext.tsx"; createRoot(document.getElementById("root")).render(React.createElement(React.StrictMode, null, React.createElement(BrushContextProvider, null, React.createElement(MapView))));`
 			},
 			configureServer(server) {
 				server.middlewares.use((req, res, next) => {

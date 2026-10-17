@@ -52,10 +52,14 @@ export const HtmlPreviewPanel: React.FC = () => {
 		async (moduleId: string) => {
 			if (!course || !courseRoot) return
 			const target = course.modules.find((m) => m.id === moduleId)
-			if (!target) return
+			if (!target) {
+				return
+			}
 			// Phase B: prerequisite gate — silently no-op if locked. The UI should
 			// have prevented the click already (disabled button) but defence in depth.
-			if (!courseProgress.canAccess(target)) return
+			if (!courseProgress.canAccess(target)) {
+				return
+			}
 			const fullPath = resolveModuleFilePath(courseRoot, target.path)
 			try {
 				const loaded = await persistThenLoadCourseModule(
@@ -379,9 +383,15 @@ export const HtmlPreviewPanel: React.FC = () => {
 											.filter(Boolean)
 											.join(", ")
 										const subParts: string[] = []
-										if (manifest?.level) subParts.push(String(manifest.level))
-										if (manifest?.estimated_minutes) subParts.push(`${manifest.estimated_minutes} min`)
-										if (manifest?.license) subParts.push(String(manifest.license))
+										if (manifest?.level) {
+											subParts.push(String(manifest.level))
+										}
+										if (manifest?.estimated_minutes) {
+											subParts.push(`${manifest.estimated_minutes} min`)
+										}
+										if (manifest?.license) {
+											subParts.push(String(manifest.license))
+										}
 										const subline = subParts.join(" · ")
 										return (
 											<SidebarItemCard

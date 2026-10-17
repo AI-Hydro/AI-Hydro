@@ -4,7 +4,7 @@
 
 import type { Controller } from "@core/controller"
 import type { MapLayerPatch } from "@core/map/mergeMapLayerPatch"
-import { MapRoi } from "@shared/proto/cline/map"
+import { MapLayer, MapRoi } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
@@ -12,6 +12,36 @@ import { type MapCommandPayload, mapCommandSchema } from "./mapCommandSchema"
 
 const MAP_COMMANDS_DIR = path.join(os.homedir(), ".aihydro", "map_commands")
 const POLL_INTERVAL_MS = 250
+
+/**
+ * Sniff the deck.gl layerType ("point" | "line" | "polygon") from a GeoJSON
+ * string by inspecting the first geometry encountered. Falls back to "polygon".
+ * Vector geometry is auto-detected per-feature by GeoJsonLayer regardless, but
+ * the layerType drives legend icons and line-specific styling.
+ */
+function sniffGeometryType(geojson: string): string {
+	try {
+		const parsed = JSON.parse(geojson)
+		const firstGeomType: string | undefined =
+			parsed?.type === "FeatureCollection"
+				? parsed.features?.[0]?.geometry?.type
+				: parsed?.type === "Feature"
+					? parsed.geometry?.type
+					: parsed?.type
+		switch (firstGeomType) {
+			case "Point":
+			case "MultiPoint":
+				return "point"
+			case "LineString":
+			case "MultiLineString":
+				return "line"
+			default:
+				return "polygon"
+		}
+	} catch {
+		return "polygon"
+	}
+}
 
 export class MapCommandWatcher {
 	private intervalId: NodeJS.Timeout | null = null
@@ -166,6 +196,49 @@ export class MapCommandWatcher {
 			case "set_basemap": {
 				if (cmd.basemap_id) {
 					this.controller.mapSessionService.setBasemap(cmd.basemap_id, cmd.basemap_name)
+				}
+				break
+			}
+			case "fly_to": {
+				if (typeof cmd.longitude === "number" && typeof cmd.latitude === "number") {
+					this.appendAgentCommandEvent("command.fly_to", {
+						longitude: cmd.longitude,
+						latitude: cmd.latitude,
+						zoom: cmd.zoom ?? 9,
+						durationMs: cmd.duration_ms ?? 2000,
+					})
+				}
+				break
+			}
+			case "add_layer_from_run": {
+				if (!cmd.layer_id || !cmd.geojson) {
+					console.warn("[MapCommandWatcher] add_layer_from_run: missing layer_id or geojson")
+					break
+				}
+				const layer = MapLayer.create({
+					id: cmd.layer_id,
+					name: cmd.layer_name || cmd.layer_id,
+					geojson: cmd.geojson,
+					layerType: sniffGeometryType(cmd.geojson),
+					visible: true,
+					metadata: {
+						run_id: cmd.run_id || "",
+						session_id: cmd.session_id || "",
+						source: "run_output",
+					},
+				})
+				this.controller.addMapLayer(layer)
+				if (cmd.auto_zoom !== false) {
+					this.appendAgentCommandEvent("command.fit_layer", { layerId: cmd.layer_id })
+				}
+				break
+			}
+			case "set_time_range": {
+				if (cmd.start_iso && cmd.end_iso) {
+					this.appendAgentCommandEvent("command.set_time_range", {
+						startIso: cmd.start_iso,
+						endIso: cmd.end_iso,
+					})
 				}
 				break
 			}

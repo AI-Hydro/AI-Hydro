@@ -37,6 +37,16 @@ export interface LiveLayer {
 	geeStartDate?: string
 	geeEndDate?: string
 	geeMock?: boolean
+	// Phase 3.4 — provenance chips
+	toolName?: string // metadata.tool_name — MCP tool that created this layer
+	runId?: string // metadata._run_id   — enforcement run_id
+	agentStep?: string // metadata.agent_step — agent step index/label
+	computedAt?: string // metadata.timestamp  — ISO timestamp of computation
+	// Phase 3.4 — time slider
+	timeStart?: string // metadata.time_start — ISO date / YYYY-MM-DD
+	timeEnd?: string // metadata.time_end   — ISO date / YYYY-MM-DD
+	// Phase 3.4 — claim binding
+	boundClaimId?: string // metadata.claim_id   — linked claim in the ledger
 }
 
 export function parseBoundsJson(raw?: string): LayerBounds | undefined {
@@ -89,5 +99,12 @@ export function mapLayerToLiveLayer(layer: MapLayer): LiveLayer {
 		geeStartDate: meta.gee_start_date,
 		geeEndDate: meta.gee_end_date,
 		geeMock: meta.gee_mock === "true",
+		toolName: meta.tool_name,
+		runId: meta._run_id,
+		agentStep: meta.agent_step,
+		computedAt: meta.timestamp,
+		timeStart: meta.time_start,
+		timeEnd: meta.time_end,
+		boundClaimId: meta.claim_id,
 	}
 }

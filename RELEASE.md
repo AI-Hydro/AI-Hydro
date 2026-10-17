@@ -58,3 +58,22 @@ a real predecessor to diff against. This does **not** claim that HEAD is
 byte-identical to whatever was actually published as 0.2.5 historically —
 only that it's the closest available anchor point, and every release from
 here forward will have an accurate tag.
+
+## Marketplace 0.3.0 was published untagged (recorded 2026-10-17)
+
+The Marketplace serves `0.3.0`, and no `aihydro-v0.3.*` tag exists. Evidence
+(string markers in the gallery-installed bundle) shows that bundle was built
+from an uncommitted working tree on the `feat/deepseek-harness-hardening`
+line: it contains the native-platform-primacy prompt grouping, multi-line JSON
+repair, `fly_to` / `set_time_range` host handling and WebGL context-loss
+recovery, but not the Inundation 3D or time-slider UI. Nothing on `main` was
+ever published under 0.2.6 or 0.2.7 (the Marketplace rejects lower versions).
+
+Branch `feat/deepseek-harness-hardening` (head `ba06b214f`) was merged into
+`main` by `reconcile/release-0.3-into-main` so that every shipped commit is an
+ancestor of `main`. That merge is the nearest anchor to the published 0.3.0 and
+is **not** claimed to be byte-identical to it.
+
+Open owner decisions before the next release: the version number (must be
+above 0.3.0; `package.json` still reads 0.2.7 pending that decision), whether to
+add a retroactive `aihydro-v0.3.0` tag at `ba06b214f`, and whether to publish.
