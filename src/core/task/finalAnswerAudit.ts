@@ -17,6 +17,7 @@ import { isAiHydroServerName } from "./tools/handlers/aiHydroServer"
  */
 
 export const AUDIT_TOOL_NAME = "audit_interpretation"
+export const CHAT_STATUS_TOOL_NAME = "aihydro_chat_status"
 export const DEFAULT_AUDIT_TIMEOUT_MS = 15_000
 const MAX_VIOLATIONS_SHOWN = 10
 
@@ -39,9 +40,16 @@ export interface AuditViolationView {
 }
 
 export type FinalAnswerAuditOutcome =
-	| { status: "skipped"; reason: "no-ai-hydro-server" | "nothing-to-audit" }
-	| { status: "passed"; cited?: number; total?: number }
-	| { status: "violations"; violations: AuditViolationView[]; totalViolations: number; cited?: number; total?: number }
+	| { status: "skipped"; reason: "no-ai-hydro-server" | "nothing-to-audit" | "no-research-session" }
+	| { status: "passed"; sessionId?: string; cited?: number; total?: number }
+	| {
+			status: "violations"
+			sessionId?: string
+			violations: AuditViolationView[]
+			totalViolations: number
+			cited?: number
+			total?: number
+	  }
 	| { status: "unavailable"; reason: string }
 
 /** Numeric literals or evidence markers: the things the auditor can say anything about. */
@@ -65,6 +73,18 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 	return Promise.race([p, timeout]).finally(() => clearTimeout(timer))
 }
 
+function responseJson(response: McpToolCallResponse): { json?: any; text: string; isError: boolean } {
+	const text = (response?.content ?? [])
+		.map((c: any) => (c?.type === "text" ? c.text : ""))
+		.filter(Boolean)
+		.join("\n")
+	try {
+		return { json: JSON.parse(text), text, isError: !!response?.isError }
+	} catch {
+		return { text, isError: !!response?.isError }
+	}
+}
+
 export async function runFinalAnswerAudit(args: {
 	hub: AuditHub
 	ulid: string
@@ -85,9 +105,35 @@ export async function runFinalAnswerAudit(args: {
 		return unavailable(`server '${server.name}' does not expose ${AUDIT_TOOL_NAME}`)
 	}
 
+	// The server resolves "which study?" with a fallback to the most recently modified study on disk.
+	// That must never decide which evidence ledger audits this answer, so first confirm a study is
+	// actually bound to THIS chat, and later require the audited session to be that study.
+	let boundStudy: string
+	try {
+		if (server.tools && server.tools.length > 0 && !server.tools.some((t) => t.name === CHAT_STATUS_TOOL_NAME)) {
+			return unavailable(`cannot confirm a research session is bound to this chat (${CHAT_STATUS_TOOL_NAME} not exposed)`)
+		}
+		const statusCtx = buildAiHydroCallContext({ chat_id: ulid }, ulid, workspaceRoot, args.modelIdReturned)
+		const status = responseJson(
+			await withTimeout(
+				hub.callTool(server.name, CHAT_STATUS_TOOL_NAME, statusCtx.args, ulid, statusCtx.meta),
+				args.timeoutMs ?? DEFAULT_AUDIT_TIMEOUT_MS,
+			),
+		)
+		if (status.isError || !status.json || typeof status.json.bound !== "boolean") {
+			return unavailable("could not determine whether a research session is bound to this chat")
+		}
+		if (!status.json.bound || typeof status.json.study_id !== "string") {
+			return { status: "skipped", reason: "no-research-session" }
+		}
+		boundStudy = status.json.study_id
+	} catch (error) {
+		return unavailable(error instanceof Error ? error.message : String(error))
+	}
+
 	let response: McpToolCallResponse
 	try {
-		const ctx = buildAiHydroCallContext({ prose: answer }, ulid, workspaceRoot, args.modelIdReturned)
+		const ctx = buildAiHydroCallContext({ prose: answer, session_id: boundStudy }, ulid, workspaceRoot, args.modelIdReturned)
 		response = await withTimeout(
 			hub.callTool(server.name, AUDIT_TOOL_NAME, ctx.args, ulid, ctx.meta),
 			args.timeoutMs ?? DEFAULT_AUDIT_TIMEOUT_MS,
@@ -96,34 +142,32 @@ export async function runFinalAnswerAudit(args: {
 		return unavailable(error instanceof Error ? error.message : String(error))
 	}
 
-	const text = (response?.content ?? [])
-		.map((c: any) => (c?.type === "text" ? c.text : ""))
-		.filter(Boolean)
-		.join("\n")
-	if (response?.isError) {
+	const { json: parsed, text, isError } = responseJson(response)
+	if (isError) {
 		return unavailable(text || "the audit tool reported an error")
 	}
-	let parsed: any
-	try {
-		parsed = JSON.parse(text)
-	} catch {
+	if (!parsed) {
 		return unavailable("the audit tool returned a response that is not JSON")
 	}
-	if (parsed && typeof parsed.error === "string") {
-		// e.g. no research session is bound to this chat, so there is no evidence ledger to check against
+	if (typeof parsed.error === "string") {
 		return unavailable(parsed.error)
 	}
-	if (!parsed || typeof parsed.passed !== "boolean") {
+	if (typeof parsed.passed !== "boolean") {
 		return unavailable("the audit tool returned an unrecognised response")
+	}
+	const sessionId = typeof parsed.session_id === "string" ? parsed.session_id : undefined
+	if (sessionId !== boundStudy) {
+		return unavailable(`audited session '${sessionId ?? "unknown"}' is not the study bound to this chat ('${boundStudy}')`)
 	}
 	const cited = typeof parsed.cited_numeric_count === "number" ? parsed.cited_numeric_count : undefined
 	const total = typeof parsed.total_numeric_count === "number" ? parsed.total_numeric_count : undefined
 	if (parsed.passed) {
-		return { status: "passed", cited, total }
+		return { status: "passed", sessionId, cited, total }
 	}
 	const raw: any[] = Array.isArray(parsed.violations) ? parsed.violations : []
 	return {
 		status: "violations",
+		sessionId,
 		totalViolations: raw.length,
 		cited,
 		total,
@@ -145,13 +189,13 @@ export function formatFinalAnswerAudit(outcome: FinalAnswerAuditOutcome): string
 		case "unavailable":
 			return `**Answer audit unavailable** (${outcome.reason}). The final answer above was NOT checked against the evidence ledger. ${note}`
 		case "passed":
-			return `**Answer audit passed**${
+			return `**Answer audit passed** (study \`${outcome.sessionId}\`)${
 				outcome.total !== undefined && outcome.cited !== undefined
 					? `: ${outcome.cited}/${outcome.total} numbers cited`
 					: ""
 			}. ${note}`
 		case "violations": {
-			const header = `**Answer audit found ${outcome.totalViolations} issue${outcome.totalViolations === 1 ? "" : "s"}**${
+			const header = `**Answer audit (study \`${outcome.sessionId}\`) found ${outcome.totalViolations} issue${outcome.totalViolations === 1 ? "" : "s"}**${
 				outcome.total !== undefined && outcome.cited !== undefined
 					? ` (${outcome.cited}/${outcome.total} numbers cited)`
 					: ""

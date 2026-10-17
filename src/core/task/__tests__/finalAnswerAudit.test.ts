@@ -6,21 +6,40 @@ import { type AuditHub, formatFinalAnswerAudit, hasAuditableContent, runFinalAns
 import { AttemptCompletionHandler } from "../tools/handlers/AttemptCompletionHandler"
 
 const AUDIT_TOOL = { name: "audit_interpretation" }
+const STATUS_TOOL = { name: "aihydro_chat_status" }
+const BOUND = { bound: true, study_id: "study-1" }
 
 function server(overrides: Partial<McpServer> = {}): McpServer {
-	return { name: "ai-hydro", status: "connected", config: "{}", tools: [AUDIT_TOOL], ...overrides } as McpServer
+	return { name: "ai-hydro", status: "connected", config: "{}", tools: [AUDIT_TOOL, STATUS_TOOL], ...overrides } as McpServer
 }
 
 function textResponse(obj: unknown, isError = false) {
 	return { isError, content: [{ type: "text", text: typeof obj === "string" ? obj : JSON.stringify(obj) }] } as any
 }
 
-function mockHub(servers: McpServer[], callTool: sinon.SinonStub = sinon.stub()): AuditHub & { callTool: sinon.SinonStub } {
-	return { getServers: () => servers, callTool } as any
+/**
+ * `callTool` is the stub that answers audit_interpretation (so existing assertions on its calls hold);
+ * aihydro_chat_status is answered by `status` (default: chat bound to study-1).
+ */
+function mockHub(
+	servers: McpServer[],
+	callTool: sinon.SinonStub = sinon.stub(),
+	status: any = textResponse(BOUND),
+): AuditHub & { callTool: sinon.SinonStub; statusCalls: any[][] } {
+	const statusCalls: any[][] = []
+	const router = (serverName: string, tool: string, ...rest: any[]) => {
+		if (tool === "aihydro_chat_status") {
+			statusCalls.push([serverName, tool, ...rest])
+			return status instanceof Error ? Promise.reject(status) : Promise.resolve(status)
+		}
+		return callTool(serverName, tool, ...rest)
+	}
+	return { getServers: () => servers, callTool: router, statusCalls, auditStub: callTool } as any
 }
 
-const PASS = { passed: true, violations: [], cited_numeric_count: 2, total_numeric_count: 2 }
+const PASS = { session_id: "study-1", passed: true, violations: [], cited_numeric_count: 2, total_numeric_count: 2 }
 const FAIL = {
+	session_id: "study-1",
 	passed: false,
 	cited_numeric_count: 0,
 	total_numeric_count: 1,
@@ -45,11 +64,12 @@ describe("final-answer audit", () => {
 				answer: "NSE is 0.71 [run:r1#nse]",
 				modelIdReturned: "claude-opus-5-5-x",
 			})
-			expect(out).to.deep.equal({ status: "passed", cited: 2, total: 2 })
+			expect(out).to.deep.equal({ status: "passed", sessionId: "study-1", cited: 2, total: 2 })
 			const [serverName, tool, args, ulid, meta] = callTool.firstCall.args
 			expect(serverName).to.equal("ai-hydro")
 			expect(tool).to.equal("audit_interpretation")
 			expect(args.prose).to.equal("NSE is 0.71 [run:r1#nse]")
+			expect(args.session_id).to.equal("study-1")
 			expect(ulid).to.equal("chat-1")
 			expect(meta["aihydro/context"]).to.include({ chat_id: "chat-1", model_id_returned: "claude-opus-5-5-x" })
 		})
@@ -64,6 +84,7 @@ describe("final-answer audit", () => {
 			expect(out.status).to.equal("violations")
 			const text = formatFinalAnswerAudit(out) as string
 			expect(text).to.include("found 1 issue")
+			expect(text).to.include("study `study-1`")
 			expect(text).to.include("uncited_number")
 			expect(text).to.include("Fix: Add [run:<id>#nse]")
 			expect(text).to.include("answer above is unchanged")
@@ -122,9 +143,47 @@ describe("final-answer audit", () => {
 			}
 		})
 
+		it("skips (no unrelated-ledger fallback) when no research session is bound to this chat", async () => {
+			const callTool = sinon.stub().resolves(textResponse(PASS))
+			const hub = mockHub([server()], callTool, textResponse({ bound: false, study_id: null }))
+			const out = await runFinalAnswerAudit({ hub, ulid: "chat-1", workspaceRoot: "/w", answer: "NSE 0.7" })
+			expect(out).to.deep.equal({ status: "skipped", reason: "no-research-session" })
+			expect(callTool.called).to.equal(false)
+			expect(hub.statusCalls[0][2]).to.include({ chat_id: "chat-1" })
+		})
+
+		it("is unavailable (not a guess) when the binding cannot be determined", async () => {
+			for (const status of [new Error("boom"), textResponse("nope"), textResponse({ ok: 1 }), textResponse("x", true)]) {
+				const callTool = sinon.stub().resolves(textResponse(PASS))
+				const out = await runFinalAnswerAudit({
+					hub: mockHub([server()], callTool, status),
+					ulid: "c",
+					workspaceRoot: "/w",
+					answer: "NSE 0.7",
+				})
+				expect(out.status).to.equal("unavailable")
+				expect(callTool.called).to.equal(false)
+			}
+			const noStatusTool = mockHub([server({ tools: [AUDIT_TOOL] as any })])
+			expect(
+				(await runFinalAnswerAudit({ hub: noStatusTool, ulid: "c", workspaceRoot: "/w", answer: "NSE 0.7" })).status,
+			).to.equal("unavailable")
+		})
+
+		it("is unavailable if the audit ran against a different session than the bound one", async () => {
+			const out = await runFinalAnswerAudit({
+				hub: mockHub([server()], sinon.stub().resolves(textResponse({ ...PASS, session_id: "other-study" }))),
+				ulid: "c",
+				workspaceRoot: "/w",
+				answer: "NSE 0.7",
+			})
+			expect(out.status).to.equal("unavailable")
+			expect((out as any).reason).to.include("other-study")
+		})
+
 		it("reports unavailable when the connected server has tools but not audit_interpretation", async () => {
 			const out = await runFinalAnswerAudit({
-				hub: mockHub([server({ tools: [{ name: "other" } as any] })]),
+				hub: mockHub([server({ tools: [{ name: "other" } as any, STATUS_TOOL] })]),
 				ulid: "c",
 				workspaceRoot: "/w",
 				answer: "x 1",
@@ -173,7 +232,7 @@ describe("final-answer audit", () => {
 			await new AttemptCompletionHandler().execute(config, block)
 			expect(order).to.deep.equal([
 				"say:completion_result:NSE was 0.71",
-				"say:text:**Answer audit found 1 i",
+				"say:text:**Answer audit (study `s",
 				"ask:completion_result",
 				"say:user_feedback:thanks",
 			])
