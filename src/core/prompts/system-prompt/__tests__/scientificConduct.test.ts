@@ -2,6 +2,8 @@ import { expect } from "chai"
 import { describe, it } from "mocha"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { getSystemPrompt } from "../index"
+import { PromptBuilder } from "../registry/PromptBuilder"
+import { PromptRegistry } from "../registry/PromptRegistry"
 import type { SystemPromptContext } from "../types"
 
 const ctxFor = (modelId: string): SystemPromptContext =>
@@ -57,5 +59,19 @@ describe("system prompt: scientific conduct and removed contradictions", () => {
 		const prompt = await getSystemPrompt(ctxFor("gpt-3"))
 		expect(prompt).to.match(/\*\*Skills:\*\* Consult the skill catalog/)
 		expect(prompt).to.match(/not a mandatory pre-flight/)
+	})
+
+	it("EVERY registered variant (incl. xs) has the conduct rules and no assume-success rule", async () => {
+		await getSystemPrompt(ctxFor("gpt-3")) // loads the registry
+		const registry = PromptRegistry.getInstance() as any
+		const variants: Array<[string, any]> = [...registry.variants.entries()]
+		expect(variants.length).to.be.greaterThan(3)
+		for (const [key, variant] of variants) {
+			const prompt = await new PromptBuilder(variant, ctxFor("gpt-3"), registry.components).build()
+			expect(prompt, key).to.include("Never report a number")
+			expect(prompt, key).to.match(/Abstain when the evidence is insufficient/)
+			expect(prompt, key).to.not.match(/(?<!never )assume (the terminal|success)/i)
+			expect(prompt, key).to.not.match(/Mandatory Pre-Flight/)
+		}
 	})
 })

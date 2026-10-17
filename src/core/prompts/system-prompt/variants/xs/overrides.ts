@@ -1,3 +1,4 @@
+import { SCIENTIFIC_CONDUCT_RULES } from "../../components/scientific_conduct"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { PromptVariant } from "../../types"
 
@@ -50,7 +51,8 @@ const XS_RULES = `GLOBAL RULES
 - Prefer list/search/read tools over asking; if anything is unclear, use <ask_followup_question>.
 - Edits: replace_in_file default; exact markers; complete lines only.
 - Tone: direct, technical, concise. Never start with "Great", "Certainly", "Okay", or "Sure".
-- Images (if provided) can inform decisions.`
+- Images (if provided) can inform decisions.
+${SCIENTIFIC_CONDUCT_RULES}`
 
 const XS_OBJECTIVES = `EXECUTION FLOW
 - Understand request → PLAN explore (read-only) → propose collaborative plan with options/risks/tests → ask if it matches → output: **Switch me to ACT MODE to implement.**
