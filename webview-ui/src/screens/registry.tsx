@@ -6,6 +6,7 @@
 import { Providers } from "../Providers"
 import App from "../App"
 import HistoryView from "../components/history/HistoryView"
+import WelcomeView from "../components/welcome/WelcomeView"
 import { finalAnswerTask, mcpCallTask, plainTextTask, refusalTask, taskItem } from "./fixtures/chat"
 import { approvalClaims, claim, driftClaims, FIXTURE_SESSION, statusClaims } from "./fixtures/claims"
 import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/experiments"
@@ -105,7 +106,18 @@ export const screens: ScreenDef[] = [
 	},
 
 	// ── Chat (sidebar) ──────────────────────────────────────────────
-	chatScreen("chat-welcome", "Welcome / first run", { state: { welcomeViewCompleted: false } }),
+	// Rendered directly: ExtensionStateContext force-sets showWelcome=false 2s after mount (stale-closure
+	// timeout), so mounting through App would capture the chat home instead of the first-run view.
+	chatScreen("chat-welcome", "Welcome / first run", {
+		state: { welcomeViewCompleted: false },
+		render: () => (
+			<Providers>
+				<div style={{ position: "relative", height: "100vh" }}>
+					<WelcomeView />
+				</div>
+			</Providers>
+		),
+	}),
 	chatScreen("chat-home-history", "Chat home with history cards and auto-approve bar"),
 	chatScreen("chat-home-empty-history", "Chat home, no history", { state: { taskHistory: [] } }),
 	chatScreen("chat-task-text", "Task with plain text", { state: taskState(plainTextTask) }),

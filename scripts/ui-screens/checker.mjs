@@ -129,7 +129,8 @@ export function pageChecker() {
 			"button, [role=button], a[href], input:not([type=hidden]), select, textarea, [role=tab], [role=checkbox], [role=switch], vscode-button, vscode-checkbox, vscode-radio",
 		),
 	)
-	const INTERACTIVE_SELECTOR = "button, [role=button], a[href], input, select, textarea, [role=tab], vscode-button, vscode-checkbox, vscode-radio"
+	const INTERACTIVE_SELECTOR =
+		"button, [role=button], a[href], input, select, textarea, [role=tab], vscode-button, vscode-checkbox, vscode-radio"
 	for (const el of document.querySelectorAll("body *")) {
 		if (interactive.has(el) || el.closest("[data-harness]")) continue
 		// cursor:pointer is inherited by decorative children (icons) of real controls; the control is the target.

@@ -46,10 +46,30 @@ const workers = Number(opt("workers", "4"))
 const baselineDir = resolve(opt("baseline", join(root, "webview-ui/screens-baseline", process.platform)))
 const budgetPath = resolve(opt("budget", join(root, "webview-ui/screens-baseline/checker-budget.json")))
 const diffThreshold = Number(opt("diff-threshold", "0.002"))
+const resume = flag("resume")
+const freeze = !flag("no-freeze")
 const check = flag("check")
 const writeBudget = flag("write-budget")
 const updateBaseline = flag("update-baseline")
 for (const t of themes) if (!THEMES.includes(t)) throw new Error(`unknown theme ${t}`)
+
+// Production CSS still runs always-on keyframes under prefers-reduced-motion (plan S1/S2 fix that), so the
+// harness fast-forwards animations to their end state before measuring: deterministic checks and pixels.
+const FREEZE_CSS =
+	"*,*::before,*::after{animation-duration:0.001s!important;animation-delay:0s!important;animation-iteration-count:1!important;animation-fill-mode:forwards!important;transition-duration:0s!important;transition-delay:0s!important;scroll-behavior:auto!important;caret-color:transparent!important}"
+
+// Layout can still be moving under load (virtualised lists scrolling to the end, late fonts). Take
+// screenshots until two consecutive ones are byte-identical (max 10) and return the last one.
+async function settle(page) {
+	let previous = null
+	for (let i = 0; i < 10; i++) {
+		const shot = await page.screenshot({ timeout: 90000 })
+		if (previous && Buffer.compare(previous, shot) === 0) return shot
+		previous = shot
+		await page.waitForTimeout(200)
+	}
+	return previous
+}
 
 const REF = { theme: "dark", font: 13 }
 const refWidth = { sidebar: 400, panel: 800, editor: 1280 }
@@ -119,13 +139,25 @@ const allScreens = await warm.evaluate(() => window.__screens)
 await warm.context().close()
 const screens = allScreens.filter((s) => !only || only.includes(s.id) || only.includes(s.group))
 
-const cells = []
+const allCells = []
 for (const s of screens)
 	for (const t of themes)
 		for (const w of widths)
-			for (const f of fonts) for (const m of motion) cells.push({ screen: s, theme: t, width: w, font: f, motion: m })
+			for (const f of fonts) for (const m of motion) allCells.push({ screen: s, theme: t, width: w, font: f, motion: m })
 
+// --resume keeps clean results (and their PNGs) from an earlier run in the same --out dir and renders only the rest.
 const results = []
+const priorByFile = new Map()
+if (resume && existsSync(join(outDir, "summary.json"))) {
+	for (const r of JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")).results ?? [])
+		if (r.errors.length === 0 && r.checker && existsSync(join(outDir, "png", r.file))) priorByFile.set(r.file, r)
+}
+const cells = allCells.filter((c) => {
+	const prior = priorByFile.get(`${name(c.screen.id, c.theme, c.width, c.font, c.motion)}.png`)
+	if (prior) results.push(prior)
+	return !prior
+})
+if (resume) process.stderr.write(`resume: reusing ${results.length} clean cells, rendering ${cells.length}\n`)
 let next = 0
 
 async function worker() {
@@ -152,52 +184,64 @@ async function worker() {
 			axe: null,
 			ok: true,
 		}
-		try {
-			await page.emulateMedia({ reducedMotion: m === "reduce" ? "reduce" : "no-preference" })
-			await page.setViewportSize({ width, height: width >= 1280 ? 900 : 860 })
-			await page.goto(`${base}/screen/${screen.id}?theme=${theme}&font=${font}&surface=${screen.surface}`, {
-				waitUntil: "networkidle",
-				timeout: 120000,
-			})
-			await page.waitForFunction(() => window.__screenReady === true, null, { timeout: 60000 })
-			await page.locator("#root > *").first().waitFor({ timeout: 60000 })
-			if (screen.ready) await page.locator(screen.ready).first().waitFor({ timeout: 60000 })
-			await page.waitForTimeout(screen.hasMapCanvas ? 1500 : 350)
-			const steps = await page.evaluate(() => window.__screenSteps ?? [])
-			for (const step of steps) {
-				if (step.click)
-					await page
-						.locator(step.click)
-						.nth(step.nth ?? 0)
-						.click({ timeout: 20000 })
-				else if (step.scroll) await page.locator(step.scroll).first().scrollIntoViewIfNeeded({ timeout: 20000 })
-				else if (step.fill) await page.locator(step.fill[0]).first().fill(step.fill[1])
-				else if (step.press) await page.keyboard.press(step.press)
-				else if (step.wait) await page.waitForTimeout(step.wait)
-			}
-			await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {})
-			await page.waitForTimeout(screen.hasMapCanvas ? 800 : 200)
-			record.checker = await page.evaluate(pageChecker)
-			if (axe) {
-				await page.evaluate(axe)
-				record.axe = await page.evaluate(async () => {
-					const r = await window.axe.run(document.body, { resultTypes: ["violations"] })
-					return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }))
+		for (let attempt = 0; attempt < 2; attempt++) {
+			errors = []
+			record.ok = true
+			record.checker = null
+			try {
+				await page.emulateMedia({ reducedMotion: m === "reduce" ? "reduce" : "no-preference" })
+				await page.setViewportSize({ width, height: width >= 1280 ? 900 : 860 })
+				await page.goto(`${base}/screen/${screen.id}?theme=${theme}&font=${font}&surface=${screen.surface}`, {
+					waitUntil: "networkidle",
+					timeout: 120000,
 				})
+				await page.waitForFunction(() => window.__screenReady === true, null, { timeout: 60000 })
+				await page.locator("#root > *").first().waitFor({ timeout: 60000 })
+				if (screen.ready) await page.locator(screen.ready).first().waitFor({ timeout: 60000 })
+				await page.waitForTimeout(screen.hasMapCanvas ? 1500 : 350)
+				const steps = await page.evaluate(() => window.__screenSteps ?? [])
+				for (const step of steps) {
+					if (step.click)
+						await page
+							.locator(step.click)
+							.nth(step.nth ?? 0)
+							.click({ timeout: 20000 })
+					else if (step.scroll) await page.locator(step.scroll).first().scrollIntoViewIfNeeded({ timeout: 20000 })
+					else if (step.fill) await page.locator(step.fill[0]).first().fill(step.fill[1])
+					else if (step.press) await page.keyboard.press(step.press)
+					else if (step.wait) await page.waitForTimeout(step.wait)
+				}
+				await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {})
+				await page.waitForTimeout(screen.hasMapCanvas ? 800 : 200)
+				await settle(page)
+				if (freeze) {
+					await page.addStyleTag({ content: FREEZE_CSS })
+					await page.waitForTimeout(150)
+				}
+				record.checker = await page.evaluate(pageChecker)
+				if (axe) {
+					await page.evaluate(axe)
+					record.axe = await page.evaluate(async () => {
+						const r = await window.axe.run(document.body, { resultTypes: ["violations"] })
+						return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }))
+					})
+				}
+				const mask = screen.hasMapCanvas
+					? await page.evaluate(() =>
+							[...document.querySelectorAll("canvas")].map((c) => {
+								const r = c.getBoundingClientRect()
+								return [r.left, r.top, r.right, r.bottom]
+							}),
+						)
+					: []
+				record.mask = mask
+				writeFileSync(join(outDir, "png", file), await settle(page))
+			} catch (e) {
+				record.ok = false
+				errors.push(`HARNESS: ${String(e.message ?? e).split("\n")[0]}`)
 			}
-			const mask = screen.hasMapCanvas
-				? await page.evaluate(() =>
-						[...document.querySelectorAll("canvas")].map((c) => {
-							const r = c.getBoundingClientRect()
-							return [r.left, r.top, r.right, r.bottom]
-						}),
-					)
-				: []
-			record.mask = mask
-			await page.screenshot({ path: join(outDir, "png", file) })
-		} catch (e) {
-			record.ok = false
-			errors.push(`HARNESS: ${String(e.message ?? e).split("\n")[0]}`)
+			// A transient harness failure (machine load) gets one retry; real page errors do not.
+			if (record.ok || errors.some((e) => !e.startsWith("HARNESS:"))) break
 		}
 		record.errors = errors
 		results.push(record)
