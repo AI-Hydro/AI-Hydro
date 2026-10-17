@@ -14,5 +14,8 @@ npm run ui:screens -- --out <dir> --themes dark,light,hc-dark,hc-light \
 - The built-in checker (`scripts/ui-screens/checker.mjs`) counts: missing accessible names, targets under 24x24 px, text under 11 px, and WCAG contrast failures (text over canvas/images/gradients is reported as indeterminate, never as a pass). axe-core runs automatically if `axe-core` is resolvable; it is not installed here.
 - `--check` fails on page errors, unrouted requests, per-screen counts above `webview-ui/screens-baseline/checker-budget.json` (reference cell only: dark, 13 px, native width), and pixel diffs over 0.2% against `webview-ui/screens-baseline/<os>/` when that directory exists. Image baselines are not committed (owner decision pending); create them locally with `--update-baseline`. Map canvases are masked in pixel diffs.
 - `--write-budget` rewrites the budget; use it only in a slice that lowers counts.
+- `--resume` keeps clean cells from an earlier run in the same `--out` and renders only the rest (a failed cell gets one automatic retry).
+- Animations are fast-forwarded to their end state before measuring (`--no-freeze` disables this) so checks and pixels are deterministic. Production CSS still runs always-on keyframes under `prefers-reduced-motion`; that is an S2 fix, not hidden by this.
+- `node scripts/ui-screens/write-baseline-doc.mjs <summary.json> <out.md>` renders the committed baseline doc from a run.
 
 Outputs: `<out>/png/*.png`, `<out>/index.html` (contact sheet), `<out>/summary.json`.

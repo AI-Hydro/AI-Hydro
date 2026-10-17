@@ -206,6 +206,13 @@ async function worker() {
 							.locator(step.click)
 							.nth(step.nth ?? 0)
 							.click({ timeout: 20000 })
+					else if (step.scrollEnd)
+						await page
+							.locator(step.scrollEnd)
+							.first()
+							.evaluate((el) => {
+								el.scrollTop = el.scrollHeight
+							})
 					else if (step.scroll) await page.locator(step.scroll).first().scrollIntoViewIfNeeded({ timeout: 20000 })
 					else if (step.fill) await page.locator(step.fill[0]).first().fill(step.fill[1])
 					else if (step.press) await page.keyboard.press(step.press)

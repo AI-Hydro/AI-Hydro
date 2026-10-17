@@ -18,6 +18,7 @@ export type ScreenStep =
 	| { click: string; nth?: number }
 	| { fill: [string, string] }
 	| { scroll: string }
+	| { scrollEnd: string }
 	| { wait: number }
 	| { press: string }
 

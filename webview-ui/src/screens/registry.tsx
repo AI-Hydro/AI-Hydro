@@ -84,6 +84,15 @@ const chatScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): 
 	...extra,
 })
 
+/** Chat task transcripts: pin the virtualised list to its end so the capture does not depend on smooth-scroll timing. */
+const SCROLL_TO_END: ScreenDef["steps"] = [
+	{ wait: 600 },
+	{ scrollEnd: "[data-virtuoso-scroller=true]" },
+	{ wait: 400 },
+	{ scrollEnd: "[data-virtuoso-scroller=true]" },
+	{ wait: 400 },
+]
+
 const taskState = (aihydroMessages: NonNullable<ScreenDef["state"]>["aihydroMessages"]) => ({
 	currentTaskItem: taskItem,
 	aihydroMessages,
@@ -120,10 +129,17 @@ export const screens: ScreenDef[] = [
 	}),
 	chatScreen("chat-home-history", "Chat home with history cards and auto-approve bar"),
 	chatScreen("chat-home-empty-history", "Chat home, no history", { state: { taskHistory: [] } }),
-	chatScreen("chat-task-text", "Task with plain text", { state: taskState(plainTextTask) }),
-	chatScreen("chat-task-mcp", "Task with ai-hydro MCP call and result", { state: taskState(mcpCallTask) }),
-	chatScreen("chat-task-refusal", "Task with structured refusal (GAUGE_AMBIGUOUS)", { state: taskState(refusalTask) }),
+	chatScreen("chat-task-text", "Task with plain text", { state: taskState(plainTextTask), steps: SCROLL_TO_END }),
+	chatScreen("chat-task-mcp", "Task with ai-hydro MCP call and result", {
+		state: taskState(mcpCallTask),
+		steps: SCROLL_TO_END,
+	}),
+	chatScreen("chat-task-refusal", "Task with structured refusal (GAUGE_AMBIGUOUS)", {
+		state: taskState(refusalTask),
+		steps: SCROLL_TO_END,
+	}),
 	chatScreen("chat-task-answer", "Final answer with run and claim chips", {
+		steps: SCROLL_TO_END,
 		state: taskState(finalAnswerTask),
 		ledger: { sessionId: FIXTURE_SESSION, claims: statusClaims },
 	}),

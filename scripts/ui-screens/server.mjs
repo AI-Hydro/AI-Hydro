@@ -44,7 +44,9 @@ function screenHtml(id, query) {
 <link rel="stylesheet" href="/__themes/${theme}.css">
 <style>html,body{background:${bg};color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);margin:0;height:100%}#root{height:100%}</style>
 <script>
-  document.body ? 0 : 0;
+  // Every load starts from empty storage: persisted UI state (expanded sections, map workspace) must not leak
+  // between cells that share a browser context. The screen entry installs its own fixture storage afterwards.
+  try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}
   window.__PLATFORM__ = "vscode";
   window.acquireVsCodeApi = function () {
     return { postMessage: function (m) { if (window.__hostPost) window.__hostPost(m) }, getState: function () { return {} }, setState: function () {} };
