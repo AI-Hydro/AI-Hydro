@@ -1,0 +1,331 @@
+/**
+ * Screen registry for the UI harness (dev-only; see scripts/ui-screens/).
+ * Each entry names a real production component tree plus the synthetic host
+ * data it should see. Do not import this file from production code.
+ */
+import { Providers } from "../Providers"
+import App from "../App"
+import HistoryView from "../components/history/HistoryView"
+import { finalAnswerTask, mcpCallTask, plainTextTask, refusalTask, taskItem } from "./fixtures/chat"
+import { approvalClaims, claim, driftClaims, FIXTURE_SESSION, statusClaims } from "./fixtures/claims"
+import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/experiments"
+import { featureLayers, framedWorkspace, MAP_STORAGE_KEY, basinPolygon } from "./fixtures/map"
+import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
+import { courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
+import type { ScreenDef } from "./types"
+
+const app = () => <App />
+
+const EVIDENCE = "AIHYDRO_EVIDENCE_BOARD_STANDALONE"
+const EXPERIMENT = "AIHYDRO_EXPERIMENT_TABLE_STANDALONE"
+const REPLAY = "AIHYDRO_REPLAY_PANEL_STANDALONE"
+const MAP = "AIHYDRO_MAP_STANDALONE"
+const PREVIEW = "AIHYDRO_HTML_PREVIEW_STANDALONE"
+
+const experimentHost =
+	(payload: unknown): ScreenDef["onMessage"] =>
+	(msg, reply) => {
+		if (msg.type === "experiment_table_ready") reply(payload)
+		if (msg.type === "list_sessions") reply({ type: "session_list", sessions: [FIXTURE_SESSION] })
+	}
+const replayHost =
+	(payload: unknown): ScreenDef["onMessage"] =>
+	(msg, reply) => {
+		if (msg.type === "replay_ready") reply(payload)
+		if (msg.type === "list_sessions") reply({ type: "session_list", sessions: [FIXTURE_SESSION] })
+	}
+const studioHost: ScreenDef["onMessage"] = (msg, reply) => {
+	if (msg.type === "aihydro-load-course") {
+		const isCourse = String(msg.filePath ?? "").includes("/course/")
+		reply({
+			type: "aihydro-course-loaded",
+			requestId: msg.requestId,
+			course: isCourse ? courseManifest : null,
+			courseRoot: isCourse ? "/fixture/course" : null,
+		})
+	}
+	if (msg.type === "aihydro-course-progress") {
+		reply({ type: "aihydro-course-progress-result", requestId: msg.requestId, progress: courseProgress })
+	}
+}
+
+const evidenceScreen = (id: string, title: string, claims: ScreenDef["ledger"], extra: Partial<ScreenDef> = {}): ScreenDef => ({
+	id,
+	title,
+	group: "evidence",
+	surface: "editor",
+	flags: [EVIDENCE],
+	ledger: claims,
+	render: app,
+	...extra,
+})
+
+const mapScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): ScreenDef => ({
+	id,
+	title,
+	group: "map",
+	surface: "editor",
+	flags: [MAP],
+	hasMapCanvas: true,
+	storage: { [MAP_STORAGE_KEY]: framedWorkspace() },
+	ready: "canvas#ai-hydro-research-map",
+	render: app,
+	...extra,
+})
+
+const chatScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): ScreenDef => ({
+	id,
+	title,
+	group: "chat",
+	surface: "sidebar",
+	render: app,
+	...extra,
+})
+
+const taskState = (aihydroMessages: NonNullable<ScreenDef["state"]>["aihydroMessages"]) => ({
+	currentTaskItem: taskItem,
+	aihydroMessages,
+})
+
+const approvalScreen = (key: keyof typeof approvalClaims): ScreenDef =>
+	evidenceScreen(`evidence-approval-${key}`, `Evidence Board: approval ${key}`, {
+		sessionId: FIXTURE_SESSION,
+		claims: [approvalClaims[key]],
+	})
+
+export const screens: ScreenDef[] = [
+	// ── Chat (sidebar) ──────────────────────────────────────────────
+	chatScreen("chat-welcome", "Welcome / first run", { state: { welcomeViewCompleted: false } }),
+	chatScreen("chat-home-history", "Chat home with history cards and auto-approve bar"),
+	chatScreen("chat-home-empty-history", "Chat home, no history", { state: { taskHistory: [] } }),
+	chatScreen("chat-task-text", "Task with plain text", { state: taskState(plainTextTask) }),
+	chatScreen("chat-task-mcp", "Task with ai-hydro MCP call and result", { state: taskState(mcpCallTask) }),
+	chatScreen("chat-task-refusal", "Task with structured refusal (GAUGE_AMBIGUOUS)", { state: taskState(refusalTask) }),
+	chatScreen("chat-task-answer", "Final answer with run and claim chips", {
+		state: taskState(finalAnswerTask),
+		ledger: { sessionId: FIXTURE_SESSION, claims: statusClaims },
+	}),
+	{
+		id: "chat-history-list",
+		title: "History list view",
+		group: "chat",
+		surface: "sidebar",
+		render: () => (
+			<Providers>
+				<div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+					<HistoryView onDone={() => {}} />
+				</div>
+			</Providers>
+		),
+	},
+
+	// ── Evidence Board (editor) ─────────────────────────────────────
+	evidenceScreen("evidence-all-statuses", "Evidence Board: one claim per status", {
+		sessionId: FIXTURE_SESSION,
+		claims: statusClaims,
+	}),
+	evidenceScreen("evidence-drift-states", "Evidence Board: drift no_history / in_sync / drifted", {
+		sessionId: FIXTURE_SESSION,
+		claims: driftClaims,
+	}),
+	approvalScreen("approved"),
+	approvalScreen("integrity-only"),
+	approvalScreen("consumed"),
+	approvalScreen("unverifiable"),
+	approvalScreen("stale-evidence"),
+	approvalScreen("stale-revision"),
+	approvalScreen("revision-mismatch"),
+	approvalScreen("unreported"),
+	evidenceScreen("evidence-empty", "Evidence Board: empty", { sessionId: FIXTURE_SESSION, claims: [] }),
+	evidenceScreen("evidence-error", "Evidence Board: load error", {
+		sessionId: "",
+		claims: [],
+		error: "Fixture error: ledger snapshot could not be read",
+	}),
+
+	// ── Experiment Table (editor) ───────────────────────────────────
+	{
+		id: "experiment-with-ci",
+		title: "Experiment Table with intervals",
+		group: "experiment",
+		surface: "editor",
+		flags: [EXPERIMENT],
+		onMessage: experimentHost(experimentWithCi),
+		render: app,
+	},
+	{
+		id: "experiment-no-ci",
+		title: "Experiment Table without intervals",
+		group: "experiment",
+		surface: "editor",
+		flags: [EXPERIMENT],
+		onMessage: experimentHost(experimentNoCi),
+		render: app,
+	},
+	{
+		id: "experiment-failed-rows",
+		title: "Experiment Table with failed rows",
+		group: "experiment",
+		surface: "editor",
+		flags: [EXPERIMENT],
+		onMessage: experimentHost(experimentFailed),
+		render: app,
+	},
+	{
+		id: "experiment-empty",
+		title: "Experiment Table empty",
+		group: "experiment",
+		surface: "editor",
+		flags: [EXPERIMENT],
+		onMessage: (m, r) =>
+			m.type === "experiment_table_ready" &&
+			r({ type: "experiment_table_empty", message: "No experiments found in this session." }),
+		render: app,
+	},
+
+	// ── Replay (editor) ─────────────────────────────────────────────
+	{
+		id: "replay-session",
+		title: "Replay: session source",
+		group: "replay",
+		surface: "editor",
+		flags: [REPLAY],
+		onMessage: replayHost(replaySession),
+		render: app,
+	},
+	{
+		id: "replay-capsule",
+		title: "Replay: capsule source",
+		group: "replay",
+		surface: "editor",
+		flags: [REPLAY],
+		onMessage: replayHost(replayCapsule),
+		render: app,
+	},
+	{
+		id: "replay-mismatch",
+		title: "Replay: digest mismatch",
+		group: "replay",
+		surface: "editor",
+		flags: [REPLAY],
+		onMessage: replayHost(replayMismatch),
+		render: app,
+	},
+	{
+		id: "replay-missing",
+		title: "Replay: missing records",
+		group: "replay",
+		surface: "editor",
+		flags: [REPLAY],
+		onMessage: replayHost(replayMissing),
+		render: app,
+	},
+	{
+		id: "replay-no-timezone",
+		title: "Replay: timezone not recorded",
+		group: "replay",
+		surface: "editor",
+		flags: [REPLAY],
+		onMessage: replayHost(replayNoTimezone),
+		render: app,
+	},
+	{
+		id: "replay-warnings",
+		title: "Replay: loader warnings",
+		group: "replay",
+		surface: "editor",
+		flags: [REPLAY],
+		onMessage: replayHost(replayWarnings),
+		render: app,
+	},
+
+	// ── Map (editor) ────────────────────────────────────────────────
+	mapScreen("map-empty-esri", "Map empty state over a persisted street basemap", {
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace("esri-topo") },
+	}),
+	mapScreen("map-empty-default", "Map empty state, default basemap"),
+	mapScreen("map-features", "Map with basin, gauge, rivers and raster (toolbar visible)", { layers: featureLayers() }),
+	mapScreen("map-layer-manager", "Map layer manager open", {
+		layers: featureLayers(),
+		steps: [{ click: 'button[aria-label^="Layer manager"]' }, { wait: 500 }],
+	}),
+	mapScreen("map-layer-provenance", "Layer provenance tab with MISSING_PROVENANCE", {
+		layers: featureLayers(),
+		steps: [
+			{ click: 'button[aria-label^="Layer manager"]' },
+			{ wait: 500 },
+			{ click: 'button[title="Show details"]', nth: 2 },
+			{ wait: 300 },
+			{ click: 'button:text-is("Provenance")' },
+			{ wait: 300 },
+			{ scroll: "text=No provenance record linked" },
+		],
+	}),
+	mapScreen("map-time-slider", "Map time slider", {
+		layers: featureLayers(),
+		steps: [{ click: 'button[aria-label^="Time slider"]' }, { wait: 500 }],
+	}),
+	mapScreen("map-swipe", "Map swipe compare", {
+		layers: [basinPolygon, ...featureLayers().slice(0, 1)],
+		steps: [{ click: 'button[aria-label^="Swipe"]' }, { wait: 500 }],
+	}),
+	mapScreen("map-export-success", "Map export panel, artifacts written", {
+		layers: featureLayers(),
+		exportOutputs: 2,
+		steps: [
+			{ click: 'button[aria-label="Export snapshot"]' },
+			{ wait: 800 },
+			{ click: 'button:has-text("Quick Export")' },
+			{ wait: 1200 },
+		],
+	}),
+	mapScreen("map-export-zero-output", "Map export panel, zero outputs reported", {
+		layers: featureLayers(),
+		exportOutputs: 0,
+		steps: [
+			{ click: 'button[aria-label="Export snapshot"]' },
+			{ wait: 800 },
+			{ click: 'button:has-text("Quick Export")' },
+			{ wait: 1200 },
+		],
+	}),
+
+	// ── Studio / HTML preview (editor) ──────────────────────────────
+	{
+		id: "studio-static-doc",
+		title: "Studio: static document",
+		group: "studio",
+		surface: "editor",
+		flags: [PREVIEW],
+		htmlPreviews: [staticDoc],
+		onMessage: studioHost,
+		render: app,
+	},
+	{
+		id: "studio-executable-module",
+		title: "Studio: executable module",
+		group: "studio",
+		surface: "editor",
+		flags: [PREVIEW],
+		htmlPreviews: [executableModule],
+		onMessage: studioHost,
+		render: app,
+	},
+	{
+		id: "studio-course-progress",
+		title: "Studio: course with progress",
+		group: "studio",
+		surface: "editor",
+		flags: [PREVIEW],
+		htmlPreviews: [courseModule],
+		onMessage: studioHost,
+		render: app,
+	},
+]
+
+export function findScreen(id: string): ScreenDef | undefined {
+	return screens.find((s) => s.id === id)
+}
+
+// Keep `claim` referenced for fixtures that build ad-hoc claims in future screens.
+void claim
