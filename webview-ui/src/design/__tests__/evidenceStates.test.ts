@@ -1,7 +1,15 @@
 import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { APPROVED_TOKEN, EVIDENCE_STATE_IDS, EVIDENCE_STATES, LINE_DASH, stateForInformationClass } from "../evidenceStates"
+import {
+	APPROVED_TOKEN,
+	EVIDENCE_STATE_IDS,
+	EVIDENCE_STATES,
+	LINE_DASH,
+	stateForInformationClass,
+	TOKEN_ALLOWLIST,
+	tokenVariable,
+} from "../evidenceStates"
 
 const CODICON_CSS = [
 	resolve(__dirname, "../../../../node_modules/@vscode/codicons/dist/codicon.css"),
@@ -29,13 +37,30 @@ describe("evidenceStates", () => {
 		)
 	})
 
-	it("uses the passed/green token for `approved` and for nothing else", () => {
+	it("lets only `approved` reach the success token, via a per-state allowlist", () => {
 		expect(EVIDENCE_STATES.approved.token).toBe(APPROVED_TOKEN)
-		expect(APPROVED_TOKEN).toContain("--vscode-testing-iconPassed")
+		expect(tokenVariable(APPROVED_TOKEN)).toBe("--vscode-testing-iconPassed")
+		const successVars = new Set(["--vscode-testing-iconPassed"])
 		for (const id of EVIDENCE_STATE_IDS) {
-			if (id === "approved") continue
-			expect(EVIDENCE_STATES[id].token, `${id} must not be green`).not.toMatch(GREEN)
+			const variable = tokenVariable(EVIDENCE_STATES[id].token)
+			expect(variable, `${id} token must be a theme variable`).toBeDefined()
+			expect(TOKEN_ALLOWLIST[id], `${id} allowlist`).toContain(variable)
+			if (id !== "approved") {
+				expect(successVars.has(variable as string), `${id} must not use a success token`).toBe(false)
+				for (const allowed of TOKEN_ALLOWLIST[id]) {
+					expect(allowed, `${id} allowlist entry`).not.toMatch(GREEN)
+					expect(allowed, `${id} allowlist entry`).not.toMatch(
+						/(Added|added|Passed|Success|success|Green|green|Insert)/,
+					)
+				}
+			}
 		}
+	})
+
+	it("rejects a non-allowlisted token (mutation guard)", () => {
+		// A state pointing at a green-ish variable the denylist never knew about must fail the allowlist.
+		const mutated = "var(--vscode-gitDecoration-addedResourceForeground, #81b88b)"
+		expect(TOKEN_ALLOWLIST.stale).not.toContain(tokenVariable(mutated))
 	})
 
 	it("gives every state a text label and an icon shape, never colour alone", () => {
@@ -57,11 +82,17 @@ describe("evidenceStates", () => {
 		expect(icons.size, "icons are distinct so states differ by shape, not hue").toBe(EVIDENCE_STATE_IDS.length)
 	})
 
-	it("distinguishes observed from modelled by line style, not only hue", () => {
+	it("distinguishes observed from modelled by line style and shape, not only hue", () => {
 		expect(EVIDENCE_STATES.observed.lineStyle).toBe("solid")
 		expect(EVIDENCE_STATES.modelled.lineStyle).toBe("dashed")
 		expect(LINE_DASH[EVIDENCE_STATES.observed.lineStyle]).not.toBe(LINE_DASH[EVIDENCE_STATES.modelled.lineStyle])
+		expect(EVIDENCE_STATES.observed.shape).not.toBe(EVIDENCE_STATES.modelled.shape)
 		expect(EVIDENCE_STATES.observed.token).not.toBe(EVIDENCE_STATES.modelled.token)
+	})
+
+	it("gives every state a unique (shape, lineStyle) pair", () => {
+		const pairs = EVIDENCE_STATE_IDS.map((id) => `${EVIDENCE_STATES[id].shape}/${EVIDENCE_STATES[id].lineStyle}`)
+		expect(new Set(pairs).size).toBe(pairs.length)
 	})
 
 	it("maps only explicit information classes and never infers one", () => {

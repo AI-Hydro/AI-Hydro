@@ -8,8 +8,11 @@
  *    "supported", is non-green.
  *  - Every state has a text label AND an icon (distinct per state) AND a border
  *    shape. Colour is never the only carrier of meaning (WCAG 1.4.1).
- *  - `observed` and `modelled` differ in line style (solid vs dashed), not just hue,
- *    so the distinction survives greyscale and high-contrast themes.
+ *  - `observed` and `modelled` differ in line style (solid vs dashed) and in badge
+ *    shape, not just hue, so the distinction survives greyscale and high-contrast themes.
+ *  - Each state's (shape, lineStyle) pair is unique.
+ *  - Tokens come from a per-state ALLOWLIST (below); a state can only use a theme
+ *    variable named for it there, so no other state can reach a success/green token.
  *
  * This module is pure data: no React, no webview imports.
  */
@@ -74,7 +77,7 @@ export const EVIDENCE_STATES: Record<EvidenceStateId, EvidenceStateDef> = {
 		token: "var(--vscode-textLink-foreground, #3794ff)",
 		icon: "codicon-check",
 		shape: "outline",
-		lineStyle: "solid",
+		lineStyle: "dotted",
 		description: "Computed or re-checked by the AI-Hydro package from recorded data.",
 	},
 	unverified: {
@@ -83,7 +86,7 @@ export const EVIDENCE_STATES: Record<EvidenceStateId, EvidenceStateDef> = {
 		token: "var(--vscode-descriptionForeground, #9d9d9d)",
 		icon: "codicon-question",
 		shape: "dotted",
-		lineStyle: "dotted",
+		lineStyle: "solid",
 		description: "No check was recorded. This does not mean the value is wrong.",
 	},
 	refused: {
@@ -92,7 +95,7 @@ export const EVIDENCE_STATES: Record<EvidenceStateId, EvidenceStateDef> = {
 		token: "var(--vscode-errorForeground, #f85149)",
 		icon: "codicon-stop-circle",
 		shape: "filled",
-		lineStyle: "solid",
+		lineStyle: "dashed",
 		description: "The tool stopped instead of guessing; see the recovery options.",
 	},
 	stale: {
@@ -101,7 +104,7 @@ export const EVIDENCE_STATES: Record<EvidenceStateId, EvidenceStateDef> = {
 		token: "var(--vscode-editorWarning-foreground, #bf8803)",
 		icon: "codicon-history",
 		shape: "dashed",
-		lineStyle: "dashed",
+		lineStyle: "solid",
 		description: "Cited evidence or the claim itself changed after this was recorded.",
 	},
 	provisional: {
@@ -136,7 +139,7 @@ export const EVIDENCE_STATES: Record<EvidenceStateId, EvidenceStateDef> = {
 		label: "Derived",
 		token: "var(--vscode-descriptionForeground, #9d9d9d)",
 		icon: "codicon-git-merge",
-		shape: "outline",
+		shape: "dotted",
 		lineStyle: "dotted",
 		description: "Computed from other recorded values.",
 	},
@@ -146,9 +149,32 @@ export const EVIDENCE_STATES: Record<EvidenceStateId, EvidenceStateDef> = {
 		token: "var(--vscode-descriptionForeground, #9d9d9d)",
 		icon: "codicon-hubot",
 		shape: "dotted",
-		lineStyle: "dotted",
+		lineStyle: "dash-dot",
 		description: "Stated by the agent. Nothing in the package verified it.",
 	},
+}
+
+/**
+ * Per-state allowlist of theme variables. Only `approved` may use a success colour; everything else is limited to
+ * neutral, link, warning, error or chart-blue/purple variables. Adding a variable here is a deliberate review point.
+ */
+export const TOKEN_ALLOWLIST: Record<EvidenceStateId, readonly string[]> = {
+	approved: ["--vscode-testing-iconPassed"],
+	"integrity-only": ["--vscode-editorWarning-foreground"],
+	verified: ["--vscode-textLink-foreground"],
+	unverified: ["--vscode-descriptionForeground"],
+	refused: ["--vscode-errorForeground"],
+	stale: ["--vscode-editorWarning-foreground"],
+	provisional: ["--vscode-editorWarning-foreground"],
+	observed: ["--vscode-charts-blue"],
+	modelled: ["--vscode-charts-purple"],
+	derived: ["--vscode-descriptionForeground"],
+	"agent-asserted": ["--vscode-descriptionForeground"],
+}
+
+/** The CSS custom property named in a `var(--x, fallback)` token. */
+export function tokenVariable(token: string): string | undefined {
+	return /^var\((--[A-Za-z0-9-]+)/.exec(token)?.[1]
 }
 
 export const EVIDENCE_STATE_IDS = Object.keys(EVIDENCE_STATES) as EvidenceStateId[]
