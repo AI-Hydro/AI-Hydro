@@ -325,6 +325,10 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("multiRootEnabled", !!request.multiRootEnabled)
 		}
 
+		if (request.finalAnswerAuditEnabled !== undefined) {
+			controller.stateManager.setGlobalState("finalAnswerAuditEnabled", !!request.finalAnswerAuditEnabled)
+		}
+
 		if (request.hooksEnabled !== undefined) {
 			controller.stateManager.setGlobalState("hooksEnabled", !!request.hooksEnabled)
 		}

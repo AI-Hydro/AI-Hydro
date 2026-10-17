@@ -274,6 +274,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		backgroundCommandTaskId: undefined,
 		lastDismissedCliBannerVersion: 0,
 		subagentsEnabled: false,
+		finalAnswerAuditEnabled: true,
 
 		// NEW: Add workspace information with defaults
 		workspaceRoots: [],

@@ -24,6 +24,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		mcpResponsesCollapsed,
 		openaiReasoningEffort,
 		strictPlanModeEnabled,
+		finalAnswerAuditEnabled,
 		yoloModeToggled,
 		dictationSettings,
 		useAutoCondense,
@@ -255,6 +256,21 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							</VSCodeCheckbox>
 							<p className="toggle-description">
 								Enforces strict tool use while in plan mode, preventing file edits.
+							</p>
+						</div>
+						<div className="mt-2">
+							<VSCodeCheckbox
+								checked={finalAnswerAuditEnabled !== false}
+								onChange={(e: any) => {
+									const checked = e.target.checked === true
+									updateSetting("finalAnswerAuditEnabled", checked)
+								}}>
+								Audit final answers
+							</VSCodeCheckbox>
+							<p className="toggle-description">
+								When the AI-Hydro MCP server is connected, checks each final answer for uncited numbers and
+								unsupported claims and shows the result below the answer. Display only: it never blocks or changes
+								the answer.
 							</p>
 						</div>
 						<div className="mt-2">
