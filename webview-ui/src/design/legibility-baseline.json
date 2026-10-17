@@ -1,8 +1,8 @@
 {
 	"_note": "Per-file counts of text-[8px|9px|10px] and emoji in guarded component dirs. May shrink, never grow.",
 	"totals": {
-		"smallText": 126,
-		"emoji": 172
+		"smallText": 369,
+		"emoji": 265
 	},
 	"files": {
 		"components/evidence-board/EvidenceBoard.tsx": {
@@ -22,72 +22,104 @@
 			"emoji": 0
 		},
 		"components/replay-panel/ReplayPanel.tsx": {
-			"smallText": 27,
+			"smallText": 28,
 			"emoji": 0
 		},
 		"components/map/AnnotationsPanel.tsx": {
-			"smallText": 0,
-			"emoji": 25
+			"smallText": 48,
+			"emoji": 45
 		},
 		"components/map/BaseMapSelector.tsx": {
-			"smallText": 0,
+			"smallText": 1,
 			"emoji": 17
 		},
-		"components/map/HydrographyPanel.tsx": {
-			"smallText": 0,
+		"components/map/FeatureIdentifier.tsx": {
+			"smallText": 20,
 			"emoji": 2
 		},
+		"components/map/GraduatedSymbologyEditor.tsx": {
+			"smallText": 3,
+			"emoji": 1
+		},
+		"components/map/HydrographyPanel.tsx": {
+			"smallText": 11,
+			"emoji": 6
+		},
 		"components/map/Inundation3DControls.tsx": {
-			"smallText": 0,
+			"smallText": 2,
+			"emoji": 1
+		},
+		"components/map/InundationScrubberPanel.tsx": {
+			"smallText": 5,
 			"emoji": 1
 		},
 		"components/map/LayerPanel.tsx": {
-			"smallText": 0,
-			"emoji": 24
+			"smallText": 24,
+			"emoji": 37
 		},
 		"components/map/MapContextMenu.tsx": {
-			"smallText": 0,
-			"emoji": 25
+			"smallText": 7,
+			"emoji": 28
 		},
 		"components/map/MapExport.tsx": {
-			"smallText": 0,
-			"emoji": 1
+			"smallText": 13,
+			"emoji": 8
+		},
+		"components/map/MapLegend.tsx": {
+			"smallText": 8,
+			"emoji": 0
+		},
+		"components/map/MapRoiStrip.tsx": {
+			"smallText": 5,
+			"emoji": 0
 		},
 		"components/map/MapToolRibbon.tsx": {
-			"smallText": 0,
-			"emoji": 25
+			"smallText": 4,
+			"emoji": 32
 		},
 		"components/map/MapView.tsx": {
-			"smallText": 0,
-			"emoji": 6
+			"smallText": 7,
+			"emoji": 11
 		},
 		"components/map/MeasureTool.tsx": {
-			"smallText": 0,
+			"smallText": 2,
 			"emoji": 2
 		},
+		"components/map/PhotoStrip.tsx": {
+			"smallText": 1,
+			"emoji": 0
+		},
 		"components/map/ResearchGalleryPanel.tsx": {
-			"smallText": 0,
-			"emoji": 4
+			"smallText": 6,
+			"emoji": 12
 		},
 		"components/map/SearchBar.tsx": {
-			"smallText": 0,
-			"emoji": 7
+			"smallText": 8,
+			"emoji": 10
 		},
 		"components/map/SwipePanel.tsx": {
-			"smallText": 0,
-			"emoji": 3
+			"smallText": 8,
+			"emoji": 5
+		},
+		"components/map/SymbologyEditor.tsx": {
+			"smallText": 8,
+			"emoji": 1
+		},
+		"components/map/TimeSliderPanel.tsx": {
+			"smallText": 1,
+			"emoji": 0
 		},
 		"components/map/TransectsPanel.tsx": {
-			"smallText": 0,
-			"emoji": 21
+			"smallText": 41,
+			"emoji": 35
 		},
 		"components/map/VectorDrawTool.tsx": {
-			"smallText": 0,
+			"smallText": 2,
 			"emoji": 1
 		},
 		"components/chat/ChatRow.tsx": {
-			"smallText": 0,
-			"emoji": 7
+			"smallText": 1,
+			"emoji": 9
 		},
 		"components/chat/ChatTextArea.tsx": {
 			"smallText": 1,
@@ -110,7 +142,7 @@
 			"emoji": 0
 		},
 		"components/chat/auto-approve-menu/AutoApproveBar.tsx": {
-			"smallText": 1,
+			"smallText": 2,
 			"emoji": 0
 		},
 		"components/chat/auto-approve-menu/AutoApproveModal.tsx": {
@@ -121,8 +153,16 @@
 			"smallText": 2,
 			"emoji": 0
 		},
+		"components/chat/task-header/TaskTimelineTooltip.tsx": {
+			"smallText": 1,
+			"emoji": 0
+		},
 		"components/history/HistoryPreview.tsx": {
 			"smallText": 5,
+			"emoji": 0
+		},
+		"components/history/HistoryView.tsx": {
+			"smallText": 4,
 			"emoji": 0
 		}
 	}

@@ -16,8 +16,25 @@ const GUARDED = ["evidence-board", "experiment-table", "replay-panel", "map", "c
 	(d) => `components/${d}`,
 )
 
-const SMALL_TEXT = /text-\[(?:8|9|10)px\]/g
-const EMOJI = /\p{Emoji_Presentation}|\p{Extended_Pictographic}️/gu
+// Smallest acceptable rendered size, in CSS px, at the default 13px editor font (rem assumes a 16px root).
+const MIN_PX = 11
+const REM_PX = 16
+const EM_PX = 13
+
+const toPx = (value: number, unit: string): number => (unit === "rem" ? value * REM_PX : unit === "em" ? value * EM_PX : value)
+
+/** Tailwind arbitrary sizes: text-[9px], text-[9.5px], text-[0.6rem], text-[0.7em]. */
+const TW_SIZE = /text-\[(\d+(?:\.\d+)?)(px|rem|em)\]/g
+/** Inline style props: fontSize: 10, fontSize: "9.5px", fontSize: '0.6rem'. */
+const INLINE_NUM = /fontSize\s*:\s*(\d+(?:\.\d+)?)(?![\d.]|\s*["'`])/g
+const INLINE_STR = /fontSize\s*:\s*["'`](\d+(?:\.\d+)?)(px|rem|em)["'`]/g
+/** CSS declarations (in .css files or style strings). */
+const CSS_SIZE = /font-size\s*:\s*(\d+(?:\.\d+)?)(px|rem|em)/g
+/**
+ * Emoji and icon-glyph characters: emoji presentation, pictographs with VS16, and the bare symbols that render as
+ * emoji or pictograms without U+FE0F (warning sign, check marks, crosses, stars, misc technical, arrows-in-box).
+ */
+const EMOJI = /\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F|[\u2300-\u23FF\u2600-\u27BF\u2B00-\u2BFF\u25A0-\u25FF]/gu
 
 interface Counts {
 	smallText: number
@@ -30,9 +47,29 @@ function walk(dir: string, out: string[] = []): string[] {
 		if (statSync(full).isDirectory()) {
 			if (name === "__tests__" || name === "__mocks__") continue
 			walk(full, out)
-		} else if (/\.tsx$/.test(name) && !/\.(test|spec|stories)\.tsx$/.test(name)) out.push(full)
+		} else if (/\.(tsx|css)$/.test(name) && !/\.(test|spec|stories)\.tsx$/.test(name)) out.push(full)
 	}
 	return out
+}
+
+export function countSmall(text: string, isCss: boolean): number {
+	let n = 0
+	const check = (re: RegExp, unitAt: number | null) => {
+		for (const m of text.matchAll(re)) {
+			const value = Number(m[1])
+			const px = toPx(value, unitAt === null ? "px" : m[unitAt])
+			if (px < MIN_PX) n++
+		}
+	}
+	check(TW_SIZE, 2)
+	check(INLINE_NUM, null)
+	check(INLINE_STR, 2)
+	if (isCss) check(CSS_SIZE, 2)
+	return n
+}
+
+export function countEmoji(text: string): number {
+	return (text.match(EMOJI) ?? []).length
 }
 
 export function scan(): Record<string, Counts> {
@@ -40,13 +77,35 @@ export function scan(): Record<string, Counts> {
 	for (const dir of GUARDED) {
 		for (const file of walk(join(SRC, dir))) {
 			const text = readFileSync(file, "utf8")
-			const smallText = (text.match(SMALL_TEXT) ?? []).length
-			const emoji = (text.match(EMOJI) ?? []).length
+			const smallText = countSmall(text, file.endsWith(".css"))
+			const emoji = countEmoji(text)
 			if (smallText || emoji) result[relative(SRC, file)] = { smallText, emoji }
 		}
 	}
 	return result
 }
+
+describe("legibility scanners", () => {
+	it("flags fractional px, rem/em below 11px-equivalent, inline fontSize and css font-size", () => {
+		expect(countSmall("text-[9px] text-[9.5px] text-[10.9px]", false)).toBe(3)
+		expect(countSmall("text-[11px] text-[0.75rem] text-[0.9em]", false)).toBe(0)
+		expect(countSmall("text-[0.6rem] text-[0.8em]", false)).toBe(2)
+		expect(countSmall("style={{ fontSize: 10 }} style={{ fontSize: 12 }}", false)).toBe(1)
+		expect(
+			countSmall('style={{ fontSize: "9.5px" }} style={{ fontSize: "0.6rem" }} style={{ fontSize: "12px" }}', false),
+		).toBe(2)
+		expect(countSmall(".a{font-size:9px}.b{font-size:0.5rem}.c{font-size:12px}", true)).toBe(2)
+		expect(countSmall(".a{font-size:9px}", false)).toBe(0)
+	})
+
+	it("flags emoji with and without U+FE0F, and bare pictograph symbols", () => {
+		expect(countEmoji("\u26A0 warning")).toBe(1)
+		expect(countEmoji("\u2714 done \u2713 ok \u2717 no")).toBe(3)
+		expect(countEmoji("\u26A0\uFE0F")).toBe(1)
+		expect(countEmoji("\u{1F5FA}\uFE0F map")).toBeGreaterThanOrEqual(1)
+		expect(countEmoji("plain text, arrows \u2192 and bullets \u2022 are fine")).toBe(0)
+	})
+})
 
 describe("legibility budget (may shrink, never grow)", () => {
 	const current = scan()
