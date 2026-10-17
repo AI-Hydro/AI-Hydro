@@ -207,11 +207,20 @@ async function worker() {
 							.nth(step.nth ?? 0)
 							.click({ timeout: 20000 })
 					else if (step.scrollEnd)
+						// Virtualised lists re-measure items after each scroll; iterate until scrollTop/scrollHeight stop moving.
 						await page
 							.locator(step.scrollEnd)
 							.first()
-							.evaluate((el) => {
-								el.scrollTop = el.scrollHeight
+							.evaluate(async (el) => {
+								let last = ""
+								let stable = 0
+								for (let i = 0; i < 40 && stable < 4; i++) {
+									el.scrollTop = el.scrollHeight
+									await new Promise((r) => setTimeout(r, 150))
+									const now = `${el.scrollTop}/${el.scrollHeight}`
+									stable = now === last ? stable + 1 : 0
+									last = now
+								}
 							})
 					else if (step.scroll) await page.locator(step.scroll).first().scrollIntoViewIfNeeded({ timeout: 20000 })
 					else if (step.fill) await page.locator(step.fill[0]).first().fill(step.fill[1])
@@ -349,7 +358,7 @@ if (check || updateBaseline) {
 					)
 						diff++
 				}
-			if (diff / Math.max(1, total) > diffThreshold)
+			if (diff / Math.max(1, total) > (screens.find((x) => x.id === r.screen)?.pixelDiffThreshold ?? diffThreshold))
 				diffs.overThreshold.push({ file: r.file, ratio: +(diff / total).toFixed(5) })
 		}
 	} else {

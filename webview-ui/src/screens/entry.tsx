@@ -11,7 +11,15 @@ import { findScreen, screens } from "./registry"
 declare global {
 	interface Window {
 		__hostPost?: (message: Record<string, unknown>) => void
-		__screens?: Array<{ id: string; title: string; group: string; surface: string; hasMapCanvas: boolean; ready?: string }>
+		__screens?: Array<{
+			id: string
+			title: string
+			group: string
+			surface: string
+			hasMapCanvas: boolean
+			ready?: string
+			pixelDiffThreshold?: number
+		}>
 		__screenSteps?: unknown
 		__screenReady?: boolean
 	}
@@ -25,6 +33,7 @@ window.__screens = screens.map((s) => ({
 	surface: s.surface,
 	hasMapCanvas: !!s.hasMapCanvas,
 	ready: s.ready,
+	pixelDiffThreshold: s.pixelDiffThreshold,
 }))
 
 const screen = findScreen(id)
