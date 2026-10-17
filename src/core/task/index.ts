@@ -924,8 +924,8 @@ export class Task {
 		const lastApiReqStartedIndex = findLastIndex(savedAiHydroMessages, (m) => m.type === "say" && m.say === "api_req_started")
 		if (lastApiReqStartedIndex !== -1) {
 			const lastApiReqStarted = savedAiHydroMessages[lastApiReqStartedIndex]
-			const { cost, cancelReason }: AiHydroApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
-			if (cost === undefined && cancelReason === undefined) {
+			const { cost, costStatus, cancelReason }: AiHydroApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
+			if (cost === undefined && costStatus === undefined && cancelReason === undefined) {
 				savedAiHydroMessages.splice(lastApiReqStartedIndex, 1)
 			}
 		}

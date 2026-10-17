@@ -40,7 +40,7 @@ export function resolveRegistryModel<Id extends string>(args: {
 	if (!requestedId) {
 		return { id: defaultId, info: registry[defaultId] }
 	}
-	if (requestedId in registry) {
+	if (Object.hasOwn(registry, requestedId)) {
 		return { id: requestedId as Id, info: registry[requestedId] }
 	}
 	return { id: requestedId as Id, info: registry[defaultId] }
@@ -48,7 +48,27 @@ export function resolveRegistryModel<Id extends string>(args: {
 
 /** Throws {@link UnknownModelError} if a model id was requested that the registry does not contain. */
 export function assertKnownModel(provider: string, requestedId: string | undefined, registry: Readonly<Record<string, unknown>>) {
-	if (requestedId && !(requestedId in registry)) {
+	if (requestedId && !Object.hasOwn(registry, requestedId)) {
 		throw new UnknownModelError(provider, requestedId, Object.keys(registry).length)
+	}
+}
+
+/**
+ * For dynamic-list providers (OpenRouter, Groq, Requesty, ...) the model id comes from a list the
+ * user chose from and the info may not be loaded yet. Never substitute another model's id: send what
+ * the user selected, with the default's info as a clearly flagged stand-in (cost is then reported as
+ * "unavailable" rather than priced from an unrelated model).
+ */
+export function standInModel<Id extends string = string>(
+	requestedId: string,
+	standInInfo: ModelInfo,
+): { id: Id; info: ModelInfo } {
+	return {
+		id: requestedId as Id,
+		info: {
+			...standInInfo,
+			pricingUnverified: true,
+			description: `Stand-in info for "${requestedId}": the model is not in the loaded model list, so limits and prices are the provider default's and are not shown as facts.`,
+		} as ModelInfo,
 	}
 }

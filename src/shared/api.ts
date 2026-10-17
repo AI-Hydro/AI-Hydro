@@ -242,6 +242,7 @@ export interface ClaudeModelInfo extends ModelInfo {
 	supportsEffort?: boolean // output_config.effort is accepted
 	supportsXhighEffort?: boolean // effort "xhigh" is accepted (otherwise clamped to "high")
 	supportsTemperature?: boolean // false = any explicit temperature is rejected (default true)
+	pricingUnverified?: boolean // prices not sourced: cost display must say "unavailable", never $0 or a guess
 }
 
 export interface OpenAiCompatibleModelInfo extends ModelInfo {
@@ -276,74 +277,34 @@ export const CLAUDE_SONNET_1M_TIERS = [
 
 // Anthropic
 // https://docs.anthropic.com/en/docs/about-claude/models // prices updated 2025-01-02
+/** Shared, deliberately minimal ModelInfo for Claude 5.x models whose pricing/limits are not sourced here. */
+const CLAUDE_5X_UNVERIFIED = {
+	maxTokens: 8192,
+	contextWindow: 200_000,
+	supportsImages: true,
+	supportsPromptCache: true,
+	supportsTemperature: false,
+	pricingUnverified: true,
+	description: "Pricing, context window and capability limits not verified in this repo; cost is not shown.",
+} as const satisfies ClaudeModelInfo
+
 export type AnthropicModelId = keyof typeof anthropicModels
 export const anthropicDefaultModelId: AnthropicModelId = "claude-sonnet-4-6"
 export const ANTHROPIC_MIN_THINKING_BUDGET = 1_024
 export const ANTHROPIC_MAX_THINKING_BUDGET = 6_000
 export const anthropicModels = {
-	// Claude 5.x line. Sourced from Anthropic's published model list (cached 2026-10-06): IDs, 1M context,
-	// $/MTok input/output and cache-read prices. Cache-write prices were not in that source and are left
-	// unset (TBD) rather than guessed; cost display treats a missing price as 0 for that component.
-	// maxTokens is the streaming default we request (model maximum is 128K), not a documented limit.
-	"claude-fable-5-1": {
-		maxTokens: 64_000,
-		contextWindow: 1_000_000,
-		supportsImages: true,
-		supportsPromptCache: true,
-		supportsAdaptiveThinking: true,
-		supportsEffort: true,
-		supportsXhighEffort: true,
-		supportsTemperature: false,
-		inputPrice: 10.0,
-		outputPrice: 50.0,
-		cacheReadsPrice: 0.25,
-		description: "Thinking is always on. Cache-write price TBD.",
-	},
-	"claude-opus-5-5": {
-		maxTokens: 64_000,
-		contextWindow: 1_000_000,
-		supportsImages: true,
-		supportsPromptCache: true,
-		supportsAdaptiveThinking: true,
-		supportsEffort: true,
-		supportsXhighEffort: true,
-		supportsTemperature: false,
-		inputPrice: 4.0,
-		outputPrice: 20.0,
-		cacheReadsPrice: 0.2,
-		description: "Thinking cannot be disabled; default effort is medium. Cache-write price TBD.",
-	},
-	"claude-sonnet-5-5": {
-		maxTokens: 64_000,
-		contextWindow: 1_000_000,
-		supportsImages: true,
-		supportsPromptCache: true,
-		supportsAdaptiveThinking: true,
-		supportsEffort: true,
-		supportsXhighEffort: true,
-		supportsTemperature: false,
-		inputPrice: 2.0,
-		outputPrice: 10.0,
-		cacheReadsPrice: 0.2,
-		description: "Cache-write price TBD.",
-	},
-	"claude-haiku-5-5": {
-		maxTokens: 64_000,
-		contextWindow: 1_000_000,
-		supportsImages: true,
-		supportsPromptCache: true,
-		supportsAdaptiveThinking: true,
-		supportsEffort: true,
-		supportsXhighEffort: true,
-		supportsTemperature: false,
-		inputPrice: 0.1,
-		outputPrice: 0.5,
-		tiers: [
-			{ contextWindow: 100_000, inputPrice: 0.1, outputPrice: 0.5 },
-			{ contextWindow: 1_000_000, inputPrice: 0.5, outputPrice: 2.5 },
-		],
-		description: "Prices shown are for prompts up to 100K tokens (tiered above). Cache prices TBD.",
-	},
+	// Claude 5.x line. The model IDs are as listed in the Claude Code environment's own model list
+	// (2026-10-17; see docs/model-config/claude-5x-models.md). NOTHING else about these models is
+	// sourced in this repo, so: prices are left undefined and `pricingUnverified` makes the cost
+	// display say "cost unavailable" instead of showing $0 or a guess; the context window is the
+	// smallest window documented for any model in this registry (200K) and maxTokens follows the
+	// registry-wide default; capability flags are limited to the conservative ones (no explicit
+	// temperature, prompt cache markers). Adaptive thinking / effort flags are deliberately unset
+	// until they can be traced to a committed source.
+	"claude-fable-5-1": CLAUDE_5X_UNVERIFIED,
+	"claude-opus-5-5": CLAUDE_5X_UNVERIFIED,
+	"claude-sonnet-5-5": CLAUDE_5X_UNVERIFIED,
+	"claude-haiku-5-5": CLAUDE_5X_UNVERIFIED,
 	"claude-opus-4-7": {
 		maxTokens: 8192,
 		contextWindow: 1_000_000,
@@ -351,7 +312,6 @@ export const anthropicModels = {
 		supportsPromptCache: true,
 		supportsAdaptiveThinking: true,
 		supportsEffort: true,
-		supportsXhighEffort: true,
 		supportsTemperature: false,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
@@ -606,22 +566,22 @@ export const bedrockModels = {
 	"anthropic.claude-fable-5-1": {
 		...anthropicModels["claude-fable-5-1"],
 		description:
-			"Model ID follows Anthropic's documented anthropic.<model> pattern; Bedrock availability and Converse-API support not verified in this repo. Bedrock pricing TBD (first-party rates shown).",
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
 	},
 	"anthropic.claude-opus-5-5": {
 		...anthropicModels["claude-opus-5-5"],
 		description:
-			"Model ID follows Anthropic's documented anthropic.<model> pattern; Bedrock availability and Converse-API support not verified in this repo. Bedrock pricing TBD (first-party rates shown).",
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
 	},
 	"anthropic.claude-sonnet-5-5": {
 		...anthropicModels["claude-sonnet-5-5"],
 		description:
-			"Model ID follows Anthropic's documented anthropic.<model> pattern; Bedrock availability and Converse-API support not verified in this repo. Bedrock pricing TBD (first-party rates shown).",
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
 	},
 	"anthropic.claude-haiku-5-5": {
 		...anthropicModels["claude-haiku-5-5"],
 		description:
-			"Model ID follows Anthropic's documented anthropic.<model> pattern; Bedrock availability and Converse-API support not verified in this repo. Bedrock pricing TBD (first-party rates shown).",
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
 	},
 	"anthropic.claude-opus-4-7-v1": {
 		maxTokens: 8192,
@@ -630,7 +590,6 @@ export const bedrockModels = {
 		supportsPromptCache: true,
 		supportsAdaptiveThinking: true,
 		supportsEffort: true,
-		supportsXhighEffort: true,
 		supportsTemperature: false,
 		inputPrice: 5.0,
 		outputPrice: 25.0,
@@ -940,12 +899,12 @@ export const vertexModels = {
 	"claude-opus-5-5": {
 		...anthropicModels["claude-opus-5-5"],
 		description:
-			"Vertex availability per Anthropic docs (bare first-party ID). Vertex pricing TBD (first-party rates shown).",
+			"Vertex id is the bare model id; availability not verified in this repo. Pricing and limits not verified; cost is not shown.",
 	},
 	"claude-sonnet-5-5": {
 		...anthropicModels["claude-sonnet-5-5"],
 		description:
-			"Vertex availability per Anthropic docs (bare first-party ID). Vertex pricing TBD (first-party rates shown).",
+			"Vertex id is the bare model id; availability not verified in this repo. Pricing and limits not verified; cost is not shown.",
 	},
 	"claude-opus-4-7": {
 		maxTokens: 8192,
@@ -954,7 +913,6 @@ export const vertexModels = {
 		supportsPromptCache: true,
 		supportsAdaptiveThinking: true,
 		supportsEffort: true,
-		supportsXhighEffort: true,
 		supportsTemperature: false,
 		inputPrice: 5.0,
 		outputPrice: 25.0,

@@ -747,10 +747,18 @@ export class AwsBedrockHandler implements ApiHandler {
 	private getInferenceConfig(modelInfo: ModelInfo, modelType: "anthropic" | "nova"): any {
 		if (modelType === "anthropic") {
 			const plan = this.getReasoningPlan()
+			// Models flagged supportsTemperature === false reject any explicit temperature (even 1 with thinking).
+			const rejectsTemperature = (modelInfo as ClaudeModelInfo).supportsTemperature === false
 			return {
 				maxTokens: modelInfo.maxTokens || 8192,
-				// Thinking requires temperature 1; the newest models reject an explicit temperature entirely.
-				...(plan.sendTemperature ? { temperature: 0 } : plan.thinkingRequested ? { temperature: 1 } : {}),
+				// Thinking requires temperature 1; otherwise 0.
+				...(rejectsTemperature
+					? {}
+					: plan.sendTemperature
+						? { temperature: 0 }
+						: plan.thinkingRequested
+							? { temperature: 1 }
+							: {}),
 			}
 		}
 

@@ -8,7 +8,12 @@ import { DeepSeekHandler } from "../providers/deepseek"
 import { UnknownModelError } from "../providers/model-resolution"
 import { OpenAiNativeHandler } from "../providers/openai-native"
 import { VertexHandler } from "../providers/vertex"
+import { GroqHandler } from "../providers/groq"
+import { HuggingFaceHandler } from "../providers/huggingface"
+import { OpenRouterHandler } from "../providers/openrouter"
+import { RequestyHandler } from "../providers/requesty"
 import { buildAnthropicStreamRequest, planAnthropicReasoning } from "../transform/anthropic-request"
+import { assessApiCost } from "@/utils/cost"
 
 const MSGS: Anthropic.Messages.MessageParam[] = [
 	{ role: "user", content: "first" },
@@ -98,20 +103,82 @@ describe("model layer honesty", () => {
 		})
 	})
 
-	describe("new Claude models are registered", () => {
+	describe("new Claude models are registered, without invented facts", () => {
 		for (const id of ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]) {
-			it(`${id} in Anthropic and Bedrock registries with adaptive thinking`, () => {
-				;(anthropicModels as Record<string, any>)[id].supportsAdaptiveThinking.should.equal(true)
-				;(bedrockModels as Record<string, any>)[`anthropic.${id}`].supportsAdaptiveThinking.should.equal(true)
+			it(`${id}: id registered (Anthropic, Bedrock); prices undefined; pricing flagged unverified`, () => {
+				for (const info of [
+					(anthropicModels as Record<string, any>)[id],
+					(bedrockModels as Record<string, any>)[`anthropic.${id}`],
+				]) {
+					info.pricingUnverified.should.equal(true)
+					for (const k of ["inputPrice", "outputPrice", "cacheWritesPrice", "cacheReadsPrice"]) {
+						;(info[k] === undefined).should.equal(true, k)
+					}
+					// capability claims we cannot source stay unset
+					;(info.supportsAdaptiveThinking === undefined).should.equal(true)
+					;(info.supportsXhighEffort === undefined).should.equal(true)
+					info.supportsTemperature.should.equal(false)
+				}
 			})
 		}
-		it("Vertex has only the IDs documented for Vertex (opus/sonnet 5.5)", () => {
+		it("Vertex has only opus/sonnet 5.5", () => {
 			Object.keys(vertexModels).should.containEql("claude-opus-5-5")
 			Object.keys(vertexModels).should.containEql("claude-sonnet-5-5")
 			Object.keys(vertexModels).should.not.containEql("claude-fable-5-1")
 		})
 		it("AnthropicHandler resolves claude-opus-5-5 verbatim (no silent default)", () => {
 			new AnthropicHandler({ apiModelId: "claude-opus-5-5" }).getModel().id.should.equal("claude-opus-5-5")
+		})
+		it("prototype property names are not treated as registry models", async () => {
+			let err: any
+			try {
+				await drain(new AnthropicHandler({ apiKey: "k", apiModelId: "constructor" }).createMessage("s", MSGS))
+			} catch (e) {
+				err = e
+			}
+			err.should.be.instanceOf(UnknownModelError)
+		})
+	})
+
+	describe("cost honesty", () => {
+		it("unverified-pricing models report cost unavailable, not $0", () => {
+			assessApiCost((anthropicModels as Record<string, any>)["claude-opus-5-5"], 10, 10).should.equal("unavailable")
+		})
+		it("caching models with an undefined cache price report a lower bound", () => {
+			assessApiCost({ supportsPromptCache: true, inputPrice: 1, outputPrice: 2 }, 100, 0).should.equal("lower-bound")
+			assessApiCost({ supportsPromptCache: true, inputPrice: 1, outputPrice: 2, cacheWritesPrice: 1 }, 100, 5).should.equal(
+				"lower-bound",
+			)
+			assessApiCost({ supportsPromptCache: true, inputPrice: 1, outputPrice: 2 }, 0, 0).should.equal("ok")
+			assessApiCost((anthropicModels as Record<string, any>)["claude-sonnet-4-6"], 100, 100).should.equal("ok")
+		})
+	})
+
+	describe("dynamic-list providers keep the user's model id", () => {
+		it("OpenRouter / Requesty / Groq / HuggingFace pass an unlisted id through, flagged", () => {
+			const or = new OpenRouterHandler({ openRouterModelId: "vendor/new-model" } as any).getModel()
+			or.id.should.equal("vendor/new-model")
+			;(or.info as any).pricingUnverified.should.equal(true)
+			new RequestyHandler({ requestyModelId: "x/y" } as any).getModel().id.should.equal("x/y")
+			new GroqHandler({ groqModelId: "not-listed" } as any).getModel().id.should.equal("not-listed")
+			new HuggingFaceHandler({ huggingFaceModelId: "org/not-listed" } as any).getModel().id.should.equal("org/not-listed")
+		})
+	})
+
+	describe("Bedrock inference config", () => {
+		it("omits temperature for models that reject it, even with thinking on", () => {
+			const h: any = new AwsBedrockHandler({ apiModelId: "anthropic.claude-opus-5-5", thinkingBudgetTokens: 4096 })
+			const cfg = h.getInferenceConfig(h.getModel().info, "anthropic")
+			cfg.should.not.have.property("temperature")
+		})
+		it("still sends temperature 0 for models that accept it, and 1 with budget thinking", () => {
+			const plain: any = new AwsBedrockHandler({ apiModelId: "anthropic.claude-sonnet-4-20250514-v1:0" })
+			plain.getInferenceConfig(plain.getModel().info, "anthropic").temperature.should.equal(0)
+			const thinking: any = new AwsBedrockHandler({
+				apiModelId: "anthropic.claude-sonnet-4-20250514-v1:0",
+				thinkingBudgetTokens: 2048,
+			})
+			thinking.getInferenceConfig(thinking.getModel().info, "anthropic").temperature.should.equal(1)
 		})
 	})
 
@@ -139,23 +206,24 @@ describe("model layer honesty", () => {
 			}
 		})
 
-		it("5.x: adaptive thinking, never budget_tokens, never temperature", () => {
-			const b = body("claude-opus-5-5", { budget: 4096 })
-			b.thinking.should.eql({ type: "adaptive", display: "summarized" })
-			JSON.stringify(b).should.not.containEql("budget_tokens")
+		it("5.x (unverified capabilities): conservative request - no temperature, no thinking params, caching on", () => {
+			const b = body("claude-opus-5-5", { budget: 4096, effort: "high" })
 			b.should.not.have.property("temperature")
-		})
-
-		it("5.x with thinking toggled off omits the thinking param (cannot be disabled)", () => {
-			const b = body("claude-sonnet-5-5", { budget: 0 })
 			b.should.not.have.property("thinking")
+			b.should.not.have.property("output_config")
+			JSON.stringify(b).should.not.containEql("budget_tokens")
+		})
+
+		it("4.7: adaptive thinking, effort in output_config, xhigh clamped (xhigh support is not claimed)", () => {
+			const b = body("claude-opus-4-7", { budget: 4096, effort: "xhigh" })
+			b.thinking.should.eql({ type: "adaptive", display: "summarized" })
+			b.output_config.should.eql({ effort: "high" })
 			b.should.not.have.property("temperature")
 		})
 
-		it("effort goes in output_config; xhigh is clamped on models without it", () => {
-			body("claude-opus-5-5", { effort: "xhigh" }).output_config.should.eql({ effort: "xhigh" })
+		it("effort goes in output_config; unknown values and non-effort models are ignored", () => {
 			body("claude-opus-4-6", { effort: "xhigh" }).output_config.should.eql({ effort: "high" })
-			body("claude-opus-5-5", { effort: "bogus" }).should.not.have.property("output_config")
+			body("claude-opus-4-7", { effort: "bogus" }).should.not.have.property("output_config")
 			body("claude-sonnet-4-5-20250929", { effort: "high" }).should.not.have.property("output_config")
 		})
 

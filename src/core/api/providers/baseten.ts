@@ -6,6 +6,7 @@ import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { standInModel } from "./model-resolution"
 
 interface BasetenHandlerOptions extends CommonApiHandlerOptions {
 	basetenApiKey?: string
@@ -73,7 +74,11 @@ export class BasetenHandler implements ApiHandler {
 			return { id, info: basetenModels[id] }
 		}
 
-		// Default fallback
+		// A model was selected but is not in the static list and has no loaded info: keep the user's id.
+		const requested = basetenModelId || apiModelId
+		if (requested) {
+			return standInModel<BasetenModelId>(requested, basetenModels[basetenDefaultModelId])
+		}
 		return {
 			id: basetenDefaultModelId,
 			info: basetenModels[basetenDefaultModelId],

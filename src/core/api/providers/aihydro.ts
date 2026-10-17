@@ -13,6 +13,7 @@ import { withRetry } from "../retry"
 import { createOpenRouterStream } from "../transform/openrouter-stream"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { OpenRouterErrorResponse } from "./types"
+import { standInModel } from "./model-resolution"
 
 interface AiHydroHandlerOptions extends CommonApiHandlerOptions {
 	ulid?: string
@@ -265,6 +266,10 @@ export class AiHydroHandler implements ApiHandler {
 		const modelInfo = this.options.openRouterModelInfo
 		if (modelId && modelInfo) {
 			return { id: modelId, info: modelInfo }
+		}
+		if (modelId) {
+			// A model was selected but its info is not loaded: keep the user's id, never swap in the default.
+			return standInModel(modelId, openRouterDefaultModelInfo)
 		}
 		return { id: openRouterDefaultModelId, info: openRouterDefaultModelInfo }
 	}

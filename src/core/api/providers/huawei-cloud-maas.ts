@@ -5,6 +5,7 @@ import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { standInModel } from "./model-resolution"
 
 interface HuaweiCloudMaaSHandlerOptions extends CommonApiHandlerOptions {
 	huaweiCloudMaasApiKey?: string
@@ -50,7 +51,13 @@ export class HuaweiCloudMaaSHandler implements ApiHandler {
 			return { id, info: huaweiCloudMaasModels[id] }
 		}
 
-		// Default fallback
+		// A model was selected but is not in the static list and has no loaded info: keep the user's id.
+		if (huaweiCloudMaasModelId) {
+			return standInModel<HuaweiCloudMaasModelId>(
+				huaweiCloudMaasModelId,
+				huaweiCloudMaasModels[huaweiCloudMaasDefaultModelId],
+			)
+		}
 		return {
 			id: huaweiCloudMaasDefaultModelId,
 			info: huaweiCloudMaasModels[huaweiCloudMaasDefaultModelId],

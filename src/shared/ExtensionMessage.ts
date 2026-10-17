@@ -271,6 +271,8 @@ export interface AiHydroApiReqInfo {
 	cacheWrites?: number
 	cacheReads?: number
 	cost?: number
+	/** "unavailable": pricing not verified, no cost number; "lower-bound": cost excludes unpriced cache tokens. */
+	costStatus?: "unavailable" | "lower-bound"
 	cancelReason?: AiHydroApiReqCancelReason
 	streamingFailedMessage?: string
 	retryStatus?: {
