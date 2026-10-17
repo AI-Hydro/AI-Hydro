@@ -12,15 +12,27 @@ import { AiHydroDefaultTool } from "@/shared/tools"
  * MCP resources and docs, but no MCP tools.
  */
 
-/** Built-in tools blocked outright in the explorer profile. */
-export const EXPLORER_RESTRICTED_TOOLS: readonly AiHydroDefaultTool[] = [
-	AiHydroDefaultTool.BASH, // execute_command
-	AiHydroDefaultTool.FILE_NEW, // write_to_file
-	AiHydroDefaultTool.FILE_EDIT, // replace_in_file
-	AiHydroDefaultTool.MULTI_FILE_EDIT, // edit_files
-	AiHydroDefaultTool.NEW_RULE, // new_rule
-	AiHydroDefaultTool.BROWSER, // browser_action (has side effects)
-	AiHydroDefaultTool.NEW_TASK, // new_task (no sub-spawning from explorer)
+/**
+ * Built-in tools the explorer profile may call. This is an ALLOWLIST: any tool not listed here
+ * (including tools added later, e.g. preview_html which writes model-supplied HTML to the workspace
+ * and opens it, or report_bug which opens an external issue) is refused by default.
+ * use_mcp_tool is allowed here but further gated by MCP readOnlyHint (see explorerMcpBlockReason).
+ */
+export const EXPLORER_ALLOWED_TOOLS: readonly AiHydroDefaultTool[] = [
+	AiHydroDefaultTool.FILE_READ,
+	AiHydroDefaultTool.SEARCH,
+	AiHydroDefaultTool.LIST_FILES,
+	AiHydroDefaultTool.LIST_CODE_DEF,
+	AiHydroDefaultTool.WEB_FETCH,
+	AiHydroDefaultTool.MCP_USE, // gated by readOnlyHint
+	AiHydroDefaultTool.MCP_ACCESS,
+	AiHydroDefaultTool.MCP_DOCS,
+	AiHydroDefaultTool.ASK,
+	AiHydroDefaultTool.ATTEMPT,
+	AiHydroDefaultTool.CONDENSE,
+	AiHydroDefaultTool.SUMMARIZE_TASK,
+	AiHydroDefaultTool.PLAN_MODE,
+	AiHydroDefaultTool.TODO,
 ]
 
 const READ_ONLY_TOOL_LIST =
@@ -64,7 +76,7 @@ export function explorerBlockReason(
 	params: Record<string, unknown> | undefined,
 	mcpHub: ExplorerMcpHub | undefined,
 ): string | undefined {
-	if ((EXPLORER_RESTRICTED_TOOLS as readonly string[]).includes(toolName)) {
+	if (!(EXPLORER_ALLOWED_TOOLS as readonly string[]).includes(toolName)) {
 		return `Tool '${toolName}' is not available in EXPLORER profile. This is a read-only research subagent. Use only ${READ_ONLY_TOOL_LIST}.`
 	}
 	if (toolName === AiHydroDefaultTool.MCP_USE) {

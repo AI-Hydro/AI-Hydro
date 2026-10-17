@@ -1,7 +1,8 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
 import type { McpServer } from "@/shared/mcp"
-import { explorerBlockReason, explorerMcpBlockReason } from "../explorerPolicy"
+import { AiHydroDefaultTool } from "@/shared/tools"
+import { EXPLORER_ALLOWED_TOOLS, explorerBlockReason, explorerMcpBlockReason } from "../explorerPolicy"
 
 const hub = (tools: any[]) => ({
 	getServers: () => [{ name: "ai-hydro", status: "connected", config: "{}", tools } as McpServer],
@@ -46,8 +47,18 @@ describe("explorer profile policy", () => {
 		expect(explorerMcpBlockReason(h, "ai-hydro", "t")).to.be.a("string")
 	})
 
-	it("still blocks the built-in write tools by name and leaves read tools alone", () => {
+	it("is an allowlist: every tool outside it is refused, including preview_html and report_bug", () => {
+		for (const t of Object.values(AiHydroDefaultTool)) {
+			const reason = explorerBlockReason(t, { server_name: "ai-hydro", tool_name: "get_streamflow" }, hub(TOOLS))
+			if (EXPLORER_ALLOWED_TOOLS.includes(t)) {
+				expect(reason, t).to.equal(undefined)
+			} else {
+				expect(reason, t).to.be.a("string")
+			}
+		}
 		for (const t of [
+			"preview_html",
+			"report_bug",
 			"execute_command",
 			"write_to_file",
 			"replace_in_file",
@@ -55,16 +66,27 @@ describe("explorer profile policy", () => {
 			"new_rule",
 			"browser_action",
 			"new_task",
+			"some_future_tool",
 		]) {
 			expect(explorerBlockReason(t, {}, hub(TOOLS)), t).to.be.a("string")
 		}
+	})
+
+	it("allows the read-only built-ins and completion/interaction tools", () => {
 		for (const t of [
 			"read_file",
 			"search_files",
 			"list_files",
 			"list_code_definition_names",
 			"access_mcp_resource",
+			"load_mcp_documentation",
 			"web_fetch",
+			"ask_followup_question",
+			"attempt_completion",
+			"condense",
+			"summarize_task",
+			"plan_mode_respond",
+			"focus_chain",
 		]) {
 			expect(explorerBlockReason(t, {}, hub(TOOLS)), t).to.equal(undefined)
 		}
