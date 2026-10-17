@@ -1,0 +1,702 @@
+{
+	"_note": "Checker baseline budget. Counts may shrink, never grow. Reference cell = dark theme, 13px, native width (sidebar 400, panel 800, editor 1280). Regenerate with --write-budget only when a slice lowers counts.",
+	"reference": {
+		"theme": "dark",
+		"font": 13,
+		"widths": {
+			"sidebar": 400,
+			"panel": 800,
+			"editor": 1280
+		}
+	},
+	"screens": {
+		"chat-history-list": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 54,
+				"smallText": 0,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2056,
+				"smallText": 0,
+				"contrast": 250,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-home-empty-history": {
+			"ref": {
+				"noName": 1,
+				"smallTarget": 21,
+				"smallText": 2,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 840,
+				"smallText": 80,
+				"contrast": 40,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-home-history": {
+			"ref": {
+				"noName": 1,
+				"smallTarget": 59,
+				"smallText": 2,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 2360,
+				"smallText": 80,
+				"contrast": 220,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-task-answer": {
+			"ref": {
+				"noName": 1,
+				"smallTarget": 73,
+				"smallText": 11,
+				"contrast": 9,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 2752,
+				"smallText": 440,
+				"contrast": 455,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-task-mcp": {
+			"ref": {
+				"noName": 1,
+				"smallTarget": 66,
+				"smallText": 6,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 2584,
+				"smallText": 240,
+				"contrast": 270,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-task-refusal": {
+			"ref": {
+				"noName": 1,
+				"smallTarget": 69,
+				"smallText": 7,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 2632,
+				"smallText": 280,
+				"contrast": 310,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-task-text": {
+			"ref": {
+				"noName": 1,
+				"smallTarget": 49,
+				"smallText": 4,
+				"contrast": 2,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 1944,
+				"smallText": 160,
+				"contrast": 130,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-welcome": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 1
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 188,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 40
+			}
+		},
+		"evidence-all-statuses": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 12,
+				"smallText": 79,
+				"contrast": 22,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 424,
+				"smallText": 2948,
+				"contrast": 815,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-approved": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 33,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1108,
+				"contrast": 283,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-consumed": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 33,
+				"contrast": 7,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1108,
+				"contrast": 325,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-integrity-only": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 33,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1108,
+				"contrast": 259,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-revision-mismatch": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 34,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1148,
+				"contrast": 303,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-stale-evidence": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 35,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1188,
+				"contrast": 323,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-stale-revision": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 35,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1188,
+				"contrast": 323,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-unreported": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 33,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1108,
+				"contrast": 295,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-unverifiable": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 35,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1188,
+				"contrast": 323,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-drift-states": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 10,
+				"smallText": 47,
+				"contrast": 9,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 344,
+				"smallText": 1668,
+				"contrast": 381,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-empty": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 7,
+				"contrast": 6,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 160,
+				"smallText": 260,
+				"contrast": 185,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-error": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 2,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 160,
+				"smallText": 80,
+				"contrast": 130,
+				"contrastIndeterminate": 0
+			}
+		},
+		"experiment-empty": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 2,
+				"contrast": 2,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 160,
+				"smallText": 80,
+				"contrast": 80,
+				"contrastIndeterminate": 0
+			}
+		},
+		"experiment-failed-rows": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 58,
+				"smallText": 93,
+				"contrast": 25,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2240,
+				"smallText": 3700,
+				"contrast": 895,
+				"contrastIndeterminate": 0
+			}
+		},
+		"experiment-no-ci": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 50,
+				"smallText": 88,
+				"contrast": 18,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 1872,
+				"smallText": 3500,
+				"contrast": 655,
+				"contrastIndeterminate": 0
+			}
+		},
+		"experiment-with-ci": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 62,
+				"smallText": 100,
+				"contrast": 24,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2352,
+				"smallText": 3980,
+				"contrast": 835,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-empty-default": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 1,
+				"smallText": 1,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 40,
+				"smallText": 40,
+				"contrast": 260,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-empty-esri": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 1,
+				"smallText": 1,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 40,
+				"smallText": 40,
+				"contrast": 260,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-export-success": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 33,
+				"smallText": 18,
+				"contrast": 1,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 1320,
+				"smallText": 720,
+				"contrast": 1320,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-export-zero-output": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 33,
+				"smallText": 18,
+				"contrast": 1,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 1320,
+				"smallText": 720,
+				"contrast": 1320,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-features": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 1,
+				"smallText": 6,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 40,
+				"smallText": 240,
+				"contrast": 280,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-layer-manager": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 57,
+				"smallText": 46,
+				"contrast": 26,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2280,
+				"smallText": 1840,
+				"contrast": 2610,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-layer-provenance": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 60,
+				"smallText": 51,
+				"contrast": 50,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2400,
+				"smallText": 2040,
+				"contrast": 3870,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-swipe": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 6,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 120,
+				"smallText": 240,
+				"contrast": 340,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-time-slider": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 6,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 160,
+				"smallText": 240,
+				"contrast": 380,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-capsule": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 9,
+				"smallText": 38,
+				"contrast": 13,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1400,
+				"contrast": 660,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-mismatch": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 9,
+				"smallText": 40,
+				"contrast": 13,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1460,
+				"contrast": 676,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-missing": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 9,
+				"smallText": 40,
+				"contrast": 13,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1460,
+				"contrast": 676,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-no-timezone": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 9,
+				"smallText": 38,
+				"contrast": 13,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1400,
+				"contrast": 660,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-session": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 9,
+				"smallText": 38,
+				"contrast": 13,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1400,
+				"contrast": 660,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-warnings": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 9,
+				"smallText": 38,
+				"contrast": 13,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1400,
+				"contrast": 660,
+				"contrastIndeterminate": 0
+			}
+		},
+		"studio-course-progress": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 15,
+				"smallText": 15,
+				"contrast": 7,
+				"contrastIndeterminate": 11
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 600,
+				"smallText": 584,
+				"contrast": 280,
+				"contrastIndeterminate": 424
+			}
+		},
+		"studio-executable-module": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 11,
+				"smallText": 8,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 440,
+				"smallText": 304,
+				"contrast": 170,
+				"contrastIndeterminate": 0
+			}
+		},
+		"studio-static-doc": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 11,
+				"smallText": 7,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 440,
+				"smallText": 264,
+				"contrast": 180,
+				"contrastIndeterminate": 0
+			}
+		},
+		"design-primitives": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			}
+		}
+	}
+}
