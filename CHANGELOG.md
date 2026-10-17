@@ -9,7 +9,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [Unreleased]
+## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
 ### Added / Fixed — Harness quick wins (vision-2040, branch `vision2040/harness-quickwins`)
 
