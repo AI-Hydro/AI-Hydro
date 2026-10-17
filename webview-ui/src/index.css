@@ -23,6 +23,7 @@ The correct order is:
 
 /* AI-Hydro design tokens (custom properties only; no visual change by itself) */
 @import "./design/tokens.css";
+@import "./design/targets.css";
 
 /* Tailwind imports come after external imports */
 @import "tailwindcss/theme.css" layer(theme);
@@ -1919,111 +1920,7 @@ vscode-dropdown::part(listbox) {
 
 /* ─── Map Components ─── */
 
-/* ===== Map Empty State ===== */
-
-.map-empty-state {
-	position: absolute;
-	inset: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-direction: column;
-	pointer-events: none;
-	overflow: hidden;
-}
-
-.map-empty-state--dark {
-	color: rgba(255, 255, 255, 0.9);
-}
-
-.map-empty-state--light {
-	color: rgba(0, 0, 0, 0.75);
-}
-
-/* Animated water ripple background */
-.map-empty-ripple {
-	position: absolute;
-	width: 200px;
-	height: 200px;
-	border-radius: 50%;
-	border: 1px solid color-mix(in srgb, var(--ai-hydro-ocean-blue) 25%, transparent);
-	animation: mapRipple 6s ease-out infinite;
-	pointer-events: none;
-}
-
-@keyframes mapRipple {
-	0% {
-		transform: scale(0.5);
-		opacity: 0.6;
-	}
-	100% {
-		transform: scale(4);
-		opacity: 0;
-	}
-}
-
-.map-empty-content {
-	position: relative;
-	z-index: 1;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 10px;
-	animation: fadeInUp 0.6s ease-out forwards;
-}
-
-.map-empty-icon {
-	font-size: 56px;
-	animation: float 3s ease-in-out infinite;
-	opacity: 0.9;
-	margin-bottom: 4px;
-}
-
-.map-empty-title {
-	margin: 0;
-	font-size: 20px;
-	font-weight: 700;
-	letter-spacing: -0.02em;
-	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-}
-
-.map-empty-subtitle {
-	margin: 0;
-	font-size: 13px;
-	opacity: 0.8;
-	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-	max-width: 340px;
-	text-align: center;
-	line-height: 1.5;
-}
-
-.map-empty-actions {
-	display: flex;
-	gap: 8px;
-	margin-top: 8px;
-	flex-wrap: wrap;
-	justify-content: center;
-}
-
-.map-empty-action {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	padding: 5px 10px;
-	background: color-mix(in srgb, var(--vscode-badge-background) 15%, transparent);
-	border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 30%, transparent);
-	border-radius: 6px;
-	font-size: 11px;
-	opacity: 0.85;
-	transition:
-		background 0.15s ease-out,
-		border-color 0.15s ease-out;
-}
-
-.map-empty-action-icon {
-	font-size: 13px;
-}
-
+/* Map empty state now renders the design-system EmptyState (components/map/MapEmptyState.tsx). */
 .map-search-root {
 	position: relative;
 	width: 100%;
@@ -2287,6 +2184,8 @@ vscode-dropdown::part(listbox) {
 	font-size: inherit;
 	font-variant-numeric: tabular-nums;
 	padding: 2px 6px;
+	min-height: 24px;
+	min-width: 24px;
 	margin: 0;
 	border-radius: 3px;
 	transition: background 0.15s ease-out;
@@ -2298,8 +2197,8 @@ vscode-dropdown::part(listbox) {
 }
 
 .map-attribution {
-	font-size: 9px;
-	opacity: 0.65;
+	font-size: 11px;
+	opacity: 0.85;
 	margin-left: auto;
 	white-space: nowrap;
 }
@@ -2408,6 +2307,40 @@ vscode-dropdown::part(listbox) {
 		border-color 0.15s ease-out;
 }
 
+.map-ribbon-button--labelled {
+	width: 100%;
+	height: 28px;
+	min-height: 28px;
+	padding: 0 8px;
+	gap: 8px;
+	justify-content: flex-start;
+	font-size: var(--aih-text-label, 12px);
+}
+.map-ribbon-button--labelled .codicon {
+	font-size: 16px;
+	flex: none;
+}
+.map-ribbon-button:not(.map-ribbon-button--labelled) .codicon {
+	font-size: 18px;
+}
+.map-ribbon-button__text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.map-ribbon-group {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 2px;
+	padding: 4px 4px 2px;
+}
+.map-ribbon-group__title {
+	padding: 0 8px 2px;
+	font-size: var(--aih-text-caption, 11px);
+	color: var(--vscode-descriptionForeground);
+}
+
 .map-ribbon-button:hover {
 	background: color-mix(in srgb, var(--vscode-button-background) 10%, transparent);
 }
@@ -2419,15 +2352,15 @@ vscode-dropdown::part(listbox) {
 
 .map-ribbon-badge {
 	position: absolute;
-	top: -2px;
-	right: -2px;
-	min-width: 14px;
-	height: 14px;
+	top: -4px;
+	right: -4px;
+	min-width: 16px;
+	height: 16px;
 	padding: 0 3px;
-	border-radius: 7px;
+	border-radius: 8px;
 	background: var(--vscode-button-background);
-	color: #fff;
-	font-size: 9px;
+	color: var(--vscode-button-foreground, #fff);
+	font-size: 11px;
 	font-weight: 700;
 	display: flex;
 	align-items: center;
@@ -2697,4 +2630,22 @@ vscode-dropdown::part(listbox) {
 .html-preview-empty-subtitle {
 	font-size: 11px;
 	opacity: 0.7;
+}
+
+/*
+ * Reduced motion: every keyframe animation above (float, fade-in, shimmer, glow, gradient, message slides, typing
+ * dots, ripples) is limited to a single near-instant step, and transitions are removed, when the user asks for
+ * reduced motion. Elements using `animation ... forwards` still end in their final state.
+ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-delay: 0s !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+		transition-delay: 0s !important;
+		scroll-behavior: auto !important;
+	}
 }

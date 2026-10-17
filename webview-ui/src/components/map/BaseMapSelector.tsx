@@ -23,19 +23,19 @@ export const BASE_MAP_STYLES: BaseMapStyle[] = [
 	// ── Hydrology / Earth-science friendly defaults ──────────────────────────
 	{
 		id: "usgs-topo",
-		name: "🗺️ USGS Topo",
+		name: "USGS Topo",
 		url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
 		attribution: "USGS The National Map",
 	},
 	{
 		id: "usgs-imagery",
-		name: "🛰️ USGS Imagery",
+		name: "USGS Imagery",
 		url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
 		attribution: "USGS The National Map",
 	},
 	{
 		id: "usgs-shaded-relief",
-		name: "🏔️ USGS Shaded Relief",
+		name: "USGS Shaded Relief",
 		url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}",
 		attribution: "USGS The National Map",
 	},
@@ -43,25 +43,25 @@ export const BASE_MAP_STYLES: BaseMapStyle[] = [
 	// ── Esri (global, robust, no token) ──────────────────────────────────────
 	{
 		id: "esri-hillshade",
-		name: "⛰️ Esri Hillshade",
+		name: "Esri Hillshade",
 		url: "https://services.arcgisonline.com/arcgis/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
 		attribution: "© Esri — Sources: Esri, USGS, NOAA",
 	},
 	{
 		id: "esri-imagery",
-		name: "🌍 Esri World Imagery",
+		name: "Esri World Imagery",
 		url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
 		attribution: "© Esri — Sources: Esri, Maxar, Earthstar Geographics, USGS",
 	},
 	{
 		id: "esri-topo",
-		name: "📐 Esri World Topo",
+		name: "Esri World Topo",
 		url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
 		attribution: "© Esri",
 	},
 	{
 		id: "esri-ocean",
-		name: "🌊 Esri Ocean",
+		name: "Esri Ocean",
 		url: "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
 		attribution: "© Esri — Sources: GEBCO, NOAA, Garmin",
 	},
@@ -69,19 +69,19 @@ export const BASE_MAP_STYLES: BaseMapStyle[] = [
 	// ── Carto (clean overlay base, OSM-derived, CDN, free for non-commercial) ──
 	{
 		id: "carto-light",
-		name: "☀️ Carto Light",
+		name: "Carto Light",
 		url: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
 		attribution: "© OpenStreetMap © CartoDB",
 	},
 	{
 		id: "carto-dark",
-		name: "🌙 Carto Dark",
+		name: "Carto Dark",
 		url: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
 		attribution: "© OpenStreetMap © CartoDB",
 	},
 	{
 		id: "carto-voyager",
-		name: "🧭 Carto Voyager",
+		name: "Carto Voyager",
 		url: "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
 		attribution: "© OpenStreetMap © CartoDB",
 	},
@@ -89,22 +89,22 @@ export const BASE_MAP_STYLES: BaseMapStyle[] = [
 	// ── Alternates / specialty ───────────────────────────────────────────────
 	{
 		id: "stadia-terrain",
-		name: "🏞️ Stadia Terrain",
+		name: "Stadia Terrain",
 		url: "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.jpg",
 		attribution: "© Stadia Maps © Stamen Design © OpenStreetMap",
 	},
 	{
 		id: "osm-hot",
-		name: "🚑 Humanitarian OSM",
+		name: "Humanitarian OSM",
 		url: "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
 		attribution: "© OpenStreetMap © HOT",
 	},
 
 	// ── Mapbox (token-gated) ─────────────────────────────────────────────────
-	{ id: "mapbox-dark", name: "🌃 Mapbox Dark", url: "mapbox://styles/mapbox/dark-v10", requiresToken: true },
-	{ id: "mapbox-light", name: "🏙️ Mapbox Light", url: "mapbox://styles/mapbox/light-v10", requiresToken: true },
-	{ id: "mapbox-outdoors", name: "🏞️ Mapbox Outdoors", url: "mapbox://styles/mapbox/outdoors-v10", requiresToken: true },
-	{ id: "mapbox-satellite", name: "🌐 Mapbox Satellite", url: "mapbox://styles/mapbox/satellite-v9", requiresToken: true },
+	{ id: "mapbox-dark", name: "Mapbox Dark", url: "mapbox://styles/mapbox/dark-v10", requiresToken: true },
+	{ id: "mapbox-light", name: "Mapbox Light", url: "mapbox://styles/mapbox/light-v10", requiresToken: true },
+	{ id: "mapbox-outdoors", name: "Mapbox Outdoors", url: "mapbox://styles/mapbox/outdoors-v10", requiresToken: true },
+	{ id: "mapbox-satellite", name: "Mapbox Satellite", url: "mapbox://styles/mapbox/satellite-v9", requiresToken: true },
 ]
 
 interface BaseMapSelectorProps {
@@ -159,11 +159,13 @@ export const BasemapList: React.FC<BaseMapSelectorProps> = ({
 						}}
 						title={style.attribution ?? style.name}
 						type="button">
-						<span style={{ flexShrink: 0, fontSize: 14, width: 18, textAlign: "center" }}>
-							{style.name.match(/^\p{Emoji}/u)?.[0] ?? "🌐"}
-						</span>
+						<span
+							aria-hidden="true"
+							className={`codicon codicon-${selected ? "check" : "map"}`}
+							style={{ flexShrink: 0, fontSize: 14, width: 18, textAlign: "center" }}
+						/>
 						<span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-							{style.name.replace(/^\p{Emoji}\s*/u, "")}
+							{style.name}
 						</span>
 					</button>
 				)
@@ -175,8 +177,8 @@ export const BasemapList: React.FC<BaseMapSelectorProps> = ({
 						padding: "8px 8px 4px",
 						marginTop: 6,
 						borderTop: `1px solid ${subtle}`,
-						fontSize: 10,
-						opacity: 0.55,
+						fontSize: 11,
+						opacity: 0.8,
 						lineHeight: 1.4,
 					}}>
 					{availableStyles.find((s) => s.id === currentStyle)?.attribution ?? ""}

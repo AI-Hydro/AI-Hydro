@@ -67,6 +67,7 @@ import { reportBasemapChanged, reportMapEvent, reportVisibleLayers } from "./map
 import { loadMapWorkspace, sanitizePersistedViewState, sanitizeViewStateForDeck, saveMapWorkspace } from "./mapWorkspace"
 import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGalleryPanel"
 import { resolveFileUri } from "./resolveFileUri"
+import { MapEmptyState } from "./MapEmptyState"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
 import TimeSliderPanel from "./TimeSliderPanel"
@@ -1043,14 +1044,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		e.preventDefault()
 		e.dataTransfer.dropEffect = "copy"
 	}, [])
-	const onDrop = useCallback(async (e: React.DragEvent) => {
-		if (!e.dataTransfer?.files || e.dataTransfer.files.length === 0) {
-			return
-		}
-		e.preventDefault()
-		dragDepthRef.current = 0
-		setIsDragOver(false)
-		const result = await loadAndPushFiles(e.dataTransfer.files)
+	const ingestFiles = useCallback(async (files: FileList) => {
+		const result = await loadAndPushFiles(files)
 		if (result.loaded > 0 && result.errors.length === 0) {
 			setDropStatus({ kind: "ok", msg: `Loaded ${result.loaded} layer${result.loaded > 1 ? "s" : ""}.` })
 		} else if (result.loaded > 0) {
@@ -1063,6 +1058,18 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		}
 		window.setTimeout(() => setDropStatus(null), 4000)
 	}, [])
+	const onDrop = useCallback(
+		async (e: React.DragEvent) => {
+			if (!e.dataTransfer?.files || e.dataTransfer.files.length === 0) {
+				return
+			}
+			e.preventDefault()
+			dragDepthRef.current = 0
+			setIsDragOver(false)
+			await ingestFiles(e.dataTransfer.files)
+		},
+		[ingestFiles],
+	)
 
 	// Persist UI state whenever it changes
 	useEffect(() => {
@@ -2938,7 +2945,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					const labelStyle: React.CSSProperties = {
 						background: "rgba(0,0,0,0.68)",
 						color: "#fff",
-						fontSize: 10,
+						fontSize: 11,
 						padding: "3px 9px",
 						borderRadius: 12,
 						fontWeight: 600,
@@ -3037,7 +3044,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					)
 				})()}
 
-			{layers.length === 0 && <MapEmptyState mapStyle={mapStyle} />}
+			{layers.length === 0 && (
+				<MapEmptyState onFilesPicked={(files) => void ingestFiles(files)} onFindGauge={() => setSearchOpen(true)} />
+			)}
 
 			{/* Search pin clear button */}
 			{searchPin && (
@@ -3633,38 +3642,6 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	)
 }
 
-// ─── Empty State ────────────────────────────────────────────────────────────
-
-const MapEmptyState: React.FC<{ mapStyle: string }> = ({ mapStyle }) => {
-	const isDark = mapStyle === "dark"
-	return (
-		<div className={`map-empty-state ${isDark ? "map-empty-state--dark" : "map-empty-state--light"}`}>
-			<div className="map-empty-ripple" />
-			<div className="map-empty-ripple" style={{ animationDelay: "1.5s" }} />
-			<div className="map-empty-ripple" style={{ animationDelay: "3s" }} />
-			<div className="map-empty-content">
-				<div className="map-empty-icon">🗺️</div>
-				<h2 className="map-empty-title">AI-Hydro Map</h2>
-				<p className="map-empty-subtitle">No layers yet — run a hydrological analysis or push a layer to get started.</p>
-				<div className="map-empty-actions">
-					<div className="map-empty-action">
-						<span className="map-empty-action-icon">📥</span>
-						<span>Drop a GeoJSON file</span>
-					</div>
-					<div className="map-empty-action">
-						<span className="map-empty-action-icon">🔍</span>
-						<span>Search for a gauge</span>
-					</div>
-					<div className="map-empty-action">
-						<span className="map-empty-action-icon">🌊</span>
-						<span>Run a watershed tool</span>
-					</div>
-				</div>
-			</div>
-		</div>
-	)
-}
-
 // ─── Unified Bottom Bar (zoom + compass + scale + coords + attribution) ─────
 
 const MapBottomBar: React.FC<{
@@ -3905,7 +3882,7 @@ const KeyboardShortcutsHelp: React.FC<{ mapStyle: string }> = ({ mapStyle }) => 
 						<code
 							style={{
 								fontFamily: "var(--vscode-editor-font-family, monospace)",
-								fontSize: 10,
+								fontSize: 11,
 								background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
 								padding: "2px 6px",
 								borderRadius: 3,
@@ -4003,7 +3980,7 @@ const _RasterLegend: React.FC<RasterLegendProps> = ({ layers, visibleLayerIds, m
 				borderRadius: 5,
 				boxShadow: "0 1px 5px rgba(0,0,0,0.28)",
 				fontFamily: "var(--vscode-font-family, system-ui, sans-serif)",
-				fontSize: 10,
+				fontSize: 11,
 				color: fg,
 				minWidth: 170,
 				maxWidth: 220,
@@ -4013,7 +3990,7 @@ const _RasterLegend: React.FC<RasterLegendProps> = ({ layers, visibleLayerIds, m
 			<div
 				style={{
 					marginBottom: 4,
-					fontSize: 10,
+					fontSize: 11,
 					opacity: 0.72,
 					overflow: "hidden",
 					textOverflow: "ellipsis",
@@ -4061,7 +4038,7 @@ const _RasterLegend: React.FC<RasterLegendProps> = ({ layers, visibleLayerIds, m
 				style={{
 					display: "flex",
 					justifyContent: "space-between",
-					fontSize: 9,
+					fontSize: 11,
 					opacity: 0.78,
 					fontVariantNumeric: "tabular-nums",
 				}}>
@@ -4080,11 +4057,11 @@ const _RasterLegend: React.FC<RasterLegendProps> = ({ layers, visibleLayerIds, m
 					fontVariantNumeric: "tabular-nums",
 					minHeight: 14,
 				}}>
-				<span style={{ fontSize: 9, opacity: 0.65 }}>cursor</span>
+				<span style={{ fontSize: 11, opacity: 0.85 }}>cursor</span>
 				<span style={{ fontSize: 12, fontWeight: 600, opacity: cursorReading ? 1 : 0.3 }}>
 					{cursorReading ? fmtRasterValue(cursorReading.value) : "—"}
 				</span>
-				{cursorReading?.units && <span style={{ fontSize: 9, opacity: 0.6 }}>{cursorReading.units}</span>}
+				{cursorReading?.units && <span style={{ fontSize: 11, opacity: 0.85 }}>{cursorReading.units}</span>}
 			</div>
 		</div>
 	)

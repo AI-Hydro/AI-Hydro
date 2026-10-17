@@ -118,8 +118,12 @@ interface MapToolRibbonProps {
 }
 
 interface RibbonButtonProps {
+	/** Codicon name without prefix. */
 	icon: string
+	/** Accessible name and tooltip; always present. */
 	label: string
+	/** Visible text beside the icon when the ribbon is wide enough. */
+	text?: string
 	active: boolean
 	accent: string
 	onClick: () => void
@@ -127,18 +131,41 @@ interface RibbonButtonProps {
 	disabled?: boolean
 }
 
-const RibbonButton: React.FC<RibbonButtonProps> = ({ icon, label, active, onClick, badge, disabled }) => (
+const RibbonButton: React.FC<RibbonButtonProps> = ({ icon, label, text, active, onClick, badge, disabled }) => (
 	<button
 		aria-label={label}
-		className={`map-ribbon-button${active ? " map-ribbon-button--active" : ""}`}
+		aria-pressed={active}
+		className={`map-ribbon-button${active ? " map-ribbon-button--active" : ""}${text ? " map-ribbon-button--labelled" : ""}`}
 		disabled={disabled}
 		onClick={onClick}
 		title={label}
 		type="button">
-		<span aria-hidden="true">{icon}</span>
+		<span aria-hidden="true" className={`codicon codicon-${icon}`} />
+		{text && <span className="map-ribbon-button__text">{text}</span>}
 		{badge !== undefined && <span className="map-ribbon-badge">{badge > 99 ? "99+" : badge}</span>}
 	</button>
 )
+
+/** Wide enough to show text labels beside the ribbon icons (labels from 800 px). */
+function useWideViewport(minWidth = 800): boolean {
+	const [wide, setWide] = React.useState(() => typeof window !== "undefined" && window.innerWidth >= minWidth)
+	React.useEffect(() => {
+		const onResize = () => setWide(window.innerWidth >= minWidth)
+		window.addEventListener("resize", onResize)
+		return () => window.removeEventListener("resize", onResize)
+	}, [minWidth])
+	return wide
+}
+
+interface RibbonItem extends Omit<RibbonButtonProps, "accent" | "text"> {
+	key: string
+	/** Short visible label. */
+	text: string
+}
+interface RibbonGroup {
+	title: string
+	items: RibbonItem[]
+}
 
 export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	rasterRevision,
@@ -284,7 +311,8 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 		window.addEventListener("mouseup", onUp)
 	}
 
-	const ribbonWidth = 44
+	const showLabels = useWideViewport()
+	const ribbonWidth = showLabels ? 188 : 44
 
 	// Close panel handler — also clears measure mode / search / export when closing
 	const closePanel = () => {
@@ -309,6 +337,177 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 		setActive(null)
 	}
 
+	const ribbonGroups: RibbonGroup[] = [
+		{
+			title: "Layers & basemap",
+			items: [
+				{
+					key: "basemap",
+					icon: "globe",
+					text: "Basemap",
+					label: "Basemap",
+					active: active === "basemap",
+					onClick: () => toggle("basemap"),
+				},
+				{
+					key: "layers",
+					icon: "layers",
+					text: "Layers",
+					label: layerCount > 0 ? `Layer manager (${layerCount})` : "Layer manager",
+					active: active === "layers",
+					badge: layerCount > 0 ? layerCount : undefined,
+					onClick: () => toggle("layers"),
+				},
+				{
+					key: "gallery",
+					icon: "compass",
+					text: "Gallery",
+					label: "Research Gallery",
+					active: active === "gallery" || !!galleryOpen,
+					onClick: () => {
+						toggle("gallery")
+						onGalleryToggle?.()
+					},
+				},
+				{
+					key: "hydrography",
+					icon: "type-hierarchy",
+					text: "Reference vectors",
+					label: "Reference vectors (MERIT rivers, WBD HUCs)",
+					active: active === "hydrography",
+					onClick: () => toggle("hydrography"),
+				},
+			],
+		},
+		{
+			title: "Navigate & search",
+			items: [
+				{
+					key: "fit",
+					icon: "screen-full",
+					text: "Fit to layers",
+					label: "Fit to layers",
+					active: false,
+					disabled: layerCount === 0,
+					onClick: () => onFitExtent?.(),
+				},
+				{
+					key: "search",
+					icon: "search",
+					text: "Search",
+					label: "Search",
+					active: active === "search" || !!searchOpen,
+					onClick: () => {
+						toggle("search")
+						onSearchToggle?.()
+					},
+				},
+			],
+		},
+		{
+			title: "Measure & analyse",
+			items: [
+				{
+					key: "draw",
+					icon: "edit",
+					text: "Draw",
+					label: "Draw geometry",
+					active: active === "draw",
+					onClick: () => {
+						onMeasureModeChange?.(null)
+						if (active === "transect") {
+							onTransectToggle?.()
+						}
+						toggle("draw")
+					},
+				},
+				{
+					key: "annotations",
+					icon: "tag",
+					text: "Annotations",
+					label: "Smart annotations",
+					active: active === "annotations",
+					onClick: () => toggle("annotations"),
+				},
+				{
+					key: "measure",
+					icon: "symbol-ruler",
+					text: "Measure",
+					label: "Measure",
+					active: active === "measure" || !!measureMode,
+					onClick: () => {
+						onDrawModeChange?.(null)
+						toggle("measure")
+					},
+				},
+				{
+					key: "transect",
+					icon: "graph-line",
+					text: "Transect",
+					label: "Transect profile",
+					active: active === "transect" || !!transectActive,
+					onClick: () => {
+						onMeasureModeChange?.(null)
+						onDrawModeChange?.(null)
+						if (active !== "transect") {
+							onTransectToggle?.()
+						}
+						toggle("transect")
+					},
+				},
+				{
+					key: "flood",
+					icon: "pulse",
+					text: "Flood",
+					label: "Flood inundation — stage scrubber & 3D view",
+					active: active === "flood",
+					badge:
+						layers?.filter(
+							(l) =>
+								l.metadata?.tool === "map_flood_inundation" ||
+								l.metadata?.source === "HAND+SRC" ||
+								l.metadata?.stage_lookup_json,
+						).length || undefined,
+					onClick: () => toggle("flood"),
+				},
+			],
+		},
+		{
+			title: "Time & compare",
+			items: [
+				{
+					key: "swipe",
+					icon: "split-horizontal",
+					text: "Swipe",
+					label: "Swipe / Compare layers",
+					active: active === "swipe",
+					onClick: () => toggle("swipe"),
+				},
+				{
+					key: "time",
+					icon: "clock",
+					text: "Time",
+					label: "Time slider — filter layers by date range",
+					active: active === "time",
+					onClick: () => toggle("time"),
+				},
+			],
+		},
+		{
+			title: "Export",
+			items: [
+				{
+					key: "export",
+					icon: "export",
+					text: "Export",
+					label: "Export snapshot",
+					active: active === "export" || !!exportOpen,
+					onClick: () => toggle("export"),
+				},
+			],
+		},
+	]
+
 	return (
 		<>
 			{/* Tool panels — top-right, left of icon strip; kept narrow to avoid covering inspector */}
@@ -318,7 +517,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					style={{
 						position: "absolute",
 						top: 10,
-						right: 52,
+						right: ribbonWidth + 8,
 						zIndex: 4,
 						width: clampPanelWidth(panelWidth, active),
 						height: clampPanelHeight(panelHeight, active),
@@ -657,14 +856,17 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 				</div>
 			)}
 
-			{/* Icon ribbon — compact strip at top-right */}
-			<div
+			{/* Grouped ribbon: labelled at 800px and wider, icon-only (with aria-labels and tooltips) below */}
+			<nav
+				aria-label="Map tools"
 				style={{
 					position: "absolute",
 					top: 10,
 					right: 10,
 					zIndex: 5,
 					width: ribbonWidth,
+					maxHeight: "calc(100% - 20px)",
+					overflowY: "auto",
 					background: bg,
 					color: fg,
 					border: `1px solid ${border}`,
@@ -672,145 +874,36 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
 					display: "flex",
 					flexDirection: "column",
-					alignItems: "center",
+					alignItems: "stretch",
 					padding: "6px 0",
 					gap: 4,
 					pointerEvents: "auto",
+					boxSizing: "border-box",
 				}}>
-				<RibbonButton
-					accent={accent}
-					active={active === "basemap"}
-					icon="🗺️"
-					label="Basemap"
-					onClick={() => toggle("basemap")}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "layers"}
-					badge={layerCount > 0 ? layerCount : undefined}
-					icon="📑"
-					label={layerCount > 0 ? `Layer manager (${layerCount})` : "Layer manager"}
-					onClick={() => toggle("layers")}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "gallery" || !!galleryOpen}
-					icon="🧭"
-					label="Research Gallery"
-					onClick={() => {
-						toggle("gallery")
-						onGalleryToggle?.()
-					}}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "hydrography"}
-					icon="🌊"
-					label="Reference vectors (MERIT rivers, WBD HUCs)"
-					onClick={() => toggle("hydrography")}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={false}
-					disabled={layerCount === 0}
-					icon="⛶"
-					label="Fit to layers"
-					onClick={() => onFitExtent?.()}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "search" || !!searchOpen}
-					icon="🔍"
-					label="Search"
-					onClick={() => {
-						toggle("search")
-						onSearchToggle?.()
-					}}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "draw"}
-					icon="✏️"
-					label="Draw geometry"
-					onClick={() => {
-						onMeasureModeChange?.(null)
-						if (active === "transect") {
-							onTransectToggle?.()
-						}
-						toggle("draw")
-					}}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "annotations"}
-					icon="🏷️"
-					label="Smart annotations"
-					onClick={() => {
-						toggle("annotations")
-					}}
-				/>
-				<div className="map-ribbon-divider" />
-				<RibbonButton
-					accent={accent}
-					active={active === "measure" || !!measureMode}
-					icon="📏"
-					label="Measure"
-					onClick={() => {
-						onDrawModeChange?.(null)
-						toggle("measure")
-					}}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "transect" || !!transectActive}
-					icon="📈"
-					label="Transect profile"
-					onClick={() => {
-						onMeasureModeChange?.(null)
-						onDrawModeChange?.(null)
-						if (active !== "transect") {
-							onTransectToggle?.()
-						}
-						toggle("transect")
-					}}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "swipe"}
-					icon="◧"
-					label="Swipe / Compare layers"
-					onClick={() => toggle("swipe")}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "flood"}
-					badge={
-						layers?.filter(
-							(l) =>
-								l.metadata?.tool === "map_flood_inundation" ||
-								l.metadata?.source === "HAND+SRC" ||
-								l.metadata?.stage_lookup_json,
-						).length || undefined
-					}
-					icon="💧"
-					label="Flood inundation — stage scrubber & 3D view"
-					onClick={() => toggle("flood")}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "time"}
-					icon="🕐"
-					label="Time slider — filter layers by date range"
-					onClick={() => toggle("time")}
-				/>
-				<RibbonButton
-					accent={accent}
-					active={active === "export" || !!exportOpen}
-					icon="🖼️"
-					label="Export snapshot"
-					onClick={() => toggle("export")}
-				/>
-			</div>
+				{ribbonGroups.map((group, index) => (
+					<div
+						aria-label={group.title}
+						className="map-ribbon-group"
+						key={group.title}
+						role="group"
+						style={{ borderTop: index === 0 ? "none" : `1px solid ${border}` }}>
+						{showLabels && <div className="map-ribbon-group__title">{group.title}</div>}
+						{group.items.map((item) => (
+							<RibbonButton
+								accent={accent}
+								active={item.active}
+								badge={item.badge}
+								disabled={item.disabled}
+								icon={item.icon}
+								key={item.key}
+								label={item.label}
+								onClick={item.onClick}
+								text={showLabels ? item.text : undefined}
+							/>
+						))}
+					</div>
+				))}
+			</nav>
 		</>
 	)
 }

@@ -1877,7 +1877,10 @@ export const MapExport: React.FC<MapExportProps> = ({
 		colorRampLegend: true,
 		watermark: true,
 	})
-	const [status, setStatus] = useState<{ kind: "idle" | "busy" | "ok" | "err"; msg: string }>({ kind: "idle", msg: "" })
+	const [status, setStatus] = useState<{ kind: "idle" | "busy" | "ok" | "warn" | "err"; msg: string }>({
+		kind: "idle",
+		msg: "",
+	})
 	const [previewUrl, setPreviewUrl] = useState<string>("")
 	const [previewExpanded, setPreviewExpanded] = useState(false)
 	const [previewScale, setPreviewScale] = useState<"fit" | "actual">("fit")
@@ -2162,10 +2165,18 @@ export const MapExport: React.FC<MapExportProps> = ({
 				setStatus({ kind: "err", msg: saved.message || "Export write failed." })
 				return
 			}
-			setStatus({
-				kind: "ok",
-				msg: `Saved ${saved.outputs.length} artifact${saved.outputs.length === 1 ? "" : "s"} with provenance.`,
-			})
+			if (saved.outputs.length === 0) {
+				// A successful reply with no files is not a successful export: say so.
+				setStatus({
+					kind: "warn",
+					msg: "No files were written. The export reported success but returned no output files, so nothing was saved.",
+				})
+			} else {
+				setStatus({
+					kind: "ok",
+					msg: `Saved ${saved.outputs.length} artifact${saved.outputs.length === 1 ? "" : "s"} with provenance.`,
+				})
+			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error)
 			reportMapEvent("map_export.failed", { reason: "WEBVIEW_EXPORT_FAILED", message }, "system")
@@ -2749,17 +2760,28 @@ export const MapExport: React.FC<MapExportProps> = ({
 			</button>
 			{status.msg && (
 				<div
+					role={status.kind === "err" || status.kind === "warn" ? "alert" : "status"}
 					style={{
 						marginTop: 8,
-						fontSize: 11,
+						fontSize: 12,
+						display: "flex",
+						gap: 6,
+						alignItems: "flex-start",
 						color:
 							status.kind === "err"
-								? "#f87171"
-								: status.kind === "ok"
-									? "#7dd3fc"
-									: "var(--vscode-descriptionForeground, #999)",
+								? "var(--vscode-errorForeground, #f85149)"
+								: status.kind === "warn"
+									? "var(--vscode-editorWarning-foreground, #cca700)"
+									: "var(--vscode-foreground, #ccc)",
 					}}>
-					{status.msg}
+					{(status.kind === "warn" || status.kind === "err") && (
+						<span
+							aria-hidden="true"
+							className={`codicon codicon-${status.kind === "warn" ? "warning" : "error"}`}
+							style={{ marginTop: 2 }}
+						/>
+					)}
+					<span>{status.msg}</span>
 				</div>
 			)}
 			{previewExpanded &&

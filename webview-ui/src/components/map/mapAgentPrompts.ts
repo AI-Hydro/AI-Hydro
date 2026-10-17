@@ -392,3 +392,16 @@ export function buildBatchTransectsAgentPrompt(ctx: MapBatchTransectsContext): s
 		"Use the profile statistics and visible map layers to analyze the batch. Where a computation is implied, call the appropriate MCP tool.",
 	].join("\n")
 }
+
+/**
+ * Seed for the map empty state's "start a watershed investigation" action. It asks for a procedure, names no
+ * outcome, and tells the agent to stop and ask rather than guess a location or gauge.
+ */
+export function buildStartInvestigationAgentPrompt(): string {
+	return [
+		"I am on the AI-Hydro map with no layers loaded and want to start a watershed investigation.",
+		"Ask me which gauge or location to use, and stop and ask if the gauge is ambiguous or cannot be found.",
+		"Then delineate the watershed with the AI-Hydro tools and add the resulting layers to the map.",
+		"Report which tools and data sources you used, and say plainly when something could not be checked.",
+	].join("\n")
+}

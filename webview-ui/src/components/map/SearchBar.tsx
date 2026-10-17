@@ -438,6 +438,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 					aria-controls="search-results-list"
 					aria-expanded={results.length > 0}
 					aria-label="Search places, coordinates, gauges, or dams"
+					autoFocus={embedded}
 					className="map-search-input"
 					onChange={(e) => setQuery(e.target.value)}
 					onKeyDown={handleKeyDown}

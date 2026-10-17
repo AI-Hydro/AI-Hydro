@@ -118,7 +118,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({ layers, visibleLayerIds, m
 				borderRadius: 5,
 				boxShadow: "0 1px 5px rgba(0,0,0,0.28)",
 				fontFamily: "var(--vscode-font-family, system-ui, sans-serif)",
-				fontSize: 10,
+				fontSize: 11,
 				color: fg,
 				minWidth: 170,
 				maxWidth: 240,
@@ -127,7 +127,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({ layers, visibleLayerIds, m
 			<div
 				style={{
 					marginBottom: 4,
-					fontSize: 10,
+					fontSize: 11,
 					opacity: 0.72,
 					overflow: "hidden",
 					textOverflow: "ellipsis",
@@ -152,14 +152,14 @@ export const MapLegend: React.FC<MapLegendProps> = ({ layers, visibleLayerIds, m
 					/>
 				)}
 			</div>
-			<div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, opacity: 0.78 }}>
+			<div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, opacity: 0.78 }}>
 				<span>{Number.isFinite(minRaw) ? fmtValue(minRaw) : "min"}</span>
 				<span>{Number.isFinite(maxRaw) ? fmtValue(maxRaw) : "max"}</span>
 			</div>
-			{spec.units && <div style={{ fontSize: 9, opacity: 0.65, marginTop: 2 }}>{spec.units}</div>}
+			{spec.units && <div style={{ fontSize: 11, opacity: 0.65, marginTop: 2 }}>{spec.units}</div>}
 			{showTick && (
 				<div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "baseline" }}>
-					<span style={{ fontSize: 9, opacity: 0.65 }}>cursor</span>
+					<span style={{ fontSize: 11, opacity: 0.65 }}>cursor</span>
 					<span style={{ fontSize: 12, fontWeight: 600 }}>{fmtValue(cursorReading.value)}</span>
 				</div>
 			)}
@@ -195,7 +195,7 @@ const MeritRiverLegend: React.FC<{ bg: string; fg: string; bdClr: string; bottom
 			borderRadius: 5,
 			boxShadow: "0 1px 5px rgba(0,0,0,0.28)",
 			fontFamily: "var(--vscode-font-family, system-ui, sans-serif)",
-			fontSize: 10,
+			fontSize: 11,
 			color: fg,
 			minWidth: 160,
 			pointerEvents: "none",
@@ -220,7 +220,7 @@ const MeritRiverLegend: React.FC<{ bg: string; fg: string; bdClr: string; bottom
 				<span style={{ opacity: 0.78 }}>{item.label}</span>
 			</div>
 		))}
-		<div style={{ marginTop: 4, fontSize: 9, opacity: 0.62 }}>width/color by stream order or upstream area</div>
+		<div style={{ marginTop: 4, fontSize: 11, opacity: 0.62 }}>width/color by stream order or upstream area</div>
 	</div>
 )
 
@@ -243,7 +243,7 @@ const CategoricalLegend: React.FC<{
 			borderRadius: 5,
 			boxShadow: "0 1px 5px rgba(0,0,0,0.28)",
 			fontFamily: "var(--vscode-font-family, system-ui, sans-serif)",
-			fontSize: 10,
+			fontSize: 11,
 			color: fg,
 			maxWidth: 220,
 			pointerEvents: "none",
