@@ -9,7 +9,7 @@ e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ p
 		await route.abort("blockedbyclient")
 	})
 
-	const welcomeHeading = sidebar.getByRole("heading", { name: "Hi, I'm AI-Hydro" })
+	const welcomeHeading = sidebar.getByRole("heading", { name: "Welcome to AI-Hydro" })
 	const providerSelectorInput = sidebar.getByTestId("provider-selector-input")
 
 	// Verify the current inline provider setup is visible.
