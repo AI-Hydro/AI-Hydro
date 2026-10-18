@@ -12,6 +12,7 @@ import { stripMarkdown } from "@/utils/stripMarkdown"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import { formatLargeNumber, formatSize } from "@/utils/format"
+import { HighlightedText, withMatchRegions } from "./HighlightedText"
 import "./history.css"
 
 type HistoryViewProps = {
@@ -223,7 +224,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 	}, [tasks])
 
 	const taskHistorySearchResults = useMemo(() => {
-		const results = searchQuery ? highlight(fuse.search(searchQuery)) : tasks
+		const results = searchQuery ? withMatchRegions(fuse.search(searchQuery)) : tasks
 
 		results.sort((a, b) => {
 			switch (sortOption) {
@@ -362,7 +363,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 							return (
 								<article className="history-item modern-card mx-3 my-2 flex" key={item.id}>
 									<VSCodeCheckbox
-										aria-label={`Select task: ${item.task.replace(/<[^>]*>/g, "")}`}
+										aria-label={`Select task: ${item.task}`}
 										checked={selectedItems.includes(item.id)}
 										className="pl-3 pr-1"
 										onClick={(e) => {
@@ -399,7 +400,9 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 											className="history-card__title"
 											onClick={() => handleShowTaskWithId(item.id)}
 											type="button">
-											<span className="ph-no-capture" dangerouslySetInnerHTML={{ __html: item.task }} />
+											<span className="ph-no-capture">
+												<HighlightedText regions={item.matchRegions} text={item.task} />
+											</span>
 										</button>
 										<Text as="p" muted variant="caption">
 											{describeInvestigation(undefined)}
