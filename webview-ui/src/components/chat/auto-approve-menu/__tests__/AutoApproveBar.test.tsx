@@ -26,7 +26,7 @@ describe("AutoApproveBar", () => {
 		render(<AutoApproveBar />)
 		expect(screen.getByText("Tool auto-run")).toBeInTheDocument()
 		expect(
-			screen.getByText("Never covers claim approval. Claim approval is signed outside the agent (aihydro-approve)."),
+			screen.getByText("Does not approve claims. Claim approval is a signed step you perform in a terminal (aihydro-approve)."),
 		).toBeInTheDocument()
 		expect(screen.queryByText(/^Auto-approve$/i)).toBeNull()
 	})

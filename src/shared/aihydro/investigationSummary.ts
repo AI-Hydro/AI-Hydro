@@ -1,6 +1,6 @@
 /**
  * Pure presenter for the "science line" on history cards: which basin or gauge a task investigated and how many of
- * its claims are in each evidence state. It never infers a missing value: no record means "No investigation record".
+ * its claims are in each evidence state. It never infers a missing value: no record means "Investigation record not linked yet".
  */
 
 export interface InvestigationRecord {
@@ -10,7 +10,7 @@ export interface InvestigationRecord {
 	claims?: { approved: number; integrityOnly: number; notApproved: number }
 }
 
-export const NO_INVESTIGATION_RECORD = "No investigation record"
+export const NO_INVESTIGATION_RECORD = "Investigation record not linked yet"
 
 export function describeInvestigation(record: InvestigationRecord | undefined | null): string {
 	if (!record || (!record.label?.trim() && !record.claims)) {

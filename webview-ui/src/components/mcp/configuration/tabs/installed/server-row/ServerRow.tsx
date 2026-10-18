@@ -350,7 +350,7 @@ const ServerRow = ({
 												data-tool="all-tools"
 												onChange={handleAutoApproveChange}
 												style={{ marginBottom: -10 }}>
-												Auto-approve all tools
+												Auto-run all tools
 											</VSCodeCheckbox>
 										)}
 									</div>

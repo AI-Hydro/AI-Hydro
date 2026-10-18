@@ -50,6 +50,6 @@ describe("HistoryPreview", () => {
 
 	it("says there is no investigation record rather than inventing one", () => {
 		render(<HistoryPreview showHistoryView={() => {}} />)
-		expect(screen.getByText("No investigation record")).toBeInTheDocument()
+		expect(screen.getByText("Investigation record not linked yet")).toBeInTheDocument()
 	})
 })
