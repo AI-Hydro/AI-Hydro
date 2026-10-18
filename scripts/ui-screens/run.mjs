@@ -98,42 +98,71 @@ const externalHosts = new Map()
 let unrouted = 0
 const unroutedUrls = new Set()
 const FIXTURE_HEADER = "x-ui-screens-fixture"
-const isLocal = (u) => /^(https?|wss?):\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(u) || /^(data|blob|about):/.test(u)
+// "Local" is the harness server's own origin (exact scheme/host/port, plus its ws twin) and inert schemes.
+// Any other port on localhost/127.0.0.1 is not the harness and is therefore external.
+const baseUrl = new URL(base)
+const isLocal = (u) => {
+	if (/^(data|blob|about):/.test(u)) return true
+	try {
+		const url = new URL(u)
+		return (url.protocol === "http:" || url.protocol === "ws:") && url.host === baseUrl.host
+	} catch {
+		return false
+	}
+}
+const noteUnrouted = (url, how) => {
+	unrouted++
+	unroutedUrls.add(`${how} ${url.slice(0, 160)}`)
+}
 
 async function newContext() {
 	const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 })
 	const handled = new WeakSet()
-	await context.route(/^(?!(https?|wss?):\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$))(https?|wss?):/, (route) => {
-		const request = route.request()
-		handled.add(request)
-		const url = request.url()
-		const host = new URL(url).host
-		externalHosts.set(host, (externalHosts.get(host) ?? 0) + 1)
-		const looksLikeTile = request.resourceType() === "image" || /\/(tile|\d+\/\d+\/\d+)|\.png|\.jpe?g|\.webp/i.test(url)
-		if (looksLikeTile) {
-			const { color } = basemapIdForUrl(url)
+	await context.route(
+		(url) => !isLocal(url.href) && /^(https?|wss?):$/.test(url.protocol),
+		(route) => {
+			const request = route.request()
+			handled.add(request)
+			const url = request.url()
+			const host = new URL(url).host
+			externalHosts.set(host, (externalHosts.get(host) ?? 0) + 1)
+			const looksLikeTile = request.resourceType() === "image" || /\/(tile|\d+\/\d+\/\d+)|\.png|\.jpe?g|\.webp/i.test(url)
+			if (looksLikeTile) {
+				const { color } = basemapIdForUrl(url)
+				return route.fulfill({
+					status: 200,
+					contentType: "image/png",
+					headers: { "Access-Control-Allow-Origin": "*", [FIXTURE_HEADER]: "1" },
+					body: tilePng(color),
+				})
+			}
 			return route.fulfill({
-				status: 200,
-				contentType: "image/png",
+				status: 404,
+				contentType: "text/plain",
 				headers: { "Access-Control-Allow-Origin": "*", [FIXTURE_HEADER]: "1" },
-				body: tilePng(color),
+				body: "blocked by UI screen harness",
 			})
-		}
-		return route.fulfill({
-			status: 404,
-			contentType: "text/plain",
-			headers: { "Access-Control-Allow-Origin": "*", [FIXTURE_HEADER]: "1" },
-			body: "blocked by UI screen harness",
-		})
-	})
-	// A non-local request is "unrouted" if its response did not come from the harness (no fixture header).
-	// Checked on the response, not on a timer, so machine load cannot cause false positives.
+		},
+	)
+	// A non-local request is "unrouted" if its response did not come from the harness (no fixture header),
+	// if it failed outright (it left the routing layer), or if it is a websocket (routes never cover those).
+	// Checked on events, not on a timer, so machine load cannot cause false positives.
 	context.on("response", (response) => {
 		const url = response.url()
-		if (!isLocal(url) && !response.headers()[FIXTURE_HEADER]) {
-			unrouted++
-			unroutedUrls.add(url.slice(0, 160))
-		}
+		if (!isLocal(url) && !response.headers()[FIXTURE_HEADER]) noteUnrouted(url, "response")
+	})
+	// A routed request the page itself cancelled (tiles dropped on pan/unmount) reports ERR_ABORTED: not an escape.
+	// Any other failure, or a failure of a request the router never saw, means traffic left the harness.
+	context.on("requestfailed", (request) => {
+		if (isLocal(request.url())) return
+		const aborted = /ERR_ABORTED/.test(request.failure()?.errorText ?? "")
+		if (!(handled.has(request) && aborted))
+			noteUnrouted(request.url(), `requestfailed(${request.failure()?.errorText ?? "?"})`)
+	})
+	context.on("page", (page) => {
+		page.on("websocket", (ws) => {
+			if (!isLocal(ws.url())) noteUnrouted(ws.url(), "websocket")
+		})
 	})
 	return context
 }
@@ -328,9 +357,18 @@ const budgetOut = {
 	),
 }
 const RULES_BUDGETED = RULES.filter((r) => r !== "contrastIndeterminate")
+// Cell-set signature: budgets for a reduced matrix (the CI subset) live under budget.subsets[signature].
+const matrixSig = `themes=${[...themes].sort()};widths=${[...widths].sort((x, y) => x - y)};fonts=${[...fonts].sort((x, y) => x - y)};motion=${[...motion].sort()}`
+const DEFAULT_SIG = "themes=dark,hc-dark,hc-light,light;widths=320,400,800,1280,1920;fonts=13,20;motion=reduce"
 const minRules = (a, b) =>
 	Object.fromEntries(RULES.map((r) => [r, Math.min(a?.[r] ?? Number.POSITIVE_INFINITY, b?.[r] ?? Number.POSITIVE_INFINITY)]))
 if (writeBudget) {
+	// A cell that errored or rendered blank would record a falsely low count that can never be raised again.
+	const bad = results.filter((r) => r.errors.length || !r.checker)
+	if (bad.length) {
+		console.error(`refusing --write-budget: ${bad.length} cell(s) errored (first: ${bad[0].file}); fix or re-run`)
+		process.exit(1)
+	}
 	// The budget can only shrink: existing entries keep min(old, new) per rule. New screens take the measured values.
 	const old = existsSync(budgetPath) ? JSON.parse(readFileSync(budgetPath, "utf8")) : { screens: {} }
 	for (const [id, s] of Object.entries(budgetOut.screens)) {
@@ -350,6 +388,18 @@ if (writeBudget) {
 	}
 	// Screens absent from this run (subset run) keep their old entries.
 	for (const [id, prev] of Object.entries(old.screens ?? {})) if (!budgetOut.screens[id]) budgetOut.screens[id] = prev
+	// Reduced matrices (e.g. the CI subset) record their per-screen totals under subsets[signature], min-merged.
+	budgetOut.subsets = old.subsets ?? {}
+	if (matrixSig !== DEFAULT_SIG) {
+		const entry = (budgetOut.subsets[matrixSig] ??= { screens: {} })
+		for (const [id, s] of Object.entries(perScreen)) {
+			const prev = entry.screens[id]
+			entry.screens[id] = {
+				matrixTotal: prev && prev.cells === s.cells ? minRules(prev.matrixTotal, s.matrixTotal) : s.matrixTotal,
+				cells: s.cells,
+			}
+		}
+	}
 	mkdirSync(dirname(budgetPath), { recursive: true })
 	writeFileSync(budgetPath, JSON.stringify(budgetOut, null, "\t") + "\n")
 }
@@ -359,22 +409,45 @@ if (check && !writeBudget) {
 	if (!existsSync(budgetPath)) budgetFailures.push(`budget file missing: ${budgetPath}`)
 	else {
 		const budget = JSON.parse(readFileSync(budgetPath, "utf8"))
+		const budgetIds = Object.keys(budget.screens ?? {})
+		if (only) {
+			// Subset run: every requested screen (by id or group) must exist, and every rendered one needs a budget entry.
+			for (const q of only)
+				if (!allScreens.some((x) => x.id === q || x.group === q))
+					budgetFailures.push(`--screens ${q}: no such screen or group`)
+		} else {
+			// Full run: the rendered set and the budgeted set must be identical, so a screen can neither dodge nor orphan its budget.
+			for (const x of allScreens)
+				if (!budgetIds.includes(x.id))
+					budgetFailures.push(`${x.id}: screen has no budget entry (add with --write-budget)`)
+			for (const id of budgetIds)
+				if (!allScreens.some((x) => x.id === id))
+					budgetFailures.push(`${id}: budget entry has no registered screen (stale)`)
+		}
+		const subset = budget.subsets?.[matrixSig]?.screens ?? {}
 		for (const [id, s] of Object.entries(perScreen)) {
 			const b = budget.screens?.[id]
 			if (!b) {
-				budgetFailures.push(`${id}: rendered screen has no budget entry (add with --write-budget)`)
+				if (only) budgetFailures.push(`${id}: rendered screen has no budget entry (add with --write-budget)`)
 				continue
 			}
-			for (const rule of RULES_BUDGETED) {
-				if (s.ref && b.ref && s.ref[rule] > b.ref[rule])
-					budgetFailures.push(`${id} ref ${rule}: ${s.ref[rule]} > ${b.ref[rule]}`)
-			}
-			// Matrix totals are only comparable when the same number of cells was rendered.
-			if (b.cells === s.cells) {
+			if (!s.ref)
+				budgetFailures.push(
+					`${id}: reference cell absent or unchecked (render theme ${REF.theme}, font ${REF.font}, native width)`,
+				)
+			else if (!b.ref) budgetFailures.push(`${id}: budget entry has no ref`)
+			else
+				for (const rule of RULES_BUDGETED)
+					if (s.ref[rule] > b.ref[rule]) budgetFailures.push(`${id} ref ${rule}: ${s.ref[rule]} > ${b.ref[rule]}`)
+			// Matrix totals are only comparable over the same cell set: the full matrix, or a recorded subset signature.
+			const mb = matrixSig === DEFAULT_SIG && b.cells === s.cells ? b : subset[id]?.cells === s.cells ? subset[id] : null
+			if (mb) {
 				matrixTotalsChecked++
 				for (const rule of RULES_BUDGETED)
-					if (s.matrixTotal[rule] > b.matrixTotal[rule])
-						budgetFailures.push(`${id} matrix ${rule}: ${s.matrixTotal[rule]} > ${b.matrixTotal[rule]}`)
+					if (s.matrixTotal[rule] > mb.matrixTotal[rule])
+						budgetFailures.push(`${id} matrix ${rule}: ${s.matrixTotal[rule]} > ${mb.matrixTotal[rule]}`)
+			} else if (flag("require-matrix-budget")) {
+				budgetFailures.push(`${id}: no matrix budget for cell set [${matrixSig}] (record with --write-budget)`)
 			}
 		}
 	}
