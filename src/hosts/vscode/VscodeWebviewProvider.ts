@@ -14,6 +14,9 @@ https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default
 https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
 */
 
+/** Session and run ids accepted from the webview for open_replay (same charset the panel operations use). */
+const REPLAY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
+
 export class VscodeWebviewProvider extends WebviewProvider implements vscode.WebviewViewProvider {
 	// Used in package.json as the view's id. This value cannot be changed due to how vscode caches
 	// views based on their id, and updating the id would break existing instances of the extension.
@@ -203,6 +206,19 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				await handleMapAgentTaskMessage(this.controller, message, async (response) => {
 					await this.webview?.webview.postMessage(response)
 				})
+				break
+			}
+			case "open_replay": {
+				// Run link on a science tool-call card. Same message the Evidence Board and Experiment Table send;
+				// ids are charset-checked before they reach the Replay panel.
+				const sessionId = String(message.session_id ?? "")
+				const runId = String(message.run_id ?? "")
+				if (REPLAY_ID_PATTERN.test(sessionId) && REPLAY_ID_PATTERN.test(runId)) {
+					const { VscodeReplayProvider } = require("@/hosts/vscode/VscodeReplayProvider")
+					void VscodeReplayProvider.openWithSession(sessionId, runId)
+				} else {
+					console.warn("Ignoring open_replay with an invalid session or run id")
+				}
 				break
 			}
 			default: {
