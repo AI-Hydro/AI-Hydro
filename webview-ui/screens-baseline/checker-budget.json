@@ -78,23 +78,6 @@
 			},
 			"cells": 40
 		},
-		"toolcard-raw-open": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
 		"toolcard-refusal": {
 			"ref": {
 				"noName": 0,
@@ -851,7 +834,7 @@
 						"noName": 0,
 						"smallTarget": 18,
 						"smallText": 0,
-						"contrast": 9,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -861,7 +844,7 @@
 						"noName": 0,
 						"smallTarget": 24,
 						"smallText": 0,
-						"contrast": 9,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1232,6 +1215,56 @@
 						"smallTarget": 36,
 						"smallText": 40,
 						"contrast": 33,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"toolcard-area-fail": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"toolcard-provisional": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"toolcard-refusal": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"toolcard-success": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"toolcard-unreported-class": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6

@@ -208,9 +208,6 @@ export const screens: ScreenDef[] = [
 		"recorded",
 		signaturesCall,
 	),
-	toolCardScreen("toolcard-raw-open", "Tool card: raw JSON disclosure open", "recorded", successCall, {
-		steps: [{ click: "text=Raw arguments and result (JSON)" }, { wait: 200 }],
-	}),
 	{
 		id: "chat-history-list",
 		title: "History list view",
