@@ -1,8 +1,8 @@
 {
 	"_note": "Per-file counts of text-[8px|9px|10px] and emoji in guarded component dirs. May shrink, never grow.",
 	"totals": {
-		"smallText": 369,
-		"emoji": 265
+		"smallText": 304,
+		"emoji": 230
 	},
 	"files": {
 		"components/evidence-board/EvidenceBoard.tsx": {
@@ -29,10 +29,6 @@
 			"smallText": 48,
 			"emoji": 45
 		},
-		"components/map/BaseMapSelector.tsx": {
-			"smallText": 1,
-			"emoji": 17
-		},
 		"components/map/FeatureIdentifier.tsx": {
 			"smallText": 20,
 			"emoji": 2
@@ -54,7 +50,7 @@
 			"emoji": 1
 		},
 		"components/map/LayerPanel.tsx": {
-			"smallText": 24,
+			"smallText": 0,
 			"emoji": 37
 		},
 		"components/map/MapContextMenu.tsx": {
@@ -62,12 +58,8 @@
 			"emoji": 28
 		},
 		"components/map/MapExport.tsx": {
-			"smallText": 13,
+			"smallText": 0,
 			"emoji": 8
-		},
-		"components/map/MapLegend.tsx": {
-			"smallText": 8,
-			"emoji": 0
 		},
 		"components/map/MapRoiStrip.tsx": {
 			"smallText": 5,
@@ -75,11 +67,11 @@
 		},
 		"components/map/MapToolRibbon.tsx": {
 			"smallText": 4,
-			"emoji": 32
+			"emoji": 18
 		},
 		"components/map/MapView.tsx": {
-			"smallText": 7,
-			"emoji": 11
+			"smallText": 0,
+			"emoji": 7
 		},
 		"components/map/MeasureTool.tsx": {
 			"smallText": 2,
@@ -121,10 +113,6 @@
 			"smallText": 1,
 			"emoji": 9
 		},
-		"components/chat/ChatTextArea.tsx": {
-			"smallText": 1,
-			"emoji": 0
-		},
 		"components/chat/ClaimChip.tsx": {
 			"smallText": 4,
 			"emoji": 0
@@ -141,10 +129,6 @@
 			"smallText": 1,
 			"emoji": 0
 		},
-		"components/chat/auto-approve-menu/AutoApproveBar.tsx": {
-			"smallText": 2,
-			"emoji": 0
-		},
 		"components/chat/auto-approve-menu/AutoApproveModal.tsx": {
 			"smallText": 1,
 			"emoji": 0
@@ -155,14 +139,6 @@
 		},
 		"components/chat/task-header/TaskTimelineTooltip.tsx": {
 			"smallText": 1,
-			"emoji": 0
-		},
-		"components/history/HistoryPreview.tsx": {
-			"smallText": 5,
-			"emoji": 0
-		},
-		"components/history/HistoryView.tsx": {
-			"smallText": 4,
 			"emoji": 0
 		}
 	}
