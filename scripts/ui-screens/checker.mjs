@@ -33,12 +33,20 @@ export function pageChecker() {
 	}
 	const parseColor = (value) => {
 		const m = value.match(/rgba?\(([^)]+)\)/)
-		if (!m) return null
-		const parts = m[1]
-			.split(/[ ,/]+/)
-			.filter(Boolean)
-			.map(Number)
-		return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }
+		if (m) {
+			const parts = m[1]
+				.split(/[ ,/]+/)
+				.filter(Boolean)
+				.map(Number)
+			return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }
+		}
+		// Computed color-mix() results serialise as color(srgb r g b / a) with 0..1 channels.
+		const c = value.match(/color\(srgb ([^)]+)\)/)
+		if (c) {
+			const parts = c[1].split(/[ /]+/).filter(Boolean).map(Number)
+			return { r: parts[0] * 255, g: parts[1] * 255, b: parts[2] * 255, a: parts.length > 3 ? parts[3] : 1 }
+		}
+		return null
 	}
 	const over = (top, bottom) => {
 		const a = top.a + bottom.a * (1 - top.a)
@@ -140,6 +148,9 @@ export function pageChecker() {
 		if (interactive.has(el) || el.closest("[data-harness]")) continue
 		// cursor:pointer is inherited by decorative children (icons) of real controls; the control is the target.
 		if (el.parentElement?.closest(INTERACTIVE_SELECTOR)) continue
+		// A <label> (and its text) is not the target: the control it names is. Same for label text slotted into
+		// toolkit form controls.
+		if (el.tagName === "LABEL" || el.closest("label, vscode-text-field, vscode-text-area, vscode-dropdown")) continue
 		if (getComputedStyle(el).cursor === "pointer" && visible(el)) pointerDerived.push(el)
 	}
 	// Count only the outermost pointer element (a label and its inner span are one target).
@@ -175,6 +186,8 @@ export function pageChecker() {
 		if (["SCRIPT", "STYLE", "NOSCRIPT", "OPTION"].includes(el.tagName)) continue
 		if (!visible(el)) continue
 		seen.add(el)
+		// Text revealed on hover (opacity 0) is not visible content in this capture.
+		if (opacityOf(el) < 0.05) continue
 		const style = getComputedStyle(el)
 		const size = parseFloat(style.fontSize)
 		// WCAG 1.4.3 exempts inactive UI components from the contrast requirement.
