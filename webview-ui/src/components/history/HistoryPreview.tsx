@@ -14,7 +14,7 @@ type HistoryPreviewProps = {
 
 /**
  * Task to investigation mapping. The host does not yet tell the webview which investigation (session) a past task
- * belonged to, so every card honestly reads "No investigation record" until it does. The presenter and card are
+ * belonged to, so every card honestly reads "Investigation record not linked yet" until it does. The presenter and card are
  * ready for it: pass a record and the science line shows the basin/gauge and claim counts by state.
  */
 const investigationFor = (_taskId: string): InvestigationRecord | undefined => undefined

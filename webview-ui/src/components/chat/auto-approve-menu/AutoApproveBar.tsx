@@ -110,7 +110,7 @@ const AutoApproveBar = ({ style }: AutoApproveBarProps) => {
 				/>
 			</div>
 			<Text as="p" className="pb-[6px]" muted variant="caption">
-				Never covers claim approval. Claim approval is signed outside the agent (aihydro-approve).
+				Does not approve claims. Claim approval is a signed step you perform in a terminal (aihydro-approve).
 			</Text>
 
 			<AutoApproveModal

@@ -6,8 +6,10 @@
  * webview-ui/src/screens/mockHost.ts); the real contexts and components run.
  * Serves /screen/<id>?theme=&font= and the approximate theme CSS files.
  */
+import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
-import { dirname, resolve } from "node:path"
+import { tmpdir } from "node:os"
+import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createRequire } from "node:module"
 
@@ -90,7 +92,12 @@ export const MapContextProvider = ({children}) => React.createElement(React.Frag
 		configFile: false,
 		root: webview,
 		logLevel: "warn",
-		cacheDir: resolve(process.env.UI_SCREENS_CACHE ?? "/private/tmp/aihydro-ui-screens-vite", "cache"),
+		// Keyed by checkout: two worktrees sharing one Vite dep cache re-optimise over each other (duplicate React in the page).
+		cacheDir: resolve(
+			process.env.UI_SCREENS_CACHE ??
+				join(tmpdir(), "aihydro-ui-screens-vite", createHash("sha1").update(root).digest("hex").slice(0, 10)),
+			"cache",
+		),
 		server: { host: "127.0.0.1", port: 0, fs: { allow: [root] } },
 		esbuild: { jsx: "automatic" },
 		optimizeDeps: { entries: ["src/screens/entry.tsx"] },

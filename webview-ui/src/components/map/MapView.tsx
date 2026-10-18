@@ -1,4 +1,4 @@
-import { FlyToInterpolator, LightingEffect, type MapViewState, WebMercatorViewport } from "@deck.gl/core"
+import { LightingEffect, type MapViewState, WebMercatorViewport } from "@deck.gl/core"
 import { TileLayer } from "@deck.gl/geo-layers"
 import { BitmapLayer, GeoJsonLayer, PathLayer, TextLayer } from "@deck.gl/layers"
 import DeckGL from "@deck.gl/react"
@@ -23,6 +23,7 @@ import {
 import { BASE_MAP_STYLES } from "./BaseMapSelector"
 import FeatureIdentifier, { type ClickedFeature, type MapInspectPoint } from "./FeatureIdentifier"
 import { loadAndPushFileEntries, loadAndPushFiles } from "./formats"
+import { flyToTransition } from "./flyToTransition"
 import { rasterCache } from "./formats/rasterCache"
 import {
 	addToMyGallery,
@@ -1598,8 +1599,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 									longitude: p.longitude,
 									latitude: p.latitude,
 									zoom: p.zoom ?? 9,
-									transitionDuration: p.durationMs ?? 2000,
-									transitionInterpolator: new FlyToInterpolator({ speed: 1.2 }),
+									...flyToTransition(p.durationMs),
 								}),
 							)
 						}

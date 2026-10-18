@@ -139,7 +139,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 				<div className="overflow-y-auto p-3 flex-1 min-h-0 overscroll-contain">
 					<div className="flex justify-between items-center mb-3">
 						<HeroTooltip
-							content="Tool auto-run lets AI-Hydro perform the following actions without asking each time. It never covers claim approval, which is signed outside the agent. Use with caution and only enable what you understand."
+							content="Tool auto-run lets AI-Hydro perform the following actions without asking each time. It does not approve claims: claim approval is a signed step you perform in a terminal (aihydro-approve). Use with caution and only enable what you understand."
 							placement="top">
 							<div className="text-base font-semibold mb-1">Tool auto-run settings</div>
 						</HeroTooltip>

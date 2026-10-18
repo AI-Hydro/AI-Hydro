@@ -49,6 +49,7 @@ import {
 } from "@/utils/slash-commands"
 import { validateApiConfiguration, validateModelId } from "@/utils/validate"
 import AiHydroRulesToggleModal from "../aihydro-rules/AiHydroRulesToggleModal"
+import { ACT_MODE_COLOR, PLAN_MODE_COLOR, PlanActSwitch } from "./PlanActSwitch"
 import ServersToggleModal from "./ServersToggleModal"
 import VoiceRecorder from "./VoiceRecorder"
 
@@ -98,56 +99,6 @@ interface GitCommit {
 	label: string
 	description: string
 }
-
-const PLAN_MODE_COLOR = "#4A90E2" // Ocean blue for planning
-const ACT_MODE_COLOR = "#50C878" // Emerald green for action
-
-const SwitchOption = styled.div.withConfig({
-	shouldForwardProp: (prop) => !["isActive", "activeColor"].includes(prop),
-})<{ isActive: boolean; activeColor: string }>`
-	padding: 4px 10px;
-	min-height: 24px;
-	box-sizing: border-box;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	/* Active text is black on the mode colour (white on emerald/blue is under 3:1); the option carries its own fill. */
-	background-color: ${(props) => (props.isActive ? props.activeColor : "transparent")};
-	color: ${(props) => (props.isActive ? "#000000" : "var(--vscode-input-foreground)")};
-	z-index: 1;
-	transition: color 0.2s ease;
-	font-size: 12px;
-	width: 50%;
-	text-align: center;
-
-	&:hover {
-		background-color: ${(props) => (!props.isActive ? "var(--vscode-toolbar-hoverBackground)" : props.activeColor)};
-	}
-`
-
-const SwitchContainer = styled.div<{ disabled: boolean }>`
-	display: flex;
-	align-items: center;
-	background-color: var(--vscode-editor-background);
-	border: 1px solid var(--vscode-input-border);
-	border-radius: 12px;
-	overflow: hidden;
-	cursor: ${(props) => (props.disabled ? "not-allowed" : "pointer")};
-	opacity: ${(props) => (props.disabled ? 0.5 : 1)};
-	user-select: none; // Prevent text selection
-`
-
-const Slider = styled.div.withConfig({
-	shouldForwardProp: (prop) => !["isAct", "isPlan"].includes(prop),
-})<{ isAct: boolean; isPlan?: boolean }>`
-	position: absolute;
-	height: 100%;
-	width: 50%;
-	display: none; /* the active option now carries the fill */
-	background-color: ${(props) => (props.isPlan ? PLAN_MODE_COLOR : ACT_MODE_COLOR)};
-	transition: transform 0.2s ease;
-	transform: translateX(${(props) => (props.isAct ? "100%" : "0%")});
-`
 
 const ButtonGroup = styled.div`
 	display: flex;
@@ -1063,37 +1014,43 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			}
 		}, [apiConfiguration, openRouterModels])
 
-		const onModeToggle = useCallback(() => {
-			// if (textAreaDisabled) return
-			let changeModeDelay = 0
-			if (showModelSelector) {
-				// user has model selector open, so we should save it before switching modes
-				submitApiConfig()
-				changeModeDelay = 250 // necessary to let the api config update (we send message and wait for it to be saved) FIXME: this is a hack and we ideally should check for api config changes, then wait for it to be saved, before switching modes
-			}
-			setTimeout(async () => {
-				const convertedProtoMode = mode === "plan" ? PlanActMode.ACT : PlanActMode.PLAN
-				const response = await StateServiceClient.togglePlanActModeProto(
-					TogglePlanActModeRequest.create({
-						mode: convertedProtoMode,
-						chatContent: {
-							message: inputValue.trim() ? inputValue : undefined,
-							images: selectedImages,
-							files: selectedFiles,
-						},
-					}),
-				)
-				// Focus the textarea after mode toggle with slight delay
-				setTimeout(() => {
-					if (response.value) {
-						setInputValue("")
-					}
-					textAreaRef.current?.focus()
-				}, 100)
-			}, changeModeDelay)
-		}, [mode, showModelSelector, submitApiConfig, inputValue, selectedImages, selectedFiles])
+		const onModeToggle = useCallback(
+			(options?: { keepFocus?: boolean }) => {
+				// if (textAreaDisabled) return
+				let changeModeDelay = 0
+				if (showModelSelector) {
+					// user has model selector open, so we should save it before switching modes
+					submitApiConfig()
+					changeModeDelay = 250 // necessary to let the api config update (we send message and wait for it to be saved) FIXME: this is a hack and we ideally should check for api config changes, then wait for it to be saved, before switching modes
+				}
+				setTimeout(async () => {
+					const convertedProtoMode = mode === "plan" ? PlanActMode.ACT : PlanActMode.PLAN
+					const response = await StateServiceClient.togglePlanActModeProto(
+						TogglePlanActModeRequest.create({
+							mode: convertedProtoMode,
+							chatContent: {
+								message: inputValue.trim() ? inputValue : undefined,
+								images: selectedImages,
+								files: selectedFiles,
+							},
+						}),
+					)
+					// Focus the textarea after mode toggle with slight delay
+					setTimeout(() => {
+						if (response.value) {
+							setInputValue("")
+						}
+						// Keyboard use of the Plan/Act switch keeps focus on the switch
+						if (!options?.keepFocus) {
+							textAreaRef.current?.focus()
+						}
+					}, 100)
+				}, changeModeDelay)
+			},
+			[mode, showModelSelector, submitApiConfig, inputValue, selectedImages, selectedFiles],
+		)
 
-		useShortcut(usePlatform().togglePlanActKeys, onModeToggle, { disableTextInputs: false }) // important that we don't disable the text input here
+		useShortcut(usePlatform().togglePlanActKeys, () => onModeToggle(), { disableTextInputs: false }) // important that we don't disable the text input here
 
 		const handleContextButtonClick = useCallback(() => {
 			// Focus the textarea first
@@ -1780,27 +1737,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						style={{ zIndex: 1000 }}
 						tipText={`In ${shownTooltipMode === "act" ? "Act" : "Plan"}  mode, AI-Hydro will ${shownTooltipMode === "act" ? "complete the task immediately" : "gather information to architect a plan"}`}
 						visible={shownTooltipMode !== null}>
-						<SwitchContainer data-testid="mode-switch" disabled={false} onClick={onModeToggle}>
-							<Slider isAct={mode === "act"} isPlan={mode === "plan"} />
-							<SwitchOption
-								activeColor={PLAN_MODE_COLOR}
-								aria-checked={mode === "plan"}
-								isActive={mode === "plan"}
-								onMouseLeave={() => setShownTooltipMode(null)}
-								onMouseOver={() => setShownTooltipMode("plan")}
-								role="switch">
-								Plan
-							</SwitchOption>
-							<SwitchOption
-								activeColor={ACT_MODE_COLOR}
-								aria-checked={mode === "act"}
-								isActive={mode === "act"}
-								onMouseLeave={() => setShownTooltipMode(null)}
-								onMouseOver={() => setShownTooltipMode("act")}
-								role="switch">
-								Act
-							</SwitchOption>
-						</SwitchContainer>
+						<PlanActSwitch mode={mode} onHover={setShownTooltipMode} onToggle={onModeToggle} />
 					</Tooltip>
 				</div>
 			</div>

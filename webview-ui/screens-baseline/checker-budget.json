@@ -802,5 +802,441 @@
 				"contrastIndeterminate": 0
 			}
 		}
+	},
+	"subsets": {
+		"themes=dark,hc-light;widths=400,800,1280;fonts=13;motion=reduce": {
+			"screens": {
+				"chat-history-list": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-home-empty-history": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-home-history": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-task-answer": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 36,
+						"smallText": 24,
+						"contrast": 27,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-task-mcp": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 9,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-task-refusal": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 9,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-task-text": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-welcome": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"design-primitives": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-all-statuses": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 68,
+						"smallText": 448,
+						"contrast": 140,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-approval-approved": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 44,
+						"smallText": 172,
+						"contrast": 41,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-approval-consumed": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 44,
+						"smallText": 172,
+						"contrast": 54,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-approval-integrity-only": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 44,
+						"smallText": 172,
+						"contrast": 42,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-approval-revision-mismatch": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 44,
+						"smallText": 178,
+						"contrast": 44,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-approval-stale-evidence": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 44,
+						"smallText": 184,
+						"contrast": 47,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-approval-stale-revision": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 44,
+						"smallText": 184,
+						"contrast": 47,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-approval-unreported": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 44,
+						"smallText": 172,
+						"contrast": 45,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-approval-unverifiable": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 44,
+						"smallText": 184,
+						"contrast": 47,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-drift-states": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 56,
+						"smallText": 256,
+						"contrast": 64,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-empty": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 28,
+						"smallText": 40,
+						"contrast": 37,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"evidence-error": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 28,
+						"smallText": 12,
+						"contrast": 24,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"experiment-empty": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 12,
+						"contrast": 15,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"experiment-failed-rows": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 58,
+						"smallText": 556,
+						"contrast": 121,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"experiment-no-ci": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 70,
+						"smallText": 526,
+						"contrast": 91,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"experiment-with-ci": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 70,
+						"smallText": 598,
+						"contrast": 109,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-empty-default": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-empty-esri": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-export-success": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 192,
+						"smallText": 6,
+						"contrast": 147,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-export-zero-output": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 192,
+						"smallText": 6,
+						"contrast": 147,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-features": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layer-manager": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 84,
+						"smallText": 0,
+						"contrast": 168,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layer-provenance": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 102,
+						"smallText": 0,
+						"contrast": 312,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-swipe": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 12,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-time-slider": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"replay-capsule": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 48,
+						"smallText": 218,
+						"contrast": 102,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"replay-mismatch": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 48,
+						"smallText": 230,
+						"contrast": 105,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"replay-missing": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 48,
+						"smallText": 230,
+						"contrast": 105,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"replay-no-timezone": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 48,
+						"smallText": 218,
+						"contrast": 102,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"replay-session": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 48,
+						"smallText": 218,
+						"contrast": 102,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"replay-warnings": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 48,
+						"smallText": 218,
+						"contrast": 102,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"studio-course-progress": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 60,
+						"smallText": 88,
+						"contrast": 48,
+						"contrastIndeterminate": 64
+					},
+					"cells": 6
+				},
+				"studio-executable-module": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 46,
+						"contrast": 30,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"studio-static-doc": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 36,
+						"smallText": 40,
+						"contrast": 33,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				}
+			}
+		}
 	}
 }
