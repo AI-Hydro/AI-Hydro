@@ -443,7 +443,7 @@ const refFile = (id) => {
 			r.motion === motion[0],
 	)?.file
 }
-let html = `<!doctype html><meta charset="utf-8"><title>UI screens</title><style>body{font:14px system-ui;margin:16px;background:#fff;color:#111}h1{font-size:18px}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}figure{margin:0;border:1px solid #ccc;padding:8px}img{width:100%;border:1px solid #ddd}figcaption{font-size:12px;margin-top:4px}table{border-collapse:collapse;font-size:12px}td,th{border:1px solid #ccc;padding:2px 6px}</style><h1>UI screen contact sheet (reference cell: dark, 13px, native width). All data is synthetic FIXTURE content.</h1><div class="g">`
+let html = `<!doctype html><meta charset="utf-8"><title>UI screens</title><style>body{font:14px system-ui;margin:16px;background:#fff;color:#111}h1{font-size:18px}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}figure{margin:0;border:1px solid #ccc;padding:8px}img{width:100%;border:1px solid #ddd}figcaption{font-size:12px;margin-top:4px}table{border-collapse:collapse;font-size:12px}td,th{border:1px solid #ccc;padding:2px 6px}</style><h1>UI screen contact sheet (reference cell: dark, 13px, native width). All data is FIXTURE content: synthetic, or recorded server output replayed offline (each screen's banner says which).</h1><div class="g">`
 for (const s of screens) {
 	const f = refFile(s.id)
 	const c = perScreen[s.id]?.ref

@@ -26,7 +26,7 @@ const out = []
 out.push(`# UI screens: ${label} checker baseline`)
 out.push("")
 out.push(
-	"All screens are synthetic FIXTURE renders from `webview-ui/src/screens/registry.tsx` (harness: `docs/ui/README.md`). Nothing here is a research result. Theme tokens are approximate hand-authored sets, so contrast counts are indicative.",
+	"All screens are FIXTURE renders (synthetic, or recorded server output replayed offline; each banner says which) from `webview-ui/src/screens/registry.tsx` (harness: `docs/ui/README.md`). Nothing here is a research result. Theme tokens are approximate hand-authored sets, so contrast counts are indicative.",
 )
 out.push("")
 out.push(

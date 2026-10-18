@@ -28,4 +28,20 @@ describe("screen harness registry", () => {
 			}
 		}
 	})
+
+	it("covers the S3 tool-card states and labels recorded data as recorded, not synthetic", () => {
+		const ids = screens.filter((s) => s.id.startsWith("toolcard-")).map((s) => s.id)
+		expect(ids).toEqual(
+			expect.arrayContaining([
+				"toolcard-success",
+				"toolcard-refusal",
+				"toolcard-area-fail",
+				"toolcard-provisional",
+				"toolcard-unreported-class",
+			]),
+		)
+		for (const s of screens.filter((x) => x.id.startsWith("toolcard-"))) {
+			expect(["recorded", "spliced"], s.id).toContain(s.fixtureKind)
+		}
+	})
 })
