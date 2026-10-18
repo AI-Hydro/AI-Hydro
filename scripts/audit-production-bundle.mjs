@@ -4,7 +4,21 @@ import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 
 const EXPECTED_EXCELJS_VERSION = "4.4.0"
-const BASELINE_REVIEW_BY = "2026-08-31"
+// Reviewed 2026-10-19 (reachability review; docs/vision-2040 PROGRESS, AI-Hydro repo):
+// - The VSIX ships only dist/extension.js (.vscodeignore excludes node_modules). Of the packages
+//   below, only exceljs is in the bundle; archiver, archiver-utils, zip-stream, readdir-glob, glob,
+//   minimatch, brace-expansion and rimraf are lockfile-tree findings under exceljs's package root
+//   and are kept out of the bundle by the deep import in src/integrations/misc/extract-text.ts and
+//   enforced by scripts/verify-extension-bundle.mjs.
+// - exceljs is shipped and reads untrusted .xlsx (read-only, workbook.xlsx.readFile). Its installed
+//   dependencies are at patched versions for every GitHub advisory except uuid 8.3.2, whose advisory
+//   needs v3/v5/v6 with a caller buffer; exceljs only calls uuid.v4() without one, so that path is
+//   unreachable. Mapping npm source 1119441 to that uuid advisory is an inference: confirm it with
+//   `npm audit --omit=dev --json` before the next extension.
+// - Follow-up before this date: replace exceljs with a narrow xlsx reader with a size/ZIP-expansion
+//   guard (or a patched exceljs), then delete this baseline. The exact range/node/source checks
+//   below still fail on any new advisory, so the extension cannot hide new findings.
+const BASELINE_REVIEW_BY = "2026-12-31"
 const HIGH_BASELINE = {
 	archiver: {
 		isDirect: false,
