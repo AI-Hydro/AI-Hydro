@@ -27,6 +27,8 @@ export function createValidLearningPackFiles(options?: {
 	courseId?: string
 	privateKey?: KeyObject
 	provenanceBytes?: Uint8Array
+	/** SemVer range the pack declares; defaults to the 0.2.x line the unit tests pin their runtime to. */
+	aiHydroRange?: string
 }): {
 	files: Map<string, Uint8Array>
 	fingerprint: string
@@ -46,7 +48,7 @@ export function createValidLearningPackFiles(options?: {
 		publisher: { name: "Synthetic Test", keyId: fingerprint },
 		ownership: { courseId: options?.courseId ?? "hmfp", moduleIds: TEST_MODULE_IDS },
 		entryModuleId: TEST_MODULE_IDS[0],
-		compatibility: { aiHydro: ">=0.2.5 <0.3.0", packApi: 1, runtimeContract: "html-preview-v1" },
+		compatibility: { aiHydro: options?.aiHydroRange ?? ">=0.2.5 <0.3.0", packApi: 1, runtimeContract: "html-preview-v1" },
 		capabilities: { localPython: "terminal-equivalent", webExternalOrigins: [] },
 		environmentPath: "environments/environment.json",
 		provenancePath: "provenance/provenance.json",
