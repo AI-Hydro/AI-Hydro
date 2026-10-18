@@ -55,7 +55,7 @@ e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ p
 			{ timeout: 30_000 },
 		)
 		.toBe("test-api-key")
-	const submitButton = sidebar.getByRole("button", { name: "Let's go!" })
+	const submitButton = sidebar.getByRole("button", { name: "Continue" })
 	const chatInputBox = sidebar.getByTestId("chat-input")
 	let submitDispatched = false
 	await expect
