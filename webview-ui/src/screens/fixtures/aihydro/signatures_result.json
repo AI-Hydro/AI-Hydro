@@ -1,0 +1,209 @@
+{
+	"args": {
+		"session_id": "e2e-proof-3-01013500-20261017T171951Z",
+		"start_date": "1989-10-01",
+		"end_date": "2009-09-30",
+		"precipitation": "skip",
+		"geometry_geojson": "<elided: polygon GeoJSON string>"
+	},
+	"result": {
+		"data": {
+			"q_mean": 1.694778661007764,
+			"q_std": 2.0204045603058898,
+			"q5": 0.24048520178840413,
+			"q95": 6.356608847271864,
+			"q_median": 0.9467750737075009,
+			"baseflow_index": 0.5853970180143581,
+			"runoff_ratio": null,
+			"stream_elas": null,
+			"high_q_freq": 6.1,
+			"high_q_dur": 8.714285714285714,
+			"low_q_freq": 41.35,
+			"low_q_dur": 20.170731707317074,
+			"zero_q_freq": 0.0,
+			"flow_variability": 1.1921347647276248,
+			"hfd_mean": 207.25,
+			"half_flow_date_std": 16.77162782797186,
+			"slope_fdc": 2.6965378024424225,
+			"_uncertainty": {
+				"q_mean": {
+					"value": 1.694778661007764,
+					"ci_low": 1.5371211710103145,
+					"ci_high": 1.8526341908380342,
+					"method": "bootstrap_block",
+					"n": 7305,
+					"ci_level": 0.9
+				},
+				"q_median": {
+					"value": 0.9467750737075009,
+					"ci_low": 0.8405607762509558,
+					"ci_high": 1.0421567044168207,
+					"method": "bootstrap_block",
+					"n": 7305,
+					"ci_level": 0.9
+				},
+				"q5": {
+					"value": 0.24048520178840413,
+					"ci_low": 0.2047374015225603,
+					"ci_high": 0.27298320203008036,
+					"method": "bootstrap_block",
+					"n": 7305,
+					"ci_level": 0.9
+				},
+				"q95": {
+					"value": 6.356608847271864,
+					"ci_low": 5.480679414091224,
+					"ci_high": 6.96540471846594,
+					"method": "bootstrap_block",
+					"n": 7305,
+					"ci_level": 0.9
+				},
+				"flow_variability": {
+					"value": 1.1921347647276248,
+					"ci_low": 1.1185420702411721,
+					"ci_high": 1.2641473106908936,
+					"method": "bootstrap_block",
+					"n": 7305,
+					"ci_level": 0.9
+				},
+				"baseflow_index": {
+					"value": 0.5853970180143581,
+					"ci_low": 0.5714594819304801,
+					"ci_high": 0.5987070972165334,
+					"method": "bootstrap_block",
+					"n": 7305,
+					"ci_level": 0.9,
+					"block_size": 365,
+					"scope": "sampling_variability_of_ratio; excludes filter and observation uncertainty"
+				}
+			},
+			"_streamflow_source": {
+				"product": null,
+				"observation": "caller_supplied"
+			},
+			"flow_quantile_convention": "camels_nonexceedance_v1",
+			"_precipitation": {
+				"status": "not_attempted",
+				"product": null,
+				"units": null,
+				"units_declared": null,
+				"digest": null,
+				"digest_scheme": "sha256 over 'YYYY-MM-DD<TAB>repr(float)<LF>' lines of the received series",
+				"n_days": 0,
+				"start": null,
+				"end": null,
+				"mean_mm_day": null,
+				"min_mm_day": null,
+				"max_mm_day": null,
+				"reason": "skipped by caller (precipitation='skip'); no precipitation request was made",
+				"dependent_signatures": [
+					"runoff_ratio",
+					"stream_elas"
+				]
+			},
+			"precipitation_status": "not_attempted",
+			"precipitation_product": null,
+			"precipitation_digest": null,
+			"precipitation_units": null,
+			"streamflow_observation": "caller_supplied",
+			"streamflow_product": null
+		},
+		"meta": {
+			"tool": "aihydro_watershed.signatures.signatures.extract_hydrological_signatures",
+			"version": "2.3.7",
+			"gauge_id": "01013500",
+			"sources": [
+				{
+					"name": "aihydro-data precipitation router (GridMET / CHIRPS / ERA5-Land / CHIRPS_IRI)",
+					"url": "https://github.com/AI-Hydro/aihydro-data",
+					"accessed": "2026-10-17",
+					"citation": "@misc{AIHydroData2024,\n  title={aihydro-data: global hydrology dataverse},\n  author={{AI-Hydro Contributors}},\n  year={2024},\n  url={https://github.com/AI-Hydro/aihydro-data}\n}"
+				},
+				{
+					"name": "USGS NWIS",
+					"url": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items",
+					"accessed": "2026-10-17",
+					"citation": "@misc{NWIS2024,\n  title={National Water Information System (NWIS), served by the USGS Water Data APIs},\n  author={{USGS Water Resources Mission Area}},\n  year={2024},\n  url={https://api.waterdata.usgs.gov/ogcapi/v1}\n}"
+				}
+			],
+			"params": {
+				"gauge_id": "01013500",
+				"area_km2": 2258.5163954900077,
+				"start_date": "1989-10-01",
+				"end_date": "2009-09-30",
+				"baseflow_method": "lyne_hollick",
+				"baseflow_params": {
+					"alpha": 0.925,
+					"passes": 3
+				},
+				"baseflow_reference": "Nathan & McMahon (1990); Ladson et al. (2013)",
+				"precipitation": "skip"
+			},
+			"computed_at": "2026-10-17T17:20:04.816482+00:00",
+			"feature_id": "__override__",
+			"run_id": "signatures.f784bbe00376"
+		},
+		"feature_id": "__override__",
+		"_files_saved": [],
+		"_sync_required": "[3 analyses complete, no interpretation yet] When ALL planned steps are done, call get_session_raw_state('e2e-proof-3-01013500-20261017T171951Z') then write_research_interpretation('e2e-proof-3-01013500-20261017T171951Z', ...) to persist the scientific context across conversations.",
+		"quality_flags": [
+			{
+				"validator": "water_balance_consistency",
+				"status": "insufficient_data",
+				"severity": null,
+				"message": "Hydrological signatures (runoff_ratio) not found in session.",
+				"recommendation": "Run extract_hydrological_signatures first.",
+				"affected_slots": [
+					"signatures"
+				],
+				"metadata": {}
+			},
+			{
+				"validator": "uncertainty_present",
+				"status": "insufficient_data",
+				"severity": null,
+				"message": "Slot 'signatures' not found in session.",
+				"recommendation": "Run the analysis tool that populates 'signatures' first.",
+				"affected_slots": [
+					"signatures"
+				],
+				"metadata": {}
+			},
+			{
+				"validator": "stationarity",
+				"status": "pass",
+				"severity": null,
+				"message": "No significant trend in annual streamflow totals over 20 water years (Mann-Kendall τ = 0.137, p = 0.4223 ≥ 0.05). Stationarity assumption is not violated.",
+				"recommendation": null,
+				"affected_slots": [
+					"streamflow"
+				],
+				"metadata": {
+					"mann_kendall_tau": 0.1368,
+					"p_value": 0.4223,
+					"n_water_years": 20
+				}
+			}
+		],
+		"next_steps": [
+			{
+				"tool": "separate_baseflow",
+				"reason": "Partition total streamflow into quick-flow and baseflow components."
+			},
+			{
+				"tool": "train_hydro_model",
+				"reason": "Calibrate HBV-light or LSTM using the computed signatures as objective targets."
+			},
+			{
+				"tool": "add_claim",
+				"reason": "Record a scientific finding (e.g. BFI, runoff ratio) to the evidence ledger."
+			},
+			{
+				"tool": "check_water_balance_consistency",
+				"reason": "Re-run the water-balance validator on demand if you changed forcing data.",
+				"when": "if forcing data was updated after signatures were computed"
+			}
+		],
+		"_run_id": "sigs.20261017.e2eproo.637c355a"
+	}
+}

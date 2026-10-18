@@ -1,0 +1,208 @@
+{
+	"data_fetch": {
+		"name": "data_fetch",
+		"description": "Fetch a single hydrology variable for one geometry / time window.\n\nArgs:\n    variable:    Canonical name ('precipitation', 'tmax', 'et', ...); see data_list_products().\n    geometry:    (lat, lon) tuple, [minx, miny, maxx, maxy] bbox, GeoJSON dict or WKT string.\n    start:       ISO-8601 start date, e.g. '2015-01-01'.\n    end:         ISO-8601 end date (inclusive).\n    mode:        'auto' (router picks the product for the region) or 'manual' (needs product=).\n    product:     Product ID, e.g. 'CHIRPS', 'GRIDMET_PRECIP'. Required for mode='manual'.\n    aggregation: 'basin_mean' (default, 1-D series) or 'raw_raster' (clipped DataArray).\n    cache:       True (default) uses the disk cache and retains the series; False retains none.\n    session_id:  Session to record the call in; auto-resolved from the chat when omitted.\n    gauge_id:    streamflow only. USGS site number ('01013500' or 'USGS-01013500'); outranks a\n                 BasinRef alias and an outlet. A polygon with no identity -> GAUGE_REQUIRED,\n                 an ambiguous outlet -> GAUGE_AMBIGUOUS; refusals are final.\n\nReturns:\n    Success: variable, product, source, cache_hit, data (head + shape; data.retained_series),\n    license, citation, next_steps and `_run_id`, the `series` argument of summarize_series,\n    detect_threshold_runs, compare_series and bootstrap_statistic. Failure: error envelope\n    with recovery hints.\n\nQueued backends (GloFAS / HPC) raise USE_ASYNC_TOOL (next_tools=['data_fetch_background']).",
+		"inputSchema": {
+			"properties": {
+				"variable": {
+					"type": "string"
+				},
+				"geometry": {
+					"title": "Geometry"
+				},
+				"start": {
+					"type": "string"
+				},
+				"end": {
+					"type": "string"
+				},
+				"mode": {
+					"default": "auto",
+					"type": "string"
+				},
+				"product": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				},
+				"aggregation": {
+					"default": "basin_mean",
+					"type": "string"
+				},
+				"cache": {
+					"default": true,
+					"type": "boolean"
+				},
+				"region": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				},
+				"outlet": {
+					"anyOf": [
+						{
+							"maxItems": 2,
+							"minItems": 2,
+							"prefixItems": [
+								{
+									"type": "number"
+								},
+								{
+									"type": "number"
+								}
+							],
+							"type": "array"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				},
+				"session_id": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				},
+				"gauge_id": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				}
+			},
+			"required": [
+				"variable",
+				"geometry",
+				"start",
+				"end"
+			],
+			"type": "object"
+		},
+		"annotations": {
+			"readOnlyHint": false,
+			"destructiveHint": false,
+			"idempotentHint": true,
+			"openWorldHint": true
+		}
+	},
+	"extract_hydrological_signatures": {
+		"name": "extract_hydrological_signatures",
+		"description": "Extract 17 CAMELS-style hydrological signatures (flow stats, BFI,\nrunoff ratio, elasticity, high/low flow events, FDC slope, timing).\n`q5` / `q95` are the 5% / 95% flow quantiles (low / high flow, CAMELS), not\nexceedance flows; `flow_quantile_convention` marks results that follow this.\nRequires delineate_watershed first. Defaults to CAMELS analysis period\n1989-10-01 to 2009-09-30.\n\nParameters\n----------\nsession_id : str | None (optional from Wave 3)\n    Research session identifier. Auto-resolved from chat context when omitted.\nstart_date, end_date : str\n    Analysis period in YYYY-MM-DD format.\nfeature : str | None, optional\n    Feature id or name to extract signatures for. Omit to use the active\n    feature or session watershed geometry.\ngeometry_geojson : str, optional\n    Override watershed geometry as a GeoJSON string. Use when the session\n    geometry is wrong or when working directly with a delineated polygon\n    from delineate_watershed_from_point (e.g. global basins).\nprecipitation : \"auto\" | \"skip\"\n    \"auto\" (default) fetches precipitation and computes runoff_ratio /\n    stream_elas only if the series is physically valid. \"skip\" makes no\n    precipitation request (offline / network-guarded runs; some backends\n    read through the netCDF C library that Python-level guards cannot\n    see): runoff_ratio and stream_elas are then None and the run record\n    declares the precipitation acquisition as status \"not_attempted\".",
+		"inputSchema": {
+			"properties": {
+				"session_id": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				},
+				"start_date": {
+					"default": "1989-10-01",
+					"type": "string"
+				},
+				"end_date": {
+					"default": "2009-09-30",
+					"type": "string"
+				},
+				"feature": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"items": {},
+							"type": "array"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				},
+				"geometry_geojson": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				},
+				"precipitation": {
+					"default": "auto",
+					"type": "string"
+				}
+			},
+			"type": "object"
+		},
+		"annotations": {
+			"readOnlyHint": false,
+			"destructiveHint": false,
+			"idempotentHint": true,
+			"openWorldHint": true
+		}
+	},
+	"list_claims": {
+		"name": "list_claims",
+		"description": "List all scientific claims in the session (an error if the session is missing or unreadable).",
+		"inputSchema": {
+			"properties": {
+				"session_id": {
+					"type": "string"
+				},
+				"status": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				}
+			},
+			"required": [
+				"session_id"
+			],
+			"type": "object"
+		},
+		"annotations": {
+			"readOnlyHint": true,
+			"destructiveHint": false,
+			"idempotentHint": true,
+			"openWorldHint": false
+		}
+	}
+}
