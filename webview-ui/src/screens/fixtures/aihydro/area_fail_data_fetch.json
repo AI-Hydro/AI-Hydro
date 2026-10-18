@@ -2,8 +2,8 @@
 	"args": {
 		"variable": "streamflow",
 		"geometry": "<geojson>",
-		"start": "1989-10-01",
-		"end": "2009-09-30",
+		"start": "2019-01-01",
+		"end": "2019-12-31",
 		"gauge_id": "01109000",
 		"session_id": "e2e-proof-3-01013500-20261017T171951Z"
 	},
@@ -85,12 +85,12 @@
 			"site_name": "WADING RIVER NEAR NORTON, MA"
 		},
 		"quality": {
-			"n_rows": 7305,
+			"n_rows": 365,
 			"approval_counts": {
-				"Approved": 7305
+				"Approved": 365
 			},
 			"qualifier_counts": {
-				"ESTIMATED": 2100
+				"ESTIMATED": 11
 			},
 			"qualifiers_other": {},
 			"n_null_values": 0,
@@ -98,22 +98,25 @@
 			"provisional_fraction": 0.0,
 			"provisional_first": null,
 			"provisional_last": null,
-			"n_expected": 7305,
-			"n_missing": 0,
-			"units_native": "ft^3/s",
-			"time_series_id": "aa8ac20eb72d4fa58ea9c0eaf61e10ee",
-			"site_id": "USGS-01013500",
-			"backend": "usgs_waterdata"
+			"n_expected": 365,
+			"n_missing": 0
 		},
 		"upstream": {
 			"backend": "usgs_waterdata",
 			"api_version": "ogcapi/v1",
 			"request_urls": [
-				"https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?monitoring_location_id=USGS-01013500&parameter_code=00060&statistic_id=00003&time=1989-10-01%2F2009-09-30&limit=10000&f=json"
+				"https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?monitoring_location_id=USGS-01109000&parameter_code=00060&statistic_id=00003&time=2019-01-01%2F2019-12-31&limit=10000&f=json"
 			],
-			"retrieved_at": "2026-10-17T17:19:59Z",
+			"retrieved_at": "2026-10-18T09:31:54Z",
 			"response_sha256": [
-				"694da4cb6f6e09b395450456cdb29d5346e52edb3a5297dc243df08f2b9f957b"
+				"2fb463e0905a93cdb041a0a1bb180fde918d30bc1677ada65fbe17d6e3359129"
+			],
+			"content_sha256": [
+				"15cf3b96c3c4a9bb8e586ae9470972c3c50c572f45275b7506ccfc2256c7f524"
+			],
+			"volatile_envelope_keys": [
+				"timeStamp",
+				"links"
 			],
 			"last_modified": [
 				null
@@ -122,14 +125,16 @@
 				null
 			],
 			"date": [
-				"Sat, 17 Oct 2026 17:20:02 GMT"
+				"Sat, 17 Oct 2026 09:57:17 GMT"
 			],
 			"x_build_version": [
 				"1.10.3-7de16842"
 			],
-			"feature_last_modified_max": "2025-09-29T19:25:18.407229+00:00",
-			"n_pages": 1,
-			"data_sha256": "0f5ad62729db08b422ee6ad1cd28f3424dbc1728224bff2d782d17d4efad2f44"
+			"feature_last_modified_max": "2025-12-31T13:53:22.426929+00:00",
+			"features_sha256": "7646a6fb8b6e9ba6450ee10aebf4106e93fd92b462946c0b192c59c191b981cd",
+			"features_sorted_sha256": "e169662be50fcda8e790779e155885a0aed8cd34260448d10afece77ce99c519",
+			"values_sha256": "012864d862bc53a18cdbd8dab7eee5bee3aedc12feaca13958b8d809f0fcbfdd",
+			"n_pages": 1
 		},
 		"_run_id": "fx-run-0102"
 	}

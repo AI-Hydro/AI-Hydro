@@ -174,7 +174,7 @@ export const screens: ScreenDef[] = [
 		scrollPinned: PINNED,
 	}),
 	chatScreen("chat-task-mcp", "Task with ai-hydro MCP call and result", {
-		fixtureKind: "recorded",
+		fixtureKind: "recorded-call",
 		state: taskState(mcpCallTask, true),
 		expectVisible: ["text=Raw arguments and result (JSON)"],
 		steps: SCROLL_TO_END,

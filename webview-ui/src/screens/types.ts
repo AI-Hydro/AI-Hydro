@@ -26,11 +26,12 @@ export type ScreenStep =
  * What the fixture data is, for the harness banner: invented values, a body recorded from a real server, or recorded
  * pieces (real code output on recorded inputs) spliced together offline. Defaults to "synthetic".
  */
-export type FixtureKind = "synthetic" | "recorded" | "spliced"
+export type FixtureKind = "synthetic" | "recorded" | "recorded-call" | "spliced"
 
 export const FIXTURE_BANNER: Record<FixtureKind, string> = {
 	synthetic: "FIXTURE: synthetic data, not a result",
 	recorded: "FIXTURE: recorded output, replayed offline",
+	"recorded-call": "FIXTURE: recorded tool call, synthetic chat",
 	spliced: "FIXTURE: spliced recorded fields (offline)",
 }
 

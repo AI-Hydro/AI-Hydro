@@ -40,6 +40,7 @@ describe("screen harness registry", () => {
 				"toolcard-unreported-class",
 			]),
 		)
+		expect(screens.find((x) => x.id === "chat-task-mcp")?.fixtureKind).toBe("recorded-call")
 		for (const s of screens.filter((x) => x.id.startsWith("toolcard-"))) {
 			expect(["recorded", "spliced"], s.id).toContain(s.fixtureKind)
 		}
