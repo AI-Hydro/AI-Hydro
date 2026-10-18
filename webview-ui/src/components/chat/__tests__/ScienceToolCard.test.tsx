@@ -50,7 +50,7 @@ describe("ScienceToolCard: success", () => {
 		const { container } = card(successCall)
 		const chip = screen.getByRole("group", { name: /Gauge resolution/ })
 		expect(chip.textContent).toBe("explicit_id · distance not reported · area check pass")
-		expect(chip.getAttribute("title")).toContain("log area ratio 0.0003789")
+		expect(chip.getAttribute("title")).toContain("log area ratio 0.000;")
 		expect(container.textContent).not.toContain("Area check failed")
 	})
 
@@ -68,7 +68,7 @@ describe("ScienceToolCard: success", () => {
 
 describe("ScienceToolCard: run link", () => {
 	it("opens Replay with the session from the call's arguments", () => {
-		card(successCall, { fallbackSessionId: "ignored-session" })
+		card(successCall)
 		fireEvent.click(screen.getByRole("button", { name: "Open in Replay" }))
 		expect(postMessage).toHaveBeenCalledWith({
 			type: "open_replay",
@@ -77,11 +77,11 @@ describe("ScienceToolCard: run link", () => {
 		})
 	})
 
-	it("falls back to the ledger session when the call carries none", () => {
-		const args = JSON.stringify({ variable: "streamflow" })
-		card(provisionalCall, { argsJson: args, fallbackSessionId: "ledger-session" })
+	it("uses a session the result itself carries when the call names none", () => {
+		const result = JSON.stringify({ _run_id: "fx-run-9", session_id: "result-session" })
+		render(<ScienceToolCard argsJson="{}" resultText={result} serverName="ai-hydro" toolName="t" />)
 		fireEvent.click(screen.getByRole("button", { name: "Open in Replay" }))
-		expect(postMessage).toHaveBeenCalledWith({ type: "open_replay", session_id: "ledger-session", run_id: "fx-run-0101" })
+		expect(postMessage).toHaveBeenCalledWith({ type: "open_replay", session_id: "result-session", run_id: "fx-run-9" })
 	})
 
 	it("does not offer a link it cannot honour when no session id is known", () => {
@@ -172,6 +172,12 @@ describe("ScienceToolCard: missing fields", () => {
 		rerender(<ScienceToolCard argsJson="{}" serverName="ai-hydro" toolName="some_tool" />)
 		expect(container.textContent).toContain("No result recorded yet.")
 		expect(container.textContent).toContain("Purpose: not reported")
+	})
+
+	it("says the result is not paired when the response could not be attributed", () => {
+		const { container } = render(<ScienceToolCard argsJson="{}" serverName="ai-hydro" toolName="t" unpaired />)
+		expect(container.textContent).toContain("Result not paired (concurrent calls)")
+		expect(container.textContent).not.toContain("Running")
 	})
 
 	it("shows images returned by the tool", () => {

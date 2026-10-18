@@ -10,7 +10,9 @@
  */
 import {
 	describeAreaRatio,
+	assertedGauge,
 	describeProvisional,
+	describeQualityExtras,
 	describeSiteResolution,
 	type InformationClassInfo,
 	presentToolCall,
@@ -32,8 +34,8 @@ export interface ScienceToolCardProps {
 	annotations?: ToolAnnotationsInput
 	/** True while the host is waiting for the server (shows "Running"). */
 	running?: boolean
-	/** Session Replay should open; the call's own `session_id` argument wins over this. */
-	fallbackSessionId?: string
+	/** True when a response arrived but could not be attributed to this call (concurrent calls). */
+	unpaired?: boolean
 }
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
@@ -67,14 +69,18 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 	toolMeta,
 	annotations,
 	running,
-	fallbackSessionId,
+	unpaired,
 }) => {
 	const model = useMemo(
 		() => presentToolCall(serverName, toolName, argsJson, resultText, annotations, toolMeta),
 		[serverName, toolName, argsJson, resultText, annotations, toolMeta],
 	)
-	const sessionId = sessionIdFromArgs(argsJson) ?? (fallbackSessionId?.trim() || undefined)
+	// Only a session the call or its own result names. No ambient fallback: the loaded session may not be the one that ran this.
+	const sessionId = sessionIdFromArgs(argsJson) ?? model.sessionId
 	const { refusal, siteResolution: sr, quality } = model
+	const qualityLines = quality
+		? [...(quality.provisional ? [describeProvisional(quality.provisional)] : []), ...describeQualityExtras(quality)]
+		: []
 
 	const openReplay = () => {
 		if (model.runId && sessionId) {
@@ -126,7 +132,11 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 
 			{model.resultState === "pending" && (
 				<Text muted role="status" variant="caption">
-					{running ? "Running…" : "No result recorded yet."}
+					{unpaired
+						? "Result not paired (concurrent calls): the response is shown below as raw text."
+						: running
+							? "Running…"
+							: "No result recorded yet."}
 				</Text>
 			)}
 
@@ -199,6 +209,12 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 										<Text>
 											The gauge's drainage area and the basin polygon disagree ({describeAreaRatio(sr)}).
 										</Text>
+										{assertedGauge(sr) && (
+											<Text as="div">
+												The server honoured the gauge you asserted: the returned data is for{" "}
+												{sr.site ?? "that gauge"}, not for the basin polygon.
+											</Text>
+										)}
 										{sr.warnings.map((w) => (
 											<Text as="div" key={w} muted variant="caption">
 												{w}
@@ -235,7 +251,13 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 							},
 							{
 								label: "Quality",
-								value: quality?.provisional ? describeProvisional(quality.provisional) : undefined,
+								value: qualityLines.length ? (
+									<>
+										{qualityLines.map((line) => (
+											<div key={line}>{line}</div>
+										))}
+									</>
+								) : undefined,
 							},
 							{ label: "Information class", value: <ClassBadge info={model.informationClass} /> },
 							{

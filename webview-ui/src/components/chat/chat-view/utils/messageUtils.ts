@@ -2,7 +2,7 @@
  * Utility functions for message filtering, grouping, and manipulation
  */
 
-import { isScienceResponse } from "@shared/aihydro/toolCallPresenter"
+import { getPairing } from "@shared/aihydro/toolCallPresenter"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { AiHydroMessage, AiHydroSayBrowserAction } from "@shared/ExtensionMessage"
@@ -47,7 +47,7 @@ export function filterVisibleMessages(messages: AiHydroMessage[]): AiHydroMessag
 				return false
 			case "mcp_server_response":
 				// A first-party science call shows its result inside the tool-call card, not as a raw JSON row.
-				if (isScienceResponse(messages, index)) {
+				if (getPairing(messages).hiddenResponses.has(index)) {
 					return false
 				}
 				break

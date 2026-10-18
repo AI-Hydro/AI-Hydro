@@ -2,9 +2,11 @@ import {
 	describeAreaRatio,
 	describeProvisional,
 	describeSiteResolution,
-	findToolResultText,
+	assertedGauge,
+	describeQualityExtras,
+	getPairing,
+	pairScienceCalls,
 	firstSentence,
-	isScienceResponse,
 	isScienceServer,
 	presentToolCall,
 } from "@shared/aihydro/toolCallPresenter"
@@ -101,13 +103,13 @@ describe("presenter: gauge resolution", () => {
 		expect(m.siteResolution?.logAreaRatio).toBeCloseTo(-2.999961658833441, 9)
 		expect(m.siteResolution?.warnings[0]).toContain("area_check=fail")
 		expect(describeSiteResolution(m.siteResolution!)).toBe("explicit_id · distance not reported · area check fail")
-		expect(describeAreaRatio(m.siteResolution!)).toBe("log area ratio -3; gauge/basin area ratio 0.04979; limit ±0.09531")
+		expect(describeAreaRatio(m.siteResolution!)).toBe("log area ratio -3.000; gauge/basin area ratio 0.0498; limit ±0.095")
 	})
 
 	it("reads an outlet_snap record: signed distance in metres", () => {
 		const m = presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ site_resolution: outletSnapResolution }))
 		expect(m.siteResolution).toMatchObject({ method: "outlet_snap", distanceM: 0, areaCheck: "pass" })
-		expect(describeSiteResolution(m.siteResolution!)).toBe("outlet_snap · 0 m · area check pass")
+		expect(describeSiteResolution(m.siteResolution!)).toBe("outlet_snap · 0.0 m · area check pass")
 	})
 
 	it("says 'not reported' for an unrecognised or missing area check", () => {
@@ -175,9 +177,24 @@ describe("presenter: refusals", () => {
 		expect(m.resultState).toBe("error")
 	})
 
-	it("never reads a string `error` field as a success", () => {
-		const m = presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ error: false, ok: 1 }))
-		expect(m.refusal).toBeUndefined()
+	it("does not treat error:false or ok:true as a refusal", () => {
+		expect(presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ error: false, ok: 1 })).refusal).toBeUndefined()
+		expect(presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ ok: true })).refusal).toBeUndefined()
+		expect(presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ error: "" })).refusal).toBeUndefined()
+	})
+
+	it("treats a non-empty string error as a refusal with the string as its message", () => {
+		const m = presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ error: "session not found" }))
+		expect(m.resultState).toBe("error")
+		expect(m.refusal?.code).toBeUndefined()
+		expect(m.refusal?.message).toBe("session not found")
+	})
+
+	it("treats ok:false as a refusal and prefers an explicit message", () => {
+		const m = presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ ok: false, message: "nothing to do", code: "NOPE" }))
+		expect(m.resultState).toBe("error")
+		expect(m.refusal).toMatchObject({ code: "NOPE", message: "nothing to do" })
+		expect(presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ ok: false })).refusal?.message).toBeUndefined()
 	})
 })
 
@@ -279,6 +296,49 @@ describe("presenter: robustness", () => {
 		expect(m.runId).toBe("r1")
 		expect(m.rawResult).not.toContain("base64")
 	})
+	it("takes images only from the trailing host-appended run", () => {
+		const url = "data:image/png;base64,AAAA"
+		const inside = presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ note: `\n\n${url}\n\nmore`, _run_id: "r1" }))
+		expect(inside.images).toEqual([])
+		const mid = presentToolCall("ai-hydro", "t", "{}", `x\n\n${url}\n\ntail text`)
+		expect(mid.images).toEqual([])
+		const two = presentToolCall("ai-hydro", "t", "{}", `${JSON.stringify({ _run_id: "r" })}\n\n${url}\n\n${url}`)
+		expect(two.images).toEqual([url, url])
+	})
+	it("reads a session id only from the result's own fields", () => {
+		expect(presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ session_id: "s1" })).sessionId).toBe("s1")
+		expect(presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ data: { session_id: "s2" } })).sessionId).toBe("s2")
+		expect(presentToolCall("ai-hydro", "t", "{}", JSON.stringify({ meta: { session_id: "s3" } })).sessionId).toBeUndefined()
+	})
+	it("surfaces non-zero negative, null and other-qualifier counts only", () => {
+		const q = presentToolCall(
+			"ai-hydro",
+			"t",
+			"{}",
+			JSON.stringify({
+				quality: {
+					n_rows: 10,
+					approval_counts: { Approved: 10 },
+					n_negative: 2,
+					n_null_values: 1,
+					qualifiers_other: { FOO: 3 },
+				},
+			}),
+		).quality!
+		expect(describeQualityExtras(q)).toEqual([
+			"2 negative values (kept, not converted)",
+			"1 null value dropped",
+			"other qualifiers: FOO 3",
+		])
+		expect(describeQualityExtras({ nNegative: 0, nNullValues: 0, qualifiersOther: {} })).toEqual([])
+	})
+	it("says dates are not reported when provisional values come without dates", () => {
+		expect(describeProvisional({ count: 4, total: 10 })).toBe("provisional 4/10 (dates not reported)")
+	})
+	it("says the returned data is for the asserted gauge only for honoured assertions", () => {
+		expect(assertedGauge({ method: "explicit_id", warnings: [] })).toBe(true)
+		expect(assertedGauge({ method: "outlet_snap", warnings: [] })).toBe(false)
+	})
 	it("takes units only from x-units or an explicit 'units:' phrase", () => {
 		const schema = {
 			properties: {
@@ -325,7 +385,7 @@ describe("server identity and message pairing", () => {
 		expect(isScienceServer(undefined)).toBe(false)
 	})
 
-	it("pairs a call with the first response before the next call", () => {
+	it("pairs one outstanding science call with its response, even across sequential calls", () => {
 		const msgs = [
 			call(1, "ai-hydro"),
 			{ ts: 2, say: "mcp_server_request_started" },
@@ -333,27 +393,47 @@ describe("server identity and message pairing", () => {
 			call(4, "ai-hydro"),
 			res(5, "B"),
 		]
-		expect(findToolResultText(msgs, 1)).toBe("A")
-		expect(findToolResultText(msgs, 4)).toBe("B")
+		const p = pairScienceCalls(msgs)
+		expect(p.byCallTs.get(1)).toEqual({ status: "paired", resultText: "A" })
+		expect(p.byCallTs.get(4)).toEqual({ status: "paired", resultText: "B" })
+		expect([...p.hiddenResponses]).toEqual([2, 4])
 	})
-	it("returns undefined while a call has no response", () => {
-		expect(findToolResultText([call(1, "ai-hydro")], 1)).toBeUndefined()
-		expect(findToolResultText([call(1, "ai-hydro"), call(2, "ai-hydro"), res(3, "B")], 1)).toBeUndefined()
-		expect(findToolResultText([], 1)).toBeUndefined()
+
+	it("leaves a call with no response out of the map (still running)", () => {
+		expect(pairScienceCalls([call(1, "ai-hydro")]).byCallTs.size).toBe(0)
 	})
-	it("hides only responses that follow a first-party tool call", () => {
-		const msgs = [
-			call(1, "ai-hydro"),
-			res(2, "A"),
-			call(3, "github"),
-			res(4, "B"),
-			call(5, "ai-hydro", "access_mcp_resource"),
-			res(6, "C"),
-		]
-		expect(isScienceResponse(msgs, 1)).toBe(true)
-		expect(isScienceResponse(msgs, 3)).toBe(false)
-		expect(isScienceResponse(msgs, 5)).toBe(false)
-		expect(isScienceResponse(msgs, 0)).toBe(false)
+
+	it("never guesses when calls interleave: both calls are unpaired and every response stays visible", () => {
+		const p = pairScienceCalls([call(1, "ai-hydro"), call(2, "ai-hydro"), res(3, "A"), res(4, "B")])
+		expect(p.byCallTs.get(1)).toEqual({ status: "unpaired" })
+		expect(p.byCallTs.get(2)).toEqual({ status: "unpaired" })
+		expect(p.hiddenResponses.size).toBe(0)
+	})
+
+	it("treats two unanswered calls followed by one response as ambiguous", () => {
+		const p = pairScienceCalls([call(1, "ai-hydro"), call(2, "github"), res(3, "A")])
+		expect(p.byCallTs.get(1)).toEqual({ status: "unpaired" })
+		expect(p.byCallTs.has(2)).toBe(false)
+		expect(p.hiddenResponses.size).toBe(0)
+	})
+
+	it("keeps an orphan response visible and does not touch later pairs", () => {
+		const p = pairScienceCalls([res(1, "orphan"), call(2, "ai-hydro"), res(3, "B")])
+		expect(p.hiddenResponses.has(0)).toBe(false)
+		expect(p.byCallTs.get(2)).toEqual({ status: "paired", resultText: "B" })
+	})
+
+	it("hides only responses of a lone first-party tool call", () => {
+		const msgs = [call(1, "github"), res(2, "B"), call(3, "ai-hydro", "access_mcp_resource"), res(4, "C")]
+		const p = pairScienceCalls(msgs)
+		expect(p.hiddenResponses.size).toBe(0)
+		expect(p.byCallTs.size).toBe(0)
+	})
+
+	it("computes once per list identity", () => {
+		const msgs = [call(1, "ai-hydro"), res(2, "A")]
+		expect(getPairing(msgs)).toBe(getPairing(msgs))
+		expect(getPairing([...msgs])).not.toBe(getPairing(msgs))
 	})
 })
 
@@ -363,8 +443,9 @@ describe("ADR-008 b and the S3 reviewer check", () => {
 		expect(source).not.toMatch(/"(data_fetch|fetch_streamflow|delineate)/)
 		expect(source).not.toMatch(/'(data_fetch|fetch_streamflow|delineate)/)
 	})
-	it("imports nothing, so it loads without webview or host code", () => {
-		expect(source).not.toMatch(/^\s*import\s/m)
+	it("imports only the pure server-name list, so it loads without webview or host code", () => {
+		const imports = (source.match(/^[ \t]*import\s.*$/gm) ?? []).map((l) => l.trim())
+		expect(imports).toEqual(['import { isFirstPartyServerName } from "./firstPartyServers"'])
 		expect(source).not.toMatch(/\brequire\(/)
 	})
 })

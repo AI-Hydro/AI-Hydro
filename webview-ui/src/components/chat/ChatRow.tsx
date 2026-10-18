@@ -8,7 +8,7 @@ import {
 	AiHydroSayTool,
 	COMPLETION_RESULT_CHANGES_FLAG,
 } from "@shared/ExtensionMessage"
-import { findToolResultText, isScienceServer } from "@shared/aihydro/toolCallPresenter"
+import { getPairing, isScienceServer } from "@shared/aihydro/toolCallPresenter"
 import { BooleanRequest, Int64Request, StringRequest } from "@shared/proto/cline/common"
 import { VSCodeBadge, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
@@ -32,7 +32,6 @@ import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server
 import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row/McpToolRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useHtmlPreviewContext } from "@/context/HtmlPreviewContext"
-import { useOptionalLedgerContext } from "@/context/LedgerContext"
 import { FileServiceClient, TaskServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
 import { CheckpointControls } from "../common/CheckpointControls"
@@ -333,7 +332,6 @@ export const ChatRowContent = memo(
 	}: ChatRowContentProps) => {
 		const { mcpServers, mcpMarketplaceCatalog, onRelinquishControl, vscodeTerminalExecutionMode, aihydroMessages } =
 			useExtensionState()
-		const ledger = useOptionalLedgerContext()
 		const { items: htmlPreviewItems } = useHtmlPreviewContext()
 		const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 		const [quoteButtonState, setQuoteButtonState] = useState<QuoteButtonState>({
@@ -1269,6 +1267,7 @@ export const ChatRowContent = memo(
 			const server = mcpServers.find((server) => server.name === useMcpServer.serverName)
 			// Server-identity switch (never per tool): first-party science calls render as a semantic card.
 			const scienceCall = useMcpServer.type === "use_mcp_tool" && isScienceServer(useMcpServer.serverName)
+			const sciencePair = scienceCall ? getPairing(aihydroMessages ?? []).byCallTs.get(message.ts) : undefined
 			const scienceTool = scienceCall ? server?.tools?.find((tool) => tool.name === useMcpServer.toolName) : undefined
 			return (
 				<>
@@ -1306,8 +1305,8 @@ export const ChatRowContent = memo(
 						<ScienceToolCard
 							annotations={scienceTool?.annotations}
 							argsJson={useMcpServer.arguments}
-							fallbackSessionId={ledger?.sessionId}
-							resultText={findToolResultText(aihydroMessages ?? [], message.ts)}
+							resultText={sciencePair?.status === "paired" ? sciencePair.resultText : undefined}
+							unpaired={sciencePair?.status === "unpaired"}
 							running={isMcpServerResponding}
 							serverName={useMcpServer.serverName}
 							toolMeta={{ description: scienceTool?.description, inputSchema: scienceTool?.inputSchema }}

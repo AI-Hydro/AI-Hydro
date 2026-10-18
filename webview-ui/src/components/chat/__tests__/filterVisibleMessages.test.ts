@@ -22,4 +22,8 @@ describe("filterVisibleMessages: science tool results", () => {
 	it("keeps a response with no preceding call", () => {
 		expect(filterVisibleMessages([response(2)]).map((m) => m.ts)).toEqual([2])
 	})
+	it("keeps every response row when calls interleave (the card says it is unpaired)", () => {
+		const out = filterVisibleMessages([call(1, "ai-hydro"), call(2, "ai-hydro"), response(3), response(4)])
+		expect(out.map((m) => m.ts)).toEqual([1, 2, 3, 4])
+	})
 })

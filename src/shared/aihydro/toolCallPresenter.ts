@@ -13,15 +13,17 @@
  *   tools/list   `description`, `inputSchema`, `annotations`
  * See webview-ui/src/screens/fixtures/aihydro/README.md for where each was recorded.
  *
- * No React and no webview imports: importable from the extension host and from tests (ADR-008 b).
+ * No React and no webview imports (one relative import of a pure name list): importable from the extension host and
+ * from tests (ADR-008 b).
  */
 
-/** The first-party server whose tool calls get science cards. A server-identity switch, never per tool. */
-const SCIENCE_SERVER_NAMES = new Set(["ai-hydro", "aihydro", "aihydro-tools", "ai-hydro-tools", "aihydro_tools"])
+import { isFirstPartyServerName } from "./firstPartyServers"
 
-export function isScienceServer(serverName: string | undefined): boolean {
-	return SCIENCE_SERVER_NAMES.has((serverName ?? "").trim().toLowerCase())
-}
+/**
+ * The first-party server whose tool calls get science cards. A server-identity switch, never per tool.
+ * By name only (see firstPartyServers.ts for what that does and does not establish).
+ */
+export const isScienceServer = isFirstPartyServerName
 
 /** MCP tool annotations as served by tools/list. Hints, not guarantees. */
 export interface ToolAnnotationsInput {
@@ -91,6 +93,11 @@ export interface QualityInfo {
 	/** `approval_status` counts exactly as reported, e.g. `{ Approved: 77, Provisional: 43 }`. */
 	approvalCounts?: Record<string, number>
 	provisional?: { count: number; total: number; first?: string; last?: string }
+	/** Reported only when present; zero counts are kept so the card can omit them deliberately. */
+	nNegative?: number
+	nNullValues?: number
+	/** Qualifier tokens outside the documented set, with counts. */
+	qualifiersOther?: Record<string, number>
 }
 
 export const INFORMATION_CLASSES = ["observed", "modelled", "reanalysis", "derived", "projection"] as const
@@ -128,6 +135,8 @@ export interface ToolCardModel {
 	place?: PlaceInfo
 	siteResolution?: SiteResolutionInfo
 	runId?: string
+	/** `session_id` the result itself carries (top level or `data`); never taken from anywhere else. */
+	sessionId?: string
 	quality?: QualityInfo
 	/** From the explicit `information_class` field only. */
 	informationClass?: InformationClassInfo
@@ -254,16 +263,15 @@ function presentArgs(args: Json | undefined, schemaInput: unknown): TypedArg[] {
 	})
 }
 
-/** The host appends tool images to the response text as `\n\n<data URL>`. */
-const IMAGE_TAIL = /\n\n(data:image\/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+)/g
+/** The host appends tool images to the response text as `\n\n<data URL>`; only that trailing run is taken. */
+const IMAGE_TAIL = /((?:\n\ndata:image\/[A-Za-z0-9.+-]+;base64,[A-Za-z0-9+/=]+)+)$/
 
 function splitImages(text: string): { text: string; images: string[] } {
-	const images: string[] = []
-	const stripped = text.replace(IMAGE_TAIL, (_m, url: string) => {
-		images.push(url)
-		return ""
-	})
-	return { text: stripped, images }
+	const match = IMAGE_TAIL.exec(text)
+	if (!match) {
+		return { text, images: [] }
+	}
+	return { text: text.slice(0, match.index), images: match[1].split("\n\n").filter(Boolean) }
 }
 
 interface ParsedResult {
@@ -387,7 +395,19 @@ function presentQuality(body: Json): QualityInfo | undefined {
 			last: str(q.provisional_last),
 		}
 	}
-	return rows === undefined && !approvalCounts ? undefined : { rows, approvalCounts, provisional }
+	let qualifiersOther: Record<string, number> | undefined
+	if (isRecord(q.qualifiers_other)) {
+		qualifiersOther = {}
+		for (const [k, v] of Object.entries(q.qualifiers_other)) {
+			const n = num(v)
+			if (n !== undefined) {
+				qualifiersOther[k] = n
+			}
+		}
+	}
+	return rows === undefined && !approvalCounts
+		? undefined
+		: { rows, approvalCounts, provisional, nNegative: num(q.n_negative), nNullValues: num(q.n_null_values), qualifiersOther }
 }
 
 function presentInformationClass(body: Json): InformationClassInfo | undefined {
@@ -407,9 +427,18 @@ function candidateText(c: unknown): string {
 	return (isRecord(c) && (str(c.site) ?? str(c.id))) || JSON.stringify(c)
 }
 
-/** A structured refusal: the U4 envelope (`error: true`) or a host-marked tool error. */
+/** The envelope's error text when `error` is a non-empty string (a first-party tool that returns {"error": "..."}). */
+const errorString = (body: Json): string | undefined => str(body.error)
+
+/**
+ * A refusal: the U4 envelope (`error: true`), a non-empty string `error`, `ok: false`, `isError: true`, or a
+ * host-marked tool error. A refusal without a code reads "code not reported"; it is never shown as a success.
+ */
 function presentRefusal(body: Json | undefined, isError: boolean, rawText: string): RefusalInfo | undefined {
-	const envelope = body && (body.error === true || body.isError === true) ? body : undefined
+	const envelope =
+		body && (body.error === true || body.isError === true || body.ok === false || errorString(body) !== undefined)
+			? body
+			: undefined
 	if (!envelope && !isError) {
 		return undefined
 	}
@@ -420,7 +449,7 @@ function presentRefusal(body: Json | undefined, isError: boolean, rawText: strin
 	const candidates = at(envelope, "details", "candidates")
 	return {
 		code: str(envelope.code),
-		message: str(envelope.message),
+		message: str(envelope.message) ?? errorString(envelope),
 		recovery: asTextList(envelope.recovery),
 		nextTools: asTextList(envelope.next_tools),
 		exampleCall: example === undefined ? undefined : typeof example === "string" ? example : JSON.stringify(example),
@@ -483,6 +512,7 @@ export function presentToolCall(
 		model.place = presentPlace(body)
 		model.siteResolution = presentSiteResolution(body)
 		model.runId = str(body._run_id)
+		model.sessionId = str(body.session_id) ?? str(at(body, "data", "session_id"))
 		model.quality = presentQuality(body)
 		model.informationClass = presentInformationClass(body)
 	}
@@ -499,15 +529,35 @@ function trimTime(iso: string): string {
 
 /** "provisional 43/120 (2026-09-04 to 2026-10-16)". */
 export function describeProvisional(p: NonNullable<QualityInfo["provisional"]>): string {
-	const dates = p.count > 0 && p.first && p.last ? ` (${trimTime(p.first)} to ${trimTime(p.last)})` : ""
+	let dates = ""
+	if (p.count > 0) {
+		dates = p.first && p.last ? ` (${trimTime(p.first)} to ${trimTime(p.last)})` : " (dates not reported)"
+	}
 	return `provisional ${p.count}/${p.total}${dates}`
 }
 
-const roundTo = (n: number, digits: number) => String(Number(n.toPrecision(digits)))
+/** Extra quality facts, shown only when present and non-zero (the raw row is hidden by default). */
+export function describeQualityExtras(q: QualityInfo): string[] {
+	const out: string[] = []
+	if (q.nNegative) {
+		out.push(`${q.nNegative} negative value${q.nNegative === 1 ? "" : "s"} (kept, not converted)`)
+	}
+	if (q.nNullValues) {
+		out.push(`${q.nNullValues} null value${q.nNullValues === 1 ? "" : "s"} dropped`)
+	}
+	const other = Object.entries(q.qualifiersOther ?? {}).filter(([, n]) => n > 0)
+	if (other.length) {
+		out.push(`other qualifiers: ${other.map(([k, n]) => `${k} ${n}`).join(", ")}`)
+	}
+	return out
+}
+
+/** One precision per quantity: distance 1 decimal (m), log area ratio and its limit 3 decimals, ratio 3 significant figures. */
+const fixed3 = (n: number) => n.toFixed(3)
 
 /** Chip text: "method · distance · area check pass". Missing parts say "not reported". */
 export function describeSiteResolution(sr: SiteResolutionInfo): string {
-	const distance = sr.distanceM === undefined ? `distance ${NOT_REPORTED_TEXT}` : `${roundTo(sr.distanceM, 4)} m`
+	const distance = sr.distanceM === undefined ? `distance ${NOT_REPORTED_TEXT}` : `${sr.distanceM.toFixed(1)} m`
 	const check = sr.areaCheck === undefined ? `area check ${NOT_REPORTED_TEXT}` : `area check ${sr.areaCheck}`
 	return [sr.method ?? `method ${NOT_REPORTED_TEXT}`, distance, check].join(" · ")
 }
@@ -515,61 +565,87 @@ export function describeSiteResolution(sr: SiteResolutionInfo): string {
 /** Hover text carrying the log-area ratio. */
 export function describeAreaRatio(sr: SiteResolutionInfo): string {
 	const parts = [
-		sr.logAreaRatio === undefined ? `log area ratio ${NOT_REPORTED_TEXT}` : `log area ratio ${roundTo(sr.logAreaRatio, 4)}`,
+		sr.logAreaRatio === undefined ? `log area ratio ${NOT_REPORTED_TEXT}` : `log area ratio ${fixed3(sr.logAreaRatio)}`,
 	]
 	if (sr.areaRatio !== undefined) {
-		parts.push(`gauge/basin area ratio ${roundTo(sr.areaRatio, 4)}`)
+		parts.push(`gauge/basin area ratio ${sr.areaRatio.toPrecision(3)}`)
 	}
 	if (sr.maxAbsLogAreaRatio !== undefined) {
-		parts.push(`limit ±${roundTo(sr.maxAbsLogAreaRatio, 4)}`)
+		parts.push(`limit ±${fixed3(sr.maxAbsLogAreaRatio)}`)
 	}
 	return parts.join("; ")
 }
 
-/**
- * Finds the response text for the tool call at `callTs` in a message list: the first `mcp_server_response`
- * after it, stopping at the next tool call. Undefined while the call is still running.
- */
-export function findToolResultText(
-	messages: ReadonlyArray<{ ts: number; ask?: string; say?: string; text?: string }>,
-	callTs: number,
-): string | undefined {
-	const start = messages.findIndex((m) => m.ts === callTs && (m.ask === "use_mcp_server" || m.say === "use_mcp_server"))
-	if (start < 0) {
-		return undefined
+/** Gauge identities the server honoured as asserted (explicit id or BasinRef alias). */
+export function assertedGauge(sr: SiteResolutionInfo): boolean {
+	return sr.method === "explicit_id" || sr.method === "basin_ref_alias"
+}
+
+// ───────────────────────── call / response pairing ─────────────────────────
+
+type PairMessage = { ts: number; ask?: string; say?: string; text?: string }
+
+export type PairStatus =
+	| { status: "paired"; resultText: string }
+	/** More than one call was outstanding when a response arrived, so it cannot be attributed. Never guessed. */
+	| { status: "unpaired" }
+
+export interface Pairing {
+	/** Per science tool call `ts`: its response, or unpaired. Calls absent from the map have no response yet. */
+	byCallTs: Map<number, PairStatus>
+	/** Indexes of `mcp_server_response` messages that a card shows (and the list therefore hides). */
+	hiddenResponses: Set<number>
+}
+
+const isCall = (m: PairMessage) => m.ask === "use_mcp_server" || m.say === "use_mcp_server"
+
+function callInfo(m: PairMessage): { science: boolean } {
+	try {
+		const call = JSON.parse(m.text ?? "{}")
+		return { science: !!call && call.type === "use_mcp_tool" && isScienceServer(str(call.serverName)) }
+	} catch {
+		return { science: false }
 	}
-	for (let i = start + 1; i < messages.length; i++) {
-		const m = messages[i]
-		if (m.say === "mcp_server_response") {
-			return m.text ?? ""
-		}
-		if (m.ask === "use_mcp_server" || m.say === "use_mcp_server") {
-			return undefined
-		}
-	}
-	return undefined
 }
 
 /**
- * True for an `mcp_server_response` that belongs to a science tool call, so the card (not a raw JSON row) shows it.
- * `messages[index]` is the response; the nearest preceding tool call decides.
+ * The message stream carries no tool-use id, so a response is attributed only when it is unambiguous: exactly
+ * one MCP call is outstanding, that call is a first-party tool call, and nothing else intervened. Any other
+ * arrangement (two calls outstanding, a response with no call) leaves the response unpaired: the card says so and
+ * the response row stays visible. One rule for the card and for the list filter, computed in one pass.
  */
-export function isScienceResponse(
-	messages: ReadonlyArray<{ ask?: string; say?: string; text?: string }>,
-	index: number,
-): boolean {
-	if (messages[index]?.say !== "mcp_server_response") {
-		return false
-	}
-	for (let i = index - 1; i >= 0; i--) {
-		const m = messages[i]
-		if (m.say === "mcp_server_response") {
-			return false
+export function pairScienceCalls(messages: ReadonlyArray<PairMessage>): Pairing {
+	const byCallTs = new Map<number, PairStatus>()
+	const hiddenResponses = new Set<number>()
+	let outstanding: Array<{ ts: number; science: boolean }> = []
+	messages.forEach((m, index) => {
+		if (isCall(m)) {
+			outstanding.push({ ts: m.ts, ...callInfo(m) })
+		} else if (m.say === "mcp_server_response") {
+			if (outstanding.length === 1 && outstanding[0].science) {
+				byCallTs.set(outstanding[0].ts, { status: "paired", resultText: m.text ?? "" })
+				hiddenResponses.add(index)
+			} else {
+				for (const call of outstanding) {
+					if (call.science) {
+						byCallTs.set(call.ts, { status: "unpaired" })
+					}
+				}
+			}
+			outstanding = []
 		}
-		if (m.ask === "use_mcp_server" || m.say === "use_mcp_server") {
-			const call = parseJsonObject(m.text ?? "{}")
-			return !!call && call.type === "use_mcp_tool" && isScienceServer(str(call.serverName))
-		}
+	})
+	return { byCallTs, hiddenResponses }
+}
+
+const pairingCache = new WeakMap<object, Pairing>()
+
+/** `pairScienceCalls`, computed once per message-list identity. */
+export function getPairing(messages: ReadonlyArray<PairMessage>): Pairing {
+	let cached = pairingCache.get(messages)
+	if (!cached) {
+		cached = pairScienceCalls(messages)
+		pairingCache.set(messages, cached)
 	}
-	return false
+	return cached
 }
