@@ -2633,17 +2633,43 @@ vscode-dropdown::part(listbox) {
 }
 
 /*
- * Reduced motion: every keyframe animation above (float, fade-in, shimmer, glow, gradient, message slides, typing
- * dots, ripples) is limited to a single near-instant step, and transitions are removed, when the user asks for
- * reduced motion. Elements using `animation ... forwards` still end in their final state.
+ * Reduced motion: decorative keyframe animations (float, fade-in, shimmer, glow, gradient, message slides, ripples)
+ * are limited to a single near-instant step, and transitions are removed, when the user asks for reduced motion.
+ * Elements using `animation ... forwards` still end in their final state.
+ *
+ * Working cues are exempt, because a spinner or pulse that stops reads as a hang: add `.motion-essential` to any
+ * element whose looping animation signals "still working". The same exemption covers the codicon/Tailwind spinners,
+ * the typing dots and running-status dots, and inline-styled `spin`/`pulse` animations.
  */
 @media (prefers-reduced-motion: reduce) {
-	*,
-	*::before,
-	*::after {
+	*:not(
+			:is(
+				.motion-essential,
+				.codicon-modifier-spin,
+				.animate-spin,
+				.animate-typing-dot,
+				.animate-typing-dot-delay-1,
+				.animate-typing-dot-delay-2,
+				.animate-thinking-shimmer,
+				.animate-activity-pulse,
+				.animate-wave-dots,
+				.status-dot-pending,
+				.chat-row-status-dot--running,
+				[style*="animation: spin"],
+				[style*="animation: pulse"],
+				[style*="aihydro-spin"],
+				[style*="aihydro-kernel-pulse"]
+			)
+		),
+	*:not(:is(.motion-essential, .codicon-modifier-spin, .animate-spin))::before,
+	*:not(:is(.motion-essential, .codicon-modifier-spin, .animate-spin))::after {
 		animation-duration: 0.001ms !important;
 		animation-delay: 0s !important;
 		animation-iteration-count: 1 !important;
+	}
+	*,
+	*::before,
+	*::after {
 		transition-duration: 0.001ms !important;
 		transition-delay: 0s !important;
 		scroll-behavior: auto !important;
