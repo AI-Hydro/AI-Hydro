@@ -638,7 +638,7 @@ vscode-dropdown::part(listbox) {
 	font-size: 11px;
 	font-weight: 500;
 	line-height: 1.4;
-	background: color-mix(in srgb, var(--vscode-badge-background) 70%, transparent);
+	background: var(--vscode-badge-background);
 	color: var(--vscode-badge-foreground);
 	border: 1px solid color-mix(in srgb, var(--vscode-badge-background) 50%, transparent);
 	transition: background 0.15s ease-out;

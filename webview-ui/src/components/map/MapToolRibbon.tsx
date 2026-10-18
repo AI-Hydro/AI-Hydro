@@ -240,8 +240,9 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 
 	const isDark = mapStyle === "dark"
 	const fg = isDark ? "var(--vscode-foreground, #ddd)" : "var(--vscode-foreground, #222)"
-	const bg = isDark ? "rgba(20,20,28,0.96)" : "rgba(248,248,250,0.97)"
-	const border = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"
+	// Chrome follows the VS Code theme (not the basemap style): text uses --vscode-foreground, so the surface must too.
+	const bg = "var(--vscode-editorWidget-background, var(--vscode-editor-background, #1f1f1f))"
+	const border = "var(--vscode-contrastBorder, var(--vscode-editorWidget-border, rgba(128,128,128,0.35)))"
 	const subtle = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"
 	const accent = "var(--vscode-button-background, #0e639c)"
 

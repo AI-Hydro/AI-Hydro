@@ -2226,7 +2226,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
 				<div>
 					<div style={{ fontWeight: 700, fontSize: 14 }}>Map Plate Composer</div>
-					<div style={{ fontSize: 10, opacity: 0.68, marginTop: 2 }}>
+					<div style={{ fontSize: 11, opacity: 0.68, marginTop: 2 }}>
 						Preview, verify, and export reproducible map plates.
 					</div>
 				</div>
@@ -2351,7 +2351,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 					{previewStatus.msg && (
 						<div
 							style={{
-								fontSize: 10,
+								fontSize: 11,
 								color: previewStatus.kind === "err" ? "#f87171" : "var(--vscode-descriptionForeground, #999)",
 								marginBottom: 8,
 							}}>
@@ -2371,12 +2371,12 @@ export const MapExport: React.FC<MapExportProps> = ({
 							border: `1px solid ${border}`,
 						}}>
 						<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-							<span style={{ fontSize: 10, fontWeight: 600, opacity: 0.8, flex: 1 }}>💾 My Templates</span>
+							<span style={{ fontSize: 11, fontWeight: 600, opacity: 0.8, flex: 1 }}>💾 My Templates</span>
 							{!tmplNaming && (
 								<button
 									onClick={() => setTmplNaming(true)}
 									style={{
-										fontSize: 9,
+										fontSize: 11,
 										padding: "1px 7px",
 										background: "transparent",
 										color: fg,
@@ -2408,7 +2408,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 									placeholder="Template name…"
 									style={{
 										flex: 1,
-										fontSize: 10,
+										fontSize: 11,
 										padding: "2px 6px",
 										background: "rgba(255,255,255,0.07)",
 										color: fg,
@@ -2421,7 +2421,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 								<button
 									onClick={savePlateTemplate}
 									style={{
-										fontSize: 9,
+										fontSize: 11,
 										padding: "2px 6px",
 										background: accent,
 										color: "#fff",
@@ -2438,7 +2438,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 										setTmplName("")
 									}}
 									style={{
-										fontSize: 9,
+										fontSize: 11,
 										padding: "2px 6px",
 										background: "transparent",
 										color: fg,
@@ -2452,7 +2452,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 							</div>
 						)}
 						{savedTemplates.length === 0 ? (
-							<div style={{ fontSize: 9, opacity: 0.45, textAlign: "center" }}>
+							<div style={{ fontSize: 11, opacity: 0.45, textAlign: "center" }}>
 								No templates yet. Configure layout settings then click ＋ Save current.
 							</div>
 						) : (
@@ -2478,7 +2478,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 												border: "none",
 												color: fg,
 												cursor: "pointer",
-												fontSize: 10,
+												fontSize: 11,
 												padding: 0,
 												overflow: "hidden",
 												textOverflow: "ellipsis",
@@ -2488,7 +2488,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 											type="button">
 											{t.name}
 										</button>
-										<span style={{ fontSize: 9, opacity: 0.4, whiteSpace: "nowrap" }}>
+										<span style={{ fontSize: 11, opacity: 0.4, whiteSpace: "nowrap" }}>
 											{t.template} · {t.dpi}dpi
 										</span>
 										<button
@@ -2627,7 +2627,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 									alignItems: "center",
 									marginBottom: 3,
 								}}>
-								<span style={{ fontSize: 10, opacity: 0.72 }}>{label}</span>
+								<span style={{ fontSize: 11, opacity: 0.72 }}>{label}</span>
 								{/* Alignment toggle */}
 								<div style={{ display: "flex", gap: 2 }}>
 									{(["left", "center", "right"] as TextAlign[]).map((a) => (
@@ -2679,7 +2679,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 
 					{/* Footer alignment toggle */}
 					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-						<span style={{ fontSize: 10, opacity: 0.72 }}>Footer text align</span>
+						<span style={{ fontSize: 11, opacity: 0.72 }}>Footer text align</span>
 						<div style={{ display: "flex", gap: 2 }}>
 							{(["left", "center", "right"] as TextAlign[]).map((a) => (
 								<button
@@ -2730,7 +2730,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 						))}
 					</div>
 
-					<div style={{ fontSize: 10, opacity: 0.72, marginBottom: 8 }}>
+					<div style={{ fontSize: 11, opacity: 0.72, marginBottom: 8 }}>
 						Output: {dims.width} x {dims.height}px ({Math.round(dims.pixels / 1_000_000)} MP),{" "}
 						{TEMPLATE_PAGES[template].label}
 					</div>

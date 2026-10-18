@@ -15,3 +15,8 @@ vscode-checkbox::part(label),
 vscode-radio::part(label) {
 	padding-block: 4px;
 }
+/* Checkboxes without a label part still need a 24px hit area. */
+vscode-checkbox {
+	padding: 3px;
+	box-sizing: content-box;
+}

@@ -706,7 +706,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 							<br />
 							<strong>Add to AI-Hydro Map</strong>
 						</div>
-						<div style={{ fontSize: 10, marginTop: 10, opacity: 0.7 }}>
+						<div style={{ fontSize: 11, marginTop: 10, opacity: 0.7 }}>
 							GeoJSON · KML · KMZ · GPX
 							<br />
 							Shapefile (.zip) · GeoTIFF · CSV
@@ -761,7 +761,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 											alignItems: "center",
 											gap: 6,
 											padding: "4px 8px",
-											fontSize: 10,
+											fontSize: 11,
 											fontWeight: 600,
 											opacity: 0.85,
 											background: "rgba(0,0,0,0.1)",
@@ -771,7 +771,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 											cursor: "pointer",
 											userSelect: "none",
 										}}>
-										<span style={{ fontSize: 9, opacity: 0.6, width: 12, textAlign: "center" }}>
+										<span style={{ fontSize: 11, opacity: 0.6, width: 12, textAlign: "center" }}>
 											{isCollapsed ? "▶" : "▼"}
 										</span>
 										<span>
@@ -849,13 +849,13 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 										/>
 
 										{/* Layer type + source badges */}
-										<span style={{ fontSize: 10, opacity: 0.6, flexShrink: 0 }} title={layer.layerType ?? ""}>
+										<span style={{ fontSize: 11, opacity: 0.6, flexShrink: 0 }} title={layer.layerType ?? ""}>
 											{layerTypeIcon(layer.layerType)}
 										</span>
 										{isGeeTile && layer.metadata?.gee_mock === "true" && (
 											<span
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													padding: "1px 5px",
 													borderRadius: 3,
 													background: "rgba(220,160,0,0.15)",
@@ -869,7 +869,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 										{sourceStatus === "source_changed" && (
 											<span
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													padding: "1px 5px",
 													borderRadius: 3,
 													background: "rgba(255, 190, 80, 0.14)",
@@ -882,7 +882,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 										)}
 										<span
 											style={{
-												fontSize: 9,
+												fontSize: 11,
 												lineHeight: "15px",
 												padding: "0 5px",
 												borderRadius: 999,
@@ -912,7 +912,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 										{layer.metadata?.display_mode === "preview" && (
 											<span
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													padding: "1px 5px",
 													borderRadius: 3,
 													background: "rgba(100,180,255,0.12)",
@@ -926,7 +926,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 										{layer.metadata?.simplified === "true" && (
 											<span
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													padding: "1px 5px",
 													borderRadius: 3,
 													background: "rgba(100,180,255,0.12)",
@@ -940,7 +940,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 										{(layer.metadata?._run_id || layer.metadata?.tool_name) && (
 											<span
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													padding: "1px 5px",
 													borderRadius: 3,
 													background: "rgba(80,200,120,0.12)",
@@ -1021,7 +1021,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 												marginTop: 4,
 												marginBottom: 2,
 											}}>
-											<span style={{ fontSize: 10, opacity: 0.65, minWidth: 38 }}>Opacity</span>
+											<span style={{ fontSize: 11, opacity: 0.65, minWidth: 38 }}>Opacity</span>
 											<input
 												max={1}
 												min={0}
@@ -1041,7 +1041,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 											/>
 											<span
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													opacity: 0.65,
 													minWidth: 28,
 													textAlign: "right",
@@ -1061,7 +1061,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 									{niceMeta.length > 0 && (
 										<div
 											style={{
-												fontSize: 10,
+												fontSize: 11,
 												opacity: 0.7,
 												marginTop: 3,
 												marginLeft: 58,
@@ -1252,7 +1252,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 														style={{
 															flex: 1,
 															padding: "4px 8px",
-															fontSize: 10,
+															fontSize: 11,
 															background:
 																symbologyMode === "basic"
 																	? "var(--vscode-button-background, #0e639c)"
@@ -1270,7 +1270,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 														style={{
 															flex: 1,
 															padding: "4px 8px",
-															fontSize: 10,
+															fontSize: 11,
 															background:
 																symbologyMode === "graduated"
 																	? "var(--vscode-button-background, #0e639c)"
@@ -1318,7 +1318,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 												marginTop: 8,
 												paddingTop: 6,
 												borderTop: `1px dashed ${border}`,
-												fontSize: 10,
+												fontSize: 11,
 												fontFamily: "var(--vscode-editor-font-family, ui-monospace, monospace)",
 												opacity: 0.85,
 												display: "grid",
@@ -1415,7 +1415,7 @@ const AttributeTable: React.FC<{ layer: MapLayer; border: string; fg: string }> 
 				style={{
 					marginTop: 8,
 					padding: "6px 8px",
-					fontSize: 10,
+					fontSize: 11,
 					opacity: 0.65,
 					borderTop: `1px dashed ${border}`,
 					color: fg,
@@ -1462,7 +1462,7 @@ const AttributeTable: React.FC<{ layer: MapLayer; border: string; fg: string }> 
 				marginTop: 8,
 				overflow: "auto",
 				maxHeight: 220,
-				fontSize: 10,
+				fontSize: 11,
 				fontFamily: "var(--vscode-editor-font-family, ui-monospace, monospace)",
 				borderTop: `1px dashed ${border}`,
 			}}>
@@ -1485,7 +1485,7 @@ const AttributeTable: React.FC<{ layer: MapLayer; border: string; fg: string }> 
 				<button
 					onClick={exportCsv}
 					style={{
-						fontSize: 9,
+						fontSize: 11,
 						padding: "1px 6px",
 						background: "transparent",
 						color: fg,
@@ -1544,16 +1544,16 @@ const AttributeTable: React.FC<{ layer: MapLayer; border: string; fg: string }> 
 					<button
 						disabled={page === 0}
 						onClick={() => setPage((p) => Math.max(0, p - 1))}
-						style={{ fontSize: 10, cursor: "pointer", background: "transparent", border: "none", color: fg }}>
+						style={{ fontSize: 11, cursor: "pointer", background: "transparent", border: "none", color: fg }}>
 						‹ Prev
 					</button>
-					<span style={{ fontSize: 10 }}>
+					<span style={{ fontSize: 11 }}>
 						{page + 1} / {totalPages} ({features.length} features)
 					</span>
 					<button
 						disabled={page === totalPages - 1}
 						onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-						style={{ fontSize: 10, cursor: "pointer", background: "transparent", border: "none", color: fg }}>
+						style={{ fontSize: 11, cursor: "pointer", background: "transparent", border: "none", color: fg }}>
 						Next ›
 					</button>
 				</div>
@@ -1597,7 +1597,7 @@ const LayerInspector: React.FC<{
 						onClick={() => setTab(key as typeof tab)}
 						style={{
 							padding: "3px 8px",
-							fontSize: 10,
+							fontSize: 11,
 							border: `1px solid ${tab === key ? statusTone.bd : "transparent"}`,
 							borderRadius: 3,
 							background: tab === key ? statusTone.bg : "transparent",
@@ -1616,7 +1616,7 @@ const LayerInspector: React.FC<{
 							<strong style={{ fontSize: 12 }}>{layer.name || layer.id}</strong>
 							<span
 								style={{
-									fontSize: 9,
+									fontSize: 11,
 									padding: "1px 6px",
 									borderRadius: 999,
 									background: statusTone.bg,
@@ -1727,6 +1727,7 @@ const IconBtn: React.FC<{
 	style?: React.CSSProperties
 }> = ({ onClick, title, children, fg, border, active, disabled, style }) => (
 	<button
+		aria-label={title}
 		disabled={disabled}
 		onClick={onClick}
 		style={{
@@ -1735,6 +1736,11 @@ const IconBtn: React.FC<{
 			border: `1px solid ${active ? border : "transparent"}`,
 			borderRadius: 3,
 			padding: "2px 5px",
+			minWidth: 24,
+			minHeight: 24,
+			display: "inline-flex",
+			alignItems: "center",
+			justifyContent: "center",
 			cursor: disabled ? "default" : "pointer",
 			fontSize: 12,
 			lineHeight: 1,
@@ -1749,6 +1755,7 @@ const IconBtn: React.FC<{
 
 const smallBtn = (fg: string, border: string): React.CSSProperties => ({
 	padding: "3px 8px",
+	minHeight: 24,
 	fontSize: 11,
 	background: "transparent",
 	border: `1px solid ${border}`,

@@ -103,10 +103,17 @@ const PLAN_MODE_COLOR = "#4A90E2" // Ocean blue for planning
 const ACT_MODE_COLOR = "#50C878" // Emerald green for action
 
 const SwitchOption = styled.div.withConfig({
-	shouldForwardProp: (prop) => !["isActive"].includes(prop),
-})<{ isActive: boolean }>`
-	padding: 2px 8px;
-	color: ${(props) => (props.isActive ? "white" : "var(--vscode-input-foreground)")};
+	shouldForwardProp: (prop) => !["isActive", "activeColor"].includes(prop),
+})<{ isActive: boolean; activeColor: string }>`
+	padding: 4px 10px;
+	min-height: 24px;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* Active text is black on the mode colour (white on emerald/blue is under 3:1); the option carries its own fill. */
+	background-color: ${(props) => (props.isActive ? props.activeColor : "transparent")};
+	color: ${(props) => (props.isActive ? "#000000" : "var(--vscode-input-foreground)")};
 	z-index: 1;
 	transition: color 0.2s ease;
 	font-size: 12px;
@@ -114,7 +121,7 @@ const SwitchOption = styled.div.withConfig({
 	text-align: center;
 
 	&:hover {
-		background-color: ${(props) => (!props.isActive ? "var(--vscode-toolbar-hoverBackground)" : "transparent")};
+		background-color: ${(props) => (!props.isActive ? "var(--vscode-toolbar-hoverBackground)" : props.activeColor)};
 	}
 `
 
@@ -127,9 +134,6 @@ const SwitchContainer = styled.div<{ disabled: boolean }>`
 	overflow: hidden;
 	cursor: ${(props) => (props.disabled ? "not-allowed" : "pointer")};
 	opacity: ${(props) => (props.disabled ? 0.5 : 1)};
-	transform: scale(0.85);
-	transform-origin: right center;
-	margin-left: -10px; // compensate for the transform so flex spacing works
 	user-select: none; // Prevent text selection
 `
 
@@ -139,6 +143,7 @@ const Slider = styled.div.withConfig({
 	position: absolute;
 	height: 100%;
 	width: 50%;
+	display: none; /* the active option now carries the fill */
 	background-color: ${(props) => (props.isPlan ? PLAN_MODE_COLOR : ACT_MODE_COLOR)};
 	transition: transform 0.2s ease;
 	transform: translateX(${(props) => (props.isAct ? "100%" : "0%")});
@@ -1778,6 +1783,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						<SwitchContainer data-testid="mode-switch" disabled={false} onClick={onModeToggle}>
 							<Slider isAct={mode === "act"} isPlan={mode === "plan"} />
 							<SwitchOption
+								activeColor={PLAN_MODE_COLOR}
 								aria-checked={mode === "plan"}
 								isActive={mode === "plan"}
 								onMouseLeave={() => setShownTooltipMode(null)}
@@ -1786,6 +1792,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								Plan
 							</SwitchOption>
 							<SwitchOption
+								activeColor={ACT_MODE_COLOR}
 								aria-checked={mode === "act"}
 								isActive={mode === "act"}
 								onMouseLeave={() => setShownTooltipMode(null)}
