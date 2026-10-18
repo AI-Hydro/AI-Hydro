@@ -132,6 +132,3 @@ export const useLedgerContext = () => {
 	}
 	return ctx
 }
-
-/** Like useLedgerContext, but returns undefined outside the provider (isolated renders and tests). */
-export const useOptionalLedgerContext = () => useContext(LedgerContext)
