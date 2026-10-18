@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Page } from "@playwright/test"
@@ -8,6 +8,12 @@ import {
 	TEST_MODULE_IDS,
 } from "../../services/learning-pack/__tests__/learningPackTestFixture"
 import { E2ETestHelper, e2e } from "./utils/helpers"
+
+// The real extension host validates the pack against its own package.json version, so the
+// synthetic pack must declare compatibility with that version rather than a fixed release line.
+const EXTENSION_VERSION = (
+	JSON.parse(readFileSync(path.join(E2ETestHelper.CODEBASE_ROOT_DIR, "package.json"), "utf8")) as { version: string }
+).version
 
 const installedPackE2E = e2e.extend<{ workspaceDir: string }>({
 	workspaceDir: async ({}, use) => {
@@ -31,7 +37,7 @@ const installedPackE2E = e2e.extend<{ workspaceDir: string }>({
 			<img id="embedded" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==">
 			<img id="external" src="https://phase1-csp.invalid/external.png">
 		</body></html>`)
-		const { files } = createValidLearningPackFiles({ firstModuleBytes: entryHtml })
+		const { files } = createValidLearningPackFiles({ firstModuleBytes: entryHtml, aiHydroRange: `^${EXTENSION_VERSION}` })
 		writeFileSync(path.join(workspace, "synthetic.aihydropack"), createLearningPackTestArchive(files))
 		try {
 			await use(workspace)

@@ -203,6 +203,12 @@ const ModelDisplayButton = styled.a<{ isActive?: boolean; disabled?: boolean }>`
 	&:focus-visible {
 		outline: none;
 	}
+
+	/* The badge is inline-flex/nowrap; let it shrink so a long model id truncates instead of overflowing onto the Plan/Act switch. */
+	.aih-badge {
+		min-width: 0;
+		max-width: 100%;
+	}
 `
 
 const ModelButtonContent = styled.div`

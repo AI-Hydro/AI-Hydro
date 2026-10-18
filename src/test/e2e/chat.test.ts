@@ -35,15 +35,15 @@ e2e("Chat - can send messages and switch between modes", async ({ helper, sideba
 	await expect(sidebar.getByText("Recent Tasks")).toBeVisible()
 	await expect(sidebar.getByText("Hello, AI-Hydro!")).toBeVisible()
 
-	// Makes sure the act and plan switches are working correctly
-	// Aria-checked state should be true for Act and false for Plan
-	const actButton = sidebar.getByRole("switch", { name: "Act" })
-	const planButton = sidebar.getByRole("switch", { name: "Plan" })
+	// Makes sure the Plan/Act radio group works: Act starts selected, and
+	// selecting Plan moves the selection (clicking the active option is a no-op).
+	const actButton = sidebar.getByRole("radio", { name: "Act" })
+	const planButton = sidebar.getByRole("radio", { name: "Plan" })
 
 	await expect(actButton).toBeChecked()
 	await expect(planButton).not.toBeChecked()
 
-	await actButton.click()
+	await planButton.click()
 	await expect(actButton).not.toBeChecked()
 	await expect(planButton).toBeChecked()
 

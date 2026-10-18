@@ -207,7 +207,7 @@ export class E2ETestHelper {
 	}
 
 	public async signin(webview: Frame): Promise<void> {
-		const welcomeHeading = webview.getByRole("heading", { name: "Hi, I'm AI-Hydro" })
+		const welcomeHeading = webview.getByRole("heading", { name: "Welcome to AI-Hydro" })
 		const providerSelector = webview.getByTestId("provider-selector-input")
 		await expect(welcomeHeading).toBeVisible()
 		await expect(providerSelector).toBeVisible()
