@@ -1,5 +1,5 @@
 {
-	"_note": "Checker baseline budget. Counts may shrink, never grow. Reference cell = dark theme, 13px, native width (sidebar 400, panel 800, editor 1280). Regenerate with --write-budget only when a slice lowers counts.",
+	"_note": "Checker baseline budget. Counts may shrink, never grow: --write-budget keeps min(old, new) per rule. Reference cell = dark theme, 13px, native width (sidebar 400, panel 800, editor 1280). cells = matrix size the matrixTotal was measured over (totals are only compared for equal sizes).",
 	"reference": {
 		"theme": "dark",
 		"font": 13,
@@ -13,9 +13,9 @@
 		"chat-history-list": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 54,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 5,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -28,9 +28,9 @@
 		},
 		"chat-home-empty-history": {
 			"ref": {
-				"noName": 1,
-				"smallTarget": 21,
-				"smallText": 2,
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
@@ -44,10 +44,10 @@
 		},
 		"chat-home-history": {
 			"ref": {
-				"noName": 1,
-				"smallTarget": 59,
-				"smallText": 2,
-				"contrast": 3,
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -60,10 +60,10 @@
 		},
 		"chat-task-answer": {
 			"ref": {
-				"noName": 1,
-				"smallTarget": 73,
-				"smallText": 11,
-				"contrast": 9,
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 4,
+				"contrast": 4,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -76,10 +76,10 @@
 		},
 		"chat-task-mcp": {
 			"ref": {
-				"noName": 1,
-				"smallTarget": 66,
-				"smallText": 6,
-				"contrast": 4,
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -92,10 +92,10 @@
 		},
 		"chat-task-refusal": {
 			"ref": {
-				"noName": 1,
-				"smallTarget": 69,
-				"smallText": 7,
-				"contrast": 5,
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -108,10 +108,10 @@
 		},
 		"chat-task-text": {
 			"ref": {
-				"noName": 1,
-				"smallTarget": 49,
-				"smallText": 4,
-				"contrast": 2,
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -125,10 +125,10 @@
 		"chat-welcome": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 5,
+				"smallTarget": 0,
 				"smallText": 0,
 				"contrast": 0,
-				"contrastIndeterminate": 1
+				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
@@ -136,6 +136,22 @@
 				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 40
+			}
+		},
+		"design-primitives": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
 			}
 		},
 		"evidence-all-statuses": {
@@ -349,7 +365,7 @@
 		"experiment-failed-rows": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 58,
+				"smallTarget": 10,
 				"smallText": 93,
 				"contrast": 25,
 				"contrastIndeterminate": 0
@@ -365,7 +381,7 @@
 		"experiment-no-ci": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 50,
+				"smallTarget": 13,
 				"smallText": 88,
 				"contrast": 18,
 				"contrastIndeterminate": 0
@@ -381,7 +397,7 @@
 		"experiment-with-ci": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 62,
+				"smallTarget": 13,
 				"smallText": 100,
 				"contrast": 24,
 				"contrastIndeterminate": 0
@@ -397,8 +413,8 @@
 		"map-empty-default": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 1,
-				"smallText": 1,
+				"smallTarget": 0,
+				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
@@ -413,8 +429,8 @@
 		"map-empty-esri": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 1,
-				"smallText": 1,
+				"smallTarget": 0,
+				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
@@ -429,8 +445,8 @@
 		"map-export-success": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 33,
-				"smallText": 18,
+				"smallTarget": 32,
+				"smallText": 1,
 				"contrast": 1,
 				"contrastIndeterminate": 0
 			},
@@ -445,8 +461,8 @@
 		"map-export-zero-output": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 33,
-				"smallText": 18,
+				"smallTarget": 32,
+				"smallText": 1,
 				"contrast": 1,
 				"contrastIndeterminate": 0
 			},
@@ -461,8 +477,8 @@
 		"map-features": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 1,
-				"smallText": 6,
+				"smallTarget": 0,
+				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
@@ -477,8 +493,8 @@
 		"map-layer-manager": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 57,
-				"smallText": 46,
+				"smallTarget": 14,
+				"smallText": 0,
 				"contrast": 26,
 				"contrastIndeterminate": 0
 			},
@@ -493,8 +509,8 @@
 		"map-layer-provenance": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 60,
-				"smallText": 51,
+				"smallTarget": 17,
+				"smallText": 0,
 				"contrast": 50,
 				"contrastIndeterminate": 0
 			},
@@ -509,8 +525,8 @@
 		"map-swipe": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 3,
-				"smallText": 6,
+				"smallTarget": 2,
+				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
@@ -525,8 +541,8 @@
 		"map-time-slider": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 6,
+				"smallTarget": 3,
+				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
@@ -637,7 +653,7 @@
 		"studio-course-progress": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 15,
+				"smallTarget": 10,
 				"smallText": 15,
 				"contrast": 7,
 				"contrastIndeterminate": 11
@@ -653,7 +669,7 @@
 		"studio-executable-module": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 11,
+				"smallTarget": 5,
 				"smallText": 8,
 				"contrast": 4,
 				"contrastIndeterminate": 0
@@ -669,7 +685,7 @@
 		"studio-static-doc": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 11,
+				"smallTarget": 6,
 				"smallText": 7,
 				"contrast": 5,
 				"contrastIndeterminate": 0
@@ -679,22 +695,6 @@
 				"smallTarget": 440,
 				"smallText": 264,
 				"contrast": 180,
-				"contrastIndeterminate": 0
-			}
-		},
-		"design-primitives": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
 				"contrastIndeterminate": 0
 			}
 		}

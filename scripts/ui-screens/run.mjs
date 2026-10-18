@@ -96,6 +96,8 @@ try {
 
 const externalHosts = new Map()
 let unrouted = 0
+const unroutedUrls = new Set()
+const FIXTURE_HEADER = "x-ui-screens-fixture"
 const isLocal = (u) => /^(https?|wss?):\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(u) || /^(data|blob|about):/.test(u)
 
 async function newContext() {
@@ -113,24 +115,24 @@ async function newContext() {
 			return route.fulfill({
 				status: 200,
 				contentType: "image/png",
-				headers: { "Access-Control-Allow-Origin": "*" },
+				headers: { "Access-Control-Allow-Origin": "*", [FIXTURE_HEADER]: "1" },
 				body: tilePng(color),
 			})
 		}
 		return route.fulfill({
 			status: 404,
 			contentType: "text/plain",
-			headers: { "Access-Control-Allow-Origin": "*" },
+			headers: { "Access-Control-Allow-Origin": "*", [FIXTURE_HEADER]: "1" },
 			body: "blocked by UI screen harness",
 		})
 	})
-	context.on("request", (request) => {
-		const url = request.url()
-		if (!isLocal(url) && !handled.has(request)) {
-			// Give the route handler a tick: request events can precede route registration bookkeeping.
-			setTimeout(() => {
-				if (!handled.has(request)) unrouted++
-			}, 50)
+	// A non-local request is "unrouted" if its response did not come from the harness (no fixture header).
+	// Checked on the response, not on a timer, so machine load cannot cause false positives.
+	context.on("response", (response) => {
+		const url = response.url()
+		if (!isLocal(url) && !response.headers()[FIXTURE_HEADER]) {
+			unrouted++
+			unroutedUrls.add(url.slice(0, 160))
 		}
 	})
 	return context
@@ -467,6 +469,7 @@ const summary = {
 	errors: errorCells.reduce((n, r) => n + r.errors.length, 0),
 	errorSamples: errorCells.slice(0, 10).map((r) => ({ file: r.file, errors: r.errors.slice(0, 2) })),
 	unroutedRequests: unrouted,
+	unroutedUrls: [...unroutedUrls].slice(0, 10),
 	externalRoutedRequests: Object.fromEntries(externalHosts),
 	axe: axe ? "ran" : "unavailable (axe-core not installed)",
 	checker: { referenceCellTotals: refTotals, matrixTotals: totals },
