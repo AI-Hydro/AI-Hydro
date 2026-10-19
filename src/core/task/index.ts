@@ -53,6 +53,7 @@ import { Logger } from "@services/logging/Logger"
 import { McpHub } from "@services/mcp/McpHub"
 import { ApiConfiguration } from "@shared/api"
 import { findLast, findLastIndex } from "@shared/array"
+import { recordedOutcomeFor } from "@shared/aihydro/askOutcome"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import {
@@ -622,6 +623,15 @@ export class Task {
 		})
 		if (this.taskState.lastMessageTs !== askTs) {
 			throw new Error("Current ask promise was ignored") // could happen if we send multiple asks in a row i.e. with command_output. It's important that when we know an ask could fail, it is handled gracefully
+		}
+		// Record the user's decision on the ask row so the transcript can tell "ran" from "denied" from "unknown".
+		const recorded = recordedOutcomeFor(type, this.taskState.askResponse!)
+		if (recorded) {
+			const index = findLastIndex(this.messageStateHandler.getAiHydroMessages(), (m) => m.ts === askTs)
+			if (index >= 0) {
+				await this.messageStateHandler.updateAiHydroMessage(index, { askOutcome: recorded })
+				await this.postStateToWebview()
+			}
 		}
 		const result = {
 			response: this.taskState.askResponse!,

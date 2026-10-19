@@ -38,6 +38,8 @@ export interface ScienceToolCardProps {
 	unpaired?: boolean
 	/** True while the call is an unanswered permission ask: nothing has run or been fetched yet. */
 	awaitingPermission?: boolean
+	/** True when the user denied this call: it did not run. */
+	denied?: boolean
 }
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
@@ -73,6 +75,7 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 	running,
 	unpaired,
 	awaitingPermission,
+	denied,
 }) => {
 	const model = useMemo(
 		() => presentToolCall(serverName, toolName, argsJson, resultText, annotations, toolMeta),
@@ -141,7 +144,9 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 							? "Running…"
 							: awaitingPermission
 								? "Not run yet: waiting for your permission."
-								: "No result recorded yet."}
+								: denied
+									? "Not run: you denied this call."
+									: "No result recorded yet."}
 				</Text>
 			)}
 

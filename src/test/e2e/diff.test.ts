@@ -53,7 +53,7 @@ e2e.describe("Diff Editor", () => {
 			await sidebar.getByTestId("send-button").click({ delay: 50 })
 
 			await expect.poll(() => server.generationCounter, { timeout: 60_000 }).toBeGreaterThan(editGeneration)
-			await expect(sidebar.getByText(/AI Hydro (wants to edit|edited) this file:/)).toBeVisible({
+			await expect(sidebar.getByText("AI Hydro wants to edit this file:")).toBeVisible({
 				timeout: 30_000,
 			})
 

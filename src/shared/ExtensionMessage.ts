@@ -140,6 +140,8 @@ export interface AiHydroMessage {
 	files?: string[]
 	partial?: boolean
 	commandCompleted?: boolean
+	/** Recorded by the host when the user answers a tool/command/MCP/browser ask. Absent = no evidence either way. */
+	askOutcome?: "approved" | "denied"
 	lastCheckpointHash?: string
 	isCheckpointCheckedOut?: boolean
 	isOperationOutsideWorkspace?: boolean

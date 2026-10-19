@@ -8,6 +8,7 @@ import {
 	AiHydroSayTool,
 	COMPLETION_RESULT_CHANGES_FLAG,
 } from "@shared/ExtensionMessage"
+import { type AskOutcome, deriveAskOutcome } from "@shared/aihydro/askOutcome"
 import { getPairing, isScienceServer } from "@shared/aihydro/toolCallPresenter"
 import { BooleanRequest, Int64Request, StringRequest } from "@shared/proto/cline/common"
 import { VSCodeBadge, VSCodeButton, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
@@ -47,6 +48,24 @@ import UserMessage from "./UserMessage"
 const normalColor = "var(--vscode-foreground)"
 const errorColor = "var(--vscode-errorForeground)"
 const _cancelledColor = "var(--vscode-descriptionForeground)"
+
+/**
+ * Header wording for a call that needed permission, by what the stream shows happened to it. Past tense only with
+ * evidence; a denied call is said to be not run; with no evidence the row only says the agent asked.
+ * `tail` ends the phrase ("" when more text follows in the same header).
+ */
+function askText(outcome: AskOutcome, noun: string, past: string, tail = ":"): string {
+	switch (outcome) {
+		case "pending":
+			return `AI Hydro wants to ${noun}${tail}`
+		case "executed":
+			return `AI Hydro ${past}${tail}`
+		case "denied":
+			return tail === ":" ? `Denied: ${noun} (not run)` : `Denied: ${noun}`
+		default:
+			return `AI Hydro asked to ${noun}${tail}`
+	}
+}
 
 const ChatRowContainer = styled.div`
 	padding: 10px 6px 6px 15px;
@@ -382,7 +401,9 @@ export const ChatRowContent = memo(
 
 		// "wants to ..." is honest only while the call is awaiting permission. An ask that is no longer the last row
 		// has been answered (run or denied), and a `say` is by construction something that already happened.
-		const isPendingAsk = message.type === "ask" && isLast && !isMcpServerResponding
+		// Tense comes from the outcome recorded in the stream (askOutcome.ts), never from row position.
+		const askOutcome = useMemo(() => deriveAskOutcome(message, aihydroMessages ?? []), [message, aihydroMessages])
+		const isPendingAsk = askOutcome === "pending"
 
 		const handleToggle = useCallback(() => {
 			onToggleExpand(message.ts)
@@ -507,7 +528,7 @@ export const ChatRowContent = memo(
 								marginBottom: "-1.5px",
 							}}></span>,
 						<span style={{ color: normalColor, fontWeight: "bold" }}>
-							{isPendingAsk ? "AI Hydro wants to execute this command:" : "AI Hydro ran this command:"}
+							{askText(askOutcome, "execute this command", "ran this command")}
 						</span>,
 					]
 				case "use_mcp_server":
@@ -526,19 +547,14 @@ export const ChatRowContent = memo(
 						<span
 							className="ph-no-capture"
 							style={{ color: normalColor, fontWeight: "bold", wordBreak: "break-word" }}>
-							{isPendingAsk ? "AI Hydro wants to " : "AI Hydro "}
 							{mcpServerUse.type === "use_mcp_tool"
-								? isPendingAsk
-									? "use a tool"
-									: "used a tool"
-								: isPendingAsk
-									? "access a resource"
-									: "accessed a resource"}{" "}
+								? askText(askOutcome, "use a tool", "used a tool", "")
+								: askText(askOutcome, "access a resource", "accessed a resource", "")}{" "}
 							on the{" "}
 							<code className="break-all">
 								{getMcpServerDisplayName(mcpServerUse.serverName, mcpMarketplaceCatalog)}
 							</code>{" "}
-							MCP server:
+							MCP server:{askOutcome === "denied" ? " (not run)" : ""}
 						</span>,
 					]
 				case "completion_result":
@@ -580,7 +596,7 @@ export const ChatRowContent = memo(
 			isCommandPending,
 			apiReqCancelReason,
 			isMcpServerResponding,
-			isPendingAsk,
+			askOutcome,
 			message.text,
 		])
 
@@ -629,9 +645,7 @@ export const ChatRowContent = memo(
 								{toolIcon("edit")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">
-									{isPendingAsk ? "AI Hydro wants to edit this file:" : "AI Hydro edited this file:"}
-								</span>
+								<span className="font-bold">{askText(askOutcome, "edit this file", "edited this file")}</span>
 							</div>
 							<CodeAccordian
 								// isLoading={message.partial}
@@ -650,7 +664,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span className="font-bold">
-									{isPendingAsk ? "AI Hydro wants to create a new file:" : "AI Hydro created a new file:"}
+									{askText(askOutcome, "create a new file", "created a new file")}
 								</span>
 							</div>
 							<CodeAccordian
@@ -670,9 +684,7 @@ export const ChatRowContent = memo(
 								{toolIcon(isImage ? "file-media" : "file-code")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">
-									{isPendingAsk ? "AI Hydro wants to read this file:" : "AI Hydro read this file:"}
-								</span>
+								<span className="font-bold">{askText(askOutcome, "read this file", "read this file")}</span>
 							</div>
 							<div
 								className="modern-card overflow-hidden"
@@ -736,9 +748,11 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span className="font-bold">
-									{isPendingAsk
-										? "AI Hydro wants to view the top level files in this directory:"
-										: "AI Hydro viewed the top level files in this directory:"}
+									{askText(
+										askOutcome,
+										"view the top level files in this directory",
+										"viewed the top level files in this directory",
+									)}
 								</span>
 							</div>
 							<CodeAccordian
@@ -758,9 +772,11 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span className="font-bold">
-									{isPendingAsk
-										? "AI Hydro wants to recursively view all files in this directory:"
-										: "AI Hydro recursively viewed all files in this directory:"}
+									{askText(
+										askOutcome,
+										"recursively view all files in this directory",
+										"recursively viewed all files in this directory",
+									)}
 								</span>
 							</div>
 							<CodeAccordian
@@ -780,9 +796,11 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span className="font-bold">
-									{isPendingAsk
-										? "AI Hydro wants to view source code definition names used in this directory:"
-										: "AI Hydro viewed source code definition names used in this directory:"}
+									{askText(
+										askOutcome,
+										"view source code definition names used in this directory",
+										"viewed source code definition names used in this directory",
+									)}
 								</span>
 							</div>
 							<CodeAccordian
@@ -801,8 +819,9 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span className="font-bold">
-									{isPendingAsk ? "AI Hydro wants to search" : "AI Hydro searched"} this directory for{" "}
+									{askText(askOutcome, "search this directory for", "searched this directory for", "")}{" "}
 									<code style={{ wordBreak: "break-all" }}>{tool.regex}</code>:
+									{askOutcome === "denied" ? " (not run)" : ""}
 								</span>
 							</div>
 							<SearchResultsDisplay
@@ -898,9 +917,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This URL is external")}
 								<span className="font-bold">
-									{isPendingAsk
-										? "AI Hydro wants to fetch content from this URL:"
-										: "AI Hydro fetched content from this URL:"}
+									{askText(askOutcome, "fetch content from this URL", "fetched content from this URL")}
 								</span>
 							</div>
 							<div
@@ -1049,7 +1066,7 @@ export const ChatRowContent = memo(
 
 			const displayTitle = isSubagentCommand ? (
 				<span style={{ color: normalColor, fontWeight: "bold" }}>
-					{isPendingAsk ? "AI Hydro wants to use a subagent:" : "AI Hydro used a subagent:"}
+					{askText(askOutcome, "use a subagent", "used a subagent")}
 				</span>
 			) : (
 				title
@@ -1327,6 +1344,7 @@ export const ChatRowContent = memo(
 							unpaired={sciencePair?.status === "unpaired"}
 							running={isMcpServerResponding}
 							awaitingPermission={isPendingAsk}
+							denied={askOutcome === "denied"}
 							serverName={useMcpServer.serverName}
 							toolMeta={{ description: scienceTool?.description, inputSchema: scienceTool?.inputSchema }}
 							toolName={useMcpServer.toolName || ""}
