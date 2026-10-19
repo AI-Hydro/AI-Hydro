@@ -194,11 +194,6 @@ vscode-dropdown::part(listbox) {
 	--ai-hydro-ocean-light: #6bb6ff; /* Light ocean blue */
 	--ai-hydro-ocean-dark: #2e5bba; /* Dark ocean blue */
 
-	/* Emerald Green Theme - Action Colors */
-	--ai-hydro-emerald: #50c878; /* Primary emerald */
-	--ai-hydro-emerald-light: #6ade8f; /* Light emerald */
-	--ai-hydro-emerald-dark: #3a9b5c; /* Dark emerald */
-
 	/* Teal Theme - Accent Colors */
 	--ai-hydro-teal: #20b2aa; /* Primary teal */
 	--ai-hydro-teal-light: #48d1cc; /* Light teal */
@@ -217,9 +212,8 @@ vscode-dropdown::part(listbox) {
 
 	/* Semantic Color Mappings */
 	--ai-hydro-plan-mode: var(--ai-hydro-ocean-blue);
-	--ai-hydro-act-mode: var(--ai-hydro-emerald);
+	--ai-hydro-act-mode: var(--vscode-button-background);
 	--ai-hydro-accent: var(--ai-hydro-teal);
-	--ai-hydro-success: var(--ai-hydro-emerald);
 	--ai-hydro-info: var(--ai-hydro-cyan);
 	--ai-hydro-warning: var(--ai-hydro-teal);
 }
@@ -987,9 +981,9 @@ vscode-dropdown::part(listbox) {
 }
 
 .browser-relaunch-result--success {
-	background-color: color-mix(in srgb, var(--vscode-terminal-ansiGreen) 15%, transparent);
-	color: var(--vscode-terminal-ansiGreen);
-	border: 1px solid color-mix(in srgb, var(--vscode-terminal-ansiGreen) 25%, transparent);
+	background-color: color-mix(in srgb, var(--vscode-charts-blue) 15%, transparent);
+	color: var(--vscode-charts-blue);
+	border: 1px solid color-mix(in srgb, var(--vscode-charts-blue) 25%, transparent);
 }
 
 .browser-relaunch-result--error {
@@ -1066,8 +1060,8 @@ vscode-dropdown::part(listbox) {
 }
 
 .status-dot-connected {
-	background: var(--vscode-terminal-ansiGreen);
-	box-shadow: 0 0 6px color-mix(in srgb, var(--vscode-terminal-ansiGreen) 50%, transparent);
+	background: var(--vscode-charts-blue);
+	box-shadow: 0 0 6px color-mix(in srgb, var(--vscode-charts-blue) 50%, transparent);
 }
 
 .status-dot-disconnected {
@@ -1546,9 +1540,9 @@ vscode-dropdown::part(listbox) {
 }
 
 .announcement-step-dot--done {
-	background-color: rgba(0, 200, 120, 0.2);
-	border: 1px solid rgba(0, 200, 120, 0.5);
-	color: #00c878;
+	background-color: color-mix(in srgb, var(--vscode-charts-blue) 20%, transparent);
+	border: 1px solid color-mix(in srgb, var(--vscode-charts-blue) 50%, transparent);
+	color: var(--vscode-charts-blue);
 }
 
 .announcement-step-dot--pending {
@@ -2633,22 +2627,22 @@ vscode-dropdown::part(listbox) {
 @media (prefers-reduced-motion: reduce) {
 	*:not(
 			:is(
-				.motion-essential,
-				.codicon-modifier-spin,
-				.animate-spin,
-				.animate-typing-dot,
-				.animate-typing-dot-delay-1,
-				.animate-typing-dot-delay-2,
-				.animate-thinking-shimmer,
-				.animate-activity-pulse,
-				.animate-wave-dots,
-				.status-dot-pending,
-				.chat-row-status-dot--running,
-				[style*="animation: spin"],
-				[style*="animation: pulse"],
-				[style*="aihydro-spin"],
-				[style*="aihydro-kernel-pulse"]
-			)
+					.motion-essential,
+					.codicon-modifier-spin,
+					.animate-spin,
+					.animate-typing-dot,
+					.animate-typing-dot-delay-1,
+					.animate-typing-dot-delay-2,
+					.animate-thinking-shimmer,
+					.animate-activity-pulse,
+					.animate-wave-dots,
+					.status-dot-pending,
+					.chat-row-status-dot--running,
+					[style*="animation: spin"],
+					[style*="animation: pulse"],
+					[style*="aihydro-spin"],
+					[style*="aihydro-kernel-pulse"]
+				)
 		),
 	*:not(:is(.motion-essential, .codicon-modifier-spin, .animate-spin))::before,
 	*:not(:is(.motion-essential, .codicon-modifier-spin, .animate-spin))::after {

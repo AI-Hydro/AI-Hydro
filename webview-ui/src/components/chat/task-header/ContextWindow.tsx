@@ -252,7 +252,6 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 										label: "tracking-wider font-medium text-foreground/80",
 										value: "text-description",
 									}}
-									color="success"
 									disableAnimation={true}
 									onClick={handleContextWindowBarClick}
 									size="md"

@@ -317,3 +317,21 @@ export function getButtonConfig(message: AiHydroMessage | undefined, _mode: Mode
 
 	return BUTTON_CONFIGS.partial
 }
+
+/**
+ * True while there is something for Escape to stop: a streaming reply or in-flight API request (the states that
+ * show a Cancel button), a foreground command producing output, or a background command. Idle, awaiting-answer and
+ * finished states are not running, so Escape does nothing there.
+ */
+export function isTaskRunning(lastMessage: AiHydroMessage | undefined, backgroundCommandRunning = false): boolean {
+	if (backgroundCommandRunning) {
+		return true
+	}
+	if (!lastMessage) {
+		return false
+	}
+	if (lastMessage.type === "ask" && lastMessage.ask === "command_output") {
+		return true
+	}
+	return getButtonConfig(lastMessage).secondaryAction === "cancel"
+}
