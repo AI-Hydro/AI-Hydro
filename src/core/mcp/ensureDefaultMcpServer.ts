@@ -105,7 +105,19 @@ async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown):
 			recorded?.command === current.command &&
 			recorded.args.length === current.args.length &&
 			recorded.args.every((a, i) => a === current.args[i])
-		if (sameLaunch || !looksLikeFirstPartyLauncher(current.command, current.args)) {
+		if (sameLaunch) {
+			return
+		}
+		if (!looksLikeFirstPartyLauncher(current.command, current.args)) {
+			// Not recorded and not trusted: say so once per start instead of silently losing claim-approval prompts.
+			await HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message:
+					`The "${SERVER_NAME}" MCP server uses a non-standard launcher (\`${[current.command, ...current.args].join(" ")}\`), ` +
+					"so AI-Hydro does not treat it as the first-party server: claim-approval prompts and read-only subagent " +
+					"tools are off for it. To restore them, register the standard `aihydro-mcp` or `python -m ai_hydro.mcp` launcher.",
+				options: { items: [] },
+			})
 			return
 		}
 		if (!recorded) {
@@ -120,7 +132,7 @@ async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown):
 				`The "${SERVER_NAME}" MCP server now launches \`${[current.command, ...current.args].join(" ")}\`, which differs from the ` +
 				"launcher AI-Hydro registered. Until you confirm, it is not treated as the first-party server " +
 				"(claim-approval prompts and read-only subagent tools are off).",
-			options: { items: [trust, "Dismiss"] },
+			options: { items: [trust, "Dismiss"], modal: true },
 		})
 		if (action.selectedOption === trust) {
 			await recordFirstPartyLauncher(settingsDir, current)

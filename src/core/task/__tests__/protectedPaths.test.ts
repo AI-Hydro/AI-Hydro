@@ -32,6 +32,14 @@ describe("protected paths for agent file writes (B3)", () => {
 		expect(isProtectedPath(path.join(home, ".ssh"), roots)).to.equal(true)
 	})
 
+	it("protects a repository's .git/config and .git/hooks (git runs programs from them)", () => {
+		for (const p of ["/work/repo/.git/config", "/work/repo/.git/hooks/pre-commit", "C:\\work\\repo\\.git\\hooks\\post-merge"]) {
+			expect(isProtectedPath(p, roots), p).to.equal(true)
+		}
+		expect(isProtectedPath("/work/repo/.gitignore", roots)).to.equal(false)
+		expect(isProtectedPath("/work/repo/.git/HEAD", roots)).to.equal(false)
+	})
+
 	it("does not protect ordinary or look-alike paths", () => {
 		expect(isProtectedPath(path.join(home, "project", "src", "a.ts"), roots)).to.equal(false)
 		expect(isProtectedPath(path.join(home, ".sshx", "key"), roots)).to.equal(false)

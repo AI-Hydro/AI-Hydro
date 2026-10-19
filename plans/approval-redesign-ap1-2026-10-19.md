@@ -19,6 +19,21 @@ T1 (effectClass only), T3, T4, T5, T13, T14, T15, T16, T17, T18, T27, T28, plus 
 
 T28 covers `backgroundExec` and test-mode `executeCommandInNode` by asserting on the spawn source, because a unit test cannot start those shell hosts.
 
+## Security review of PR 61 (BLOCK) and what changed
+
+| Finding | Fix |
+|---|---|
+| 1. Classifier bypassed by shell syntax it never parsed (zsh `*(e:..:)`, `=(..)`, brace expansion, abbreviated flags, PowerShell) | `src/core/task/readOnlyClassifier.ts`: unquoted `( ) { } * ? [ ] ! #`, a word-leading `=`, `~`, `^`, quoted `; & < > ` ! $`, control and non-ASCII characters reject; per-program flag ALLOW-lists (no abbreviations); sort, file, tree, rg, jq dropped; Windows and non-bash/zsh/sh/dash shells classify nothing read-only |
+| 2. Model flags survive (`-s yolo_mode_toggled=true -y` after the injected false) | `subagentLaunchRefusal` denies `-y`, `--yolo`, any `yolo`, model `AIHYDRO_PROFILE=` and any flag other than `--profile`/`--workdir`; `sanitizeSubagentFlags` strips them again at injection; the notice is only shown for the standard form where it is true |
+| 3. Launch-rule evasion | `mentionsAihydroProgram`: any word that normalises (quotes, escapes, case, path, `.exe`) to `aihydro`, across chains and wrappers, is a launch: denied while subagents are disabled, otherwise always asks; also enforced in `executeCommandTool` |
+| 4. McpHub raw read path | `autoApprove` for tools, connection config strings and UI toggles come only from the gate's accepted policy (`McpPolicyGate.acceptedAutoApprove` / `sanitize`); integration test with a real McpHub and stdio server: edit, refresh, still not auto-approved, revert |
+
+Non-blocking items done: `AIHYDRO_AGENT_CONTEXT=1` in ArtifactKernelService, GeeService and MapHydrologyService spawns; "Trust this launcher" is modal; a notice when a non-standard first-party launcher is not recorded; spaced-dot (`ai_hydro . approval`) and glob (`aihydro-appro?e`) forms in the protected matcher; `.git/config` and `.git/hooks` are protected paths.
+
+Follow-up (not done): DiffViewProvider creates new files before approval, so a protected-path or approval decision for a brand-new file is made after the file exists on disk. Move creation behind approval.
+
+New limits from the review fixes: a word equal to `aihydro` anywhere in a command (`cat aihydro`) is treated as a launch (asks, or is denied while subagents are disabled); the whitespace-collapsing and glob variants of the protected matcher can over-match (denies, the safe direction); the classifier takes `$SHELL` of the extension host as the terminal's shell and an unset or unlisted shell means nothing auto-runs; git subcommands still read repository config that was written before the session.
+
 ## Known limits (state these in review; do not over-trust the layers)
 
 1. **Text matching is not a boundary.** The protected-command matcher and the protected-path text check read command text. Indirection defeats them: `a=aihydro-; ${a}approve`, `$'\x61ihydro-approve'`, a script file written earlier and run later, a base64-decoded payload, a program that spawns another, a subagent that decides on its own. `commandPolicy.test.ts` pins these as documented misses.

@@ -70,8 +70,14 @@ function resolveThroughSymlinks(target: string): string {
 	}
 }
 
+/** A repository's config and hooks can make git run programs (core.pager, core.fsmonitor, hooks), so they are protected too. */
+const GIT_EXEC_PATH = /(^|\/)\.git\/(config|hooks)(\/|$)/i
+
 /** Whether an absolute path equals or lies inside any protected root (also checks the symlink-resolved path). */
 export function isProtectedPath(absolutePath: string, roots: readonly string[]): boolean {
+	if (GIT_EXEC_PATH.test(absolutePath.replace(/\\/g, "/"))) {
+		return true
+	}
 	const candidates = new Set([comparable(absolutePath), comparable(resolveThroughSymlinks(absolutePath))])
 	const rootForms = roots.flatMap((root) => [comparable(root), comparable(resolveThroughSymlinks(root))])
 	for (const candidate of candidates) {

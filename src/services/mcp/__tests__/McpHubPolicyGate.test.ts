@@ -14,6 +14,19 @@ const Module = require("module")
 const originalRequire = Module.prototype.require
 const STUBBED = "@core/controller/mcp/subscribeToMcpServers"
 
+/** A minimal real stdio MCP server with two tools, so McpHub connects and lists tools for real. */
+const SERVER_SCRIPT = (sdk: string) => `
+const { Server } = require(${JSON.stringify(sdk + "/server/index.js")})
+const { StdioServerTransport } = require(${JSON.stringify(sdk + "/server/stdio.js")})
+const { ListToolsRequestSchema, CallToolRequestSchema } = require(${JSON.stringify(sdk + "/types.js")})
+const server = new Server({ name: "stub", version: "0.0.0" }, { capabilities: { tools: {} } })
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: ["describe_tool", "run_python"].map((name) => ({ name, inputSchema: { type: "object" } })),
+}))
+server.setRequestHandler(CallToolRequestSchema, async () => ({ content: [{ type: "text", text: "ok" }] }))
+server.connect(new StdioServerTransport())
+`
+
 describe("McpHub reads autoApprove only from the accepted policy (B3, review finding 4)", function () {
 	this.timeout(60_000)
 	let dir: string
@@ -21,6 +34,7 @@ describe("McpHub reads autoApprove only from the accepted policy (B3, review fin
 	let hub: any
 	let prompts: string[]
 	let answer: string | undefined
+	let launch: (autoApprove: string[]) => Record<string, unknown>
 
 	beforeEach(async () => {
 		Module.prototype.require = function (request: string) {
@@ -51,7 +65,14 @@ describe("McpHub reads autoApprove only from the accepted policy (B3, review fin
 			"/mock/extension",
 			dir,
 		)
-		await fs.writeFile(file, JSON.stringify({ mcpServers: { s: { command: "x", autoApprove: ["describe_tool"] } } }))
+		const script = path.join(dir, "stub-server.js")
+		await fs.writeFile(
+			script,
+			SERVER_SCRIPT(path.resolve(__dirname, "../../../../node_modules/@modelcontextprotocol/sdk/dist/cjs")),
+		)
+		const entry = (autoApprove: string[]) => ({ command: process.execPath, args: [script], autoApprove })
+		launch = entry
+		await fs.writeFile(file, JSON.stringify({ mcpServers: { s: entry(["describe_tool"]) } }))
 		const { McpHub } = await import("../McpHub")
 		hub = new McpHub(
 			async () => dir,
@@ -59,22 +80,10 @@ describe("McpHub reads autoApprove only from the accepted policy (B3, review fin
 			"0.0.0",
 			{} as any,
 		)
-		for (let i = 0; i < 200 && !hub.policyGate.baselineSet; i++) {
+		for (let i = 0; i < 400 && !(hub.policyGate.baselineSet && hub.connections[0]?.server.status === "connected"); i++) {
 			await new Promise((r) => setTimeout(r, 25))
 		}
-		// A connected server with two tools, so there is something to flag.
-		hub.connections.push({
-			server: {
-				name: "s",
-				config: JSON.stringify({ type: "stdio", command: "x" }),
-				status: "connected",
-				tools: [{ name: "describe_tool" }, { name: "run_python" }],
-			},
-			client: {
-				request: async () => ({ tools: [{ name: "describe_tool" }, { name: "run_python" }] }),
-			},
-			transport: null,
-		})
+		expect(hub.connections[0]?.server.status).to.equal("connected")
 	})
 
 	afterEach(async () => {
@@ -93,7 +102,7 @@ describe("McpHub reads autoApprove only from the accepted policy (B3, review fin
 		])
 
 		// 1. Agent edit: adds run_python to autoApprove on disk.
-		const edited = { mcpServers: { s: { command: "x", autoApprove: ["describe_tool", "run_python"] } } }
+		const edited = { mcpServers: { s: launch(["describe_tool", "run_python"]) } }
 		await fs.writeFile(file, JSON.stringify(edited))
 
 		// 2. Refresh before the watcher has run (or while the dialog is open): the raw file says run_python, the host must not.
@@ -124,10 +133,7 @@ describe("McpHub reads autoApprove only from the accepted policy (B3, review fin
 	})
 
 	it("a reconnect through the RPC path does not carry an unconfirmed edit into connection state", async () => {
-		await fs.writeFile(
-			file,
-			JSON.stringify({ mcpServers: { s: { command: "x", autoApprove: ["describe_tool", "run_python"] } } }),
-		)
+		await fs.writeFile(file, JSON.stringify({ mcpServers: { s: launch(["describe_tool", "run_python"]) } }))
 		const settings = await hub.readAndValidateMcpSettingsFile()
 		await hub.updateServerConnectionsRPC(settings.mcpServers)
 		expect(await flags()).to.deep.equal([
@@ -138,10 +144,7 @@ describe("McpHub reads autoApprove only from the accepted policy (B3, review fin
 
 	it("after the user confirms, the flag takes effect", async () => {
 		answer = "Apply changes"
-		await fs.writeFile(
-			file,
-			JSON.stringify({ mcpServers: { s: { command: "x", autoApprove: ["describe_tool", "run_python"] } } }),
-		)
+		await fs.writeFile(file, JSON.stringify({ mcpServers: { s: launch(["describe_tool", "run_python"]) } }))
 		const settings = await hub.readAndValidateMcpSettingsFile()
 		const effective = await hub.policyGate.gateExternal(settings.mcpServers)
 		await hub.updateServerConnections(effective)
