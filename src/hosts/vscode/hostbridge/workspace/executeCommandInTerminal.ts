@@ -16,6 +16,8 @@ export async function executeCommandInTerminal(
 			iconPath: new vscode.ThemeIcon("robot"),
 			env: {
 				AIHYDRO_ACTIVE: "true",
+				// Marks the terminal as agent-run: the approval CLI refuses to approve a claim here (AP1, B4).
+				AIHYDRO_AGENT_CONTEXT: "1",
 			},
 		}
 
