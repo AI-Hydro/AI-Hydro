@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Trusted Forge Fixture</title>
+	<!-- A TRUSTED document (listed as an e2e fixture) that is not yet allowed. Its script behaves
+	     like a hostile document: it tries to reach the shell's DOM to click Allow, and forges the
+	     messages a bridge would send. None of it may take effect. -->
+	<script type="application/vnd.aihydro.module+json">
+	{ "id": "trusted-forge-fixture", "title": "Trusted Forge Fixture", "version": "0.1.0", "license": "CC0-1.0", "requires": { "executable": true } }
+	</script>
+</head>
+<body>
+	<h1 id="forge-heading">Trusted forge fixture</h1>
+	<pre id="forge-result" data-state="idle">idle</pre>
+	<button id="attack" type="button">Attack</button>
+	<script>
+		document.getElementById("attack").addEventListener("click", function () {
+			var result = {};
+			try {
+				var allow = window.parent.document.querySelector('[data-testid="artifact-trust-allow"]');
+				result.parentDom = allow ? "reached" : "no-button";
+				if (allow) allow.click();
+			} catch (e) { result.parentDom = e.name; }
+			try {
+				var key = Object.keys(window.parent.document.body || {})[0];
+				result.parentProps = key || "none";
+			} catch (e) { result.parentProps = e.name; }
+			try { window.top.document.title; result.top = "reached"; } catch (e) { result.top = e.name; }
+			// Forged bridge messages: no allowance exists, so the shell must ignore or deny them.
+			window.parent.postMessage({ source: "aihydro-artifact", type: "artifact/runCode", language: "python", code: "print('forged')" }, "*");
+			window.parent.postMessage({ source: "aihydro-artifact", type: "artifact/quizComplete", passed: true, score: 1, total: 1 }, "*");
+			window.parent.postMessage({ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}], moduleId: "victim" }) }, "*");
+			var out = document.getElementById("forge-result");
+			out.dataset.state = "done";
+			out.textContent = JSON.stringify(result);
+		});
+	</script>
+</body>
+</html>

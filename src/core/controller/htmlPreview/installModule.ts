@@ -11,6 +11,7 @@ import type { Controller } from "../index"
 import {
 	assertTrustedMarketplaceRedirect,
 	assertTrustedMarketplaceUrl,
+	MAX_MODULE_BYTES,
 	resolveContainedInstallDir,
 } from "./marketplaceUrlAllowlist"
 
@@ -29,6 +30,8 @@ export async function installModule(controller: Controller, request: InstallModu
 		const response = await axios.get(downloadUrl, {
 			responseType: "text",
 			timeout: 30000,
+			maxContentLength: MAX_MODULE_BYTES,
+			maxBodyLength: MAX_MODULE_BYTES,
 			beforeRedirect: (options) => assertTrustedMarketplaceRedirect(options, "installModule downloadUrl"),
 		})
 		const html = String(response.data)

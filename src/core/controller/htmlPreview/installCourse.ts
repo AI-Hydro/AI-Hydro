@@ -16,6 +16,8 @@ import type { Controller } from "../index"
 import {
 	assertTrustedMarketplaceRedirect,
 	assertTrustedMarketplaceUrl,
+	MAX_MANIFEST_BYTES,
+	MAX_MODULE_BYTES,
 	resolveContainedInstallDir,
 	sanitizeMarketplaceId,
 } from "./marketplaceUrlAllowlist"
@@ -37,6 +39,8 @@ export async function installCourse(controller: Controller, request: InstallCour
 		const manifestResp = await axios.get(manifestUrl, {
 			responseType: "json",
 			timeout: 30000,
+			maxContentLength: MAX_MANIFEST_BYTES,
+			maxBodyLength: MAX_MANIFEST_BYTES,
 			beforeRedirect: (options) => assertTrustedMarketplaceRedirect(options, "installCourse manifestUrl"),
 		})
 		const manifest = manifestResp.data
@@ -95,6 +99,8 @@ export async function installCourse(controller: Controller, request: InstallCour
 				const html = await axios.get(downloadUrl, {
 					responseType: "text",
 					timeout: 30000,
+					maxContentLength: MAX_MODULE_BYTES,
+					maxBodyLength: MAX_MODULE_BYTES,
 					beforeRedirect: (options) =>
 						assertTrustedMarketplaceRedirect(options, `installCourse module ${moduleId} downloadUrl`),
 				})

@@ -12,6 +12,7 @@ const runtimeE2E = e2e.extend<{ workspaceDir: string; e2eTrustedPaths: string[] 
 			path.join(workspaceDir, "phase0", "golden-course"),
 			path.join(workspaceDir, "phase0", "standalone-module.html"),
 			path.join(workspaceDir, "phase0", "interrupt-module.html"),
+			path.join(workspaceDir, "phase0", "trusted-forge.html"),
 		])
 	},
 	workspaceDir: async ({ userDataDir }, use) => {
@@ -27,6 +28,7 @@ const runtimeE2E = e2e.extend<{ workspaceDir: string; e2eTrustedPaths: string[] 
 		cpSync(path.join(phase0Fixtures, "standalone-module.html"), path.join(workspaceDir, "phase0", "standalone-module.html"))
 		cpSync(path.join(phase0Fixtures, "interrupt-module.html"), path.join(workspaceDir, "phase0", "interrupt-module.html"))
 		cpSync(path.join(phase0Fixtures, "untrusted-runcode.html"), path.join(workspaceDir, "phase0", "untrusted-runcode.html"))
+		cpSync(path.join(phase0Fixtures, "trusted-forge.html"), path.join(workspaceDir, "phase0", "trusted-forge.html"))
 		cpSync(path.join(phase0Fixtures, "quarto-fidelity"), path.join(workspaceDir, "phase0", "quarto-fidelity"), {
 			recursive: true,
 		})
@@ -418,4 +420,28 @@ runtimeE2E("Studio stages a document's agent request for a user click and revoke
 			timeout: 15_000,
 		})
 		.toBe(false)
+})
+
+runtimeE2E("A document script cannot grant itself execution or reach the shell @phase0-smoke", async ({ page }) => {
+	await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, (route) => route.abort())
+	await openWorkspaceFile(page, "phase0/trusted-forge.html")
+	const shell = await waitForShellWithSrcdoc(page, "trusted-forge-fixture", 60_000)
+	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Trusted, execution off")
+	const artifact = await waitForFrame(page, async (frame) => (await frame.locator("#forge-heading").count()) === 1)
+
+	await artifact.locator("#attack").evaluate((element: HTMLElement) => element.click())
+	await expect(artifact.locator("#forge-result")).toHaveAttribute("data-state", "done", { timeout: 15_000 })
+	// The iframe is an opaque origin: every route into the shell's DOM or globals is a SecurityError.
+	const reached = JSON.parse((await artifact.locator("#forge-result").textContent()) ?? "{}") as Record<string, string>
+	expect(reached.parentDom).toBe("SecurityError")
+	expect(reached.parentProps).toBe("SecurityError")
+	expect(reached.top).toBe("SecurityError")
+
+	// Nothing took effect: still not allowed, no bridge, no staged agent prompt, no progress.
+	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Trusted, execution off")
+	await expect(shell.getByTestId("artifact-trust-allow")).toBeVisible()
+	await expect(shell.getByTestId("artifact-trust-revoke")).toHaveCount(0)
+	expect(await shell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("artifact/cellRegistry")
+	await expect(shell.getByTestId("agent-handoff-prompt")).toHaveCount(0)
+	await expect(shell.getByTestId("agent-handoff-notice")).toBeVisible({ timeout: 15_000 })
 })

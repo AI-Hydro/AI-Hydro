@@ -32,6 +32,10 @@ function trustedOrigins(): Set<string> {
 	return origins
 }
 
+/** Body caps for marketplace downloads (a module is a single self-contained HTML file). */
+export const MAX_MODULE_BYTES = 8 * 1024 * 1024
+export const MAX_MANIFEST_BYTES = 1024 * 1024
+
 export function assertTrustedMarketplaceUrl(url: string, context: string): void {
 	let parsed: URL
 	try {
