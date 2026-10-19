@@ -22,6 +22,8 @@
  * plans/approval-redesign-ap1-2026-10-19.md.
  */
 
+import { classifyCommand, type ShellEnvironment } from "./readOnlyClassifier"
+
 // ---------------------------------------------------------------------------------------------------------------
 // 1. Protected commands (hard deny)
 // ---------------------------------------------------------------------------------------------------------------
@@ -36,13 +38,62 @@ export const PROTECTED_COMMAND_DENY_MESSAGE =
 	"notification. No auto-run, YOLO or approval setting can allow the agent to run it."
 
 /**
- * Reduce raw command text to the forms a shell would execute after quote and escape removal. Returned as two
- * variants because a backslash is both a shell escape (`aihydro-appro\ve`) and a Windows path separator
- * (`ai_hydro\approval`): deleting it handles the first, turning it into `/` handles the second.
+ * Reduce raw command text to the forms a shell would execute after quote and escape removal. A backslash is both a
+ * shell escape (`aihydro-appro\ve`) and a Windows path separator (`ai_hydro\approval`), so it is deleted in one
+ * variant and turned into `/` in another. Each of those is then also produced with all whitespace removed (so
+ * `ai_hydro . approval` and a backslash-newline continuation collapse) and with unset-variable-style expansions
+ * removed (`aihydro-${x}approve`, `aihydro-$''approve`). Non-ASCII characters are dropped.
  */
 function protectedMatchVariants(raw: string): string[] {
-	const base = raw.toLowerCase().replace(/['"]/g, "")
-	return [base.replace(/\\/g, ""), base.replace(/\\/g, "/")].map((s) => s.replace(/\s+/g, " "))
+	const base = raw
+		.toLowerCase()
+		.replace(/[\u2010-\u2015\u2212]/g, "-")
+		.replace(/['"]/g, "")
+		.replace(/[^\x20-\x7e\n]/g, "")
+	const out: string[] = []
+	for (const unescaped of [base.replace(/\\\n/g, "").replace(/\\/g, ""), base.replace(/\\/g, "/")]) {
+		// `$` alone (what is left of `$''` and `$""`), and braced/special parameters that expand to nothing.
+		const dollarOnly = unescaped.replace(/\$/g, "")
+		const noParameters = unescaped.replace(/\$\{[^}]*\}|\$[@*#?!0-9]/g, "")
+		for (const text of [unescaped, dollarOnly, noParameters]) {
+			out.push(text.replace(/\s+/g, " "), text.replace(/\s+/g, ""))
+		}
+	}
+	return out
+}
+
+/** Whether a shell glob (`appr*`, `app?ove`, `[a]pprove`) could expand to `target`. Unparseable globs match (fail closed). */
+function globCouldMatch(glob: string, target: string): boolean {
+	if (!/[?*[]/.test(glob)) {
+		return false
+	}
+	try {
+		const source = glob
+			.replace(/[.+^${}()|\\]/g, "\\$&")
+			.replace(/\*/g, ".*")
+			.replace(/\?/g, ".")
+		return new RegExp(`^${source}$`).test(target)
+	} catch {
+		return true
+	}
+}
+
+/**
+ * Glob forms of the protected names: `aihydro-appro?e`, `aihydro-appr*`, `ai_hydro/appr*`, `ai_hydro.app?oval`.
+ * The program name is spelled out and only the tail is a glob, so the match is exact about what the glob can reach.
+ */
+function matchProtectedGlob(variant: string): string | undefined {
+	for (const [prefix, target, name] of [
+		[/aihydro-([a-z0-9_?*[\]-]+)/g, "approve", "aihydro-approve (glob)"],
+		[/ai_hydro[./]([a-z0-9_?*[\]-]+)/g, "approval", "ai_hydro approval (glob)"],
+	] as const) {
+		for (const m of variant.matchAll(prefix)) {
+			if (globCouldMatch(m[1], target)) {
+				return name
+			}
+		}
+	}
+	return undefined
 }
 
 /**
@@ -61,331 +112,85 @@ export function matchProtectedCommand(raw: string): string | undefined {
 		if (PROTECTED_IMPORT_PATTERN.test(variant)) {
 			return "ai_hydro import approval"
 		}
+		const glob = matchProtectedGlob(variant)
+		if (glob) {
+			return glob
+		}
 	}
 	return undefined
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// 2. Read-only classifier
+// 1b. Subagent launches
 // ---------------------------------------------------------------------------------------------------------------
 
-export interface CommandClassification {
-	readOnly: boolean
-	/** Why the command is not read-only (or "read-only"). For logs and tests; not shown as a safety claim. */
-	reason: string
-}
+export const SUBAGENTS_DISABLED_MESSAGE =
+	"Subagents are disabled. Launching an `aihydro` subagent was refused. The user can enable subagents in AI-Hydro settings; do not retry this launch until they do."
+
+export const SUBAGENT_LAUNCH_REFUSED_MESSAGE =
+	'Subagent launch refused: the model may not set YOLO, a profile environment variable or extra settings. Use exactly `aihydro "prompt"` with optional `--profile explorer|data-runner` and `--workdir <dir>`.'
+
+const SUBAGENT_PATTERN = /^aihydro\s+(['"])(.+?)\1(\s+.*)?$/
 
 /**
- * Programs with no way to write, execute or reach the network through their normal flags. A program appears
- * here only after its flags were checked; the ones with a write/exec flag carry a banned-flag rule below.
+ * Whether any word of the command is the `aihydro` CLI program, after quote/escape/case/path normalisation and
+ * across chains, `env`/prefix wrappers and absolute paths: `cd . && aihydro "x"`, `env aihydro "x"`,
+ * `/usr/local/bin/aihydro "x"`, `AIHYDRO "x"`, `aihydro -y "x"`. Deliberately broad: a word that merely equals
+ * `aihydro` (`cat aihydro`) is also treated as a launch, which only means it asks (or is refused while subagents
+ * are disabled). The indirection limits in the file header apply here too.
  */
-const READ_ONLY_PROGRAMS: ReadonlySet<string> = new Set([
-	"ls",
-	"cat",
-	"head",
-	"tail",
-	"wc",
-	"pwd",
-	"echo",
-	"which",
-	"whoami",
-	"stat",
-	"file",
-	"diff",
-	"cmp",
-	"du",
-	"df",
-	"basename",
-	"dirname",
-	"realpath",
-	"readlink",
-	"sort",
-	"cut",
-	"tr",
-	"nl",
-	"tac",
-	"rev",
-	"md5sum",
-	"sha1sum",
-	"sha256sum",
-	"shasum",
-	"uname",
-	"id",
-	"tree",
-	"grep",
-	"egrep",
-	"fgrep",
-	"rg",
-	"jq",
-	"true",
-	"find",
-	"git",
-	// Windows cmd built-ins and tools.
-	"dir",
-	"type",
-	"where",
-	"findstr",
-])
-
-/** Flags that turn an otherwise read-only program into a writer or executor. */
-const BANNED_FLAGS: Record<string, (flag: string) => boolean> = {
-	// sort -o FILE / --output=FILE writes; -o may sit in a cluster (-uo).
-	sort: (f) => /^-[A-Za-z]*o/.test(f) || f.startsWith("--output"),
-	// tree -o FILE writes.
-	tree: (f) => /^-[A-Za-z]*o/.test(f) || f.startsWith("--output"),
-	// ripgrep --pre CMD executes CMD per file.
-	rg: (f) => f.startsWith("--pre") || f.startsWith("--hostname-bin"),
-	// file -C writes a compiled magic file.
-	file: (f) => f === "-C" || f === "--compile",
-	// Following never exits, so it would hang rather than finish.
-	tail: (f) => /^-[A-Za-z]*[fF]/.test(f) || f.startsWith("--follow"),
-	find: (f) => ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"].includes(f),
-}
-
-const GIT_SIMPLE_READ_SUBCOMMANDS: ReadonlySet<string> = new Set([
-	"status",
-	"log",
-	"diff",
-	"show",
-	"blame",
-	"rev-parse",
-	"ls-files",
-	"ls-tree",
-	"cat-file",
-	"describe",
-	"shortlog",
-	"rev-list",
-	"show-ref",
-	"name-rev",
-	"count-objects",
-	"grep",
-	"whatchanged",
-	"diff-tree",
-	"diff-files",
-	"diff-index",
-	"merge-base",
-	"for-each-ref",
-	"check-ignore",
-])
-
-/** Git flags that write a file, run an external program, or open a pager command. */
-function isBannedGitFlag(word: string): boolean {
-	return (
-		word.startsWith("--output") ||
-		word === "--ext-diff" ||
-		word === "--textconv" ||
-		word.startsWith("--open-files-in-pager") ||
-		word.startsWith("-O") ||
-		word.startsWith("--exec")
-	)
-}
-
-const GIT_LIST_ONLY_FLAGS: ReadonlySet<string> = new Set([
-	"-a",
-	"-r",
-	"-v",
-	"-vv",
-	"-l",
-	"-n",
-	"--all",
-	"--remotes",
-	"--verbose",
-	"--list",
-	"--show-current",
-	"--merged",
-	"--no-merged",
-])
-
-function isReadOnlyGit(words: string[]): boolean {
-	let i = 1
-	// Global options. `-c key=value` (and --exec-path/--config-env) can make git run arbitrary programs, so only
-	// a few inert ones are accepted.
-	while (i < words.length && words[i].startsWith("-")) {
-		const word = words[i]
-		if (["--no-pager", "--no-optional-locks", "--no-replace-objects", "--literal-pathspecs", "-P"].includes(word)) {
-			i += 1
-		} else if (word === "-C" && i + 1 < words.length) {
-			i += 2
-		} else {
-			return false
-		}
-	}
-	const sub = words[i]
-	if (!sub) {
-		return false
-	}
-	const rest = words.slice(i + 1)
-	if (rest.some(isBannedGitFlag)) {
-		return false
-	}
-	if (GIT_SIMPLE_READ_SUBCOMMANDS.has(sub)) {
-		return true
-	}
-	switch (sub) {
-		case "branch":
-		case "tag": {
-			const dashed = rest.filter((w) => w.startsWith("-"))
-			const bare = rest.filter((w) => !w.startsWith("-"))
-			const dashedOk = dashed.every(
-				(w) =>
-					GIT_LIST_ONLY_FLAGS.has(w) ||
-					w.startsWith("--sort=") ||
-					w.startsWith("--format=") ||
-					w.startsWith("--contains="),
-			)
-			// A bare argument is a name to create unless a list flag turns it into a pattern.
-			const listing = rest.includes("--list") || rest.includes("-l")
-			return dashedOk && (bare.length === 0 || listing)
-		}
-		case "remote":
-			return rest.length === 0 || (rest.length === 1 && (rest[0] === "-v" || rest[0] === "--verbose"))
-		case "config":
-			return ["--get", "--get-all", "--get-regexp", "--list", "-l"].includes(rest[0] ?? "")
-		case "stash":
-			return rest[0] === "list" || rest[0] === "show"
-		case "reflog":
-			return rest.length === 0 || rest[0] === "show"
-		default:
-			return false
-	}
-}
-
-/**
- * Split into pipeline segments of words, quote- and escape-aware. Returns undefined when the text contains
- * anything a conservative classifier must not interpret: command separators, background, redirection,
- * substitution, variable expansion, here-docs, newlines, or an unterminated quote.
- *
- * These characters are rejected even inside quotes (`grep "a>b" f` asks). That costs a prompt now and then and
- * removes every quoting edge case.
- */
-function splitPipeline(command: string): string[][] | undefined {
-	const segments: string[][] = []
-	let words: string[] = []
-	let word = ""
-	let inWord = false
-	let quote: "'" | '"' | undefined
-
-	const endWord = () => {
-		if (inWord) {
-			words.push(word)
-		}
-		word = ""
-		inWord = false
-	}
-
-	for (let i = 0; i < command.length; i++) {
-		const ch = command[i]
-		if (/[\n\r\0;&<>`]/.test(ch)) {
-			return undefined
-		}
-		if (quote === "'") {
-			if (ch === "'") {
-				quote = undefined
-			} else {
-				word += ch
+export function mentionsAihydroProgram(raw: string): boolean {
+	const base = raw
+		.toLowerCase()
+		.replace(/['"]/g, "")
+		.replace(/[^\x20-\x7e\n]/g, "")
+	for (const text of [base.replace(/\\/g, ""), base.replace(/\\/g, "/")]) {
+		for (const token of text.split(/[\s;&|()<>`${}=,]+/)) {
+			const program = (token.split("/").pop() ?? "").replace(/\.(exe|cmd|bat|ps1|js|mjs)$/, "")
+			if (program === "aihydro") {
+				return true
 			}
-			continue
 		}
-		if (ch === "$") {
-			return undefined
-		}
-		if (quote === '"') {
-			if (ch === '"') {
-				quote = undefined
-			} else if (ch === "\\") {
+	}
+	return false
+}
+
+/**
+ * Why a launch must be refused regardless of approval, or undefined. The model may not choose the subagent's
+ * approval policy: no YOLO (`-y`, `--yolo`, `yolo_mode_toggled`), no `AIHYDRO_PROFILE=` environment prefix, and for
+ * the standard form `aihydro "prompt" <flags>` only `--profile` and `--workdir` after the prompt (anything else, such
+ * as a later `-s yolo_mode_toggled=true`, would override the flags the host injects).
+ */
+export function subagentLaunchRefusal(command: string): string | undefined {
+	if (/aihydro_profile\s*=/i.test(command)) {
+		return SUBAGENT_LAUNCH_REFUSED_MESSAGE
+	}
+	const match = command.trim().match(SUBAGENT_PATTERN)
+	if (match) {
+		const tokens = (match[3] ?? "").trim().split(/\s+/).filter(Boolean)
+		for (let i = 0; i < tokens.length; i++) {
+			const flag = tokens[i]
+			const value = tokens[i + 1]
+			if ((flag === "--workdir" || flag === "--profile") && value !== undefined && !value.startsWith("-")) {
 				i += 1
-				if (i >= command.length) {
-					return undefined
-				}
-				word += command[i]
 			} else {
-				word += ch
+				return SUBAGENT_LAUNCH_REFUSED_MESSAGE
 			}
-			continue
 		}
-		if (ch === "'" || ch === '"') {
-			quote = ch
-			inWord = true
-		} else if (ch === "\\") {
-			i += 1
-			if (i >= command.length) {
-				return undefined
-			}
-			word += command[i]
-			inWord = true
-		} else if (ch === "|") {
-			endWord()
-			if (words.length === 0) {
-				return undefined // `||` or a leading pipe
-			}
-			segments.push(words)
-			words = []
-		} else if (/\s/.test(ch)) {
-			endWord()
-		} else {
-			word += ch
-			inWord = true
-		}
-	}
-	if (quote) {
 		return undefined
 	}
-	endWord()
-	if (words.length === 0) {
-		return undefined
+	const words = command.toLowerCase().split(/[\s'"=;&|()]+/)
+	if (/yolo/i.test(command) || words.includes("-y") || words.includes("--yes")) {
+		return SUBAGENT_LAUNCH_REFUSED_MESSAGE
 	}
-	segments.push(words)
-	return segments
+	return undefined
 }
 
-function classifySegment(words: string[]): CommandClassification {
-	const program = words[0]
-	if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(program)) {
-		return { readOnly: false, reason: "leading variable assignment" }
-	}
-	if (program.includes("/") || program.includes("\\")) {
-		return { readOnly: false, reason: `program given as a path: ${program}` }
-	}
-	if (!READ_ONLY_PROGRAMS.has(program)) {
-		return { readOnly: false, reason: `'${program}' is not on the read-only allowlist` }
-	}
-	if (program === "git") {
-		return isReadOnlyGit(words)
-			? { readOnly: true, reason: "read-only" }
-			: { readOnly: false, reason: "git subcommand or flag is not read-only" }
-	}
-	const banned = BANNED_FLAGS[program]
-	if (banned) {
-		const hit = words.slice(1).find((w) => w.startsWith("-") && banned(w))
-		if (hit) {
-			return { readOnly: false, reason: `${program} ${hit} can write or execute` }
-		}
-	}
-	return { readOnly: true, reason: "read-only" }
-}
+// ---------------------------------------------------------------------------------------------------------------
+// 2. Read-only classifier: see readOnlyClassifier.ts (re-exported here)
+// ---------------------------------------------------------------------------------------------------------------
 
-/**
- * Host-side verdict: is this command read-only? Conservative: when in doubt, it is not. A pipeline qualifies only
- * if every segment does. Anything with `;`, `&&`, `||`, `&`, redirection, `$(...)`, backticks, `$VAR`, here-docs
- * or an unknown program is not read-only.
- */
-export function classifyCommand(command: string): CommandClassification {
-	const trimmed = command.trim()
-	if (!trimmed) {
-		return { readOnly: false, reason: "empty command" }
-	}
-	const segments = splitPipeline(trimmed)
-	if (!segments) {
-		return { readOnly: false, reason: "contains a separator, redirection, substitution, expansion or unterminated quote" }
-	}
-	for (const words of segments) {
-		const verdict = classifySegment(words)
-		if (!verdict.readOnly) {
-			return verdict
-		}
-	}
-	return { readOnly: true, reason: "read-only" }
-}
+export { type CommandClassification, classifyCommand, type ShellEnvironment } from "./readOnlyClassifier"
 
 // ---------------------------------------------------------------------------------------------------------------
 // 3. Protected paths mentioned in command text
@@ -396,6 +201,8 @@ const PROTECTED_PATH_PATTERNS: readonly RegExp[] = [
 	/\.aihydro\/(approvals|trust|registry)(\/|\s|$)/,
 	/\$\{?aihydro_home\}?|%aihydro_home%/,
 	/aihydro_mcp_settings\.json/,
+	// A repository's config and hooks can make git run programs (core.pager, core.fsmonitor, hooks).
+	/(^|[/\s=:])\.git\/(config|hooks)/,
 ]
 
 /**
@@ -422,7 +229,7 @@ export function commandMentionsProtectedPath(raw: string, protectedRoots: readon
 export interface CommandPolicyInput {
 	/** The command that will run (after any workspace-hint rewriting). Classified and scanned. */
 	command: string
-	/** The command exactly as the model wrote it, when it differs from `command`. Scanned for protected commands too. */
+	/** The command exactly as the model wrote it, when it differs from `command`. Scanned too. */
 	rawCommand?: string
 	/** The model's `requires_approval` claim. May only tighten. */
 	modelRequiresApproval: boolean
@@ -430,10 +237,13 @@ export interface CommandPolicyInput {
 	autoApproveSafe: boolean
 	/** "Execute all commands" (executeAllCommands); YOLO supplies true. */
 	autoApproveAll: boolean
-	isSubagentLaunch: boolean
+	/** Optional extra signal; launches are also detected from the command text itself (mentionsAihydroProgram). */
+	isSubagentLaunch?: boolean
 	subagentsEnabled: boolean
-	/** Result of commandMentionsProtectedPath for this command. */
+	/** Result of commandPolicyMentionsProtectedPath for this command. */
 	touchesProtectedPath: boolean
+	/** Shell used for classification; defaults to this process's platform and $SHELL. Tests inject it. */
+	shellEnvironment?: ShellEnvironment
 }
 
 export type CommandPolicyResult =
@@ -441,30 +251,33 @@ export type CommandPolicyResult =
 	| { action: "ask"; reason: string }
 	| { action: "run"; reason: string }
 
-export const SUBAGENTS_DISABLED_MESSAGE =
-	"Subagents are disabled. Launching an `aihydro` subagent was refused. The user can enable subagents in AI-Hydro settings; do not retry this launch until they do."
-
 /**
  * The single ordered decision for a command. First match wins.
  *
  *  0a. protected command            -> deny   (YOLO and allow settings cannot change this)
  *  0b. subagent launch, disabled    -> deny
- *  0c. subagent launch              -> ask    (always; never auto-runs, whatever the model or settings say)
- *  0d. touches a protected path     -> ask    (YOLO and "Execute all commands" included)
+ *  0c. subagent launch with model-set YOLO/profile/extra flags -> deny
+ *  0d. subagent launch              -> ask    (always; never auto-runs, whatever the model or settings say)
+ *  0e. touches a protected path     -> ask    (YOLO and "Execute all commands" included)
  *  1.  "Run read-only commands" off -> ask
  *  2.  "Execute all commands" on    -> run    (the user's explicit choice; YOLO lands here)
  *  3.  host says read-only and the model did not ask for approval -> run
  *  4.  everything else              -> ask
  */
 export function decideCommand(input: CommandPolicyInput): CommandPolicyResult {
-	const protectedMatch = matchProtectedCommand(input.command) ?? matchProtectedCommand(input.rawCommand ?? "")
+	const texts = [input.command, input.rawCommand ?? ""]
+	const protectedMatch = texts.map(matchProtectedCommand).find((m) => m !== undefined)
 	if (protectedMatch) {
 		return { action: "deny", reason: `protected command (${protectedMatch})`, message: PROTECTED_COMMAND_DENY_MESSAGE }
 	}
-	if (input.isSubagentLaunch && !input.subagentsEnabled) {
-		return { action: "deny", reason: "subagents disabled", message: SUBAGENTS_DISABLED_MESSAGE }
-	}
-	if (input.isSubagentLaunch) {
+	if (input.isSubagentLaunch || texts.some(mentionsAihydroProgram)) {
+		if (!input.subagentsEnabled) {
+			return { action: "deny", reason: "subagents disabled", message: SUBAGENTS_DISABLED_MESSAGE }
+		}
+		const refusal = texts.map((t) => (t ? subagentLaunchRefusal(t) : undefined)).find((r) => r !== undefined)
+		if (refusal) {
+			return { action: "deny", reason: "subagent launch sets its own policy", message: refusal }
+		}
 		return { action: "ask", reason: "subagent launch always asks" }
 	}
 	if (input.touchesProtectedPath) {
@@ -479,6 +292,6 @@ export function decideCommand(input: CommandPolicyInput): CommandPolicyResult {
 	if (input.modelRequiresApproval) {
 		return { action: "ask", reason: "the model asked for approval" }
 	}
-	const verdict = classifyCommand(input.command)
+	const verdict = classifyCommand(input.command, input.shellEnvironment)
 	return verdict.readOnly ? { action: "run", reason: "host classified read-only" } : { action: "ask", reason: verdict.reason }
 }

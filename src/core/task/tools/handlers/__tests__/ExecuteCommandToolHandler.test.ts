@@ -15,8 +15,12 @@ import { ExecuteCommandToolHandler } from "../ExecuteCommandToolHandler"
  */
 describe("ExecuteCommandToolHandler host-side command policy", () => {
 	let sandbox: sinon.SinonSandbox
+	let savedShell: string | undefined
 
 	beforeEach(() => {
+		// Classification is shell-dependent (fail closed outside bash/zsh/sh/dash): pin a POSIX shell.
+		savedShell = process.env.SHELL
+		process.env.SHELL = "/bin/zsh"
 		sandbox = sinon.createSandbox()
 		// telemetryService is a lazy proxy that builds the real service on first use; give it an inert one.
 		resetTelemetryService()
@@ -26,6 +30,11 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 		} as unknown as TelemetryService)
 	})
 	afterEach(() => {
+		if (savedShell === undefined) {
+			delete process.env.SHELL
+		} else {
+			process.env.SHELL = savedShell
+		}
 		sandbox.restore()
 		resetTelemetryService()
 	})

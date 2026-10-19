@@ -17,6 +17,8 @@ const base: CommandPolicyInput = {
 	isSubagentLaunch: false,
 	subagentsEnabled: true,
 	touchesProtectedPath: false,
+	// Classification is shell-dependent (fail closed outside bash/zsh/sh/dash and on Windows): pin it.
+	shellEnvironment: { platform: "darwin", shell: "/bin/zsh" },
 }
 const decide = (over: Partial<CommandPolicyInput>) => decideCommand({ ...base, ...over })
 
@@ -96,21 +98,25 @@ describe("commandPolicy: host-side read-only classification (T14)", () => {
 		"git status",
 		"git log --oneline -5",
 		"git diff HEAD~1",
-		"git -C sub status",
 		"git branch --list 'feat*'",
 		"git remote -v",
 		"cat README.md | head -5",
 		'grep -rn "a|b" src | wc -l',
 		"find . -name '*.ts'",
-		"rg foo",
 		"tail -n 20 file.log",
 		"echo hello",
 		"pwd",
-		"jq .name package.json",
+		"git diff HEAD~1 -- README.md",
+		"git log --oneline --graph -n 5",
+		"du -sh .",
+		"head -n 5 file",
 	]
 	for (const command of readOnly) {
 		it(`T14 runs ${JSON.stringify(command)}`, () => {
-			expect(classifyCommand(command).readOnly, classifyCommand(command).reason).to.equal(true)
+			expect(
+				classifyCommand(command, base.shellEnvironment).readOnly,
+				classifyCommand(command, base.shellEnvironment).reason,
+			).to.equal(true)
 			expect(decide({ command }).action).to.equal("run")
 		})
 	}
@@ -140,10 +146,14 @@ describe("commandPolicy: host-side read-only classification (T14)", () => {
 		"wget https://example.com",
 		"find . -delete",
 		"find . -exec rm {} ;",
+		"find . -ok rm x",
 		"find . -fprint out",
 		"sort -o out in",
 		"sort -uo out in",
-		"rg --pre cat foo",
+		"sort in",
+		"rg foo",
+		"jq .name package.json",
+		"git -C sub status",
 		"tail -f app.log",
 		"git commit -m x",
 		"git push",
@@ -169,7 +179,7 @@ describe("commandPolicy: host-side read-only classification (T14)", () => {
 	]
 	for (const command of notReadOnly) {
 		it(`T14 asks for ${JSON.stringify(command)}`, () => {
-			expect(classifyCommand(command).readOnly, command).to.equal(false)
+			expect(classifyCommand(command, base.shellEnvironment).readOnly, command).to.equal(false)
 			expect(decide({ command }).action, command).to.equal("ask")
 		})
 	}
