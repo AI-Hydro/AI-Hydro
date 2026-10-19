@@ -3,6 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import type { Controller } from "@core/controller"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import axios from "axios"
 import * as vscode from "vscode"
 import { AiHydroEnv } from "@/config"
@@ -13,7 +14,6 @@ import { geeCommandSchema, geePreviewChirpsPayloadSchema, geeStatusPayloadSchema
 import type { GeeProjectInfo, GeeStatusResult } from "@/services/gee/types"
 import { handleHydroMapCommand } from "@/services/hydrology/handleHydroMapCommand"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 function expandHomePath(filePath: string): string {
 	if (filePath === "~") {

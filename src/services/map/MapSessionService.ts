@@ -1,3 +1,4 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { MapEvent, MapLayer, MapRoi, MapSessionState, MapSessionView } from "@shared/proto/cline/map"
 import { MapRoi as MapRoiProto, MapSessionState as MapSessionStateProto } from "@shared/proto/cline/map"
 import { execFile } from "child_process"
@@ -5,7 +6,6 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import { promisify } from "util"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const MAP_SESSION_FILE = aihydroPath("map_session.json")
 const OUTBOUND_EVENTS_DIR = aihydroPath("map_events", "outbound")

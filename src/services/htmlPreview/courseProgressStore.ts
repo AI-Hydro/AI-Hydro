@@ -14,10 +14,11 @@
  * Phase C (agent integration) will expose this same surface via MCP tools so
  * the agent can read student progress without going through the webview.
  */
+
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { KeyedAsyncQueue } from "./keyedAsyncQueue"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const PROGRESS_DIR = aihydroPath("course_progress")
 const mutationQueue = new KeyedAsyncQueue()

@@ -19,11 +19,11 @@
 
 import type { Controller } from "@core/controller"
 import { buildInundation3dLayerFromPath, hydrateInundation3dLayers } from "@core/map/inundation3dLayer"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const MAP_EVENTS_DIR = aihydroPath("map_events")
 const POLL_INTERVAL_MS = 200

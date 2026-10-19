@@ -1,8 +1,8 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { MapLayer } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 export const MAP_LAYER_CATALOG_FILE = aihydroPath("map_layer_catalog.json")
 const MAP_LAYER_GEOJSON_CACHE_DIR = aihydroPath("map_layer_geojson_cache")

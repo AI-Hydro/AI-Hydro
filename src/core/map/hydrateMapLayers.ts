@@ -15,13 +15,13 @@
  */
 
 import type { Controller } from "@core/controller"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 import { buildInundation3dLayerFromPath } from "./inundation3dLayer"
 import { type MapLayerCatalogEntry, readMapLayerCatalog } from "./mapLayerCatalog"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 async function readFileToBase64(filePath: string): Promise<string | null> {
 	try {

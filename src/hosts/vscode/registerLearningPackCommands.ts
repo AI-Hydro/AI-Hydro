@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { prerelease } from "semver"
 import * as vscode from "vscode"
 import type { Controller } from "@/core/controller"
@@ -30,7 +31,6 @@ import {
 import { loadTrustedPublishers, removeTrustedPublisher } from "@/services/learning-pack/trustStore"
 import { isInTestMode } from "@/services/test/TestMode"
 import { PreviewHtmlRequest } from "@/shared/proto/cline/html_preview"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 export interface LearningPackCommandIds {
 	readonly install: string

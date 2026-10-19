@@ -31,6 +31,7 @@ import { PreviewHtmlRequest } from "./shared/proto/cline/html_preview"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
 
 import path from "node:path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { ExtensionContext } from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-grpc-client"
@@ -54,7 +55,6 @@ import { telemetryService } from "./services/telemetry"
 import { SharedUriHandler } from "./services/uri/SharedUriHandler"
 import { ShowMessageType } from "./shared/proto/host/window"
 import { fileExistsAtPath } from "./utils/fs"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const MAP_FILE_EXTENSIONS = new Set([".geojson", ".json", ".topojson", ".kml", ".kmz", ".gpx", ".zip", ".tif", ".tiff", ".csv"])
 const HTML_FILE_EXTENSIONS = new Set([".html", ".htm"])

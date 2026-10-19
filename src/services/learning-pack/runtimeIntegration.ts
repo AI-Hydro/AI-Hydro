@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { type InstalledLearningPackVersion, loadLearningPackRegistry } from "./learningPackLifecycle"
 import { learningPackStoragePaths } from "./lifecycleStorage"
 import type { LearningPackCourse, LearningPackEdition } from "./types"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 export const LEARNING_PACK_ARTIFACT_KIND = "learning-pack-v1"
 

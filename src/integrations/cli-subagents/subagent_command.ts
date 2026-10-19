@@ -1,7 +1,7 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { randomBytes } from "crypto"
 import * as fs from "fs"
 import * as path from "path"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 /**
  * Pattern to match simplified AI-Hydro CLI syntax: aihydro "prompt" or aihydro 'prompt'

@@ -1,7 +1,7 @@
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
+import type { BoundStudyInfo } from "@shared/ExtensionMessage"
 import fs from "fs"
 import path from "path"
-import type { BoundStudyInfo } from "@shared/ExtensionMessage"
-import { aihydroHome } from "@shared/aihydro/aihydroHome"
 
 // Mirrors the Python session layer (ai_hydro.session.chat_binding /
 // ai_hydro.session.store): the binding map and per-study files live under

@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import { LedgerContextProvider } from "@/context/LedgerContext"
 import { APPROVED_TOKEN } from "../../../design/evidenceStates"
@@ -148,7 +148,10 @@ describe("Evidence Board: green means approved", () => {
 			["approved, empty trust root", { ...GOOD_STAMP, approvalTrustRoot: "" }],
 			["approved, empty approval digest", { ...GOOD_STAMP, approvalForRevisionDigest: "" }],
 			["approved, empty claim digest", { ...GOOD_STAMP, revisionDigest: "" }],
-			["approved, user-trust channel", { ...GOOD_STAMP, approvalChannel: "ssh_sig_user_trust", approvalTrustRoot: "user_writable" }],
+			[
+				"approved, user-trust channel",
+				{ ...GOOD_STAMP, approvalChannel: "ssh_sig_user_trust", approvalTrustRoot: "user_writable" },
+			],
 			["approved, same-user CLI", { ...GOOD_STAMP, approvalChannel: "cli_same_user" }],
 			["approved, opt-out policy", { ...GOOD_STAMP, approvalPolicy: "unsigned_opt_out" }],
 			["approved, other revision", { ...GOOD_STAMP, approvalForRevisionDigest: "sha256:old" }],

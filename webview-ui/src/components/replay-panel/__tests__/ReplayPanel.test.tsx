@@ -139,7 +139,9 @@ describe("Replay: green means approved", () => {
 		const view = render(<ReplayPanel />)
 		act(() =>
 			window.dispatchEvent(
-				new MessageEvent("message", { data: { type: "replay_data", session_id: "synthetic", source: "session", entries } }),
+				new MessageEvent("message", {
+					data: { type: "replay_data", session_id: "synthetic", source: "session", entries },
+				}),
 			),
 		)
 		return view
@@ -210,7 +212,10 @@ describe("Replay: arrow keys are scoped to the run timeline", () => {
 
 	it("leaves arrow keys alone in the session input and the filter input", () => {
 		showTwoRuns()
-		for (const input of [screen.getByPlaceholderText("session_id or capsule path"), screen.getByPlaceholderText(/Filter by tool/)]) {
+		for (const input of [
+			screen.getByPlaceholderText("session_id or capsule path"),
+			screen.getByPlaceholderText(/Filter by tool/),
+		]) {
 			const notPrevented = fireEvent.keyDown(input, { key: "ArrowDown" })
 			expect(notPrevented).toBe(true) // not prevented: the input keeps its caret / datalist behaviour
 		}

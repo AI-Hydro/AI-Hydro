@@ -7,10 +7,10 @@
  */
 
 import type { Controller } from "@core/controller"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { ClaimRecord, ClaimUpdate } from "@shared/proto/cline/ledger"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const ledgerEventsDir = () => aihydroPath("ledger_events")
 const POLL_INTERVAL_MS = 250

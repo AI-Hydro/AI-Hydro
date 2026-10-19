@@ -1,7 +1,7 @@
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs"
 import * as path from "path"
 import type { ResearchSnapshot, SnapshotReader } from "./researchSnapshot"
-import { aihydroHome } from "@shared/aihydro/aihydroHome"
 
 export interface EvidenceSpanSurface {
 	sourceType: string

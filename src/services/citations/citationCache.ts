@@ -8,9 +8,9 @@
  * to `lookupCitation`.  Manual invalidation: delete the file.
  */
 
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const CACHE_DIR = aihydroPath("citations")
 const TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days

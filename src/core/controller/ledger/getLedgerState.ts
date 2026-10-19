@@ -1,10 +1,10 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { GetLedgerStateRequest, LedgerStateResponse } from "@shared/proto/cline/ledger"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { readResearchSnapshot } from "@/integrations/aihydro-session/researchSnapshot"
 import { loadClaimSurface } from "@/integrations/aihydro-session/sessionSurfaces"
 import type { Controller } from ".."
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 async function mostRecentSessionId(): Promise<string> {
 	// Resolved per call so AIHYDRO_HOME is honoured (WP-0).

@@ -19,6 +19,7 @@
  * Phase 4: comment store integration for `user.comment` events.
  */
 
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
 import * as path from "path"
 import {
@@ -26,7 +27,6 @@ import {
 	updateComment as commentStoreUpdate,
 	type TextAnchor,
 } from "@/services/comments/commentStore"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const MAX_EVENTS = 500
 const MAX_DISK_EVENTS_PER_MODULE = 200

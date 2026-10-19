@@ -1,5 +1,6 @@
 import { ensureSettingsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { execa } from "@packages/execa"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { ShowMessageType } from "@shared/proto/host/window"
 import { ExecuteCommandInTerminalRequest } from "@shared/proto/host/workspace"
 import { fileExistsAtPath } from "@utils/fs"
@@ -8,7 +9,6 @@ import os from "os"
 import * as path from "path"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const SERVER_NAME = "ai-hydro"
 const CACHE_DIR = aihydroPath("cache")

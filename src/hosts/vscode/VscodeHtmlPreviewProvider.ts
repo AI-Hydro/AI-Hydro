@@ -1,5 +1,6 @@
 import type { Controller } from "@core/controller"
 import { handlePreviewAgentTaskMessage } from "@core/htmlPreview/handlePreviewAgentTask"
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import * as vscode from "vscode"
 import type { ArtifactRef } from "@/services/artifact-preview/ArtifactPreviewService"
 import { buildPreviewCsp } from "@/services/artifact-preview/buildPreviewCsp"
@@ -18,7 +19,6 @@ import {
 	learningPackProgressKey,
 	parseInstalledLearningPackScope,
 } from "@/services/learning-pack/runtimeIntegration"
-import { aihydroHome } from "@shared/aihydro/aihydroHome"
 
 /**
  * Owns the single AI-Hydro HTML Preview webview panel.

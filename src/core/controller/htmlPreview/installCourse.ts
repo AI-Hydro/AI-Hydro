@@ -1,3 +1,4 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { InstallCourseRequest, InstallCourseResponse } from "@shared/proto/cline/html_preview"
 import { InstallCourseResponse as InstallCourseResponseProto } from "@shared/proto/cline/html_preview"
 import axios from "axios"
@@ -13,7 +14,6 @@ import {
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
 import type { Controller } from "../index"
 import { assertTrustedMarketplaceUrl } from "./marketplaceUrlAllowlist"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 /**
  * Install a whole course: fetch the course.json manifest, download every member

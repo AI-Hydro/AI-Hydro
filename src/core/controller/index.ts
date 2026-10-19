@@ -22,6 +22,7 @@ import { shouldInlineHtml } from "@services/artifact-preview/inlineHtmlPolicy"
 import { geoFormatConverter } from "@services/geo/GeoFormatConverter"
 import { GeoConversionError } from "@services/geo/types"
 import { McpHub } from "@services/mcp/McpHub"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { ApiProvider, ModelInfo } from "@shared/api"
 import { ChatContent } from "@shared/ChatContent"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
@@ -73,7 +74,6 @@ import { appendAiHydroStealthModels } from "./models/refreshOpenRouterModels"
 import { checkCliInstallation } from "./state/checkCliInstallation"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts

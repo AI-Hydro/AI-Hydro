@@ -1,10 +1,10 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { Empty } from "@shared/proto/cline/common"
 import type { DeleteSkillRequest } from "@shared/proto/cline/skills"
 import { SkillSource } from "@shared/proto/cline/skills"
 import * as fs from "fs/promises"
 import type { Controller } from "../index"
 import { resolveSkillDir } from "./skillPaths"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 export async function deleteSkill(_controller: Controller, request: DeleteSkillRequest): Promise<Empty> {
 	const { skillId, source } = request

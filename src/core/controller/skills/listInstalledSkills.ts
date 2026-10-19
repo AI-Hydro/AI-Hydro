@@ -1,9 +1,9 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { EmptyRequest } from "@shared/proto/cline/common"
 import { SkillCatalog, SkillItem, SkillSource } from "@shared/proto/cline/skills"
 import * as fs from "fs/promises"
 import * as path from "path"
 import type { Controller } from "../index"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 function sourceFromString(s: string): SkillSource {
 	if (s === "agent_created") return SkillSource.AGENT_CREATED

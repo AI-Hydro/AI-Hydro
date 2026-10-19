@@ -1,3 +1,4 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { InstallModuleRequest, InstallModuleResponse } from "@shared/proto/cline/html_preview"
 import { InstallModuleResponse as InstallModuleResponseProto } from "@shared/proto/cline/html_preview"
 import axios from "axios"
@@ -8,7 +9,6 @@ import type { ModuleRegistryEntry } from "@/services/htmlPreview/moduleRegistry"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
 import type { Controller } from "../index"
 import { assertTrustedMarketplaceUrl } from "./marketplaceUrlAllowlist"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 export async function installModule(controller: Controller, request: InstallModuleRequest): Promise<InstallModuleResponse> {
 	const { moduleId, downloadUrl, title, version } = request

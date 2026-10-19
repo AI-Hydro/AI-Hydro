@@ -17,9 +17,9 @@
  * observe them via `preview_recent_events`.
  */
 
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const COMMENTS_DIR = aihydroPath("comments")
 

@@ -65,7 +65,10 @@ describe("aihydroHome (WP-0: one AI-Hydro home)", () => {
 
 		it("the bound-study reader reads chat_studies.json from AIHYDRO_HOME", () => {
 			fs.mkdirSync(path.join(scratch, "sessions"), { recursive: true })
-			fs.writeFileSync(path.join(scratch, "chat_studies.json"), JSON.stringify({ chat_to_study: { ulid1: "scratch-study" } }))
+			fs.writeFileSync(
+				path.join(scratch, "chat_studies.json"),
+				JSON.stringify({ chat_to_study: { ulid1: "scratch-study" } }),
+			)
 			expect(getBoundStudy("ulid1")?.studyId).to.equal("scratch-study")
 		})
 	})

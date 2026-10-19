@@ -17,7 +17,21 @@ describe("approvalPresentation", () => {
 	})
 
 	it("never gives a recorded check outcome the success token", () => {
-		for (const status of ["pass", "match", "warn", "warning", "advisory", "missing", "fail", "failed", "invalid", "error", "mismatch", "other", ""]) {
+		for (const status of [
+			"pass",
+			"match",
+			"warn",
+			"warning",
+			"advisory",
+			"missing",
+			"fail",
+			"failed",
+			"invalid",
+			"error",
+			"mismatch",
+			"other",
+			"",
+		]) {
 			expect(checkStatusToken(status), status).not.toContain("iconPassed")
 		}
 		expect(checkStatusToken("pass")).toBe(NEUTRAL_TOKEN)

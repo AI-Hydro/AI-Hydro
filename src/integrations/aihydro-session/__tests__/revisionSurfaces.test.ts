@@ -119,7 +119,6 @@ describe("minimal-run filter", () => {
 })
 
 describe("approval-state rendering logic", () => {
-
 	it("renders the pending_refresh sentinel as pending, never approved", () => {
 		const a = describeApproval({ state: "pending_refresh" })
 		expect(a.approved).to.equal(false)

@@ -12,9 +12,10 @@
  * the stored version against the remote catalog version to compute
  * `updateAvailable`; the sha256 enables a future "content changed" check.
  */
+
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 export interface ModuleRegistryEntry {
 	id: string
