@@ -18,7 +18,7 @@ import {
  * Regression tests for the security review of PR 61 (BLOCK, four findings). The lists below are the reviewer's
  * attack scripts (scratchpad atk.ts / atk2.ts), reproduced verbatim, plus the fixes' own cases.
  */
-const ZSH = { platform: "darwin", shell: "/bin/zsh" }
+const ZSH = { platform: "darwin", shell: "/bin/zsh", workspaceTrusted: true }
 const BASE: CommandPolicyInput = {
 	command: "ls",
 	modelRequiresApproval: false,
@@ -222,7 +222,10 @@ describe("B1: the classifier does not parse shell syntax it cannot model", () =>
 	it("still allows the plain read-only commands under bash, zsh, sh and dash", () => {
 		for (const shell of ["/bin/bash", "/bin/zsh", "/bin/sh", "/usr/bin/dash"]) {
 			for (const c of ["ls", "ls -la src", "git status", "cat README.md", "git diff HEAD~1", "cat README.md | head -5"]) {
-				expect(classifyCommand(c, { platform: "linux", shell }).readOnly, `${shell} ${c}`).to.equal(true)
+				expect(
+					classifyCommand(c, { platform: "linux", shell, workspaceTrusted: true }).readOnly,
+					`${shell} ${c}`,
+				).to.equal(true)
 			}
 		}
 	})

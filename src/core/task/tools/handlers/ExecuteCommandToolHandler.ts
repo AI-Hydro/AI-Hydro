@@ -1,6 +1,6 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { commandMentionsProtectedPath, decideCommand } from "@core/task/commandPolicy"
+import { commandMentionsProtectedPath, commandToExecute, decideCommand } from "@core/task/commandPolicy"
 import { getHostProtectedRoots } from "@core/task/protectedRoots"
 import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
 import { isSubagentCommand, SUBAGENT_NO_YOLO_NOTICE } from "@integrations/cli-subagents/subagent_command"
@@ -228,10 +228,10 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 
 		// Execute the command in the correct directory
 		// If executionDir is different from cwd, prepend cd command
-		let finalCommand: string = actualCommand
+		let finalCommand: string = commandToExecute(actualCommand, policy)
 		if (executionDir !== config.cwd) {
 			// Use && to chain commands so they run in sequence
-			finalCommand = `cd "${executionDir}" && ${actualCommand}`
+			finalCommand = `cd "${executionDir}" && ${finalCommand}`
 		}
 
 		const [userRejected, result] = await config.callbacks.executeCommandTool(finalCommand, timeoutSeconds)

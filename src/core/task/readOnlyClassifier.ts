@@ -1,3 +1,5 @@
+import { isWorkspaceTrusted } from "./workspaceTrust"
+
 /**
  * Host-side read-only command classifier (approval redesign AP1, finding B1). Pure and dependency-free.
  *
@@ -19,10 +21,15 @@
  *    fish, csh), nothing is classified read-only: PowerShell aliases (`ls`, `sort`) accept script blocks and
  *    `(cmd)` subexpressions that this parser does not understand.
  *
- * It is a filter, not a sandbox. It knows nothing about hostile files, aliases, PATH entries, or repository
- * configuration that git (or any program) reads: a repository `core.pager` or `core.fsmonitor` set by an earlier
- * write can still make an allowed `git` subcommand run a program. Writes into `.git/` are therefore protected paths
- * (protectedPaths.ts), but a pre-existing hostile repository config is out of scope.
+ * It is a filter, not a sandbox. It knows nothing about hostile files, aliases or PATH entries.
+ *
+ * git is the exception that needed a gate of its own: a pre-existing hostile `.git/config` makes read-only git
+ * commands run programs (`core.fsmonitor`, `filter.<name>.clean`, `diff.external`, `diff.<name>.textconv`). So git
+ * is read-only-classified ONLY in a trusted workspace (`workspaceTrusted`; Restricted Mode and hosts that cannot
+ * report trust ask), and a classified-read-only git run is hardened through the environment
+ * (gitHardening.ts). The hardening neutralises what it can enumerate; `filter.<name>` and `diff.<name>.textconv`
+ * driver names are arbitrary and cannot be enumerated, which is why workspace trust, not the hardening, is the gate.
+ * Writes into `.git/config` and `.git/hooks` are also protected paths (protectedPaths.ts).
  */
 
 export interface CommandClassification {
@@ -35,6 +42,11 @@ export interface ShellEnvironment {
 	platform: string
 	/** $SHELL of the host process; the terminal's shell is assumed to match it. */
 	shell?: string
+	/**
+	 * Whether the workspace is trusted (VS Code Restricted Mode off). Unset means "ask the registered provider",
+	 * and an unregistered provider means not trusted. git is read-only-classified only in a trusted workspace.
+	 */
+	workspaceTrusted?: boolean
 }
 
 const POSIX_SHELLS = new Set(["bash", "zsh", "sh", "dash"])
@@ -303,7 +315,7 @@ function isReadOnlyGit(words: string[]): string | undefined {
 		return "git without a subcommand"
 	}
 	const rest = words.slice(i + 1)
-	const spec = GIT_SUBCOMMANDS[sub]
+	const spec = Object.hasOwn(GIT_SUBCOMMANDS, sub) ? GIT_SUBCOMMANDS[sub] : undefined
 	if (spec) {
 		const bad = flagsAllowed(rest, spec)
 		return bad ? `git ${sub} flag ${bad} is not on the allow-list` : undefined
@@ -451,7 +463,7 @@ function splitPipeline(command: string): string[][] | undefined {
 	return segments
 }
 
-function classifySegment(words: string[]): CommandClassification {
+function classifySegment(words: string[], workspaceTrusted: boolean): CommandClassification {
 	const program = words[0]
 	if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(program)) {
 		return { readOnly: false, reason: "leading variable assignment" }
@@ -460,6 +472,9 @@ function classifySegment(words: string[]): CommandClassification {
 		return { readOnly: false, reason: `program given as a path: ${program}` }
 	}
 	if (program === "git") {
+		if (!workspaceTrusted) {
+			return { readOnly: false, reason: "git only auto-runs in a trusted workspace (a repository config can run programs)" }
+		}
 		const problem = isReadOnlyGit(words)
 		return problem ? { readOnly: false, reason: problem } : { readOnly: true, reason: "read-only" }
 	}
@@ -467,7 +482,8 @@ function classifySegment(words: string[]): CommandClassification {
 		const bad = findAllowed(words.slice(1))
 		return bad ? { readOnly: false, reason: `find ${bad} is not on the allow-list` } : { readOnly: true, reason: "read-only" }
 	}
-	const spec = PROGRAMS[program]
+	// Own properties only: `constructor`, `toString`, `__proto__` and `hasOwnProperty` are not programs.
+	const spec = Object.hasOwn(PROGRAMS, program) ? PROGRAMS[program] : undefined
 	if (spec === undefined) {
 		return { readOnly: false, reason: `'${program}' is not on the read-only allowlist` }
 	}
@@ -506,11 +522,18 @@ export function classifyCommand(command: string, environment: ShellEnvironment =
 			reason: "uses shell syntax the classifier does not model (separators, redirection, expansion, globbing, braces, comments or an unterminated quote)",
 		}
 	}
+	const workspaceTrusted = environment.workspaceTrusted ?? isWorkspaceTrusted()
 	for (const words of segments) {
-		const verdict = classifySegment(words)
+		const verdict = classifySegment(words, workspaceTrusted)
 		if (!verdict.readOnly) {
 			return verdict
 		}
 	}
 	return { readOnly: true, reason: "read-only" }
+}
+
+/** Whether any pipeline segment of an (already classified) command runs git. */
+export function commandRunsGit(command: string): boolean {
+	const segments = splitPipeline(command.trim())
+	return segments?.some((words) => words[0] === "git") ?? false
 }

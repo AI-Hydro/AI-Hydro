@@ -22,7 +22,8 @@
  * plans/approval-redesign-ap1-2026-10-19.md.
  */
 
-import { classifyCommand, type ShellEnvironment } from "./readOnlyClassifier"
+import { classifyCommand, commandRunsGit, type ShellEnvironment } from "./readOnlyClassifier"
+import { hardenGitEnvironment } from "./gitHardening"
 
 // ---------------------------------------------------------------------------------------------------------------
 // 1. Protected commands (hard deny)
@@ -150,6 +151,11 @@ export function mentionsAihydroProgram(raw: string): boolean {
 			if (program === "aihydro") {
 				return true
 			}
+			// A glob that could expand to `aihydro` (`aihydr?`, `aihyd*`, `a*hydro`, `[a]ihydro`). Needs two literal
+			// characters outside bracket classes so a bare `*` or `[abc]*` is not a launch; over-matching only means it asks.
+			if (program.replace(/\[[^\]]*\]|[?*[\]]/g, "").length >= 2 && globCouldMatch(program, "aihydro")) {
+				return true
+			}
 		}
 	}
 	return false
@@ -190,7 +196,7 @@ export function subagentLaunchRefusal(command: string): string | undefined {
 // 2. Read-only classifier: see readOnlyClassifier.ts (re-exported here)
 // ---------------------------------------------------------------------------------------------------------------
 
-export { type CommandClassification, classifyCommand, type ShellEnvironment } from "./readOnlyClassifier"
+export { type CommandClassification, classifyCommand, commandRunsGit, type ShellEnvironment } from "./readOnlyClassifier"
 
 // ---------------------------------------------------------------------------------------------------------------
 // 3. Protected paths mentioned in command text
@@ -264,6 +270,19 @@ export type CommandPolicyResult =
  *  3.  host says read-only and the model did not ask for approval -> run
  *  4.  everything else              -> ask
  */
+/** The `reason` of a run that the host classified read-only. */
+export const HOST_READ_ONLY_REASON = "host classified read-only"
+
+/**
+ * The text to execute for an approved command. A host-classified read-only command that runs git is wrapped so git
+ * sees a hardened environment (see gitHardening.ts); everything else runs unchanged.
+ */
+export function commandToExecute(command: string, decision: CommandPolicyResult): string {
+	return decision.action === "run" && decision.reason === HOST_READ_ONLY_REASON && commandRunsGit(command)
+		? hardenGitEnvironment(command)
+		: command
+}
+
 export function decideCommand(input: CommandPolicyInput): CommandPolicyResult {
 	const texts = [input.command, input.rawCommand ?? ""]
 	const protectedMatch = texts.map(matchProtectedCommand).find((m) => m !== undefined)
@@ -293,5 +312,5 @@ export function decideCommand(input: CommandPolicyInput): CommandPolicyResult {
 		return { action: "ask", reason: "the model asked for approval" }
 	}
 	const verdict = classifyCommand(input.command, input.shellEnvironment)
-	return verdict.readOnly ? { action: "run", reason: "host classified read-only" } : { action: "ask", reason: verdict.reason }
+	return verdict.readOnly ? { action: "run", reason: HOST_READ_ONLY_REASON } : { action: "ask", reason: verdict.reason }
 }

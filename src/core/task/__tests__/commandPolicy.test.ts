@@ -18,7 +18,7 @@ const base: CommandPolicyInput = {
 	subagentsEnabled: true,
 	touchesProtectedPath: false,
 	// Classification is shell-dependent (fail closed outside bash/zsh/sh/dash and on Windows): pin it.
-	shellEnvironment: { platform: "darwin", shell: "/bin/zsh" },
+	shellEnvironment: { platform: "darwin", shell: "/bin/zsh", workspaceTrusted: true },
 }
 const decide = (over: Partial<CommandPolicyInput>) => decideCommand({ ...base, ...over })
 

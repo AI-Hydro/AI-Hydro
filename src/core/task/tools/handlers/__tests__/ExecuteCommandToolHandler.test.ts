@@ -5,6 +5,7 @@ import { resetTelemetryService } from "@/services/telemetry"
 import { TelemetryService } from "@/services/telemetry/TelemetryService"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@/shared/AutoApprovalSettings"
+import { setWorkspaceTrustProvider } from "../../../workspaceTrust"
 import { AutoApprove } from "../../autoApprove"
 import { ExecuteCommandToolHandler } from "../ExecuteCommandToolHandler"
 
@@ -21,6 +22,7 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 		// Classification is shell-dependent (fail closed outside bash/zsh/sh/dash): pin a POSIX shell.
 		savedShell = process.env.SHELL
 		process.env.SHELL = "/bin/zsh"
+		setWorkspaceTrustProvider(() => true)
 		sandbox = sinon.createSandbox()
 		// telemetryService is a lazy proxy that builds the real service on first use; give it an inert one.
 		resetTelemetryService()
@@ -30,6 +32,7 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 		} as unknown as TelemetryService)
 	})
 	afterEach(() => {
+		setWorkspaceTrustProvider(undefined)
 		if (savedShell === undefined) {
 			delete process.env.SHELL
 		} else {
@@ -114,7 +117,14 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 		for (const command of ["ls", "git status", "cat README.md"]) {
 			const { calls } = await run(command, false)
 			expect(calls.ask, command).to.have.length(0)
-			expect(calls.executed, command).to.deep.equal([command])
+			// git runs hardened (workspace trust is the gate, the environment is the second layer); others as written
+			if (command.startsWith("git")) {
+				expect(calls.executed, command).to.have.length(1)
+				expect(calls.executed[0], command).to.include("GIT_CONFIG_COUNT=")
+				expect(calls.executed[0], command).to.include(command)
+			} else {
+				expect(calls.executed, command).to.deep.equal([command])
+			}
 		}
 	})
 
