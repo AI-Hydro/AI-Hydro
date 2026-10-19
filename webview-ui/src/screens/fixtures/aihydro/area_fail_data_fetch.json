@@ -1,0 +1,141 @@
+{
+	"args": {
+		"variable": "streamflow",
+		"geometry": "<geojson>",
+		"start": "2019-01-01",
+		"end": "2019-12-31",
+		"gauge_id": "01109000",
+		"session_id": "e2e-proof-3-01013500-20261017T171951Z"
+	},
+	"result": {
+		"variable": "streamflow",
+		"product": "NWIS_STREAMFLOW",
+		"source": "direct_api",
+		"units": "m3/s",
+		"timestep": "daily",
+		"license": "public domain (USGS)",
+		"citation": "U.S. Geological Survey (2026). USGS Water Data APIs, OGC API collection 'daily' (daily mean discharge, parameter 00060, statistic 00003). https://api.waterdata.usgs.gov/ogcapi/v1. Data from USGS Water Data for the Nation, https://waterdata.usgs.gov. The retrieval time and response hashes are in result.upstream.",
+		"site_resolution": {
+			"site": "USGS-01109000",
+			"method": "explicit_id",
+			"distance_m": null,
+			"comid": null,
+			"candidates": [
+				"USGS-01109000"
+			],
+			"alias_verified": null,
+			"comid_outlet": null,
+			"outlet_offset_m": null,
+			"direction": null,
+			"distance_basis": null,
+			"A_gauge_km2": 112.14648517754878,
+			"A_gauge_contributing_km2": 112.14648517754878,
+			"A_basin_km2": 2252.4360061596863,
+			"area_basis": "request_geometry",
+			"area_ratio": 0.04978897729873981,
+			"log_area_ratio": -2.999961658833441,
+			"area_check": "fail",
+			"area_units_note": "A_gauge converted as square miles x 2.589988110336; the Water Data API body does not state the unit of drainage_area (USGS documents square miles). Cross-check: legacy site rdb drain_area_va = 870 for 01013500 equals the API drainage_area 870.0",
+			"thresholds": {
+				"max_distance_m": 5000.0,
+				"max_abs_log_area_ratio": 0.09531017980432493,
+				"outlet_offset_max_m": 200.0,
+				"query_distance_km": 10
+			},
+			"thresholds_overridden": false,
+			"rule_version": "ADR-003-A2-2026-10-17",
+			"warnings": [
+				"area_check=fail: gauge total area 112.15 km2 vs request geometry 2252.44 km2 (ratio 0.050); the explicit identity assertion was honoured"
+			],
+			"upstream": {
+				"backend": "usgs_waterdata",
+				"api_version": "ogcapi/v1",
+				"request_urls": [
+					"https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?id=USGS-01109000&f=json"
+				],
+				"retrieved_at": "2026-10-18T08:24:10Z",
+				"response_sha256": [
+					"26d4a4e863b6c76ce2d788d5a9d267f6514335a01e54a5c4462079b2a8f7b784"
+				],
+				"content_sha256": [
+					"6a07ab8979d94d8b98cdc3aae848e5dd1359e89dcb3fc2a6559702fc13e429bd"
+				],
+				"volatile_envelope_keys": [
+					"timeStamp",
+					"links"
+				],
+				"last_modified": [
+					null
+				],
+				"etag": [
+					null
+				],
+				"date": [
+					"Sat, 17 Oct 2026 09:58:14 GMT"
+				],
+				"x_build_version": [
+					"1.10.3-7de16842"
+				],
+				"feature_last_modified_max": null,
+				"features_sha256": null,
+				"features_sorted_sha256": null,
+				"values_sha256": null,
+				"n_pages": 1
+			},
+			"site_name": "WADING RIVER NEAR NORTON, MA"
+		},
+		"quality": {
+			"n_rows": 365,
+			"approval_counts": {
+				"Approved": 365
+			},
+			"qualifier_counts": {
+				"ESTIMATED": 11
+			},
+			"qualifiers_other": {},
+			"n_null_values": 0,
+			"n_negative": 0,
+			"provisional_fraction": 0.0,
+			"provisional_first": null,
+			"provisional_last": null,
+			"n_expected": 365,
+			"n_missing": 0
+		},
+		"upstream": {
+			"backend": "usgs_waterdata",
+			"api_version": "ogcapi/v1",
+			"request_urls": [
+				"https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?monitoring_location_id=USGS-01109000&parameter_code=00060&statistic_id=00003&time=2019-01-01%2F2019-12-31&limit=10000&f=json"
+			],
+			"retrieved_at": "2026-10-18T09:31:54Z",
+			"response_sha256": [
+				"2fb463e0905a93cdb041a0a1bb180fde918d30bc1677ada65fbe17d6e3359129"
+			],
+			"content_sha256": [
+				"15cf3b96c3c4a9bb8e586ae9470972c3c50c572f45275b7506ccfc2256c7f524"
+			],
+			"volatile_envelope_keys": [
+				"timeStamp",
+				"links"
+			],
+			"last_modified": [
+				null
+			],
+			"etag": [
+				null
+			],
+			"date": [
+				"Sat, 17 Oct 2026 09:57:17 GMT"
+			],
+			"x_build_version": [
+				"1.10.3-7de16842"
+			],
+			"feature_last_modified_max": "2025-12-31T13:53:22.426929+00:00",
+			"features_sha256": "7646a6fb8b6e9ba6450ee10aebf4106e93fd92b462946c0b192c59c191b981cd",
+			"features_sorted_sha256": "e169662be50fcda8e790779e155885a0aed8cd34260448d10afece77ce99c519",
+			"values_sha256": "012864d862bc53a18cdbd8dab7eee5bee3aedc12feaca13958b8d809f0fcbfdd",
+			"n_pages": 1
+		},
+		"_run_id": "fx-run-0102"
+	}
+}

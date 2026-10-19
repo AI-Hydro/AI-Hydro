@@ -1,0 +1,87 @@
+/* Science tool-call card. Tokens only (see design/tokens.css); no green: only the `approved` evidence state may use it. */
+.aih-toolcard {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-2);
+	margin-top: var(--aih-space-2);
+	padding: var(--aih-space-2) var(--aih-space-3);
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-md);
+	background: var(--vscode-textCodeBlock-background, var(--aih-surface-raised));
+	color: var(--aih-fg);
+	font-size: var(--aih-text-label);
+	min-width: 0;
+}
+.aih-toolcard--stopped {
+	border-color: var(--vscode-errorForeground, var(--aih-border));
+	border-style: dashed;
+}
+.aih-toolcard__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--aih-space-1) var(--aih-space-3);
+}
+.aih-toolcard__tool {
+	font-family: var(--vscode-editor-font-family, monospace);
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+.aih-toolcard__section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-1);
+}
+.aih-toolcard__label {
+	color: var(--aih-fg-muted);
+	font-size: var(--aih-text-caption);
+}
+.aih-toolcard__chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--aih-space-2);
+}
+.aih-toolcard__warning {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--aih-space-2);
+	padding: var(--aih-space-1) var(--aih-space-2);
+	border: 2px double var(--vscode-editorWarning-foreground, var(--aih-border));
+	border-radius: var(--aih-radius-sm);
+}
+.aih-toolcard__warning .codicon {
+	color: var(--vscode-editorWarning-foreground, currentColor);
+	margin-top: 2px;
+}
+.aih-toolcard__list {
+	margin: 0;
+	padding-left: var(--aih-space-4);
+}
+.aih-toolcard__code {
+	margin: 0;
+	padding: var(--aih-space-1) var(--aih-space-2);
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-sm);
+	font-family: var(--vscode-editor-font-family, monospace);
+	font-size: var(--aih-text-caption);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.aih-toolcard__raw {
+	max-height: 280px;
+	overflow: auto;
+}
+.aih-toolcard__image {
+	max-width: 100%;
+	height: auto;
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-sm);
+}
+.aih-toolcard__runlink {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--aih-space-2);
+}

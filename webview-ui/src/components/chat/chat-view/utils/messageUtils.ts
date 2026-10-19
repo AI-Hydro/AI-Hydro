@@ -2,6 +2,7 @@
  * Utility functions for message filtering, grouping, and manipulation
  */
 
+import { getPairing } from "@shared/aihydro/toolCallPresenter"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { AiHydroMessage, AiHydroSayBrowserAction } from "@shared/ExtensionMessage"
@@ -17,7 +18,7 @@ export function processMessages(messages: AiHydroMessage[]): AiHydroMessage[] {
  * Filter messages that should be visible in the chat
  */
 export function filterVisibleMessages(messages: AiHydroMessage[]): AiHydroMessage[] {
-	return messages.filter((message) => {
+	return messages.filter((message, index) => {
 		switch (message.ask) {
 			case "completion_result":
 				// don't show a chat row for a completion_result ask without text. This specific type of message only occurs if AI-Hydro wants to execute a command as part of its completion result, in which case we interject the completion_result tool with the execute_command tool.
@@ -44,6 +45,12 @@ export function filterVisibleMessages(messages: AiHydroMessage[]): AiHydroMessag
 				break
 			case "mcp_server_request_started":
 				return false
+			case "mcp_server_response":
+				// A first-party science call shows its result inside the tool-call card, not as a raw JSON row.
+				if (getPairing(messages).hiddenResponses.has(index)) {
+					return false
+				}
+				break
 		}
 		return true
 	})

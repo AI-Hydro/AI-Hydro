@@ -1,0 +1,325 @@
+{
+	"args": {
+		"variable": "streamflow",
+		"geometry": "<geojson>",
+		"start": "1989-10-01",
+		"end": "2009-09-30",
+		"gauge_id": "01013500",
+		"session_id": "e2e-proof-3-01013500-20261017T171951Z"
+	},
+	"result": {
+		"variable": "streamflow",
+		"product": "NWIS_STREAMFLOW",
+		"source": "direct_api",
+		"product_identity": {
+			"product_id": "NWIS_STREAMFLOW",
+			"source": "direct_api",
+			"source_dataset_id": "usgs_waterdata_daily",
+			"dataset_version": "",
+			"variant": "",
+			"temporal_derivation": "",
+			"input_dependencies": [],
+			"units": "m3/s",
+			"units_spec": "m3/s",
+			"units_declared": "m3/s",
+			"timestep": "daily",
+			"resolution_m": 0,
+			"common_pitfalls": [
+				"CONUS gauges only — for global streamflow use GRDC_STREAMFLOW (Phase 4).",
+				"The gauge is never guessed. Pass a USGS site number as the geometry, or a basin polygon together with its outlet (the gauge is then identified by distance along the river AND drainage-area agreement, ADR-003 amendment A2). A polygon without an outlet refuses GAUGE_REQUIRED; no candidate / several candidates refuse GAUGE_NOT_FOUND / GAUGE_AMBIGUOUS. These refusals are terminal: the request is never answered with modelled flow instead.",
+				"Every row keeps USGS's approval_status (Approved/Provisional) and qualifier. Provisional values are subject to revision; result.quality.provisional_fraction says how much of the series is provisional, and cached provisional data expires (AIHYDRO_DATA_PROVISIONAL_TTL_DAYS, default 7).",
+				"Qualifiers other than ESTIMATED (for example FORCEINTERPOLATION) are kept as USGS reports them.",
+				"Units are m³/s (converted from ft³/s with 0.028316846592); divide by watershed area × 86400 for mm/day.",
+				"Without an API key USGS rate-limits requests (HTTP 429 -> USGS_RATE_LIMITED); register a free api.data.gov key and export API_USGS_PAT."
+			],
+			"identity_basis": "configured_product",
+			"asset_revision_verified": false
+		},
+		"units": "m3/s",
+		"units_spec": "m3/s",
+		"units_declared": "m3/s",
+		"timestep": "daily",
+		"resolution_m": 0.0,
+		"common_pitfalls": [
+			"CONUS gauges only — for global streamflow use GRDC_STREAMFLOW (Phase 4).",
+			"The gauge is never guessed. Pass a USGS site number as the geometry, or a basin polygon together with its outlet (the gauge is then identified by distance along the river AND drainage-area agreement, ADR-003 amendment A2). A polygon without an outlet refuses GAUGE_REQUIRED; no candidate / several candidates refuse GAUGE_NOT_FOUND / GAUGE_AMBIGUOUS. These refusals are terminal: the request is never answered with modelled flow instead.",
+			"Every row keeps USGS's approval_status (Approved/Provisional) and qualifier. Provisional values are subject to revision; result.quality.provisional_fraction says how much of the series is provisional, and cached provisional data expires (AIHYDRO_DATA_PROVISIONAL_TTL_DAYS, default 7).",
+			"Qualifiers other than ESTIMATED (for example FORCEINTERPOLATION) are kept as USGS reports them.",
+			"Units are m³/s (converted from ft³/s with 0.028316846592); divide by watershed area × 86400 for mm/day.",
+			"Without an API key USGS rate-limits requests (HTTP 429 -> USGS_RATE_LIMITED); register a free api.data.gov key and export API_USGS_PAT."
+		],
+		"coverage_start": "1989-10-01",
+		"coverage_end": "2009-09-30",
+		"coverage_complete": true,
+		"days_missing_head": 0,
+		"days_missing_tail": 0,
+		"fallback_history": [
+			{
+				"product": "NWIS_STREAMFLOW",
+				"source": "direct_api",
+				"outcome": "served",
+				"reason": ""
+			}
+		],
+		"cache_hit": false,
+		"cache_key": "e48525217f738b78c83115ce",
+		"fetched_at": "2026-10-17T17:20:03.810603+00:00",
+		"license": "public domain (USGS)",
+		"citation": "U.S. Geological Survey (2026). USGS Water Data APIs, OGC API collection 'daily' (daily mean discharge, parameter 00060, statistic 00003). https://api.waterdata.usgs.gov/ogcapi/v1. Data from USGS Water Data for the Nation, https://waterdata.usgs.gov. The retrieval time and response hashes are in result.upstream.",
+		"spatial_support": "gauge_point",
+		"aggregation_actual": "gauge_point_value",
+		"site_resolution": {
+			"site": "USGS-01013500",
+			"method": "explicit_id",
+			"distance_m": null,
+			"comid": null,
+			"candidates": [
+				"USGS-01013500"
+			],
+			"alias_verified": null,
+			"comid_outlet": null,
+			"outlet_offset_m": null,
+			"direction": null,
+			"distance_basis": null,
+			"A_gauge_km2": 2253.2896559923197,
+			"A_gauge_contributing_km2": 2253.2896559923197,
+			"A_basin_km2": 2252.4360061596863,
+			"area_basis": "request_geometry",
+			"area_ratio": 1.0003789896051647,
+			"log_area_ratio": 0.00037891780674427814,
+			"area_check": "pass",
+			"area_units_note": "A_gauge converted as square miles x 2.589988110336; the Water Data API body does not state the unit of drainage_area (USGS documents square miles). Cross-check: legacy site rdb drain_area_va = 870 for 01013500 equals the API drainage_area 870.0",
+			"thresholds": {
+				"max_distance_m": 5000.0,
+				"max_abs_log_area_ratio": 0.09531017980432493,
+				"outlet_offset_max_m": 200.0,
+				"query_distance_km": 10
+			},
+			"thresholds_overridden": false,
+			"rule_version": "ADR-003-A2-2026-10-17",
+			"warnings": [],
+			"upstream": {
+				"backend": "usgs_waterdata",
+				"api_version": "ogcapi/v1",
+				"request_urls": [
+					"https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items?id=USGS-01013500&f=json"
+				],
+				"retrieved_at": "2026-10-17T17:19:55Z",
+				"response_sha256": [
+					"7eab38c25f8c50d7eb6cdb46b56e1bf93d8daa9f55f8eb6298db96ea3e912ef4"
+				],
+				"last_modified": [
+					null
+				],
+				"etag": [
+					null
+				],
+				"date": [
+					"Sat, 17 Oct 2026 17:19:58 GMT"
+				],
+				"x_build_version": [
+					"1.10.3-7de16842"
+				],
+				"feature_last_modified_max": null,
+				"n_pages": 1
+			},
+			"site_name": "Fish River near Fort Kent, Maine"
+		},
+		"quality": {
+			"n_rows": 7305,
+			"approval_counts": {
+				"Approved": 7305
+			},
+			"qualifier_counts": {
+				"ESTIMATED": 2100
+			},
+			"qualifiers_other": {},
+			"n_null_values": 0,
+			"n_negative": 0,
+			"provisional_fraction": 0.0,
+			"provisional_first": null,
+			"provisional_last": null,
+			"n_expected": 7305,
+			"n_missing": 0,
+			"units_native": "ft^3/s",
+			"time_series_id": "aa8ac20eb72d4fa58ea9c0eaf61e10ee",
+			"site_id": "USGS-01013500",
+			"backend": "usgs_waterdata"
+		},
+		"upstream": {
+			"backend": "usgs_waterdata",
+			"api_version": "ogcapi/v1",
+			"request_urls": [
+				"https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?monitoring_location_id=USGS-01013500&parameter_code=00060&statistic_id=00003&time=1989-10-01%2F2009-09-30&limit=10000&f=json"
+			],
+			"retrieved_at": "2026-10-17T17:19:59Z",
+			"response_sha256": [
+				"694da4cb6f6e09b395450456cdb29d5346e52edb3a5297dc243df08f2b9f957b"
+			],
+			"last_modified": [
+				null
+			],
+			"etag": [
+				null
+			],
+			"date": [
+				"Sat, 17 Oct 2026 17:20:02 GMT"
+			],
+			"x_build_version": [
+				"1.10.3-7de16842"
+			],
+			"feature_last_modified_max": "2025-09-29T19:25:18.407229+00:00",
+			"n_pages": 1,
+			"data_sha256": "0f5ad62729db08b422ee6ad1cd28f3424dbc1728224bff2d782d17d4efad2f44"
+		},
+		"next_steps": [
+			{
+				"tool": "extract_hydrological_signatures",
+				"rationale": "Streamflow ready — compute flow signatures."
+			},
+			{
+				"tool": "train_hydro_model",
+				"rationale": "Streamflow + forcing → calibrate a rainfall-runoff model."
+			},
+			{
+				"tool": "data_describe_product",
+				"rationale": "Include NWIS citation before publishing."
+			}
+		],
+		"notes": [
+			"Values are a single gauge point series from 'NWIS_STREAMFLOW', NOT an areal average over the geometry (spatial_support='gauge_point')."
+		],
+		"data": {
+			"type": "DataFrame",
+			"rows": 7305,
+			"columns": [
+				"date",
+				"streamflow",
+				"value_native",
+				"negative_flag",
+				"approval_status",
+				"approval_code",
+				"qualifier",
+				"qualifier_code"
+			],
+			"head": [
+				{
+					"date": "1989-10-01T00:00:00",
+					"streamflow": 8.4950539776,
+					"value_native": 300.0,
+					"negative_flag": false,
+					"approval_status": "Approved",
+					"approval_code": "A",
+					"qualifier": "",
+					"qualifier_code": ""
+				},
+				{
+					"date": "1989-10-02T00:00:00",
+					"streamflow": 8.410103437824,
+					"value_native": 297.0,
+					"negative_flag": false,
+					"approval_status": "Approved",
+					"approval_code": "A",
+					"qualifier": "",
+					"qualifier_code": ""
+				},
+				{
+					"date": "1989-10-03T00:00:00",
+					"streamflow": 8.863172983296,
+					"value_native": 313.0,
+					"negative_flag": false,
+					"approval_status": "Approved",
+					"approval_code": "A",
+					"qualifier": "",
+					"qualifier_code": ""
+				},
+				{
+					"date": "1989-10-04T00:00:00",
+					"streamflow": 8.381786591232,
+					"value_native": 296.0,
+					"negative_flag": false,
+					"approval_status": "Approved",
+					"approval_code": "A",
+					"qualifier": "",
+					"qualifier_code": ""
+				},
+				{
+					"date": "1989-10-05T00:00:00",
+					"streamflow": 8.098618125312,
+					"value_native": 286.0,
+					"negative_flag": false,
+					"approval_status": "Approved",
+					"approval_code": "A",
+					"qualifier": "",
+					"qualifier_code": ""
+				}
+			],
+			"series_retained": true,
+			"retained_series": {
+				"value_column": "streamflow",
+				"n": 7305,
+				"n_finite": 7305,
+				"first_date": "1989-10-01",
+				"last_date": "2009-09-30",
+				"file_digest": "sha256:16908feb7ed7db9f9012347cfafcf4f60f733816127fc47bc60566f3e9efe4a0",
+				"format": "aihydro.series/1"
+			}
+		},
+		"streamflow_slot": {
+			"slot": "streamflow",
+			"gauge_id": "01013500",
+			"data_file": "<elided: local path>",
+			"n_values": 7305,
+			"qualification_codes_n": 7305,
+			"qualifiers_other": {}
+		},
+		"quality_flags": [
+			{
+				"validator": "unit_consistency",
+				"status": "pass",
+				"severity": null,
+				"message": "Units consistent: m3/s.",
+				"recommendation": null,
+				"affected_slots": [
+					"streamflow"
+				],
+				"metadata": {}
+			},
+			{
+				"validator": "record_length",
+				"status": "pass",
+				"severity": null,
+				"message": "Record length is 7305 days (20.0 years) — meets the ≥ 20-year threshold for reliable flood-frequency analysis.",
+				"recommendation": null,
+				"affected_slots": [
+					"streamflow"
+				],
+				"metadata": {
+					"n_days": 7305
+				}
+			},
+			{
+				"validator": "usgs_qualification_codes",
+				"status": "warning",
+				"severity": "low",
+				"message": "Streamflow record contains estimated ('e') values — gaps were filled using regression or nearby gauges.",
+				"recommendation": "Note in any claim that some values are estimated. Estimated records are particularly common during flood peaks.",
+				"affected_slots": [
+					"streamflow"
+				],
+				"metadata": {
+					"quality_flag": "estimated_data",
+					"approval_counts": {
+						"Approved": 7305
+					},
+					"qualifier_counts": {
+						"ESTIMATED": 2100
+					},
+					"qualifiers_other": {},
+					"codes": null
+				}
+			}
+		],
+		"_run_id": "dfetch.20261017.e2eproo.48d4b668"
+	}
+}

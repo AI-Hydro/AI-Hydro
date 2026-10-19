@@ -1,0 +1,37 @@
+{
+	"args": {
+		"bogus": 1
+	},
+	"isError": true,
+	"envelope": {
+		"error": true,
+		"tool": "compute_spectral_index",
+		"message": "The call to 'compute_spectral_index' could not be completed: missing required argument index_name. Fix the arguments using the schema and example below, then retry.",
+		"unexpected_params": [
+			"bogus"
+		],
+		"required": [
+			"index_name"
+		],
+		"input_schema": {
+			"type": "object",
+			"properties": {
+				"index_name": {
+					"type": "string"
+				},
+				"session_id": {
+					"type": "string"
+				}
+			},
+			"required": [
+				"index_name"
+			]
+		},
+		"example_call": {
+			"tool": "compute_spectral_index",
+			"arguments": {
+				"index_name": "<index_name>"
+			}
+		}
+	}
+}

@@ -8,6 +8,7 @@ import {
 	AiHydroSayTool,
 	COMPLETION_RESULT_CHANGES_FLAG,
 } from "@shared/ExtensionMessage"
+import { getPairing, isScienceServer } from "@shared/aihydro/toolCallPresenter"
 import { BooleanRequest, Int64Request, StringRequest } from "@shared/proto/cline/common"
 import { VSCodeBadge, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
@@ -40,6 +41,7 @@ import ErrorRow from "./ErrorRow"
 import NewTaskPreview from "./NewTaskPreview"
 import QuoteButton from "./QuoteButton"
 import ReportBugPreview from "./ReportBugPreview"
+import ScienceToolCard from "./ScienceToolCard"
 import SearchResultsDisplay from "./SearchResultsDisplay"
 import UserMessage from "./UserMessage"
 
@@ -328,7 +330,8 @@ export const ChatRowContent = memo(
 		onSetQuote,
 		onCancelCommand,
 	}: ChatRowContentProps) => {
-		const { mcpServers, mcpMarketplaceCatalog, onRelinquishControl, vscodeTerminalExecutionMode } = useExtensionState()
+		const { mcpServers, mcpMarketplaceCatalog, onRelinquishControl, vscodeTerminalExecutionMode, aihydroMessages } =
+			useExtensionState()
 		const { items: htmlPreviewItems } = useHtmlPreviewContext()
 		const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 		const [quoteButtonState, setQuoteButtonState] = useState<QuoteButtonState>({
@@ -1262,6 +1265,10 @@ export const ChatRowContent = memo(
 		if (message.ask === "use_mcp_server" || message.say === "use_mcp_server") {
 			const useMcpServer = JSON.parse(message.text || "{}") as AiHydroAskUseMcpServer
 			const server = mcpServers.find((server) => server.name === useMcpServer.serverName)
+			// Server-identity switch (never per tool): first-party science calls render as a semantic card.
+			const scienceCall = useMcpServer.type === "use_mcp_tool" && isScienceServer(useMcpServer.serverName)
+			const sciencePair = scienceCall ? getPairing(aihydroMessages ?? []).byCallTs.get(message.ts) : undefined
+			const scienceTool = scienceCall ? server?.tools?.find((tool) => tool.name === useMcpServer.toolName) : undefined
 			return (
 				<>
 					<div className="chat-row-header">
@@ -1294,61 +1301,74 @@ export const ChatRowContent = memo(
 						)}
 					</div>
 
-					<div
-						style={{
-							background: "var(--vscode-textCodeBlock-background)",
-							borderRadius: "3px",
-							padding: "8px 10px",
-							marginTop: "8px",
-						}}>
-						{useMcpServer.type === "access_mcp_resource" && (
-							<McpResourceRow
-								item={{
-									...(findMatchingResourceOrTemplate(
-										useMcpServer.uri || "",
-										server?.resources,
-										server?.resourceTemplates,
-									) || {
-										name: "",
-										mimeType: "",
-										description: "",
-									}),
-									uri: useMcpServer.uri || "",
-								}}
-							/>
-						)}
+					{scienceCall ? (
+						<ScienceToolCard
+							annotations={scienceTool?.annotations}
+							argsJson={useMcpServer.arguments}
+							resultText={sciencePair?.status === "paired" ? sciencePair.resultText : undefined}
+							unpaired={sciencePair?.status === "unpaired"}
+							running={isMcpServerResponding}
+							serverName={useMcpServer.serverName}
+							toolMeta={{ description: scienceTool?.description, inputSchema: scienceTool?.inputSchema }}
+							toolName={useMcpServer.toolName || ""}
+						/>
+					) : (
+						<div
+							style={{
+								background: "var(--vscode-textCodeBlock-background)",
+								borderRadius: "3px",
+								padding: "8px 10px",
+								marginTop: "8px",
+							}}>
+							{useMcpServer.type === "access_mcp_resource" && (
+								<McpResourceRow
+									item={{
+										...(findMatchingResourceOrTemplate(
+											useMcpServer.uri || "",
+											server?.resources,
+											server?.resourceTemplates,
+										) || {
+											name: "",
+											mimeType: "",
+											description: "",
+										}),
+										uri: useMcpServer.uri || "",
+									}}
+								/>
+							)}
 
-						{useMcpServer.type === "use_mcp_tool" && (
-							<>
-								<div onClick={(e) => e.stopPropagation()}>
-									<McpToolRow
-										compact={true}
-										serverName={useMcpServer.serverName}
-										tool={{
-											name: useMcpServer.toolName || "",
-											description:
-												server?.tools?.find((tool) => tool.name === useMcpServer.toolName)?.description ||
-												"",
-											autoApprove:
-												server?.tools?.find((tool) => tool.name === useMcpServer.toolName)?.autoApprove ||
-												false,
-										}}
-									/>
-								</div>
-								{useMcpServer.arguments && useMcpServer.arguments !== "{}" && (
-									<div style={{ marginTop: "8px" }}>
-										<CodeAccordian
-											code={useMcpServer.arguments}
-											isExpanded={isExpanded}
-											language="json"
-											onToggleExpand={handleToggle}
-											path="arguments"
+							{useMcpServer.type === "use_mcp_tool" && (
+								<>
+									<div onClick={(e) => e.stopPropagation()}>
+										<McpToolRow
+											compact={true}
+											serverName={useMcpServer.serverName}
+											tool={{
+												name: useMcpServer.toolName || "",
+												description:
+													server?.tools?.find((tool) => tool.name === useMcpServer.toolName)
+														?.description || "",
+												autoApprove:
+													server?.tools?.find((tool) => tool.name === useMcpServer.toolName)
+														?.autoApprove || false,
+											}}
 										/>
 									</div>
-								)}
-							</>
-						)}
-					</div>
+									{useMcpServer.arguments && useMcpServer.arguments !== "{}" && (
+										<div style={{ marginTop: "8px" }}>
+											<CodeAccordian
+												code={useMcpServer.arguments}
+												isExpanded={isExpanded}
+												language="json"
+												onToggleExpand={handleToggle}
+												path="arguments"
+											/>
+										</div>
+									)}
+								</>
+							)}
+						</div>
+					)}
 				</>
 			)
 		}

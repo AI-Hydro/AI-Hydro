@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client"
 import "../index.css"
 import { setActiveScreen } from "./active"
 import { findScreen, screens } from "./registry"
+import { FIXTURE_BANNER } from "./types"
 
 declare global {
 	interface Window {
@@ -61,7 +62,7 @@ if (!screen) {
 	}
 	const badge = document.createElement("div")
 	badge.setAttribute("data-harness", "fixture-badge")
-	badge.textContent = "FIXTURE: synthetic data, not a result"
+	badge.textContent = FIXTURE_BANNER[screen.fixtureKind ?? "synthetic"]
 	// Top banner strip: the layout reserves it (#root starts below it), so it never overlaps a control.
 	badge.style.cssText =
 		"flex:none;height:24px;box-sizing:border-box;padding:0 8px;display:flex;align-items:center;font:700 12px/1 monospace;background:#b00020;color:#fff;pointer-events:none;white-space:nowrap;overflow:hidden"

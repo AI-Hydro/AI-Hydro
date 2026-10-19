@@ -4,8 +4,7 @@
  * (telemetry, host providers, etc.).
  */
 
-/** Names the extension itself registers for the first-party aihydro-tools server. */
-const FIRST_PARTY_SERVER_NAMES = new Set(["ai-hydro", "aihydro", "aihydro-tools", "ai-hydro-tools", "aihydro_tools"])
+import { FIRST_PARTY_SERVER_NAMES } from "@shared/aihydro/firstPartyServers"
 
 /** Extra trusted names, comma separated, for users who register the server under another alias. */
 export const TRUSTED_SERVER_ENV = "AIHYDRO_TRUSTED_MCP_SERVERS"

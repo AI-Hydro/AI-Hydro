@@ -1,5 +1,6 @@
 /** Synthetic chat transcripts (invented; no model produced these). */
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
+import { refusalCall, successCall } from "./aihydro"
 import { FIXTURE_NOW, fixtureHistory } from "./state"
 
 const t0 = FIXTURE_NOW - 600_000
@@ -38,34 +39,23 @@ export const plainTextTask: AiHydroMessage[] = [
 	),
 ]
 
+/** Recorded data_fetch call and result (verbatim, e2e-proof-3). The prompt text is invented. */
 export const mcpCallTask: AiHydroMessage[] = [
-	task("Delineate the catchment for the synthetic gauge SYN-00000001."),
+	task("Fetch daily streamflow for USGS gauge 01013500."),
 	apiReq(t0 + step),
-	mcpCall(t0 + 2 * step, "delineate_watershed", { gauge_id: "SYN-00000001", method: "fixture" }),
-	mcpResult(t0 + 3 * step, {
-		_run_id: "fx-run-0001",
-		basin_ref: { label: "Synthetic basin 001", gauge_id: "SYN-00000001" },
-		area_km2: "not a real value",
-		metadata: { source_status: "synthetic" },
-	}),
+	mcpCall(t0 + 2 * step, successCall.toolName, JSON.parse(successCall.argsJson)),
+	mcpResult(t0 + 3 * step, successCall.resultText),
 	apiReq(t0 + 4 * step),
 ]
 
+/** Real terminal refusal envelope (GAUGE_REQUIRED), delivered the way the host delivers an MCP error. */
 export const refusalTask: AiHydroMessage[] = [
-	task("Fetch streamflow for the station named Fixture Creek."),
+	task("Fetch streamflow for the basin polygon, no gauge named."),
 	apiReq(t0 + step),
-	mcpCall(t0 + 2 * step, "fetch_streamflow", { site_name: "Fixture Creek" }),
-	mcpResult(t0 + 3 * step, {
-		isError: true,
-		error: "GAUGE_AMBIGUOUS",
-		code: "GAUGE_AMBIGUOUS",
-		message: "Two candidate gauges match the name; refusing to guess.",
-		recovery: "Pass an explicit gauge_id from the candidates list, or ask the user which gauge is intended.",
-		candidates: [{ site: "SYN-00000001" }, { site: "SYN-00000002" }],
-		example_call: { gauge_id: "SYN-00000001" },
-	}),
+	mcpCall(t0 + 2 * step, refusalCall.toolName, JSON.parse(refusalCall.argsJson)),
+	mcpResult(t0 + 3 * step, refusalCall.resultText),
 	apiReq(t0 + 4 * step),
-	text(t0 + 5 * step, "The lookup stopped because the station name matches more than one gauge. Which gauge do you mean?"),
+	text(t0 + 5 * step, "The lookup stopped because no gauge was identified. Which gauge do you mean?"),
 ]
 
 export const finalAnswerTask: AiHydroMessage[] = [

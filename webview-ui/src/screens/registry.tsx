@@ -6,6 +6,16 @@
 import { Providers } from "../Providers"
 import App from "../App"
 import HistoryView from "../components/history/HistoryView"
+import { ScienceToolCard } from "../components/chat/ScienceToolCard"
+import {
+	areaFailCall,
+	fixtureMcpServers,
+	provisionalCall,
+	type RecordedCall,
+	refusalCall,
+	signaturesCall,
+	successCall,
+} from "./fixtures/aihydro"
 import { finalAnswerTask, mcpCallTask, plainTextTask, refusalTask, taskItem } from "./fixtures/chat"
 import { approvalClaims, claim, driftClaims, FIXTURE_SESSION, statusClaims } from "./fixtures/claims"
 import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/experiments"
@@ -101,9 +111,39 @@ const SCROLL_TO_END: ScreenDef["steps"] = [
 const STRUCTURAL_ONLY = 1
 const PINNED = "[data-virtuoso-scroller=true]"
 
-const taskState = (aihydroMessages: NonNullable<ScreenDef["state"]>["aihydroMessages"]) => ({
+const taskState = (aihydroMessages: NonNullable<ScreenDef["state"]>["aihydroMessages"], withScienceServer = false) => ({
 	currentTaskItem: taskItem,
 	aihydroMessages,
+	...(withScienceServer ? { mcpServers: fixtureMcpServers } : {}),
+})
+
+/** A science tool-call card on its own at sidebar width (the card is what the checker budget is measured on). */
+const toolCardScreen = (
+	id: string,
+	title: string,
+	fixtureKind: ScreenDef["fixtureKind"],
+	c: RecordedCall,
+	extra: Partial<ScreenDef> = {},
+): ScreenDef => ({
+	id,
+	title,
+	group: "chat",
+	surface: "sidebar",
+	fixtureKind,
+	ready: "section[aria-label^='Tool call']",
+	render: () => (
+		<div style={{ padding: "10px 6px 6px 15px", height: "100%", boxSizing: "border-box", overflowY: "auto" }}>
+			<ScienceToolCard
+				annotations={c.annotations}
+				argsJson={c.argsJson}
+				resultText={c.resultText}
+				serverName="ai-hydro"
+				toolMeta={c.meta}
+				toolName={c.toolName}
+			/>
+		</div>
+	),
+	...extra,
 })
 
 const approvalScreen = (key: keyof typeof approvalClaims): ScreenDef =>
@@ -134,14 +174,16 @@ export const screens: ScreenDef[] = [
 		scrollPinned: PINNED,
 	}),
 	chatScreen("chat-task-mcp", "Task with ai-hydro MCP call and result", {
-		state: taskState(mcpCallTask),
-		expectVisible: ["text=delineate_watershed"],
+		fixtureKind: "recorded-call",
+		state: taskState(mcpCallTask, true),
+		expectVisible: ["text=Raw arguments and result (JSON)"],
 		steps: SCROLL_TO_END,
 		pixelDiffThreshold: STRUCTURAL_ONLY,
 		scrollPinned: PINNED,
 	}),
-	chatScreen("chat-task-refusal", "Task with structured refusal (GAUGE_AMBIGUOUS)", {
-		state: taskState(refusalTask),
+	chatScreen("chat-task-refusal", "Task with structured refusal (GAUGE_REQUIRED)", {
+		fixtureKind: "spliced",
+		state: taskState(refusalTask, true),
 		expectVisible: ["text=Which gauge do you mean?"],
 		steps: SCROLL_TO_END,
 		pixelDiffThreshold: STRUCTURAL_ONLY,
@@ -155,6 +197,17 @@ export const screens: ScreenDef[] = [
 		expectVisible: ["text=Fixture answer: no value here is a result."],
 		ledger: { sessionId: FIXTURE_SESSION, claims: statusClaims },
 	}),
+	// ── Science tool-call cards (S3) ────────────────────────────────
+	toolCardScreen("toolcard-success", "Tool card: success, explicit gauge, area check pass", "recorded", successCall),
+	toolCardScreen("toolcard-refusal", "Tool card: terminal refusal (GAUGE_REQUIRED)", "spliced", refusalCall),
+	toolCardScreen("toolcard-area-fail", "Tool card: gauge area check failed", "spliced", areaFailCall),
+	toolCardScreen("toolcard-provisional", "Tool card: provisional 43/120", "spliced", provisionalCall),
+	toolCardScreen(
+		"toolcard-unreported-class",
+		"Tool card: nothing reported (class, source, quality)",
+		"recorded",
+		signaturesCall,
+	),
 	{
 		id: "chat-history-list",
 		title: "History list view",

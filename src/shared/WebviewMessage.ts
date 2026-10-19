@@ -1,5 +1,14 @@
 export interface WebviewMessage {
-	type: "grpc_request" | "grpc_request_cancel" | "invokeCommand" | "aihydro-hydro-command" | "aihydro-map-agent-task"
+	type:
+		| "grpc_request"
+		| "grpc_request_cancel"
+		| "invokeCommand"
+		| "aihydro-hydro-command"
+		| "aihydro-map-agent-task"
+		| "open_replay"
+	/** open_replay: the session and run a tool-call card links to. Both are validated host-side. */
+	session_id?: string
+	run_id?: string
 	grpc_request?: GrpcRequest
 	grpc_request_cancel?: GrpcCancel
 	command?: string

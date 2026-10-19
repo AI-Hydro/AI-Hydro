@@ -1,0 +1,22 @@
+{
+	"args": {
+		"variable": "streamflow",
+		"geometry": "<geojson>",
+		"start": "1989-10-01",
+		"end": "2009-09-30",
+		"session_id": "e2e-proof-3-01013500-20261017T171951Z"
+	},
+	"isError": true,
+	"envelope": {
+		"error": true,
+		"code": "GAUGE_REQUIRED",
+		"message": "no gauge id, usgs alias or outlet was supplied",
+		"recovery": "pass gauge_id='USGS-xxxxxxxx', a BasinRef with a usgs: alias, an outlet (lon, lat) with a basin geometry, or request a modelled product explicitly",
+		"next_tools": [],
+		"docs_anchor": "",
+		"details": {
+			"reason": "no_identity",
+			"candidates": []
+		}
+	}
+}
