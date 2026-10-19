@@ -304,11 +304,11 @@ const GIT_BRANCH_LIST_FLAGS = [
 ]
 
 function isReadOnlyGit(words: string[]): string | undefined {
-	// Only a bare `--no-pager` is accepted before the subcommand. `-c`, `-C`, `--git-dir`, `--exec-path` and
+	// Only a single bare `--no-pager` is accepted before the subcommand. `-c`, `-C`, `--git-dir`, `--exec-path` and
 	// `--config-env` can run programs or move to another repository.
 	let i = 1
-	while (words[i] === "--no-pager") {
-		i += 1
+	if (words[i] === "--no-pager") {
+		i += 1 // at most ONE: a repeated flag would be a different shape than the hardening wrapper expects
 	}
 	const sub = words[i]
 	if (!sub) {

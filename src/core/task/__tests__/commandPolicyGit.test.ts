@@ -69,13 +69,7 @@ describe("A2: hardening injected when a read-only git command auto-runs", () => 
 			expect(a).to.include(`GIT_CONFIG_VALUE_${i}=${value}`)
 		}
 		const keys = GIT_HARDENING_CONFIG.map(([k]) => k)
-		for (const k of [
-			"core.fsmonitor",
-			"core.hooksPath",
-			"core.pager",
-			"core.sshCommand",
-			"protocol.allow",
-		]) {
+		for (const k of ["core.fsmonitor", "core.hooksPath", "core.pager", "core.sshCommand", "protocol.allow"]) {
 			expect(keys, k).to.include(k)
 		}
 		expect(GIT_HARDENING_CONFIG.find(([k]) => k === "core.fsmonitor")?.[1]).to.equal("false")
@@ -161,6 +155,10 @@ describe("A2: hardening injected when a read-only git command auto-runs", () => 
 			run(hardenGitEnvironment("git log -p -1") + " >/dev/null")
 			run(hardenGitEnvironment("git show HEAD") + " >/dev/null")
 			run(hardenGitEnvironment("git --no-pager diff -- a.txt") + " >/dev/null")
+			// A repeated --no-pager must not skip the wrapper (the wrapper loops; the classifier accepts one).
+			run(hardenGitEnvironment("git --no-pager --no-pager diff") + " >/dev/null")
+			run(hardenGitEnvironment("git --no-pager --no-pager log -p") + " >/dev/null")
+			run(hardenGitEnvironment("git --no-pager --no-pager --no-pager show HEAD") + " >/dev/null")
 			expect(fs.existsSync(path.join(dir, "PWNED_FSMONITOR")), "core.fsmonitor ran").to.equal(false)
 			expect(fs.existsSync(path.join(dir, "PWNED_EXTDIFF")), "diff.external ran").to.equal(false)
 			expect(fs.existsSync(path.join(dir, "PWNED_TEXTCONV")), "diff textconv ran").to.equal(false)
@@ -169,6 +167,20 @@ describe("A2: hardening injected when a read-only git command auto-runs", () => 
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true })
 		}
+	})
+})
+
+describe("A: a repeated --no-pager is not accepted by the classifier", () => {
+	it("allows at most one leading --no-pager", () => {
+		const env = posix(true)
+		expect(classifyCommand("git --no-pager diff", env).readOnly).to.equal(true)
+		expect(classifyCommand("git --no-pager --no-pager diff", env).readOnly).to.equal(false)
+		expect(classifyCommand("git --no-pager --no-pager log -p", env).readOnly).to.equal(false)
+		expect(decideCommand({ ...BASE, command: "git --no-pager --no-pager diff" }).action).to.equal("ask")
+	})
+
+	it("the wrapper function loops over repeated --no-pager flags", () => {
+		expect(GIT_WRAPPER_FUNCTION).to.include('while [ "$1" = --no-pager ]; do shift; done')
 	})
 })
 

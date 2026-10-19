@@ -47,7 +47,7 @@ export function gitHardeningAssignments(): string[] {
  * `--no-ext-diff --no-textconv`. `command git` bypasses the function, so it cannot recurse.
  */
 export const GIT_WRAPPER_FUNCTION =
-	'git() { if [ "$1" = --no-pager ]; then shift; fi; case "$1" in diff|log|show) _s=$1; shift; command git --no-pager "$_s" --no-ext-diff --no-textconv "$@";; *) command git --no-pager "$@";; esac; }'
+	'git() { while [ "$1" = --no-pager ]; do shift; done; case "$1" in diff|log|show) _s=$1; shift; command git --no-pager "$_s" --no-ext-diff --no-textconv "$@";; *) command git --no-pager "$@";; esac; }'
 
 /** Wrap an already-classified read-only POSIX command so every git in it runs with the hardened environment. */
 export function hardenGitEnvironment(command: string): string {

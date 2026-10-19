@@ -29,6 +29,7 @@ If you want to allow Cline to do something without asking, you can set the Auto 
     -   Runs a command without asking only when AI-Hydro itself classifies it as read-only: a short allowlist of programs and subcommands (`ls`, `cat`, `grep`, `git status`, and similar), optionally piped into other read-only commands. The model's own claim that a command is safe is not used; it can only make a command ask more, never less.
     -   Anything outside the allowlist asks: unknown programs, `;` / `&&` / `||`, redirection, `$(...)` and backticks, here-docs, scripts such as `python -c` or `sh -c`, `curl`, installs, and anything that mentions protected paths.
     -   This is a conservative filter, not a sandbox.
+    -   Read-only `git` commands auto-run only in a trusted workspace, because a repository's own git config can make git run programs; workspace trust is the real protection against a hostile repository's git config (the environment hardening AI-Hydro adds is only a second layer and cannot cover every config key).
     -   **Execute all commands**
         -   Permits execution of any terminal command without asking. The exceptions below still apply.
 
