@@ -46,6 +46,10 @@ export interface ScreenDef {
 	state?: Partial<ExtensionState>
 	ledger?: { sessionId: string; claims: ClaimRecord[]; error?: string }
 	layers?: MapLayer[]
+	/** Map layer-sync state the fixture reports (default "connected"). "loading" never completes. */
+	mapConnection?: "loading" | "connected" | "stale"
+	/** Workspace-relative geo file paths the fixture host lists as "Workspace files you can add". */
+	workspaceFiles?: string[]
 	/** Artifacts the fixture host reports from saveMapExport (0 exercises the zero-output state). */
 	exportOutputs?: number
 	htmlPreviews?: HtmlPreviewItem[]
