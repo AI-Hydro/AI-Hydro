@@ -1823,12 +1823,11 @@ export const deepSeekModels = {
 		contextWindow: 1_000_000,
 		// DeepSeek-V4.1-Flash accepts image input; V4 Pro does not.
 		supportsImages: true,
-		// DeepSeek reports input as cache reads + cache writes in a single usage
-		// report — set inputPrice: 0 so ApiOptions doesn't double-count.
+		// DeepSeek reports prompt_cache_hit_tokens (cache reads) and prompt_cache_miss_tokens. A miss is
+		// ordinary uncached input, billed at inputPrice; DeepSeek has no cache-write charge.
 		supportsPromptCache: true,
-		inputPrice: 0,
+		inputPrice: 0.3,
 		outputPrice: 1.2,
-		cacheWritesPrice: 0.3,
 		cacheReadsPrice: 0.006,
 		description:
 			"DeepSeek V4.1 Flash — 1M-token context, vision, fast inference, thinking mode on by default. The current default model on the DeepSeek API. Peak pricing shown; off-peak is half.",
@@ -1838,9 +1837,8 @@ export const deepSeekModels = {
 		contextWindow: 1_000_000,
 		supportsImages: false,
 		supportsPromptCache: true,
-		inputPrice: 0,
+		inputPrice: 1.32,
 		outputPrice: 3.96,
-		cacheWritesPrice: 1.32,
 		cacheReadsPrice: 0.044,
 		description:
 			"DeepSeek V4 Pro (V4-Pro-0813) — premium model with thinking mode for complex reasoning, coding, and multi-step analysis. 1M-token context, no image input. Peak pricing shown; off-peak is half.",
@@ -1852,9 +1850,8 @@ export const deepSeekModels = {
 		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
-		inputPrice: 0,
+		inputPrice: 0.3,
 		outputPrice: 1.2,
-		cacheWritesPrice: 0.3,
 		cacheReadsPrice: 0.006,
 		description:
 			"Retired identifier — served by DeepSeek-V4.1-Flash at the Flash price. Prefer deepseek-flash for new configurations.",
@@ -1868,9 +1865,8 @@ export const deepSeekModels = {
 		contextWindow: 1_000_000,
 		supportsImages: false,
 		supportsPromptCache: true,
-		inputPrice: 0,
+		inputPrice: 0.3,
 		outputPrice: 1.2,
-		cacheWritesPrice: 0.3,
 		cacheReadsPrice: 0.006,
 		description:
 			"Deprecated alias — routes to DeepSeek Flash (non-thinking mode). Prefer deepseek-flash directly for new configurations.",
@@ -1881,9 +1877,8 @@ export const deepSeekModels = {
 		contextWindow: 1_000_000,
 		supportsImages: false,
 		supportsPromptCache: true,
-		inputPrice: 0,
+		inputPrice: 0.3,
 		outputPrice: 1.2,
-		cacheWritesPrice: 0.3,
 		cacheReadsPrice: 0.006,
 		description:
 			"Deprecated alias — routes to DeepSeek Flash (thinking mode). Prefer deepseek-flash or deepseek-v4-pro directly for new configurations.",
