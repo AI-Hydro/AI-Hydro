@@ -471,7 +471,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 					data-testid="map-search-notice"
 					role={notice.kind === "empty" ? "status" : "alert"}
 					style={{
-						fontSize: 10,
+						fontSize: 11,
 						marginTop: 4,
 						color: notice.kind === "empty" ? "var(--vscode-descriptionForeground)" : "var(--vscode-editorWarning-foreground, #cca700)",
 					}}>
@@ -500,7 +500,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 						</button>
 					))}
 					{searchedPlaces && results.some((r) => r.source === "nominatim") && (
-						<div style={{ fontSize: 9, opacity: 0.6, padding: "3px 8px" }}>
+						<div style={{ fontSize: 11, opacity: 0.7, padding: "3px 8px" }}>
 							Place names © OpenStreetMap contributors (Nominatim)
 						</div>
 					)}
