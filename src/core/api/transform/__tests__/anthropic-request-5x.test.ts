@@ -59,9 +59,19 @@ describe("Claude 5.x request construction", () => {
 				} as any)
 				contextWindow.should.equal(1_000_000)
 				maxAllowedSize.should.be.above(800_000)
+				// input + a full 128K response must fit in the window
+				;(maxAllowedSize + 128_000).should.be.belowOrEqual(1_000_000)
 			})
 		})
 	}
+
+	it("legacy and current condense triggers share getContextWindowInfo (1M window / 128K output)", () => {
+		const info = { ...(anthropicModels as Record<string, any>)["claude-opus-5-5"] }
+		getContextWindowInfo({ getModel: () => ({ id: "x", info }) } as any).maxAllowedSize.should.equal(1_000_000 - 128_000 - 20_000)
+		// small-output models keep the fixed buffers
+		getContextWindowInfo({ getModel: () => ({ id: "x", info: { contextWindow: 200_000, maxTokens: 8192 } }) } as any)
+			.maxAllowedSize.should.equal(160_000)
+	})
 
 	it("cost uses the documented prices (Opus 5.5: 1M in, 100k out, 500k cache read)", () => {
 		const info = (anthropicModels as Record<string, any>)["claude-opus-5-5"]
