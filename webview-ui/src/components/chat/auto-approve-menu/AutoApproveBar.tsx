@@ -59,7 +59,7 @@ const AutoApproveBar = ({ style }: AutoApproveBarProps) => {
 		return [
 			...favorites.map((favId) => renderFavoritedItem(favId)),
 			minusFavorites.length > 0 ? (
-				<span className="chip chip-emerald" key="separator">
+				<span className="chip" key="separator">
 					<span aria-hidden="true" className="codicon codicon-check" />
 				</span>
 			) : null,

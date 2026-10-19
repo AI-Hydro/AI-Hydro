@@ -10,7 +10,7 @@ import {
 } from "@shared/ExtensionMessage"
 import { getPairing, isScienceServer } from "@shared/aihydro/toolCallPresenter"
 import { BooleanRequest, Int64Request, StringRequest } from "@shared/proto/cline/common"
-import { VSCodeBadge, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeBadge, VSCodeButton, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
 import React, { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
@@ -25,7 +25,6 @@ import CodeBlock, {
 } from "@/components/common/CodeBlock"
 import { WithCopyButton } from "@/components/common/CopyButton"
 import MarkdownBlock from "@/components/common/MarkdownBlock"
-import SuccessButton from "@/components/common/SuccessButton"
 import HtmlPreviewView from "@/components/html_preview/HtmlPreviewView"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
 import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server-row/McpResourceRow"
@@ -47,7 +46,6 @@ import UserMessage from "./UserMessage"
 
 const normalColor = "var(--vscode-foreground)"
 const errorColor = "var(--vscode-errorForeground)"
-const successColor = "var(--vscode-charts-green)"
 const _cancelledColor = "var(--vscode-descriptionForeground)"
 
 const ChatRowContainer = styled.div`
@@ -382,6 +380,10 @@ export const ChatRowContent = memo(
 
 		const type = message.type === "ask" ? message.ask : message.say
 
+		// "wants to ..." is honest only while the call is awaiting permission. An ask that is no longer the last row
+		// has been answered (run or denied), and a `say` is by construction something that already happened.
+		const isPendingAsk = message.type === "ask" && isLast && !isMcpServerResponding
+
 		const handleToggle = useCallback(() => {
 			onToggleExpand(message.ts)
 		}, [onToggleExpand, message.ts])
@@ -504,7 +506,9 @@ export const ChatRowContent = memo(
 								color: normalColor,
 								marginBottom: "-1.5px",
 							}}></span>,
-						<span style={{ color: normalColor, fontWeight: "bold" }}>AI Hydro wants to execute this command:</span>,
+						<span style={{ color: normalColor, fontWeight: "bold" }}>
+							{isPendingAsk ? "AI Hydro wants to execute this command:" : "AI Hydro ran this command:"}
+						</span>,
 					]
 				case "use_mcp_server":
 					const mcpServerUse = JSON.parse(message.text || "{}") as AiHydroAskUseMcpServer
@@ -522,7 +526,15 @@ export const ChatRowContent = memo(
 						<span
 							className="ph-no-capture"
 							style={{ color: normalColor, fontWeight: "bold", wordBreak: "break-word" }}>
-							AI Hydro wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
+							{isPendingAsk ? "AI Hydro wants to " : "AI Hydro "}
+							{mcpServerUse.type === "use_mcp_tool"
+								? isPendingAsk
+									? "use a tool"
+									: "used a tool"
+								: isPendingAsk
+									? "access a resource"
+									: "accessed a resource"}{" "}
+							on the{" "}
 							<code className="break-all">
 								{getMcpServerDisplayName(mcpServerUse.serverName, mcpMarketplaceCatalog)}
 							</code>{" "}
@@ -530,14 +542,15 @@ export const ChatRowContent = memo(
 						</span>,
 					]
 				case "completion_result":
+					// Neutral: finishing a task is not evidence. Green is reserved for an approved claim (evidenceStates).
 					return [
 						<span
-							className="codicon codicon-check"
+							className="codicon codicon-comment-discussion"
 							style={{
-								color: successColor,
+								color: normalColor,
 								marginBottom: "-1.5px",
 							}}></span>,
-						<span style={{ color: successColor, fontWeight: "bold" }}>Task Completed</span>,
+						<span style={{ color: normalColor, fontWeight: "bold" }}>Answer</span>,
 					]
 				case "api_req_started":
 					return ErrorBlockTitle({
@@ -567,6 +580,7 @@ export const ChatRowContent = memo(
 			isCommandPending,
 			apiReqCancelReason,
 			isMcpServerResponding,
+			isPendingAsk,
 			message.text,
 		])
 
@@ -595,7 +609,6 @@ export const ChatRowContent = memo(
 			const colorMap = {
 				red: "var(--vscode-errorForeground)",
 				yellow: "var(--vscode-editorWarning-foreground)",
-				green: "var(--vscode-charts-green)",
 			}
 			const toolIcon = (name: string, color?: string, rotation?: number, title?: string) => (
 				<span
@@ -616,7 +629,9 @@ export const ChatRowContent = memo(
 								{toolIcon("edit")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">AI Hydro wants to edit this file:</span>
+								<span className="font-bold">
+									{isPendingAsk ? "AI Hydro wants to edit this file:" : "AI Hydro edited this file:"}
+								</span>
 							</div>
 							<CodeAccordian
 								// isLoading={message.partial}
@@ -634,7 +649,9 @@ export const ChatRowContent = memo(
 								{toolIcon("new-file")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">AI Hydro wants to create a new file:</span>
+								<span className="font-bold">
+									{isPendingAsk ? "AI Hydro wants to create a new file:" : "AI Hydro created a new file:"}
+								</span>
 							</div>
 							<CodeAccordian
 								code={tool.content!}
@@ -654,8 +671,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span className="font-bold">
-									{/* {message.type === "ask" ? "" : "AI Hydro read this file:"} */}
-									AI Hydro wants to read this file:
+									{isPendingAsk ? "AI Hydro wants to read this file:" : "AI Hydro read this file:"}
 								</span>
 							</div>
 							<div
@@ -720,7 +736,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span className="font-bold">
-									{message.type === "ask"
+									{isPendingAsk
 										? "AI Hydro wants to view the top level files in this directory:"
 										: "AI Hydro viewed the top level files in this directory:"}
 								</span>
@@ -742,7 +758,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span className="font-bold">
-									{message.type === "ask"
+									{isPendingAsk
 										? "AI Hydro wants to recursively view all files in this directory:"
 										: "AI Hydro recursively viewed all files in this directory:"}
 								</span>
@@ -764,7 +780,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span className="font-bold">
-									{message.type === "ask"
+									{isPendingAsk
 										? "AI Hydro wants to view source code definition names used in this directory:"
 										: "AI Hydro viewed source code definition names used in this directory:"}
 								</span>
@@ -785,7 +801,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span className="font-bold">
-									AI Hydro wants to search this directory for{" "}
+									{isPendingAsk ? "AI Hydro wants to search" : "AI Hydro searched"} this directory for{" "}
 									<code style={{ wordBreak: "break-all" }}>{tool.regex}</code>:
 								</span>
 							</div>
@@ -882,7 +898,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This URL is external")}
 								<span className="font-bold">
-									{message.type === "ask"
+									{isPendingAsk
 										? "AI Hydro wants to fetch content from this URL:"
 										: "AI Hydro fetched content from this URL:"}
 								</span>
@@ -1032,7 +1048,9 @@ export const ChatRowContent = memo(
 			)
 
 			const displayTitle = isSubagentCommand ? (
-				<span style={{ color: normalColor, fontWeight: "bold" }}>AI Hydro wants to use a subagent:</span>
+				<span style={{ color: normalColor, fontWeight: "bold" }}>
+					{isPendingAsk ? "AI Hydro wants to use a subagent:" : "AI Hydro used a subagent:"}
+				</span>
 			) : (
 				title
 			)
@@ -1090,7 +1108,7 @@ export const ChatRowContent = memo(
 										let statusLabel = "Not Executed"
 										let statusPulse = false
 										if (isCommandExecuting) {
-											statusColor = successColor
+											statusColor = runningColor
 											statusLabel = "Running"
 											statusPulse = true
 										} else if (isCommandStarting) {
@@ -1308,6 +1326,7 @@ export const ChatRowContent = memo(
 							resultText={sciencePair?.status === "paired" ? sciencePair.resultText : undefined}
 							unpaired={sciencePair?.status === "unpaired"}
 							running={isMcpServerResponding}
+							awaitingPermission={isPendingAsk}
 							serverName={useMcpServer.serverName}
 							toolMeta={{ description: scienceTool?.description, inputSchema: scienceTool?.inputSchema }}
 							toolName={useMcpServer.toolName || ""}
@@ -1615,9 +1634,7 @@ export const ChatRowContent = memo(
 									onMouseUp={handleMouseUp}
 									position="bottom-right"
 									ref={contentRef}
-									style={{
-										color: "var(--vscode-charts-green)",
-									}}
+									style={{ color: normalColor }}
 									textToCopy={text}>
 									<Markdown markdown={text} />
 									{quoteButtonState.visible && (
@@ -1630,7 +1647,8 @@ export const ChatRowContent = memo(
 								</WithCopyButton>
 								{message.partial !== true && hasChanges && (
 									<div className="pt-4">
-										<SuccessButton
+										<VSCodeButton
+											appearance="secondary"
 											className="w-full"
 											disabled={seeNewChangesDisabled}
 											onClick={() => {
@@ -1648,7 +1666,7 @@ export const ChatRowContent = memo(
 											}}>
 											<i className="codicon codicon-new-file mr-1.5" />
 											See new changes
-										</SuccessButton>
+										</VSCodeButton>
 									</div>
 								)}
 							</>
@@ -1875,9 +1893,7 @@ export const ChatRowContent = memo(
 										onMouseUp={handleMouseUp}
 										position="bottom-right"
 										ref={contentRef}
-										style={{
-											color: "var(--vscode-charts-green)",
-										}}
+										style={{ color: normalColor }}
 										textToCopy={text}>
 										<Markdown markdown={text} />
 										{quoteButtonState.visible && (
@@ -1890,7 +1906,7 @@ export const ChatRowContent = memo(
 									</WithCopyButton>
 									{message.partial !== true && hasChanges && (
 										<div className="mt-4">
-											<SuccessButton
+											<VSCodeButton
 												appearance="secondary"
 												disabled={seeNewChangesDisabled}
 												onClick={() => {
@@ -1910,7 +1926,7 @@ export const ChatRowContent = memo(
 													}}
 												/>
 												See new changes
-											</SuccessButton>
+											</VSCodeButton>
 										</div>
 									)}
 								</div>

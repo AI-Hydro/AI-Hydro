@@ -1,27 +1,44 @@
 import { describeApproval } from "@shared/aihydro/claimApproval"
 import React, { useState } from "react"
 import { useLedgerContext } from "../../context/LedgerContext"
+import { type EvidenceStateId, evidenceState } from "../../design"
 
 interface ClaimChipProps {
 	claimId: string
 }
 
-// Status is the evidence-grading label, NOT an approval. No status color uses the
-// "passed" (green) tone: only an explicit, verified `approved` state does (see APPROVED_COLOR),
-// mirroring the Evidence Board so a chat chip can never imply approval by styling alone.
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-	supported: { bg: "bg-[var(--vscode-charts-blue)]", text: "text-white", label: "supported" },
-	weakly_supported: { bg: "bg-[var(--vscode-testing-iconQueued)]", text: "text-white", label: "weak" },
-	tested: { bg: "bg-[var(--vscode-textLink-foreground)]", text: "text-white", label: "tested" },
-	proposed: { bg: "bg-[var(--vscode-disabledForeground)]", text: "text-white", label: "proposed" },
-	contradicted: { bg: "bg-[var(--vscode-testing-iconFailed)]", text: "text-white", label: "contra" },
-	stale: { bg: "bg-[var(--vscode-editorWarning-foreground)]", text: "text-white", label: "stale" },
-	retracted: { bg: "bg-[var(--vscode-disabledForeground)]", text: "text-white", label: "retracted" },
+// Status is the evidence-grading label, NOT an approval. The chip's colour, icon and border come from the shared
+// evidence-state table (design/evidenceStates.ts), where only `approved` is green. A chat chip can therefore never
+// imply approval by styling alone.
+const STATUS_LABELS: Record<string, string> = {
+	supported: "supported",
+	weakly_supported: "weak",
+	tested: "tested",
+	proposed: "proposed",
+	contradicted: "contra",
+	stale: "stale",
+	retracted: "retracted",
 }
 
-const APPROVED_COLOR = { bg: "bg-[var(--vscode-testing-iconPassed)]", text: "text-white" }
-
-const FALLBACK_COLOR = { bg: "bg-[var(--vscode-disabledForeground)]", text: "text-white", label: "?" }
+/** Map a claim's status and approval display to the evidence state that styles its chip. */
+function chipState(statusKey: string, approved: boolean, tone: string | undefined): EvidenceStateId {
+	if (approved) {
+		return "approved"
+	}
+	if (statusKey === "stale" || statusKey === "retracted") {
+		return "stale"
+	}
+	if (statusKey === "contradicted") {
+		return "refused"
+	}
+	if (tone === "integrity") {
+		return "integrity-only"
+	}
+	if (statusKey === "proposed") {
+		return "agent-asserted"
+	}
+	return "unverified"
+}
 
 export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 	const { getClaim } = useLedgerContext()
@@ -29,7 +46,6 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 	const claim = getClaim(claimId)
 
 	const statusKey = claim?.status ?? "proposed"
-	const statusColor = STATUS_COLORS[statusKey] ?? FALLBACK_COLOR
 	const approval = claim
 		? describeApproval({
 				state: claim.approvalState,
@@ -44,22 +60,23 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 		: undefined
 	// Only an explicit, verified approval gets the approved styling; everything else keeps its status color.
 	const approved = approval?.approved === true && statusKey !== "stale" && statusKey !== "retracted"
-	const { bg, text } = approved ? APPROVED_COLOR : statusColor
-	const label = statusColor.label
+	const def = evidenceState(chipState(statusKey, approved, approval?.tone))
+	const label = approved ? "approved" : (STATUS_LABELS[statusKey] ?? "?")
 
 	return (
 		<span className="relative inline-flex items-center align-middle mx-0.5">
 			<button
 				className={`
-					inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-medium
-					leading-5 cursor-pointer border-0 ${bg} ${text}
+					aih-badge aih-badge--${def.shape} min-h-6 cursor-pointer
 					hover:opacity-90 transition-opacity select-none
 				`}
+				data-evidence-state={def.id}
+				style={{ "--aih-badge-color": def.token } as React.CSSProperties}
 				onClick={() => setOpen((o) => !o)}
 				title={claim?.statement || `Claim ${claimId}`}
 				data-approved={approved ? "true" : "false"}
 				type="button">
-				<span className={`codicon ${approved ? "codicon-verified-filled" : "codicon-beaker"} text-[9px]`} />
+				<span aria-hidden="true" className={`codicon ${def.icon}`} />
 				<span>{claimId}</span>
 				<span className="opacity-75">· {label}</span>
 			</button>
@@ -73,6 +90,7 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 						p-2 text-[var(--vscode-foreground)] text-xs leading-snug
 					">
 					<button
+						aria-label="Close claim details"
 						className="absolute top-1 right-1 codicon codicon-close opacity-60 hover:opacity-100 bg-transparent border-0 cursor-pointer"
 						onClick={() => setOpen(false)}
 						type="button"

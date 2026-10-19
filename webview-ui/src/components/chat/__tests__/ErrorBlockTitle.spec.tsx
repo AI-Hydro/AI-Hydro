@@ -49,3 +49,10 @@ describe("ErrorBlockTitle", () => {
 		expect(title).toBeDefined()
 	})
 })
+
+describe("ErrorBlockTitle colour", () => {
+	it("does not paint a finished API request green", () => {
+		const [icon] = ErrorBlockTitle({ cost: 0.001 })
+		expect(JSON.stringify(icon.props)).not.toMatch(/charts-green|success/)
+	})
+})

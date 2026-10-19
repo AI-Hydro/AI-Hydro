@@ -55,6 +55,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			<ChatTextArea
 				activeQuote={activeQuote}
 				inputValue={inputValue}
+				onEscape={() => messageHandlers.executeButtonAction("cancel")}
 				onFocusChange={handleFocusChange}
 				onHeightChange={() => {
 					if (isAtBottom) {

@@ -569,17 +569,12 @@ vscode-dropdown::part(listbox) {
 
 /* Command message accent */
 .command-message-accent {
-	border-left: 3px solid var(--ai-hydro-emerald);
+	border-left: 3px solid var(--ai-hydro-ocean-blue);
 }
 
 /* Error message accent */
 .error-message-accent {
 	border-left: 3px solid var(--vscode-errorForeground);
-}
-
-/* Success/completion message accent */
-.success-message-accent {
-	border-left: 3px solid var(--vscode-charts-green);
 }
 
 /* ===== Modern UI Utilities ===== */
@@ -653,12 +648,6 @@ vscode-dropdown::part(listbox) {
 	background: color-mix(in srgb, var(--ai-hydro-ocean-blue) 15%, transparent);
 	color: var(--ai-hydro-ocean-light);
 	border-color: color-mix(in srgb, var(--ai-hydro-ocean-blue) 25%, transparent);
-}
-
-.chip-emerald {
-	background: color-mix(in srgb, var(--ai-hydro-emerald) 15%, transparent);
-	color: var(--ai-hydro-emerald-light);
-	border-color: color-mix(in srgb, var(--ai-hydro-emerald) 25%, transparent);
 }
 
 .chip-teal {
@@ -756,7 +745,7 @@ vscode-dropdown::part(listbox) {
 }
 
 .tool-accent-process {
-	border-left: 3px solid var(--ai-hydro-emerald);
+	border-left: 3px solid var(--ai-hydro-ocean-blue);
 }
 
 .tool-accent-default {
@@ -1257,7 +1246,7 @@ vscode-dropdown::part(listbox) {
 }
 
 .chat-row-status-dot--running {
-	background-color: var(--vscode-charts-green);
+	background-color: var(--vscode-charts-blue);
 	animation: pulse 2s ease-in-out infinite;
 }
 
@@ -1421,7 +1410,7 @@ vscode-dropdown::part(listbox) {
 }
 
 .chat-row-shell-suggestion-btn:disabled {
-	background: var(--vscode-charts-green);
+	background: var(--vscode-button-secondaryBackground);
 	opacity: 0.8;
 	cursor: default;
 }

@@ -386,53 +386,38 @@
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
-					"command": "aihydro.mcpButtonClicked",
-					"group": "navigation@9",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
 					"command": "aihydro.mapButtonClicked",
 					"group": "navigation@2",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
-					"command": "aihydro.htmlPreviewButtonClicked",
+					"command": "aihydro.historyButtonClicked",
 					"group": "navigation@3",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
-					"command": "aihydro.historyButtonClicked",
-					"group": "navigation@7",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.connectorsButtonClicked",
-					"group": "navigation@10",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.skillsButtonClicked",
-					"group": "navigation@8",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.experimentTableButtonClicked",
-					"group": "navigation@5",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.sessionReplayButtonClicked",
-					"group": "navigation@6",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.evidenceBoardButtonClicked",
+					"submenu": "aihydro.scienceViews",
 					"group": "navigation@4",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
+					"command": "aihydro.mcpButtonClicked",
+					"group": "overflow@1",
+					"when": "view == aihydro.SidebarProvider"
+				},
+				{
+					"command": "aihydro.connectorsButtonClicked",
+					"group": "overflow@2",
+					"when": "view == aihydro.SidebarProvider"
+				},
+				{
+					"command": "aihydro.skillsButtonClicked",
+					"group": "overflow@3",
+					"when": "view == aihydro.SidebarProvider"
+				},
+				{
 					"command": "aihydro.settingsButtonClicked",
-					"group": "navigation@11",
+					"group": "overflow@4",
 					"when": "view == aihydro.SidebarProvider"
 				}
 			],
@@ -512,6 +497,24 @@
 				{
 					"command": "aihydro.abortGitCommitMessage",
 					"when": "config.git.enabled && scmProvider == git && aihydro.isGeneratingCommit"
+				}
+			],
+			"aihydro.scienceViews": [
+				{
+					"command": "aihydro.evidenceBoardButtonClicked",
+					"group": "science@1"
+				},
+				{
+					"command": "aihydro.experimentTableButtonClicked",
+					"group": "science@2"
+				},
+				{
+					"command": "aihydro.sessionReplayButtonClicked",
+					"group": "science@3"
+				},
+				{
+					"command": "aihydro.htmlPreviewButtonClicked",
+					"group": "science@4"
 				}
 			]
 		},
@@ -630,7 +633,14 @@
 					"description": "Python executable (with aihydro-tools installed) used by the map's hydrology CLI. Leave empty to use the interpreter of the registered ai-hydro MCP server, then python3/python on PATH."
 				}
 			}
-		}
+		},
+		"submenus": [
+			{
+				"id": "aihydro.scienceViews",
+				"label": "Science views",
+				"icon": "$(beaker)"
+			}
+		]
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run package",

@@ -11,6 +11,14 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Fixed — Chat honesty and header icons (vision-2040, branch `vision2040/chat-c1-c7`; audit C1 + C7)
+
+- **Nothing green unless approved.** The final answer is no longer painted green: its title is a neutral "Answer" (was a green "Task Completed"), the body uses the normal foreground colour, and "See new changes" is a neutral secondary button. Finished API requests, the plan progress bar and the auto-run bar no longer use green either. Claim chips take their colour, icon and border from `design/evidenceStates.ts` (only `approved` is green; the chip names its status). A vitest (`colorBan.test.ts`) bans `charts-green`, `bg-success`, `text-success`, `chip-emerald` and `testing-iconPassed` under `components/chat`.
+- **Tense.** "AI Hydro wants to ..." is shown only while a call is awaiting permission; once it has run the row reads "used a tool", "read this file", "edited this file", "ran this command". While a science tool call awaits permission its card says "Not run yet: waiting for your permission." (was "No result recorded yet.").
+- **Vocabulary.** Tool, MCP and browser asks use "Run" / "Deny" (edits "Save" / "Deny"; commands "Run Command" / "Deny"). "Approve" is now reserved for claims.
+- **Escape no longer stops a task from anywhere.** The window-wide Escape listener is gone; Escape stops the task only when the prompt has focus and no menu is open.
+- **Header icons: 11 become 4 inline.** New Analysis, Map View and Analysis History stay inline; Evidence Board, Experiment Table, Session Replay and HTML Preview are in a "Science views" submenu; Hydro Tools & Data Sources, External Connectors, Skills and Settings are in the "..." overflow. Command ids and titles are unchanged.
+
 ### Added / Fixed — Harness quick wins (vision-2040, branch `vision2040/harness-quickwins`)
 
 - **Model layer honesty.** An unknown model id no longer silently falls back to the provider default: static-registry providers raise a clear error naming the id (and how to select or add a model); dynamic-list providers (OpenRouter, Requesty, Groq, Baseten, Hugging Face, Huawei MaaS, Vercel AI Gateway, AI-Hydro) send the id you chose.

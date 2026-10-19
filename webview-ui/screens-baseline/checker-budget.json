@@ -10,6 +10,22 @@
 		}
 	},
 	"screens": {
+		"chat-task-answer": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 2,
+				"contrast": 2,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 2752,
+				"smallText": 440,
+				"contrast": 455,
+				"contrastIndeterminate": 0
+			}
+		},
 		"chat-task-mcp": {
 			"ref": {
 				"noName": 0,
@@ -174,22 +190,6 @@
 				"smallTarget": 2360,
 				"smallText": 80,
 				"contrast": 220,
-				"contrastIndeterminate": 0
-			}
-		},
-		"chat-task-answer": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 6,
-				"smallText": 4,
-				"contrast": 4,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 40,
-				"smallTarget": 2752,
-				"smallText": 440,
-				"contrast": 455,
 				"contrastIndeterminate": 0
 			}
 		},
@@ -823,8 +823,8 @@
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 36,
-						"smallText": 24,
-						"contrast": 27,
+						"smallText": 12,
+						"contrast": 15,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6

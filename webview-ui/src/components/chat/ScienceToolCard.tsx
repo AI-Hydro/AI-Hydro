@@ -36,6 +36,8 @@ export interface ScienceToolCardProps {
 	running?: boolean
 	/** True when a response arrived but could not be attributed to this call (concurrent calls). */
 	unpaired?: boolean
+	/** True while the call is an unanswered permission ask: nothing has run or been fetched yet. */
+	awaitingPermission?: boolean
 }
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
@@ -70,6 +72,7 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 	annotations,
 	running,
 	unpaired,
+	awaitingPermission,
 }) => {
 	const model = useMemo(
 		() => presentToolCall(serverName, toolName, argsJson, resultText, annotations, toolMeta),
@@ -136,7 +139,9 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 						? "Result not paired (concurrent calls): the response is shown below as raw text."
 						: running
 							? "Running…"
-							: "No result recorded yet."}
+							: awaitingPermission
+								? "Not run yet: waiting for your permission."
+								: "No result recorded yet."}
 				</Text>
 			)}
 
