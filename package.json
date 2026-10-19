@@ -304,7 +304,7 @@
 			},
 			{
 				"command": "aihydro.gee.status",
-				"title": "AI-Hydro: Test Google Earth Engine Connection",
+				"title": "AI-Hydro: Show Google Earth Engine Status",
 				"category": "AI-Hydro"
 			},
 			{
@@ -637,7 +637,7 @@
 		"compile": "npm run check-types && npm run lint && node esbuild.mjs",
 		"audit:production-bundle": "npm run protos && npm run check:build-tools && npm run check:extension-bundle && node scripts/audit-production-bundle.mjs",
 		"check:build-tools": "node scripts/smoke-build-tools.mjs",
-		"check:extension-bundle": "cross-env AIHYDRO_ESBUILD_METAFILE=dist/extension-metafile.json node esbuild.mjs --production && node scripts/verify-extension-bundle.mjs dist/extension-metafile.json",
+		"check:extension-bundle": "cross-env AIHYDRO_ESBUILD_METAFILE=dist/extension-metafile.json node esbuild.mjs --production && node scripts/verify-extension-bundle.mjs dist/extension-metafile.json && node scripts/check-bundle-leaks.mjs --target src --target dist",
 		"test:install": "bash scripts/test-install.sh",
 		"watch": "npm-run-all -p watch:*",
 		"watch:esbuild": "node esbuild.mjs --watch",
@@ -646,6 +646,8 @@
 		"package:vsix": "node scripts/build-development-vsix.mjs",
 		"test:vsix-contract": "node --test scripts/verify-development-vsix.test.mjs",
 		"test:workflow-contract": "node --test scripts/verify-test-workflow.test.mjs",
+		"test:leak-guard": "node --test scripts/check-bundle-leaks.test.mjs",
+		"check:bundle-leaks": "node scripts/check-bundle-leaks.mjs",
 		"protos": "node scripts/build-proto.mjs",
 		"download-ripgrep": "node scripts/download-ripgrep.mjs",
 		"postprotos": "biome format src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched",
@@ -659,7 +661,7 @@
 		"format": "biome format --changed --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error",
 		"format:fix": "biome check --changed --no-errors-on-unmatched --files-ignore-unknown=true --write",
 		"fix:all": "biome check --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe",
-		"ci:check-all": "npm-run-all -p check-types lint format test:workflow-contract",
+		"ci:check-all": "npm-run-all -p check-types lint format test:workflow-contract test:leak-guard",
 		"ci:build": "npm run protos && npm run build:webview && node esbuild.mjs && npm run compile-tests",
 		"pretest": "npm run compile && npm run compile-tests && npm run lint",
 		"test": "npm-run-all test:unit test:integration",

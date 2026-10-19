@@ -14,6 +14,9 @@ interface GeeRunResult {
 	raw?: string
 }
 
+/** First-time `connect` opens a browser OAuth flow; the status-probe default of 15 s is far too short. */
+const GEE_CONNECT_TIMEOUT_MS = 5 * 60_000
+
 export class GeeService {
 	// Cached after the first async detection — subsequent calls return instantly.
 	private static _cachedPythonCmd: string | undefined
@@ -168,7 +171,8 @@ export class GeeService {
 		if (pid) {
 			args.push("--project-id", pid)
 		}
-		const result = await GeeService.runGeeCli(args)
+		// First-time connect runs a browser OAuth round-trip, so allow minutes rather than the 15 s status-probe default.
+		const result = await GeeService.runGeeCli(args, GEE_CONNECT_TIMEOUT_MS)
 		if (result.result) {
 			const parsed = result.result as GeeStatusResult
 			if (parsed.ok) {
