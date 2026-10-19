@@ -9,6 +9,24 @@ import * as path from "path"
  */
 const AIHYDRO_COMMAND_PATTERN = /^aihydro\s+(['"])(.+?)\1(\s+.*)?$/
 
+/**
+ * Keep only `--workdir <dir>` from the model-supplied flags that follow the prompt. Anything else (`-y`, `--yolo`,
+ * `-s yolo_mode_toggled=true`, ...) is dropped: flags after the injected ones would otherwise override them.
+ * `--profile` is consumed separately before this runs. The host refuses such launches earlier
+ * (commandPolicy.subagentLaunchRefusal); this is the second line.
+ */
+export function sanitizeSubagentFlags(flags: string): string {
+	const tokens = flags.trim().split(/\s+/).filter(Boolean)
+	const kept: string[] = []
+	for (let i = 0; i < tokens.length; i++) {
+		if (tokens[i] === "--workdir" && tokens[i + 1] !== undefined && !tokens[i + 1].startsWith("-")) {
+			kept.push(tokens[i], tokens[i + 1])
+			i += 1
+		}
+	}
+	return kept.length > 0 ? ` ${kept.join(" ")}` : ""
+}
+
 /** Shown to the user when a subagent launch is approved. */
 export const SUBAGENT_NO_YOLO_NOTICE =
 	"AI-Hydro is launching a subagent WITHOUT YOLO mode. It does not inherit this task's auto-approve settings, so it uses the aihydro CLI's own approval policy and may stop to ask for approval in its terminal."
@@ -115,7 +133,7 @@ export function prepareSubagentCommand(command: string): SubagentJob | null {
 		additionalFlags = additionalFlags.replace(profileMatch[0], "")
 	}
 
-	const augmentedCommand = `aihydro ${quote}${originalPrompt}${resultInstruction}${quote}${additionalFlags}`
+	const augmentedCommand = `aihydro ${quote}${originalPrompt}${resultInstruction}${quote}${sanitizeSubagentFlags(additionalFlags)}`
 
 	// Apply the standard subagent flags (no YOLO)
 	let finalCommand = injectSubagentSettings(augmentedCommand)
@@ -181,7 +199,7 @@ function injectSubagentSettings(command: string): string {
 	if (match) {
 		const quote = match[1]
 		const prompt = match[2]
-		const additionalFlags = match[3] || ""
+		const additionalFlags = sanitizeSubagentFlags(match[3] || "")
 		const prePromptPart = prePromptFlags.length > 0 ? prePromptFlags.join(" ") + " " : ""
 		return `aihydro ${prePromptPart}${quote}${prompt}${quote} ${postPromptFlags.join(" ")}${additionalFlags}`
 	}

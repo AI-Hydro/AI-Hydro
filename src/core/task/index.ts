@@ -97,7 +97,13 @@ import { ensureLocalAiHydroDirExists } from "../context/instructions/user-instru
 import { refreshWorkflowToggles } from "../context/instructions/user-instructions/workflows"
 import { Controller } from "../controller"
 import { StateManager } from "../storage/StateManager"
-import { matchProtectedCommand, PROTECTED_COMMAND_DENY_MESSAGE, SUBAGENTS_DISABLED_MESSAGE } from "./commandPolicy"
+import {
+	matchProtectedCommand,
+	mentionsAihydroProgram,
+	PROTECTED_COMMAND_DENY_MESSAGE,
+	SUBAGENTS_DISABLED_MESSAGE,
+	subagentLaunchRefusal,
+} from "./commandPolicy"
 import { FocusChainManager } from "./focus-chain"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
@@ -1228,8 +1234,14 @@ export class Task {
 		if (matchProtectedCommand(command)) {
 			return [false, formatResponse.toolError(PROTECTED_COMMAND_DENY_MESSAGE)]
 		}
-		if (isSubagentCommand(command) && !this.stateManager.getGlobalSettingsKey("subagentsEnabled")) {
-			return [false, formatResponse.toolError(SUBAGENTS_DISABLED_MESSAGE)]
+		if (mentionsAihydroProgram(command)) {
+			if (!this.stateManager.getGlobalSettingsKey("subagentsEnabled")) {
+				return [false, formatResponse.toolError(SUBAGENTS_DISABLED_MESSAGE)]
+			}
+			const refusal = subagentLaunchRefusal(command)
+			if (refusal) {
+				return [false, formatResponse.toolError(refusal)]
+			}
 		}
 
 		// For AI-Hydro CLI subagents: prepare a job (result dir, augmented prompt, flags).
