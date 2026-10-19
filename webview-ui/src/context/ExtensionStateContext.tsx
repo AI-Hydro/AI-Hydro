@@ -14,7 +14,7 @@ import { convertProtoToAiHydroMessage } from "@shared/proto-conversions/aihydro-
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import type React from "react"
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import { Environment } from "../../../src/config"
+import { Environment } from "@shared/environment"
 import {
 	basetenDefaultModelId,
 	basetenModels,
