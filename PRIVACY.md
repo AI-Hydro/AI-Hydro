@@ -48,10 +48,22 @@ collect usage telemetry. An earlier draft of this audit's findings grouped it
 with the telemetry surface by proximity in `package.json`; that was
 inaccurate and is corrected here.
 
-**Recognition worker** (anonymous marketplace star/usage counters). A
-separate system with its own documented abuse-control posture — see
-`recognition-worker/README.md` in this repo. It records a server-derived
-daily-deduplicated hash, not raw identifiers.
+**Recognition worker** (marketplace star/usage counters). This **is** telemetry
+and is treated as such. When you install, star, open or cite a marketplace item,
+the extension POSTs the event (marketplace, item id, event type, extension
+version) to the recognition host
+(`https://aihydro-recognition.aihydro-mgalib.workers.dev/v1`, currently under a
+personal Cloudflare account; moving it to an organisation-owned domain is
+planned). Each request carries `clientIdHash`, a stable client-derived hash
+(`sha256("aihydro-recognition:" + your anonymous telemetry id)`). It is
+pseudonymous, not anonymous: the same install always sends the same hash.
+Nothing is sent to this host, including count look-ups and star toggles, unless
+**both** VS Code's telemetry setting (`telemetry.telemetryLevel`, reported to
+extensions as `vscode.env.isTelemetryEnabled`) **and** AI-Hydro's own telemetry
+setting allow it. If either is off, or cannot be read, no request is made and
+marketplace counts and stars show as unavailable. See
+`recognition-worker/README.md` for the server side. Retiring this call entirely
+is under consideration.
 
 **Final-answer audit.** When you complete a task and an AI-Hydro MCP server is
 connected, the final answer text (plus the chat id, workspace path and the

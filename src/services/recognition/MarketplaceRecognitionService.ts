@@ -1,7 +1,10 @@
 import * as crypto from "node:crypto"
 import axios from "axios"
 import { AiHydroEnv } from "@/config"
+import { StateManager } from "@/core/storage/StateManager"
+import { HostProvider } from "@/hosts/host-provider"
 import { getDistinctId } from "@/services/logging/distinctId"
+import { Setting } from "@/shared/proto/index.host"
 
 export type RecognitionMarketplace = "gallery" | "skills" | "modules" | "mcp" | "connectors" | "courses"
 export type RecognitionEventType = "import" | "install" | "open_source" | "copy_citation" | "template_open" | "uninstall" | "cite"
@@ -46,6 +49,30 @@ function anonymousClientHash(): string {
 	return crypto.createHash("sha256").update(`aihydro-recognition:${distinctId}`).digest("hex")
 }
 
+/**
+ * Recognition requests carry a stable client-derived pseudonymous hash, so they
+ * are telemetry. Nothing is sent unless BOTH the host editor's telemetry setting
+ * (VS Code: `telemetry.telemetryLevel` / `vscode.env.isTelemetryEnabled`) and the
+ * extension's own `telemetrySetting` allow it. Fails closed: if either cannot be
+ * read, nothing is sent.
+ */
+export async function isRecognitionTelemetryAllowed(): Promise<boolean> {
+	let allowed = false
+	try {
+		const host = await HostProvider.env.getTelemetrySettings({})
+		allowed =
+			(host.isEnabled === Setting.ENABLED || host.isEnabled === Setting.UNSUPPORTED) &&
+			StateManager.get().getGlobalSettingsKey("telemetrySetting") !== "disabled"
+	} catch {
+		allowed = false
+	}
+	if (!allowed) {
+		// This exact phrase is also checked in the packaged bundle by scripts/check-bundle-leaks.mjs.
+		console.debug("AI-Hydro recognition skipped: telemetry is disabled")
+	}
+	return allowed
+}
+
 export class MarketplaceRecognitionService {
 	static isConfigured(): boolean {
 		return apiBaseUrl().length > 0
@@ -54,6 +81,7 @@ export class MarketplaceRecognitionService {
 	static async recordEvent(event: MarketplaceRecognitionEvent): Promise<void> {
 		const baseUrl = apiBaseUrl()
 		if (!baseUrl || !event.itemId) return
+		if (!(await isRecognitionTelemetryAllowed())) return
 		try {
 			await axios.post(
 				`${baseUrl}/events`,
@@ -80,6 +108,7 @@ export class MarketplaceRecognitionService {
 	static async getCounts(marketplace: RecognitionMarketplace): Promise<Map<string, MarketplaceRecognitionCounts>> {
 		const baseUrl = apiBaseUrl()
 		if (!baseUrl) return new Map()
+		if (!(await isRecognitionTelemetryAllowed())) return new Map()
 		try {
 			const response = await axios.get(`${baseUrl}/counts`, {
 				params: { marketplace, clientIdHash: anonymousClientHash() },
@@ -115,6 +144,9 @@ export class MarketplaceRecognitionService {
 	static async setStar(marketplace: RecognitionMarketplace, itemId: string, starred: boolean): Promise<MarketplaceStarResult> {
 		const baseUrl = apiBaseUrl()
 		if (!baseUrl || !itemId) {
+			return { marketplace, itemId, starred: false, aiHydroStars: 0 }
+		}
+		if (!(await isRecognitionTelemetryAllowed())) {
 			return { marketplace, itemId, starred: false, aiHydroStars: 0 }
 		}
 		try {
