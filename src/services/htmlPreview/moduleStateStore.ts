@@ -15,10 +15,10 @@
  * one small disk read per module open is negligible.
  */
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
-const STATE_DIR = path.join(os.homedir(), ".aihydro", "module_state")
+const STATE_DIR = aihydroPath("module_state")
 
 export interface ModuleState {
 	moduleKey: string

@@ -18,6 +18,7 @@ import {
 	learningPackProgressKey,
 	parseInstalledLearningPackScope,
 } from "@/services/learning-pack/runtimeIntegration"
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 
 /**
  * Owns the single AI-Hydro HTML Preview webview panel.
@@ -405,9 +406,8 @@ export class VscodeHtmlPreviewProvider {
 						// sends this whenever useCourse resolves a course.
 						try {
 							const fs = await import("fs/promises")
-							const os = await import("os")
 							const path = await import("path")
-							const dir = path.join(os.homedir(), ".aihydro")
+							const dir = aihydroHome()
 							await fs.mkdir(dir, { recursive: true })
 							const payload = {
 								courseId: String(message.courseId ?? ""),
@@ -495,11 +495,9 @@ export class VscodeHtmlPreviewProvider {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const fs = require("fs") as typeof import("fs")
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		const os = require("os") as typeof import("os")
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const pathMod = require("path") as typeof import("path")
 
-		const dir = pathMod.join(os.homedir(), ".aihydro")
+		const dir = aihydroHome()
 		const intentFile = pathMod.join(dir, "course_nav_intent.json")
 		let lastTimestamp = 0
 		// Seed lastTimestamp from any existing file so stale intents from

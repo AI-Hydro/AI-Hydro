@@ -8,10 +8,11 @@ import os from "os"
 import * as path from "path"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 const SERVER_NAME = "ai-hydro"
-const CACHE_DIR = path.join(os.homedir(), ".aihydro", "cache")
-const ACTIVE_WORKSPACE_FILE = path.join(os.homedir(), ".aihydro", "active_workspace.json")
+const CACHE_DIR = aihydroPath("cache")
+const ACTIVE_WORKSPACE_FILE = aihydroPath("active_workspace.json")
 const PIP_COMMAND = "pip install aihydro-tools"
 
 /**

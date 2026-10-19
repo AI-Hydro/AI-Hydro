@@ -1,6 +1,6 @@
 import { createHash } from "crypto"
 import * as fs from "fs/promises"
-import * as os from "os"
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import * as path from "path"
 
 /**
@@ -10,8 +10,9 @@ import * as path from "path"
  */
 export const SKILL_ID_PATTERN = /^[a-z0-9][a-z0-9-_]{0,63}$/
 
-export function skillsRoot(homeDir: string = os.homedir()): string {
-	return path.join(homeDir, ".aihydro", "skills")
+/** `<AI-Hydro home>/skills`. An explicit `homeDir` (tests) is treated as the user home and ignores `AIHYDRO_HOME`. */
+export function skillsRoot(homeDir?: string): string {
+	return path.join(homeDir === undefined ? aihydroHome() : aihydroHome({}, homeDir), "skills")
 }
 
 /**
@@ -19,7 +20,7 @@ export function skillsRoot(homeDir: string = os.homedir()): string {
  * inside `<skills root>/<sourceDir>`. Throws on an empty id or any id that
  * escapes the source directory (e.g. `..`, `../x`, absolute paths).
  */
-export function resolveSkillDir(sourceDir: string, skillId: string, homeDir: string = os.homedir()): string {
+export function resolveSkillDir(sourceDir: string, skillId: string, homeDir?: string): string {
 	const base = path.resolve(skillsRoot(homeDir), sourceDir)
 	const resolved = path.resolve(base, skillId)
 	if (!skillId || !resolved.startsWith(base + path.sep)) {

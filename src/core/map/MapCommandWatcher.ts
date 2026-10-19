@@ -6,11 +6,11 @@ import type { Controller } from "@core/controller"
 import type { MapLayerPatch } from "@core/map/mergeMapLayerPatch"
 import { MapLayer, MapRoi } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import { type MapCommandPayload, mapCommandSchema } from "./mapCommandSchema"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
-const MAP_COMMANDS_DIR = path.join(os.homedir(), ".aihydro", "map_commands")
+const MAP_COMMANDS_DIR = aihydroPath("map_commands")
 const POLL_INTERVAL_MS = 250
 
 /**

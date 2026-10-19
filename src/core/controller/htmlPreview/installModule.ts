@@ -3,18 +3,18 @@ import { InstallModuleResponse as InstallModuleResponseProto } from "@shared/pro
 import axios from "axios"
 import { createHash } from "crypto"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import type { ModuleRegistryEntry } from "@/services/htmlPreview/moduleRegistry"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
 import type { Controller } from "../index"
 import { assertTrustedMarketplaceUrl } from "./marketplaceUrlAllowlist"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 export async function installModule(controller: Controller, request: InstallModuleRequest): Promise<InstallModuleResponse> {
 	const { moduleId, downloadUrl, title, version } = request
 	try {
 		assertTrustedMarketplaceUrl(downloadUrl, "installModule downloadUrl")
-		const modulesDir = path.join(os.homedir(), ".aihydro", "modules", moduleId)
+		const modulesDir = aihydroPath("modules", moduleId)
 		await fs.mkdir(modulesDir, { recursive: true })
 		const localPath = path.join(modulesDir, "module.html")
 
@@ -24,7 +24,7 @@ export async function installModule(controller: Controller, request: InstallModu
 		const sha256 = createHash("sha256").update(html).digest("hex")
 
 		// Register in installed.json
-		const registryPath = path.join(os.homedir(), ".aihydro", "modules", "installed.json")
+		const registryPath = aihydroPath("modules", "installed.json")
 		let registry: Record<string, ModuleRegistryEntry> = {}
 		try {
 			registry = JSON.parse(await fs.readFile(registryPath, "utf-8"))

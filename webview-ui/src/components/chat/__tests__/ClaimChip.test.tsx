@@ -51,8 +51,9 @@ describe("ClaimChip", () => {
 			claimId: "c-rev",
 			status: "supported",
 			approvalState: "approved",
-			approvalChannel: "ssh_sig",
+			approvalChannel: "ssh_sig_sk_system_trust",
 			approvalTrustRoot: "system",
+			approvalPolicy: "signed_required",
 			approvalForRevisionDigest: "sha256:old",
 		}
 		const { container } = render(<ClaimChip claimId="c-rev" />)
@@ -65,11 +66,35 @@ describe("ClaimChip", () => {
 			claimId: "c-ok",
 			status: "supported",
 			approvalState: "approved",
-			approvalChannel: "ssh_sig",
+			approvalChannel: "ssh_sig_sk_system_trust",
 			approvalTrustRoot: "system",
+			approvalPolicy: "signed_required",
 			approvalForRevisionDigest: "sha256:abc",
 		}
 		const { container } = render(<ClaimChip claimId="c-ok" />)
 		expect(container.querySelector("button")?.getAttribute("data-approved")).toBe("true")
+	})
+
+	it("does not look approved when the verified stamp is missing its policy or channel (fail closed)", () => {
+		for (const [id, fields] of [
+			["c-nopolicy", { approvalPolicy: "" }],
+			["c-nochannel", { approvalChannel: "" }],
+			["c-nodigest", { approvalForRevisionDigest: "" }],
+		] as const) {
+			claims[id] = {
+				...base,
+				claimId: id,
+				status: "supported",
+				approvalState: "approved",
+				approvalChannel: "ssh_sig_sk_system_trust",
+				approvalTrustRoot: "system",
+				approvalPolicy: "signed_required",
+				approvalForRevisionDigest: "sha256:abc",
+				...fields,
+			}
+			const { container, unmount } = render(<ClaimChip claimId={id} />)
+			expect(container.querySelector("button")?.getAttribute("data-approved"), id).toBe("false")
+			unmount()
+		}
 	})
 })

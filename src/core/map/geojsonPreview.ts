@@ -1,8 +1,8 @@
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
-export const MAP_LAYER_GEOJSON_PREVIEW_DIR = path.join(os.homedir(), ".aihydro", "map_layer_geojson_preview")
+export const MAP_LAYER_GEOJSON_PREVIEW_DIR = aihydroPath("map_layer_geojson_preview")
 
 const PREVIEW_TRIGGER_FEATURES = 10_000
 const PREVIEW_TRIGGER_BYTES = 4_000_000

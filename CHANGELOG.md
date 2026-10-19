@@ -11,6 +11,15 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Fixed — Evidence: green means approved, no Demo, one AI-Hydro home (vision-2040, branch `vision2040/evidence-wp01`)
+
+- **Green means a verified human approval, nothing else.** The Evidence Board and Session Replay now take their colours from `design/evidenceStates.ts`. An agent-asserted `supported` claim is labelled "Supported (agent-asserted)" in a neutral colour (lane "Supported, not approved", no longer "Citable"). "In sync", "0 need review", "recorded checks passed" and "0 failed" are neutral. Scientific status and approval authority are separate axes on every card.
+- **`describeApproval` fails closed.** A claim renders as Approved only when the verifier stamp passes an allowlist: a signed channel (`ssh_sig[_sk]_system_trust` or `ssh_sig[_sk]_supplied`) matching a system or supplied trust root, policy `signed_required`, and both revision digests present and equal. A missing, empty or unknown channel, policy, trust root or digest is "Accepted (integrity only)" with the gaps listed. An approved claim that a registry row cites (`consumed`) reads "Approved · promoted" instead of "Approval already used" when its stamp passes the same allowlist.
+- **Runs are not claims.** Runs that no claim cites are no longer shown as `tested` "evidence candidate" claims or counted in the claim total (they stay in Session Replay). The client no longer rewrites a server `supported` status to `weakly_supported`; a supported claim with no evidence carries a "no evidence linked" flag instead.
+- **Demo buttons removed** (Evidence Board, Session Replay, Experiment Table), together with the guide instruction to copy a fixture into `~/.aihydro/sessions` and the unreferenced fixture file. The installed build never contained the fixture.
+- **`AIHYDRO_HOME` is honoured end to end** (extension side). One helper, `src/shared/aihydro/aihydroHome.ts`, resolves it (default `~/.aihydro`) for sessions, ledger events, map and preview events, caches, skills, modules and the rest; the server side is done separately.
+- **Replay arrow keys** move the run selection only while focus is in the run list, so the session list and filter input keep their own keys.
+
 ### Added / Fixed — Harness quick wins (vision-2040, branch `vision2040/harness-quickwins`)
 
 - **Model layer honesty.** An unknown model id no longer silently falls back to the provider default: static-registry providers raise a clear error naming the id (and how to select or add a model); dynamic-list providers (OpenRouter, Requesty, Groq, Baseten, Hugging Face, Huawei MaaS, Vercel AI Gateway, AI-Hydro) send the id you chose.

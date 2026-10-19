@@ -1,10 +1,10 @@
 import type { Controller } from "@core/controller"
 import { MapLayer } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
-const ACTIVE_WORKSPACE_FILE = path.join(os.homedir(), ".aihydro", "active_workspace.json")
+const ACTIVE_WORKSPACE_FILE = aihydroPath("active_workspace.json")
 
 function isFloodInundationRaster(layer: MapLayer): boolean {
 	if (layer.layerType !== "raster") {

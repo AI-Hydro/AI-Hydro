@@ -13,6 +13,7 @@ import { geeCommandSchema, geePreviewChirpsPayloadSchema, geeStatusPayloadSchema
 import type { GeeProjectInfo, GeeStatusResult } from "@/services/gee/types"
 import { handleHydroMapCommand } from "@/services/hydrology/handleHydroMapCommand"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 function expandHomePath(filePath: string): string {
 	if (filePath === "~") {
@@ -28,8 +29,8 @@ async function resolveMapFilePath(filePath: string): Promise<string> {
 	const expanded = expandHomePath(filePath)
 	const candidates = [expanded]
 	if (!path.isAbsolute(expanded)) {
-		candidates.push(path.join(os.homedir(), ".aihydro", "map_layer_geojson_cache", expanded))
-		candidates.push(path.join(os.homedir(), ".aihydro", expanded))
+		candidates.push(aihydroPath("map_layer_geojson_cache", expanded))
+		candidates.push(aihydroPath(expanded))
 		for (const folder of vscode.workspace.workspaceFolders ?? []) {
 			candidates.push(path.join(folder.uri.fsPath, expanded))
 		}

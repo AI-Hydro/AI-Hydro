@@ -73,6 +73,7 @@ import { appendAiHydroStealthModels } from "./models/refreshOpenRouterModels"
 import { checkCliInstallation } from "./state/checkCliInstallation"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
@@ -861,13 +862,10 @@ export class Controller {
 			// "Installed", progress rings, and a "Continue" affordance without an
 			// extra round-trip.
 			const fsp = await import("fs/promises")
-			const osMod = await import("os")
 			const pathMod = await import("path")
 			let registry: Record<string, any> = {}
 			try {
-				registry = JSON.parse(
-					await fsp.readFile(pathMod.join(osMod.homedir(), ".aihydro", "modules", "installed.json"), "utf-8"),
-				)
+				registry = JSON.parse(await fsp.readFile(aihydroPath("modules", "installed.json"), "utf-8"))
 			} catch {
 				// no modules installed yet
 			}

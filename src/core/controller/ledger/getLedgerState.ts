@@ -1,22 +1,22 @@
 import type { GetLedgerStateRequest, LedgerStateResponse } from "@shared/proto/cline/ledger"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import { readResearchSnapshot } from "@/integrations/aihydro-session/researchSnapshot"
 import { loadClaimSurface } from "@/integrations/aihydro-session/sessionSurfaces"
 import type { Controller } from ".."
-
-const SESSIONS_DIR = path.join(os.homedir(), ".aihydro", "sessions")
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
 async function mostRecentSessionId(): Promise<string> {
-	const entries = await fs.readdir(SESSIONS_DIR).catch(() => [] as string[])
+	// Resolved per call so AIHYDRO_HOME is honoured (WP-0).
+	const sessionsDir = aihydroPath("sessions")
+	const entries = await fs.readdir(sessionsDir).catch(() => [] as string[])
 	const jsonFiles = entries.filter((entry) => entry.endsWith(".json"))
 	if (jsonFiles.length === 0) {
 		return ""
 	}
 	const withMtime = await Promise.all(
 		jsonFiles.map(async (file) => {
-			const stat = await fs.stat(path.join(SESSIONS_DIR, file)).catch(() => null)
+			const stat = await fs.stat(path.join(sessionsDir, file)).catch(() => null)
 			return { file, mtime: stat?.mtimeMs ?? 0 }
 		}),
 	)

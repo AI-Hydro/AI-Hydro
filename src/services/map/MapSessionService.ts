@@ -5,10 +5,11 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import { promisify } from "util"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
-const MAP_SESSION_FILE = path.join(os.homedir(), ".aihydro", "map_session.json")
-const OUTBOUND_EVENTS_DIR = path.join(os.homedir(), ".aihydro", "map_events", "outbound")
-const ACTIVE_WORKSPACE_FILE = path.join(os.homedir(), ".aihydro", "active_workspace.json")
+const MAP_SESSION_FILE = aihydroPath("map_session.json")
+const OUTBOUND_EVENTS_DIR = aihydroPath("map_events", "outbound")
+const ACTIVE_WORKSPACE_FILE = aihydroPath("active_workspace.json")
 const OUTBOUND_MAX_FILES = 500
 const MAX_EVENTS = 100
 const execFileAsync = promisify(execFile)

@@ -9,10 +9,10 @@
  */
 
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 
-const CACHE_DIR = path.join(os.homedir(), ".aihydro", "citations")
+const CACHE_DIR = aihydroPath("citations")
 const TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 export interface CachedCitation {

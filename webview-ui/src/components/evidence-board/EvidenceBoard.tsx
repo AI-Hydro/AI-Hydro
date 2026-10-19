@@ -1,8 +1,10 @@
-import { type ApprovalTone, describeApproval, describeDrift } from "@shared/aihydro/claimApproval"
+import { describeApproval, describeDrift } from "@shared/aihydro/claimApproval"
 import type { ClaimRecord, EvidenceSpanRecord } from "@shared/proto/cline/ledger"
 import React, { useEffect, useMemo, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useLedgerContext } from "../../context/LedgerContext"
+import { approvalToneState, NEUTRAL_TOKEN } from "../../design/approvalPresentation"
+import { evidenceState } from "../../design/evidenceStates"
 
 const STATUS_ORDER: string[] = ["proposed", "tested", "weakly_supported", "supported", "stale", "contradicted", "retracted"]
 
@@ -15,7 +17,15 @@ const STATUS_META: Record<string, { label: string; color: string; icon: string; 
 		icon: "codicon-warning",
 		lane: "Needs review",
 	},
-	supported: { label: "Supported", color: "var(--vscode-testing-iconPassed)", icon: "codicon-pass-filled", lane: "Citable" },
+	// Scientific status is a separate axis from approval authority. "Supported" is what the agent
+	// asserted (it can be set without any human), so it takes the agent-asserted token and is never
+	// green; only a verified human approval is green (see approvalToneState).
+	supported: {
+		label: "Supported (agent-asserted)",
+		color: evidenceState("agent-asserted").token,
+		icon: evidenceState("agent-asserted").icon,
+		lane: "Supported, not approved",
+	},
 	stale: { label: "Stale", color: "var(--vscode-testing-iconQueued)", icon: "codicon-history", lane: "Needs review" },
 	contradicted: { label: "Contradicted", color: "var(--vscode-testing-iconFailed)", icon: "codicon-error", lane: "Blocked" },
 	retracted: { label: "Retracted", color: "var(--vscode-disabledForeground)", icon: "codicon-circle-slash", lane: "Archived" },
@@ -77,18 +87,16 @@ async function copyText(text: string): Promise<void> {
 	}
 }
 
-const APPROVAL_TONE_COLOR: Record<ApprovalTone, string> = {
-	approved: "var(--vscode-testing-iconPassed)",
-	integrity: "var(--vscode-foreground)",
-	pending: "var(--vscode-disabledForeground)",
-	untrusted: "var(--vscode-testing-iconFailed)",
-	unknown: "var(--vscode-testing-iconQueued)",
+// "In sync" is information, not authority: neutral. Warnings use the stale token.
+const DRIFT_TONE_COLOR = {
+	ok: NEUTRAL_TOKEN,
+	warn: evidenceState("stale").token,
+	unknown: evidenceState("unverified").token,
 }
 
-const DRIFT_TONE_COLOR = {
-	ok: "var(--vscode-testing-iconPassed)",
-	warn: "var(--vscode-testing-iconQueued)",
-	unknown: "var(--vscode-disabledForeground)",
+/** A supported claim that cites no evidence: flagged for the reader; the server's status is not rewritten. */
+function lacksEvidence(claim: ClaimRecord): boolean {
+	return claim.status === "supported" && claim.evidenceSpans.length === 0
 }
 
 function claimApproval(claim: ClaimRecord) {
@@ -138,7 +146,7 @@ const RevisionChips: React.FC<{ claim: ClaimRecord }> = ({ claim }) => {
 				className="inline-flex items-center gap-0.5 text-[9px]"
 				data-approved={approval.approved ? "true" : "false"}
 				data-testid="claim-approval"
-				style={{ color: APPROVAL_TONE_COLOR[approval.tone] }}
+				style={{ color: approvalToneState(approval.tone).token }}
 				title={approval.detail ?? approval.label}>
 				<span
 					className={`codicon ${approval.approved ? "codicon-verified-filled" : approval.tone === "untrusted" ? "codicon-error" : "codicon-circle-outline"} text-[9px]`}
@@ -162,7 +170,7 @@ function claimMarkdown(claim: ClaimRecord): string {
 	return [
 		`### ${claim.statement}`,
 		"",
-		`Status: ${claim.status}`,
+		`Status: ${(STATUS_META[claim.status] ?? STATUS_META.proposed).label}`,
 		`Confidence: ${claim.confidence}`,
 		`Type: ${claim.claimType}`,
 		`Revision: ${claim.revision > 0 ? `r${claim.revision} (${claim.revisionDigest || "digest not reported"})` : "not reported"}`,
@@ -250,6 +258,16 @@ const ClaimCard: React.FC<{ claim: ClaimRecord; selected: boolean; onSelect: () 
 					</span>
 				)}
 				<RevisionChips claim={claim} />
+				{lacksEvidence(claim) && (
+					<span
+						className="inline-flex items-center gap-0.5 text-[11px]"
+						data-testid="no-evidence-flag"
+						style={{ color: evidenceState("stale").token }}
+						title="The server reports this claim as supported but it cites no evidence span">
+						<span className="codicon codicon-warning text-[11px]" />
+						no evidence linked
+					</span>
+				)}
 				{linkedRuns > 0 && (
 					<span className="inline-flex items-center gap-0.5 text-[9px] opacity-75">
 						<span className="codicon codicon-debug-rerun text-[9px]" />
@@ -329,7 +347,7 @@ const RevisionDetail: React.FC<{ claim: ClaimRecord }> = ({ claim }) => {
 					className="text-[10px]"
 					data-approved={approval.approved ? "true" : "false"}
 					data-testid="approval-line"
-					style={{ color: APPROVAL_TONE_COLOR[approval.tone] }}>
+					style={{ color: approvalToneState(approval.tone).token }}>
 					{approval.label}
 					{approval.detail && <span className="opacity-75"> — {approval.detail}</span>}
 				</div>
@@ -391,7 +409,10 @@ const ClaimDetail: React.FC<{ claim: ClaimRecord | null }> = ({ claim }) => {
 			<section className="mb-3">
 				<div className="text-[9px] font-semibold uppercase tracking-wide opacity-60 mb-1">Evidence links</div>
 				{claim.evidenceSpans.length === 0 ? (
-					<div className="opacity-55 italic">No evidence spans attached.</div>
+					<div className="opacity-55 italic" data-testid="no-evidence-note">
+						No evidence spans attached.
+						{lacksEvidence(claim) && " The status above is as reported by the server; nothing here supports it."}
+					</div>
 				) : (
 					<div className="flex flex-col gap-1.5">
 						{claim.evidenceSpans.map((span) => (
@@ -556,16 +577,6 @@ export const EvidenceBoard: React.FC = () => {
 					</select>
 					<button
 						className={BUTTON_BASE}
-						onClick={() => {
-							setRequestedSessionId("demo-reproducibility-cockpit")
-							void loadSession("demo-reproducibility-cockpit")
-						}}
-						title="Load the bundled reproducibility cockpit demo"
-						type="button">
-						Demo
-					</button>
-					<button
-						className={BUTTON_BASE}
 						disabled={!sessionId || stalenessCheck.status === "starting"}
 						onClick={() => void handleCheckStaleness()}
 						title="Ask the agent to re-check promoted claims against current data (check_registry_staleness)"
@@ -619,8 +630,9 @@ export const EvidenceBoard: React.FC = () => {
 						{evidenceSpanCount} evidence spans
 					</span>
 					<span
+						data-testid="need-review-count"
 						style={{
-							color: reviewCount > 0 ? "var(--vscode-testing-iconQueued)" : "var(--vscode-testing-iconPassed)",
+							color: reviewCount > 0 ? evidenceState("stale").token : NEUTRAL_TOKEN,
 						}}>
 						<span className="codicon codicon-warning text-[10px] mr-1" />
 						{reviewCount} need review
@@ -639,8 +651,8 @@ export const EvidenceBoard: React.FC = () => {
 					<span className="codicon codicon-beaker text-[32px] mb-2 opacity-55" />
 					<p className="text-sm">Session loaded successfully. 0 claims found.</p>
 					<p className="text-[11px] mt-1 max-w-[620px] opacity-75">
-						Use <code>add_claim</code> or <code>draft_claim_from_run</code> in chat, or click <strong>Demo</strong> to
-						inspect a populated review board.
+						Use <code>add_claim</code> or <code>draft_claim_from_run</code> in chat. Recorded runs that no claim cites
+						are not claims; they are listed in Session Replay.
 					</p>
 				</div>
 			) : (

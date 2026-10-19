@@ -24,7 +24,7 @@ vi.mock("@/config/platform.config", () => ({
 
 const SUPPORTED_CLAIM = {
 	claimId: "claim-kge-acceptable",
-	sessionId: "demo-reproducibility-cockpit",
+	sessionId: "scratch-session",
 	statement: "The calibration experiment produced acceptable KGE values for two of three basins.",
 	status: "tested",
 	claimType: "model_performance",
@@ -42,19 +42,6 @@ const SUPPORTED_CLAIM = {
 	limitations: ["Only two of three basins meet the illustrative KGE threshold."],
 }
 
-const CANDIDATE_CLAIM = {
-	claimId: "candidate:run.01109000.calibration",
-	sessionId: "demo-reproducibility-cockpit",
-	statement: "Evidence candidate from calibrate_model: review outputs before turning this run into a formal scientific claim.",
-	status: "proposed",
-	claimType: "evidence_candidate",
-	confidence: "",
-	createdAt: "2026-06-25T11:59:00Z",
-	updatedAt: "2026-06-25T11:59:00Z",
-	evidenceSpans: [{ sourceType: "run", sourceId: "run.01109000.calibration", metricRef: "", description: "" }],
-	limitations: ["Auto-generated evidence candidate; not a user-authored scientific claim."],
-}
-
 function renderBoard() {
 	return render(
 		<LedgerContextProvider>
@@ -64,44 +51,34 @@ function renderBoard() {
 }
 
 describe("EvidenceBoard", () => {
-	it("loads claims on mount and renders a status lane per claim, with synthesized candidates visually distinct from recorded claims", async () => {
+	it("loads claims on mount and renders a status lane per claim", async () => {
 		getLedgerStateMock.mockResolvedValue({
-			sessionId: "demo-reproducibility-cockpit",
-			claims: [SUPPORTED_CLAIM, CANDIDATE_CLAIM],
+			sessionId: "scratch-session",
+			claims: [SUPPORTED_CLAIM],
 			updatedAtMs: Date.now(),
 		})
 
 		renderBoard()
 
-		await waitFor(() => expect(screen.getByText("2 claims")).toBeInTheDocument())
+		await waitFor(() => expect(screen.getByText("1 claims")).toBeInTheDocument())
 
-		// Real, non-fabricated claim -> its own status lane + claim-type badge.
 		// "Tested" legitimately renders twice (the lane header + the
 		// auto-selected claim's detail-pane status card).
 		expect(screen.getAllByText("Tested").length).toBeGreaterThan(0)
 		expect(screen.getAllByText("model").length).toBeGreaterThan(0)
+	})
 
-		// F-10 verification: the synthesized/candidate claim is F-10's concern —
-		// confirm it renders with a visually distinct claim-type badge ("evidence
-		// candidate") rather than blending in with recorded, user-authored claims.
-		expect(screen.getAllByText("evidence candidate").length).toBeGreaterThan(0)
-
-		// Real interaction: clicking the second claim's card switches the detail
-		// pane to ITS limitations (not the first/auto-selected claim's). See the
-		// bullet-prefix note above for why this is a function matcher.
-		fireEvent.click(screen.getByText(CANDIDATE_CLAIM.statement))
-		expect(
-			await screen.findByText(
-				(_, element) =>
-					element?.tagName === "P" &&
-					element.textContent === "• Auto-generated evidence candidate; not a user-authored scientific claim.",
-			),
-		).toBeInTheDocument()
+	it("has no Demo control and does not point users at a demo session", async () => {
+		getLedgerStateMock.mockResolvedValue({ sessionId: "scratch-session", claims: [], updatedAtMs: Date.now() })
+		renderBoard()
+		await screen.findByText(/0 claims found/)
+		expect(screen.queryByRole("button", { name: "Demo" })).not.toBeInTheDocument()
+		expect(document.body.textContent).not.toMatch(/demo/i)
 	})
 
 	it("auto-selects the only claim and shows its evidence spans and limitations in the detail pane", async () => {
 		getLedgerStateMock.mockResolvedValue({
-			sessionId: "demo-reproducibility-cockpit",
+			sessionId: "scratch-session",
 			claims: [SUPPORTED_CLAIM],
 			updatedAtMs: Date.now(),
 		})
@@ -148,7 +125,7 @@ describe("EvidenceBoard", () => {
 			],
 		}
 		getLedgerStateMock.mockResolvedValue({
-			sessionId: "demo-reproducibility-cockpit",
+			sessionId: "scratch-session",
 			claims: [claimWithExperimentSpan],
 			updatedAtMs: Date.now(),
 		})
@@ -174,7 +151,7 @@ describe("EvidenceBoard", () => {
 	it("F-4: Check staleness posts a real agent-task prompt naming the session, then reflects the host's started/error response", async () => {
 		platformPostMessageMock.mockClear()
 		getLedgerStateMock.mockResolvedValue({
-			sessionId: "demo-reproducibility-cockpit",
+			sessionId: "scratch-session",
 			claims: [SUPPORTED_CLAIM],
 			updatedAtMs: Date.now(),
 		})
@@ -191,7 +168,7 @@ describe("EvidenceBoard", () => {
 		expect(call).toBeDefined()
 		const sentMessage = call?.[0] as { requestId: string; prompt: string }
 		expect(sentMessage.prompt).toContain("check_registry_staleness")
-		expect(sentMessage.prompt).toContain("demo-reproducibility-cockpit")
+		expect(sentMessage.prompt).toContain("scratch-session")
 
 		// Simulate the host confirming the task started, using the REAL
 		// requestId EvidenceBoard generated (not a stub) -- proves the
@@ -208,7 +185,7 @@ describe("EvidenceBoard", () => {
 	it("F-4: Check staleness shows an error state when the host reports failure", async () => {
 		platformPostMessageMock.mockClear()
 		getLedgerStateMock.mockResolvedValue({
-			sessionId: "demo-reproducibility-cockpit",
+			sessionId: "scratch-session",
 			claims: [SUPPORTED_CLAIM],
 			updatedAtMs: Date.now(),
 		})
@@ -257,7 +234,7 @@ describe("EvidenceBoard", () => {
 
 		async function renderWith(fields: Record<string, unknown>) {
 			getLedgerStateMock.mockResolvedValue({
-				sessionId: "demo-reproducibility-cockpit",
+				sessionId: "scratch-session",
 				claims: [{ ...SUPPORTED_CLAIM, ...REVISION_FIELDS, ...fields }],
 				updatedAtMs: Date.now(),
 			})
@@ -269,8 +246,9 @@ describe("EvidenceBoard", () => {
 			await renderWith({
 				approvalState: "approved",
 				approvalForRevisionDigest: "sha256:abc",
-				approvalChannel: "ssh_sig",
+				approvalChannel: "ssh_sig_sk_system_trust",
 				approvalTrustRoot: "system",
+				approvalPolicy: "signed_required",
 			})
 			const card = screen.getByTestId("claim-approval")
 			expect(card).toHaveAttribute("data-approved", "true")
@@ -278,9 +256,15 @@ describe("EvidenceBoard", () => {
 			expect(screen.getByTestId("claim-revision").textContent).toBe("r2")
 		})
 
-		for (const state of ["unverifiable", "none", "consumed", "stale_evidence", "stale_revision", "evidence_unchecked", ""]) {
+		for (const state of ["unverifiable", "none", "stale_evidence", "stale_revision", "evidence_unchecked", ""]) {
 			it(`never renders approval state ${JSON.stringify(state)} as approved`, async () => {
-				await renderWith({ approvalState: state, approvalChannel: "ssh_sig", approvalTrustRoot: "system" })
+				await renderWith({
+					approvalState: state,
+					approvalForRevisionDigest: "sha256:abc",
+					approvalChannel: "ssh_sig_sk_system_trust",
+					approvalTrustRoot: "system",
+					approvalPolicy: "signed_required",
+				})
 				expect(screen.getByTestId("claim-approval")).toHaveAttribute("data-approved", "false")
 				expect(screen.getByTestId("approval-line")).toHaveAttribute("data-approved", "false")
 				expect(screen.queryByText(/^Approved/)).not.toBeInTheDocument()
@@ -306,8 +290,9 @@ describe("EvidenceBoard", () => {
 				driftChangedFields: ["statement"],
 				approvalState: "approved",
 				approvalForRevisionDigest: "sha256:old",
-				approvalChannel: "ssh_sig",
+				approvalChannel: "ssh_sig_sk_system_trust",
 				approvalTrustRoot: "system",
+				approvalPolicy: "signed_required",
 			})
 			expect(screen.getByTestId("claim-drift")).toBeInTheDocument()
 			expect(screen.getByTestId("drift-line").textContent).toContain("changed: statement")
