@@ -1,3 +1,4 @@
+import { isAiHydroServerName } from "@/core/task/tools/handlers/aiHydroServer"
 import type { McpServer, McpTool } from "@/shared/mcp"
 import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
@@ -25,10 +26,55 @@ export async function getMcp(variant: PromptVariant, context: SystemPromptContex
 async function getMcpServers(servers: McpServer[], variant: PromptVariant, context: SystemPromptContext): Promise<string> {
 	const template = variant.componentOverrides?.[SystemPromptSection.MCP]?.template || MCP_TEMPLATE_TEXT
 
-	const serversList = servers.length > 0 ? formatMcpServersList(servers) : "(No MCP servers currently connected)"
+	let serversList = servers.length > 0 ? formatMcpServersList(servers) : "(No MCP servers currently connected)"
+	const instructions = formatMcpServerInstructions(servers)
+	if (instructions) {
+		serversList += `\n\n${instructions}`
+	}
 	return new TemplateEngine().resolve(template, context, {
 		MCP_SERVERS_LIST: serversList,
 	})
+}
+
+// ── Server-provided instructions ────────────────────────────────────────────
+//
+// An MCP server may return `instructions` in its initialize result: the server author's own guidance on how
+// its tools fit together. The extension delivers them to the model, attributed per server, with two guards:
+//   • TRUST: instructions are free text that lands in the system prompt, so a third-party server could use
+//     them to steer the agent. Only trusted servers' instructions are included.
+//   • SIZE: each server's text is capped; an over-long text is cut and the cut is stated in the prompt so
+//     neither the model nor the reader mistakes a truncated text for the whole.
+
+/** Per-server cap on delivered instructions, in characters (~6k tokens; the AI-Hydro persona is ~18k chars). */
+export const MAX_MCP_INSTRUCTIONS_CHARS = 24_000
+
+/**
+ * Whether a server's `instructions` may be shown to the model.
+ * TODO(AP1): replace with the shared `isServerTrusted(connection)` helper from vision2040/approval-ap1 once it
+ * lands; until then this is the existing first-party name check (plus the AIHYDRO_TRUSTED_MCP_SERVERS allowlist).
+ */
+export function isMcpInstructionsTrusted(server: McpServer): boolean {
+	return isAiHydroServerName(server.name)
+}
+
+/** The "Server Instructions" prompt section, or "" when no connected, trusted server provided any. */
+export function formatMcpServerInstructions(servers: McpServer[]): string {
+	const blocks: string[] = []
+	for (const server of servers) {
+		const text = server.instructions?.trim()
+		if (!text || server.status !== "connected" || server.disabled || !isMcpInstructionsTrusted(server)) {
+			continue
+		}
+		const body =
+			text.length > MAX_MCP_INSTRUCTIONS_CHARS
+				? `${text.slice(0, MAX_MCP_INSTRUCTIONS_CHARS).trimEnd()}\n\n[Instructions truncated: showing the first ${MAX_MCP_INSTRUCTIONS_CHARS} of ${text.length} characters.]`
+				: text
+		blocks.push(`## Instructions from ${server.name}\n${body}`)
+	}
+	if (blocks.length === 0) {
+		return ""
+	}
+	return `# MCP Server Instructions\nThe following guidance was provided by the named, trusted MCP server about its own tools.\n\n${blocks.join("\n\n")}`
 }
 
 // ── Progressive tool disclosure (server-driven) ─────────────────────────────

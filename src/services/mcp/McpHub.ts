@@ -392,6 +392,9 @@ export class McpHub {
 
 			connection.server.status = "connected"
 			connection.server.error = ""
+			// The server's own usage guidance (initialize result). Stored verbatim; the system prompt decides
+			// whether the server is trusted enough to have it shown to the model.
+			connection.server.instructions = client.getInstructions()?.trim() || undefined
 
 			// Register notification handler for real-time messages
 			//console.log(`[MCP Debug] Setting up notification handlers for server: ${name}`)
