@@ -76,22 +76,18 @@ describe("ClaimChip", () => {
 	})
 
 	it("does not look approved when the verified stamp is missing its policy or channel (fail closed)", () => {
-		for (const [id, fields] of [
-			["c-nopolicy", { approvalPolicy: "" }],
-			["c-nochannel", { approvalChannel: "" }],
-			["c-nodigest", { approvalForRevisionDigest: "" }],
+		const stamp: Record<string, unknown> = {
+			approvalChannel: "ssh_sig_sk_system_trust",
+			approvalTrustRoot: "system",
+			approvalPolicy: "signed_required",
+			approvalForRevisionDigest: "sha256:abc",
+		}
+		for (const [id, field] of [
+			["c-nopolicy", "approvalPolicy"],
+			["c-nochannel", "approvalChannel"],
+			["c-nodigest", "approvalForRevisionDigest"],
 		] as const) {
-			claims[id] = {
-				...base,
-				claimId: id,
-				status: "supported",
-				approvalState: "approved",
-				approvalChannel: "ssh_sig_sk_system_trust",
-				approvalTrustRoot: "system",
-				approvalPolicy: "signed_required",
-				approvalForRevisionDigest: "sha256:abc",
-				...fields,
-			}
+			claims[id] = { ...base, claimId: id, status: "supported", approvalState: "approved", ...stamp, ...{ [field]: "" } }
 			const { container, unmount } = render(<ClaimChip claimId={id} />)
 			expect(container.querySelector("button")?.getAttribute("data-approved"), id).toBe("false")
 			unmount()
