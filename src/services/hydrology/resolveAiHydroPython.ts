@@ -56,27 +56,29 @@ export async function pythonFromMcpServer(
 	server: McpServerEntry | undefined,
 	deps: Pick<ResolveDeps, "readFirstLine" | "exists" | "platform">,
 ): Promise<string | undefined> {
+	// Use the path flavour of the target platform (not the host) so mocked/remote platforms resolve consistently.
+	const p = pathFor(deps.platform)
 	const command = server?.command?.trim()
 	if (!command) return undefined
-	const base = path.basename(command)
+	const base = p.basename(command)
 	if (PYTHON_NAME.test(base) || base === "py" || base === "py.exe") {
 		return command
 	}
-	if (!path.isAbsolute(command)) return undefined
+	if (!p.isAbsolute(command)) return undefined
 
 	const first = await deps.readFirstLine(command)
 	if (first?.startsWith("#!")) {
 		const parts = first.slice(2).trim().split(/\s+/)
 		// `#!/usr/bin/env python3` carries no interpreter location; ignore it.
-		if (parts[0] && path.basename(parts[0]) !== "env" && path.isAbsolute(parts[0])) {
+		if (parts[0] && p.basename(parts[0]) !== "env" && p.isAbsolute(parts[0])) {
 			return parts[0]
 		}
 	}
-	const dir = path.dirname(command)
+	const dir = p.dirname(command)
 	const names = deps.platform === "win32" ? ["python.exe"] : ["python", "python3"]
-	for (const d of [dir, path.dirname(dir)]) {
+	for (const d of [dir, p.dirname(dir)]) {
 		for (const n of names) {
-			const candidate = path.join(d, n)
+			const candidate = p.join(d, n)
 			if (await deps.exists(candidate)) return candidate
 		}
 	}

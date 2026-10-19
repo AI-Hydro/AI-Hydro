@@ -3,7 +3,7 @@ import { retryWithBackoff } from "@utils/retry"
 import fs from "fs/promises"
 import { globby } from "globby"
 import * as path from "path"
-import simpleGit, { type SimpleGit } from "simple-git"
+import { type SimpleGit, simpleGit } from "simple-git"
 import { telemetryService } from "@/services/telemetry"
 import { getLfsPatterns, writeExcludesFile } from "./CheckpointExclusions"
 
