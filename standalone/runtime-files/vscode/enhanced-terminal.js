@@ -36,7 +36,8 @@ class StandaloneTerminalProcess extends EventEmitter {
 			this.childProcess = spawn(shell, shellArgs, {
 				cwd: cwd,
 				stdio: ["pipe", "pipe", "pipe"],
-				env: { ...process.env, TERM: "xterm-256color" },
+				// AIHYDRO_AGENT_CONTEXT marks the process as agent-run so the approval CLI refuses to approve a claim.
+				env: { ...process.env, TERM: "xterm-256color", AIHYDRO_AGENT_CONTEXT: "1" },
 			})
 
 			// Track process state
