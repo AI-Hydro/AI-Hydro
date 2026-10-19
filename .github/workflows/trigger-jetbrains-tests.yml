@@ -11,6 +11,10 @@ concurrency:
 jobs:
   trigger-integration-test:
     name: Run Tests
+    # Upstream-Cline plumbing: dispatches to the upstream JetBrains plugin repo using a
+    # GitHub App key (CLINE_JETBRAINS_WORKFLOW_KEY) that only exists in the upstream repo.
+    # In this fork the secret is absent, so the token step crashed on every PR. Skip here.
+    if: github.repository == 'cline/cline'
     runs-on: ubuntu-latest
     steps:
       - name: Generate GitHub App Token
