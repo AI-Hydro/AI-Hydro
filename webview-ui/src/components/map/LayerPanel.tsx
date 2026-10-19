@@ -28,6 +28,8 @@ import { deriveLayerIntelligence, type LayerIntelligence, layerResearchDetails, 
 import { geeDisplayLines } from "./mapLayerAdapters"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { SymbologyEditor } from "./SymbologyEditor"
+import { restoredLayersNote, WorkspaceFilesSection } from "./WorkspaceFilesSection"
+import { MAP_Z } from "./mapZ"
 
 interface LayerPanelContentProps {
 	onZoomToLayer?: (layer: MapLayer) => void
@@ -349,6 +351,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const danger = "#dc3545"
 
 	const displayNames = useMemo(() => buildDisplayNames(layers, layerAliases), [layers, layerAliases])
+	const visibleCount = useMemo(() => layers.filter((layer) => visibleLayerIds.has(layer.id)).length, [layers, visibleLayerIds])
+	const restoredNote = useMemo(() => restoredLayersNote(layers), [layers])
 
 	const commitRename = async (layer: MapLayer) => {
 		const trimmed = renameDraft.trim()
@@ -608,8 +612,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 					background: subtle,
 					gap: 4,
 				}}>
-				<span style={{ fontSize: 11, opacity: 0.7, flex: 1 }}>
-					{layers.length === 0 ? "Empty" : `${layers.length} layer${layers.length === 1 ? "" : "s"}`}
+				<span style={{ fontSize: 11, opacity: 0.7, flex: 1 }} title={restoredNote ?? undefined}>
+					{layers.length === 0 ? "Empty" : `${visibleCount} visible · ${layers.length - visibleCount} hidden`}
 				</span>
 				{layers.length > 0 && (
 					<>
@@ -1342,6 +1346,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				)}
 			</div>
 
+			{restoredNote && (
+				<div style={{ padding: "4px 8px", fontSize: 11, opacity: 0.8, borderTop: `1px solid ${border}` }}>{restoredNote}</div>
+			)}
+
+			<WorkspaceFilesSection border={border} fg={fg} layers={layers} subtle={subtle} />
+
 			{/* Footer — clear all */}
 			{layers.length > 1 && (
 				<div style={{ padding: 6, borderTop: `1px solid ${border}`, background: subtle }}>
@@ -1476,7 +1486,7 @@ const AttributeTable: React.FC<{ layer: MapLayer; border: string; fg: string }> 
 					position: "sticky",
 					top: 0,
 					background: "var(--vscode-sideBar-background, #1e1e1e)",
-					zIndex: 1,
+					zIndex: MAP_Z.local,
 					borderBottom: `1px solid ${border}`,
 				}}>
 				<span style={{ flex: 1, opacity: 0.6 }}>

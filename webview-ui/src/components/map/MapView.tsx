@@ -20,10 +20,11 @@ import {
 	saveAnnotations,
 	seedAnnotationsFromGeoJson,
 } from "./annotationStorage"
-import { BASE_MAP_STYLES } from "./BaseMapSelector"
+import { attributionFor, isKnownBaseMap, resolveBaseMap } from "./basemaps"
 import FeatureIdentifier, { type ClickedFeature, type MapInspectPoint } from "./FeatureIdentifier"
 import { loadAndPushFileEntries, loadAndPushFiles } from "./formats"
 import { flyToTransition } from "./flyToTransition"
+import { freshLayers } from "./freshLayers"
 import { rasterCache } from "./formats/rasterCache"
 import {
 	addToMyGallery,
@@ -58,28 +59,51 @@ import { MapConnectionStatus } from "./MapConnectionStatus"
 import MapContextMenu from "./MapContextMenu"
 import MapLegend from "./MapLegend"
 import { MapResourceStatus } from "./MapResourceStatus"
-import { MapToolRibbon } from "./MapToolRibbon"
+import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
 import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext } from "./mapAgentBridge"
 import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapHydroGuards"
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
 import { type CursorRasterReading, getLayerBounds, isGeoJsonLayer, sampleTopRasterAtPoint } from "./mapLayerAdapters"
 import { reportBasemapChanged, reportMapEvent, reportVisibleLayers } from "./mapSessionBridge"
-import { loadMapWorkspace, sanitizePersistedViewState, sanitizeViewStateForDeck, saveMapWorkspace } from "./mapWorkspace"
+import { MAP_Z } from "./mapZ"
+import {
+	initialBasemap,
+	loadMapWorkspace,
+	sanitizePersistedViewState,
+	sanitizeViewStateForDeck,
+	saveMapWorkspace,
+} from "./mapWorkspace"
+import { DASH_EXTENSION } from "./pathStyle"
 import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGalleryPanel"
 import { resolveFileUri } from "./resolveFileUri"
-import { MapEmptyState } from "./MapEmptyState"
+import { MapEmptyState, shouldShowEmptyState } from "./MapEmptyState"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
 import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
 import { loadTransects, type MapTransect, newTransect, saveTransects, type TransectCollection } from "./transectStorage"
+import {
+	clearTally,
+	tallyTile,
+	tileErrorsFrom,
+	tileNotesFrom,
+	type TileOutcome,
+	type TileTallies,
+} from "./tileHealth"
+import { useMapTheme } from "./useMapTheme"
 import { loadMapTile, type ResourceState, useRasterResources } from "./useRasterResources"
 import VectorDrawTool, { type CompletedVectorDraw, type VectorDrawMode } from "./VectorDrawTool"
 import VectorSavePanel from "./VectorSavePanel"
 
 type BoundingBox = [number, number, number, number]
 const QUICK_DELINEATE_MAX_MERIT_UPAREA_KM2 = 50_000
+
+/** Names for non-layer tile sources in the resource notices. */
+const TILE_SOURCE_LABELS: Record<string, string> = {
+	"basemap": "Basemap",
+	"basemap-usgs-hydro": "River overlay (USGS hydrography)",
+}
 
 /** Remote-tile layers are rendered under `${id}-tiles-${retry}` so a retry remounts them; match both forms. */
 const isDeckLayerFor = (deckLayer: { id?: string } | undefined, layerId: string): boolean =>
@@ -633,27 +657,64 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const [resourceRetry, setResourceRetry] = useState(0)
 	const { states: rasterStates, revision: rasterResourceRevision } = useRasterResources(layers, resourceRetry)
 	const [rendererError, setRendererError] = useState<string | null>(null)
-	const [tileErrors, setTileErrors] = useState<Record<string, string>>({})
+	// Tile health per source ("basemap", "basemap-<overlay>", or a layer id). Counts accumulate in a ref and are
+	// flushed to state in batches, so hundreds of tile callbacks do not re-render the map. See tileHealth.ts for
+	// how counts become an alert (tileErrors) or a quiet note (tileNotes).
+	const [tileTallies, setTileTallies] = useState<TileTallies>({})
+	const talliesRef = useRef<TileTallies>({})
+	const tallyFlushTimer = useRef<number | undefined>(undefined)
 	const resourceGeneration = useRef(0)
 	const resourcesMounted = useRef(true)
 	const currentLayers = useRef(layers)
 	currentLayers.current = layers
-	const reportTileError = useCallback((id: string, source: string, generation: number, error: unknown) => {
-		if (!resourcesMounted.current || generation !== resourceGeneration.current || (error as any)?.name === "AbortError")
-			return
-		if (
-			id !== "basemap" &&
-			!currentLayers.current.some(
-				(layer) => layer.id === id && (layer.metadata?.gee_tile_url_template || layer.metadata?.tile_url) === source,
-			)
-		)
-			return
-		const message = error instanceof Error ? error.message : String(error)
-		setTileErrors((previous) => (previous[id] === message ? previous : { ...previous, [id]: message }))
+	// Source URLs the current render draws, so a late tile callback from a previous basemap is ignored.
+	const currentSourcesRef = useRef<Record<string, string>>({})
+	const flushTallies = useCallback(() => {
+		if (tallyFlushTimer.current !== undefined) return
+		tallyFlushTimer.current = window.setTimeout(() => {
+			tallyFlushTimer.current = undefined
+			if (resourcesMounted.current) setTileTallies(talliesRef.current)
+		}, 200)
+	}, [])
+	const recordTile = useCallback(
+		(id: string, source: string, generation: number, outcome: TileOutcome) => {
+			if (!resourcesMounted.current || generation !== resourceGeneration.current) return
+			const isBasemapSource = id === "basemap" || id.startsWith("basemap-")
+			if (isBasemapSource) {
+				if (currentSourcesRef.current[id] !== source) return
+			} else if (
+				!currentLayers.current.some(
+					(layer) => layer.id === id && (layer.metadata?.gee_tile_url_template || layer.metadata?.tile_url) === source,
+				)
+			) {
+				return
+			}
+			talliesRef.current = tallyTile(talliesRef.current, id, outcome)
+			flushTallies()
+		},
+		[flushTallies],
+	)
+	const reportTileLoaded = useCallback(
+		(id: string, source: string, generation: number) => recordTile(id, source, generation, { ok: true }),
+		[recordTile],
+	)
+	const reportTileError = useCallback(
+		(id: string, source: string, generation: number, error: unknown) => {
+			if ((error as any)?.name === "AbortError") return
+			recordTile(id, source, generation, { ok: false, message: error instanceof Error ? error.message : String(error) })
+		},
+		[recordTile],
+	)
+	const tileErrors = useMemo(() => tileErrorsFrom(tileTallies), [tileTallies])
+	const tileNotes = useMemo(() => tileNotesFrom(tileTallies), [tileTallies])
+	const clearTileSource = useCallback((id: string) => {
+		talliesRef.current = clearTally(talliesRef.current, id)
+		setTileTallies(talliesRef.current)
 	}, [])
 	const retryResources = useCallback(() => {
 		resourceGeneration.current += 1
-		setTileErrors({})
+		talliesRef.current = {}
+		setTileTallies({})
 		setRendererError(null)
 		setResourceRetry((value) => value + 1)
 	}, [])
@@ -661,6 +722,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		resourcesMounted.current = true
 		return () => {
 			resourcesMounted.current = false
+			if (tallyFlushTimer.current !== undefined) window.clearTimeout(tallyFlushTimer.current)
 		}
 	}, [])
 
@@ -685,7 +747,17 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 
 	// Persistent state — restore on mount, save on change
 	const persisted = useMemo(() => loadMapWorkspace(), [])
-	const [selectedBaseMap, setSelectedBaseMap] = useState<string>(persisted.basemap ?? "usgs-topo")
+	// Basemap: the user's explicit, still-available choice, otherwise the muted hydrology default (D1).
+	const initialBase = useMemo(() => initialBasemap(persisted), [persisted])
+	const [selectedBaseMap, setSelectedBaseMap] = useState<string>(initialBase.id)
+	const [basemapExplicit, setBasemapExplicit] = useState<boolean>(initialBase.explicit)
+	const selectBaseMap = useCallback((id: string, explicit: boolean) => {
+		setSelectedBaseMap(id)
+		setBasemapExplicit(explicit)
+	}, [])
+	const resetBaseMap = useCallback(() => selectBaseMap(initialBasemap({}).id, false), [selectBaseMap])
+	const mapTheme = useMapTheme()
+	const resolvedBaseMap = useMemo(() => resolveBaseMap(selectedBaseMap, mapTheme), [selectedBaseMap, mapTheme])
 	const [viewState, setViewState] = useState<MapViewState>(sanitizeViewState(persisted.viewState))
 	const [visibleLayerIds, setVisibleLayerIds] = useState<Set<string>>(
 		new Set(persisted.visibleLayerIds ?? layers.filter((layer) => layer.visible !== false).map((layer) => layer.id)),
@@ -695,9 +767,19 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// Search / measure / export UI state
 	const [measureMode, setMeasureMode] = useState<MeasureMode>(null)
 	const [drawMode, setDrawMode] = useState<VectorDrawMode>(null)
-	const [searchOpen, setSearchOpen] = useState(false)
-	const [exportOpen, setExportOpen] = useState(false)
-	const [galleryOpen, setGalleryOpen] = useState(false)
+	// ONE source of truth for which tool panel is open. Search, export, gallery and transect "open" flags are
+	// derived from it, so two ribbon items can never be active at once and the empty state can tell a panel is up.
+	const [activeTool, setActiveTool] = useState<RibbonTool>(null)
+	const setToolOpen = useCallback(
+		(tool: Exclude<RibbonTool, null>, open: boolean) => setActiveTool((current) => (open ? tool : current === tool ? null : current)),
+		[],
+	)
+	const searchOpen = activeTool === "search"
+	const exportOpen = activeTool === "export"
+	const setSearchOpen = useCallback((open: boolean) => setToolOpen("search", open), [setToolOpen])
+	const setExportOpen = useCallback((open: boolean) => setToolOpen("export", open), [setToolOpen])
+	const setGalleryOpen = useCallback((open: boolean) => setToolOpen("gallery", open), [setToolOpen])
+	const setTransectActive = useCallback((open: boolean) => setToolOpen("transect", open), [setToolOpen])
 	const [saveVectorBusy, setSaveVectorBusy] = useState(false)
 
 	// My Gallery
@@ -725,7 +807,6 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const measureClickRef = useRef<((coord: [number, number]) => void) | null>(null)
 	const drawClickRef = useRef<((coord: [number, number]) => void) | null>(null)
 	const transectClickRef = useRef<((coord: [number, number]) => void) | null>(null)
-	const [transectActive, setTransectActive] = useState(false)
 	const [transectGeometry, setTransectGeometry] = useState<any>(null)
 	const [transectHoverCoord, setTransectHoverCoord] = useState<{ lon: number; lat: number } | null>(null)
 	const [requestExpandTransectId, setRequestExpandTransectId] = useState<string | null>(null)
@@ -844,6 +925,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// are controlled props, so the camera and overlays are preserved across the
 	// remount — the recovery is visually seamless.
 	const [glEpoch, setGlEpoch] = useState(0)
+	// Rebuild the deck.gl renderer without touching imagery: remount both Decks with fresh layer instances.
+	const reloadRenderer = useCallback(() => {
+		setRendererError(null)
+		setGlEpoch((n) => n + 1)
+	}, [])
 	const contextLostRef = useRef(false)
 	useEffect(() => {
 		const canvas = containerRef.current?.querySelector("canvas")
@@ -1075,19 +1161,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// Persist UI state whenever it changes
 	useEffect(() => {
 		saveMapWorkspace({
-			basemap: selectedBaseMap,
+			// Only an explicit choice is stored as a basemap; otherwise the default applies next time.
+			basemap: basemapExplicit ? selectedBaseMap : undefined,
+			basemapExplicit,
 			viewState: sanitizePersistedViewState(viewState),
 			visibleLayerIds: Array.from(visibleLayerIds),
 			layerOpacities,
 			clusterLayerIds: Array.from(clusterLayerIds),
 		})
-	}, [selectedBaseMap, viewState, visibleLayerIds, layerOpacities, clusterLayerIds])
+	}, [selectedBaseMap, basemapExplicit, viewState, visibleLayerIds, layerOpacities, clusterLayerIds])
 
 	// Sync basemap to host so the agent knows which tile layer is active
 	useEffect(() => {
-		const style = BASE_MAP_STYLES.find((s) => s.id === selectedBaseMap)
-		reportBasemapChanged(selectedBaseMap, style?.name ?? selectedBaseMap)
-	}, [selectedBaseMap])
+		reportBasemapChanged(resolvedBaseMap.id, resolvedBaseMap.name)
+	}, [resolvedBaseMap.id, resolvedBaseMap.name])
 
 	// Sync visible layer set (debounced)
 	const visibleSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1223,8 +1310,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					if (scene?.viewState) {
 						setViewState(sanitizeViewState(scene.viewState))
 					}
-					if (typeof scene?.basemap === "string") {
-						setSelectedBaseMap(scene.basemap)
+					if (typeof scene?.basemap === "string" && isKnownBaseMap(scene.basemap)) {
+						selectBaseMap(scene.basemap, true)
 					}
 					if (Array.isArray(scene?.visibleLayerIds)) {
 						setVisibleLayerIds(new Set(scene.visibleLayerIds))
@@ -1263,41 +1350,69 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		return () => window.removeEventListener("message", handler)
 	}, [layers, viewState, selectedBaseMap, visibleLayerIds, layerOrder, layerOpacities])
 
-	// Build deck.gl TileLayer for the base map.
+	// Build the deck.gl TileLayers for the base map (base + any hydrography overlay).
 	// Uses fetch + createImageBitmap so no loaders.gl or Mapbox token is needed.
-	const basemapLayer = useMemo(() => {
-		const baseMapConfig = BASE_MAP_STYLES.find((s) => s.id === selectedBaseMap)
-		// Skip Mapbox-scheme URLs (require token) — fall back to first non-Mapbox style
-		const tileUrl =
-			baseMapConfig && !baseMapConfig.url.startsWith("mapbox://")
-				? baseMapConfig.url
-				: (BASE_MAP_STYLES.find((s) => !s.url.startsWith("mapbox://"))?.url ?? BASE_MAP_STYLES[0].url)
-
+	// Each source is limited to its native zoom (deck overzooms the last level instead of requesting levels that
+	// do not exist) and to its extent (the USGS caches are US only), and reports per-tile outcomes for tileHealth.
+	const basemapLayers = useMemo(() => {
 		const generation = resourceGeneration.current
-		return new TileLayer({
-			id: `basemap-${resourceRetry}`,
-			data: tileUrl,
-			minZoom: 0,
-			maxZoom: 19,
-			tileSize: 256,
-			getTileData: loadMapTile,
-			onTileError: (error: unknown) => reportTileError("basemap", tileUrl, generation, error),
-			renderSubLayers: (props: any) => {
-				const {
-					bbox: { west, south, east, north },
-				} = props.tile
-				if (!props.data) {
-					return null
-				}
-				return new BitmapLayer(props, {
-					data: undefined,
-					image: props.data,
-					bounds: [west, south, east, north] as [number, number, number, number],
-					pickable: false,
-				})
+		const sources = [
+			{
+				tallyId: "basemap",
+				layerId: `basemap-${resourceRetry}`,
+				url: resolvedBaseMap.url,
+				maxNativeZoom: resolvedBaseMap.maxNativeZoom,
+				extent: resolvedBaseMap.extent,
 			},
-		})
-	}, [selectedBaseMap, resourceRetry, reportTileError])
+			...resolvedBaseMap.overlays.map((overlay) => ({
+				tallyId: `basemap-${overlay.id}`,
+				layerId: `basemap-${overlay.id}-${resourceRetry}`,
+				url: overlay.url,
+				maxNativeZoom: overlay.maxNativeZoom,
+				extent: overlay.extent,
+			})),
+		]
+		return sources.map(
+			(source) =>
+				new TileLayer({
+					id: source.layerId,
+					data: source.url,
+					minZoom: 0,
+					maxZoom: source.maxNativeZoom,
+					extent: source.extent,
+					tileSize: 256,
+					getTileData: loadMapTile,
+					onTileLoad: () => reportTileLoaded(source.tallyId, source.url, generation),
+					onTileError: (error: unknown) => reportTileError(source.tallyId, source.url, generation, error),
+					renderSubLayers: (props: any) => {
+						const {
+							bbox: { west, south, east, north },
+						} = props.tile
+						if (!props.data) {
+							return null
+						}
+						return new BitmapLayer(props, {
+							data: undefined,
+							image: props.data,
+							bounds: [west, south, east, north] as [number, number, number, number],
+							pickable: false,
+						})
+					},
+				}),
+		)
+	}, [resolvedBaseMap, resourceRetry, reportTileLoaded, reportTileError])
+
+	// Record which source URLs this render draws (late tile callbacks for an earlier basemap are ignored) and
+	// forget the previous basemap's tile health when the basemap changes, so its errors never linger.
+	currentSourcesRef.current = {
+		basemap: resolvedBaseMap.url,
+		...Object.fromEntries(resolvedBaseMap.overlays.map((overlay) => [`basemap-${overlay.id}`, overlay.url])),
+	}
+	useEffect(() => {
+		for (const id of Object.keys(talliesRef.current)) {
+			if (id === "basemap" || id.startsWith("basemap-")) clearTileSource(id)
+		}
+	}, [resolvedBaseMap, clearTileSource])
 
 	useEffect(() => {
 		const previousLayerIds = knownLayerIdsRef.current
@@ -2027,6 +2142,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 								maxZoom: 18,
 								tileSize: 256,
 								getTileData: loadMapTile,
+								onTileLoad: () => reportTileLoaded(layer.id, tileUrl, generation),
 								onTileError: (error: unknown) => reportTileError(layer.id, tileUrl, generation, error),
 								renderSubLayers: (props: any) => {
 									const {
@@ -2246,6 +2362,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			rasterStates,
 			resourceRetry,
 			reportTileError,
+			reportTileLoaded,
 			layerOpacities,
 			zoomBucket,
 			clusterLayerIds,
@@ -2501,9 +2618,10 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			pointRadiusUnits: "pixels",
 			getFillColor: [255, 140, 0, 200],
 			stroked: false,
-			dashArray: [6, 4],
+			// Dashes only render through PathStyleExtension, and its prop is getDashArray (not dashArray).
+			getDashArray: [6, 4],
 			dashJustified: true,
-			extensions: [],
+			extensions: [DASH_EXTENSION],
 		})
 	}, [transectGeometry])
 
@@ -2618,7 +2736,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const sharedLayers = useMemo(
 		() =>
 			[
-				basemapLayer,
+				...basemapLayers,
 				flood3dTerrainLayer,
 				flood3dDeckLayer,
 				inspectHighlightLayer,
@@ -2632,7 +2750,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				...searchPinLayers,
 			].filter(Boolean) as any[],
 		[
-			basemapLayer,
+			basemapLayers,
 			flood3dTerrainLayer,
 			flood3dDeckLayer,
 			inspectHighlightLayer,
@@ -2650,7 +2768,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const allLayers = useMemo(
 		() =>
 			[
-				basemapLayer,
+				...basemapLayers,
 				...dataLayers,
 				flood3dTerrainLayer,
 				flood3dDeckLayer,
@@ -2665,7 +2783,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				...searchPinLayers,
 			].filter(Boolean) as any[],
 		[
-			basemapLayer,
+			basemapLayers,
 			dataLayers,
 			flood3dTerrainLayer,
 			flood3dDeckLayer,
@@ -2695,11 +2813,17 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			return []
 		}
 		// Left side: selected left data layer + shared overlays.
-		// Uses a separate sharedLayers spread so deck.gl creates independent layer
-		// state for each DeckGL instance instead of sharing internal WebGL objects.
+		// The same instances also reach the main Deck; `swipeLayers` clones them so each Deck owns its own.
 		const leftData = swipeLayerLeft ? dataLayers.filter((l) => isDeckLayerFor(l, swipeLayerLeft)) : []
 		return [...sharedLayers, ...leftData].filter(Boolean)
 	}, [swipeMode, sharedLayers, dataLayers, swipeLayerLeft])
+
+	// Every Deck gets its own layer instances. The memoised layers above are shared by whichever Deck renders
+	// them, and a layer a Deck has initialised cannot be handed to another one ("deck.gl: assertion failed"): the
+	// main Deck is re-keyed on Retry / WebGL context restore, and swipe mode renders two Decks. See freshLayers.ts.
+	const deckEpoch = `${glEpoch}-${resourceRetry}`
+	const mainLayers = useMemo(() => freshLayers(rightLayers), [rightLayers, deckEpoch])
+	const swipeLayers = useMemo(() => freshLayers(leftLayers), [leftLayers, deckEpoch])
 
 	const readyLayerIds = useMemo(() => new Set(dataLayers.map((l: any) => l?.id).filter(Boolean) as string[]), [dataLayers])
 
@@ -2858,10 +2982,13 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			<MapConnectionStatus error={connectionError} onReconnect={reconnect} status={connectionStatus} />
 			<MapResourceStatus
 				layers={layers}
+				onReloadRenderer={reloadRenderer}
 				onRetry={retryResources}
 				rasterStates={displayStates}
 				rendererError={rendererError}
+				sourceLabels={TILE_SOURCE_LABELS}
 				tileErrors={tileErrors}
+				tileNotes={tileNotes}
 				visibleLayerIds={visibleLayerIds}
 			/>
 			{/* RIGHT MAP (or single map when not swiping) */}
@@ -2887,9 +3014,12 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				getTooltip={layers.length > 0 && clickedFeatures.length === 0 ? getTooltip : undefined}
 				id="ai-hydro-research-map"
 				key={`deck-main-${glEpoch}-${resourceRetry}`}
-				layers={rightLayers}
+				layers={mainLayers}
 				onClick={handleMapClick}
-				onError={(error) => setRendererError(error.message)}
+				onError={(error) => {
+					console.error("[MapView] deck.gl renderer error:", error)
+					setRendererError(error.message)
+				}}
 				onHover={({ coordinate }: any) => {
 					if (coordinate && Array.isArray(coordinate) && coordinate.length >= 2) {
 						const lon = coordinate[0]
@@ -2925,8 +3055,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					}}>
 					<DeckGL
 						controller={false}
-						key={`deck-swipe-${glEpoch}`}
-						layers={leftLayers}
+						key={`deck-swipe-${deckEpoch}`}
+						layers={swipeLayers}
+						onError={(error) => setRendererError(error.message)}
 						style={{ position: "absolute", inset: "0" }}
 						viewState={deckViewState}
 					/>
@@ -2964,7 +3095,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 									bottom: 38,
 									left: `calc(${swipeX * 100}% - 10px)`,
 									transform: "translateX(-100%)",
-									zIndex: 101,
+									zIndex: MAP_Z.overlay,
 									pointerEvents: "none",
 								}}>
 								<div style={labelStyle}>◀ {leftName}</div>
@@ -2976,7 +3107,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 									position: "absolute",
 									bottom: 38,
 									left: `calc(${swipeX * 100}% + 10px)`,
-									zIndex: 101,
+									zIndex: MAP_Z.overlay,
 									pointerEvents: "none",
 								}}>
 								<div style={labelStyle}>{rightName} ▶</div>
@@ -3013,7 +3144,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 									marginLeft: -2,
 									background: "rgba(255,255,255,0.9)",
 									cursor: "ew-resize",
-									zIndex: 100,
+									zIndex: MAP_Z.overlay,
 									boxShadow: "0 0 8px rgba(0,0,0,0.6)",
 								}}>
 								{/* Centre circle handle */}
@@ -3044,7 +3175,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					)
 				})()}
 
-			{layers.length === 0 && (
+			{/* Only once the layer sync has finished (a loading or stale sync says nothing about emptiness) and
+			    never behind or beside an open tool panel. */}
+			{shouldShowEmptyState({ connectionStatus, layerCount: layers.length, panelOpen: activeTool !== null }) && (
 				<MapEmptyState onFilesPicked={(files) => void ingestFiles(files)} onFindGauge={() => setSearchOpen(true)} />
 			)}
 
@@ -3224,9 +3357,10 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					/>
 				}
 				clusterLayerIds={clusterLayerIds}
+				activeTool={activeTool}
+				basemapExplicit={basemapExplicit}
 				currentBasemap={selectedBaseMap}
 				drawMode={drawMode}
-				exportOpen={exportOpen}
 				floodPanel={
 					<>
 						{!flood3dEnabled && (
@@ -3250,13 +3384,12 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						/>
 					</>
 				}
-				galleryOpen={galleryOpen}
 				galleryPanel={(() => {
 					const galleryImportCallbacks: GalleryImportCallbacks = {
 						onImportScene: (item) => {
 							const p = item.payload as MapScenePayload
 							if (p.viewState) setViewState(sanitizeViewState(p.viewState))
-							if (p.basemap) setSelectedBaseMap(p.basemap)
+							if (p.basemap && isKnownBaseMap(p.basemap)) selectBaseMap(p.basemap, true)
 							if (Array.isArray(p.visibleLayerIds)) setVisibleLayerIds(new Set(p.visibleLayerIds))
 							if (p.layerOpacities) setLayerOpacities((prev) => ({ ...prev, ...p.layerOpacities }))
 							const nLayers = p.visibleLayerIds?.length ?? 0
@@ -3360,21 +3493,22 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					containerRef.current?.querySelector<HTMLCanvasElement>("canvas#ai-hydro-research-map") ?? null
 				}
 				layerCount={layers.length}
+				visibleLayerCount={layers.filter((layer) => visibleLayerIds.has(layer.id)).length}
 				layerOpacities={layerOpacities}
 				layerOrder={layerOrder}
 				layers={sortedLayers}
 				mapStyle={mapStyle === "dark" ? "dark" : "light"}
 				measureMode={measureMode}
-				onBasemapChange={setSelectedBaseMap}
+				onActiveToolChange={setActiveTool}
+				onBasemapChange={(id) => selectBaseMap(id, true)}
+				onBasemapReset={resetBaseMap}
 				onClusterToggle={handleClusterToggle}
 				onDrawModeChange={(m) => {
 					setMeasureMode(null)
 					setPendingDraw(null)
 					setDrawMode(m)
 				}}
-				onExportToggle={() => setExportOpen((v) => !v)}
 				onFitExtent={handleFitExtent}
-				onGalleryToggle={() => setGalleryOpen((v) => !v)}
 				onHideAllLayers={() => setVisibleLayerIds(new Set())}
 				onMeasureModeChange={(m) => {
 					setDrawMode(null)
@@ -3382,9 +3516,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				}}
 				onOpacityChange={handleOpacityChange}
 				onReorder={setLayerOrder}
-				onSearchToggle={() => setSearchOpen((v) => !v)}
 				onShowAllLayers={() => setVisibleLayerIds(new Set(layers.map((l) => l.id)))}
-				onTransectToggle={() => setTransectActive((v) => !v)}
 				onVisibilityChange={handleVisibilityChange}
 				onZoomToLayer={handleZoomToLayer}
 				rasterRevision={rasterResourceRevision}
@@ -3398,7 +3530,6 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						.filter(([id]) => id === "basemap" || visibleLayerIds.has(id))
 						.map(([id, message]) => `${id}: ${message}`),
 				]}
-				searchOpen={searchOpen}
 				searchPanel={
 					<SearchBar
 						currentView={viewState}
@@ -3441,7 +3572,6 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						visibleLayerIds={visibleLayerIds}
 					/>
 				}
-				transectActive={transectActive}
 				transectsPanel={
 					<TransectsPanel
 						layerOrder={layerOrder}
@@ -3581,7 +3711,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				onResetNorth={() => setViewState((prev) => ({ ...prev, bearing: 0, pitch: 0 }))}
 				onZoomIn={() => setViewState((prev) => ({ ...prev, zoom: Math.min(20, prev.zoom + 1) }))}
 				onZoomOut={() => setViewState((prev) => ({ ...prev, zoom: Math.max(0, prev.zoom - 1) }))}
-				selectedBaseMap={selectedBaseMap}
+				attribution={attributionFor(resolvedBaseMap, { lon: viewState.longitude, lat: viewState.latitude })}
 				viewState={viewState}
 			/>
 
@@ -3591,7 +3721,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					style={{
 						position: "absolute",
 						inset: 8,
-						zIndex: 6,
+						zIndex: MAP_Z.overlay,
 						border: "2px dashed var(--vscode-focusBorder, #0e639c)",
 						borderRadius: 8,
 						background: mapStyle === "dark" ? "rgba(14, 99, 156, 0.18)" : "rgba(14, 99, 156, 0.10)",
@@ -3621,7 +3751,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						bottom: 36,
 						left: "50%",
 						transform: "translateX(-50%)",
-						zIndex: 7,
+						zIndex: MAP_Z.toast,
 						padding: "6px 12px",
 						background:
 							dropStatus.kind === "ok"
@@ -3651,9 +3781,10 @@ const MapBottomBar: React.FC<{
 	onResetNorth: () => void
 	onZoomIn: () => void
 	onZoomOut: () => void
-	selectedBaseMap: string
+	/** What the map actually draws here (base + any overlay covering the view), per basemaps.attributionFor. */
+	attribution: string
 	viewState: MapViewState
-}> = ({ bearing, cursorCoord, mapStyle, onResetNorth, onZoomIn, onZoomOut, selectedBaseMap, viewState }) => {
+}> = ({ bearing, cursorCoord, mapStyle, onResetNorth, onZoomIn, onZoomOut, attribution, viewState }) => {
 	const isDark = mapStyle === "dark"
 	const fg = isDark ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.85)"
 	const bg = isDark ? "rgba(20,20,28,0.70)" : "rgba(255,255,255,0.85)"
@@ -3741,10 +3872,6 @@ const MapBottomBar: React.FC<{
 				return formatDecimal(lon, lat)
 		}
 	}
-
-	// Attribution
-	const baseMapStyle = BASE_MAP_STYLES.find((s) => s.id === selectedBaseMap)
-	const attribution = baseMapStyle?.attribution ?? ""
 
 	return (
 		<div className="map-bottom-bar" style={{ background: bg, borderColor: border, color: fg }}>
@@ -3835,7 +3962,7 @@ const KeyboardShortcutsHelp: React.FC<{ mapStyle: string }> = ({ mapStyle }) => 
 			style={{
 				position: "absolute",
 				inset: 0,
-				zIndex: 20,
+				zIndex: MAP_Z.modal,
 				display: "flex",
 				alignItems: "center",
 				justifyContent: "center",
@@ -3973,7 +4100,7 @@ const _RasterLegend: React.FC<RasterLegendProps> = ({ layers, visibleLayerIds, m
 				position: "absolute",
 				bottom: 42, // above the status bar
 				left: 12,
-				zIndex: 4,
+				zIndex: MAP_Z.overlay,
 				padding: "6px 10px 5px",
 				background: bg,
 				border: `1px solid ${bdClr}`,

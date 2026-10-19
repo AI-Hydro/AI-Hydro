@@ -1,6 +1,7 @@
 import type { MapLayer } from "@shared/proto/cline/map"
 import React, { useMemo } from "react"
 import { type CursorRasterReading, gradientForLegend, type LegendSpec, parseLayerLegend } from "./mapLayerAdapters"
+import { MAP_Z } from "./mapZ"
 
 const fmtValue = (v: number): string => {
 	if (!Number.isFinite(v)) {
@@ -111,7 +112,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({ layers, visibleLayerIds, m
 				position: "absolute",
 				bottom: 42,
 				left: 12,
-				zIndex: 4,
+				zIndex: MAP_Z.overlay,
 				padding: "6px 10px 5px",
 				background: bg,
 				border: `1px solid ${bdClr}`,
@@ -188,7 +189,7 @@ const MeritRiverLegend: React.FC<{ bg: string; fg: string; bdClr: string; bottom
 			position: "absolute",
 			bottom: bottomOffset,
 			left: 12,
-			zIndex: 4,
+			zIndex: MAP_Z.overlay,
 			padding: "6px 10px",
 			background: bg,
 			border: `1px solid ${bdClr}`,
@@ -236,7 +237,7 @@ const CategoricalLegend: React.FC<{
 			position: "absolute",
 			bottom: 42,
 			left: 12,
-			zIndex: 4,
+			zIndex: MAP_Z.overlay,
 			padding: "6px 10px",
 			background: bg,
 			border: `1px solid ${bdClr}`,

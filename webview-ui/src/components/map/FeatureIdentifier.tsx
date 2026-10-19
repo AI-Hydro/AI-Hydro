@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react"
 import type { CursorRasterReading } from "./mapLayerAdapters"
 import { PhotoStrip } from "./PhotoStrip"
 import { extractPhotoPaths } from "./photoPaths"
+import { MAP_Z } from "./mapZ"
 
 export interface ClickedFeature {
 	layerId: string
@@ -206,7 +207,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 				position: "absolute",
 				bottom: 48,
 				right: 52,
-				zIndex: 5,
+				zIndex: MAP_Z.panel,
 				width: "max-content",
 				minWidth: 200,
 				maxWidth: 260,

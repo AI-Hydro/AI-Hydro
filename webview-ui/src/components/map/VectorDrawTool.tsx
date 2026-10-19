@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { fmtArea, fmtDist, type GeoPoint, lineLengthKm, polygonAreaKm2 } from "./geoMeasureMath"
+import { MAP_Z } from "./mapZ"
 
 export type VectorDrawMode = "polygon" | "line" | "point" | null
 
@@ -236,7 +237,7 @@ export const VectorDrawTool: React.FC<VectorDrawToolProps> = ({
 				position: "absolute",
 				top: 12,
 				left: 12,
-				zIndex: 4,
+				zIndex: MAP_Z.overlay,
 				padding: "10px 14px",
 				background: isDark ? "rgba(20,20,28,0.92)" : "rgba(252,252,252,0.93)",
 				border: `1px solid ${isDark ? "rgba(45,159,111,0.5)" : "rgba(45,159,111,0.35)"}`,

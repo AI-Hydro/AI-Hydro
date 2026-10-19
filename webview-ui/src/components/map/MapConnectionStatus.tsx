@@ -1,3 +1,5 @@
+import { MAP_Z } from "./mapZ"
+
 interface Props {
 	status: "loading" | "connected" | "stale"
 	error?: string
@@ -14,7 +16,7 @@ export function MapConnectionStatus({ status: connectionStatus, error: connectio
 				top: 12,
 				left: "25%",
 				right: "25%",
-				zIndex: 50,
+				zIndex: MAP_Z.toast,
 				padding: 10,
 				background: "var(--vscode-editor-background)",
 				color: "var(--vscode-foreground)",

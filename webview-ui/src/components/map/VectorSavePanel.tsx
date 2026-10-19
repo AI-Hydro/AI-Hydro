@@ -1,6 +1,7 @@
 import React, { useState } from "react"
 import { fmtArea, fmtDist } from "./geoMeasureMath"
 import type { CompletedVectorDraw } from "./VectorDrawTool"
+import { MAP_Z } from "./mapZ"
 
 interface VectorSavePanelProps {
 	draw: CompletedVectorDraw
@@ -48,7 +49,7 @@ export const VectorSavePanel: React.FC<VectorSavePanelProps> = ({
 				bottom: 56,
 				left: "50%",
 				transform: "translateX(-50%)",
-				zIndex: 6,
+				zIndex: MAP_Z.panel,
 				width: "min(420px, 92vw)",
 				padding: "14px 16px",
 				background: bg,

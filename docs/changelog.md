@@ -2,6 +2,18 @@
 description: AI-Hydro VS Code extension changelog — release notes, breaking changes, new tools, and bug fixes for every published version.
 ---
 
+## Unreleased
+
+### Map fixes
+
+- **Renderer crash on Retry imagery, WebGL context restore and swipe mode** ("deck.gl: assertion failed"): each Deck now gets fresh layer instances.
+- **Basemaps:** per-source native zoom and US extents for USGS caches, errors cleared on basemap change, ratio-based tile alerts with a quiet note for a few missing tiles, dismissible banner with wording per error kind. Stadia and the Mapbox entries are removed.
+- **Muted hydrology default basemap** (Carto no-labels per theme + USGS hydrography overlay). Existing profiles migrate once; "Reset to hydrology default" added.
+- **Layers:** workspace files are listed ("Workspace files you can add") instead of auto-registered; the badge counts visible layers; restored layers are scoped to the workspace and capped.
+- **Panels:** one source of truth for the open panel, one z-index scale, empty state only after sync and never with a panel open; dashed lines now render (`PathStyleExtension`).
+
+---
+
 # Changelog
 
 All notable changes to the AI-Hydro VS Code extension are documented here.

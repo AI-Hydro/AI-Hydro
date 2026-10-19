@@ -5,7 +5,8 @@ import { jsPDF } from "jspdf"
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { MapServiceClient } from "../../services/grpc-client"
-import { BASE_MAP_STYLES } from "./BaseMapSelector"
+import { attributionList, resolveBaseMap } from "./basemaps"
+import { MAP_Z } from "./mapZ"
 import { rasterCache, rasterColorStops } from "./formats/rasterCache"
 import { exportLayerMetadata, freezeMapCanvas } from "./mapCapture"
 import { reportMapEvent } from "./mapSessionBridge"
@@ -561,7 +562,9 @@ function captureLayerMetadata(layer: MapLayer): Record<string, string> {
 }
 
 export function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSceneSnapshot {
-	const basemap = BASE_MAP_STYLES.find((style) => style.id === props.currentBasemap) ?? BASE_MAP_STYLES[0]
+	// Attribution is theme-independent; the resolved entry also lists overlays (hydrography) drawn above the base.
+	const basemap = resolveBaseMap(props.currentBasemap, "dark")
+	const basemapAttribution = attributionList(basemap)
 	const visible = visibleLayers(props.layers ?? [], props.visibleLayerIds)
 	const citations = [
 		{
@@ -587,10 +590,10 @@ export function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSce
 			extentStrategy: spec.extentStrategy,
 		},
 		basemap: {
-			id: basemap?.id ?? "unknown",
-			label: basemap?.name ?? "Unknown basemap",
-			attribution: basemap?.attribution ? [basemap.attribution] : [],
-			requiresVisibleAttribution: Boolean(basemap?.attribution),
+			id: basemap.id,
+			label: basemap.name,
+			attribution: basemapAttribution,
+			requiresVisibleAttribution: basemapAttribution.length > 0,
 		},
 		layers: visible.map((layer) => ({
 			id: layer.id,
@@ -2793,7 +2796,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 						style={{
 							position: "fixed",
 							inset: 0,
-							zIndex: 9999,
+							zIndex: MAP_Z.modal,
 							background: "rgba(0,0,0,0.82)",
 							display: "flex",
 							alignItems: "center",

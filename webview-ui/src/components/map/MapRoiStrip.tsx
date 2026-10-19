@@ -2,6 +2,7 @@ import { LoadRoiFromWorkspaceRequest, SaveRoiToWorkspaceRequest } from "@shared/
 import React, { useState } from "react"
 import { MapServiceClient } from "../../services/grpc-client"
 import type { ActiveRoi } from "./mapWorkspace"
+import { MAP_Z } from "./mapZ"
 
 interface MapRoiStripProps {
 	roi: ActiveRoi | undefined
@@ -75,7 +76,7 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 					top: 10,
 					left: "50%",
 					transform: "translateX(-50%)",
-					zIndex: 4,
+					zIndex: MAP_Z.overlay,
 					display: "flex",
 					flexDirection: "column",
 					alignItems: "center",
@@ -117,7 +118,7 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 				top: 10,
 				left: "50%",
 				transform: "translateX(-50%)",
-				zIndex: 4,
+				zIndex: MAP_Z.overlay,
 				display: "flex",
 				flexDirection: "column",
 				alignItems: "center",

@@ -33,6 +33,12 @@ The **Layers panel** (📑) is the central control surface for everything on the
 
 ---
 
+### Workspace files you can add
+
+Opening the map no longer registers every GeoJSON/KML/… file in the workspace as a layer. The Layer manager lists them under **Workspace files you can add** (dependency, `.git`, `.worktrees`, `_archive` and build folders are skipped); **Add** puts one on the map. The ribbon badge counts **visible** layers; its tooltip reads "N visible · M hidden". Layers restored from an earlier session are scoped to the current workspace and capped at the 40 most recent; the panel states how many were restored out of how many were saved.
+
+---
+
 ## Layer Types & Icons
 
 | Icon | Layer type |

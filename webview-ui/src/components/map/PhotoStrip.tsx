@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useState } from "react"
 import { resolveFileUri } from "./resolveFileUri"
+import { MAP_Z } from "./mapZ"
 
 interface ResolvedThumbProps {
 	path: string
@@ -92,7 +93,7 @@ export const PhotoStrip: React.FC<PhotoStripProps> = ({ paths, thumbSize = 56 })
 						display: "flex",
 						alignItems: "center",
 						justifyContent: "center",
-						zIndex: 9999,
+						zIndex: MAP_Z.modal,
 						cursor: "zoom-out",
 					}}>
 					<img alt="site photo" src={lightbox} style={{ maxWidth: "92%", maxHeight: "92%", objectFit: "contain" }} />
