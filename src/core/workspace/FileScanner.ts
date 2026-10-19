@@ -5,6 +5,7 @@
 import * as path from "path"
 import * as vscode from "vscode"
 import { isValidGeoJSONString } from "./GeoJsonValidator"
+import { isExcludedWorkspaceGeoPath, WORKSPACE_GEO_EXCLUDE_GLOB } from "./geoScanExclusions"
 
 export interface WorkspaceGeoJsonFile {
 	uri: vscode.Uri
@@ -49,7 +50,7 @@ export class FileScanner {
 				// Includes: GeoJSON, KML, GPX, TopoJSON, FlatGeobuf, Shapefiles
 				const pattern = new vscode.RelativePattern(folder, "**/*.{geojson,json,kml,gpx,topojson,topo.json,fgb,shp}")
 				// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required for file scanning
-				const uris = await vscode.workspace.findFiles(pattern, "**/node_modules/**")
+				const uris = await vscode.workspace.findFiles(pattern, WORKSPACE_GEO_EXCLUDE_GLOB)
 
 				console.log(`[FileScanner] Found ${uris.length} potential geo data files in ${folder.name}`)
 
@@ -71,6 +72,11 @@ export class FileScanner {
 			const extension = path.extname(uri.fsPath).toLowerCase()
 			const relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath)
 			const name = path.basename(uri.fsPath)
+
+			// The watcher glob is workspace-wide, so excluded directories must be re-checked here.
+			if (isExcludedWorkspaceGeoPath(relativePath)) {
+				return
+			}
 
 			// Determine if file needs conversion
 			const requiresConversion = this.needsConversion(extension)

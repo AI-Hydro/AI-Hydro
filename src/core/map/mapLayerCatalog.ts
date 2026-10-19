@@ -1,10 +1,19 @@
 import type { MapLayer } from "@shared/proto/cline/map"
+import { createHash } from "crypto"
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 
 export const MAP_LAYER_CATALOG_FILE = path.join(os.homedir(), ".aihydro", "map_layer_catalog.json")
+/**
+ * Per-workspace catalog file. The legacy global file above is only read as a one-time fallback for a workspace
+ * that has no catalog of its own yet, so layers from other investigations no longer pile up in every window.
+ */
+export function scopedMapLayerCatalogFile(workspaceRoot: string): string {
+	const key = createHash("sha1").update(workspaceRoot).digest("hex").slice(0, 12)
+	return path.join(os.homedir(), ".aihydro", `map_layer_catalog.${key}.json`)
+}
 const MAP_LAYER_GEOJSON_CACHE_DIR = path.join(os.homedir(), ".aihydro", "map_layer_geojson_cache")
 // Tool-pushed layers may be arbitrarily large (>512 KB). We always cache them
 // so they can be restored on extension reload. User-loaded layers keep the old cap.
@@ -52,6 +61,8 @@ export interface MapLayerCatalogEntry {
 }
 
 export interface MapLayerCatalog {
+	/** Workspace folder the catalog was written for. Absent in catalogs written before scoping existed. */
+	workspace_root?: string
 	updated_at_ms: number
 	layer_order: string[]
 	layers: MapLayerCatalogEntry[]
@@ -278,7 +289,11 @@ async function previewLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 	}
 }
 
-export async function buildMapLayerCatalogAsync(layers: MapLayer[], layerOrder: string[]): Promise<MapLayerCatalog> {
+export async function buildMapLayerCatalogAsync(
+	layers: MapLayer[],
+	layerOrder: string[],
+	workspaceRoot?: string,
+): Promise<MapLayerCatalog> {
 	const order = layerOrder.length > 0 ? layerOrder.filter((id) => layers.some((l) => l.id === id)) : layers.map((l) => l.id)
 	for (const layer of layers) {
 		if (!order.includes(layer.id)) {
@@ -296,6 +311,7 @@ export async function buildMapLayerCatalogAsync(layers: MapLayer[], layerOrder: 
 		entries.push(layerToCatalogEntry(layer, cachePath, previewPath))
 	}
 	return {
+		...(workspaceRoot ? { workspace_root: workspaceRoot } : {}),
 		updated_at_ms: Date.now(),
 		layer_order: order,
 		layers: entries,
@@ -322,18 +338,23 @@ export function buildMapLayerCatalog(layers: MapLayer[], layerOrder: string[]): 
 
 export async function persistMapLayerCatalog(catalog: MapLayerCatalog): Promise<void> {
 	try {
-		await fs.mkdir(path.dirname(MAP_LAYER_CATALOG_FILE), { recursive: true })
-		await fs.writeFile(MAP_LAYER_CATALOG_FILE, JSON.stringify(catalog, null, 2), "utf8")
+		const file = catalog.workspace_root ? scopedMapLayerCatalogFile(catalog.workspace_root) : MAP_LAYER_CATALOG_FILE
+		await fs.mkdir(path.dirname(file), { recursive: true })
+		await fs.writeFile(file, JSON.stringify(catalog, null, 2), "utf8")
 	} catch (err) {
 		console.warn("[mapLayerCatalog] persist failed:", err)
 	}
 }
 
-export async function readMapLayerCatalog(): Promise<MapLayerCatalog | null> {
-	try {
-		const raw = await fs.readFile(MAP_LAYER_CATALOG_FILE, "utf8")
-		return JSON.parse(raw) as MapLayerCatalog
-	} catch {
-		return null
+export async function readMapLayerCatalog(workspaceRoot?: string): Promise<MapLayerCatalog | null> {
+	const candidates = workspaceRoot ? [scopedMapLayerCatalogFile(workspaceRoot), MAP_LAYER_CATALOG_FILE] : [MAP_LAYER_CATALOG_FILE]
+	for (const file of candidates) {
+		try {
+			const raw = await fs.readFile(file, "utf8")
+			return JSON.parse(raw) as MapLayerCatalog
+		} catch {
+			// try the next candidate
+		}
 	}
+	return null
 }

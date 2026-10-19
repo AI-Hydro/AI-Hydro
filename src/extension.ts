@@ -323,8 +323,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			// Open map in a separate side-by-side panel instead of replacing the chat view
 			await VscodeMapPanelProvider.createOrShow()
 
-			// Auto-load workspace GeoJSON files as hidden layers
-			await webview.controller.loadWorkspaceGeoJsonLayers()
+			// Workspace geo files are NOT registered as layers here (a workspace can hold hundreds of `*.json`).
+			// The Layers panel lists them as "Workspace files you can add" and the user adds them one by one.
 		}),
 	)
 

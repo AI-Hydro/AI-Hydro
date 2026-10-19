@@ -22,6 +22,7 @@ import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 import { buildInundation3dLayerFromPath } from "./inundation3dLayer"
 import { type MapLayerCatalogEntry, readMapLayerCatalog } from "./mapLayerCatalog"
+import { selectCatalogEntriesToRestore } from "./restoreSelection"
 
 async function readFileToBase64(filePath: string): Promise<string | null> {
 	try {
@@ -145,10 +146,10 @@ async function buildLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLaye
  * Read the persisted catalog and restore layers into the controller.
  * Called from Controller constructor (after mapSessionService.initialize).
  */
-export async function hydrateMapLayersFromCatalog(controller: Controller): Promise<void> {
+export async function hydrateMapLayersFromCatalog(controller: Controller, currentScope?: string): Promise<void> {
 	let catalog
 	try {
-		catalog = await readMapLayerCatalog()
+		catalog = await readMapLayerCatalog(currentScope)
 	} catch {
 		return
 	}
@@ -156,18 +157,16 @@ export async function hydrateMapLayersFromCatalog(controller: Controller): Promi
 		return
 	}
 
-	const order = catalog.layer_order ?? []
-	// Process in display order so mapLayerOrder is correct
-	const entriesInOrder = [
-		...order.map((id) => catalog.layers.find((l) => l.id === id)).filter((e): e is MapLayerCatalogEntry => !!e),
-		...catalog.layers.filter((l) => !order.includes(l.id)),
-	]
+	// Scope to the current workspace and cap the count (see restoreSelection.ts).
+	const selection = selectCatalogEntriesToRestore(catalog, currentScope)
 
 	let restored = 0
-	for (const entry of entriesInOrder) {
+	for (const entry of selection.entries) {
 		try {
 			const layer = await buildLayerFromEntry(entry)
 			if (layer) {
+				// The UI reads `_hydrated_of` to say "Restored N of M saved layers" rather than hiding the rest.
+				layer.metadata = { ...(layer.metadata ?? {}), _hydrated_of: String(selection.total) }
 				controller.addMapLayer(layer)
 				restored++
 			}
@@ -176,9 +175,11 @@ export async function hydrateMapLayersFromCatalog(controller: Controller): Promi
 		}
 	}
 
-	if (restored > 0) {
-		console.log(`[hydrateMapLayers] Restored ${restored} / ${entriesInOrder.length} layers from catalog`)
-	}
+	console.log(
+		`[hydrateMapLayers] Restored ${restored} / ${selection.total} layers from catalog` +
+			(selection.outOfScope ? ` (${selection.outOfScope} belong to another workspace)` : "") +
+			(selection.capped ? ` (${selection.capped} older layers not restored; cap reached)` : ""),
+	)
 }
 
 /**
