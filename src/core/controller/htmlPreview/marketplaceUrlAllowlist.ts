@@ -42,7 +42,7 @@ export function assertTrustedMarketplaceUrl(url: string, context: string): void 
 	// https only: marketplace content is installed on disk and previewed, so a
 	// plaintext hop would let a network attacker substitute the document.
 	if (parsed.protocol !== "https:") {
-		throw new Error(`${context}: https is required (got ${parsed.protocol})`)
+		throw new Error(`${context}: unsupported protocol ${parsed.protocol} (https is required)`)
 	}
 	const allowed = trustedOrigins()
 	if (!allowed.has(parsed.origin)) {

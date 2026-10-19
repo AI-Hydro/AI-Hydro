@@ -5,7 +5,7 @@ import { expect } from "chai"
 import { describe, it } from "mocha"
 
 // Unit specs always load through ts-node as CommonJS (see .mocharc.json), so __dirname is valid and
-// import.meta is not. src/test/__tests__/unitSpecLoader.test.ts enforces this.
+// the ESM-only URL meta-property is not. src/test/__tests__/unitSpecLoader.test.ts enforces this.
 const RUNNER = path.resolve(__dirname, "..", "artifact_kernel_runner.py")
 // Override to point at an interpreter that has the kernel's optional dependencies (e.g. numpy).
 const PYTHON = process.env.AIHYDRO_TEST_PYTHON || "python3"
