@@ -104,7 +104,7 @@ describe("marketplace id sanitisation", () => {
 	})
 
 	it("resolves an id to a directory strictly inside the install root", () => {
-		const root = path.join(path.sep, "home", "u", ".aihydro", "modules")
+		const root = path.resolve(path.sep, "home", "u", ".aihydro", "modules")
 		expect(resolveContainedInstallDir(root, "m1", "t")).to.equal(path.join(root, "m1"))
 		expect(() => resolveContainedInstallDir(root, "../escape", "t")).to.throw(/invalid id/)
 		expect(() => resolveContainedInstallDir(root, path.resolve("/abs"), "t")).to.throw(/invalid id/)

@@ -168,7 +168,7 @@ async function showExplorer(page: Page): Promise<void> {
 
 async function waitForCellFrame(page: Page, cellId: string): Promise<Frame> {
 	// Each document needs an explicit allowance (trust bar) before its kernel bridge exists.
-	await allowArtifactExecution(page)
+	await allowArtifactExecution(page, cellId)
 	return waitForFrame(page, async (frame) => (await frame.locator(`[data-aihydro-cell-id="${cellId}"]`).count()) === 1)
 }
 

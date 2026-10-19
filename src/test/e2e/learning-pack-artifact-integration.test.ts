@@ -139,7 +139,7 @@ async function waitForCourseShell(page: Page): Promise<Frame> {
 async function waitForCellFrame(page: Page, cellId: string): Promise<Frame> {
 	// Installed signed-pack modules are trusted but still need the user's per-document
 	// allowance (trust bar) before the kernel bridge exists.
-	await allowArtifactExecution(page)
+	await allowArtifactExecution(page, cellId)
 	const selector = `[data-aihydro-cell-id="${cellId}"]`
 	const deadline = Date.now() + 60_000
 	while (Date.now() < deadline) {

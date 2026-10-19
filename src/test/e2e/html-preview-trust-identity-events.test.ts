@@ -103,7 +103,7 @@ async function openGoldenModule(page: Page): Promise<Frame> {
 	await explorer.getByRole("treeitem", { name: "module.html", exact: true }).first().dblclick()
 	// Executable documents need an explicit per-document allowance (trust bar) before
 	// the kernel bridge exists. Allowing reloads the iframe, so look for the cell after.
-	await allowArtifactExecution(page)
+	await allowArtifactExecution(page, "fixture-state-create")
 	return waitForFrame(
 		page,
 		async (frame) => (await frame.locator('[data-aihydro-cell-id="fixture-state-create"]').count()) === 1,

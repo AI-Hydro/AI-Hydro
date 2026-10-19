@@ -168,7 +168,7 @@ async function waitForCourseShell(page: Page): Promise<Frame> {
 async function waitForCellFrame(page: Page, cellId: string): Promise<Frame> {
 	// Executable documents need an explicit per-document allowance (trust bar) before
 	// the kernel bridge is injected; the iframe reloads once it is granted.
-	await allowArtifactExecution(page)
+	await allowArtifactExecution(page, cellId)
 	return waitForFrame(page, async (frame) => (await frame.locator(`[data-aihydro-cell-id="${cellId}"]`).count()) === 1)
 }
 

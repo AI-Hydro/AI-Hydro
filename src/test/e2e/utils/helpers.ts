@@ -76,27 +76,43 @@ export function recordFixtureArtifacts(homeDir: string, ...roots: string[]): voi
 }
 
 /**
- * Click the trust bar's "Allow execution" for the open document, if it is
- * offered, and wait until the allowance is in effect (the badge shows Revoke).
- * A no-op when the document is already allowed. Throws if the open document is
- * not eligible (no Allow button ever appears).
+ * Click the trust bar's "Allow execution" for the open document if it is
+ * offered, and wait until the allowance is in effect.
+ *
+ * Pass `cellId` of a cell in the document you are about to run: "allowed" is
+ * then only declared once that cell's Run button has been wired by the kernel
+ * bridge in the current document. This keeps a stale shell frame from the
+ * previously open document (still showing Revoke) from satisfying the wait.
+ * Throws if the open document is never eligible (no Allow button ever appears).
  */
-export async function allowArtifactExecution(page: Page, timeoutMs = 45_000): Promise<void> {
+export async function allowArtifactExecution(page: Page, cellId?: string, timeoutMs = 60_000): Promise<void> {
 	await expect
 		.poll(
 			async () => {
+				let sawRevoke = false
 				for (const frame of page.frames()) {
 					if (frame.isDetached()) continue
 					try {
 						if ((await frame.title()) !== "AI-Hydro HTML Preview") continue
-						if ((await frame.getByTestId("artifact-trust-revoke").count()) === 1) return "allowed"
 						const allow = frame.getByTestId("artifact-trust-allow")
 						if ((await allow.count()) === 1) {
 							await allow.click()
 							return "clicked"
 						}
+						if ((await frame.getByTestId("artifact-trust-revoke").count()) === 1) sawRevoke = true
 					} catch {
 						// The preview shell is replaced while switching documents.
+					}
+				}
+				if (!sawRevoke) return "waiting"
+				if (!cellId) return "allowed"
+				for (const frame of page.frames()) {
+					if (frame.isDetached()) continue
+					try {
+						const run = frame.locator(`[data-aihydro-cell-id="${cellId}"] .aihydro-run[data-aihydro-wired="1"]`)
+						if ((await run.count()) === 1) return "allowed"
+					} catch {
+						// frame replaced
 					}
 				}
 				return "waiting"
