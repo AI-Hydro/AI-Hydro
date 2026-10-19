@@ -548,7 +548,7 @@ export const ReplayPanel: React.FC = () => {
 			{data && !loading && (
 				<div className="flex flex-col flex-1 overflow-hidden">
 					{summary && (
-						<div className="flex items-center gap-4 px-3 py-1.5 border-b border-[var(--vscode-panel-border)] shrink-0 text-[10px] opacity-75">
+						<div className="flex items-center gap-4 px-3 py-1.5 border-b border-[var(--vscode-panel-border)] shrink-0 text-[10px] text-[var(--vscode-descriptionForeground)]">
 							<span>
 								<span className="codicon codicon-run-all text-[10px] mr-1" />
 								{summary.total} runs
