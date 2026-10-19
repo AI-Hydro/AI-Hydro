@@ -215,7 +215,8 @@ describe("fetchSkillText (real axios against a local server)", () => {
 describe("resolveSkillDir", () => {
 	it("stays inside the source directory", () => {
 		const dir = resolveSkillDir("manual", "my-skill", "/h")
-		expect(dir).to.equal(path.join("/h", ".aihydro", "skills", "manual", "my-skill"))
+		// resolveSkillDir returns an absolute path; on Windows path.resolve adds the drive letter, path.join does not.
+		expect(dir).to.equal(path.resolve("/h", ".aihydro", "skills", "manual", "my-skill"))
 	})
 	it("rejects empty, dot-dot, nested-escape and absolute ids", () => {
 		for (const bad of ["", "..", "../x", "a/../../x", "/etc"]) {
