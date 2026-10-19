@@ -243,7 +243,7 @@ export const WelcomeScreen: Story = {
 	parameters: {
 		docs: {
 			description: {
-				story: "The welcome screen shown to new users or when no task is active. Displays quick start options and recent task history.",
+				story: "The welcome screen shown to new users or when no task is active. Explains what AI-Hydro is and prompts for a model provider before continuing.",
 			},
 		},
 	},
@@ -251,9 +251,9 @@ export const WelcomeScreen: Story = {
 	// More on component testing: https://storybook.js.org/docs/writing-tests/interaction-testing
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement)
-		await expect(canvas.getByText("Hi, I'm AI-Hydro")).toBeInTheDocument()
+		await expect(canvas.getByText("Welcome to AI-Hydro")).toBeInTheDocument()
 		await expect(canvas.getByTestId("provider-selector-input")).toBeInTheDocument()
-		await expect(canvas.getByText("Let's go!")).toBeInTheDocument()
+		await expect(canvas.getByRole("button", { name: "Continue" })).toBeInTheDocument()
 	},
 }
 
