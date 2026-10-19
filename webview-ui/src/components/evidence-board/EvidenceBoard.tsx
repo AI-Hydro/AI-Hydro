@@ -620,7 +620,7 @@ export const EvidenceBoard: React.FC = () => {
 			)}
 
 			{sessionId && !loading && !error && (
-				<div className="flex items-center gap-4 px-3 py-1.5 border-b border-[var(--vscode-panel-border)] text-[10px] opacity-75 shrink-0">
+				<div className="flex items-center gap-4 px-3 py-1.5 border-b border-[var(--vscode-panel-border)] text-[10px] text-[var(--vscode-descriptionForeground)] shrink-0">
 					<span>
 						<span className="codicon codicon-checklist text-[10px] mr-1" />
 						{allClaims.length} claims
