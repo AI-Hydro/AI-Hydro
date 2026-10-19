@@ -4,64 +4,115 @@ import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 
 const EXPECTED_EXCELJS_VERSION = "4.4.0"
-const BASELINE_REVIEW_BY = "2026-08-31"
+// Baseline accepted by the owner on 2026-10-19, WITHOUT individual reachability review:
+// - These are the 16 high production advisories `npm audit --omit=dev` reports after the
+//   simple-git 4.0.2 / proxy-addr 2.0.8 upgrade and an in-range `npm audit fix`. They were hidden
+//   until now because the expired review date and the critical check failed first.
+// - A reachability review of each entry (is it in dist/extension.js, and can untrusted input reach
+//   the vulnerable path?) is the follow-up due before BASELINE_REVIEW_BY. Entries found reachable
+//   are to be upgraded or replaced, not kept here.
+// - The earlier entries (archiver, archiver-utils, brace-expansion, exceljs, glob, minimatch,
+//   readdir-glob, rimraf, zip-stream) no longer report as high and are removed. exceljs is now
+//   moderate; its only flagged dependency path is uuid, which exceljs calls as v4() without a
+//   buffer, so the vulnerable v3/v5/v6-with-buffer path is unreachable.
+// - The exact range/node/source checks below still fail on any new advisory or changed entry.
+const BASELINE_REVIEW_BY = "2026-12-31"
 const HIGH_BASELINE = {
-	archiver: {
+	"@firebase/firestore": {
 		isDirect: false,
-		range: "0.20.0 - 7.0.1",
-		nodes: ["node_modules/exceljs/node_modules/archiver"],
-		advisorySources: [1124334],
+		range: "1.3.1-0 - 1.3.1-canary.df1b588 || 1.3.2-0 - 1.3.3-canary.bc4a844 || 1.13.1-0 - 1.13.1-canary.ce3addba || 1.14.0-0 - 1.15.1 || 3.7.3-20221108184443 - 3.7.3-canary.fde5adf63 || >=3.8.0-20221206221533",
+		nodes: ["node_modules/@firebase/firestore"],
+		advisorySources: [1240623, 1240625],
 	},
-	"archiver-utils": {
+	"@firebase/firestore-compat": {
+		isDirect: false,
+		range: "<=0.0.900-exp.520ca39d0 || 0.2.3-20221108184443 - 0.2.3-canary.fde5adf63 || >=0.3.0-20221206221533",
+		nodes: ["node_modules/@firebase/firestore-compat"],
+		advisorySources: [1240623, 1240625],
+	},
+	"@grpc/grpc-js": {
+		isDirect: false,
+		range: "<=1.13.5",
+		nodes: ["node_modules/@firebase/firestore/node_modules/@grpc/grpc-js"],
+		advisorySources: [1240623, 1240625],
+	},
+	"@puppeteer/browsers": {
+		isDirect: false,
+		range: "*",
+		nodes: ["node_modules/@puppeteer/browsers"],
+		advisorySources: [1139346, 1193685, 1240853],
+	},
+	"basic-ftp": {
+		isDirect: false,
+		range: "<=6.2.0",
+		nodes: ["node_modules/basic-ftp"],
+		advisorySources: [1240853],
+	},
+	braces: {
+		isDirect: false,
+		range: "*",
+		nodes: ["node_modules/braces"],
+		advisorySources: [1240992],
+	},
+	"extract-zip": {
+		isDirect: false,
+		range: "*",
+		nodes: ["node_modules/extract-zip"],
+		advisorySources: [1139346, 1193685],
+	},
+	"fast-glob": {
+		isDirect: false,
+		range: "*",
+		nodes: ["node_modules/fast-glob"],
+		advisorySources: [1240992],
+	},
+	firebase: {
+		isDirect: true,
+		range: "0.900.22 || 6.0.2-0 - 6.0.2-canary.42eae23 || 6.0.3-0 - 6.0.4-canary.bc4a844 || 7.9.1-0 - 7.9.1-canary.0396117e || 7.13.2-0 - 7.13.2-canary.ce3addba || 7.14.0-0 - 7.15.1 || 8.10.0-20217172214 - 8.10.0-canary.f40c0db53 || 9.0.0-20217250818 - 9.0.0-canary.d0d3acb10 || 9.0.1-2021727231341 - 9.0.1-canary.e039e1472 || 9.0.2-2021891633 - 9.0.2-canary.ff9baf70c || 9.0.3-202181503543 - 9.1.0-canary.f7d8324a1 || 9.1.1-2021830195733 - 9.1.1-canary.e70de6201 || 9.1.2-20219523556 - 9.1.2-canary.fc1d36497 || 9.13.1-20221108184443 - 9.14.0-canary.fde5adf63 || >=9.15.0-20221206221533",
+		nodes: ["node_modules/firebase"],
+		advisorySources: [1240623, 1240625],
+	},
+	"get-uri": {
+		isDirect: false,
+		range: ">=5.0.0",
+		nodes: ["node_modules/get-uri"],
+		advisorySources: [1240853],
+	},
+	globby: {
+		isDirect: true,
+		range: ">=8.0.0",
+		nodes: ["node_modules/globby"],
+		advisorySources: [1240992],
+	},
+	micromatch: {
 		isDirect: false,
 		range: ">=0.2.0",
-		nodes: [
-			"node_modules/exceljs/node_modules/archiver-utils",
-			"node_modules/exceljs/node_modules/zip-stream/node_modules/archiver-utils",
-		],
-		advisorySources: [1124334],
+		nodes: ["node_modules/micromatch"],
+		advisorySources: [1240992],
 	},
-	"brace-expansion": {
+	"pac-proxy-agent": {
 		isDirect: false,
-		range: "<=5.0.7",
-		nodes: ["node_modules/brace-expansion", "node_modules/minimatch/node_modules/brace-expansion"],
-		advisorySources: [1124334],
+		range: ">=6.0.0",
+		nodes: ["node_modules/pac-proxy-agent"],
+		advisorySources: [1240853],
 	},
-	exceljs: {
+	"proxy-agent": {
+		isDirect: false,
+		range: ">=6.0.0",
+		nodes: ["node_modules/proxy-agent"],
+		advisorySources: [1240853],
+	},
+	"puppeteer-chromium-resolver": {
 		isDirect: true,
-		range: ">=3.5.0",
-		nodes: ["node_modules/exceljs"],
-		advisorySources: [1119441, 1124334],
+		range: "20.0.0 - 24.0.3",
+		nodes: ["node_modules/puppeteer-chromium-resolver"],
+		advisorySources: [1139346, 1193685, 1240853],
 	},
-	glob: {
-		isDirect: false,
-		range: "4.3.0 - 10.5.0",
-		nodes: ["node_modules/exceljs/node_modules/glob", "node_modules/fstream/node_modules/glob"],
-		advisorySources: [1124334],
-	},
-	minimatch: {
+	"puppeteer-core": {
 		isDirect: true,
-		range: "2.0.0 - 10.0.2",
-		nodes: ["node_modules/minimatch", "node_modules/readdir-glob/node_modules/minimatch"],
-		advisorySources: [1124334],
-	},
-	"readdir-glob": {
-		isDirect: false,
-		range: "<=2.0.3",
-		nodes: ["node_modules/readdir-glob"],
-		advisorySources: [1124334],
-	},
-	rimraf: {
-		isDirect: false,
-		range: "2.3.0 - 3.0.2 || 4.2.0 - 5.0.10",
-		nodes: ["node_modules/fstream/node_modules/rimraf"],
-		advisorySources: [1124334],
-	},
-	"zip-stream": {
-		isDirect: false,
-		range: "0.8.0 - 6.0.1",
-		nodes: ["node_modules/exceljs/node_modules/zip-stream"],
-		advisorySources: [1124334],
+		range: "19.8.4 - 24.43.1",
+		nodes: ["node_modules/puppeteer-core"],
+		advisorySources: [1139346, 1193685, 1240853],
 	},
 }
 
@@ -118,6 +169,8 @@ function collectAdvisorySources(vulnerabilities, name, visited = new Set()) {
 	}
 	return sources
 }
+
+const SYNTHETIC_TARGET = "basic-ftp"
 
 function assertExactArray(label, actual, expected) {
 	const sortedActual = [...actual].sort()
@@ -183,24 +236,25 @@ function expectSyntheticRejection(label, mutate) {
 }
 
 expectSyntheticRejection("new production node for an existing advisory", (candidate) => {
-	candidate.vulnerabilities.archiver.nodes.push("node_modules/new-runtime/node_modules/archiver")
+	candidate.vulnerabilities[SYNTHETIC_TARGET].nodes.push(`node_modules/new-runtime/node_modules/${SYNTHETIC_TARGET}`)
 })
 expectSyntheticRejection("directness change for an existing advisory", (candidate) => {
-	candidate.vulnerabilities.archiver.isDirect = true
+	candidate.vulnerabilities[SYNTHETIC_TARGET].isDirect = true
 })
 expectSyntheticRejection("range change for an existing advisory", (candidate) => {
-	candidate.vulnerabilities.archiver.range = "*"
+	candidate.vulnerabilities[SYNTHETIC_TARGET].range = "*"
 })
 expectSyntheticRejection("new advisory source on an allowlisted package", (candidate) => {
-	candidate.vulnerabilities.archiver.via.push({
+	candidate.vulnerabilities[SYNTHETIC_TARGET].via.push({
 		source: 9999999,
-		name: "archiver",
+		name: SYNTHETIC_TARGET,
 		severity: "high",
 		range: "*",
 	})
 })
 try {
-	validateAuditBaseline(audit, new Date("2026-09-01T00:00:00.000Z"))
+	// One day after the review date, so the self-test follows BASELINE_REVIEW_BY when it moves.
+	validateAuditBaseline(audit, new Date(Date.parse(`${BASELINE_REVIEW_BY}T23:59:59.999Z`) + 24 * 60 * 60 * 1000))
 	throw new Error("Synthetic expired audit baseline was not rejected.")
 } catch (error) {
 	if (!String(error).includes("baseline expired")) {
