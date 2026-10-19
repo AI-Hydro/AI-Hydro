@@ -363,18 +363,13 @@ export const screens: ScreenDef[] = [
 	},
 	mapScreen("map-error-imagery", "Map with every basemap tile failing (alert, Retry imagery)", { layers: [basinPolygon] }),
 	mapScreen("map-error-partial-tiles", "Map with one basemap tile missing (quiet note, no alert)", { layers: [basinPolygon] }),
-	mapScreen("map-empty-search-open", "No layers with the Search panel open (no empty-state card)", {
-		steps: [{ click: 'button[aria-label="Search"]' }, { wait: 500 }],
+	mapScreen("map-empty-panel-open", "No layers with a tool panel open (no empty-state card)", {
+		steps: [{ click: 'button[aria-label="Basemap"]' }, { wait: 500 }],
 	}),
 	mapScreen("map-sync-loading", "Layer sync still loading (no empty-state card)", { mapConnection: "loading" }),
-	mapScreen("map-layer-badge-counts", "Layer badge counts visible layers; panel says N visible, M hidden", {
+	// Ribbon badge counts visible layers only (2 of 4 shown); the tooltip and panel header read "N visible · M hidden".
+	mapScreen("map-layer-badge-counts", "Layer badge counts visible layers only", {
 		layers: featureLayers().map((layer, index) => (index % 2 === 1 ? { ...layer, visible: false } : layer)),
-		steps: [{ click: 'button[aria-label^="Layer manager"]' }, { wait: 500 }],
-	}),
-	mapScreen("map-layers-workspace-files", "Layer manager listing workspace files you can add", {
-		layers: [basinPolygon],
-		workspaceFiles: ["data/basins/lower_basin.geojson", "data/gauges/stations.geojson", "outputs/run-0001/extent.geojson"],
-		steps: [{ click: 'button[aria-label^="Layer manager"]' }, { wait: 700 }],
 	}),
 	mapScreen("map-features", "Map with basin, gauge, rivers and raster (toolbar visible)", { layers: featureLayers() }),
 	mapScreen("map-layer-manager", "Map layer manager open", {

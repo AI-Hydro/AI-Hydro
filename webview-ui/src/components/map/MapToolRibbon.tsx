@@ -584,6 +584,8 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 								border: "none",
 								borderRadius: 3,
 								padding: "2px 6px",
+								minWidth: 24,
+								minHeight: 24,
 								cursor: "pointer",
 								fontSize: 13,
 								lineHeight: 1,

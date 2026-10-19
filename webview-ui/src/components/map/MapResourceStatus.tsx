@@ -76,6 +76,8 @@ export function MapResourceStatus({
 	const hasProblem = Boolean(rendererError) || imageryErrors.length > 0
 	if (!hasProblem && !loading.length && !notes.length) return null
 
+	// Targets of at least 24 px (WCAG 2.2 target size).
+	const button: React.CSSProperties = { minHeight: 24, minWidth: 24, padding: "2px 8px" }
 	const frame: React.CSSProperties = {
 		position: "absolute",
 		bottom: 52,
@@ -96,7 +98,7 @@ export function MapResourceStatus({
 	if (hasProblem && dismissedKey === problemKey) {
 		return (
 			<div style={{ ...frame, padding: "4px 8px" }}>
-				<button onClick={() => setDismissedKey(null)} title="Show the map problems that were dismissed" type="button">
+				<button onClick={() => setDismissedKey(null)} style={button} title="Show the map problems that were dismissed" type="button">
 					Map issues ({imageryErrors.length + (rendererError ? 1 : 0)})
 				</button>
 			</div>
@@ -110,7 +112,7 @@ export function MapResourceStatus({
 					<strong style={{ flex: 1 }}>
 						{rendererError && imageryErrors.length === 0 ? "Map renderer stopped" : "Map display incomplete"}
 					</strong>
-					<button aria-label="Dismiss map issues" onClick={() => setDismissedKey(problemKey)} type="button">
+					<button aria-label="Dismiss map issues" onClick={() => setDismissedKey(problemKey)} style={button} type="button">
 						Dismiss
 					</button>
 				</div>
@@ -123,12 +125,12 @@ export function MapResourceStatus({
 				{imageryErrors.length > 0 && <div>Missing imagery is not evidence of missing environmental features.</div>}
 				<div style={{ display: "flex", gap: 6, marginTop: 6 }}>
 					{rendererError && (
-						<button onClick={onReloadRenderer ?? onRetry} type="button">
+						<button onClick={onReloadRenderer ?? onRetry} style={button} type="button">
 							Reload map renderer
 						</button>
 					)}
 					{imageryErrors.length > 0 && (
-						<button onClick={onRetry} type="button">
+						<button onClick={onRetry} style={button} type="button">
 							Retry imagery
 						</button>
 					)}
