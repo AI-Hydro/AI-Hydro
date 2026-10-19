@@ -3,8 +3,8 @@
  *
  * A document may ask the Python kernel to run code, or start an agent task,
  * only when ALL of the following hold:
- *   1. its source is trusted: an installed, signed Learning Pack module, or an
- *      artifact written by AI-Hydro's own recorded tools;
+ *   1. its source is trusted: an installed, signed Learning Pack module whose
+ *      installed bytes still verify against the signed checksums (checked at load);
  *   2. the user explicitly allowed execution for this document; and
  *   3. the allowance is visible as a badge in the shell, with a revoke action.
  *
@@ -19,8 +19,11 @@
 export type ArtifactTrustSource =
 	/** Installed, signature-verified Learning Pack module. */
 	| "learning-pack"
-	/** Artifact written by AI-Hydro's own recorded tools (host-verified provenance record). */
-	| "recorded-tool"
+	/**
+	 * Test-only: a fixture the isolated Playwright extension host was told to trust
+	 * (see classifyArtifactFile). Never assigned outside isIsolatedLocalE2E().
+	 */
+	| "e2e-fixture"
 	/** Marketplace module/course: downloaded over the network and not signed. */
 	| "unsigned-module"
 	/** Any other HTML document (workspace file, agent-written inline HTML, external dashboard). */
@@ -33,7 +36,7 @@ export const ARTIFACT_TRUST_METADATA_KEYS = {
 } as const
 
 export function isTrustedArtifactSource(source: ArtifactTrustSource | undefined): boolean {
-	return source === "learning-pack" || source === "recorded-tool"
+	return source === "learning-pack" || source === "e2e-fixture"
 }
 
 export interface ArtifactTrustState {
@@ -46,7 +49,7 @@ export interface ArtifactTrustState {
 	canExecute: boolean
 }
 
-const KNOWN_SOURCES: readonly ArtifactTrustSource[] = ["learning-pack", "recorded-tool", "unsigned-module", "document"]
+const KNOWN_SOURCES: readonly ArtifactTrustSource[] = ["learning-pack", "e2e-fixture", "unsigned-module", "document"]
 
 /** Fail closed: anything missing or malformed is an untrusted, static document. */
 export function readArtifactTrust(metadata: Readonly<Record<string, string>> | undefined): ArtifactTrustState {
@@ -60,8 +63,8 @@ export function readArtifactTrust(metadata: Readonly<Record<string, string>> | u
 export function describeArtifactTrust(state: ArtifactTrustState): { label: string; detail: string } {
 	switch (state.source) {
 		case "learning-pack":
-		case "recorded-tool": {
-			const origin = state.source === "learning-pack" ? "Signed Learning Pack module" : "AI-Hydro recorded artifact"
+		case "e2e-fixture": {
+			const origin = state.source === "learning-pack" ? "Signed Learning Pack module" : "Test fixture"
 			return state.allowed
 				? { label: "Execution allowed", detail: `${origin}. Python and agent hand-off are enabled for this document.` }
 				: { label: "Trusted, execution off", detail: `${origin}. Allow it to enable Python and agent hand-off.` }

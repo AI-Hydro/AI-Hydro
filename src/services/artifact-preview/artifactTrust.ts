@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ArtifactTrustSource, isTrustedArtifactSource } from "@shared/artifactTrust"
+import { isIsolatedLocalE2E } from "@/services/test/isIsolatedLocalE2E"
 
 /**
  * Host-side execution-trust enforcement for Studio documents. See
@@ -14,6 +14,20 @@ interface TrustSubject {
 	id: string
 	contentHash: string
 	trustSource: ArtifactTrustSource
+	/**
+	 * The shell renders this exact hashed snapshot (`srcdoc`) rather than loading the
+	 * live file from disk. A document served from a live URL can change after it was
+	 * allowed, so it can never hold an allowance.
+	 */
+	servedFromSnapshot: boolean
+}
+
+function eligible(subject: TrustSubject): boolean {
+	if (!isTrustedArtifactSource(subject.trustSource) || !subject.servedFromSnapshot) {
+		return false
+	}
+	// The e2e source exists only for the isolated Playwright host.
+	return subject.trustSource !== "e2e-fixture" || isIsolatedLocalE2E()
 }
 
 /**
@@ -24,9 +38,9 @@ interface TrustSubject {
 export class ArtifactTrustStore {
 	private readonly allowances = new Map<string, string>()
 
-	/** Allow execution. Refuses (returns false) for any untrusted source. */
+	/** Allow execution. Refuses (returns false) for any ineligible document. */
 	allow(subject: TrustSubject): boolean {
-		if (!isTrustedArtifactSource(subject.trustSource)) {
+		if (!eligible(subject)) {
 			return false
 		}
 		this.allowances.set(subject.id, subject.contentHash)
@@ -38,9 +52,7 @@ export class ArtifactTrustStore {
 	}
 
 	isAllowed(subject: TrustSubject | undefined): boolean {
-		return Boolean(
-			subject && isTrustedArtifactSource(subject.trustSource) && this.allowances.get(subject.id) === subject.contentHash,
-		)
+		return Boolean(subject && eligible(subject) && this.allowances.get(subject.id) === subject.contentHash)
 	}
 }
 
@@ -57,32 +69,15 @@ export function executionDenialMessage(source: ArtifactTrustSource, reason: Exec
 
 // ─── Source classification ──────────────────────────────────────────────
 
-/** Directory that holds provenance records written by AI-Hydro's recorded tools. */
-export function artifactRecordRoot(): string {
-	return process.env.AIHYDRO_ARTIFACT_RECORD_ROOT || path.join(os.homedir(), ".aihydro", "artifact-records")
-}
-
-/**
- * A recorded-tool artifact has a record `<root>/<sha256>.json` whose `sha256`
- * equals the SHA-256 of the file's current bytes. The root is under the user's
- * home (or an explicit env override), never inside the workspace, so a cloned
- * repository cannot supply records. A modified file no longer matches its record.
- */
-export async function hasRecordedToolProvenance(fsPath: string, root = artifactRecordRoot()): Promise<boolean> {
+async function realpathOr(candidate: string): Promise<string> {
 	try {
-		const bytes = await fs.readFile(fsPath)
-		const digest = createHash("sha256").update(bytes).digest("hex")
-		const record = JSON.parse(await fs.readFile(path.join(root, `${digest}.json`), "utf8")) as {
-			schema?: unknown
-			sha256?: unknown
-		}
-		return record.schema === "aihydro-artifact-record-v1" && record.sha256 === digest
+		return await fs.realpath(candidate)
 	} catch {
-		return false
+		return path.resolve(candidate)
 	}
 }
 
-function containedBy(candidate: string, parent: string): boolean {
+export function containedBy(candidate: string, parent: string): boolean {
 	const relative = path.relative(parent, candidate)
 	return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
 }
@@ -92,27 +87,56 @@ export function marketplaceInstallRoots(home = os.homedir()): string[] {
 	return [path.join(home, ".aihydro", "modules"), path.join(home, ".aihydro", "courses")]
 }
 
-export function isUnsignedMarketplacePath(fsPath: string, home = os.homedir()): boolean {
-	const resolved = path.resolve(fsPath)
-	return marketplaceInstallRoots(home).some((root) => containedBy(resolved, root))
+/** Symlink-safe: both sides are resolved with realpath before comparing. */
+export async function isUnsignedMarketplacePath(fsPath: string, home = os.homedir()): Promise<boolean> {
+	const resolved = await realpathOr(fsPath)
+	for (const root of marketplaceInstallRoots(home)) {
+		if (containedBy(resolved, await realpathOr(root))) {
+			return true
+		}
+	}
+	return false
+}
+
+/**
+ * Test-only trust seam for the isolated Playwright extension host: paths listed in
+ * `AIHYDRO_E2E_TRUSTED_FIXTURES` (path-delimiter separated files or directories)
+ * are "e2e-fixture". Inert unless E2E_TEST=true and AIHYDRO_ENVIRONMENT=local.
+ */
+async function isE2ETrustedFixture(fsPath: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+	if (!isIsolatedLocalE2E(env)) {
+		return false
+	}
+	const raw = env.AIHYDRO_E2E_TRUSTED_FIXTURES
+	if (!raw) {
+		return false
+	}
+	const resolved = await realpathOr(fsPath)
+	for (const entry of raw.split(path.delimiter).filter(Boolean)) {
+		if (containedBy(resolved, await realpathOr(entry))) {
+			return true
+		}
+	}
+	return false
 }
 
 /**
  * Classify a file about to be registered. `installedPack` is the result of the
- * Learning Pack registry lookup (signature verification happens at pack install).
+ * Learning Pack registry lookup, which also re-verifies the installed bytes
+ * against the pack's signed checksums (see resolveInstalledLearningPackArtifact).
  */
 export async function classifyArtifactFile(
 	fsPath: string,
-	opts: { installedPack: boolean; home?: string; recordRoot?: string },
+	opts: { installedPack: boolean; home?: string; env?: NodeJS.ProcessEnv },
 ): Promise<ArtifactTrustSource> {
 	if (opts.installedPack) {
 		return "learning-pack"
 	}
-	if (isUnsignedMarketplacePath(fsPath, opts.home)) {
+	if (await isUnsignedMarketplacePath(fsPath, opts.home)) {
 		return "unsigned-module"
 	}
-	if (await hasRecordedToolProvenance(fsPath, opts.recordRoot)) {
-		return "recorded-tool"
+	if (await isE2ETrustedFixture(fsPath, opts.env ?? process.env)) {
+		return "e2e-fixture"
 	}
 	return "document"
 }

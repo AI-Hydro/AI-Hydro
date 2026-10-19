@@ -1,15 +1,11 @@
-import { createHash } from "node:crypto"
 import { execFileSync } from "node:child_process"
 import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	type PathLike,
-	readdirSync,
-	readFileSync,
 	type RmOptions,
 	rmSync,
-	statSync,
 	writeFileSync,
 } from "node:fs"
 import * as os from "node:os"
@@ -50,29 +46,6 @@ export function writeUserSettings(userDataDir: string, settings: Record<string, 
 	const dir = path.join(userDataDir, "User")
 	mkdirSync(dir, { recursive: true })
 	writeFileSync(path.join(dir, "settings.json"), JSON.stringify(settings, null, 2))
-}
-
-/**
- * Mark every `.html` file at or under each of `roots` as an artifact produced by AI-Hydro's
- * recorded tools, by writing the host-side provenance records the trust gate
- * looks for (`$HOME/.aihydro/artifact-records/<sha256>.json`; the launched
- * VS Code runs with HOME=homeDir). Files not passed here stay static documents.
- */
-export function recordFixtureArtifacts(homeDir: string, ...roots: string[]): void {
-	const recordDir = path.join(homeDir, ".aihydro", "artifact-records")
-	mkdirSync(recordDir, { recursive: true })
-	const visit = (entryPath: string) => {
-		if (statSync(entryPath).isDirectory()) {
-			for (const entry of readdirSync(entryPath)) visit(path.join(entryPath, entry))
-		} else if (entryPath.endsWith(".html")) {
-			const sha256 = createHash("sha256").update(readFileSync(entryPath)).digest("hex")
-			writeFileSync(
-				path.join(recordDir, `${sha256}.json`),
-				JSON.stringify({ schema: "aihydro-artifact-record-v1", sha256, tool: "e2e-fixture" }),
-			)
-		}
-	}
-	for (const root of roots) visit(root)
 }
 
 /**
@@ -123,6 +96,12 @@ export async function allowArtifactExecution(page: Page, cellId?: string, timeou
 }
 
 export interface E2ETestConfigs {
+	/**
+	 * Fixture files/directories the isolated extension host should treat as trusted
+	 * (AIHYDRO_E2E_TRUSTED_FIXTURES, honoured only when E2E_TEST=true and
+	 * AIHYDRO_ENVIRONMENT=local). Everything else stays a static document.
+	 */
+	e2eTrustedPaths: string[]
 	workspaceType: "single" | "multi"
 	channel: "stable" | "insiders"
 	workspaceTrust: "disabled" | "enabled"
@@ -507,12 +486,13 @@ export const e2e = test
 		},
 	})
 	.extend<E2ETestConfigs>({
+		e2eTrustedPaths: [],
 		workspaceType: "single",
 		channel: "stable",
 		workspaceTrust: "disabled",
 	})
 	.extend<{ openVSCode: (workspacePath: string) => Promise<ElectronApplication> }>({
-		openVSCode: async ({ userDataDir, extensionsDir, homeDir, channel, workspaceTrust }, use, testInfo) => {
+		openVSCode: async ({ userDataDir, extensionsDir, homeDir, channel, workspaceTrust, e2eTrustedPaths }, use, testInfo) => {
 			const executablePath = await getVSCodeExecutablePath(channel)
 			const matplotlibConfigDir = path.join(homeDir, ".cache", "matplotlib")
 			mkdirSync(matplotlibConfigDir, { recursive: true })
@@ -536,6 +516,7 @@ export const e2e = test
 						TEMP_PROFILE: "true",
 						E2E_TEST: "true",
 						AIHYDRO_ENVIRONMENT: "local",
+						AIHYDRO_E2E_TRUSTED_FIXTURES: e2eTrustedPaths.join(path.delimiter),
 						GRPC_RECORDER_FILE_NAME: E2ETestHelper.generateTestFileName(testInfo.title, testInfo.project.name),
 						// GRPC_RECORDER_ENABLED: "true",
 						// GRPC_RECORDER_TESTS_FILTERS_ENABLED: "true"

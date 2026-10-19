@@ -2,7 +2,7 @@ import { StringRequest } from "@shared/proto/cline/common"
 import { type HtmlPreviewItem, HtmlPreviewMode } from "@shared/proto/cline/html_preview"
 import { fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import HtmlPreviewView from "../HtmlPreviewView"
+import HtmlPreviewView, { sanitizeFrameDiag } from "../HtmlPreviewView"
 
 const copyToClipboardMock = vi.fn().mockResolvedValue({})
 const openUrlMock = vi.fn().mockResolvedValue({})
@@ -179,10 +179,11 @@ describe("HtmlPreviewView", () => {
 		expect(iframe.getAttribute("srcdoc")).to.contain("fonts.googleapis.com")
 	})
 
-	it("uses a single sandboxed profile (scripts allowed)", () => {
+	it("uses a single sandboxed profile: scripts allowed, never same-origin with the shell", () => {
 		render(<HtmlPreviewView item={baseItem} />)
 		const iframe = screen.getByTitle("Test Preview") as HTMLIFrameElement
-		expect(iframe.getAttribute("sandbox")).to.equal("allow-scripts allow-same-origin allow-popups allow-forms allow-modals")
+		expect(iframe.getAttribute("sandbox")).to.equal("allow-scripts allow-popups allow-forms allow-modals")
+		expect(iframe.getAttribute("sandbox")).not.to.contain("allow-same-origin")
 	})
 
 	it("does not expose safe/interactive mode toggles", () => {
@@ -428,5 +429,29 @@ describe("HtmlPreviewView", () => {
 				expect(screen.queryByTestId("agent-handoff-prompt")).not.toBeInTheDocument()
 			})
 		})
+	})
+})
+
+describe("frame diagnostics over postMessage", () => {
+	it("coerces a hostile or malformed reply into clamped plain data", () => {
+		const hostile = sanitizeFrameDiag({
+			scriptCount: "many",
+			scriptSrcs: ["a".repeat(5000), 7, { toString: () => "x" }],
+			bodySize: Number.POSITIVE_INFINITY,
+			errors: new Array(50).fill("e"),
+			diagInstalled: "yes",
+			leafletPresent: 1,
+		})
+		expect(hostile.scriptCount).to.equal(0)
+		expect(hostile.scriptSrcs).to.have.length(1)
+		expect(hostile.scriptSrcs[0]).to.have.length(400)
+		expect(hostile.bodySize).to.equal(0)
+		expect(hostile.errors).to.have.length(6)
+		expect(hostile.diagInstalled).to.equal(false)
+		expect(hostile.leafletPresent).to.equal(false)
+	})
+
+	it("treats a non-object reply as an error state", () => {
+		expect(sanitizeFrameDiag(null).errors[0]).to.match(/malformed/)
 	})
 })

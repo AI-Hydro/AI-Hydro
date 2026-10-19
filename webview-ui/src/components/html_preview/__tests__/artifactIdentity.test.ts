@@ -20,7 +20,7 @@ function makeItem(overrides: Partial<HtmlPreviewItem> = {}): HtmlPreviewItem {
 }
 
 // Host-assigned trust metadata. Capability follows the host's decision, not the document's claims.
-const TRUSTED = { trustSource: "recorded-tool" }
+const TRUSTED = { trustSource: "e2e-fixture" }
 
 const EXECUTABLE_MANIFEST: AiHydroModuleManifest = { requires: { executable: true, python: ["matplotlib"] } }
 

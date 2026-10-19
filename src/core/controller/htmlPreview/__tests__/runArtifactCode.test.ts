@@ -9,7 +9,7 @@ describe("runArtifactCode", () => {
 	let mockController: Partial<Controller>
 	let executeStub: sinon.SinonStub
 	let allowStub: sinon.SinonStub
-	let trustSource: "learning-pack" | "recorded-tool" | "unsigned-module" | "document"
+	let trustSource: "learning-pack" | "e2e-fixture" | "unsigned-module" | "document"
 	let executionAllowed: boolean
 
 	beforeEach(() => {
@@ -35,7 +35,7 @@ describe("runArtifactCode", () => {
 					dirFsPath: "/tmp",
 					trustSource,
 				}),
-				canExecute: () => executionAllowed && (trustSource === "learning-pack" || trustSource === "recorded-tool"),
+				canExecute: () => executionAllowed && (trustSource === "learning-pack" || trustSource === "e2e-fixture"),
 			})) as unknown as Controller["getArtifactPreviewService"],
 			getArtifactKernelService: (() => ({
 				execute: executeStub,
@@ -137,8 +137,8 @@ describe("runArtifactCode", () => {
 			expect(executeStub.called).to.be.false
 		})
 
-		it("runs a recorded-tool artifact once allowed", async () => {
-			trustSource = "recorded-tool"
+		it("runs a trusted artifact once allowed", async () => {
+			trustSource = "e2e-fixture"
 			const result = await runArtifactCode(mockController as Controller, request())
 			expect(result.status).to.equal("success")
 			expect(executeStub.calledOnce).to.be.true

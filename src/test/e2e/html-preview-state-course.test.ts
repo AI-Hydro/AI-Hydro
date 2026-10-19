@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Page } from "@playwright/test"
 import type { ElectronApplication } from "playwright"
-import { allowArtifactExecution, E2ETestHelper, e2e, recordFixtureArtifacts, writeUserSettings } from "./utils/helpers"
+import { allowArtifactExecution, E2ETestHelper, e2e, writeUserSettings } from "./utils/helpers"
 
 interface LifecycleSession {
 	launch: () => Promise<{ app: ElectronApplication; page: Page }>
@@ -21,8 +21,12 @@ const stateCourseE2E = e2e
 			}
 		},
 	})
-	.extend<{ workspaceDir: string }>({
-		workspaceDir: async ({ workspaceRoot, userDataDir, homeDir }, use) => {
+	.extend<{ workspaceDir: string; e2eTrustedPaths: string[] }>({
+		// The course fixtures stand in for trusted modules.
+		e2eTrustedPaths: async ({ workspaceDir }, use) => {
+			await use([path.join(workspaceDir, "phase0", "golden-course")])
+		},
+		workspaceDir: async ({ workspaceRoot, userDataDir }, use) => {
 			const workspaceDir = path.join(workspaceRoot, "workspace")
 			const baseWorkspace = path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "workspace")
 			const goldenCourse = path.join(
@@ -46,8 +50,6 @@ const stateCourseE2E = e2e
 				"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
 				"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
 			})
-			// The course fixtures stand in for artifacts produced by AI-Hydro's recorded tools.
-			recordFixtureArtifacts(homeDir, path.join(workspaceDir, "phase0", "golden-course"))
 			await use(workspaceDir)
 		},
 	})

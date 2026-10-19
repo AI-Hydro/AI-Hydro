@@ -47,10 +47,18 @@ function newRequestId(prefix: string): string {
  *   relays to VscodeHtmlPreviewProvider's onDidReceiveMessage handler.
  * Phase 1: will switch to gRPC unary (PreviewServiceClient.reportPreviewEvent).
  */
-export function reportPreviewEvent(kind: PreviewEventKind, payload: PreviewEventPayload = {}, source: string = "user"): void {
+export function reportPreviewEvent(
+	kind: PreviewEventKind,
+	payload: PreviewEventPayload = {},
+	source: string = "user",
+	artifactId?: string,
+): void {
 	try {
 		PLATFORM_CONFIG.postMessage({
 			type: "aihydro-preview-event",
+			// The host resolves the module id from this host-assigned artifact id and
+			// decides how far to trust the event; the payload's own ids are ignored.
+			artifactId,
 			kind,
 			payloadJson: JSON.stringify(payload),
 			timestampMs: Date.now(),
@@ -65,12 +73,13 @@ export function reportPreviewEvent(kind: PreviewEventKind, payload: PreviewEvent
 /**
  * Post the edited HTML to the extension host for disk persistence.
  * The host's `VscodeHtmlPreviewProvider` handles `aihydro-save-document`
- * by calling `vscode.workspace.fs.writeFile(filePath, html)`.
+ * by writing `html` to the registered path of `artifactId` (the host ignores a differing filePath).
  */
-export function requestSaveDocument(filePath: string, html: string): void {
+export function requestSaveDocument(artifactId: string, filePath: string, html: string): void {
 	try {
 		PLATFORM_CONFIG.postMessage({
 			type: "aihydro-save-document",
+			artifactId,
 			filePath,
 			html,
 		})

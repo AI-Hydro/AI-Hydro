@@ -56,9 +56,10 @@ import { useCourseProgress } from "./useCourseProgress"
  *
  * Rendering: we prefer `<iframe srcdoc={item.htmlContent}>` over `src=URL`.
  *
- *   • `srcdoc` makes the iframe **same-origin** with the parent webview,
- *     so the parent's CSP (which whitelists common viz CDNs like jsdelivr,
- *     plot.ly, jquery) applies to anything the artifact tries to load.
+ *   • `srcdoc` inherits the parent's CSP (which whitelists common viz CDNs
+ *     like jsdelivr, plot.ly, jquery) for anything the artifact tries to
+ *     load, and is sandboxed into an opaque origin (no `allow-same-origin`),
+ *     so the document cannot touch the shell.
  *
  *   • Using `src=https://file+.vscode-resource.vscode-cdn.net/…` (i.e.
  *     `asWebviewUri`) puts the iframe on a *different* subdomain from the
@@ -114,9 +115,9 @@ interface FrameDiag {
  * Tiny script we prepend to every `srcdoc` HTML body. It hooks `window.onerror`,
  * the `unhandledrejection` event, and console.error/warn so that any runtime
  * failure inside the artifact (a missing script, a CSP violation, a Leaflet
- * exception, …) is captured into `window.__aihydroDiag` where the parent can
- * read it after load. We do NOT use postMessage because the same-origin
- * iframe gives us direct access to `iframe.contentWindow`.
+ * exception, …) is captured into `window.__aihydroDiag`. The iframe is an
+ * opaque origin, so the shell cannot read it; it asks via postMessage
+ * (`aihydro-diag-request`) and this script answers with a plain-data summary.
  *
  * This is the diagnostic that turns "the map is blank" into a specific error
  * message in the diagnostic strip.
@@ -154,6 +155,40 @@ const DIAG_SCRIPT = `<script>(function(){
   // (e.g. third-party libs) without helping users.
   var origErr = console.error;
   console.error = function(){ rec('error', arguments); try { origErr.apply(console, arguments); } catch(_){} };
+
+  // The shell cannot read this document (opaque origin), so it asks and the document answers
+  // with a plain-data summary. Only counts/short strings leave; the shell clamps them again.
+  function collect() {
+    var doc = document;
+    var scripts = Array.prototype.slice.call(doc.querySelectorAll('script'));
+    var sheets = Array.prototype.slice.call(doc.querySelectorAll('link[rel~="stylesheet"]'));
+    var maps = Array.prototype.slice.call(doc.querySelectorAll('div.folium-map, div[id^="map_"], div.leaflet-container, div[id^="plotly"]'));
+    var rects = maps.slice(0, 4).map(function(el){
+      var r = el.getBoundingClientRect(); var c = window.getComputedStyle(el);
+      return (el.id || el.className) + ': ' + Math.round(r.width) + 'x' + Math.round(r.height) +
+        ' display=' + c.display + ' visibility=' + c.visibility + ' z=' + c.zIndex;
+    });
+    return {
+      scriptCount: scripts.length,
+      scriptSrcs: scripts.map(function(s){ return s.getAttribute('src') || ''; }).filter(Boolean).slice(0, 8),
+      stylesheetCount: sheets.length,
+      stylesheetHrefs: sheets.map(function(s){ return s.getAttribute('href') || ''; }).filter(Boolean).slice(0, 8),
+      bodyChildren: doc.body ? doc.body.childElementCount : 0,
+      bodySize: doc.body ? doc.body.innerHTML.length : 0,
+      leafletPresent: typeof window.L !== 'undefined',
+      foliumDivCount: maps.length,
+      tileImageCount: doc.querySelectorAll('.leaflet-tile, img.leaflet-tile').length,
+      mapRects: rects,
+      errors: d.errors.slice(0, 6),
+      consoleMsgs: d.consoleMsgs.slice(0, 6),
+      cspViolations: d.cspViolations.slice(0, 6),
+      diagInstalled: true
+    };
+  }
+  window.addEventListener('message', function(e){
+    if (e.source !== window.parent || !e.data || e.data.type !== 'aihydro-diag-request') return;
+    try { window.parent.postMessage({ type: 'aihydro-frame-diag', diag: collect() }, '*'); } catch(_) {}
+  });
 })();</script>`
 
 /**
@@ -201,11 +236,16 @@ function pickRenderPath(item?: HtmlPreviewItem): RenderPath {
 	return "none"
 }
 
-const SANDBOX_ATTR = "allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+// No `allow-same-origin`: the document runs in an opaque origin, so its script cannot reach the
+// shell's DOM, React props, or window globals. Everything it can say to the shell arrives as a
+// postMessage and is treated as untrusted data (see the message handlers below). Allow, Send and
+// Revoke are shell UI the document cannot touch.
+const SANDBOX_ATTR = "allow-scripts allow-popups allow-forms allow-modals"
 
 // Round-trips interactive control state (bindParam values) through the host's
 // moduleStateStore. Mirrors the request/response pattern in useCourseProgress.
 function sendModuleState(
+	artifactId: string,
 	action: "get" | "set" | "reset",
 	moduleKey: string,
 	values?: Record<string, string>,
@@ -231,6 +271,7 @@ function sendModuleState(
 		try {
 			PLATFORM_CONFIG.postMessage({
 				type: "aihydro-module-state",
+				artifactId,
 				requestId,
 				action,
 				moduleKey,
@@ -242,6 +283,51 @@ function sendModuleState(
 			resolve(null)
 		}
 	})
+}
+
+function emptyFrameDiag(error: string): FrameDiag {
+	return {
+		scriptCount: 0,
+		scriptSrcs: [],
+		stylesheetCount: 0,
+		stylesheetHrefs: [],
+		bodyChildren: 0,
+		bodySize: 0,
+		leafletPresent: false,
+		foliumDivCount: 0,
+		tileImageCount: 0,
+		mapRects: [],
+		errors: [error],
+		consoleMsgs: [],
+		cspViolations: [],
+		diagInstalled: false,
+	}
+}
+
+const num = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(value, 1e9)) : 0)
+const strs = (value: unknown, max: number): string[] =>
+	Array.isArray(value) ? value.filter((v): v is string => typeof v === "string").slice(0, max).map((v) => v.slice(0, 400)) : []
+
+/** Coerce an untrusted diagnostics payload from the document into the FrameDiag shape. */
+export function sanitizeFrameDiag(raw: unknown): FrameDiag {
+	if (!raw || typeof raw !== "object") return emptyFrameDiag("diagnostics reply was malformed")
+	const d = raw as Record<string, unknown>
+	return {
+		scriptCount: num(d.scriptCount),
+		scriptSrcs: strs(d.scriptSrcs, 8),
+		stylesheetCount: num(d.stylesheetCount),
+		stylesheetHrefs: strs(d.stylesheetHrefs, 8),
+		bodyChildren: num(d.bodyChildren),
+		bodySize: num(d.bodySize),
+		leafletPresent: d.leafletPresent === true,
+		foliumDivCount: num(d.foliumDivCount),
+		tileImageCount: num(d.tileImageCount),
+		mapRects: strs(d.mapRects, 4),
+		errors: strs(d.errors, 6),
+		consoleMsgs: strs(d.consoleMsgs, 6),
+		cspViolations: strs(d.cspViolations, 6),
+		diagInstalled: d.diagInstalled === true,
+	}
 }
 
 const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen = true, onToggleSidePanel }) => {
@@ -273,6 +359,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		try {
 			PLATFORM_CONFIG.postMessage({
 				type: "aihydro-active-course",
+				artifactId: item?.id ?? "",
 				courseId: course.courseId,
 				coursePath,
 				courseRoot,
@@ -281,7 +368,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		} catch (err) {
 			console.warn("[HtmlPreviewView] active-course post failed:", err)
 		}
-	}, [course?.courseId, courseRoot, currentModuleId])
+	}, [course?.courseId, courseRoot, currentModuleId, item?.id])
 	// Phase D — accept navigation pushes from the agent's course_navigate
 	// MCP tool. The extension host watches ~/.aihydro/course_nav_intent.json
 	// and forwards intent messages here. We route through the same code
@@ -825,6 +912,16 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 			if (data.artifactId && item?.id && data.artifactId !== item.id) {
 				return
 			}
+			// Everything below is untrusted data from the document. Without an allowance the
+			// document has no bridge, so none of these messages is legitimate: answer a run
+			// request with a denial and drop the rest (no events, manifests, state or quiz
+			// results reach the host or the learner's progress).
+			if (!canExecute) {
+				if (data.type === "artifact/runCode") {
+					void handleArtifactRunCode(data.code ?? "", data.language ?? "python", data.cellId)
+				}
+				return
+			}
 
 			// Phase 1: relay every artifact event to the host's PreviewSessionService
 			// so MCP tools (preview_get_state, preview_recent_events) and the agent
@@ -841,15 +938,16 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 						pythonCount: data.pythonCount,
 					},
 					"system",
+					item?.id,
 				)
 			} else if (data.type === "artifact/manifest" && data.manifest) {
-				reportPreviewEvent("manifest.loaded", { ...data.manifest, moduleId }, "system")
+				reportPreviewEvent("manifest.loaded", { ...data.manifest, moduleId }, "system", item?.id)
 			} else if (data.type === "artifact/runAllProgress") {
-				reportPreviewEvent("cell.run.started", { ...eventBase, current: data.current, total: data.total }, "user")
+				reportPreviewEvent("cell.run.started", { ...eventBase, current: data.current, total: data.total }, "user", item?.id)
 			} else if (data.type === "artifact/runAllComplete") {
-				reportPreviewEvent("cell.run.completed", eventBase, "user")
+				reportPreviewEvent("cell.run.completed", eventBase, "user", item?.id)
 			} else if (data.type === "artifact/runCode") {
-				reportPreviewEvent("cell.run.started", { ...eventBase, code: data.code, language: data.language }, "user")
+				reportPreviewEvent("cell.run.started", { ...eventBase, code: data.code, language: data.language }, "user", item?.id)
 			}
 
 			if (data.type === "artifact/cellRegistry") {
@@ -885,6 +983,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 					"user.interaction",
 					{ ...eventBase, quizId: data.quizId, passed: data.passed, score: data.score, total: data.total },
 					"user",
+					item?.id,
 				)
 				if (data.passed && course && currentModuleId && !courseProgress.isCompleted(currentModuleId)) {
 					void courseProgress.markComplete(currentModuleId)
@@ -896,14 +995,14 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 			const moduleKey = item?.filePath || item?.id || ""
 			if (data.type === "artifact/stateRequest") {
 				if (moduleKey) {
-					void sendModuleState("get", moduleKey, undefined, learningPackScope).then((values) => {
+					void sendModuleState(item?.id ?? "", "get", moduleKey, undefined, learningPackScope).then((values) => {
 						postResultToIframe({ type: "artifact/stateRestore", state: values ?? {} })
 					})
 				}
 				return
 			}
 			if (data.type === "artifact/stateChanged") {
-				if (moduleKey) void sendModuleState("set", moduleKey, data.state ?? {}, learningPackScope)
+				if (moduleKey) void sendModuleState(item?.id ?? "", "set", moduleKey, data.state ?? {}, learningPackScope)
 				return
 			}
 			// Phase 3.5b — reactive param widgets: bridge posts this when an input
@@ -1012,10 +1111,13 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 			// Relay to the host PreviewSessionService (it dedupes by source).
 			// Phase 1's previewBridge already does this for events the webview
 			// generates itself; we mirror the same path for bridge events.
+			// The module id is the host-assigned artifact id, never the document's claim, and a
+			// document without an allowance is tagged so the agent reads its events as untrusted.
 			reportPreviewEvent(
 				(data.kind ?? "unknown") as Parameters<typeof reportPreviewEvent>[0],
-				payload as Record<string, unknown>,
-				data.source || "bridge",
+				{ ...payload, moduleId: item?.id ?? "unknown", module_id: undefined } as Record<string, unknown>,
+				canExecute ? "bridge" : "untrusted-document",
+				item?.id,
 			)
 		}
 		window.addEventListener("message", onBridgeMessage)
@@ -1116,7 +1218,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				win.postMessage({ type: "aihydro-request-save" }, "*")
 			})
 			if (html) {
-				requestSaveDocument(item.filePath, html)
+				requestSaveDocument(item.id, item.filePath, html)
 				setHasPendingTextEdits(false)
 				return true
 			}
@@ -1187,8 +1289,8 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 	}, [item?.filePath])
 
 	/**
-	 * After the iframe loads, walk its document (same-origin only — works
-	 * for srcdoc, not for cross-origin `src` fallback) and capture what's
+	 * After the iframe loads, ask the document (srcdoc only, via postMessage; the
+	 * cross-origin `src` fallback has no diagnostic script) to report what's
 	 * actually in there: script count, whether Leaflet is defined,
 	 * captured runtime errors, console output. This is the diagnostic that
 	 * pinpoints WHY a Folium/Plotly map renders blank.
@@ -1198,83 +1300,25 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		if (!iframe) {
 			return
 		}
-		try {
-			const doc = iframe.contentDocument
-			const win = iframe.contentWindow as
-				| (Window & { __aihydroDiag?: { errors: string[]; consoleMsgs: string[] }; L?: unknown })
-				| null
-			if (!doc || !win) {
-				setFrameDiag({
-					scriptCount: 0,
-					scriptSrcs: [],
-					stylesheetCount: 0,
-					stylesheetHrefs: [],
-					bodyChildren: 0,
-					bodySize: 0,
-					leafletPresent: false,
-					foliumDivCount: 0,
-					tileImageCount: 0,
-					mapRects: [],
-					errors: ["contentDocument unavailable (cross-origin fallback)"],
-					consoleMsgs: [],
-					cspViolations: [],
-					diagInstalled: false,
-				})
-				return
-			}
-			const scripts = Array.from(doc.querySelectorAll("script"))
-			const srcs = scripts
-				.map((s) => s.getAttribute("src") || "")
-				.filter(Boolean)
-				.slice(0, 8)
-			const stylesheets = Array.from(doc.querySelectorAll('link[rel~="stylesheet"]'))
-			const stylesheetHrefs = stylesheets
-				.map((s) => s.getAttribute("href") || "")
-				.filter(Boolean)
-				.slice(0, 8)
-			const diag = (win as any).__aihydroDiag || { errors: [], consoleMsgs: [], cspViolations: [], installed: false }
-			const mapElements = Array.from(
-				doc.querySelectorAll<HTMLElement>('div.folium-map, div[id^="map_"], div.leaflet-container, div[id^="plotly"]'),
-			)
-			const mapRects = mapElements.slice(0, 4).map((el) => {
-				const rect = el.getBoundingClientRect()
-				const computed = win.getComputedStyle(el)
-				return `${el.id || el.className}: ${Math.round(rect.width)}x${Math.round(rect.height)} display=${computed.display} visibility=${computed.visibility} z=${computed.zIndex}`
-			})
-			setFrameDiag({
-				scriptCount: scripts.length,
-				scriptSrcs: srcs,
-				stylesheetCount: stylesheets.length,
-				stylesheetHrefs,
-				bodyChildren: doc.body ? doc.body.childElementCount : 0,
-				bodySize: doc.body ? doc.body.innerHTML.length : 0,
-				leafletPresent: typeof (win as any).L !== "undefined",
-				foliumDivCount: mapElements.length,
-				tileImageCount: doc.querySelectorAll(".leaflet-tile, img.leaflet-tile").length,
-				mapRects,
-				errors: (diag.errors || []).slice(0, 6),
-				consoleMsgs: (diag.consoleMsgs || []).slice(0, 6),
-				cspViolations: (diag.cspViolations || []).slice(0, 6),
-				diagInstalled: Boolean(diag.installed),
-			})
-		} catch (e) {
-			setFrameDiag({
-				scriptCount: 0,
-				scriptSrcs: [],
-				stylesheetCount: 0,
-				stylesheetHrefs: [],
-				bodyChildren: 0,
-				bodySize: 0,
-				leafletPresent: false,
-				foliumDivCount: 0,
-				tileImageCount: 0,
-				mapRects: [],
-				errors: [`introspection threw: ${e instanceof Error ? e.message : String(e)}`],
-				consoleMsgs: [],
-				cspViolations: [],
-				diagInstalled: false,
-			})
+		if (renderPath !== "srcdoc" || !iframe.contentWindow) {
+			// The `src` fallback is a different origin and carries no diagnostic script.
+			setFrameDiag(emptyFrameDiag("diagnostics unavailable (cross-origin fallback)"))
+			return
 		}
+		// The srcdoc document is sandboxed into an opaque origin: ask it to report (see DIAG_SCRIPT).
+		iframe.contentWindow.postMessage({ type: "aihydro-diag-request" }, "*")
+	}, [renderPath])
+
+	// Diagnostics replies are untrusted data from the document: shape-check and clamp every field.
+	useEffect(() => {
+		const onDiag = (event: MessageEvent) => {
+			if (event.source !== iframeRef.current?.contentWindow) return
+			const data = event.data as { type?: string; diag?: unknown } | null
+			if (!data || data.type !== "aihydro-frame-diag") return
+			setFrameDiag(sanitizeFrameDiag(data.diag))
+		}
+		window.addEventListener("message", onDiag)
+		return () => window.removeEventListener("message", onDiag)
 	}, [])
 
 	if (!item) {
@@ -1412,10 +1456,9 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 							key={iframeKey}
 							ref={iframeRef}
 							sandbox={sandbox}
-							// IMPORTANT: prefer srcdoc to keep the iframe same-origin
-							// with the parent webview. Only fall back to `src` (which
-							// hits VS Code's resource subdomain) for artifacts too big
-							// to embed inline.
+							// srcdoc renders the exact hashed snapshot the host trust-checked, in a
+							// sandboxed opaque origin. Only artifacts too big to embed fall back to
+							// `src` (the live file), and those can never hold an execution allowance.
 							{...(renderPath === "srcdoc" ? { srcDoc: srcdocWithDiag } : { src: item.webviewUri })}
 							onError={() => {
 								setError("Failed to load the artifact in the iframe.")

@@ -4,7 +4,7 @@ import type { ArtifactTrustSource } from "@shared/artifactTrust"
 import * as vscode from "vscode"
 import { ArtifactTrustStore } from "./artifactTrust"
 import { type DetectedMode, detectMode } from "./detectMode"
-import { getHtmlUtf8ByteLength } from "./inlineHtmlPolicy"
+import { getHtmlUtf8ByteLength, shouldInlineHtml } from "./inlineHtmlPolicy"
 import { inlineRelativeAssets } from "./inlineRelativeAssets"
 import { findQuartoSiteRoot } from "./quartoSiteRoot"
 
@@ -46,6 +46,25 @@ export interface ArtifactRef {
 	trustSource: ArtifactTrustSource
 	/** Free-form, persisted across the gRPC boundary. */
 	metadata: Record<string, string>
+}
+
+/**
+ * What the trust store needs to know about a document. `servedFromSnapshot` is true
+ * only when the shell renders the hashed `ref.html` (srcdoc); larger artifacts fall back
+ * to loading the live file by URL, which can change after the user allowed it.
+ */
+function trustSubject(ref: ArtifactRef): {
+	id: string
+	contentHash: string
+	trustSource: ArtifactTrustSource
+	servedFromSnapshot: boolean
+} {
+	return {
+		id: ref.id,
+		contentHash: ref.contentHash,
+		trustSource: ref.trustSource,
+		servedFromSnapshot: shouldInlineHtml(ref.byteLength),
+	}
 }
 
 /** Maximum on-disk artifact size we are willing to register. */
@@ -171,7 +190,8 @@ export class ArtifactPreviewService {
 
 	/** Whether the document may use the Python kernel and hand work to the agent. */
 	canExecute(id: string): boolean {
-		return this.trust.isAllowed(this.artifacts.get(id))
+		const ref = this.artifacts.get(id)
+		return Boolean(ref) && this.trust.isAllowed(trustSubject(ref as ArtifactRef))
 	}
 
 	/**
@@ -184,14 +204,14 @@ export class ArtifactPreviewService {
 			return false
 		}
 		if (allowed) {
-			this.trust.allow(ref)
+			this.trust.allow(trustSubject(ref))
 		} else {
 			this.trust.revoke(id)
 		}
 		// Deliberately no `emit`: service changes rebuild the whole preview panel
 		// (VscodeHtmlPreviewProvider.refreshPanel). An allowance change only needs the
 		// updated item pushed to the webview, which the controller does.
-		return this.trust.isAllowed(ref)
+		return this.trust.isAllowed(trustSubject(ref))
 	}
 
 	list(): ArtifactRef[] {
@@ -282,6 +302,11 @@ export class ArtifactPreviewService {
 
 	private upsert(ref: ArtifactRef): void {
 		const existing = this.artifacts.get(ref.id)
+		if (existing && (existing.contentHash !== ref.contentHash || existing.trustSource !== ref.trustSource)) {
+			// A re-registration with different bytes or provenance never inherits the
+			// previous document's allowance.
+			this.trust.revoke(ref.id)
+		}
 		this.artifacts.set(ref.id, ref)
 		this.emit({ kind: existing ? "updated" : "added", ref })
 	}

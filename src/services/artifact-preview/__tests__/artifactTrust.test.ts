@@ -1,21 +1,14 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { createHash } from "node:crypto"
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ArtifactTrustSource, readArtifactTrust } from "@shared/artifactTrust"
 import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import { ArtifactPreviewService, type ArtifactRef } from "../ArtifactPreviewService"
-import {
-	ArtifactTrustStore,
-	classifyArtifactFile,
-	executionDenialMessage,
-	hasRecordedToolProvenance,
-	isUnsignedMarketplacePath,
-} from "../artifactTrust"
+import { ArtifactTrustStore, classifyArtifactFile, executionDenialMessage, isUnsignedMarketplacePath } from "../artifactTrust"
 
-function subject(trustSource: ArtifactTrustSource, contentHash = "h1", id = "file_1") {
-	return { id, contentHash, trustSource }
+function subject(trustSource: ArtifactTrustSource, contentHash = "h1", id = "file_1", servedFromSnapshot = true) {
+	return { id, contentHash, trustSource, servedFromSnapshot }
 }
 
 describe("ArtifactTrustStore", () => {
@@ -27,10 +20,9 @@ describe("ArtifactTrustStore", () => {
 		}
 	})
 
-	it("requires an explicit allow even for trusted sources", () => {
+	it("requires an explicit allow even for a trusted source", () => {
 		const store = new ArtifactTrustStore()
 		expect(store.isAllowed(subject("learning-pack"))).to.equal(false)
-		expect(store.isAllowed(subject("recorded-tool"))).to.equal(false)
 		expect(store.allow(subject("learning-pack"))).to.equal(true)
 		expect(store.isAllowed(subject("learning-pack"))).to.equal(true)
 	})
@@ -49,9 +41,9 @@ describe("ArtifactTrustStore", () => {
 
 	it("revokes", () => {
 		const store = new ArtifactTrustStore()
-		store.allow(subject("recorded-tool"))
+		store.allow(subject("learning-pack"))
 		store.revoke("file_1")
-		expect(store.isAllowed(subject("recorded-tool"))).to.equal(false)
+		expect(store.isAllowed(subject("learning-pack"))).to.equal(false)
 	})
 
 	it("does not honour an allowance if the source later becomes untrusted", () => {
@@ -62,6 +54,37 @@ describe("ArtifactTrustStore", () => {
 
 	it("treats an unknown document as not allowed", () => {
 		expect(new ArtifactTrustStore().isAllowed(undefined)).to.equal(false)
+	})
+
+	it("never holds an allowance for a document served from the live file instead of the hashed snapshot", () => {
+		const store = new ArtifactTrustStore()
+		expect(store.allow(subject("learning-pack", "h1", "file_1", false))).to.equal(false)
+		expect(store.isAllowed(subject("learning-pack", "h1", "file_1", false))).to.equal(false)
+		// An allowance granted while served from the snapshot lapses if the document later
+		// falls back to the live file.
+		store.allow(subject("learning-pack", "h1", "file_1", true))
+		expect(store.isAllowed(subject("learning-pack", "h1", "file_1", false))).to.equal(false)
+	})
+
+	describe("e2e-fixture source", () => {
+		const saved = { E2E_TEST: process.env.E2E_TEST, AIHYDRO_ENVIRONMENT: process.env.AIHYDRO_ENVIRONMENT }
+		afterEach(() => {
+			for (const [key, value] of Object.entries(saved)) {
+				if (value === undefined) delete process.env[key]
+				else process.env[key] = value
+			}
+		})
+
+		it("cannot be allowed outside the isolated e2e host", () => {
+			delete process.env.E2E_TEST
+			expect(new ArtifactTrustStore().allow(subject("e2e-fixture"))).to.equal(false)
+		})
+
+		it("can be allowed inside the isolated e2e host", () => {
+			process.env.E2E_TEST = "true"
+			process.env.AIHYDRO_ENVIRONMENT = "local"
+			expect(new ArtifactTrustStore().allow(subject("e2e-fixture"))).to.equal(true)
+		})
 	})
 })
 
@@ -80,13 +103,11 @@ describe("executionDenialMessage", () => {
 describe("artifact source classification", () => {
 	let tmp: string
 	let home: string
-	let records: string
 
 	beforeEach(() => {
 		tmp = mkdtempSync(path.join(os.tmpdir(), "aihydro-trust-"))
 		home = path.join(tmp, "home")
-		records = path.join(home, ".aihydro", "artifact-records")
-		mkdirSync(records, { recursive: true })
+		mkdirSync(home, { recursive: true })
 	})
 	afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
@@ -96,76 +117,86 @@ describe("artifact source classification", () => {
 		writeFileSync(file, body)
 		return file
 	}
-	function record(body: string, overrides: Record<string, unknown> = {}): void {
-		const digest = createHash("sha256").update(body).digest("hex")
-		writeFileSync(
-			path.join(records, `${digest}.json`),
-			JSON.stringify({ schema: "aihydro-artifact-record-v1", sha256: digest, ...overrides }),
-		)
-	}
+	const e2eEnv = (trusted: string): NodeJS.ProcessEnv => ({
+		E2E_TEST: "true",
+		AIHYDRO_ENVIRONMENT: "local",
+		AIHYDRO_E2E_TRUSTED_FIXTURES: trusted,
+	})
 
 	it("is a static document by default", async () => {
 		const file = writeDoc("ws/dashboard.html", "<html>external</html>")
-		expect(await classifyArtifactFile(file, { installedPack: false, home, recordRoot: records })).to.equal("document")
+		expect(await classifyArtifactFile(file, { installedPack: false, home, env: {} })).to.equal("document")
 	})
 
-	it("is a learning pack module when the pack registry resolves it", async () => {
+	it("is a learning pack module when the verified pack registry resolves it", async () => {
 		const file = writeDoc("ws/m.html", "<html></html>")
-		expect(await classifyArtifactFile(file, { installedPack: true, home, recordRoot: records })).to.equal("learning-pack")
+		expect(await classifyArtifactFile(file, { installedPack: true, home, env: {} })).to.equal("learning-pack")
 	})
 
-	it("is a recorded-tool artifact only with a matching host-side record", async () => {
-		const body = "<html>report</html>"
-		const file = writeDoc("ws/report.html", body)
-		record(body)
-		expect(await classifyArtifactFile(file, { installedPack: false, home, recordRoot: records })).to.equal("recorded-tool")
-	})
-
-	it("loses recorded-tool status when the file is modified after recording", async () => {
-		const body = "<html>report</html>"
-		const file = writeDoc("ws/report.html", body)
-		record(body)
-		writeFileSync(file, `${body}<script>evil()</script>`)
-		expect(await hasRecordedToolProvenance(file, records)).to.equal(false)
-	})
-
-	it("rejects a record with the wrong schema or digest", async () => {
-		const body = "<html>x</html>"
-		const file = writeDoc("ws/x.html", body)
-		record(body, { schema: "something-else" })
-		expect(await hasRecordedToolProvenance(file, records)).to.equal(false)
-		record(body, { sha256: "0".repeat(64) })
-		expect(await hasRecordedToolProvenance(file, records)).to.equal(false)
-	})
-
-	it("never reads records from the workspace", async () => {
+	it("has no provenance-record trust origin: a record in the workspace or home grants nothing", async () => {
 		const body = "<html>cloned</html>"
 		const file = writeDoc("repo/cloned.html", body)
-		const digest = createHash("sha256").update(body).digest("hex")
-		writeDoc(`repo/.aihydro/artifact-records/${digest}.json`, JSON.stringify({ schema: "aihydro-artifact-record-v1", sha256: digest }))
-		expect(await classifyArtifactFile(file, { installedPack: false, home, recordRoot: records })).to.equal("document")
+		writeDoc("repo/.aihydro/artifact-records/x.json", JSON.stringify({ schema: "aihydro-artifact-record-v1" }))
+		writeDoc("home/.aihydro/artifact-records/x.json", JSON.stringify({ schema: "aihydro-artifact-record-v1" }))
+		expect(await classifyArtifactFile(file, { installedPack: false, home, env: {} })).to.equal("document")
 	})
 
 	it("marks files under the marketplace install roots as unsigned modules", async () => {
-		const moduleFile = path.join(home, ".aihydro", "modules", "m1", "module.html")
-		const courseFile = path.join(home, ".aihydro", "courses", "c1", "m1", "module.html")
-		expect(isUnsignedMarketplacePath(moduleFile, home)).to.equal(true)
-		expect(isUnsignedMarketplacePath(courseFile, home)).to.equal(true)
-		expect(isUnsignedMarketplacePath(path.join(home, ".aihydro", "modules-evil", "x.html"), home)).to.equal(false)
-		const file = writeDoc("home/.aihydro/modules/m1/module.html", "<html></html>")
-		expect(await classifyArtifactFile(file, { installedPack: false, home, recordRoot: records })).to.equal("unsigned-module")
+		const moduleFile = writeDoc("home/.aihydro/modules/m1/module.html", "<html></html>")
+		const courseFile = writeDoc("home/.aihydro/courses/c1/m1/module.html", "<html></html>")
+		expect(await isUnsignedMarketplacePath(moduleFile, home)).to.equal(true)
+		expect(await isUnsignedMarketplacePath(courseFile, home)).to.equal(true)
+		const lookalike = writeDoc("home/.aihydro/modules-evil/x.html", "<html></html>")
+		expect(await isUnsignedMarketplacePath(lookalike, home)).to.equal(false)
+		expect(await classifyArtifactFile(moduleFile, { installedPack: false, home, env: {} })).to.equal("unsigned-module")
 	})
 
-	it("keeps a marketplace file unsigned even if it has a record", async () => {
-		const body = "<html>market</html>"
-		const file = writeDoc("home/.aihydro/modules/m1/module.html", body)
-		record(body)
-		expect(await classifyArtifactFile(file, { installedPack: false, home, recordRoot: records })).to.equal("unsigned-module")
+	it("sees through a symlink into the marketplace install root", async function () {
+		const target = writeDoc("home/.aihydro/modules/m1/module.html", "<html></html>")
+		const link = path.join(tmp, "ws", "innocent.html")
+		mkdirSync(path.dirname(link), { recursive: true })
+		try {
+			symlinkSync(target, link)
+		} catch {
+			this.skip() // symlinks need privileges on some Windows runners
+		}
+		expect(await classifyArtifactFile(link, { installedPack: false, home, env: {} })).to.equal("unsigned-module")
+	})
+
+	describe("e2e-fixture", () => {
+		it("is trusted only for listed paths and only in the isolated e2e host", async () => {
+			const listed = writeDoc("ws/fixtures/a.html", "<html></html>")
+			const other = writeDoc("ws/other/b.html", "<html></html>")
+			const env = e2eEnv(path.join(tmp, "ws", "fixtures"))
+			expect(await classifyArtifactFile(listed, { installedPack: false, home, env })).to.equal("e2e-fixture")
+			expect(await classifyArtifactFile(other, { installedPack: false, home, env })).to.equal("document")
+			// Same variable without the isolated-host markers is ignored.
+			expect(
+				await classifyArtifactFile(listed, {
+					installedPack: false,
+					home,
+					env: { AIHYDRO_E2E_TRUSTED_FIXTURES: path.join(tmp, "ws", "fixtures") },
+				}),
+			).to.equal("document")
+			expect(
+				await classifyArtifactFile(listed, {
+					installedPack: false,
+					home,
+					env: { ...env, AIHYDRO_ENVIRONMENT: "production" },
+				}),
+			).to.equal("document")
+		})
+
+		it("never overrides the unsigned marketplace label", async () => {
+			const file = writeDoc("home/.aihydro/modules/m1/module.html", "<html></html>")
+			const env = e2eEnv(path.join(home, ".aihydro", "modules"))
+			expect(await classifyArtifactFile(file, { installedPack: false, home, env })).to.equal("unsigned-module")
+		})
 	})
 })
 
 describe("ArtifactPreviewService execution gate", () => {
-	function makeRef(trustSource: ArtifactTrustSource, contentHash = "h1"): ArtifactRef {
+	function makeRef(trustSource: ArtifactTrustSource, contentHash = "h1", byteLength = 13): ArtifactRef {
 		return {
 			id: "file_1",
 			title: "t",
@@ -176,7 +207,7 @@ describe("ArtifactPreviewService execution gate", () => {
 			contentHash,
 			createdAt: 0,
 			html: "<html></html>",
-			byteLength: 13,
+			byteLength,
 			trustSource,
 			metadata: {},
 		}
@@ -207,16 +238,34 @@ describe("ArtifactPreviewService execution gate", () => {
 		}
 	})
 
+	it("never allows a document too large for the hashed snapshot (it would load from the live file)", () => {
+		const svc = makeService()
+		register(svc, makeRef("learning-pack", "h1", 200 * 1024 * 1024))
+		expect(svc.setExecutionAllowed("file_1", true)).to.equal(false)
+		expect(svc.canExecute("file_1")).to.equal(false)
+	})
+
 	it("denies an unknown artifact", () => {
 		expect(makeService().canExecute("nope")).to.equal(false)
 		expect(makeService().setExecutionAllowed("nope", true)).to.equal(false)
 	})
 
-	it("drops the allowance when the document is re-registered with different content", () => {
+	it("clears the allowance on re-registration with different content, even if it later reverts", () => {
 		const svc = makeService()
-		register(svc, makeRef("recorded-tool", "h1"))
+		register(svc, makeRef("learning-pack", "h1"))
 		svc.setExecutionAllowed("file_1", true)
-		register(svc, makeRef("recorded-tool", "h2"))
+		register(svc, makeRef("learning-pack", "h2"))
+		expect(svc.canExecute("file_1")).to.equal(false)
+		register(svc, makeRef("learning-pack", "h1"))
+		expect(svc.canExecute("file_1"), "a stale allowance must not revive when the old bytes return").to.equal(false)
+	})
+
+	it("clears the allowance when provenance changes", () => {
+		const svc = makeService()
+		register(svc, makeRef("learning-pack", "h1"))
+		svc.setExecutionAllowed("file_1", true)
+		register(svc, makeRef("document", "h1"))
+		register(svc, makeRef("learning-pack", "h1"))
 		expect(svc.canExecute("file_1")).to.equal(false)
 	})
 
@@ -244,5 +293,6 @@ describe("readArtifactTrust (host/webview shared definition)", () => {
 	it("agrees with the store: only a trusted source plus an allowance can execute", () => {
 		expect(readArtifactTrust({ trustSource: "learning-pack", executionAllowed: "true" }).canExecute).to.equal(true)
 		expect(readArtifactTrust({ trustSource: "document", executionAllowed: "true" }).canExecute).to.equal(false)
+		expect(readArtifactTrust({ trustSource: "recorded-tool", executionAllowed: "true" }).canExecute).to.equal(false)
 	})
 })

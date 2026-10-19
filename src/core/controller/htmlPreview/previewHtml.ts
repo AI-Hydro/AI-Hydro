@@ -78,7 +78,7 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 			const packArtifact = await resolveInstalledLearningPackArtifact(fsPath)
 			// Trust is decided here, by the host, from where the file came from. It is
 			// never read from the document. Anything that is not an installed signed
-			// pack module or a recorded-tool artifact stays an untrusted static document.
+			// pack module stays an untrusted static document.
 			const trustSource = await classifyArtifactFile(fsPath, { installedPack: Boolean(packArtifact) })
 			ref = await svc.registerFile({
 				trustSource,

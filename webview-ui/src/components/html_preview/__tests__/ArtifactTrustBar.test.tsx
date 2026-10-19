@@ -52,7 +52,7 @@ describe("readArtifactTrust", () => {
 	})
 
 	it("requires both a trusted source and the allowance", () => {
-		expect(readArtifactTrust({ trustSource: "recorded-tool" }).canExecute).toBe(false)
-		expect(readArtifactTrust({ trustSource: "recorded-tool", executionAllowed: "true" }).canExecute).toBe(true)
+		expect(readArtifactTrust({ trustSource: "e2e-fixture" }).canExecute).toBe(false)
+		expect(readArtifactTrust({ trustSource: "e2e-fixture", executionAllowed: "true" }).canExecute).toBe(true)
 	})
 })

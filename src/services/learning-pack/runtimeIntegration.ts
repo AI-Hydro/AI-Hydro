@@ -2,9 +2,11 @@ import { createHash } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
+import { minVersion } from "semver"
 import { type InstalledLearningPackVersion, loadLearningPackRegistry } from "./learningPackLifecycle"
 import { learningPackStoragePaths } from "./lifecycleStorage"
 import type { LearningPackCourse, LearningPackEdition } from "./types"
+import { validateLearningPackFiles } from "./validateLearningPack"
 
 export const LEARNING_PACK_ARTIFACT_KIND = "learning-pack-v1"
 
@@ -43,20 +45,70 @@ export function defaultLearningPackRoot(): string {
 	return process.env.AIHYDRO_LEARNING_PACK_ROOT || path.join(os.homedir(), ".aihydro", "learning-packs")
 }
 
-function containedBy(candidate: string, parent: string): boolean {
+export function containedBy(candidate: string, parent: string): boolean {
 	const relative = path.relative(parent, candidate)
 	return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
+}
+
+async function listFiles(directory: string, base = directory): Promise<string[]> {
+	const out: string[] = []
+	for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+		const full = path.join(directory, entry.name)
+		if (entry.isDirectory()) out.push(...(await listFiles(full, base)))
+		else if (entry.isFile()) out.push(path.relative(base, full).split(path.sep).join("/"))
+		else out.push(`${path.relative(base, full).split(path.sep).join("/")}\u0000non-regular`)
+	}
+	return out
+}
+
+/**
+ * Re-verify an installed pack at load time, not only at install: every checksummed file
+ * must still hash to its signed value, the Ed25519 signature must still verify, the
+ * signer must be the one recorded at install, and no undeclared file may live in the
+ * installation directory (an unlisted script would load unsigned code under a signed name).
+ */
+export async function verifyInstalledLearningPack(installation: string, recorded: InstalledLearningPackVersion): Promise<boolean> {
+	try {
+		const present = await listFiles(installation)
+		const files = new Map<string, Uint8Array>()
+		for (const relative of present) {
+			if (relative.includes("\u0000")) return false
+			files.set(relative, await fs.readFile(path.join(installation, ...relative.split("/"))))
+		}
+		const manifestBytes = files.get("pack.json")
+		if (!manifestBytes) return false
+		const range = (JSON.parse(Buffer.from(manifestBytes).toString("utf8")) as { compatibility?: { aiHydro?: string } }).compatibility
+			?.aiHydro
+		const version = range ? minVersion(range)?.version : undefined
+		if (!version) return false
+		const verified = validateLearningPackFiles(files, { aiHydroVersion: version })
+		if (verified.status !== "valid" || !verified.verified) return false
+		// validateLearningPackFiles also rejects any undeclared file in the directory.
+		return verified.verified.signerFingerprint === recorded.signerFingerprint
+	} catch {
+		return false
+	}
 }
 
 function activeRoot(root: string, active: InstalledLearningPackVersion): string {
 	return path.resolve(learningPackStoragePaths(root).root, ...active.relativePath.split("/"))
 }
 
+async function realpathOr(candidate: string): Promise<string> {
+	try {
+		return await fs.realpath(candidate)
+	} catch {
+		return path.resolve(candidate)
+	}
+}
+
 export async function resolveInstalledLearningPackArtifact(
 	filePath: string,
 	root = defaultLearningPackRoot(),
 ): Promise<InstalledLearningPackArtifact | null> {
-	const resolvedFile = path.resolve(filePath)
+	// Symlink-safe: compare real paths so a link placed inside (or pointing into) the
+	// pack store cannot make a foreign file look like a pack module.
+	const resolvedFile = await realpathOr(filePath)
 	let registry
 	try {
 		registry = await loadLearningPackRegistry(root)
@@ -64,9 +116,10 @@ export async function resolveInstalledLearningPackArtifact(
 		return null
 	}
 	for (const [packId, record] of Object.entries(registry.packs)) {
-		const installation = activeRoot(root, record.active)
+		const installation = await realpathOr(activeRoot(root, record.active))
 		if (!containedBy(resolvedFile, installation)) continue
 		try {
+			if (!(await verifyInstalledLearningPack(installation, record.active))) return null
 			const course = JSON.parse(await fs.readFile(path.join(installation, "course.json"), "utf8")) as LearningPackCourse
 			const module = course.modules.find((entry) => path.resolve(installation, ...entry.path.split("/")) === resolvedFile)
 			if (!module) return null

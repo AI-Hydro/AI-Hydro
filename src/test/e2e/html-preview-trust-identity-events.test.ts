@@ -2,7 +2,7 @@ import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } fr
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Page } from "@playwright/test"
-import { allowArtifactExecution, E2ETestHelper, e2e, recordFixtureArtifacts, writeUserSettings } from "./utils/helpers"
+import { allowArtifactExecution, E2ETestHelper, e2e, writeUserSettings } from "./utils/helpers"
 
 interface MirroredPreviewEvent {
 	moduleId: string
@@ -12,8 +12,12 @@ interface MirroredPreviewEvent {
 	source: string
 }
 
-const evidenceE2E = e2e.extend<{ workspaceDir: string }>({
-	workspaceDir: async ({ userDataDir, homeDir }, use) => {
+const evidenceE2E = e2e.extend<{ workspaceDir: string; e2eTrustedPaths: string[] }>({
+	// The golden course stands in for a trusted module.
+	e2eTrustedPaths: async ({ workspaceDir }, use) => {
+		await use([path.join(workspaceDir, "phase0", "golden-course")])
+	},
+	workspaceDir: async ({ userDataDir }, use) => {
 		const root = mkdtempSync(path.join(os.tmpdir(), "aihydro-phase0-trust-identity-"))
 		const workspaceDir = path.join(root, "workspace")
 		const baseWorkspace = path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "workspace")
@@ -36,8 +40,6 @@ const evidenceE2E = e2e.extend<{ workspaceDir: string }>({
 			"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
 			"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
 		})
-		// The golden course stands in for artifacts produced by AI-Hydro's recorded tools.
-		recordFixtureArtifacts(homeDir, path.join(workspaceDir, "phase0", "golden-course"))
 
 		try {
 			await use(workspaceDir)

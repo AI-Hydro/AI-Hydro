@@ -2,10 +2,19 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Locator, type Page } from "@playwright/test"
-import { allowArtifactExecution, E2ETestHelper, e2e, recordFixtureArtifacts, writeUserSettings } from "./utils/helpers"
+import { allowArtifactExecution, E2ETestHelper, e2e, writeUserSettings } from "./utils/helpers"
 
-const runtimeE2E = e2e.extend<{ workspaceDir: string }>({
-	workspaceDir: async ({ userDataDir, homeDir }, use) => {
+const runtimeE2E = e2e.extend<{ workspaceDir: string; e2eTrustedPaths: string[] }>({
+	// The executable fixtures stand in for trusted modules. index.html, untrusted-runcode.html
+	// and quarto-fidelity are deliberately NOT listed, so they stay static documents.
+	e2eTrustedPaths: async ({ workspaceDir }, use) => {
+		await use([
+			path.join(workspaceDir, "phase0", "golden-course"),
+			path.join(workspaceDir, "phase0", "standalone-module.html"),
+			path.join(workspaceDir, "phase0", "interrupt-module.html"),
+		])
+	},
+	workspaceDir: async ({ userDataDir }, use) => {
 		const root = mkdtempSync(path.join(os.tmpdir(), "aihydro-phase0-workspace-"))
 		const workspaceDir = path.join(root, "workspace")
 		const baseWorkspace = path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "workspace")
@@ -33,16 +42,6 @@ const runtimeE2E = e2e.extend<{ workspaceDir: string }>({
 			"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
 			"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
 		})
-		// The executable fixtures stand in for artifacts produced by AI-Hydro's own
-		// recorded tools. index.html and quarto-fidelity are deliberately NOT recorded,
-		// so they stay static documents.
-		recordFixtureArtifacts(
-			homeDir,
-			path.join(workspaceDir, "phase0", "golden-course"),
-			path.join(workspaceDir, "phase0", "standalone-module.html"),
-			path.join(workspaceDir, "phase0", "interrupt-module.html"),
-		)
-
 		try {
 			await use(workspaceDir)
 		} finally {
