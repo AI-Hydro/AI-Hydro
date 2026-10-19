@@ -216,9 +216,34 @@ export class McpPolicyGate {
 		return { ...config, mcpServers: revertLoosenings(prev, config.mcpServers, keep) }
 	}
 
+	/**
+	 * The autoApprove list the host honours for a server: ONLY what was accepted (startup baseline, UI writes,
+	 * confirmed external edits). The raw settings file is never consulted for this, so an unconfirmed agent edit
+	 * cannot take effect on a tools refresh or a reconnect. Before a baseline exists nothing is auto-approved.
+	 */
+	acceptedAutoApprove(server: string): string[] {
+		return [...asList(this.accepted?.[server]?.autoApprove)]
+	}
+
+	/**
+	 * `servers` with every loosening relative to the accepted policy undone, for building connection state from a
+	 * settings object that may contain an unconfirmed edit. No prompt: confirmation belongs to the watcher path.
+	 */
+	sanitize<T extends Record<string, any>>(servers: T): T {
+		return this.accepted ? (revertLoosenings(this.accepted, servers as unknown as ServersLike) as unknown as T) : servers
+	}
+
 	accept(servers: ServersLike | undefined): void {
 		if (servers) {
 			this.accepted = policySnapshot(servers)
 		}
 	}
+}
+
+/** Tools with `autoApprove` derived from an accepted list only. */
+export function markAutoApprove<T extends { name: string }>(
+	tools: T[],
+	accepted: readonly string[],
+): (T & { autoApprove: boolean })[] {
+	return tools.map((tool) => ({ ...tool, autoApprove: accepted.includes(tool.name) }))
 }

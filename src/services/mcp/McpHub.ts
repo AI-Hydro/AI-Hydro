@@ -39,7 +39,14 @@ import { DEFAULT_REQUEST_TIMEOUT_MS } from "./constants"
 import { buildStdioServerEnv } from "./serverEnv"
 import { StreamableHttpReconnectHandler } from "./StreamableHttpReconnectHandler"
 import { BaseConfigSchema, McpSettingsSchema, ServerConfigSchema } from "./schemas"
-import { describeLoosening, McpPolicyGate, type PolicyChange, revertSettingsFile, type ServersLike } from "./policyGate"
+import {
+	describeLoosening,
+	markAutoApprove,
+	McpPolicyGate,
+	type PolicyChange,
+	revertSettingsFile,
+	type ServersLike,
+} from "./policyGate"
 import { McpConnection, McpServerConfig, Transport } from "./types"
 export class McpHub {
 	getMcpServersPath: () => Promise<string>
@@ -167,6 +174,8 @@ export class McpHub {
 					try {
 						const effective = await this.policyGate.gateExternal(settings.mcpServers)
 						await this.updateServerConnections(effective)
+						this.syncToolApproveFlags()
+						await this.notifyWebviewOfServerChanges()
 					} catch (error) {
 						console.error("Failed to process MCP settings change:", error)
 					}
@@ -206,6 +215,18 @@ export class McpHub {
 		} catch (error) {
 			console.error("Failed to ask about a policy-loosening MCP settings edit; treating it as declined:", error)
 			return false
+		}
+	}
+
+	/** Recompute every connection's per-tool autoApprove flag from the accepted policy (after a confirm or revert). */
+	private syncToolApproveFlags(): void {
+		for (const connection of this.connections) {
+			if (connection.server.tools) {
+				connection.server.tools = markAutoApprove(
+					connection.server.tools,
+					this.policyGate.acceptedAutoApprove(connection.server.name),
+				)
+			}
 		}
 	}
 
@@ -548,17 +569,9 @@ export class McpHub {
 				timeout: DEFAULT_REQUEST_TIMEOUT_MS,
 			})
 
-			// Get autoApprove settings
-			const settingsPath = await this.getMcpSettingsFilePath()
-			const content = await fs.readFile(settingsPath, "utf-8")
-			const config = JSON.parse(content)
-			const autoApproveConfig = config.mcpServers[serverName]?.autoApprove || []
-
-			// Mark tools as always allowed based on settings
-			const tools = (response?.tools || []).map((tool) => ({
-				...tool,
-				autoApprove: autoApproveConfig.includes(tool.name),
-			}))
+			// autoApprove comes from the policy gate's ACCEPTED policy only, never from the raw settings file: an
+			// unconfirmed agent edit must not take effect on a refresh (approval redesign AP1, B3).
+			const tools = markAutoApprove(response?.tools || [], this.policyGate.acceptedAutoApprove(serverName))
 
 			return tools
 		} catch (error) {
@@ -628,7 +641,9 @@ export class McpHub {
 		}
 	}
 
-	async updateServerConnectionsRPC(newServers: Record<string, McpServerConfig>): Promise<void> {
+	async updateServerConnectionsRPC(requestedServers: Record<string, McpServerConfig>): Promise<void> {
+		// Connection state (including the config string the webview and trust checks read) carries accepted policy only.
+		const newServers = this.policyGate.sanitize(requestedServers)
 		this.isConnecting = true
 		this.removeAllFileWatchers()
 		const currentNames = new Set(this.connections.map((conn) => conn.server.name))
@@ -675,7 +690,8 @@ export class McpHub {
 		this.isConnecting = false
 	}
 
-	async updateServerConnections(newServers: Record<string, McpServerConfig>): Promise<void> {
+	async updateServerConnections(requestedServers: Record<string, McpServerConfig>): Promise<void> {
+		const newServers = this.policyGate.sanitize(requestedServers)
 		this.isConnecting = true
 		this.removeAllFileWatchers()
 		const currentNames = new Set(this.connections.map((conn) => conn.server.name))
@@ -1037,10 +1053,10 @@ export class McpHub {
 			const connection = this.connections.find((conn) => conn.server.name === serverName)
 			if (connection && connection.server.tools) {
 				// Update the autoApprove property of each tool in the in-memory server object
-				connection.server.tools = connection.server.tools.map((tool) => ({
-					...tool,
-					autoApprove: autoApprove.includes(tool.name),
-				}))
+				connection.server.tools = markAutoApprove(
+					connection.server.tools,
+					this.policyGate.acceptedAutoApprove(serverName),
+				)
 			}
 
 			// Return sorted servers without notifying webview
@@ -1085,10 +1101,10 @@ export class McpHub {
 			const connection = this.connections.find((conn) => conn.server.name === serverName)
 			if (connection && connection.server.tools) {
 				// Update the autoApprove property of each tool in the in-memory server object
-				connection.server.tools = connection.server.tools.map((tool) => ({
-					...tool,
-					autoApprove: autoApprove.includes(tool.name),
-				}))
+				connection.server.tools = markAutoApprove(
+					connection.server.tools,
+					this.policyGate.acceptedAutoApprove(serverName),
+				)
 				await this.notifyWebviewOfServerChanges()
 			}
 		} catch (error) {
