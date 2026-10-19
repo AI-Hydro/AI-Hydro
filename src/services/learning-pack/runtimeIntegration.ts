@@ -105,6 +105,7 @@ async function realpathOr(candidate: string): Promise<string> {
 export async function resolveInstalledLearningPackArtifact(
 	filePath: string,
 	root = defaultLearningPackRoot(),
+	options: { verifyIntegrity?: boolean } = {},
 ): Promise<InstalledLearningPackArtifact | null> {
 	// Symlink-safe: compare real paths so a link placed inside (or pointing into) the
 	// pack store cannot make a foreign file look like a pack module.
@@ -119,7 +120,8 @@ export async function resolveInstalledLearningPackArtifact(
 		const installation = await realpathOr(activeRoot(root, record.active))
 		if (!containedBy(resolvedFile, installation)) continue
 		try {
-			if (!(await verifyInstalledLearningPack(installation, record.active))) return null
+			// Trust decisions always verify; only unit fixtures with synthetic installs opt out.
+			if (options.verifyIntegrity !== false && !(await verifyInstalledLearningPack(installation, record.active))) return null
 			const course = JSON.parse(await fs.readFile(path.join(installation, "course.json"), "utf8")) as LearningPackCourse
 			const module = course.modules.find((entry) => path.resolve(installation, ...entry.path.split("/")) === resolvedFile)
 			if (!module) return null
@@ -142,8 +144,9 @@ export async function resolveInstalledLearningPackArtifact(
 export async function resolveInstalledLearningPackScope(
 	filePath: string,
 	root = defaultLearningPackRoot(),
+	options: { verifyIntegrity?: boolean } = {},
 ): Promise<InstalledLearningPackScope | null> {
-	return (await resolveInstalledLearningPackArtifact(filePath, root))?.scope ?? null
+	return (await resolveInstalledLearningPackArtifact(filePath, root, options))?.scope ?? null
 }
 
 export function learningPackArtifactMetadata(scope: InstalledLearningPackScope): Readonly<Record<string, string>> {

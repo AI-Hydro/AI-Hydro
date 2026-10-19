@@ -614,7 +614,8 @@
 				"aihydro.htmlPreview.shareKernelAcrossArtifacts": {
 					"type": "boolean",
 					"default": false,
-					"description": "When true, all HTML previews in a workspace share one Python kernel namespace per profile. Default is false (one kernel per artifact)."
+					"scope": "machine",
+					"description": "When true, all HTML previews in a workspace share one Python kernel namespace per profile. Default is false (one kernel per artifact). Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.gee.projectId": {
 					"type": "string",

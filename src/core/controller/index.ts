@@ -1585,6 +1585,7 @@ export class Controller {
 		const ref = this.htmlPreviewService.get(id)
 		if (!resulting) {
 			this.artifactKernelService.stopSessionsForArtifact(id)
+			this.artifactKernelService.stopSharedSessions()
 		}
 		if (ref) {
 			this.htmlPreviewVersion++

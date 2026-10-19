@@ -14,6 +14,7 @@ describe("Studio kernel settings scope", () => {
 		"aihydro.htmlPreview.pythonInterpreter",
 		"aihydro.htmlPreview.pythonExecution",
 		"aihydro.htmlPreview.pythonTimeoutSeconds",
+		"aihydro.htmlPreview.shareKernelAcrossArtifacts",
 	]) {
 		it(`${key} is machine scope, so workspace (repository) settings cannot change it`, () => {
 			expect(pkg.contributes.configuration.properties[key]?.scope).to.equal("machine")
