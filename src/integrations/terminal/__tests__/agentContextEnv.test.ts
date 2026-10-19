@@ -25,9 +25,7 @@ describe("agent-context marker on agent surfaces (T28)", () => {
 			created.push(options)
 			return { show: () => {}, exitStatus: undefined }
 		}
-		api.ThemeIcon = class {
-			constructor(public id: string) {}
-		}
+		api.ThemeIcon = class {}
 	})
 	afterEach(() => {
 		win.createTerminal = savedCreate
