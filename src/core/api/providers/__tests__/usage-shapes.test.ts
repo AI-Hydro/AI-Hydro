@@ -91,6 +91,18 @@ describe("provider usage -> meter convention", () => {
 		})
 	})
 
+	describe("ambiguous Anthropic-style shape (documented limitation)", () => {
+		it("raw usage with uncached >= reads + writes is read as a whole-prompt report", () => {
+			const u = normalizeOpenAiStyleUsage({
+				prompt_tokens: 50_000,
+				cache_creation_input_tokens: 8_000,
+				cache_read_input_tokens: 40_000,
+			})
+			u.uncachedInputTokens.should.equal(2_000)
+			u.promptTokens.should.equal(50_000)
+		})
+	})
+
 	describe("Anthropic message_start usage", () => {
 		it("is already in the meter convention: input_tokens excludes cache reads and writes", async () => {
 			// SDK type: Anthropic.Usage { input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens }

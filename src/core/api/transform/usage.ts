@@ -43,6 +43,11 @@ const positive = (n: number | null | undefined): number => (typeof n === "number
  *  - Anthropic-style (cache_creation_input_tokens / cache_read_input_tokens): LiteLLM-style proxies report prompt_tokens
  *    as the whole prompt (input + reads + writes). A proxy that forwards Anthropic's raw usage instead has
  *    prompt_tokens = uncached input only, which shows as prompt_tokens < reads + writes; then it is taken as uncached.
+ *
+ * KNOWN LIMITATION of that heuristic: a proxy forwarding RAW Anthropic usage whose uncached input is >= reads + writes
+ * (for example input 50,000, reads 40,000, writes 8,000) is indistinguishable from a whole-prompt report, so it is
+ * treated as whole-prompt and the uncached share is understated (here 2,000 instead of 50,000). The shape cannot be
+ * told apart from the numbers alone; it is pinned by a test so a change is deliberate.
  */
 export function normalizeOpenAiStyleUsage(usage: OpenAiStyleUsageInput | undefined | null): NormalizedUsage {
 	const reads =

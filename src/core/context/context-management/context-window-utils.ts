@@ -10,6 +10,9 @@ import { OpenAiHandler } from "@core/api/providers/openai"
 /** Slack for tokenizer drift and per-request overhead on top of the output reserve. */
 export const CONTEXT_MARGIN_TOKENS = 20_000
 
+/** Upper bound on the share of the window reserved for the response. */
+export const MAX_OUTPUT_RESERVE_FRACTION = 0.2
+
 export function getContextWindowInfo(api: ApiHandler) {
 	const modelInfo = api.getModel().info
 	let contextWindow = modelInfo.contextWindow || 128_000
@@ -36,12 +39,15 @@ export function getContextWindowInfo(api: ApiHandler) {
 	}
 
 	// Input plus the response must fit in the window. Models whose max output is large (Claude 5.x: 128K, and
-	// thinking counts toward it) need that much headroom, or a prompt condensed "just under" the threshold can still
-	// overflow once the answer is added. Only applies when the model's max output is a real fraction of the window
-	// (the 8k-32k defaults elsewhere are already covered by the fixed buffers above).
+	// thinking counts toward it) need headroom, or a prompt condensed "just under" the threshold can still overflow once
+	// the answer is added. The reservation is clamped to 20% of the window: models whose maxTokens is nearly the whole
+	// window (e.g. 129,024 of 131,072) would otherwise get a zero or negative budget and condense on every request.
 	const maxOutput = modelInfo.maxTokens ?? 0
-	if (maxOutput > 40_000 && maxOutput < contextWindow) {
-		maxAllowedSize = Math.min(maxAllowedSize, contextWindow - maxOutput - CONTEXT_MARGIN_TOKENS)
+	if (maxOutput > 40_000) {
+		const reserve = Math.min(maxOutput, MAX_OUTPUT_RESERVE_FRACTION * contextWindow)
+		// A flat 20k margin would leave 64k windows under half usable, so it scales down on small windows.
+		const margin = Math.min(CONTEXT_MARGIN_TOKENS, 0.05 * contextWindow)
+		maxAllowedSize = Math.min(maxAllowedSize, contextWindow - reserve - margin)
 	}
 
 	return { contextWindow, maxAllowedSize }
