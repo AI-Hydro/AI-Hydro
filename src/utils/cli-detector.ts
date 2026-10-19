@@ -9,6 +9,8 @@ const execAsync = promisify(exec)
 interface CliSubagentDetectionParams {
 	yoloModeToggled: boolean
 	maxConsecutiveMistakes: number
+	/** AIHYDRO_AGENT_CONTEXT=1: this process was started by the agent (a subagent launch runs in an agent terminal). */
+	agentContext?: boolean
 	isOneshot?: boolean
 	outputFormat?: string
 }
@@ -47,5 +49,8 @@ export function isCliSubagentContext(params: CliSubagentDetectionParams): boolea
 	const hasYoloMode = params.yoloModeToggled === true
 	const hasHighMistakeLimit = params.maxConsecutiveMistakes === 6
 
-	return hasYoloMode && hasHighMistakeLimit
+	// Subagents are no longer launched in YOLO (approval redesign AP1, B2), so YOLO cannot be part of the
+	// signature. The agent-context marker, which every agent terminal carries, takes its place; the YOLO form is
+	// kept for subagents started by an older host.
+	return hasHighMistakeLimit && (params.agentContext === true || hasYoloMode)
 }

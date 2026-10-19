@@ -119,7 +119,8 @@ export class GeeService {
 
 			const child = spawn(pythonCmd, ["-m", "ai_hydro.gee.cli", ...args], {
 				cwd: extensionRoot,
-				env: process.env,
+				// Marks the child as running in an agent context, so the claim-approval CLI refuses to run in it (AP1, B4).
+				env: { ...process.env, AIHYDRO_AGENT_CONTEXT: "1" },
 				stdio: ["ignore", "pipe", "pipe"],
 			})
 
