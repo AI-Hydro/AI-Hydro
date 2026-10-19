@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto"
 import * as path from "node:path"
+import type { ArtifactTrustSource } from "@shared/artifactTrust"
 import * as vscode from "vscode"
+import { ArtifactTrustStore } from "./artifactTrust"
 import { type DetectedMode, detectMode } from "./detectMode"
 import { getHtmlUtf8ByteLength } from "./inlineHtmlPolicy"
 import { inlineRelativeAssets } from "./inlineRelativeAssets"
@@ -37,6 +39,11 @@ export interface ArtifactRef {
 	byteLength: number
 	/** Optional verified package root exposed to the webview resource server. */
 	localResourceRoot?: string
+	/**
+	 * Host-determined provenance used by the execution-trust gate. Never derived
+	 * from document content; defaults to the untrusted "document".
+	 */
+	trustSource: ArtifactTrustSource
 	/** Free-form, persisted across the gRPC boundary. */
 	metadata: Record<string, string>
 }
@@ -71,6 +78,8 @@ export class ArtifactPreviewService {
 	private readonly artifacts = new Map<string, ArtifactRef>()
 	private readonly listeners = new Set<(c: ArtifactChange) => void>()
 	private readonly inlineDir: vscode.Uri
+	/** Per-document execution allowances (see artifactTrust.ts). */
+	private readonly trust = new ArtifactTrustStore()
 
 	constructor(private readonly context: vscode.ExtensionContext) {
 		this.inlineDir = vscode.Uri.joinPath(context.globalStorageUri, "html-artifacts")
@@ -83,6 +92,7 @@ export class ArtifactPreviewService {
 		preferredMode?: DetectedMode
 		metadata?: Readonly<Record<string, string>>
 		localResourceRoot?: string
+		trustSource?: ArtifactTrustSource
 	}): Promise<ArtifactRef> {
 		const fileUri = vscode.Uri.file(path.resolve(opts.fsPath))
 		const bytes = await vscode.workspace.fs.readFile(fileUri)
@@ -118,6 +128,7 @@ export class ArtifactPreviewService {
 			preferredMode: opts.preferredMode,
 			metadata: isMultiFileSite ? { ...opts.metadata, multiFileSite: "true" } : opts.metadata,
 			localResourceRoot,
+			trustSource: opts.trustSource,
 		})
 		this.upsert(ref)
 		return ref
@@ -128,7 +139,12 @@ export class ArtifactPreviewService {
 	 * inside `globalStorageUri/html-artifacts/`. Reusing the same title
 	 * overwrites the same file rather than producing duplicate artifacts.
 	 */
-	async registerInline(opts: { html: string; title?: string; preferredMode?: DetectedMode }): Promise<ArtifactRef> {
+	async registerInline(opts: {
+		html: string
+		title?: string
+		preferredMode?: DetectedMode
+		trustSource?: ArtifactTrustSource
+	}): Promise<ArtifactRef> {
 		const bytes = new TextEncoder().encode(opts.html)
 		this.assertSize(bytes.byteLength, opts.title ?? "inline")
 		await vscode.workspace.fs.createDirectory(this.inlineDir)
@@ -143,6 +159,7 @@ export class ArtifactPreviewService {
 			source: "inline",
 			html: opts.html,
 			preferredMode: opts.preferredMode,
+			trustSource: opts.trustSource,
 		})
 		this.upsert(ref)
 		return ref
@@ -152,6 +169,29 @@ export class ArtifactPreviewService {
 		return this.artifacts.get(id)
 	}
 
+	/** Whether the document may use the Python kernel and hand work to the agent. */
+	canExecute(id: string): boolean {
+		return this.trust.isAllowed(this.artifacts.get(id))
+	}
+
+	/**
+	 * Allow or revoke execution for one document. Returns the resulting state;
+	 * an untrusted document can never be allowed.
+	 */
+	setExecutionAllowed(id: string, allowed: boolean): boolean {
+		const ref = this.artifacts.get(id)
+		if (!ref) {
+			return false
+		}
+		if (allowed) {
+			this.trust.allow(ref)
+		} else {
+			this.trust.revoke(id)
+		}
+		this.emit({ kind: "updated", ref })
+		return this.trust.isAllowed(ref)
+	}
+
 	list(): ArtifactRef[] {
 		return Array.from(this.artifacts.values())
 	}
@@ -159,6 +199,7 @@ export class ArtifactPreviewService {
 	remove(id: string): boolean {
 		const existing = this.artifacts.get(id)
 		const removed = this.artifacts.delete(id)
+		this.trust.revoke(id)
 		if (removed && existing) {
 			this.emit({ kind: "removed", ref: existing })
 		}
@@ -167,6 +208,9 @@ export class ArtifactPreviewService {
 
 	clear(): void {
 		if (this.artifacts.size === 0) return
+		for (const id of this.artifacts.keys()) {
+			this.trust.revoke(id)
+		}
 		this.artifacts.clear()
 		this.emit({ kind: "cleared" })
 	}
@@ -204,6 +248,7 @@ export class ArtifactPreviewService {
 		preferredMode?: DetectedMode
 		metadata?: Readonly<Record<string, string>>
 		localResourceRoot?: string
+		trustSource?: ArtifactTrustSource
 	}): ArtifactRef {
 		const byteLength = getHtmlUtf8ByteLength(args.html)
 		const contentHash = createHash("sha256").update(args.html).digest("hex")
@@ -221,6 +266,7 @@ export class ArtifactPreviewService {
 			html: args.html,
 			byteLength,
 			localResourceRoot: args.localResourceRoot,
+			trustSource: args.trustSource ?? "document",
 			metadata: {
 				timestamp: new Date().toISOString(),
 				source: args.source,

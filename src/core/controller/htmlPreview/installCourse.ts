@@ -13,7 +13,12 @@ import {
 } from "@/services/htmlPreview/moduleRegistry"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
 import type { Controller } from "../index"
-import { assertTrustedMarketplaceUrl } from "./marketplaceUrlAllowlist"
+import {
+	assertTrustedMarketplaceRedirect,
+	assertTrustedMarketplaceUrl,
+	resolveContainedInstallDir,
+	sanitizeMarketplaceId,
+} from "./marketplaceUrlAllowlist"
 
 /**
  * Install a whole course: fetch the course.json manifest, download every member
@@ -29,15 +34,35 @@ export async function installCourse(controller: Controller, request: InstallCour
 		assertTrustedMarketplaceUrl(manifestUrl, "installCourse manifestUrl")
 
 		// 1. Fetch the course manifest.
-		const manifestResp = await axios.get(manifestUrl, { responseType: "json", timeout: 30000 })
+		const manifestResp = await axios.get(manifestUrl, {
+			responseType: "json",
+			timeout: 30000,
+			beforeRedirect: (options) => assertTrustedMarketplaceRedirect(options, "installCourse manifestUrl"),
+		})
 		const manifest = manifestResp.data
 		const resolvedCourseId = String(manifest.courseId || manifest.course_id || courseId || "")
 		if (!resolvedCourseId) throw new Error("Course manifest has no courseId")
 
-		const courseDir = path.join(os.homedir(), ".aihydro", "courses", resolvedCourseId)
+		const courseDir = resolveContainedInstallDir(
+			path.join(os.homedir(), ".aihydro", "courses"),
+			resolvedCourseId,
+			"installCourse courseId",
+		)
 		await fs.mkdir(courseDir, { recursive: true })
 
-		const modules: any[] = Array.isArray(manifest.modules) ? manifest.modules : []
+		// Drop module entries whose id is not a plain path segment. The id names a
+		// directory and the (rewritten) manifest path is later resolved from the
+		// course root, so an unsafe entry must not survive into course.json.
+		const modules: any[] = (Array.isArray(manifest.modules) ? manifest.modules : []).filter((m: any) => {
+			try {
+				sanitizeMarketplaceId(String(m?.id || m?.moduleId || m?.module_id || ""), "installCourse moduleId")
+				return true
+			} catch (err) {
+				console.warn("[installCourse] dropping module with unsafe id:", err)
+				return false
+			}
+		})
+		manifest.modules = modules
 		if (modules.length === 0) throw new Error("Course manifest has no modules")
 
 		// 2. Load the module registry once.
@@ -60,13 +85,19 @@ export async function installCourse(controller: Controller, request: InstallCour
 		const manifestBase = manifestUrl.slice(0, manifestUrl.lastIndexOf("/") + 1)
 		for (const m of modules) {
 			const moduleId = String(m.id || m.moduleId || m.module_id || "")
+			if (!moduleId) continue
 			const manifestPath = String(m.path || `${moduleId}/module.html`)
 			const downloadUrl = String(m.downloadUrl || m.download_url || manifestBase + manifestPath)
-			if (!moduleId || !downloadUrl) continue
+			if (!downloadUrl) continue
 			const relPath = `${moduleId}/module.html`
 			try {
 				assertTrustedMarketplaceUrl(downloadUrl, `installCourse module ${moduleId} downloadUrl`)
-				const html = await axios.get(downloadUrl, { responseType: "text", timeout: 30000 })
+				const html = await axios.get(downloadUrl, {
+					responseType: "text",
+					timeout: 30000,
+					beforeRedirect: (options) =>
+						assertTrustedMarketplaceRedirect(options, `installCourse module ${moduleId} downloadUrl`),
+				})
 				const htmlText = String(html.data)
 				const dest = path.join(courseDir, relPath)
 				await fs.mkdir(path.dirname(dest), { recursive: true })
@@ -111,7 +142,8 @@ export async function installCourse(controller: Controller, request: InstallCour
 		// 5. Open the entry module — useCourse will discover course.json from here.
 		const entry = modules[0]
 		const entryModuleId = String(entry.id || entry.moduleId || entry.module_id || "")
-		const entryPath = path.join(courseDir, String(entry.path || `${entryModuleId}/module.html`))
+		// Always the normalized layout used at download time, never a manifest-supplied path.
+		const entryPath = path.join(courseDir, entryModuleId, "module.html")
 		const { PreviewHtmlRequest } = await import("@shared/proto/cline/html_preview")
 		const { previewHtml } = await import("@core/controller/htmlPreview/previewHtml")
 		await previewHtml(

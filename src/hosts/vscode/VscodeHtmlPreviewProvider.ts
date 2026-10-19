@@ -265,7 +265,7 @@ export class VscodeHtmlPreviewProvider {
 							try {
 								await handlePreviewAgentTaskMessage(
 									mainWebview.controller,
-									message as { requestId?: string; prompt?: string },
+									message as { requestId?: string; prompt?: string; artifactId?: string },
 									async (response) => {
 										await panel.webview.postMessage(response)
 									},

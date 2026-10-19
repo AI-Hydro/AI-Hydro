@@ -8,17 +8,29 @@ import * as path from "path"
 import type { ModuleRegistryEntry } from "@/services/htmlPreview/moduleRegistry"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
 import type { Controller } from "../index"
-import { assertTrustedMarketplaceUrl } from "./marketplaceUrlAllowlist"
+import {
+	assertTrustedMarketplaceRedirect,
+	assertTrustedMarketplaceUrl,
+	resolveContainedInstallDir,
+} from "./marketplaceUrlAllowlist"
 
 export async function installModule(controller: Controller, request: InstallModuleRequest): Promise<InstallModuleResponse> {
 	const { moduleId, downloadUrl, title, version } = request
 	try {
 		assertTrustedMarketplaceUrl(downloadUrl, "installModule downloadUrl")
-		const modulesDir = path.join(os.homedir(), ".aihydro", "modules", moduleId)
+		const modulesDir = resolveContainedInstallDir(
+			path.join(os.homedir(), ".aihydro", "modules"),
+			moduleId,
+			"installModule moduleId",
+		)
 		await fs.mkdir(modulesDir, { recursive: true })
 		const localPath = path.join(modulesDir, "module.html")
 
-		const response = await axios.get(downloadUrl, { responseType: "text", timeout: 30000 })
+		const response = await axios.get(downloadUrl, {
+			responseType: "text",
+			timeout: 30000,
+			beforeRedirect: (options) => assertTrustedMarketplaceRedirect(options, "installModule downloadUrl"),
+		})
 		const html = String(response.data)
 		await fs.writeFile(localPath, html, "utf-8")
 		const sha256 = createHash("sha256").update(html).digest("hex")

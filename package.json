@@ -594,18 +594,21 @@
 						"never"
 					],
 					"default": "prompt",
-					"description": "Whether HTML Preview may run Python code cells via a persistent kernel (equivalent trust to terminal commands)."
+					"scope": "machine",
+					"description": "Whether HTML Preview may run Python code cells via a persistent kernel (equivalent trust to terminal commands). Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.htmlPreview.pythonInterpreter": {
 					"type": "string",
 					"default": "",
-					"description": "Absolute path to a Python interpreter for HTML Preview kernels. When empty, AI-Hydro discovers VS Code's interpreter, .venv, and .aihydro/venv."
+					"scope": "machine",
+					"description": "Absolute path to a Python interpreter for HTML Preview kernels. When empty, AI-Hydro discovers VS Code's interpreter, .venv, and .aihydro/venv. Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.htmlPreview.pythonTimeoutSeconds": {
 					"type": "number",
 					"default": 120,
 					"minimum": 30,
 					"maximum": 600,
+					"scope": "machine",
 					"description": "Maximum seconds for a single Python cell execution in HTML Preview."
 				},
 				"aihydro.htmlPreview.shareKernelAcrossArtifacts": {

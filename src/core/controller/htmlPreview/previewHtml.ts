@@ -5,6 +5,7 @@ import { ShowMessageType } from "@shared/proto/host/window"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { learningPackArtifactMetadata, resolveInstalledLearningPackArtifact } from "@/services/learning-pack/runtimeIntegration"
+import { classifyArtifactFile } from "@/services/artifact-preview/artifactTrust"
 import type { Controller } from ".."
 
 /**
@@ -75,7 +76,12 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 				return Empty.create()
 			}
 			const packArtifact = await resolveInstalledLearningPackArtifact(fsPath)
+			// Trust is decided here, by the host, from where the file came from. It is
+			// never read from the document. Anything that is not an installed signed
+			// pack module or a recorded-tool artifact stays an untrusted static document.
+			const trustSource = await classifyArtifactFile(fsPath, { installedPack: Boolean(packArtifact) })
 			ref = await svc.registerFile({
+				trustSource,
 				fsPath,
 				title: title || path.basename(fsPath),
 				preferredMode,

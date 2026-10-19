@@ -1,4 +1,6 @@
 import { ArtifactCodeLanguage, type RunArtifactCodeRequest, RunArtifactCodeResponse } from "@shared/proto/cline/html_preview"
+import { isTrustedArtifactSource } from "@shared/artifactTrust"
+import { executionDenialMessage } from "@/services/artifact-preview/artifactTrust"
 import { mapRunResultToOutputs } from "@/services/artifact-preview/mapRunResultToOutputs"
 import { executeWorkspacePython } from "@/services/artifact-preview/workspacePythonExecution"
 import type { Controller } from ".."
@@ -58,19 +60,32 @@ export async function runArtifactCode(controller: Controller, request: RunArtifa
 		})
 	}
 
-	const allowed = await ensurePythonExecutionAllowed()
-	if (!allowed) {
-		return RunArtifactCodeResponse.create({
-			status: "denied",
-			error: "Python execution was denied. Trust the workspace, set aihydro.htmlPreview.pythonExecution to always, or click Allow when prompted.",
-		})
-	}
-
 	const ref = controller.getArtifactPreviewService().get(artifactId)
 	if (!ref) {
 		return RunArtifactCodeResponse.create({
 			status: "error",
 			error: `Unknown artifact: ${artifactId}. Refresh the HTML Preview panel.`,
+		})
+	}
+
+	// Trust gate (before any prompt or kernel start): only a trusted document the
+	// user has explicitly allowed may run Python. Static documents and unsigned
+	// marketplace modules are refused here regardless of what the webview sent.
+	if (!controller.getArtifactPreviewService().canExecute(artifactId)) {
+		return RunArtifactCodeResponse.create({
+			status: "denied",
+			error: executionDenialMessage(
+				ref.trustSource,
+				isTrustedArtifactSource(ref.trustSource) ? "not-allowed" : "untrusted",
+			),
+		})
+	}
+
+	const allowed = await ensurePythonExecutionAllowed()
+	if (!allowed) {
+		return RunArtifactCodeResponse.create({
+			status: "denied",
+			error: "Python execution was denied. Trust the workspace, set aihydro.htmlPreview.pythonExecution to always, or click Allow when prompted.",
 		})
 	}
 

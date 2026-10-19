@@ -36,6 +36,12 @@ export async function notifyParamChanged(
 		})
 	}
 
+	// The name is spliced into Python source, so it must be a plain identifier.
+	// (Execution itself is trust-gated in runArtifactCode.)
+	if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(paramName)) {
+		return NotifyParamChangedResponse.create({ triggered: false, error: "param_name must be a Python identifier" })
+	}
+
 	// Build a minimal Python assignment that updates the parameter, then
 	// re-runs the cell.  The variable assignment is placed at the top of the
 	// code string so it shadows the cell's original binding.
