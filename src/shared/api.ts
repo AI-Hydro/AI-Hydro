@@ -277,34 +277,89 @@ export const CLAUDE_SONNET_1M_TIERS = [
 
 // Anthropic
 // https://docs.anthropic.com/en/docs/about-claude/models // prices updated 2025-01-02
-/** Shared, deliberately minimal ModelInfo for Claude 5.x models whose pricing/limits are not sourced here. */
-const CLAUDE_5X_UNVERIFIED = {
-	maxTokens: 8192,
-	contextWindow: 200_000,
+/**
+ * Claude 5.x limits and capabilities shared by all four models, from Anthropic's published model pages
+ * (fetched 2026-10-19):
+ *   https://platform.claude.com/docs/en/models/overview            (context 1M, max output 128K, adaptive thinking)
+ *   https://platform.claude.com/docs/en/models/opus-5-5/overview   (and /fable-5-1, /sonnet-5-5, /haiku-5-5)
+ *   https://platform.claude.com/docs/en/build-with-claude/effort   (effort low..max; xhigh on all four)
+ *   https://platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5
+ *       (thinking can't be disabled on Opus 5.5 / Fable 5.1: `thinking.type` "disabled" or "enabled"+budget_tokens
+ *        is a 400, so budget_tokens is never sent: supportsAdaptiveThinking, not supportsThinkingBudget)
+ *
+ * maxTokens is the documented synchronous maximum (128K). It is a hard cap on thinking plus answer, so a small
+ * value truncates turns on models whose adaptive thinking is always on; requests are streamed.
+ * supportsTemperature stays false: the Haiku 5.5 page says "Omit temperature, top_p, and top_k" and the Opus/Fable/
+ * Sonnet pages do not say otherwise; sending none is the conservative choice.
+ * Prompt cache: all four support it (512-token minimum on Opus 5.5 and Haiku 5.5).
+ */
+const CLAUDE_5X_COMMON = {
+	maxTokens: 128_000,
+	contextWindow: 1_000_000,
 	supportsImages: true,
 	supportsPromptCache: true,
+	supportsAdaptiveThinking: true,
+	supportsEffort: true,
+	supportsXhighEffort: true,
 	supportsTemperature: false,
-	pricingUnverified: true,
-	description: "Pricing, context window and capability limits not verified in this repo; cost is not shown.",
 } as const satisfies ClaudeModelInfo
+
+/** Shape for a 5.x model on a platform whose prices are not sourced here (Bedrock, Vertex): cost is not shown. */
+const CLAUDE_5X_PLATFORM_PRICING_UNVERIFIED = {
+	pricingUnverified: true,
+	inputPrice: undefined,
+	outputPrice: undefined,
+	cacheWritesPrice: undefined,
+	cacheReadsPrice: undefined,
+} as const
 
 export type AnthropicModelId = keyof typeof anthropicModels
 export const anthropicDefaultModelId: AnthropicModelId = "claude-sonnet-4-6"
 export const ANTHROPIC_MIN_THINKING_BUDGET = 1_024
 export const ANTHROPIC_MAX_THINKING_BUDGET = 6_000
 export const anthropicModels = {
-	// Claude 5.x line. The model IDs are as listed in the Claude Code environment's own model list
-	// (2026-10-17; see docs/model-config/claude-5x-models.md). NOTHING else about these models is
-	// sourced in this repo, so: prices are left undefined and `pricingUnverified` makes the cost
-	// display say "cost unavailable" instead of showing $0 or a guess; the context window is the
-	// smallest window documented for any model in this registry (200K) and maxTokens follows the
-	// registry-wide default; capability flags are limited to the conservative ones (no explicit
-	// temperature, prompt cache markers). Adaptive thinking / effort flags are deliberately unset
-	// until they can be traced to a committed source.
-	"claude-fable-5-1": CLAUDE_5X_UNVERIFIED,
-	"claude-opus-5-5": CLAUDE_5X_UNVERIFIED,
-	"claude-sonnet-5-5": CLAUDE_5X_UNVERIFIED,
-	"claude-haiku-5-5": CLAUDE_5X_UNVERIFIED,
+	// Claude 5.x line. Limits and flags: see CLAUDE_5X_COMMON. Prices are USD per MTok on the Claude API from
+	// https://platform.claude.com/docs/en/about-claude/pricing (fetched 2026-10-19), with 5-minute cache writes.
+	"claude-fable-5-1": {
+		...CLAUDE_5X_COMMON,
+		inputPrice: 10,
+		outputPrice: 50,
+		cacheWritesPrice: 12.5,
+		cacheReadsPrice: 0.25,
+	},
+	"claude-opus-5-5": {
+		...CLAUDE_5X_COMMON,
+		inputPrice: 4,
+		outputPrice: 20,
+		cacheWritesPrice: 5,
+		cacheReadsPrice: 0.2,
+	},
+	"claude-sonnet-5-5": {
+		...CLAUDE_5X_COMMON,
+		inputPrice: 2,
+		outputPrice: 10,
+		cacheWritesPrice: 2.5,
+		cacheReadsPrice: 0.1,
+	},
+	// Haiku 5.5 is priced by prompt length (cache reads and writes count toward it): the base row below applies up
+	// to 100,000 prompt tokens and the tier above it to larger prompts (same pricing page).
+	"claude-haiku-5-5": {
+		...CLAUDE_5X_COMMON,
+		inputPrice: 0.1,
+		outputPrice: 0.5,
+		cacheWritesPrice: 0.125,
+		cacheReadsPrice: 0.01,
+		tiers: [
+			{ contextWindow: 100_000, inputPrice: 0.1, outputPrice: 0.5, cacheWritesPrice: 0.125, cacheReadsPrice: 0.01 },
+			{
+				contextWindow: Number.MAX_SAFE_INTEGER,
+				inputPrice: 0.5,
+				outputPrice: 2.5,
+				cacheWritesPrice: 0.625,
+				cacheReadsPrice: 0.05,
+			},
+		],
+	},
 	"claude-opus-4-7": {
 		maxTokens: 8192,
 		contextWindow: 1_000_000,
@@ -565,23 +620,27 @@ export const bedrockDefaultModelId: BedrockModelId = "anthropic.claude-sonnet-4-
 export const bedrockModels = {
 	"anthropic.claude-fable-5-1": {
 		...anthropicModels["claude-fable-5-1"],
+		...CLAUDE_5X_PLATFORM_PRICING_UNVERIFIED,
 		description:
-			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Limits and capability flags are from the Claude API model pages; platform pricing is not sourced here, so cost is not shown.",
 	},
 	"anthropic.claude-opus-5-5": {
 		...anthropicModels["claude-opus-5-5"],
+		...CLAUDE_5X_PLATFORM_PRICING_UNVERIFIED,
 		description:
-			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Limits and capability flags are from the Claude API model pages; platform pricing is not sourced here, so cost is not shown.",
 	},
 	"anthropic.claude-sonnet-5-5": {
 		...anthropicModels["claude-sonnet-5-5"],
+		...CLAUDE_5X_PLATFORM_PRICING_UNVERIFIED,
 		description:
-			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Limits and capability flags are from the Claude API model pages; platform pricing is not sourced here, so cost is not shown.",
 	},
 	"anthropic.claude-haiku-5-5": {
 		...anthropicModels["claude-haiku-5-5"],
+		...CLAUDE_5X_PLATFORM_PRICING_UNVERIFIED,
 		description:
-			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Pricing and limits not verified; cost is not shown.",
+			"Bedrock id follows the anthropic.<model> pattern; availability and Converse-API support not verified in this repo. Limits and capability flags are from the Claude API model pages; platform pricing is not sourced here, so cost is not shown.",
 	},
 	"anthropic.claude-opus-4-7-v1": {
 		maxTokens: 8192,
@@ -898,13 +957,15 @@ export const vertexDefaultModelId: VertexModelId = "claude-sonnet-4-6"
 export const vertexModels = {
 	"claude-opus-5-5": {
 		...anthropicModels["claude-opus-5-5"],
+		...CLAUDE_5X_PLATFORM_PRICING_UNVERIFIED,
 		description:
-			"Vertex id is the bare model id; availability not verified in this repo. Pricing and limits not verified; cost is not shown.",
+			"Vertex id is the bare model id; availability not verified in this repo. Limits and capability flags are from the Claude API model pages; platform pricing is not sourced here, so cost is not shown.",
 	},
 	"claude-sonnet-5-5": {
 		...anthropicModels["claude-sonnet-5-5"],
+		...CLAUDE_5X_PLATFORM_PRICING_UNVERIFIED,
 		description:
-			"Vertex id is the bare model id; availability not verified in this repo. Pricing and limits not verified; cost is not shown.",
+			"Vertex id is the bare model id; availability not verified in this repo. Limits and capability flags are from the Claude API model pages; platform pricing is not sourced here, so cost is not shown.",
 	},
 	"claude-opus-4-7": {
 		maxTokens: 8192,
