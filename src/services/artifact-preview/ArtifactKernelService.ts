@@ -411,7 +411,9 @@ export class ArtifactKernelService {
 		// Secret-shaped vars (API keys, tokens, cloud credentials) are scrubbed
 		// before the child sees them — artifact code is workspace-trusted, not
 		// credential-trusted. See scrubKernelEnv.ts.
-		const env = { ...scrubKernelEnv(process.env), PYTHONUNBUFFERED: "1", ...profile.env }
+		// AIHYDRO_AGENT_CONTEXT is last so a kernel profile env cannot clear it (AP1, B4): artifact code is
+		// agent-influenced, and the claim-approval CLI refuses to run where the marker is set.
+		const env = { ...scrubKernelEnv(process.env), PYTHONUNBUFFERED: "1", ...profile.env, AIHYDRO_AGENT_CONTEXT: "1" }
 		const child = spawn(profile.interpreterPath, [runnerPath], {
 			cwd: profile.cwd,
 			env,
