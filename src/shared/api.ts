@@ -311,6 +311,7 @@ const CLAUDE_5X_PLATFORM_PRICING_UNVERIFIED = {
 	outputPrice: undefined,
 	cacheWritesPrice: undefined,
 	cacheReadsPrice: undefined,
+	tiers: undefined,
 } as const
 
 export type AnthropicModelId = keyof typeof anthropicModels
@@ -2242,9 +2243,8 @@ export const internationalQwenModels = {
 		contextWindow: 64_000,
 		supportsImages: false,
 		supportsPromptCache: true,
-		inputPrice: 0,
+		inputPrice: 0.14, // a DeepSeek cache miss is plain input; no cache-write charge
 		outputPrice: 0.28,
-		cacheWritesPrice: 0.14,
 		cacheReadsPrice: 0.014,
 	},
 	"deepseek-r1": {
@@ -2252,9 +2252,8 @@ export const internationalQwenModels = {
 		contextWindow: 64_000,
 		supportsImages: false,
 		supportsPromptCache: true,
-		inputPrice: 0,
+		inputPrice: 0.55, // a DeepSeek cache miss is plain input; no cache-write charge
 		outputPrice: 2.19,
-		cacheWritesPrice: 0.55,
 		cacheReadsPrice: 0.14,
 	},
 	"qwen-vl-max": {
@@ -2585,9 +2584,8 @@ export const mainlandQwenModels = {
 		contextWindow: 64_000,
 		supportsImages: false,
 		supportsPromptCache: true,
-		inputPrice: 0,
+		inputPrice: 0.14, // a DeepSeek cache miss is plain input; no cache-write charge
 		outputPrice: 0.28,
-		cacheWritesPrice: 0.14,
 		cacheReadsPrice: 0.014,
 	},
 	"deepseek-r1": {
@@ -2595,9 +2593,8 @@ export const mainlandQwenModels = {
 		contextWindow: 64_000,
 		supportsImages: false,
 		supportsPromptCache: true,
-		inputPrice: 0,
+		inputPrice: 0.55, // a DeepSeek cache miss is plain input; no cache-write charge
 		outputPrice: 2.19,
-		cacheWritesPrice: 0.55,
 		cacheReadsPrice: 0.14,
 	},
 	"qwen-vl-max": {

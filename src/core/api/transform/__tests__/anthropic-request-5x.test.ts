@@ -67,10 +67,13 @@ describe("Claude 5.x request construction", () => {
 
 	it("legacy and current condense triggers share getContextWindowInfo (1M window / 128K output)", () => {
 		const info = { ...(anthropicModels as Record<string, any>)["claude-opus-5-5"] }
-		getContextWindowInfo({ getModel: () => ({ id: "x", info }) } as any).maxAllowedSize.should.equal(1_000_000 - 128_000 - 20_000)
+		getContextWindowInfo({ getModel: () => ({ id: "x", info }) } as any).maxAllowedSize.should.equal(
+			1_000_000 - 128_000 - 20_000,
+		)
 		// small-output models keep the fixed buffers
-		getContextWindowInfo({ getModel: () => ({ id: "x", info: { contextWindow: 200_000, maxTokens: 8192 } }) } as any)
-			.maxAllowedSize.should.equal(160_000)
+		getContextWindowInfo({
+			getModel: () => ({ id: "x", info: { contextWindow: 200_000, maxTokens: 8192 } }),
+		} as any).maxAllowedSize.should.equal(160_000)
 	})
 
 	it("cost uses the documented prices (Opus 5.5: 1M in, 100k out, 500k cache read)", () => {

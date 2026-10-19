@@ -81,11 +81,13 @@ describe("provider usage -> meter convention", () => {
 			u.promptTokens.should.equal(15)
 			u.uncachedInputTokens.should.equal(5)
 		})
-		it("cached_tokens larger than prompt_tokens never yields negative input", () => {
-			normalizeOpenAiStyleUsage({
+		it("cached_tokens larger than prompt_tokens is read as an exclusive prompt count, never negative", () => {
+			const u = normalizeOpenAiStyleUsage({
 				prompt_tokens: 10,
 				prompt_tokens_details: { cached_tokens: 12 },
-			}).uncachedInputTokens.should.equal(0)
+			})
+			u.uncachedInputTokens.should.equal(10)
+			u.promptTokens.should.equal(22)
 		})
 	})
 

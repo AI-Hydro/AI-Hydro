@@ -6,6 +6,7 @@ import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { normalizeOpenAiStyleUsage, OpenAiStyleUsageInput } from "../transform/usage"
 
 interface LiteLlmHandlerOptions extends CommonApiHandlerOptions {
 	liteLlmApiKey?: string
@@ -305,33 +306,25 @@ export class LiteLlmHandler implements ApiHandler {
 
 			// Handle token usage information
 			if (chunk.usage) {
-				// Extract cache-related information if available
-				// Need to use type assertion since these properties are not in the standard OpenAI types
-				const usage = chunk.usage as {
-					prompt_tokens: number
-					completion_tokens: number
-					cache_creation_input_tokens?: number
-					prompt_cache_miss_tokens?: number
-					cache_read_input_tokens?: number
-					prompt_cache_hit_tokens?: number
-				}
-
-				const cacheWriteTokens = usage.cache_creation_input_tokens || usage.prompt_cache_miss_tokens || 0
-				const cacheReadTokens = usage.cache_read_input_tokens || usage.prompt_cache_hit_tokens || 0
+				// Detect the shape (Anthropic-style creation/read, or DeepSeek-style hit/miss) and report the meter convention.
+				const u = normalizeOpenAiStyleUsage(chunk.usage as OpenAiStyleUsageInput)
+				const cacheWriteTokens = u.cacheWriteTokens
+				const cacheReadTokens = u.cacheReadTokens
 
 				// Calculate cost using the actual token usage including cache tokens
 				const totalCost =
 					(await this.calculateCost(
-						usage.prompt_tokens || 0,
-						usage.completion_tokens || 0,
+						// calculateCost treats this as prompt minus cache writes (writes are priced separately)
+						u.uncachedInputTokens + u.cacheReadTokens,
+						u.outputTokens,
 						cacheWriteTokens > 0 ? cacheWriteTokens : undefined,
 						cacheReadTokens > 0 ? cacheReadTokens : undefined,
 					)) || 0
 
 				yield {
 					type: "usage",
-					inputTokens: usage.prompt_tokens || 0,
-					outputTokens: usage.completion_tokens || 0,
+					inputTokens: u.uncachedInputTokens,
+					outputTokens: u.outputTokens,
 					cacheWriteTokens: cacheWriteTokens > 0 ? cacheWriteTokens : undefined,
 					cacheReadTokens: cacheReadTokens > 0 ? cacheReadTokens : undefined,
 					totalCost,
