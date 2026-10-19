@@ -1,5 +1,17 @@
+import { createHash } from "node:crypto"
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, type PathLike, type RmOptions, rmSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	type PathLike,
+	readdirSync,
+	readFileSync,
+	type RmOptions,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ElectronApplication, expect, type Frame, type Page, test } from "@playwright/test"
@@ -27,6 +39,71 @@ function getVSCodeExecutablePath(channel: "stable" | "insiders"): Promise<string
 		vscodeExecutablePathPromises.set(channel, executablePath)
 	}
 	return executablePath
+}
+
+/**
+ * Studio kernel settings are machine scope, so a workspace `.vscode/settings.json`
+ * cannot set them (that is the point). Tests write them to the user settings of
+ * the VS Code profile instead.
+ */
+export function writeUserSettings(userDataDir: string, settings: Record<string, unknown>): void {
+	const dir = path.join(userDataDir, "User")
+	mkdirSync(dir, { recursive: true })
+	writeFileSync(path.join(dir, "settings.json"), JSON.stringify(settings, null, 2))
+}
+
+/**
+ * Mark every `.html` file at or under each of `roots` as an artifact produced by AI-Hydro's
+ * recorded tools, by writing the host-side provenance records the trust gate
+ * looks for (`$HOME/.aihydro/artifact-records/<sha256>.json`; the launched
+ * VS Code runs with HOME=homeDir). Files not passed here stay static documents.
+ */
+export function recordFixtureArtifacts(homeDir: string, ...roots: string[]): void {
+	const recordDir = path.join(homeDir, ".aihydro", "artifact-records")
+	mkdirSync(recordDir, { recursive: true })
+	const visit = (entryPath: string) => {
+		if (statSync(entryPath).isDirectory()) {
+			for (const entry of readdirSync(entryPath)) visit(path.join(entryPath, entry))
+		} else if (entryPath.endsWith(".html")) {
+			const sha256 = createHash("sha256").update(readFileSync(entryPath)).digest("hex")
+			writeFileSync(
+				path.join(recordDir, `${sha256}.json`),
+				JSON.stringify({ schema: "aihydro-artifact-record-v1", sha256, tool: "e2e-fixture" }),
+			)
+		}
+	}
+	for (const root of roots) visit(root)
+}
+
+/**
+ * Click the trust bar's "Allow execution" for the open document, if it is
+ * offered, and wait until the allowance is in effect (the badge shows Revoke).
+ * A no-op when the document is already allowed. Throws if the open document is
+ * not eligible (no Allow button ever appears).
+ */
+export async function allowArtifactExecution(page: Page, timeoutMs = 45_000): Promise<void> {
+	await expect
+		.poll(
+			async () => {
+				for (const frame of page.frames()) {
+					if (frame.isDetached()) continue
+					try {
+						if ((await frame.title()) !== "AI-Hydro HTML Preview") continue
+						if ((await frame.getByTestId("artifact-trust-revoke").count()) === 1) return "allowed"
+						const allow = frame.getByTestId("artifact-trust-allow")
+						if ((await allow.count()) === 1) {
+							await allow.click()
+							return "clicked"
+						}
+					} catch {
+						// The preview shell is replaced while switching documents.
+					}
+				}
+				return "waiting"
+			},
+			{ timeout: timeoutMs, message: "Studio trust bar never offered or confirmed execution" },
+		)
+		.toBe("allowed")
 }
 
 export interface E2ETestConfigs {

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Untrusted Document Fixture</title>
+	<!-- Models an external dashboard that tries to reach the kernel and the agent. It has a
+	     module manifest and cells on purpose: a document's own claims must grant nothing. -->
+	<script type="application/vnd.aihydro.module+json">
+	{ "id": "untrusted-runcode-fixture", "title": "Untrusted Document Fixture", "version": "0.1.0", "license": "CC0-1.0", "requires": { "executable": true } }
+	</script>
+</head>
+<body>
+	<h1 id="untrusted-heading">Untrusted dashboard</h1>
+	<div id="run-result" data-state="pending">pending</div>
+	<button id="ask-kernel" type="button">Ask kernel</button>
+	<button id="ask-agent" type="button">Ask agent</button>
+	<script>
+		window.addEventListener("message", function (event) {
+			var data = event.data || {};
+			if (data.type === "artifact/runCodeResult") {
+				document.getElementById("run-result").dataset.state = data.status || "unknown";
+				document.getElementById("run-result").textContent = (data.status || "unknown") + ": " + (data.error || data.stdout || "");
+			}
+		});
+		document.getElementById("ask-kernel").addEventListener("click", function () {
+			parent.postMessage({ source: "aihydro-artifact", type: "artifact/runCode", language: "python", code: "print('should-never-run')" }, "*");
+		});
+		document.getElementById("ask-agent").addEventListener("click", function () {
+			parent.postMessage({ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}] }) }, "*");
+		});
+	</script>
+</body>
+</html>

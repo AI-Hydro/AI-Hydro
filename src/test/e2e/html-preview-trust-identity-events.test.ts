@@ -1,8 +1,8 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Page } from "@playwright/test"
-import { E2ETestHelper, e2e } from "./utils/helpers"
+import { allowArtifactExecution, E2ETestHelper, e2e, recordFixtureArtifacts, writeUserSettings } from "./utils/helpers"
 
 interface MirroredPreviewEvent {
 	moduleId: string
@@ -13,7 +13,7 @@ interface MirroredPreviewEvent {
 }
 
 const evidenceE2E = e2e.extend<{ workspaceDir: string }>({
-	workspaceDir: async ({}, use) => {
+	workspaceDir: async ({ userDataDir, homeDir }, use) => {
 		const root = mkdtempSync(path.join(os.tmpdir(), "aihydro-phase0-trust-identity-"))
 		const workspaceDir = path.join(root, "workspace")
 		const baseWorkspace = path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "workspace")
@@ -30,15 +30,14 @@ const evidenceE2E = e2e.extend<{ workspaceDir: string }>({
 
 		const pythonInterpreter = process.env.AIHYDRO_E2E_PYTHON
 		if (!pythonInterpreter) throw new Error("AIHYDRO_E2E_PYTHON must select the deterministic interpreter")
-		mkdirSync(path.join(workspaceDir, ".vscode"), { recursive: true })
-		writeFileSync(
-			path.join(workspaceDir, ".vscode", "settings.json"),
-			JSON.stringify({
-				"aihydro.htmlPreview.pythonExecution": "always",
-				"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
-				"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
-			}),
-		)
+		// Machine-scope settings cannot come from the workspace; write the user profile.
+		writeUserSettings(userDataDir, {
+			"aihydro.htmlPreview.pythonExecution": "always",
+			"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
+			"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
+		})
+		// The golden course stands in for artifacts produced by AI-Hydro's recorded tools.
+		recordFixtureArtifacts(homeDir, path.join(workspaceDir, "phase0", "golden-course"))
 
 		try {
 			await use(workspaceDir)
@@ -102,6 +101,9 @@ async function openGoldenModule(page: Page): Promise<Frame> {
 		}
 	}
 	await explorer.getByRole("treeitem", { name: "module.html", exact: true }).first().dblclick()
+	// Executable documents need an explicit per-document allowance (trust bar) before
+	// the kernel bridge exists. Allowing reloads the iframe, so look for the cell after.
+	await allowArtifactExecution(page)
 	return waitForFrame(
 		page,
 		async (frame) => (await frame.locator('[data-aihydro-cell-id="fixture-state-create"]').count()) === 1,

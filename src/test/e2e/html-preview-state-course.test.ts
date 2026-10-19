@@ -1,9 +1,9 @@
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Page } from "@playwright/test"
 import type { ElectronApplication } from "playwright"
-import { E2ETestHelper, e2e } from "./utils/helpers"
+import { allowArtifactExecution, E2ETestHelper, e2e, recordFixtureArtifacts, writeUserSettings } from "./utils/helpers"
 
 interface LifecycleSession {
 	launch: () => Promise<{ app: ElectronApplication; page: Page }>
@@ -22,7 +22,7 @@ const stateCourseE2E = e2e
 		},
 	})
 	.extend<{ workspaceDir: string }>({
-		workspaceDir: async ({ workspaceRoot }, use) => {
+		workspaceDir: async ({ workspaceRoot, userDataDir, homeDir }, use) => {
 			const workspaceDir = path.join(workspaceRoot, "workspace")
 			const baseWorkspace = path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "workspace")
 			const goldenCourse = path.join(
@@ -40,19 +40,14 @@ const stateCourseE2E = e2e
 			if (!pythonInterpreter) {
 				throw new Error("AIHYDRO_E2E_PYTHON must point to the deterministic test interpreter")
 			}
-			mkdirSync(path.join(workspaceDir, ".vscode"), { recursive: true })
-			writeFileSync(
-				path.join(workspaceDir, ".vscode", "settings.json"),
-				JSON.stringify(
-					{
-						"aihydro.htmlPreview.pythonExecution": "always",
-						"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
-						"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
-					},
-					null,
-					2,
-				),
-			)
+			// Machine-scope settings cannot come from the workspace; write the user profile.
+			writeUserSettings(userDataDir, {
+				"aihydro.htmlPreview.pythonExecution": "always",
+				"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
+				"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
+			})
+			// The course fixtures stand in for artifacts produced by AI-Hydro's recorded tools.
+			recordFixtureArtifacts(homeDir, path.join(workspaceDir, "phase0", "golden-course"))
 			await use(workspaceDir)
 		},
 	})
@@ -172,6 +167,8 @@ async function showExplorer(page: Page): Promise<void> {
 }
 
 async function waitForCellFrame(page: Page, cellId: string): Promise<Frame> {
+	// Each document needs an explicit allowance (trust bar) before its kernel bridge exists.
+	await allowArtifactExecution(page)
 	return waitForFrame(page, async (frame) => (await frame.locator(`[data-aihydro-cell-id="${cellId}"]`).count()) === 1)
 }
 
