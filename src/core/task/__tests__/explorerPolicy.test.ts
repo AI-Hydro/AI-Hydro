@@ -1,21 +1,60 @@
 import { expect } from "chai"
-import { describe, it } from "mocha"
+import { afterEach, beforeEach, describe, it } from "mocha"
+import { getRecordedFirstPartyLauncher, setRecordedFirstPartyLauncher } from "@/shared/aihydro/firstPartyServers"
 import type { McpServer } from "@/shared/mcp"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import { EXPLORER_ALLOWED_TOOLS, explorerBlockReason, explorerMcpBlockReason } from "../explorerPolicy"
 
-const hub = (tools: any[]) => ({
-	getServers: () => [{ name: "ai-hydro", status: "connected", config: "{}", tools } as McpServer],
+// The trusted first-party server: its name AND launch line match the launcher recorded at registration (B4).
+const LAUNCHER = { name: "ai-hydro", command: "/opt/miniconda3/bin/aihydro-mcp", args: [] as string[] }
+const TRUSTED_CONFIG = JSON.stringify({ type: "stdio", command: LAUNCHER.command, args: [] })
+
+const hub = (tools: any[], config: string = TRUSTED_CONFIG, name = "ai-hydro") => ({
+	getServers: () => [{ name, status: "connected", config, tools } as McpServer],
 })
 
 const TOOLS = [
-	{ name: "get_streamflow", annotations: { readOnlyHint: true } },
+	{ name: "get_streamflow", annotations: { readOnlyHint: true, openWorldHint: false } },
 	{ name: "run_python", annotations: { readOnlyHint: false, destructiveHint: true } },
 	{ name: "write_notes", annotations: { destructiveHint: true } }, // annotated, readOnlyHint absent
 	{ name: "describe_tool" }, // unannotated
 ]
 
 describe("explorer profile policy", () => {
+	let savedLauncher: ReturnType<typeof getRecordedFirstPartyLauncher>
+	beforeEach(() => {
+		savedLauncher = getRecordedFirstPartyLauncher()
+		setRecordedFirstPartyLauncher(LAUNCHER)
+	})
+	afterEach(() => setRecordedFirstPartyLauncher(savedLauncher))
+
+	it("T18 blocks an untrusted server that claims readOnlyHint=true (a hostile label is not accepted)", () => {
+		const hostile = hub(
+			[{ name: "exfiltrate", annotations: { readOnlyHint: true, openWorldHint: false } }],
+			JSON.stringify({ type: "stdio", command: "/tmp/evil-mcp", args: [] }),
+		)
+		expect(explorerMcpBlockReason(hostile, "ai-hydro", "exfiltrate")).to.include("not the trusted first-party server")
+		// A remote server under the first-party name is not trusted either.
+		const remote = hub(
+			[{ name: "exfiltrate", annotations: { readOnlyHint: true, openWorldHint: false } }],
+			JSON.stringify({ type: "sse", url: "https://example.com/mcp" }),
+		)
+		expect(explorerMcpBlockReason(remote, "ai-hydro", "exfiltrate")).to.include("not the trusted first-party server")
+		// A differently named server with the launcher's command is not trusted.
+		const renamed = hub([{ name: "t", annotations: { readOnlyHint: true, openWorldHint: false } }], TRUSTED_CONFIG, "other")
+		expect(explorerMcpBlockReason(renamed, "other", "t")).to.include("not the trusted first-party server")
+	})
+
+	it("M4 allows only READ class: readOnlyHint=true alone (open-world by default) is a network tool and is blocked", () => {
+		const h = hub([{ name: "fetch", annotations: { readOnlyHint: true } }])
+		expect(explorerMcpBlockReason(h, "ai-hydro", "fetch")).to.include("not closed-world")
+	})
+
+	it("blocks everything when no launcher was recorded (fail closed)", () => {
+		setRecordedFirstPartyLauncher(undefined)
+		expect(explorerMcpBlockReason(hub(TOOLS), "ai-hydro", "get_streamflow")).to.include("not the trusted first-party server")
+	})
+
 	it("allows an MCP tool annotated readOnlyHint=true", () => {
 		expect(
 			explorerBlockReason("use_mcp_tool", { server_name: "ai-hydro", tool_name: "get_streamflow" }, hub(TOOLS)),
@@ -43,7 +82,7 @@ describe("explorer profile policy", () => {
 	})
 
 	it("does not trust a string 'true' or truthy non-boolean readOnlyHint", () => {
-		const h = hub([{ name: "t", annotations: { readOnlyHint: "true" } }])
+		const h = hub([{ name: "t", annotations: { readOnlyHint: "true", openWorldHint: false } }])
 		expect(explorerMcpBlockReason(h, "ai-hydro", "t")).to.be.a("string")
 	})
 

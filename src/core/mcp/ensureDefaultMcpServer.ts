@@ -1,6 +1,7 @@
 import { ensureSettingsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { execa } from "@packages/execa"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
+import { looksLikeFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
 import { ShowMessageType } from "@shared/proto/host/window"
 import { ExecuteCommandInTerminalRequest } from "@shared/proto/host/workspace"
 import { fileExistsAtPath } from "@utils/fs"
@@ -9,6 +10,7 @@ import os from "os"
 import * as path from "path"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
+import { loadFirstPartyLauncher, recordFirstPartyLauncher } from "./firstPartyLauncher"
 
 const SERVER_NAME = "ai-hydro"
 const CACHE_DIR = aihydroPath("cache")
@@ -84,6 +86,64 @@ function getPipScriptCandidates(): string[] {
 }
 
 /**
+ * Install the trust anchor for an already-registered first-party server.
+ *  - No record yet (registered before this version): record the entry if it has the first-party launcher shape.
+ *    This trusts what is on disk at upgrade time; an entry with any other shape stays untrusted.
+ *  - Record exists and matches: nothing to do.
+ *  - Record exists and the entry changed: the server is untrusted until the user confirms in this dialog.
+ *    The dialog is the only path that rewrites the record, and it is shown to the human, not the model.
+ */
+async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown): Promise<void> {
+	try {
+		const { command, args } = (entry ?? {}) as { command?: unknown; args?: unknown }
+		const current = {
+			name: SERVER_NAME,
+			command: typeof command === "string" ? command : "",
+			args: Array.isArray(args) ? (args as unknown[]).filter((a): a is string => typeof a === "string") : [],
+		}
+		const recorded = await loadFirstPartyLauncher(settingsDir)
+		const sameLaunch =
+			recorded?.command === current.command &&
+			recorded.args.length === current.args.length &&
+			recorded.args.every((a, i) => a === current.args[i])
+		if (sameLaunch) {
+			return
+		}
+		if (!looksLikeFirstPartyLauncher(current.command, current.args)) {
+			// Not recorded and not trusted: say so once per start instead of silently losing claim-approval prompts.
+			await HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message:
+					`The "${SERVER_NAME}" MCP server uses a non-standard launcher (\`${[current.command, ...current.args].join(" ")}\`), ` +
+					"so AI-Hydro does not treat it as the first-party server: claim-approval prompts and read-only subagent " +
+					"tools are off for it. To restore them, register the standard `aihydro-mcp` or `python -m ai_hydro.mcp` launcher.",
+				options: { items: [] },
+			})
+			return
+		}
+		if (!recorded) {
+			await recordFirstPartyLauncher(settingsDir, current)
+			console.log("[AI-Hydro] Recorded the existing first-party launcher as the trust anchor")
+			return
+		}
+		const trust = "Trust this launcher"
+		const action = await HostProvider.window.showMessage({
+			type: ShowMessageType.WARNING,
+			message:
+				`The "${SERVER_NAME}" MCP server now launches \`${[current.command, ...current.args].join(" ")}\`, which differs from the ` +
+				"launcher AI-Hydro registered. Until you confirm, it is not treated as the first-party server " +
+				"(claim-approval prompts and read-only subagent tools are off).",
+			options: { items: [trust, "Dismiss"], modal: true },
+		})
+		if (action.selectedOption === trust) {
+			await recordFirstPartyLauncher(settingsDir, current)
+		}
+	} catch (error) {
+		console.error("[AI-Hydro] Failed to reconcile the first-party launcher record:", error)
+	}
+}
+
+/**
  * Auto-detect and register the `aihydro-tools` MCP server on extension startup.
  *
  * Detection order:
@@ -114,8 +174,9 @@ export async function ensureDefaultMcpServer(context: vscode.ExtensionContext): 
 			config.mcpServers = {}
 		}
 
-		// 2. Skip if already registered
+		// 2. Skip if already registered (but make sure the trust anchor exists for it, see below)
 		if (config.mcpServers[SERVER_NAME]) {
+			await reconcileFirstPartyLauncher(settingsDir, config.mcpServers[SERVER_NAME])
 			return
 		}
 
@@ -200,6 +261,13 @@ export async function ensureDefaultMcpServer(context: vscode.ExtensionContext): 
 		config.mcpServers[SERVER_NAME] = serverConfig
 
 		await fs.writeFile(settingsPath, JSON.stringify(config, null, 2))
+		// Approval redesign AP1 (B4): record the exact launcher we registered. First-party trust compares the live
+		// connection against this record, so reusing the name "ai-hydro" is not enough to be trusted.
+		await recordFirstPartyLauncher(settingsDir, {
+			name: SERVER_NAME,
+			command: serverConfig.command,
+			args: serverConfig.args,
+		})
 		console.log("[AI-Hydro] Auto-registered aihydro-tools MCP server")
 	} catch (error) {
 		// Non-fatal — user can still add manually via setup_mcp.py

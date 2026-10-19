@@ -52,6 +52,7 @@ import { ExtensionRegistryInfo } from "./registry"
 import { AuthService } from "./services/auth/AuthService"
 import { LogoutReason } from "./services/auth/types"
 import { telemetryService } from "./services/telemetry"
+import { setWorkspaceTrustProvider } from "./core/task/workspaceTrust"
 import { SharedUriHandler } from "./services/uri/SharedUriHandler"
 import { ShowMessageType } from "./shared/proto/host/window"
 import { fileExistsAtPath } from "./utils/fs"
@@ -239,6 +240,8 @@ async function warnIfWorkspaceOnCloudStorage(context: vscode.ExtensionContext): 
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
 	setupHostProvider(context)
+	// Read-only git auto-run needs a trusted workspace (a hostile .git/config runs programs); see readOnlyClassifier.ts.
+	setWorkspaceTrustProvider(() => vscode.workspace.isTrusted)
 
 	const webview = (await initialize(context)) as VscodeWebviewProvider
 
