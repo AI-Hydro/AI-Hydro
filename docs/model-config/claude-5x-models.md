@@ -35,6 +35,23 @@ All four support adaptive thinking and the effort parameter (`low`, `medium`, `h
 `thinking: enabled` (400), so the request builder only ever sends `adaptive` (when the user's thinking
 setting is on) and otherwise omits the field. The user's effort setting is sent as `output_config.effort`.
 
+## Evidence table
+
+Fetched 2026-10-19 (WebFetch of the pages; values re-checked by the reviewer on the same date). "Whole request"
+means the Haiku 5.5 tier is chosen per request from the full prompt length, cache reads and writes included, and
+reprices every token of that request.
+
+| Fact | Fable 5.1 | Opus 5.5 | Sonnet 5.5 | Haiku 5.5 | Source URL |
+|---|---|---|---|---|---|
+| Context window | 1M | 1M | 1M | 1M | https://platform.claude.com/docs/en/models/overview |
+| Max output | 128K | 128K | 128K | 128K | https://platform.claude.com/docs/en/models/overview |
+| Thinking | adaptive, always on | adaptive, always on | adaptive | adaptive | https://platform.claude.com/docs/en/models/overview |
+| Default effort | high | medium | high | medium | https://platform.claude.com/docs/en/build-with-claude/effort |
+| Input / output, USD per MTok | 10 / 50 | 4 / 20 | 2 / 10 | 0.10 / 0.50 (prompt <= 100k) | https://platform.claude.com/docs/en/about-claude/pricing |
+| 5m cache write | 12.50 | 5 | 2.50 | 0.125 (prompt <= 100k) | https://platform.claude.com/docs/en/about-claude/pricing |
+| Cache read | 0.25 | 0.20 | 0.10 | 0.01 (prompt <= 100k) | https://platform.claude.com/docs/en/about-claude/pricing |
+| Haiku above 100k prompt tokens (whole request) | | | | 0.50 / 2.50, write 0.625, read 0.05 | https://platform.claude.com/docs/en/about-claude/pricing |
+
 ## Deliberately conservative
 
 - `supportsTemperature: false`: the Haiku 5.5 page says to omit `temperature`, `top_p` and `top_k`; the
