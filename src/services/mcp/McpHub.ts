@@ -1,9 +1,10 @@
 import { setTimeout as setTimeoutPromise } from "node:timers/promises"
 import { sendMcpServersUpdate } from "@core/controller/mcp/subscribeToMcpServers"
+import { loadFirstPartyLauncher } from "@core/mcp/firstPartyLauncher"
 import { GlobalFileNames } from "@core/storage/disk"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
-import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import {
 	CallToolResultSchema,
@@ -35,8 +36,10 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { TelemetryService } from "../telemetry/TelemetryService"
 import { DEFAULT_REQUEST_TIMEOUT_MS } from "./constants"
+import { buildStdioServerEnv } from "./serverEnv"
 import { StreamableHttpReconnectHandler } from "./StreamableHttpReconnectHandler"
 import { BaseConfigSchema, McpSettingsSchema, ServerConfigSchema } from "./schemas"
+import { describeLoosening, McpPolicyGate, type PolicyChange, revertSettingsFile, type ServersLike } from "./policyGate"
 import { McpConnection, McpServerConfig, Transport } from "./types"
 export class McpHub {
 	getMcpServersPath: () => Promise<string>
@@ -56,6 +59,18 @@ export class McpHub {
 		message: string
 		timestamp: number
 	}> = []
+
+	/**
+	 * Approval-policy gate (approval redesign AP1, B3). Tracks the policy fields (autoApprove, trust, deny,
+	 * alwaysAsk) as last accepted. A file-watcher change that loosens policy is not applied until the user confirms
+	 * it; UI writes go through it so an unprocessed agent edit is not laundered into the baseline.
+	 */
+	private policyGate = new McpPolicyGate({
+		confirm: (changes) => this.confirmLoosening(changes),
+		revertFile: async (prev) => revertSettingsFile(await this.getMcpSettingsFilePath(), prev),
+	})
+	/** Serialises watcher events so two quick edits cannot race a confirmation dialog. */
+	private policyGateQueue: Promise<void> = Promise.resolve()
 
 	// Callback for sending notifications to active task
 	private notificationCallback?: (serverName: string, level: string, message: string) => void
@@ -145,15 +160,18 @@ export class McpHub {
 			atomic: true, // Handle atomic writes where editors write to a temp file then rename (prevents duplicate events)
 		})
 
-		this.settingsWatcher.on("change", async () => {
-			const settings = await this.readAndValidateMcpSettingsFile()
-			if (settings) {
-				try {
-					await this.updateServerConnections(settings.mcpServers)
-				} catch (error) {
-					console.error("Failed to process MCP settings change:", error)
+		this.settingsWatcher.on("change", () => {
+			this.policyGateQueue = this.policyGateQueue.then(async () => {
+				const settings = await this.readAndValidateMcpSettingsFile()
+				if (settings) {
+					try {
+						const effective = await this.policyGate.gateExternal(settings.mcpServers)
+						await this.updateServerConnections(effective)
+					} catch (error) {
+						console.error("Failed to process MCP settings change:", error)
+					}
 				}
-			}
+			})
 		})
 
 		this.settingsWatcher.on("error", (error) => {
@@ -162,10 +180,44 @@ export class McpHub {
 	}
 
 	private async initializeMcpServers(): Promise<void> {
+		// Install the first-party trust anchor before any connection is made (approval redesign AP1, B4).
+		await loadFirstPartyLauncher(await this.getSettingsDirectoryPath()).catch(() => undefined)
 		const settings = await this.readAndValidateMcpSettingsFile()
 		if (settings) {
+			// The file as found at startup is the baseline. The extension cannot know who wrote it while it was off.
+			this.policyGate.setBaseline(settings.mcpServers as unknown as ServersLike)
 			await this.updateServerConnections(settings.mcpServers)
 		}
+	}
+
+	private async confirmLoosening(changes: PolicyChange[]): Promise<boolean> {
+		const apply = "Apply changes"
+		const shown = changes.slice(0, 8).map(describeLoosening)
+		const more = changes.length > shown.length ? `, and ${changes.length - shown.length} more` : ""
+		try {
+			const answer = await HostProvider.window.showMessage({
+				type: ShowMessageType.WARNING,
+				message:
+					"The MCP settings file was edited outside AI-Hydro and the edit would let tools run without asking: " +
+					`${shown.join("; ")}${more}. If the agent made this edit, choose Revert.`,
+				options: { items: [apply, "Revert"], modal: true },
+			})
+			return answer.selectedOption === apply
+		} catch (error) {
+			console.error("Failed to ask about a policy-loosening MCP settings edit; treating it as declined:", error)
+			return false
+		}
+	}
+
+	/** Write the settings file for a UI-originated change (see McpPolicyGate.prepareUiWrite). */
+	private async writeSettingsFromUi(
+		settingsPath: string,
+		config: { mcpServers?: Record<string, any> } & Record<string, any>,
+		intended?: { server: string; tools: string[] },
+	): Promise<void> {
+		const toWrite = this.policyGate.prepareUiWrite(config, intended)
+		await fs.writeFile(settingsPath, JSON.stringify(toWrite, null, 2))
+		this.policyGate.accept(toWrite.mcpServers as ServersLike | undefined)
 	}
 
 	private findConnection(name: string, _source: "rpc" | "internal"): McpConnection | undefined {
@@ -263,11 +315,8 @@ export class McpHub {
 						command: config.command,
 						args: config.args,
 						cwd: config.cwd,
-						env: {
-							// ...(config.env ? await injectEnv(config.env) : {}), // Commented out as injectEnv is not found
-							...getDefaultEnvironment(),
-							...(config.env || {}), // Use config.env directly or an empty object
-						},
+						// Includes AIHYDRO_AGENT_CONTEXT=1 (approval redesign AP1, B4), see serverEnv.ts.
+						env: buildStdioServerEnv(config.env),
 						stderr: "pipe",
 					})
 
@@ -824,7 +873,7 @@ export class McpHub {
 				config.mcpServers[serverName].disabled = disabled
 
 				const settingsPath = await this.getMcpSettingsFilePath()
-				await fs.writeFile(settingsPath, JSON.stringify(config, null, 2))
+				await this.writeSettingsFromUi(settingsPath, config)
 
 				const connection = this.connections.find((conn) => conn.server.name === serverName)
 				if (connection) {
@@ -979,7 +1028,10 @@ export class McpHub {
 				}
 			}
 
-			await fs.writeFile(settingsPath, JSON.stringify(config, null, 2))
+			await this.writeSettingsFromUi(settingsPath, config, {
+				server: serverName,
+				tools: shouldAllow ? toolNames : [],
+			})
 
 			// Update the tools list to reflect the change
 			const connection = this.connections.find((conn) => conn.server.name === serverName)
@@ -1024,7 +1076,10 @@ export class McpHub {
 				}
 			}
 
-			await fs.writeFile(settingsPath, JSON.stringify(config, null, 2))
+			await this.writeSettingsFromUi(settingsPath, config, {
+				server: serverName,
+				tools: shouldAllow ? toolNames : [],
+			})
 
 			// Update the tools list to reflect the change
 			const connection = this.connections.find((conn) => conn.server.name === serverName)
@@ -1078,10 +1133,9 @@ export class McpHub {
 			// It would be fine if this was written, but we don't want to clutter up the file with internal details
 
 			// ToDo: We could benefit from input / output types reflecting the non-transformed / transformed versions
-			await fs.writeFile(
-				settingsPath,
-				JSON.stringify({ mcpServers: { ...settings.mcpServers, [serverName]: serverConfig } }, null, 2),
-			)
+			await this.writeSettingsFromUi(settingsPath, {
+				mcpServers: { ...settings.mcpServers, [serverName]: serverConfig },
+			})
 
 			await this.updateServerConnectionsRPC(settings.mcpServers)
 
@@ -1112,7 +1166,7 @@ export class McpHub {
 				const updatedConfig = {
 					mcpServers: config.mcpServers,
 				}
-				await fs.writeFile(settingsPath, JSON.stringify(updatedConfig, null, 2))
+				await this.writeSettingsFromUi(settingsPath, updatedConfig)
 				await this.updateServerConnectionsRPC(config.mcpServers)
 
 				// Get the servers in their correct order from settings
@@ -1148,7 +1202,7 @@ export class McpHub {
 				timeout,
 			}
 
-			await fs.writeFile(settingsPath, JSON.stringify(config, null, 2))
+			await this.writeSettingsFromUi(settingsPath, config)
 
 			await this.updateServerConnectionsRPC(config.mcpServers)
 
