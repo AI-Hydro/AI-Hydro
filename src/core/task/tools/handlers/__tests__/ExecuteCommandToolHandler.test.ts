@@ -113,7 +113,21 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 		expect(calls.executed).to.have.length(1) // ran only after the (simulated) human approval
 	})
 
-	it("T14 ls, git status and cat README.md run without asking", async () => {
+	// The classifier fails closed on Windows (the shell is not modelled), so nothing auto-runs there: assert that instead.
+	it("T14 on Windows nothing is classified read-only, so even ls asks", async function () {
+		if (process.platform !== "win32") {
+			this.skip()
+		}
+		for (const command of ["ls", "git status", "cat README.md"]) {
+			const { calls } = await run(command, false)
+			expect(calls.ask, command).to.have.length(1)
+		}
+	})
+
+	it("T14 ls, git status and cat README.md run without asking", async function () {
+		if (process.platform === "win32") {
+			this.skip()
+		}
 		for (const command of ["ls", "git status", "cat README.md"]) {
 			const { calls } = await run(command, false)
 			expect(calls.ask, command).to.have.length(0)
