@@ -1,9 +1,10 @@
 import { sendCheckpointEvent } from "@core/controller/checkpoints/subscribeToCheckpoints"
 import fs from "fs/promises"
 import * as path from "path"
-import simpleGit from "simple-git"
+import { simpleGit } from "simple-git"
 import type { FolderLockWithRetryResult } from "@/core/locks/types"
 import { telemetryService } from "@/services/telemetry"
+import { cleanCommitHash } from "./CheckpointCommitHash"
 import { GitOperations } from "./CheckpointGitOperations"
 import { releaseCheckpointLock, tryAcquireCheckpointLockWithRetry } from "./CheckpointLockUtils"
 import { getShadowGitPath, hashWorkingDir } from "./CheckpointUtils"
@@ -53,11 +54,10 @@ class CheckpointTracker {
 	private gitOperations: GitOperations
 
 	/**
-	 * Helper method to clean commit hashes that might have a "HEAD " prefix.
-	 * Used for backward compatibility with old tasks that stored hashes with the prefix.
+	 * Normalize and validate a commit hash (see CheckpointCommitHash.ts); also handles the legacy "HEAD " prefix.
 	 */
 	private cleanCommitHash(hash: string): string {
-		return hash.startsWith("HEAD ") ? hash.slice(5) : hash
+		return cleanCommitHash(hash)
 	}
 
 	/**
