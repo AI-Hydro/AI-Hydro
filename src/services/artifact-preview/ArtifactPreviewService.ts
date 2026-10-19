@@ -188,7 +188,9 @@ export class ArtifactPreviewService {
 		} else {
 			this.trust.revoke(id)
 		}
-		this.emit({ kind: "updated", ref })
+		// Deliberately no `emit`: service changes rebuild the whole preview panel
+		// (VscodeHtmlPreviewProvider.refreshPanel). An allowance change only needs the
+		// updated item pushed to the webview, which the controller does.
 		return this.trust.isAllowed(ref)
 	}
 

@@ -261,7 +261,7 @@ runtimeE2E("HTML Preview executes the golden runtime matrix @phase0-full", async
 	// offers no way to allow one.
 	await expect(staticShell.getByTestId("artifact-trust-badge")).toHaveText("Static document")
 	await expect(staticShell.getByTestId("artifact-trust-allow")).toHaveCount(0)
-	expect(await staticShell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("artifact/runCode")
+	expect(await staticShell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("artifact/cellRegistry")
 
 	await openWorkspaceFile(page, "phase0/standalone-module.html")
 	artifact = await waitForCellFrame(page, "standalone-python")
@@ -381,7 +381,7 @@ runtimeE2E("Studio denies kernel and agent requests from an untrusted document @
 	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Static document")
 	await expect(shell.getByTestId("artifact-trust-allow")).toHaveCount(0)
 	// A manifest and cells in the document grant nothing: no bridge is injected.
-	expect(await shell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("artifact/runCode")
+	expect(await shell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("artifact/cellRegistry")
 
 	const artifact = await waitForFrame(page, async (frame) => (await frame.locator("#untrusted-heading").count()) === 1)
 	await artifact.locator("#ask-kernel").evaluate((element: HTMLElement) => element.click())
@@ -415,7 +415,7 @@ runtimeE2E("Studio stages a document's agent request for a user click and revoke
 	await expect(shell.getByTestId("artifact-trust-allow")).toBeVisible({ timeout: 15_000 })
 	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Trusted, execution off")
 	await expect
-		.poll(async () => (await shell.locator("iframe").first().getAttribute("srcdoc"))?.includes("artifact/runCode"), {
+		.poll(async () => (await shell.locator("iframe").first().getAttribute("srcdoc"))?.includes("artifact/cellRegistry"), {
 			timeout: 15_000,
 		})
 		.toBe(false)

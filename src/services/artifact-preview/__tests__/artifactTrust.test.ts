@@ -229,13 +229,14 @@ describe("ArtifactPreviewService execution gate", () => {
 		expect(svc.canExecute("file_1")).to.equal(false)
 	})
 
-	it("notifies subscribers when the allowance changes", () => {
+	it("does not emit a service change (that would rebuild the whole panel)", () => {
 		const svc = makeService()
 		register(svc, makeRef("learning-pack"))
 		const kinds: string[] = []
 		svc.onChange((c) => kinds.push(c.kind))
 		svc.setExecutionAllowed("file_1", true)
-		expect(kinds).to.deep.equal(["updated"])
+		svc.setExecutionAllowed("file_1", false)
+		expect(kinds).to.deep.equal([])
 	})
 })
 
