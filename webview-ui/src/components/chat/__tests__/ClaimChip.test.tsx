@@ -75,6 +75,21 @@ describe("ClaimChip", () => {
 		expect(container.querySelector("button")?.getAttribute("data-approved")).toBe("true")
 	})
 
+	it("never looks approved for a contradicted claim, even with a verified approval of the current revision", () => {
+		claims["c-contra"] = {
+			...base,
+			claimId: "c-contra",
+			status: "contradicted",
+			approvalState: "approved",
+			approvalChannel: "ssh_sig_sk_system_trust",
+			approvalTrustRoot: "system",
+			approvalPolicy: "signed_required",
+			approvalForRevisionDigest: "sha256:abc",
+		}
+		const { container } = render(<ClaimChip claimId="c-contra" />)
+		expect(container.querySelector("button")?.getAttribute("data-approved")).toBe("false")
+	})
+
 	it("does not look approved when the verified stamp is missing its policy or channel (fail closed)", () => {
 		const stamp: Record<string, unknown> = {
 			approvalChannel: "ssh_sig_sk_system_trust",

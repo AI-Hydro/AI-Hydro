@@ -94,6 +94,17 @@ const DRIFT_TONE_COLOR = {
 	unknown: evidenceState("unverified").token,
 }
 
+/**
+ * Colour for an approval chip. A verified approval is green only while the claim is still in good standing:
+ * a contradicted, stale or retracted claim never shows green, so the problem stays visible beside the badge.
+ */
+function approvalColor(approval: { approved: boolean; tone: Parameters<typeof approvalToneState>[0] }, status: string): string {
+	if (approval.approved && ["contradicted", "stale", "retracted"].includes(status)) {
+		return evidenceState("stale").token
+	}
+	return approvalToneState(approval.tone).token
+}
+
 /** A supported claim that cites no evidence: flagged for the reader; the server's status is not rewritten. */
 function lacksEvidence(claim: ClaimRecord): boolean {
 	return claim.status === "supported" && claim.evidenceSpans.length === 0
@@ -146,7 +157,7 @@ const RevisionChips: React.FC<{ claim: ClaimRecord }> = ({ claim }) => {
 				className="inline-flex items-center gap-0.5 text-[9px]"
 				data-approved={approval.approved ? "true" : "false"}
 				data-testid="claim-approval"
-				style={{ color: approvalToneState(approval.tone).token }}
+				style={{ color: approvalColor(approval, claim.status) }}
 				title={approval.detail ?? approval.label}>
 				<span
 					className={`codicon ${approval.approved ? "codicon-verified-filled" : approval.tone === "untrusted" ? "codicon-error" : "codicon-circle-outline"} text-[9px]`}
@@ -347,7 +358,7 @@ const RevisionDetail: React.FC<{ claim: ClaimRecord }> = ({ claim }) => {
 					className="text-[10px]"
 					data-approved={approval.approved ? "true" : "false"}
 					data-testid="approval-line"
-					style={{ color: approvalToneState(approval.tone).token }}>
+					style={{ color: approvalColor(approval, claim.status) }}>
 					{approval.label}
 					{approval.detail && <span className="opacity-75"> — {approval.detail}</span>}
 				</div>
