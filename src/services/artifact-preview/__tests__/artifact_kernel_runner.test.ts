@@ -1,15 +1,18 @@
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import * as path from "node:path"
-import { fileURLToPath } from "node:url"
 import { expect } from "chai"
 import { describe, it } from "mocha"
 
-const RUNNER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "artifact_kernel_runner.py")
+// Unit specs always load through ts-node as CommonJS (see .mocharc.json), so __dirname is valid and
+// import.meta is not. src/test/__tests__/unitSpecLoader.test.ts enforces this.
+const RUNNER = path.resolve(__dirname, "..", "artifact_kernel_runner.py")
+// Override to point at an interpreter that has the kernel's optional dependencies (e.g. numpy).
+const PYTHON = process.env.AIHYDRO_TEST_PYTHON || "python3"
 
 function runKernel(lines: string[]): Promise<Record<string, unknown>[]> {
 	return new Promise((resolve, reject) => {
-		const child = spawn("python3", [RUNNER], { stdio: ["pipe", "pipe", "pipe"] })
+		const child = spawn(PYTHON, [RUNNER], { stdio: ["pipe", "pipe", "pipe"] })
 		const outputs: Record<string, unknown>[] = []
 		let buffer = ""
 
@@ -117,7 +120,7 @@ describe("artifact_kernel_runner.py", function () {
 	it("renders an MP4 for a video cell that defines a manim Scene, when manim is installed", async function () {
 		this.timeout(30_000)
 		const manimAvailable = await new Promise<boolean>((resolve) => {
-			const probe = spawn("python3", ["-c", "import manim"])
+			const probe = spawn(PYTHON, ["-c", "import manim"])
 			probe.on("error", () => resolve(false))
 			probe.on("close", (code) => resolve(code === 0))
 		})
