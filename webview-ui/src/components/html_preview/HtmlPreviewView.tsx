@@ -1,3 +1,4 @@
+import { readArtifactTrust } from "@shared/artifactTrust"
 import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
 import {
 	ArtifactCodeLanguage,
@@ -11,6 +12,7 @@ import {
 	RestartArtifactKernelRequest,
 	RunArtifactCodeRequest,
 	SetArtifactKernelProfileRequest,
+	SetArtifactExecutionAllowanceRequest,
 } from "@shared/proto/cline/html_preview"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PLATFORM_CONFIG } from "@/config/platform.config"
@@ -27,7 +29,8 @@ import {
 	usesAihydroDesignSystem,
 } from "./aihydroCellBridge"
 import { applyArtifactBaseHref, FRAGMENT_NAV_GUARD_SCRIPT } from "./artifactBaseHref"
-import { isStaticDocument } from "./artifactIdentity"
+import { AgentHandoffPrompt } from "./AgentHandoffPrompt"
+import { ArtifactTrustBar } from "./ArtifactTrustBar"
 import { CourseHeader } from "./CourseHeader"
 import { courseNavigationKey, persistThenLoadCourseModule, resolveAgentCourseNavigation } from "./courseAgentNavigation"
 import { EditContextRibbon } from "./EditContextRibbon"
@@ -392,25 +395,20 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 	const [canRedo, setCanRedo] = useState(false)
 	// Resolver for the async save-document round-trip with the iframe
 	const pendingSaveResolverRef = useRef<((html: string) => void) | null>(null)
-	// Per-item dismissal of the "this is a static document" explanation banner.
-	const [dismissedStaticNoticeIds, setDismissedStaticNoticeIds] = useState<Set<string>>(new Set())
+	// Execution trust, as decided and enforced by the host. The webview only
+	// displays it and refuses to forward kernel/agent requests that the host
+	// would refuse anyway (the host re-checks every one).
+	const trust = useMemo(() => readArtifactTrust(item?.metadata), [item?.metadata])
+	const canExecute = trust.canExecute
+	const [trustBusy, setTrustBusy] = useState(false)
+	// A document-initiated agent hand-off waits here, prompt visible, for a user click.
+	const [pendingAgentPrompt, setPendingAgentPrompt] = useState<string | null>(null)
+	const [agentPromptSending, setAgentPromptSending] = useState(false)
+	const [agentHandoffNotice, setAgentHandoffNotice] = useState<string | null>(null)
 
 	const renderPath = useMemo<RenderPath>(
 		() => pickRenderPath(item),
 		[item?.id, item?.contentHash, item?.htmlContent?.length, item?.webviewUri],
-	)
-
-	// A plain static document (no executable module manifest, not a pack) can't
-	// run cells; explain that rather than silently offering dead controls
-	// (redesign brief §8.2). Suppress the notice once the manifest arrives and
-	// proves the doc IS executable, or once the user dismisses it.
-	const showStaticNotice = useMemo(
-		() =>
-			Boolean(item) &&
-			renderPath !== "none" &&
-			isStaticDocument(item, item ? manifestsById[item.id] : undefined) &&
-			!(item && dismissedStaticNoticeIds.has(item.id)),
-		[item, manifestsById, renderPath, dismissedStaticNoticeIds],
 	)
 
 	// Pre-pend a tiny error/console forwarder so we can introspect what
@@ -431,6 +429,10 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				? applyInstalledPackCsp(injectedHtml, item.dirUri)
 				: applyArtifactBaseHref(injectedHtml, item.dirUri)
 		const artifactContext = buildArtifactContextScript(item)
+		// The kernel bridge (Run buttons, runCode/paramChanged posts) is injected
+		// only for a trusted document the user has allowed. A static document gets
+		// no bridge at all, so the "static" badge describes what is enforced.
+		const cellBridge = canExecute ? CELL_BRIDGE_SCRIPT : ""
 		// The Google Fonts <link>s are a real network request — only pay for it
 		// when the artifact actually uses the .aihydro-* design system (or is a
 		// module), and never for installed Learning Packs (offline-capable;
@@ -478,7 +480,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				AIHYDRO_BRIDGE_LEAFLET_SCRIPT +
 				AIHYDRO_BRIDGE_CITATION_SCRIPT +
 				AIHYDRO_BRIDGE_EDITOR_SCRIPT +
-				CELL_BRIDGE_SCRIPT +
+				cellBridge +
 				withHeadAssets.slice(closeIdx + 1)
 			const bodyCloseAfterDiag = withDiag.search(/<\/body\s*>/i)
 			if (bodyCloseAfterDiag >= 0) {
@@ -499,11 +501,11 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				AIHYDRO_BRIDGE_LEAFLET_SCRIPT +
 				AIHYDRO_BRIDGE_CITATION_SCRIPT +
 				AIHYDRO_BRIDGE_EDITOR_SCRIPT +
-				CELL_BRIDGE_SCRIPT +
+				cellBridge +
 				withHeadAssets +
 				LEAFLET_NORMALIZER_SCRIPT,
 		)
-	}, [renderPath, item?.htmlContent, item?.id, item?.filePath, item?.dirUri, item?.metadata?.artifactKind])
+	}, [renderPath, item?.htmlContent, item?.id, item?.filePath, item?.dirUri, item?.metadata?.artifactKind, canExecute])
 
 	useEffect(() => {
 		setError(null)
@@ -647,6 +649,19 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 
 	const handleArtifactRunCode = useCallback(
 		async (code: string, language: string, cellId?: string) => {
+			if (!canExecute) {
+				// Defense in depth: the bridge is not injected for such documents and the
+				// host refuses the RPC, but never forward a request we know will be denied.
+				postResultToIframe({
+					type: "artifact/runCodeResult",
+					status: "denied",
+					error: "denied: document is not allowed to run Python",
+					stdout: "",
+					stderr: "",
+					cellId: cellId ?? "",
+				})
+				return
+			}
 			if (language !== "python") {
 				postResultToIframe({
 					type: "artifact/runCodeResult",
@@ -737,7 +752,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				}
 			}
 		},
-		[item?.id, activeProfileId, postResultToIframe, refreshKernelInfo],
+		[canExecute, item?.id, activeProfileId, postResultToIframe, refreshKernelInfo],
 	)
 
 	// Keep a ref to the latest callback so the trailing-edge drain in the finally
@@ -895,6 +910,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 			// with notifyHostOnChange=true changes. The RPC injects a Python
 			// assignment and re-executes the cell via the running kernel.
 			if (data.type === "artifact/paramChanged" && item?.id) {
+				if (!canExecute) return
 				void HtmlPreviewServiceClient.notifyParamChanged(
 					NotifyParamChangedRequest.create({
 						artifactId: item.id,
@@ -909,6 +925,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		window.addEventListener("message", onMessage)
 		return () => window.removeEventListener("message", onMessage)
 	}, [
+		canExecute,
 		course,
 		courseProgress,
 		currentModuleId,
@@ -944,17 +961,31 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				setPendingChangeCount((n) => n + 1)
 			} else if (data.kind === "user.batch_changes") {
 				setPendingChangeCount(0)
-				// Fire the agent task — opens chat sidebar pre-seeded with batch prompt
-				const moduleId = (payload.moduleId as string | undefined) ?? item?.id ?? "unknown"
-				const changeCount = Array.isArray(payload.changes) ? payload.changes.length : 1
-				const moduleTitle = item?.title || moduleId
-				const agentPrompt = [
-					`The user has submitted ${changeCount} change${changeCount === 1 ? "" : "s"} and comment${changeCount === 1 ? "" : "s"} for the HTML module "${moduleTitle}".`,
-					`Please call \`preview_get_pending_changes("${moduleId}")\` to read the full list,`,
-					`then address each one: apply prose edits to the document, implement cell/figure changes in code,`,
-					`and call \`preview_address_comment\` for each item once done.`,
-				].join(" ")
-				void startPreviewAgentTask(agentPrompt)
+				// A document asked to hand work to the agent. Never start the task from
+				// here: stage the prompt, show it, and wait for the user's click. The
+				// prompt text is built here, not taken from the document.
+				if (!canExecute) {
+					setAgentHandoffNotice(
+						"Agent hand-off is off for this document. Only a trusted document that you have allowed can start an agent task.",
+					)
+				} else {
+					// The bridge reports the module id the session service keys on. It is
+					// document-supplied, so accept only a plain identifier; the user also
+					// sees the final prompt before it is sent.
+					const reportedId = payload.moduleId
+					const moduleId =
+						typeof reportedId === "string" && /^[\w.-]{1,128}$/.test(reportedId) ? reportedId : (item?.id ?? "unknown")
+					const changeCount = Array.isArray(payload.changes) ? payload.changes.length : 1
+					const moduleTitle = item?.title || moduleId
+					const agentPrompt = [
+						`The user has submitted ${changeCount} change${changeCount === 1 ? "" : "s"} and comment${changeCount === 1 ? "" : "s"} for the HTML module "${moduleTitle}".`,
+						`Please call \`preview_get_pending_changes("${moduleId}")\` to read the full list,`,
+						`then address each one: apply prose edits to the document, implement cell/figure changes in code,`,
+						`and call \`preview_address_comment\` for each item once done.`,
+					].join(" ")
+					setAgentHandoffNotice(null)
+					setPendingAgentPrompt(agentPrompt)
+				}
 			} else if (data.kind === "user.batch.cleared") {
 				setPendingChangeCount(0)
 			} else if (data.kind === "text.changed") {
@@ -989,7 +1020,47 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		}
 		window.addEventListener("message", onBridgeMessage)
 		return () => window.removeEventListener("message", onBridgeMessage)
-	}, [])
+	}, [canExecute, item?.id, item?.title])
+
+	// Staged prompts and notices belong to one document; drop them on switch/revoke.
+	useEffect(() => {
+		setPendingAgentPrompt(null)
+		setAgentHandoffNotice(null)
+	}, [item?.id, canExecute])
+
+	const handleSetExecutionAllowed = useCallback(
+		async (allowed: boolean) => {
+			if (!item?.id) return
+			setTrustBusy(true)
+			try {
+				await HtmlPreviewServiceClient.setArtifactExecutionAllowance(
+					SetArtifactExecutionAllowanceRequest.create({ artifactId: item.id, allowed }),
+				)
+			} catch (err) {
+				console.error("[HtmlPreviewView] Failed to update execution allowance:", err)
+			} finally {
+				setTrustBusy(false)
+			}
+		},
+		[item?.id],
+	)
+
+	const handleSendAgentPrompt = useCallback(async () => {
+		if (!item?.id || !pendingAgentPrompt || !canExecute) return
+		const prompt = pendingAgentPrompt
+		setAgentPromptSending(true)
+		try {
+			const result = await startPreviewAgentTask(prompt, item.id)
+			if (result.ok) {
+				setPendingAgentPrompt(null)
+			} else {
+				setAgentHandoffNotice(result.error || "The agent task could not be started.")
+				setPendingAgentPrompt(null)
+			}
+		} finally {
+			setAgentPromptSending(false)
+		}
+	}, [canExecute, item?.id, pendingAgentPrompt])
 
 	// ── Listen for the iframe's save-document response ──────────────────────
 	// When we post `aihydro-request-save` to the iframe the adapter posts back
@@ -1309,8 +1380,26 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 					pendingCount={pendingChangeCount}
 				/>
 			)}
-			{showStaticNotice && item && (
-				<StaticDocumentNotice onDismiss={() => setDismissedStaticNoticeIds((prev) => new Set(prev).add(item.id))} />
+			{item && renderPath !== "none" && (
+				<ArtifactTrustBar
+					busy={trustBusy}
+					onAllow={() => void handleSetExecutionAllowed(true)}
+					onRevoke={() => void handleSetExecutionAllowed(false)}
+					trust={trust}
+				/>
+			)}
+			{pendingAgentPrompt !== null && canExecute && (
+				<AgentHandoffPrompt
+					onDismiss={() => setPendingAgentPrompt(null)}
+					onSend={() => void handleSendAgentPrompt()}
+					prompt={pendingAgentPrompt}
+					sending={agentPromptSending}
+				/>
+			)}
+			{agentHandoffNotice && (
+				<div data-testid="agent-handoff-notice" role="status" style={{ padding: "4px 10px", fontSize: 11, opacity: 0.85 }}>
+					{agentHandoffNotice}
+				</div>
 			)}
 			<div style={iframeWrapperStyle}>
 				{renderPath === "none" ? (
@@ -1518,56 +1607,6 @@ function ensureSpinStyle() {
 	el.textContent = `@keyframes aihydro-spin { to { transform: rotate(360deg); } }`
 	document.head.appendChild(el)
 }
-
-// Explains why a plain static document offers no Run controls, and how to get
-// an executable version instead (redesign brief §8.2). A thin, dismissible
-// strip above the iframe — it doesn't block reading the document.
-const StaticDocumentNotice: React.FC<{ onDismiss: () => void }> = ({ onDismiss }) => (
-	<div
-		role="note"
-		style={{
-			display: "flex",
-			alignItems: "flex-start",
-			gap: 8,
-			padding: "6px 10px",
-			fontSize: 11,
-			lineHeight: 1.4,
-			color: "var(--vscode-foreground, #ccc)",
-			background: "var(--vscode-inputValidation-infoBackground, rgba(100,150,240,0.12))",
-			borderBottom: "1px solid var(--vscode-inputValidation-infoBorder, rgba(100,150,240,0.4))",
-		}}>
-		<span aria-hidden="true" style={{ fontSize: 12, lineHeight: 1.3 }}>
-			ℹ️
-		</span>
-		<span style={{ flex: 1, minWidth: 0 }}>
-			<strong>This is a static document.</strong> It has no AI-Hydro executable module manifest, so Python cells can't run
-			here. Open an AI-Hydro-profile render of this page, or install its Learning Pack, to run cells.
-		</span>
-		<button
-			aria-label="Dismiss static-document notice"
-			onClick={onDismiss}
-			style={{
-				flexShrink: 0,
-				width: 18,
-				height: 18,
-				display: "inline-flex",
-				alignItems: "center",
-				justifyContent: "center",
-				padding: 0,
-				background: "transparent",
-				border: "none",
-				color: "inherit",
-				cursor: "pointer",
-				opacity: 0.6,
-				fontSize: 13,
-				borderRadius: 3,
-			}}
-			title="Dismiss"
-			type="button">
-			×
-		</button>
-	</div>
-)
 
 const LoadingOverlay: React.FC = () => {
 	ensureSpinStyle()

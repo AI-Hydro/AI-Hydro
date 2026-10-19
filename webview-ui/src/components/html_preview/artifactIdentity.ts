@@ -1,3 +1,4 @@
+import { readArtifactTrust } from "@shared/artifactTrust"
 import type { HtmlPreviewItem } from "@shared/proto/cline/html_preview"
 import type { AiHydroModuleManifest } from "@/context/HtmlPreviewContext"
 import { isInstalledLearningPack } from "./installedPackCsp"
@@ -81,6 +82,15 @@ function deriveCapability(
 	item: HtmlPreviewItem,
 	manifest: AiHydroModuleManifest | undefined,
 ): { capability: ArtifactCapability; capabilityLabel: string } {
+	// Capability is what the host will actually enforce, never what the document
+	// claims. A manifest or pack-looking metadata on an untrusted document grants
+	// nothing: it is static (or an unsigned marketplace module).
+	const trust = readArtifactTrust(item.metadata)
+	if (!trust.trusted) {
+		return trust.source === "unsigned-module"
+			? { capability: "static", capabilityLabel: "Unsigned" }
+			: { capability: "static", capabilityLabel: "Static" }
+	}
 	if (isInstalledLearningPack(item)) {
 		return { capability: "installed-pack", capabilityLabel: "Learning Pack" }
 	}
@@ -128,9 +138,8 @@ export function deriveArtifactIdentity(item: HtmlPreviewItem, manifest: AiHydroM
 }
 
 /**
- * Whether a plain static document (no executable module manifest, not a pack)
- * is being previewed — the case the "This is a static document…" explanation
- * state (brief §8.2) applies to.
+ * Whether the document is static: its source is not trusted, so the host gives
+ * it no Python kernel and no agent access (see `@shared/artifactTrust`).
  */
 export function isStaticDocument(item: HtmlPreviewItem | undefined, manifest: AiHydroModuleManifest | undefined): boolean {
 	if (!item) {

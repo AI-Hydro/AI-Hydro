@@ -86,7 +86,7 @@ export function requestSaveDocument(filePath: string, html: string): void {
  *
  * Mirrors `mapAgentBridge.startMapAgentTask` — host handles initTask().
  */
-export function startPreviewAgentTask(prompt: string): Promise<{ ok: boolean; error?: string }> {
+export function startPreviewAgentTask(prompt: string, artifactId: string): Promise<{ ok: boolean; error?: string }> {
 	const requestId = newRequestId("preview-agent")
 	return new Promise((resolve) => {
 		const timeout = window.setTimeout(() => {
@@ -108,6 +108,8 @@ export function startPreviewAgentTask(prompt: string): Promise<{ ok: boolean; er
 			type: "aihydro-preview-agent-task",
 			requestId,
 			prompt,
+			// The host re-checks that this document is trusted and allowed.
+			artifactId,
 		})
 	})
 }
