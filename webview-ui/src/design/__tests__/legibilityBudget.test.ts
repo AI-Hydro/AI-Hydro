@@ -7,7 +7,7 @@
  *   UPDATE_LEGIBILITY_BASELINE=1 npx vitest run ...   # lowers entries; refuses to raise any
  */
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
-import { join, relative, resolve } from "node:path"
+import { join, relative, resolve, sep } from "node:path"
 import { describe, expect, it } from "vitest"
 
 const SRC = resolve(__dirname, "../..")
@@ -79,7 +79,8 @@ export function scan(): Record<string, Counts> {
 			const text = readFileSync(file, "utf8")
 			const smallText = countSmall(text, file.endsWith(".css"))
 			const emoji = countEmoji(text)
-			if (smallText || emoji) result[relative(SRC, file)] = { smallText, emoji }
+			// Baseline keys are POSIX paths; Windows relative() yields backslashes.
+			if (smallText || emoji) result[relative(SRC, file).split(sep).join("/")] = { smallText, emoji }
 		}
 	}
 	return result
