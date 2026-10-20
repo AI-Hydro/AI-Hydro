@@ -14,6 +14,7 @@ import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 import { isAiHydroServerName } from "./aiHydroServer"
+import { checkMcpToolName } from "./mcpToolNameValidation"
 
 export class UseMcpToolHandler implements IFullyManagedTool {
 	readonly name = AiHydroDefaultTool.MCP_USE
@@ -61,6 +62,22 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 		if (!tool_name) {
 			config.taskState.consecutiveMistakeCount++
 			return await config.callbacks.sayAndCreateMissingParamError(block.name, "tool_name")
+		}
+
+		// Validate the target BEFORE any approval ask: the user must never be asked to approve (or wait on) a call
+		// that cannot succeed. The model gets the structured error; the user sees at most one muted line.
+		const targetCheck = checkMcpToolName(config.services.mcpHub.connections, server_name, tool_name)
+		if (!targetCheck.ok) {
+			config.taskState.consecutiveMistakeCount++
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "use_mcp_server")
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "use_mcp_server")
+			await config.callbacks.say(
+				"info",
+				targetCheck.reason === "unknown_tool"
+					? `Skipped: '${tool_name}' is not a tool on '${server_name}'. Asked the model to retry.`
+					: `Skipped: MCP server '${server_name}' is not connected. Asked the model to retry.`,
+			)
+			return formatResponse.toolError(targetCheck.message)
 		}
 
 		// Parse and validate arguments if provided. Weaker models often emit

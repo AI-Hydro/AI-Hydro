@@ -3,6 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { ApiHandler, ApiProviderInfo, buildApiHandler } from "@core/api"
 import { ApiStream } from "@core/api/transform/stream"
 import { parseAssistantMessageV2 } from "@core/assistant-message"
+import { type NativeToolCallContext, repairNativeToolCalls } from "@core/assistant-message/nativeToolCallRepair"
 import { ContextManager } from "@core/context/context-management/ContextManager"
 import { checkContextWindowExceededError } from "@core/context/context-management/context-error-handling"
 import { getContextWindowInfo } from "@core/context/context-management/context-window-utils"
@@ -51,9 +52,9 @@ import { featureFlagsService } from "@services/feature-flags"
 import { listFiles } from "@services/glob/list-files"
 import { Logger } from "@services/logging/Logger"
 import { McpHub } from "@services/mcp/McpHub"
+import { recordedOutcomeFor } from "@shared/aihydro/askOutcome"
 import { ApiConfiguration } from "@shared/api"
 import { findLast, findLastIndex } from "@shared/array"
-import { recordedOutcomeFor } from "@shared/aihydro/askOutcome"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import {
@@ -2053,6 +2054,17 @@ export class Task {
 		yield* iterator
 	}
 
+	/** Connected MCP servers and their tools, for resolving tool names in native tool-call envelopes. */
+	private nativeToolCallContext(): NativeToolCallContext {
+		const servers = (this.mcpHub.connections ?? [])
+			.filter((c: any) => c.server?.status === "connected" && Array.isArray(c.server.tools))
+			.map((c: any) => ({
+				name: c.server.name as string,
+				tools: c.server.tools as Array<{ name: string; inputSchema?: unknown }>,
+			}))
+		return { servers }
+	}
+
 	async presentAssistantMessage() {
 		if (this.taskState.abort) {
 			throw new Error("AI-Hydro instance aborted")
@@ -2710,7 +2722,10 @@ export class Task {
 							// parse raw assistant message into content blocks
 							const prevLength = this.taskState.assistantMessageContent.length
 
-							this.taskState.assistantMessageContent = parseAssistantMessageV2(assistantMessage)
+							// DeepSeek-style native `<tool_calls>` envelopes are rewritten into the XML protocol (or hidden while streaming)
+							this.taskState.assistantMessageContent = parseAssistantMessageV2(
+								repairNativeToolCalls(assistantMessage, this.nativeToolCallContext(), false).text,
+							)
 
 							if (this.taskState.assistantMessageContent.length > prevLength) {
 								this.taskState.userMessageContentReady = false // new content we need to present, reset to false in case previous content set this to true
@@ -2830,6 +2845,13 @@ export class Task {
 				throw new Error("AI-Hydro instance aborted")
 			}
 
+			// Final pass over native-envelope repair: the transcript already shows the repaired call (or nothing); a
+			// malformed envelope gets exactly one muted line with the raw text behind a disclosure.
+			const nativeRepair = repairNativeToolCalls(assistantMessage, this.nativeToolCallContext(), true)
+			if (nativeRepair.malformed.length > 0) {
+				await this.say("info", `malformed tool call; retried\n\n${nativeRepair.malformed.join("\n\n")}`)
+			}
+
 			this.taskState.didCompleteReadingStream = true
 
 			// set any blocks to be complete to allow presentAssistantMessage to finish and set userMessageContentReady to true
@@ -2877,7 +2899,11 @@ export class Task {
 						...antThinkingContent,
 						{
 							type: "text",
-							text: assistantMessage,
+							// A repaired native envelope is stored in protocol form so the model sees one consistent format.
+							text:
+								nativeRepair.repaired > 0 && nativeRepair.malformed.length === 0
+									? nativeRepair.text
+									: assistantMessage,
 							// reasoning_details only exists for cline/openrouter providers
 							// @ts-ignore-next-line
 							reasoning_details: reasoningDetails.length > 0 ? reasoningDetails : undefined,

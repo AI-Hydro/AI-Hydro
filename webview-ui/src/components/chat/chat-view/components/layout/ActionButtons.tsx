@@ -22,7 +22,9 @@ interface ActionButtonsProps {
 }
 
 /**
- * Action buttons area including scroll-to-bottom and approve/reject buttons
+ * Action buttons area (approve/reject, Start New Task, ...). Scroll-to-bottom is a small floating round
+ * button above the footer and NEVER replaces the action buttons: a pending ask must stay answerable while
+ * the user scrolls up to read.
  */
 export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	task,
@@ -81,63 +83,36 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	}
 
 	const { showScrollToBottom, scrollToBottomSmooth, disableAutoScrollRef } = scrollBehavior
+	const handleScrollToBottom = () => {
+		scrollToBottomSmooth()
+		disableAutoScrollRef.current = false
+	}
 
 	const { primaryText, secondaryText, primaryAction, secondaryAction, enableButtons } = buttonConfig
 	const hasButtons = primaryText || secondaryText
 	const isStreaming = task.partial === true
 	const canInteract = enableButtons && !isProcessing
 
-	// Early return for scroll button to avoid unnecessary computation
-	if (showScrollToBottom || !hasButtons) {
-		const handleScrollToBottom = () => {
-			scrollToBottomSmooth()
-			disableAutoScrollRef.current = false
-		}
-		// Show scroll to top button when there are no action buttons
-		const handleScrollToTop = () => {
-			scrollBehavior.virtuosoRef.current?.scrollTo({
-				top: 0,
-				behavior: "smooth",
-			})
-			disableAutoScrollRef.current = true
-		}
-
-		return (
-			<div className="flex px-[15px]">
-				<button
-					aria-label={showScrollToBottom ? "Scroll to bottom" : "Scroll to top"}
-					className="modern-badge flex-1 h-[26px] justify-center gap-1.5 smooth-transition hover:bg-[color-mix(in_srgb,var(--vscode-toolbar-hoverBackground)_80%,transparent)] active:scale-[0.97] cursor-pointer border-0"
-					onClick={showScrollToBottom ? handleScrollToBottom : handleScrollToTop}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault()
-							if (showScrollToBottom) {
-								handleScrollToBottom()
-							} else {
-								handleScrollToTop()
-							}
-						}
-					}}>
-					{showScrollToBottom ? (
-						<>
-							<span className="codicon codicon-chevron-down text-[12px]" />
-							<span className="text-[11px] font-medium">Scroll to bottom</span>
-						</>
-					) : (
-						<>
-							<span className="codicon codicon-chevron-up text-[12px]" />
-							<span className="text-[11px] font-medium">Scroll to top</span>
-						</>
-					)}
-				</button>
-			</div>
-		)
-	}
-
 	const opacity = canInteract || isStreaming ? 1 : 0.5
 
+	const scrollButton = showScrollToBottom ? (
+		<button
+			aria-label="Scroll to bottom"
+			className="absolute right-[15px] bottom-full mb-[6px] z-10 flex items-center justify-center w-6 h-6 rounded-full border border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] cursor-pointer p-0 hover:bg-[var(--vscode-toolbar-hoverBackground)] shadow-sm"
+			onClick={handleScrollToBottom}
+			title="Scroll to bottom"
+			type="button">
+			<span aria-hidden="true" className="codicon codicon-chevron-down text-[14px]" />
+		</button>
+	) : null
+
+	if (!hasButtons) {
+		return scrollButton ? <div className="relative h-0">{scrollButton}</div> : null
+	}
+
 	return (
-		<div className="flex px-[15px]" style={{ opacity }}>
+		<div className="relative flex px-[15px]" style={{ opacity }}>
+			{scrollButton}
 			{primaryText && primaryAction && (
 				<VSCodeButton
 					appearance="primary"

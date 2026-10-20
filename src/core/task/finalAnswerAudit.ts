@@ -209,7 +209,8 @@ export function formatFinalAnswerAudit(outcome: FinalAnswerAuditOutcome): string
 					parts.push(v.message)
 				}
 				if (v.fixHint) {
-					parts.push(`Fix: ${v.fixHint}`)
+					// Code span: grammar examples in the hint ([run:...], [lit:...]) must read as text to copy, never render as chips.
+					parts.push(`\`Fix: ${v.fixHint.replace(/`/g, "'").replace(/\s+/g, " ")}\``)
 				}
 				return parts.join(" - ")
 			})

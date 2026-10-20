@@ -5,6 +5,7 @@ import {
 	McpServer as ProtoMcpServer,
 	McpTool as ProtoMcpTool,
 } from "@shared/proto/cline/mcp"
+import { explainServerTrust } from "../../aihydro/firstPartyServers"
 import { McpResource, McpResourceTemplate, McpServer, McpTool } from "../../mcp"
 
 // Helper to convert TS status to Proto enum
@@ -20,20 +21,25 @@ function convertMcpStatusToProto(status: McpServer["status"]): McpServerStatus {
 }
 
 export function convertMcpServersToProtoMcpServers(mcpServers: McpServer[]): ProtoMcpServer[] {
-	const protoServers: ProtoMcpServer[] = mcpServers.map((server) => ({
-		name: server.name,
-		config: server.config,
-		status: convertMcpStatusToProto(server.status),
-		error: server.error,
+	const protoServers: ProtoMcpServer[] = mcpServers.map((server) => {
+		const trust = explainServerTrust(server)
+		return {
+			name: server.name,
+			config: server.config,
+			status: convertMcpStatusToProto(server.status),
+			error: server.error,
 
-		// Convert nested types
-		tools: (server.tools || []).map(convertTool),
-		resources: (server.resources || []).map(convertResource),
-		resourceTemplates: (server.resourceTemplates || []).map(convertResourceTemplate),
+			// Convert nested types
+			tools: (server.tools || []).map(convertTool),
+			resources: (server.resources || []).map(convertResource),
+			resourceTemplates: (server.resourceTemplates || []).map(convertResourceTemplate),
 
-		disabled: server.disabled,
-		timeout: server.timeout,
-	}))
+			disabled: server.disabled,
+			timeout: server.timeout,
+			trusted: trust.trusted,
+			trustReason: trust.reason,
+		}
+	})
 	return protoServers
 }
 
@@ -107,6 +113,10 @@ export function convertProtoMcpServersToMcpServers(protoServers: ProtoMcpServer[
 
 			disabled: protoServer.disabled,
 			timeout: protoServer.timeout,
+			trust:
+				protoServer.trusted !== undefined && protoServer.trustReason
+					? { trusted: protoServer.trusted, reason: protoServer.trustReason }
+					: undefined,
 		}
 	})
 	return mcpServers

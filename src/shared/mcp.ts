@@ -18,6 +18,11 @@ export type McpServer = {
 	 * through the proto conversion to the webview.
 	 */
 	instructions?: string
+	/**
+	 * First-party trust verdict and reason (explainServerTrust), computed host-side and carried to the webview for
+	 * display in the MCP servers UI. Never an input to a decision: those call isServerTrusted.
+	 */
+	trust?: { trusted: boolean; reason: string }
 }
 
 export type McpTool = {

@@ -8,7 +8,12 @@
  *
  * Host/CLI-neutral: no `vscode` import, so the standalone and CLI hosts load it the same way.
  */
-import { type FirstPartyLauncher, setRecordedFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
+import {
+	type FirstPartyLauncher,
+	planFirstPartyAnchor,
+	type SettingsServerEntry,
+	setRecordedFirstPartyLauncher,
+} from "@shared/aihydro/firstPartyServers"
 import * as fs from "fs/promises"
 import * as path from "path"
 
@@ -54,4 +59,53 @@ export async function recordFirstPartyLauncher(settingsDir: string, launcher: Fi
 		JSON.stringify({ name: launcher.name, command: launcher.command, args: launcher.args }, null, 2),
 	)
 	setRecordedFirstPartyLauncher(launcher)
+}
+
+export type FirstPartyAnchorMigrationOutcome = "none" | "renamed" | "confirmed" | "declined" | "ambiguous"
+
+/**
+ * Re-point the trust anchor when the recorded server is disabled/gone but exactly one enabled first-party-shaped
+ * server is in use under another first-party name (session study S6; see `planFirstPartyAnchor` for the rules).
+ * `confirm` is the human gate (a modal dialog in the extension); it is called only for a launch line that differs
+ * from the verified record, with the exact line the user would be trusting. Host-neutral: no `vscode` import.
+ *
+ * `servers` is the `mcpServers` object of the settings file, read at startup. Nothing here is driven by tool
+ * input or model output.
+ */
+export async function migrateFirstPartyAnchor(
+	settingsDir: string,
+	servers: Record<string, unknown>,
+	confirm: (
+		candidate: { name: string; command: string; args: string[] },
+		recorded: FirstPartyLauncher | undefined,
+	) => Promise<boolean>,
+): Promise<FirstPartyAnchorMigrationOutcome> {
+	const entries: SettingsServerEntry[] = Object.entries(servers ?? {}).map(([name, raw]) => {
+		const e = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
+		return { name, type: e.type, command: e.command, args: e.args, disabled: e.disabled }
+	})
+	const recorded = (await readFirstPartyLauncher(settingsDir)) ?? undefined
+	const plan = planFirstPartyAnchor(entries, recorded)
+	switch (plan.action) {
+		case "none":
+			return "none"
+		case "ambiguous":
+			return "ambiguous"
+		case "rename": {
+			await recordFirstPartyLauncher(settingsDir, {
+				name: plan.candidate.name,
+				command: plan.candidate.command,
+				args: plan.candidate.args,
+			})
+			return "renamed"
+		}
+		case "confirm": {
+			const launcher = { name: plan.candidate.name, command: plan.candidate.command, args: plan.candidate.args }
+			if (!(await confirm(launcher, recorded))) {
+				return "declined"
+			}
+			await recordFirstPartyLauncher(settingsDir, launcher)
+			return "confirmed"
+		}
+	}
 }

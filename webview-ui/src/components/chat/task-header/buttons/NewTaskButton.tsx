@@ -1,19 +1,18 @@
 import { cn } from "@heroui/react"
-import { XIcon } from "lucide-react"
 import HeroTooltip from "@/components/common/HeroTooltip"
 
+/** Labelled (not a bare icon) so it is never mistaken for a dismiss control: it closes the current task view. */
 const NewTaskButton: React.FC<{
 	onClick: () => void
 	className?: string
 }> = ({ className, onClick }) => {
 	return (
-		<HeroTooltip content="Close current task to start new one" delay={1000} placement="bottom">
+		<HeroTooltip content="Close current task to start a new one" delay={1000} placement="bottom">
 			<button
-				aria-label="Start a New Task"
 				className={cn(
-					"flex items-center border-0 text-sm font-bold bg-transparent opacity-70 hover:opacity-100",
+					"flex items-center gap-0.5 border-0 text-xs bg-transparent opacity-70 hover:opacity-100 whitespace-nowrap",
 					className,
-					"hover:bg-muted/10 px-0 cursor-pointer",
+					"hover:bg-muted/10 px-1 cursor-pointer",
 				)}
 				onClick={(e) => {
 					e.preventDefault()
@@ -21,7 +20,8 @@ const NewTaskButton: React.FC<{
 					onClick()
 				}}
 				type="button">
-				<XIcon size="14" />
+				<span aria-hidden="true" className="codicon codicon-add text-[12px]" />
+				<span>New task</span>
 			</button>
 		</HeroTooltip>
 	)

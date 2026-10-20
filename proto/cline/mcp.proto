@@ -90,6 +90,9 @@ message McpServer {
   repeated McpResourceTemplate resource_templates = 7;
   optional bool disabled = 8;
   optional int32 timeout = 9;
+  // First-party trust verdict and the reason, computed host-side by explainServerTrust (display only).
+  optional bool trusted = 10;
+  optional string trust_reason = 11;
 }
 
 message McpServers {

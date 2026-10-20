@@ -40,6 +40,8 @@ export class FocusChainManager {
 	) => Promise<number | undefined>
 	private focusChainFileWatcher?: chokidar.FSWatcher
 	private hasTrackedFirstProgress = false
+	/** Text of the last `task_progress` row emitted to the chat, so an unchanged list is never re-emitted. */
+	private lastEmittedProgress?: string
 	private focusChainSettings: FocusChainSettings
 	private fileUpdateDebounceTimer?: NodeJS.Timeout
 
@@ -346,6 +348,15 @@ ${listInstrunctionsReminder}\n`
 		}
 	}
 
+	/** Emit a `task_progress` chat row only when the list content differs from the last row emitted. */
+	private async sayProgressIfChanged(list: string): Promise<void> {
+		if (list === this.lastEmittedProgress) {
+			return
+		}
+		this.lastEmittedProgress = list
+		await this.say("task_progress", list)
+	}
+
 	/**
 	 * Processes focus chain list updates from the AI model's task_progress parameter and persists them to disk.
 	 * Handles telemetry tracking for progress updates and falls back to reading existing files if no update provided.
@@ -387,11 +398,11 @@ ${listInstrunctionsReminder}\n`
 					await this.writeFocusChainToDisk(taskProgress.trim())
 
 					// Send the task_progress message to the UI immediately
-					await this.say("task_progress", taskProgress.trim())
+					await this.sayProgressIfChanged(taskProgress.trim())
 				} catch (error) {
 					console.error(`[Task ${this.taskId}] focus chain list: Failed to write to markdown file:`, error)
 					// Fall back to creating a task_progress message directly if file write fails
-					await this.say("task_progress", taskProgress.trim())
+					await this.sayProgressIfChanged(taskProgress.trim())
 					console.log(`[Task ${this.taskId}] focus chain list: Sent fallback task_progress message to UI`)
 				}
 			} else {
@@ -402,7 +413,7 @@ ${listInstrunctionsReminder}\n`
 					this.taskState.currentFocusChainChecklist = markdownTodoList
 
 					// Create a task_progress message to display the focus chain list in the UI
-					await this.say("task_progress", markdownTodoList)
+					await this.sayProgressIfChanged(markdownTodoList)
 				} else {
 					console.debug(`[Task ${this.taskId}] focus chain list: No valid task progress to update with`)
 				}

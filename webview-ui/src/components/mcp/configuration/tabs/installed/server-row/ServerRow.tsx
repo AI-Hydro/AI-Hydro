@@ -183,7 +183,7 @@ const ServerRow = ({
 					background: "var(--vscode-textCodeBlock-background)",
 
 					cursor: server.error ? "default" : isExpandable ? "pointer" : "default",
-					borderRadius: isExpanded || server.error ? "4px 4px 0 0" : "4px",
+					borderRadius: isExpanded || server.error || server.trust ? "4px 4px 0 0" : "4px",
 					opacity: server.disabled ? 0.6 : 1,
 				}}>
 				{!server.error && isExpandable && (
@@ -280,6 +280,34 @@ const ServerRow = ({
 					}}
 				/>
 			</div>
+
+			{server.trust && (
+				<div
+					data-testid="mcp-server-trust"
+					style={{
+						display: "flex",
+						alignItems: "baseline",
+						gap: "6px",
+						padding: "0 8px 6px 8px",
+						fontSize: "11px",
+						background: "var(--vscode-textCodeBlock-background)",
+						borderRadius: isExpanded || server.error ? "0" : "0 0 4px 4px",
+						opacity: server.disabled ? 0.6 : 1,
+					}}>
+					{/* Neutral for trusted (trust is not a green "approved" state); warning colour when not trusted. */}
+					<span
+						style={{
+							flexShrink: 0,
+							fontWeight: 600,
+							color: server.trust.trusted ? "var(--vscode-foreground)" : "var(--vscode-editorWarning-foreground)",
+						}}>
+						{server.trust.trusted ? "Trusted" : "Not trusted"}
+					</span>
+					<span style={{ opacity: 0.75, overflowWrap: "anywhere" }}>
+						{server.trust.reason.replace(/^(Not trusted|Trusted):\s*/, "")}
+					</span>
+				</div>
+			)}
 
 			{server.error ? (
 				<div
