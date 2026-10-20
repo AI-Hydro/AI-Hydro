@@ -176,6 +176,8 @@ message WorkspaceGeoFile {
     string relative_path = 1;  // Workspace-relative path (unique key)
     string name = 2;           // File name
     string extension = 3;      // Lower-case extension including the dot
+    string workspace_folder = 4; // Workspace folder path; with relative_path it identifies the file in multi-root workspaces
+    string folder_name = 5;    // Display name of that folder
 }
 
 message ListWorkspaceGeoFilesResponse {
@@ -185,6 +187,7 @@ message ListWorkspaceGeoFilesResponse {
 
 message AddWorkspaceGeoFileRequest {
     string relative_path = 1;
+    string workspace_folder = 2; // Empty is accepted only when relative_path is unambiguous
 }
 
 message AddWorkspaceGeoFileResponse {

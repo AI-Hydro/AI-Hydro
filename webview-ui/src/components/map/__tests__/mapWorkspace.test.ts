@@ -117,3 +117,44 @@ describe("mapWorkspace schema v2 (basemap migration)", () => {
 		expect(migrateWorkspace({ version: 9 })).toBeNull()
 	})
 })
+
+describe("loadMapWorkspace keeps bookmarks, aliases, ROI and ribbon size", () => {
+	const key = "aihydro.map.workspace.v1"
+	const bookmark = { id: "b1", name: "Home", longitude: -90, latitude: 40, zoom: 6, createdAt: "2026-10-20T00:00:00Z" }
+	const fields = {
+		bookmarks: [bookmark],
+		layerAliases: { l1: "Basin" },
+		activeRoi: { id: "roi1", name: "Basin", source: "map_draw", areaHa: 12.5 },
+		ribbonPanel: { width: 320, height: 400 },
+	}
+	afterEach(() => localStorage.clear())
+
+	it("returns them from a v2 save", () => {
+		localStorage.setItem(key, JSON.stringify({ version: 2, ...fields }))
+		expect(loadMapWorkspace()).toMatchObject(fields)
+	})
+
+	it("the one-time v1 migration rewrite does not erase them from storage", () => {
+		localStorage.setItem(key, JSON.stringify({ version: 1, basemap: "esri-topo", ...fields }))
+		expect(loadMapWorkspace()).toMatchObject(fields)
+		expect(JSON.parse(localStorage.getItem(key)!)).toMatchObject({ version: 2, ...fields })
+	})
+
+	it("saving an unrelated field does not drop them", () => {
+		localStorage.setItem(key, JSON.stringify({ version: 2, ...fields }))
+		saveMapWorkspace({ visibleLayerIds: ["a"] })
+		expect(JSON.parse(localStorage.getItem(key)!)).toMatchObject({ visibleLayerIds: ["a"], ...fields })
+	})
+
+	it("ignores malformed values instead of passing them on", () => {
+		localStorage.setItem(
+			key,
+			JSON.stringify({ version: 2, bookmarks: [bookmark, { id: 1 }, "x"], layerAliases: { a: "ok", b: 3 }, activeRoi: "no", ribbonPanel: [] }),
+		)
+		const ws = loadMapWorkspace()
+		expect(ws.bookmarks).toEqual([bookmark])
+		expect(ws.layerAliases).toEqual({ a: "ok" })
+		expect(ws.activeRoi).toBeUndefined()
+		expect(ws.ribbonPanel).toBeUndefined()
+	})
+})

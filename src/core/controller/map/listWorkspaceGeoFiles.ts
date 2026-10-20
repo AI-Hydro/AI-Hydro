@@ -17,6 +17,8 @@ export async function listWorkspaceGeoFiles(
 	return ListWorkspaceGeoFilesResponse.create({
 		files: all.slice(0, MAX_WORKSPACE_GEO_FILES_LISTED).map((file) => ({
 			relativePath: file.relativePath,
+			workspaceFolder: file.workspaceFolder,
+			folderName: file.workspaceFolderName,
 			name: file.name,
 			extension: file.extension.toLowerCase(),
 		})),

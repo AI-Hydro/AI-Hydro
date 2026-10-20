@@ -16,6 +16,12 @@ export const WORKSPACE_GEO_EXCLUDED_DIRS = [
 	"out",
 	"build",
 	"__pycache__",
+	"env",
+	".tox",
+	"site-packages",
+	".ipynb_checkpoints",
+	".cache",
+	"target",
 ] as const
 
 /** Glob for `vscode.workspace.findFiles(include, exclude)`. */

@@ -180,6 +180,45 @@ export function clearMapWorkspace(): void {
 	}
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value)
+
+function sanitizeBookmarks(value: unknown): MapBookmark[] | undefined {
+	if (!Array.isArray(value)) return undefined
+	const valid = value.filter(
+		(item): item is MapBookmark =>
+			isRecord(item) &&
+			typeof item.id === "string" &&
+			typeof item.name === "string" &&
+			Number.isFinite(item.longitude) &&
+			Number.isFinite(item.latitude) &&
+			Number.isFinite(item.zoom),
+	)
+	return valid
+}
+
+function sanitizeAliases(value: unknown): Record<string, string> | undefined {
+	if (!isRecord(value)) return undefined
+	return Object.fromEntries(Object.entries(value).filter(([, alias]) => typeof alias === "string")) as Record<string, string>
+}
+
+function sanitizeActiveRoi(value: unknown): ActiveRoi | undefined {
+	if (!isRecord(value)) return undefined
+	const roi: ActiveRoi = {}
+	if (typeof value.id === "string") roi.id = value.id
+	if (typeof value.name === "string") roi.name = value.name
+	if (typeof value.source === "string") roi.source = value.source
+	if (typeof value.areaHa === "number" && Number.isFinite(value.areaHa)) roi.areaHa = value.areaHa
+	return roi
+}
+
+function sanitizeRibbonPanel(value: unknown): MapWorkspace["ribbonPanel"] | undefined {
+	if (!isRecord(value)) return undefined
+	const panel: NonNullable<MapWorkspace["ribbonPanel"]> = {}
+	if (typeof value.width === "number" && Number.isFinite(value.width)) panel.width = value.width
+	if (typeof value.height === "number" && Number.isFinite(value.height)) panel.height = value.height
+	return panel
+}
+
 export function loadMapWorkspace(): MapWorkspace {
 	try {
 		const raw = typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null
@@ -217,6 +256,11 @@ export function loadMapWorkspace(): MapWorkspace {
 			visibleLayerIds,
 			layerOpacities,
 			clusterLayerIds,
+			// Carried through so a load/save cycle (and the one-time migration rewrite) never drops them.
+			activeRoi: sanitizeActiveRoi(parsed.activeRoi),
+			layerAliases: sanitizeAliases(parsed.layerAliases),
+			ribbonPanel: sanitizeRibbonPanel(parsed.ribbonPanel),
+			bookmarks: sanitizeBookmarks(parsed.bookmarks),
 			layerPanel: {
 				...DEFAULT_WORKSPACE.layerPanel!,
 				...(parsed.layerPanel && typeof parsed.layerPanel === "object" ? parsed.layerPanel : {}),

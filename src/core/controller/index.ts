@@ -9,6 +9,7 @@ import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
 import { FileScanner, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
+import { realPathInsideFolder } from "@core/workspace/workspaceGeoPaths"
 import { setupWorkspaceManager } from "@core/workspace/setup"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { getBoundStudy } from "@integrations/aihydro-session/boundStudy"
@@ -1997,8 +1998,11 @@ export class Controller {
 		// Parse to validate
 		const _geojson = JSON.parse(geojsonContent)
 
-		// Generate layer ID from file path
-		const layerId = `workspace_${file.relativePath.replace(/[^a-zA-Z0-9]/g, "_")}`
+		// Generate layer ID from file path. In a multi-root workspace the folder is part of the identity, so the
+		// same relative path in two folders yields two layers; single-folder ids are unchanged.
+		const multiRoot = (vscode.workspace.workspaceFolders?.length ?? 0) > 1
+		const idSource = multiRoot ? `${file.workspaceFolderName}/${file.relativePath}` : file.relativePath
+		const layerId = `workspace_${idSource.replace(/[^a-zA-Z0-9]/g, "_")}`
 
 		// Determine format icon for display
 		const formatIcon = this.getFormatIcon(file.extension)
@@ -2022,6 +2026,7 @@ export class Controller {
 			metadata: {
 				source: "workspace",
 				path: file.relativePath,
+				workspace_folder: file.workspaceFolder,
 				lastModified: file.lastModified.toString(),
 				originalFormat,
 				formatIcon,
@@ -2037,10 +2042,21 @@ export class Controller {
 	}
 
 	/** Add a workspace file chosen by the user (by workspace-relative path) as a layer. */
-	async addWorkspaceGeoFileByPath(relativePath: string): Promise<string> {
-		const file = this.workspaceGeoJsonFiles.find((candidate) => candidate.relativePath === relativePath)
-		if (!file) {
+	async addWorkspaceGeoFileByPath(relativePath: string, workspaceFolder = ""): Promise<string> {
+		const matches = this.workspaceGeoJsonFiles.filter(
+			(candidate) =>
+				candidate.relativePath === relativePath && (!workspaceFolder || candidate.workspaceFolder === workspaceFolder),
+		)
+		if (matches.length === 0) {
 			throw new Error(`Workspace file not found: ${relativePath}`)
+		}
+		if (matches.length > 1) {
+			throw new Error(`${relativePath} exists in more than one workspace folder; choose one from the list.`)
+		}
+		const file = matches[0]
+		// The list was checked when scanned; re-check so a symlink swapped in since then cannot escape the folder.
+		if (!(await realPathInsideFolder(file.workspaceFolder, file.uri.fsPath))) {
+			throw new Error(`${relativePath} resolves outside its workspace folder and was not added.`)
 		}
 		return await this.addWorkspaceFileAsLayer(file)
 	}

@@ -8,7 +8,13 @@ vi.mock("../../../services/grpc-client", () => ({
 	MapServiceClient: { listWorkspaceGeoFiles: mock.list, addWorkspaceGeoFile: mock.add },
 }))
 
-const file = (relativePath: string) => ({ relativePath, name: relativePath.split("/").pop(), extension: ".geojson" })
+const file = (relativePath: string, workspaceFolder = "/ws", folderName = "ws") => ({
+	relativePath,
+	workspaceFolder,
+	folderName,
+	name: relativePath.split("/").pop(),
+	extension: ".geojson",
+})
 const styleProps = { fg: "#ddd", border: "#444", subtle: "#222" }
 
 beforeEach(() => {
@@ -42,6 +48,23 @@ describe("WorkspaceFilesSection", () => {
 		render(<WorkspaceFilesSection layers={onMap} {...styleProps} />)
 		await screen.findByText("Workspace files you can add (1)")
 		expect(screen.queryByRole("button", { name: "Add a/one.geojson to the map" })).toBeNull()
+	})
+
+	it("keys multi-root files by folder plus path: the same relative path in two folders stays two rows", async () => {
+		mock.list.mockResolvedValue({
+			files: [file("data/basin.geojson", "/one", "one"), file("data/basin.geojson", "/two", "two")],
+			totalCount: 2,
+		})
+		const onMap = [
+			{ id: "workspace_one_data", name: "basin", metadata: { path: "data/basin.geojson", workspace_folder: "/one" } },
+		] as unknown as MapLayer[]
+		render(<WorkspaceFilesSection layers={onMap} {...styleProps} />)
+		// /one's copy is on the map; /two's is still addable, and the add request names its folder.
+		await screen.findByText("Workspace files you can add (1)")
+		fireEvent.click(screen.getByRole("button", { name: "Add data/basin.geojson to the map" }))
+		await waitFor(() => expect(mock.add).toHaveBeenCalledOnce())
+		expect(mock.add.mock.calls[0][0]).toMatchObject({ relativePath: "data/basin.geojson", workspaceFolder: "/two" })
+		expect(screen.getByText(/two \//)).toBeTruthy()
 	})
 
 	it("says when the list is truncated, and renders nothing when the workspace has no geo files", async () => {

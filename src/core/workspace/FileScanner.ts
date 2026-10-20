@@ -6,9 +6,14 @@ import * as path from "path"
 import * as vscode from "vscode"
 import { isValidGeoJSONString } from "./GeoJsonValidator"
 import { isExcludedWorkspaceGeoPath, WORKSPACE_GEO_EXCLUDE_GLOB } from "./geoScanExclusions"
+import { realPathInsideFolder } from "./workspaceGeoPaths"
 
 export interface WorkspaceGeoJsonFile {
 	uri: vscode.Uri
+	/** Workspace folder the file belongs to (fsPath). Together with `relativePath` it is the file's identity. */
+	workspaceFolder: string
+	/** Display name of that folder (shown when the workspace has several). */
+	workspaceFolderName: string
 	relativePath: string
 	name: string
 	extension: string
@@ -78,6 +83,12 @@ export class FileScanner {
 				return
 			}
 
+			// A symlink that leaves the workspace folder is not a workspace file.
+			if (!(await realPathInsideFolder(workspaceFolder.uri.fsPath, uri.fsPath))) {
+				console.log(`[FileScanner] Skipped (resolves outside the workspace folder): ${relativePath}`)
+				return
+			}
+
 			// Determine if file needs conversion
 			const requiresConversion = this.needsConversion(extension)
 
@@ -102,6 +113,8 @@ export class FileScanner {
 
 			const file: WorkspaceGeoJsonFile = {
 				uri,
+				workspaceFolder: workspaceFolder.uri.fsPath,
+				workspaceFolderName: workspaceFolder.name,
 				relativePath,
 				name,
 				extension,

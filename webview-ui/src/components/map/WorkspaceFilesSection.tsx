@@ -13,6 +13,8 @@ const COLLAPSED_ROWS = 8
  *
  * Files already on the map (matched by the `path` metadata of workspace layers) are not listed again.
  */
+const workspaceFileKey = (folder: string | undefined, relativePath: string) => `${folder ?? ""}\u0000${relativePath}`
+
 export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; border: string; subtle: string }> = ({
 	layers,
 	fg,
@@ -23,7 +25,7 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 	const [totalCount, setTotalCount] = useState(0)
 	const [loaded, setLoaded] = useState(false)
 	const [showAll, setShowAll] = useState(false)
-	const [busyPath, setBusyPath] = useState<string | null>(null)
+	const [busyKey, setBusyKey] = useState<string | null>(null)
 	const [status, setStatus] = useState<{ kind: "ok" | "err"; msg: string } | null>(null)
 
 	useEffect(() => {
@@ -43,19 +45,41 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 		}
 	}, [])
 
-	const onMap = useMemo(() => new Set(layers.map((layer) => layer.metadata?.path).filter(Boolean)), [layers])
-	const addable = useMemo(() => files.filter((file) => !onMap.has(file.relativePath)), [files, onMap])
+	// Identity is workspace folder + relative path (two folders may hold the same relative path). Layers saved
+	// before the folder was recorded match by path alone.
+	const onMap = useMemo(() => {
+		const keyed = new Set<string>()
+		const pathOnly = new Set<string>()
+		for (const layer of layers) {
+			const layerPath = layer.metadata?.path
+			if (!layerPath) continue
+			const folder = layer.metadata?.workspace_folder
+			if (folder) keyed.add(workspaceFileKey(folder, layerPath))
+			else pathOnly.add(layerPath)
+		}
+		return { keyed, pathOnly }
+	}, [layers])
+	const addable = useMemo(
+		() =>
+			files.filter(
+				(file) =>
+					!onMap.keyed.has(workspaceFileKey(file.workspaceFolder, file.relativePath)) &&
+					!(onMap.pathOnly.has(file.relativePath) && !file.workspaceFolder),
+			),
+		[files, onMap],
+	)
+	const multiRoot = useMemo(() => new Set(files.map((file) => file.workspaceFolder).filter(Boolean)).size > 1, [files])
 
 	const add = useCallback(async (file: WorkspaceGeoFile) => {
-		setBusyPath(file.relativePath)
+		setBusyKey(workspaceFileKey(file.workspaceFolder, file.relativePath))
 		setStatus(null)
 		try {
-			await MapServiceClient.addWorkspaceGeoFile(AddWorkspaceGeoFileRequest.create({ relativePath: file.relativePath }))
+			await MapServiceClient.addWorkspaceGeoFile(AddWorkspaceGeoFileRequest.create({ relativePath: file.relativePath, workspaceFolder: file.workspaceFolder }))
 			setStatus({ kind: "ok", msg: `Added ${file.name}.` })
 		} catch (error) {
 			setStatus({ kind: "err", msg: error instanceof Error ? error.message : `Could not add ${file.name}.` })
 		} finally {
-			setBusyPath(null)
+			setBusyKey(null)
 		}
 	}, [])
 
@@ -72,13 +96,14 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 			<div style={{ fontWeight: 600, marginBottom: 4 }}>Workspace files you can add ({addable.length})</div>
 			{addable.length === 0 && <div style={{ opacity: 0.75 }}>All workspace geo files found are already on the map.</div>}
 			{shown.map((file) => (
-				<div key={file.relativePath} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
-					<span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={file.relativePath}>
+				<div key={workspaceFileKey(file.workspaceFolder, file.relativePath)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+					<span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={workspaceFileKey(file.workspaceFolder, file.relativePath).replace("\u0000", " / ")}>
+						{multiRoot && file.folderName ? `${file.folderName} / ` : ""}
 						{file.relativePath}
 					</span>
 					<button
 						aria-label={`Add ${file.relativePath} to the map`}
-						disabled={busyPath !== null}
+						disabled={busyKey !== null}
 						onClick={() => void add(file)}
 						style={{
 							padding: "3px 8px",
@@ -87,10 +112,10 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 							background: subtle,
 							border: `1px solid ${border}`,
 							borderRadius: 3,
-							cursor: busyPath === null ? "pointer" : "default",
+							cursor: busyKey === null ? "pointer" : "default",
 						}}
 						type="button">
-						{busyPath === file.relativePath ? "Adding…" : "Add"}
+						{busyKey === workspaceFileKey(file.workspaceFolder, file.relativePath) ? "Adding…" : "Add"}
 					</button>
 				</div>
 			))}

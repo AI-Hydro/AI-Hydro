@@ -11,6 +11,12 @@ describe("geoScanExclusions", () => {
 			"_archive/old/a.json",
 			".git/objects/a.json",
 			"a/.venv/lib/b.json",
+			"env/lib/python3.12/site-packages/x/a.json",
+			"proj/.tox/py312/a.json",
+			"lib/site-packages/pkg/a.json",
+			"nb/.ipynb_checkpoints/a.json",
+			".cache/pip/a.json",
+			"rust/target/debug/a.json",
 		]) {
 			expect(isExcludedWorkspaceGeoPath(p), p).to.equal(true)
 		}

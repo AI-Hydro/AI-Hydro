@@ -6,6 +6,6 @@ export async function addWorkspaceGeoFile(
 	controller: Controller,
 	request: AddWorkspaceGeoFileRequest,
 ): Promise<AddWorkspaceGeoFileResponse> {
-	const layerId = await controller.addWorkspaceGeoFileByPath(request.relativePath)
+	const layerId = await controller.addWorkspaceGeoFileByPath(request.relativePath, request.workspaceFolder)
 	return AddWorkspaceGeoFileResponse.create({ layerId })
 }
