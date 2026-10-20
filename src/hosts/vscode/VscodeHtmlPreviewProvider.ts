@@ -26,6 +26,7 @@ import {
 	decideModuleState,
 	decidePreviewEvent,
 	decideSaveDocument,
+	decideShellReady,
 } from "./previewMessageGuards"
 
 /**
@@ -232,6 +233,15 @@ export class VscodeHtmlPreviewProvider {
 							await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
 						}
 						break
+					case "aihydro-shell-ready": {
+						if (decideShellReady(message, VscodeHtmlPreviewProvider.panelToken) === "repush") {
+							console.log("[VscodeHtmlPreviewProvider] Shell ready: re-pushing state and previews")
+							mainWebview.controller?.republishHtmlPreviews()
+						} else {
+							console.log("[VscodeHtmlPreviewProvider] Ignored shell-ready from a stale document")
+						}
+						break
+					}
 					case "aihydro-preview-event":
 						// Phase 0: relay webview-side preview events into the
 						// host's PreviewSessionService ring buffer. Phase 1 will

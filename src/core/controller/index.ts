@@ -1607,6 +1607,18 @@ export class Controller {
 		void this.postStateToWebview()
 	}
 
+	/**
+	 * Re-send every registered preview to the current subscribers and re-post state. Used when a
+	 * freshly (re)loaded Studio shell reports it is ready, to cover replies that were posted while
+	 * the previous document was being replaced.
+	 */
+	republishHtmlPreviews(): void {
+		for (const item of this.getHtmlPreviews()) {
+			this.notifyHtmlPreviewSubscribers(item)
+		}
+		void this.postStateToWebview()
+	}
+
 	private notifyHtmlPreviewSubscribers(item: HtmlPreviewItem): void {
 		this.htmlPreviewSubscribers.forEach((subscriber) => {
 			try {

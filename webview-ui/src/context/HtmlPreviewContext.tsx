@@ -41,6 +41,8 @@ export interface AiHydroModuleManifest {
 
 interface HtmlPreviewContextType {
 	items: HtmlPreviewItem[]
+	/** True once a preview snapshot from the host has been applied at least once. */
+	snapshotLoaded: boolean
 	activeItemId: string | null
 	setActiveItemId: (id: string | null) => void
 	refreshItems: () => Promise<void>
@@ -54,6 +56,7 @@ interface HtmlPreviewContextType {
 
 const HtmlPreviewContext = createContext<HtmlPreviewContextType>({
 	items: [],
+	snapshotLoaded: false,
 	activeItemId: null,
 	setActiveItemId: () => {},
 	refreshItems: async () => {},
@@ -71,6 +74,7 @@ const shortId = (id: string) => id.slice(0, 10)
 export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [items, setItems] = useState<HtmlPreviewItem[]>([])
 	const [activeItemId, setActiveItemId] = useState<string | null>(null)
+	const [snapshotLoaded, setSnapshotLoaded] = useState(false)
 	const [manifestsById, setManifestsById] = useState<Record<string, AiHydroModuleManifest>>({})
 	const setManifest = useCallback((itemId: string, manifest: AiHydroModuleManifest) => {
 		setManifestsById((prev) => ({ ...prev, [itemId]: manifest }))
@@ -132,6 +136,7 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 				return
 			}
 			setItems(nextItems)
+			setSnapshotLoaded(true)
 			if (nextItems.length > 0 && !activeItemIdRef.current) {
 				setActiveItemId(nextItems[nextItems.length - 1].id)
 			}
@@ -321,6 +326,7 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 		<HtmlPreviewContext.Provider
 			value={{
 				items,
+				snapshotLoaded,
 				activeItemId,
 				setActiveItemId,
 				refreshItems,

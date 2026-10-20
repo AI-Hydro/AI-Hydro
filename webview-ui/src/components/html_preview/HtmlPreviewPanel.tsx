@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AccordionSection } from "@/components/common/AccordionSection"
+import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 import { useHtmlPreviewContext } from "../../context/HtmlPreviewContext"
 import { type ArtifactIdentity, deriveArtifactIdentity } from "./artifactIdentity"
@@ -9,6 +10,7 @@ import { courseNavigationKey, persistThenLoadCourseModule } from "./courseAgentN
 import HtmlPreviewView from "./HtmlPreviewView"
 import { learningPackScopeFromItem } from "./installedPackCsp"
 import ModulesMarketplaceView from "./marketplace/ModulesMarketplaceView"
+import { startShellReadyHandshake } from "./shellReadyHandshake"
 import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
 
@@ -33,6 +35,7 @@ import { useCourseProgress } from "./useCourseProgress"
 export const HtmlPreviewPanel: React.FC = () => {
 	const {
 		items,
+		snapshotLoaded,
 		activeItemId,
 		setActiveItemId,
 		removeItem,
@@ -41,7 +44,23 @@ export const HtmlPreviewPanel: React.FC = () => {
 		loadWorkspaceFile,
 		manifestsById,
 	} = useHtmlPreviewContext()
-	const { workspaceHtmlFiles } = useExtensionState()
+	const { workspaceHtmlFiles, didHydrateState } = useExtensionState()
+	// Catch-up handshake with the host (see shellReadyHandshake.ts): repeat until this shell has
+	// both host state and a preview snapshot.
+	const shellReadyRef = useRef(false)
+	shellReadyRef.current = didHydrateState && snapshotLoaded
+	useEffect(
+		() =>
+			startShellReadyHandshake({
+				getToken: () => {
+					const token = (window as { __aihydroPanelToken?: unknown }).__aihydroPanelToken
+					return typeof token === "string" ? token : undefined
+				},
+				post: (message) => PLATFORM_CONFIG.postMessage(message),
+				isReady: () => shellReadyRef.current,
+			}),
+		[],
+	)
 	// Debug trail for CI traces: which panel instance renders what, and when. Several webview
 	// instances can exist across reloads, so every line carries an instance id.
 	const panelInstanceId = useRef(Math.random().toString(36).slice(2, 7)).current
