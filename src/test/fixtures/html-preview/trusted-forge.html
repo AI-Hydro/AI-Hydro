@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Trusted Forge Fixture</title>
+	<!-- A TRUSTED document (listed as an e2e fixture) that is not yet allowed. Its script behaves
+	     like a hostile document: it tries to reach the shell's DOM to click Allow, and forges the
+	     messages a bridge would send. None of it may take effect. -->
+	<script type="application/vnd.aihydro.module+json">
+	{ "id": "trusted-forge-fixture", "title": "Trusted Forge Fixture", "version": "0.1.0", "license": "CC0-1.0", "requires": { "executable": true } }
+	</script>
+</head>
+<body>
+	<h1 id="forge-heading">Trusted forge fixture</h1>
+	<pre id="forge-result" data-state="idle">idle</pre>
+	<button id="attack" type="button">Attack</button>
+	<script>
+		document.getElementById("attack").addEventListener("click", function () {
+			var result = {};
+			try {
+				var allow = window.parent.document.querySelector('[data-testid="artifact-trust-allow"]');
+				result.parentDom = allow ? "reached" : "no-button";
+				if (allow) allow.click();
+			} catch (e) { result.parentDom = e.name; }
+			try {
+				var key = Object.keys(window.parent.document.body || {})[0];
+				result.parentProps = key || "none";
+			} catch (e) { result.parentProps = e.name; }
+			try { window.top.document.title; result.top = "reached"; } catch (e) { result.top = e.name; }
+			// Forged bridge messages: no allowance exists, so the shell must ignore or deny them.
+			window.parent.postMessage({ source: "aihydro-artifact", type: "artifact/runCode", language: "python", code: "print('forged')" }, "*");
+			window.parent.postMessage({ source: "aihydro-artifact", type: "artifact/quizComplete", passed: true, score: 1, total: 1 }, "*");
+			window.parent.postMessage({ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}], moduleId: "victim" }) }, "*");
+			// Messages only the extension host may send. The shell must ignore them from a document.
+			window.parent.postMessage({ type: "aihydro-agent-navigate", courseId: "x", moduleId: "y" }, "*");
+			window.parent.postMessage({ type: "aihydro-course-progress-result", requestId: "r", progress: { completed: { y: 1 } } }, "*");
+			window.parent.postMessage({ type: "aihydro-module-state-result", requestId: "r", state: { values: { a: "b" } } }, "*");
+			window.parent.postMessage({ type: "aihydro-preview-agent-result", requestId: "r", ok: true }, "*");
+			// The same forgeries from windows the shell cannot attribute to the document: a popup that
+			// posts and closes at once (the event may arrive with a null source), and a popup that
+			// severs its opener first (it then looks like a top-level window).
+			function popupScript(sever) {
+				return "<script>(function(){var shell=window.opener&&window.opener.parent;" + (sever ? "window.opener=null;" : "") +
+					"var forged=[{type:'aihydro-agent-navigate',courseId:'c',moduleId:'m'},{type:'aihydro-course-progress-result',requestId:'r',progress:{completed:{m:1}}},{type:'aihydro-module-state-result',requestId:'r',state:{values:{a:'b'}}},{type:'aihydro-preview-agent-result',requestId:'r',ok:true}];" +
+					"try{forged.forEach(function(m){shell.postMessage(m,'*')})}catch(e){}window.close();})()<\/script>";
+			}
+			result.popups = [];
+			[false, true].forEach(function (sever) {
+				try {
+					var url = URL.createObjectURL(new Blob([popupScript(sever)], { type: "text/html" }));
+					var w = window.open(url, "_blank");
+					result.popups.push(w ? (sever ? "severed-opened" : "opened") : "blocked");
+				} catch (e) { result.popups.push(e.name); }
+			});
+			var out = document.getElementById("forge-result");
+			out.dataset.state = "done";
+			out.textContent = JSON.stringify(result);
+		});
+	</script>
+</body>
+</html>

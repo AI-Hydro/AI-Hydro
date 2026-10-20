@@ -27,6 +27,17 @@ describe("protected paths for agent file writes (B3)", () => {
 		}
 	})
 
+	it("protects the Learning Pack store and the marketplace install roots for both homes, and a relocated pack root", () => {
+		for (const aihydroHome of [path.join(home, ".aihydro"), configuredHome]) {
+			for (const sub of ["learning-packs", "modules", "courses"]) {
+				expect(isProtectedPath(path.join(aihydroHome, sub, "x", "module.html"), roots), `${aihydroHome}/${sub}`).to.equal(true)
+			}
+		}
+		const relocated = computeProtectedRoots({ homeDir: home, learningPackRoot: path.join(home, "elsewhere", "packs") })
+		expect(isProtectedPath(path.join(home, "elsewhere", "packs", "registry.json"), relocated)).to.equal(true)
+		expect(isProtectedPath(path.join(home, "elsewhere", "other.txt"), relocated)).to.equal(false)
+	})
+
 	it("protects ~/.ssh", () => {
 		expect(isProtectedPath(path.join(home, ".ssh", "id_ed25519"), roots)).to.equal(true)
 		expect(isProtectedPath(path.join(home, ".ssh"), roots)).to.equal(true)

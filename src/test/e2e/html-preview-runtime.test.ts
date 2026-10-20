@@ -1,11 +1,21 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Locator, type Page } from "@playwright/test"
-import { E2ETestHelper, e2e } from "./utils/helpers"
+import { allowArtifactExecution, E2ETestHelper, e2e, writeUserSettings } from "./utils/helpers"
 
-const runtimeE2E = e2e.extend<{ workspaceDir: string }>({
-	workspaceDir: async ({}, use) => {
+const runtimeE2E = e2e.extend<{ workspaceDir: string; e2eTrustedPaths: string[] }>({
+	// The executable fixtures stand in for trusted modules. index.html, untrusted-runcode.html
+	// and quarto-fidelity are deliberately NOT listed, so they stay static documents.
+	e2eTrustedPaths: async ({ workspaceDir }, use) => {
+		await use([
+			path.join(workspaceDir, "phase0", "golden-course"),
+			path.join(workspaceDir, "phase0", "standalone-module.html"),
+			path.join(workspaceDir, "phase0", "interrupt-module.html"),
+			path.join(workspaceDir, "phase0", "trusted-forge.html"),
+		])
+	},
+	workspaceDir: async ({ userDataDir }, use) => {
 		const root = mkdtempSync(path.join(os.tmpdir(), "aihydro-phase0-workspace-"))
 		const workspaceDir = path.join(root, "workspace")
 		const baseWorkspace = path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "workspace")
@@ -17,6 +27,8 @@ const runtimeE2E = e2e.extend<{ workspaceDir: string }>({
 		})
 		cpSync(path.join(phase0Fixtures, "standalone-module.html"), path.join(workspaceDir, "phase0", "standalone-module.html"))
 		cpSync(path.join(phase0Fixtures, "interrupt-module.html"), path.join(workspaceDir, "phase0", "interrupt-module.html"))
+		cpSync(path.join(phase0Fixtures, "untrusted-runcode.html"), path.join(workspaceDir, "phase0", "untrusted-runcode.html"))
+		cpSync(path.join(phase0Fixtures, "trusted-forge.html"), path.join(workspaceDir, "phase0", "trusted-forge.html"))
 		cpSync(path.join(phase0Fixtures, "quarto-fidelity"), path.join(workspaceDir, "phase0", "quarto-fidelity"), {
 			recursive: true,
 		})
@@ -25,20 +37,13 @@ const runtimeE2E = e2e.extend<{ workspaceDir: string }>({
 		if (!pythonInterpreter) {
 			throw new Error("AIHYDRO_E2E_PYTHON must point to the deterministic test interpreter")
 		}
-		mkdirSync(path.join(workspaceDir, ".vscode"), { recursive: true })
-		writeFileSync(
-			path.join(workspaceDir, ".vscode", "settings.json"),
-			JSON.stringify(
-				{
-					"aihydro.htmlPreview.pythonExecution": "always",
-					"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
-					"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
-				},
-				null,
-				2,
-			),
-		)
-
+		// Kernel interpreter/execution settings are machine scope: a repository's
+		// .vscode/settings.json cannot set them, so they go in the user profile.
+		writeUserSettings(userDataDir, {
+			"aihydro.htmlPreview.pythonExecution": "always",
+			"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
+			"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
+		})
 		try {
 			await use(workspaceDir)
 		} finally {
@@ -162,6 +167,9 @@ async function waitForCourseShell(page: Page): Promise<Frame> {
 }
 
 async function waitForCellFrame(page: Page, cellId: string): Promise<Frame> {
+	// Executable documents need an explicit per-document allowance (trust bar) before
+	// the kernel bridge is injected; the iframe reloads once it is granted.
+	await allowArtifactExecution(page, cellId)
 	return waitForFrame(page, async (frame) => (await frame.locator(`[data-aihydro-cell-id="${cellId}"]`).count()) === 1)
 }
 
@@ -250,6 +258,11 @@ runtimeE2E("HTML Preview executes the golden runtime matrix @phase0-full", async
 	// .aihydro-* classes gets no branded fonts — it shouldn't pay for the
 	// network request the executable module above legitimately needs.
 	expect(await staticShell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("fonts.googleapis.com")
+	// The badge states what is enforced: a static document has no kernel bridge at all and
+	// offers no way to allow one.
+	await expect(staticShell.getByTestId("artifact-trust-badge")).toHaveText("Static document")
+	await expect(staticShell.getByTestId("artifact-trust-allow")).toHaveCount(0)
+	expect(await staticShell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("artifact/cellRegistry")
 
 	await openWorkspaceFile(page, "phase0/standalone-module.html")
 	artifact = await waitForCellFrame(page, "standalone-python")
@@ -360,4 +373,85 @@ runtimeE2E("HTML Preview injects a correct base href for a multi-file Quarto sit
 	expect(fragmentTargetWasScrolled).toBe(true)
 	expect(await artifact.evaluate(() => window.location.hash)).toBe("")
 	await expect(artifact.locator("h1#title")).toHaveCount(1)
+})
+
+runtimeE2E("Studio denies kernel and agent requests from an untrusted document @phase0-smoke", async ({ page }) => {
+	await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, (route) => route.abort())
+	await openWorkspaceFile(page, "phase0/untrusted-runcode.html")
+	const shell = await waitForShellWithSrcdoc(page, "untrusted-runcode-fixture", 60_000)
+	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Static document")
+	await expect(shell.getByTestId("artifact-trust-allow")).toHaveCount(0)
+	// A manifest and cells in the document grant nothing: no bridge is injected.
+	expect(await shell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("artifact/cellRegistry")
+
+	const artifact = await waitForFrame(page, async (frame) => (await frame.locator("#untrusted-heading").count()) === 1)
+	await artifact.locator("#ask-kernel").evaluate((element: HTMLElement) => element.click())
+	await expect(artifact.locator("#run-result")).toHaveAttribute("data-state", "denied", { timeout: 15_000 })
+	await expect(artifact.locator("#run-result")).not.toContainText("should-never-run")
+
+	// A document-initiated agent hand-off is refused outright: no prompt, only a notice.
+	await artifact.locator("#ask-agent").evaluate((element: HTMLElement) => element.click())
+	await expect(shell.getByTestId("agent-handoff-notice")).toBeVisible({ timeout: 15_000 })
+	await expect(shell.getByTestId("agent-handoff-prompt")).toHaveCount(0)
+})
+
+runtimeE2E("Studio stages a document's agent request for a user click and revokes on demand @phase0-smoke", async ({ page }) => {
+	await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, (route) => route.abort())
+	await openWorkspaceFile(page, "phase0/standalone-module.html")
+	const artifact = await waitForCellFrame(page, "standalone-python")
+	const shell = await waitForShellWithSrcdoc(page, "standalone-runtime-fixture")
+	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Execution allowed")
+
+	// The document asks the agent to start a task. Nothing is sent until the user
+	// reads the prompt and clicks; here we only assert it is staged and visible.
+	await artifact.evaluate(() => {
+		parent.postMessage({ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}] }) }, "*")
+	})
+	await expect(shell.getByTestId("agent-handoff-prompt-text")).toContainText("The user has submitted 1 change", { timeout: 15_000 })
+	await shell.getByTestId("agent-handoff-dismiss").click()
+	await expect(shell.getByTestId("agent-handoff-prompt")).toHaveCount(0)
+
+	// Revoke: the badge flips, the bridge is removed on reload, and the document can no longer run.
+	await shell.getByTestId("artifact-trust-revoke").click()
+	await expect(shell.getByTestId("artifact-trust-allow")).toBeVisible({ timeout: 15_000 })
+	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Trusted, execution off")
+	await expect
+		.poll(async () => (await shell.locator("iframe").first().getAttribute("srcdoc"))?.includes("artifact/cellRegistry"), {
+			timeout: 15_000,
+		})
+		.toBe(false)
+})
+
+runtimeE2E("A document script cannot grant itself execution or reach the shell @phase0-smoke", async ({ page }) => {
+	await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, (route) => route.abort())
+	await openWorkspaceFile(page, "phase0/trusted-forge.html")
+	const shell = await waitForShellWithSrcdoc(page, "trusted-forge-fixture", 60_000)
+	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Trusted, execution off")
+	const artifact = await waitForFrame(page, async (frame) => (await frame.locator("#forge-heading").count()) === 1)
+
+	await artifact.locator("#attack").evaluate((element: HTMLElement) => element.click())
+	await expect(artifact.locator("#forge-result")).toHaveAttribute("data-state", "done", { timeout: 15_000 })
+	// The iframe is an opaque origin: every route into the shell's DOM or globals is a SecurityError.
+	const reached = JSON.parse((await artifact.locator("#forge-result").textContent()) ?? "{}") as Record<string, string>
+	expect(reached.parentDom).toBe("SecurityError")
+	expect(reached.parentProps).toBe("SecurityError")
+	expect(reached.top).toBe("SecurityError")
+	// Popups (one closed at once, one with a severed opener) forged host-only replies too. Whether the
+	// host window lets them open is environment-dependent, so only record it; what must hold is below.
+	expect(Array.isArray((reached as unknown as { popups?: unknown[] }).popups)).toBe(true)
+	// Give any popup time to post and close before asserting that nothing moved.
+	await page.waitForTimeout(2_000)
+	// The host stamps every reply the shell acts on with a per-panel secret the document cannot read.
+	const panelToken = await shell.evaluate(() => (window as unknown as { __aihydroPanelToken?: string }).__aihydroPanelToken)
+	expect(typeof panelToken === "string" && panelToken.length >= 32).toBe(true)
+
+	// Nothing took effect: still not allowed, no bridge, no staged agent prompt, no progress.
+	// (The fixture also forges host-only replies and navigation; the shell's rejection of those
+	// is covered by webview-ui hostMessage.test.ts, where the sender window can be controlled.)
+	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Trusted, execution off")
+	await expect(shell.getByTestId("artifact-trust-allow")).toBeVisible()
+	await expect(shell.getByTestId("artifact-trust-revoke")).toHaveCount(0)
+	expect(await shell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("artifact/cellRegistry")
+	await expect(shell.getByTestId("agent-handoff-prompt")).toHaveCount(0)
+	await expect(shell.getByTestId("agent-handoff-notice")).toBeVisible({ timeout: 15_000 })
 })

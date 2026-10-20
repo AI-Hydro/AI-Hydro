@@ -1,10 +1,12 @@
 import * as path from "node:path"
+import { ARTIFACT_TRUST_METADATA_KEYS } from "@shared/artifactTrust"
 import { Empty } from "@shared/proto/cline/common"
 import { HtmlPreviewMode, type PreviewHtmlRequest } from "@shared/proto/cline/html_preview"
 import { ShowMessageType } from "@shared/proto/host/window"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
-import { learningPackArtifactMetadata, resolveInstalledLearningPackArtifact } from "@/services/learning-pack/runtimeIntegration"
+import { learningPackArtifactMetadata, resolveInstalledLearningPackStatus } from "@/services/learning-pack/runtimeIntegration"
+import { classifyArtifactFile } from "@/services/artifact-preview/artifactTrust"
 import type { Controller } from ".."
 
 /**
@@ -74,8 +76,15 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 				})
 				return Empty.create()
 			}
-			const packArtifact = await resolveInstalledLearningPackArtifact(fsPath)
+			const packStatus = await resolveInstalledLearningPackStatus(fsPath)
+			const packArtifact = packStatus.kind === "verified" ? packStatus.artifact : null
+			// Trust is decided here, by the host, from where the file came from. It is
+			// never read from the document. Anything that is not a verified installed signed
+			// pack module stays an untrusted static document; a pack module that fails its
+			// load-time integrity check says why instead of silently looking like any other file.
+			const trustSource = await classifyArtifactFile(fsPath, { installedPack: Boolean(packArtifact) })
 			ref = await svc.registerFile({
+				trustSource,
 				fsPath,
 				title: title || path.basename(fsPath),
 				preferredMode,
@@ -84,7 +93,9 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 							metadata: learningPackArtifactMetadata(packArtifact.scope),
 							localResourceRoot: packArtifact.installationRoot,
 						}
-					: {}),
+					: packStatus.kind === "failed"
+						? { metadata: { [ARTIFACT_TRUST_METADATA_KEYS.integrityFailure]: packStatus.reason } }
+						: {}),
 			})
 		} else if (html) {
 			ref = await svc.registerInline({ html, title, preferredMode })

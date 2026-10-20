@@ -46,6 +46,26 @@ function pathOnPath(candidates: string[]): string | null {
 	return null
 }
 
+function isInsideFolder(candidate: string, folder: string): boolean {
+	const relative = path.relative(path.resolve(folder), path.resolve(candidate))
+	return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
+}
+
+/** Interpreters the repository (workspace) can supply. They run only if the user picks one. */
+export function isWorkspaceDerived(profile: Pick<KernelProfile, "source">): boolean {
+	return profile.source === "workspace_venv" || profile.source === "aihydro_venv"
+}
+
+/**
+ * Default interpreter when the user has not chosen one: the machine-scoped override, then a
+ * user-level VS Code interpreter, then PATH. Workspace-derived environments are never defaults.
+ */
+export function pickDefaultProfile<T extends Pick<KernelProfile, "source">>(profiles: readonly T[]): T | null {
+	const rank: Partial<Record<KernelProfile["source"], number>> = { custom: 0, vscode: 1, path: 2 }
+	const candidates = profiles.filter((p) => !isWorkspaceDerived(p) && rank[p.source] !== undefined)
+	return [...candidates].sort((a, b) => (rank[a.source] ?? 99) - (rank[b.source] ?? 99))[0] ?? null
+}
+
 export function getWorkspaceFolderPath(): string | null {
 	const folder = vscode.workspace.workspaceFolders?.[0]
 	return folder?.uri.fsPath ?? null
@@ -108,14 +128,26 @@ export async function discoverPythonEnvironments(): Promise<KernelProfile[]> {
 		add(override.trim(), `Custom: ${path.basename(override.trim())}`, "custom")
 	}
 
-	// 2. VS Code Python extension + setting
+	// 2. VS Code Python extension + setting. Anything the workspace itself supplies (an
+	// interpreter inside the repository, or a workspace-scoped python.defaultInterpreterPath)
+	// is repository-controlled, so it is listed as a workspace environment and is never a default.
 	const fromExtension = await tryPythonExtensionInterpreter()
 	if (fromExtension) {
-		add(fromExtension, `VS Code: ${path.basename(fromExtension)}`, "vscode")
+		if (isInsideFolder(fromExtension, workspaceFolder)) {
+			add(fromExtension, `Workspace (Python extension): ${path.basename(fromExtension)}`, "workspace_venv")
+		} else {
+			add(fromExtension, `VS Code: ${path.basename(fromExtension)}`, "vscode")
+		}
 	}
-	const configured = vscode.workspace.getConfiguration("python").get<string>("defaultInterpreterPath")
-	if (configured?.trim()) {
-		add(configured.trim(), `Settings: ${path.basename(configured.trim())}`, "vscode")
+	const configuredInspect = vscode.workspace.getConfiguration("python").inspect<string>("defaultInterpreterPath")
+	const userConfigured = configuredInspect?.globalValue
+	if (userConfigured?.trim()) {
+		add(userConfigured.trim(), `Settings: ${path.basename(userConfigured.trim())}`, "vscode")
+	}
+	for (const scoped of [configuredInspect?.workspaceValue, configuredInspect?.workspaceFolderValue]) {
+		if (scoped?.trim()) {
+			add(scoped.trim(), `Workspace setting: ${path.basename(scoped.trim())}`, "workspace_venv")
+		}
 	}
 
 	// 3. Workspace .venv
@@ -142,17 +174,5 @@ export async function discoverPythonEnvironments(): Promise<KernelProfile[]> {
 }
 
 export async function resolveDefaultProfile(): Promise<KernelProfile | null> {
-	const envs = await discoverPythonEnvironments()
-	if (envs.length === 0) {
-		return null
-	}
-	// Prefer aihydro venv > workspace venv > vscode > custom > path
-	const rank: Record<KernelProfile["source"], number> = {
-		aihydro_venv: 0,
-		workspace_venv: 1,
-		vscode: 2,
-		custom: 3,
-		path: 4,
-	}
-	return [...envs].sort((a, b) => rank[a.source] - rank[b.source])[0] ?? null
+	return pickDefaultProfile(await discoverPythonEnvironments())
 }

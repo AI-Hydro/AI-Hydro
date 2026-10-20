@@ -5,7 +5,8 @@
 	"version": "0.4.0",
 	"icon": "assets/icons/icon.png",
 	"engines": {
-		"vscode": "^1.84.0"
+		"vscode": "^1.84.0",
+		"node": ">=22.16.0 <23"
 	},
 	"author": {
 		"name": "AI-Hydro Research Team"
@@ -593,24 +594,28 @@
 						"never"
 					],
 					"default": "prompt",
-					"description": "Whether HTML Preview may run Python code cells via a persistent kernel (equivalent trust to terminal commands)."
+					"scope": "machine",
+					"description": "Whether HTML Preview may run Python code cells via a persistent kernel (equivalent trust to terminal commands). Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.htmlPreview.pythonInterpreter": {
 					"type": "string",
 					"default": "",
-					"description": "Absolute path to a Python interpreter for HTML Preview kernels. When empty, AI-Hydro discovers VS Code's interpreter, .venv, and .aihydro/venv."
+					"scope": "machine",
+					"description": "Absolute path to a Python interpreter for HTML Preview kernels. When empty, AI-Hydro discovers VS Code's interpreter, .venv, and .aihydro/venv. Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.htmlPreview.pythonTimeoutSeconds": {
 					"type": "number",
 					"default": 120,
 					"minimum": 30,
 					"maximum": 600,
+					"scope": "machine",
 					"description": "Maximum seconds for a single Python cell execution in HTML Preview."
 				},
 				"aihydro.htmlPreview.shareKernelAcrossArtifacts": {
 					"type": "boolean",
 					"default": false,
-					"description": "When true, all HTML previews in a workspace share one Python kernel namespace per profile. Default is false (one kernel per artifact)."
+					"scope": "machine",
+					"description": "When true, all HTML previews in a workspace share one Python kernel namespace per profile. Default is false (one kernel per artifact). Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.gee.projectId": {
 					"type": "string",
@@ -670,7 +675,7 @@
 		"eval:harness": "cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --grep \"EVAL:\"",
 		"test:coverage": "vscode-test --coverage",
 		"e2e": "playwright test -c playwright.config.ts",
-		"test:e2e:build": "vsce package --allow-package-secrets sendgrid --out dist/e2e.vsix",
+		"test:e2e:build": "cross-env AIHYDRO_E2E_BUILD=true vsce package --allow-package-secrets sendgrid --out dist/e2e.vsix",
 		"test:e2e": "playwright install && npm run test:e2e:build && node src/test/e2e/utils/build.mjs && playwright test",
 		"test:e2e:optimal": "npm run test:e2e:build && node src/test/e2e/utils/build.mjs && playwright test",
 		"test:e2e:ui": "npx tsx scripts/interactive-playwright.ts",

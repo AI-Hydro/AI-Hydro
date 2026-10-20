@@ -40,7 +40,18 @@ export const commands = {
 
 export const Uri = {
 	file: (path: string) => ({ fsPath: path, toString: () => path }),
+	joinPath: (base: { fsPath: string }, ...segments: string[]) => {
+		const joined = [base.fsPath, ...segments].join("/")
+		return { fsPath: joined, toString: () => joined }
+	},
 	parse: (uri: string) => ({ fsPath: uri, toString: () => uri }),
+}
+
+export class Disposable {
+	constructor(private readonly callOnDispose: () => void) {}
+	dispose(): void {
+		this.callOnDispose()
+	}
 }
 
 export const ExtensionContextMock = {}

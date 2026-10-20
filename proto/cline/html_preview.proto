@@ -133,6 +133,18 @@ message RunArtifactCodeRequest {
     string profile_id = 5;
 }
 
+// Allow or revoke Python/agent execution for one document. The host honours an
+// allow only for documents whose source is trusted (see src/shared/artifactTrust.ts)
+// and replies with the resulting state.
+message SetArtifactExecutionAllowanceRequest {
+    string artifact_id = 1;
+    bool allowed = 2;
+}
+
+message SetArtifactExecutionAllowanceResponse {
+    bool allowed = 1;
+}
+
 message ArtifactCellOutput {
     string type = 1;
     string text = 2;
@@ -368,6 +380,9 @@ service HtmlPreviewService {
 
     // Execute Python in a persistent kernel for an artifact preview
     rpc runArtifactCode(RunArtifactCodeRequest) returns (RunArtifactCodeResponse);
+
+    // Allow or revoke Python/agent execution for one document (trust gate)
+    rpc setArtifactExecutionAllowance(SetArtifactExecutionAllowanceRequest) returns (SetArtifactExecutionAllowanceResponse);
 
     // Restart the Python kernel for an artifact (clears namespace)
     rpc restartArtifactKernel(RestartArtifactKernelRequest) returns (Empty);

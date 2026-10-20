@@ -2,6 +2,9 @@
 
 Official contract for runnable Python/JavaScript cells inside HTML artifacts.
 
+!!! note "Cells run only in trusted, allowed documents"
+    Python cells run only when the document is a trusted source **and** you have allowed execution for it. Any other HTML is a static document with no kernel bridge. See the [Studio trust model](studio-trust-model.md).
+
 ## DOM markup
 
 ```html
