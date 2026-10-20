@@ -247,7 +247,9 @@ runtimeE2E("HTML Preview executes the golden runtime matrix @phase0-full", async
 	)
 	// The host used to invent "Interrupted by user" whether or not the kernel stopped; the
 	// kernel's own KeyboardInterrupt is the evidence now, and the cell body must not have resumed.
-	await expect(artifact.locator('[data-aihydro-cell-id="interrupt-sleep"] .aihydro-output')).not.toContainText("interrupt_failed")
+	await expect(artifact.locator('[data-aihydro-cell-id="interrupt-sleep"] .aihydro-output')).not.toContainText(
+		"interrupt_failed",
+	)
 	await runCell(artifact, "interrupt-after")
 	await expect(artifact.locator('[data-aihydro-cell-id="interrupt-after"] .aihydro-output')).toContainText(
 		"interrupt_state_kept=42",
@@ -294,8 +296,13 @@ runtimeE2E("Studio interrupt stops a busy loop, keeps variables, and never resum
 
 	for (const cellId of ["interrupt-sleep", "interrupt-spin"]) {
 		await runCell(artifact, cellId)
-		const runningShell = await waitForFrame(page, async (frame) => (await frame.getByTitle("Interrupt execution").count()) === 1)
-		await expect(output(cellId)).toContainText(/interrupt_started|spin_started/, { timeout: 30_000 })
+		const runningShell = await waitForFrame(
+			page,
+			async (frame) => (await frame.getByTitle("Interrupt execution").count()) === 1,
+		)
+		// Output only appears when a cell ends (no streaming), so give the kernel a moment to be
+		// inside the cell before pressing Stop.
+		await page.waitForTimeout(1_500)
 		await runningShell.getByTitle("Interrupt execution").click()
 		await expect(output(cellId)).toContainText("KeyboardInterrupt", { timeout: 3_000 })
 		await expect(output(cellId)).not.toContainText("interrupt_failed")
@@ -463,9 +470,14 @@ runtimeE2E("Studio stages a document's agent request for a user click and revoke
 	// The document asks the agent to start a task. Nothing is sent until the user
 	// reads the prompt and clicks; here we only assert it is staged and visible.
 	await artifact.evaluate(() => {
-		parent.postMessage({ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}] }) }, "*")
+		parent.postMessage(
+			{ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}] }) },
+			"*",
+		)
 	})
-	await expect(shell.getByTestId("agent-handoff-prompt-text")).toContainText("The user has submitted 1 change", { timeout: 15_000 })
+	await expect(shell.getByTestId("agent-handoff-prompt-text")).toContainText("The user has submitted 1 change", {
+		timeout: 15_000,
+	})
 	await shell.getByTestId("agent-handoff-dismiss").click()
 	await expect(shell.getByTestId("agent-handoff-prompt")).toHaveCount(0)
 
