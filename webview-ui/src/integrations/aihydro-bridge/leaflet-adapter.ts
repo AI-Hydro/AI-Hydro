@@ -18,7 +18,9 @@
  *   </div>
  *
  * Supported data-basemap values:
- *   usgs-topo (default), usgs-imagery, esri-satellite, carto-dark, osm
+ *   usgs-topo (default), usgs-imagery, esri-satellite, esri-dark-gray, esri-topo
+ *   (osm is a deprecated alias of esri-topo: tile.openstreetmap.org needs an app-specific User-Agent a webview cannot set)
+ *   (carto-dark is a deprecated alias of esri-dark-gray: CARTO's keyless tiles now return an API-key watermark)
  *
  * Optional data-* attributes:
  *   data-initial-zoom        — numeric zoom level (default: auto-fit)
@@ -58,14 +60,14 @@ export const AIHYDRO_BRIDGE_LEAFLET_SCRIPT = `
       attr: '© Esri',
       maxZoom: 19,
     },
-    'carto-dark': {
-      url: 'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
-      attr: '© CARTO',
-      maxZoom: 19,
+    'esri-dark-gray': {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      attr: 'Sources: Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS User Community',
+      maxZoom: 16,
     },
-    'osm': {
-      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attr: '© OpenStreetMap',
+    'esri-topo': {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+      attr: '© Esri',
       maxZoom: 19,
     },
   };
@@ -139,6 +141,8 @@ export const AIHYDRO_BRIDGE_LEAFLET_SCRIPT = `
   function initMap(el) {
     var mapId = el.getAttribute('data-aihydro-map-id') || ('map-' + Math.random().toString(36).slice(2));
     var basemapKey = el.getAttribute('data-basemap') || 'usgs-topo';
+    if (basemapKey === 'carto-dark') basemapKey = 'esri-dark-gray'; // deprecated alias
+    if (basemapKey === 'osm') basemapKey = 'esri-topo'; // deprecated alias
     var initialZoom = el.getAttribute('data-initial-zoom') ? parseInt(el.getAttribute('data-initial-zoom'), 10) : null;
     var centerLat = el.getAttribute('data-center-lat') ? parseFloat(el.getAttribute('data-center-lat')) : null;
     var centerLng = el.getAttribute('data-center-lng') ? parseFloat(el.getAttribute('data-center-lng')) : null;
@@ -252,7 +256,7 @@ export const AIHYDRO_BRIDGE_LEAFLET_SCRIPT = `
       // Layer control (only when multiple layers exist)
       if (Object.keys(overlayLayers).length > 0) {
         var baseLayers = {};
-        baseLayers[basemapKey === 'osm' ? 'OpenStreetMap' : basemapKey === 'carto-dark' ? 'Dark (CARTO)' : basemapKey === 'usgs-imagery' ? 'USGS Imagery' : basemapKey === 'esri-satellite' ? 'Satellite' : 'USGS Topo'] = primaryLayer;
+        baseLayers[basemapKey === 'esri-topo' ? 'Topo (Esri)' : basemapKey === 'esri-dark-gray' ? 'Dark Gray (Esri)' : basemapKey === 'usgs-imagery' ? 'USGS Imagery' : basemapKey === 'esri-satellite' ? 'Satellite' : 'USGS Topo'] = primaryLayer;
         L.control.layers(baseLayers, overlayLayers, { position: 'topright', collapsed: true }).addTo(map);
       }
 

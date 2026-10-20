@@ -11,6 +11,15 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Fixed — keyless basemaps (vision-2040, branch `vision2040/basemap-keyless`)
+
+- **Default basemap was a watermark.** CARTO now answers every keyless tile request (any style, any location) with one "API KEY REQUIRED" image, so the default and the Carto Light/Dark/Voyager entries were unusable. The default "Hydrology default (muted)" now uses Esri Light/Dark Gray Canvas (global, keyless, attribution shown); the Carto entries are removed (no CARTO key setting exists).
+- A dismissed coverage notice re-arms only after the view has stayed in coverage for 1.5 s, so panning along the border does not re-show it.
+- A saved choice that no longer exists (Carto, Stadia, Mapbox, Humanitarian OSM, unknown) moves to the default with a one-time notice that names the reason.
+- **No more silent blank map.** US-only basemaps (USGS Topo/Imagery/Shaded Relief) carry coverage metadata; when the view is outside coverage a non-blocking notice says so and offers "Use Hydrology default". A basemap that answers every tile in view with one identical image and returns the same image for a fixed land control tile (z3, 45-90E, 0-41N) shows a "Basemap unavailable" notice (a general placeholder check, not per-provider; open ocean alone never triggers it; a control tile that cannot be fetched or hashed claims nothing and is not retried).
+- The in-chat Leaflet preview bridge: `carto-dark` is now an alias of `esri-dark-gray` and `osm` an alias of `esri-topo`; CARTO is dropped from the artifact-preview CSP. Humanitarian OSM (OSM France) is removed: its usage page limits use to non-profit sites and apps sending an identifying user-agent, which a webview cannot do; a saved choice migrates with a notice.
+- Provider verification (keyless, coverage, max zoom, attribution, terms) is recorded in `webview-ui/src/components/map/basemaps.ts` and enforced by the catalogue tests.
+
 ### Fixed — DeepSeek unclosed envelope and task_progress (vision-2040, branch `vision2040/deepseek-unclosed-envelope`)
 
 - A DeepSeek native envelope that ends without `</tool_calls>` is now repaired when every `<invoke>` is closed and only whitespace follows the last `</invoke>` (an unclosed invoke or trailing text stays malformed).

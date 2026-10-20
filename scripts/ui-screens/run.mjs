@@ -13,13 +13,13 @@
  * threshold where a baseline exists.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { dirname, resolve, join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { createRequire } from "node:module"
+import { dirname, join, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { chromium } from "playwright"
 import { pageChecker } from "./checker.mjs"
-import { basemapIdForUrl, tileFaultStatus, tilePng } from "./tiles.mjs"
 import { startServer, THEMES } from "./server.mjs"
+import { basemapIdForUrl, isPlaceholderScreen, tileFaultStatus, tilePng } from "./tiles.mjs"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 const require = createRequire(import.meta.url)
@@ -145,11 +145,15 @@ async function newContext() {
 					})
 				}
 				const { color, overlay } = basemapIdForUrl(url)
+				const tileVariant = (u) => [...u].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7) % 1000
 				return route.fulfill({
 					status: 200,
 					contentType: "image/png",
 					headers: { "Access-Control-Allow-Origin": "*", [FIXTURE_HEADER]: "1" },
-					body: tilePng(color, { overlay }),
+					body: tilePng(color, {
+						overlay,
+						variant: overlay || isPlaceholderScreen(decodeURIComponent(screenId)) ? undefined : tileVariant(url),
+					}),
 				})
 			}
 			return route.fulfill({

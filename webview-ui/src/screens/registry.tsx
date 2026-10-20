@@ -351,6 +351,17 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-empty-default", "Map empty state, default basemap"),
 	// Hydrology default basemap: muted base, USGS hydrography overlay, no labels (light and dark come from the theme).
 	mapScreen("map-basemap-muted-default", "Map on the muted hydrology default basemap", { layers: [basinPolygon, gaugePoint] }),
+	// Basemap notices: US-only basemap over India, a saved removed (CARTO) basemap migrated, and a provider that
+	// answers every tile with one identical image.
+	mapScreen("map-basemap-outside-coverage", "USGS Topo over India: US-only notice, tiles not requested", {
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace("usgs-topo", false, [76.1, 23.3], 5) },
+	}),
+	mapScreen("map-basemap-migrated", "Saved CARTO basemap migrated to the hydrology default (notice)", {
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace("carto-light") },
+	}),
+	mapScreen("map-basemap-placeholder", "Basemap returning one identical tile for every request (unavailable notice)", {
+		layers: [basinPolygon],
+	}),
 	mapScreen("map-basemap-panel", "Basemap panel with Reset to hydrology default", {
 		layers: [basinPolygon],
 		steps: [{ click: 'button[aria-label="Basemap"]' }, { wait: 500 }],
