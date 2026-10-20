@@ -32,6 +32,11 @@ export class TerminalProcess extends EventEmitter<TerminalProcessEvents> {
 	 * (no shell integration, no code reported). Undefined until the run finishes. Never inferred from the output.
 	 */
 	exitCode: CommandExit | undefined
+	private resolveExitSettled: () => void = () => {}
+	/** Resolves once `exitCode` is final (the end event arrived or its grace period passed). Await before reading it. */
+	readonly exitSettled: Promise<void> = new Promise<void>((resolve) => {
+		this.resolveExitSettled = resolve
+	})
 	private hotTimer: NodeJS.Timeout | null = null
 
 	async run(terminal: vscode.Terminal, command: string) {
@@ -230,13 +235,21 @@ export class TerminalProcess extends EventEmitter<TerminalProcessEvents> {
 
 			this.emitRemainingBufferIfListening()
 
-			// Resolve the exit code before anything observes "completed". The end event can trail the stream by a
-			// moment, so wait briefly for it unless the stream already gave a numeric code.
-			if (endListener && typeof exitFromStream !== "number" && exitFromEvent === undefined) {
-				await Promise.race([exitEvent, new Promise<void>((resolve) => setTimeout(resolve, EXIT_EVENT_GRACE_MS))])
+			// Settle the exit code without blocking the run: the end event can trail the stream by a moment, so the
+			// listener stays until it fires (or a grace timer expires) and callers that need the code await
+			// `exitSettled`. Blocking here would stall under fake timers in the terminal integration tests.
+			const settle = () => {
+				endListener?.dispose()
+				this.exitCode = typeof exitFromEvent === "number" ? exitFromEvent : (exitFromStream ?? exitFromEvent ?? "unknown")
+				this.resolveExitSettled()
 			}
-			endListener?.dispose()
-			this.exitCode = typeof exitFromEvent === "number" ? exitFromEvent : (exitFromStream ?? exitFromEvent ?? "unknown")
+			if (!endListener || typeof exitFromStream === "number" || exitFromEvent !== undefined) {
+				settle()
+			} else {
+				this.exitCode = exitFromStream ?? "unknown"
+				void exitEvent.then(settle)
+				setTimeout(settle, EXIT_EVENT_GRACE_MS)
+			}
 
 			// the command process is finished, let's check the output to see if we need to use the terminal capture fallback
 			if (!this.fullOutput.trim()) {
@@ -283,6 +296,7 @@ export class TerminalProcess extends EventEmitter<TerminalProcessEvents> {
 			}
 			// ...and nothing tells us how it ended: record that, never assume success.
 			this.exitCode = "unknown"
+			this.resolveExitSettled()
 			// For terminals without shell integration, we can't know when the command completes
 			// So we'll just emit the continue event after a delay
 			this.emit("completed")

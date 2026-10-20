@@ -1673,6 +1673,7 @@ export class Task {
 
 		if (completed) {
 			// Record the exit code on the row before the result goes back (ToolExecutor derives execOutcome from it).
+			await Promise.race([process.exitSettled, setTimeoutPromise(500)])
 			const exitNote = describeExit(await this.recordCommandExit(process.exitCode))
 			// For subagents: try to surface structured result.json written by the subagent.
 			if (isSubagent && subagentJob) {

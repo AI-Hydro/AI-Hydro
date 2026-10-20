@@ -98,6 +98,7 @@ describe("TerminalProcess exit code (W2-0h)", () => {
 		const done = p.run(terminal, "false")
 		setTimeout(() => fire({ execution, exitCode: 9 }), 5)
 		await done
+		await p.exitSettled
 		expect(p.exitCode).to.equal(9)
 	})
 
@@ -112,6 +113,8 @@ describe("TerminalProcess exit code (W2-0h)", () => {
 		const done = p.run(terminal, "true")
 		setTimeout(() => fire({ execution: {}, exitCode: 9 }), 5)
 		await done
+		fire({ execution: {}, exitCode: 9 })
+		await p.exitSettled
 		expect(p.exitCode).to.equal("unknown")
 	})
 
