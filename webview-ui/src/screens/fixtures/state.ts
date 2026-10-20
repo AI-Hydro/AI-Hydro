@@ -89,7 +89,6 @@ export function buildBaseState(overrides: Partial<ExtensionState> = {}): Extensi
 		favoritedModelIds: [],
 		lastDismissedInfoBannerVersion: 99,
 		lastDismissedModelBannerVersion: 99,
-		lastDismissedCliBannerVersion: 99,
 		remoteConfigSettings: {},
 		subagentsEnabled: false,
 		workspaceRoots: [],

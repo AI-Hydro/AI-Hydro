@@ -5,6 +5,7 @@ import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { normalizeOpenAiStyleUsage, OpenAiStyleUsageInput } from "../transform/usage"
 import { assertKnownModel, resolveRegistryModel } from "./model-resolution"
 
 interface FireworksHandlerOptions extends CommonApiHandlerOptions {
@@ -84,14 +85,14 @@ export class FireworksHandler implements ApiHandler {
 			}
 
 			if (chunk.usage) {
+				// prompt_tokens is the whole prompt; report it in the meter convention (uncached input / cache hits).
+				const u = normalizeOpenAiStyleUsage(chunk.usage as OpenAiStyleUsageInput)
 				yield {
 					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0, // (deepseek reports total input AND cache reads/writes, see context caching: https://api-docs.deepseek.com/guides/kv_cache) where the input tokens is the sum of the cache hits/misses, while anthropic reports them as separate tokens. This is important to know for 1) context management truncation algorithm, and 2) cost calculation (NOTE: we report both input and cache stats but for now set input price to 0 since all the cost calculation will be done using cache hits/misses)
-					outputTokens: chunk.usage.completion_tokens || 0,
-					// @ts-ignore-next-line
-					cacheReadTokens: chunk.usage.prompt_cache_hit_tokens || 0,
-					// @ts-ignore-next-line
-					cacheWriteTokens: chunk.usage.prompt_cache_miss_tokens || 0,
+					inputTokens: u.uncachedInputTokens,
+					outputTokens: u.outputTokens,
+					cacheReadTokens: u.cacheReadTokens,
+					cacheWriteTokens: u.cacheWriteTokens,
 				}
 			}
 		}

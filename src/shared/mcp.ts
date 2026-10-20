@@ -12,6 +12,12 @@ export type McpServer = {
 	resourceTemplates?: McpResourceTemplate[]
 	disabled?: boolean
 	timeout?: number
+	/**
+	 * The `instructions` string from the server's initialize result (MCP spec 2024-11-05+). Host-side only:
+	 * read by McpHub after connect and rendered into the system prompt for trusted servers; not carried
+	 * through the proto conversion to the webview.
+	 */
+	instructions?: string
 }
 
 export type McpTool = {

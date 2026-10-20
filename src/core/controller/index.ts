@@ -25,6 +25,7 @@ import { McpHub } from "@services/mcp/McpHub"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { ApiProvider, ModelInfo } from "@shared/api"
 import { ChatContent } from "@shared/ChatContent"
+import { MAX_REMOTE_CATALOG_BYTES, MAX_REMOTE_CONNECTORS } from "@shared/connectors"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { McpMarketplaceCatalog } from "@shared/mcp"
@@ -72,7 +73,6 @@ import { PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { appendAiHydroStealthModels } from "./models/refreshOpenRouterModels"
-import { checkCliInstallation } from "./state/checkCliInstallation"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
 
@@ -264,9 +264,6 @@ export class Controller {
 		cleanupLegacyCheckpoints().catch((error) => {
 			console.error("Failed to cleanup legacy checkpoints:", error)
 		})
-
-		// Check CLI installation status once on startup
-		checkCliInstallation(this)
 	}
 
 	/*
@@ -981,9 +978,12 @@ export class Controller {
 			const response = await axios.get(`${AiHydroEnv.config().connectorsBaseUrl}/connectors.json`, {
 				headers: { "Content-Type": "application/json", "User-Agent": "aihydro-vscode-extension" },
 				timeout: 10000,
+				// The catalog is untrusted input: bound its size before parsing.
+				maxContentLength: MAX_REMOTE_CATALOG_BYTES,
+				maxBodyLength: MAX_REMOTE_CATALOG_BYTES,
 			})
 			if (!response.data) throw new Error("Invalid response from Connectors catalog API")
-			return JSON.stringify(Array.isArray(response.data) ? response.data : [])
+			return JSON.stringify(Array.isArray(response.data) ? response.data.slice(0, MAX_REMOTE_CONNECTORS) : [])
 		} catch (error) {
 			console.error("Failed to fetch Connectors catalog:", error)
 			return undefined
@@ -1203,7 +1203,6 @@ export class Controller {
 		const favoritedModelIds = this.stateManager.getGlobalStateKey("favoritedModelIds")
 		const lastDismissedInfoBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedInfoBannerVersion") || 0
 		const lastDismissedModelBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedModelBannerVersion") || 0
-		const lastDismissedCliBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedCliBannerVersion") || 0
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
 		const finalAnswerAuditEnabled = this.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled")
 
@@ -1304,7 +1303,6 @@ export class Controller {
 			lastDismissedInfoBannerVersion,
 			lastDismissedModelBannerVersion,
 			remoteConfigSettings: this.stateManager.getRemoteConfigSettings(),
-			lastDismissedCliBannerVersion,
 			subagentsEnabled,
 			finalAnswerAuditEnabled,
 			workspaceHtmlFiles: this.workspaceHtmlFiles.map((f) => ({
