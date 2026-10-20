@@ -59,35 +59,72 @@ runtimeE2E.skip(
 	"Phase 0 runtime tests require AIHYDRO_E2E_PYTHON to select the deterministic test interpreter",
 )
 
+/**
+ * Open a quick-input (Quick Open or the command palette) and wait until it lists `rowText`
+ * for the typed `text`.
+ *
+ * Neither step is a deterministic one-shot on a loaded hosted runner: the
+ * shortcut is dropped while the workbench (or the just-focused sidebar
+ * webview, which forwards keys to the host asynchronously) is not yet taking
+ * key bindings, and the picker can open before the workspace file index
+ * answers, leaving an empty list. Both are retried against the real signal
+ * (widget visible / matching row visible) instead of one long blind wait.
+ */
+async function openQuickInputWithRow(page: Page, shortcut: string, text: string, rowText: string): Promise<Locator> {
+	const quickOpenInput = page.locator(".quick-input-widget input:visible").last()
+	const file = page.locator(".quick-input-list .monaco-list-row").filter({ hasText: rowText }).first()
+	let lastError: unknown
+	for (let attempt = 1; attempt <= 4; attempt++) {
+		// After the sidebar is focused through the extension host, keyboard focus sits inside a
+		// webview guest frame, which only forwards key bindings to the workbench once its own
+		// content is ready. Hand focus back to the workbench document before pressing.
+		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.())
+		await page.keyboard.press(shortcut)
+		try {
+			await quickOpenInput.waitFor({ state: "visible", timeout: 10_000 })
+			await quickOpenInput.fill(text)
+			await expect(file).toBeVisible({ timeout: 15_000 })
+			return quickOpenInput
+		} catch (error) {
+			lastError = error
+			// Close whatever half-open state remains so the next attempt starts clean.
+			await page.keyboard.press("Escape")
+			await expect(quickOpenInput)
+				.not.toBeVisible({ timeout: 5_000 })
+				.catch(() => undefined)
+		}
+	}
+	throw lastError
+}
+
+/** True once the frame's current document has finished loading (scripts parsed and run). */
+async function isDocumentComplete(frame: Frame): Promise<boolean> {
+	return (await frame.evaluate(() => document.readyState)) === "complete"
+}
+
 async function openWorkspaceFile(page: Page, relativePath: string, confirmPlainHtml = false): Promise<void> {
 	await page.waitForLoadState("domcontentloaded")
 	await page.locator(".monaco-workbench").waitFor({ state: "visible", timeout: 20_000 })
 	await E2ETestHelper.openAiHydroSidebar(page)
 	await waitForFrame(page, async (frame) => (await frame.title()).startsWith("AI-Hydro"))
-	await page.keyboard.press(process.platform === "darwin" ? "Meta+P" : "Control+P")
-	const quickOpenInput = page.locator(".quick-input-widget input:visible").last()
-	await quickOpenInput.waitFor({ state: "visible", timeout: 30_000 })
-	await quickOpenInput.fill(relativePath)
-	const file = page
-		.locator(".quick-input-list .monaco-list-row")
-		.filter({ hasText: path.basename(relativePath) })
-		.first()
-	await expect(file).toBeVisible({ timeout: 30_000 })
+	const quickOpenInput = await openQuickInputWithRow(
+		page,
+		process.platform === "darwin" ? "Meta+P" : "Control+P",
+		relativePath,
+		path.basename(relativePath),
+	)
 	// Keyboard acceptance is the stable Quick Open contract across hosted
 	// platforms. A synthetic row click can select the result without opening
 	// the document on Windows, so the extension never observes the HTML file.
 	await page.keyboard.press("Enter")
 	await expect(quickOpenInput).not.toBeVisible({ timeout: 10_000 })
 	if (confirmPlainHtml) {
-		await page.keyboard.press("F1")
-		const commandInput = page.locator(".quick-input-widget input:visible").last()
-		await commandInput.waitFor({ state: "visible", timeout: 10_000 })
-		await commandInput.fill(">Add to AI-Hydro HTML Preview")
-		const addToPreviewCommand = page
-			.locator(".quick-input-list .monaco-list-row")
-			.filter({ hasText: "Add to AI-Hydro HTML Preview" })
-			.first()
-		await expect(addToPreviewCommand).toBeVisible({ timeout: 30_000 })
+		const commandInput = await openQuickInputWithRow(
+			page,
+			"F1",
+			">Add to AI-Hydro HTML Preview",
+			"Add to AI-Hydro HTML Preview",
+		)
 		await page.keyboard.press("Enter")
 		await expect(commandInput).not.toBeVisible({ timeout: 10_000 })
 	}
@@ -170,13 +207,19 @@ async function waitForCellFrame(page: Page, cellId: string): Promise<Frame> {
 	// Executable documents need an explicit per-document allowance (trust bar) before
 	// the kernel bridge is injected; the iframe reloads once it is granted.
 	await allowArtifactExecution(page, cellId)
-	return waitForFrame(page, async (frame) => (await frame.locator(`[data-aihydro-cell-id="${cellId}"]`).count()) === 1)
+	// The Run button is created by scripts that run while the document parses,
+	// so a cell node alone does not mean the bridge exists yet: wait for load.
+	return waitForFrame(
+		page,
+		async (frame) =>
+			(await frame.locator(`[data-aihydro-cell-id="${cellId}"]`).count()) === 1 && (await isDocumentComplete(frame)),
+	)
 }
 
 async function runCell(frame: Frame, cellId: string): Promise<void> {
 	const cell = frame.locator(`[data-aihydro-cell-id="${cellId}"]`)
 	const run = cell.locator(".aihydro-run")
-	await expect(run).toBeVisible()
+	await expect(run).toBeVisible({ timeout: 30_000 })
 	await expect(run).toHaveAttribute("data-aihydro-wired", "1", { timeout: 30_000 })
 	// VS Code's built-in Chat pane and startup toasts can overlap a narrow
 	// preview group on hosted macOS. Invoke the wired DOM control directly so
@@ -295,15 +338,7 @@ runtimeE2E("AI-Hydro: Show Studio opens the panel with the Studio tab label @pha
 	await E2ETestHelper.openAiHydroSidebar(page)
 	await waitForFrame(page, async (frame) => (await frame.title()).startsWith("AI-Hydro"))
 
-	await page.keyboard.press("F1")
-	const commandInput = page.locator(".quick-input-widget input:visible").last()
-	await commandInput.waitFor({ state: "visible", timeout: 10_000 })
-	await commandInput.fill(">AI-Hydro: Show Studio")
-	const showStudioCommand = page
-		.locator(".quick-input-list .monaco-list-row")
-		.filter({ hasText: "AI-Hydro: Show Studio" })
-		.first()
-	await expect(showStudioCommand).toBeVisible({ timeout: 30_000 })
+	const commandInput = await openQuickInputWithRow(page, "F1", ">AI-Hydro: Show Studio", "AI-Hydro: Show Studio")
 	await page.keyboard.press("Enter")
 	await expect(commandInput).not.toBeVisible({ timeout: 10_000 })
 
@@ -384,7 +419,12 @@ runtimeE2E("Studio denies kernel and agent requests from an untrusted document @
 	// A manifest and cells in the document grant nothing: no bridge is injected.
 	expect(await shell.locator("iframe").first().getAttribute("srcdoc")).not.toContain("artifact/cellRegistry")
 
-	const artifact = await waitForFrame(page, async (frame) => (await frame.locator("#untrusted-heading").count()) === 1)
+	// Wait for the document to finish loading so its click handlers (registered by an inline
+	// script that runs during parsing) exist before the test clicks.
+	const artifact = await waitForFrame(
+		page,
+		async (frame) => (await frame.locator("#untrusted-heading").count()) === 1 && (await isDocumentComplete(frame)),
+	)
 	await artifact.locator("#ask-kernel").evaluate((element: HTMLElement) => element.click())
 	await expect(artifact.locator("#run-result")).toHaveAttribute("data-state", "denied", { timeout: 15_000 })
 	await expect(artifact.locator("#run-result")).not.toContainText("should-never-run")
@@ -405,9 +445,14 @@ runtimeE2E("Studio stages a document's agent request for a user click and revoke
 	// The document asks the agent to start a task. Nothing is sent until the user
 	// reads the prompt and clicks; here we only assert it is staged and visible.
 	await artifact.evaluate(() => {
-		parent.postMessage({ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}] }) }, "*")
+		parent.postMessage(
+			{ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}] }) },
+			"*",
+		)
 	})
-	await expect(shell.getByTestId("agent-handoff-prompt-text")).toContainText("The user has submitted 1 change", { timeout: 15_000 })
+	await expect(shell.getByTestId("agent-handoff-prompt-text")).toContainText("The user has submitted 1 change", {
+		timeout: 15_000,
+	})
 	await shell.getByTestId("agent-handoff-dismiss").click()
 	await expect(shell.getByTestId("agent-handoff-prompt")).toHaveCount(0)
 
@@ -427,7 +472,12 @@ runtimeE2E("A document script cannot grant itself execution or reach the shell @
 	await openWorkspaceFile(page, "phase0/trusted-forge.html")
 	const shell = await waitForShellWithSrcdoc(page, "trusted-forge-fixture", 60_000)
 	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Trusted, execution off")
-	const artifact = await waitForFrame(page, async (frame) => (await frame.locator("#forge-heading").count()) === 1)
+	// The attack handler is registered by an inline script that runs while the document parses; a
+	// click before the document has loaded would be lost and leave the result "idle".
+	const artifact = await waitForFrame(
+		page,
+		async (frame) => (await frame.locator("#forge-heading").count()) === 1 && (await isDocumentComplete(frame)),
+	)
 
 	await artifact.locator("#attack").evaluate((element: HTMLElement) => element.click())
 	await expect(artifact.locator("#forge-result")).toHaveAttribute("data-state", "done", { timeout: 15_000 })

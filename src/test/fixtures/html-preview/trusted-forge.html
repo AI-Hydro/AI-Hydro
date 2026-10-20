@@ -17,6 +17,11 @@
 	<script>
 		document.getElementById("attack").addEventListener("click", function () {
 			var result = {};
+			var out = document.getElementById("forge-result");
+			// Whatever happens below, the run must settle with a recorded reason rather than leave the
+			// result "idle": the test distinguishes "the attack ran and nothing took effect" from
+			// "the handler never completed". Every step is synchronous, so nothing can hang.
+			try {
 			try {
 				var allow = window.parent.document.querySelector('[data-testid="artifact-trust-allow"]');
 				result.parentDom = allow ? "reached" : "no-button";
@@ -52,7 +57,9 @@
 					result.popups.push(w ? (sever ? "severed-opened" : "opened") : "blocked");
 				} catch (e) { result.popups.push(e.name); }
 			});
-			var out = document.getElementById("forge-result");
+			} catch (e) {
+				result.error = String(e && e.name || e);
+			}
 			out.dataset.state = "done";
 			out.textContent = JSON.stringify(result);
 		});
