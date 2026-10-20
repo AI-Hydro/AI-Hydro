@@ -95,6 +95,23 @@
 			},
 			"cells": 6
 		},
+		"chat-approval-protected-path-answered": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-checkpoint-checked-out": {
 			"ref": {
 				"noName": 0,
@@ -197,6 +214,54 @@
 			},
 			"cells": 6
 		},
+		"chat-history-list": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2056,
+				"smallText": 0,
+				"contrast": 250,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-home-empty-history": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 840,
+				"smallText": 80,
+				"contrast": 40,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-home-history": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 2360,
+				"smallText": 80,
+				"contrast": 220,
+				"contrastIndeterminate": 0
+			}
+		},
 		"chat-old-task-no-outcomes": {
 			"ref": {
 				"noName": 0,
@@ -265,107 +330,6 @@
 			},
 			"cells": 6
 		},
-		"chat-turn-machinery": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 6,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 36,
-				"smallText": 0,
-				"contrast": 9,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-user-cancel": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 5,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 30,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-basemap-migrated": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"map-basemap-outside-coverage": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"map-basemap-placeholder": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"experiment-with-ci": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 13,
-				"smallText": 100,
-				"contrast": 24,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 2352,
-				"smallText": 3980,
-				"contrast": 835,
-				"contrastIndeterminate": 0
-			}
-		},
 		"chat-task-answer": {
 			"ref": {
 				"noName": 0,
@@ -415,6 +379,887 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 40
+		},
+		"chat-task-text": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 1944,
+				"smallText": 160,
+				"contrast": 130,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-turn-machinery": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 36,
+				"smallText": 0,
+				"contrast": 9,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-user-cancel": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-welcome": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 188,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 40
+			}
+		},
+		"design-primitives": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-all-statuses": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 11,
+				"smallText": 78,
+				"contrast": 14,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 424,
+				"smallText": 2948,
+				"contrast": 815,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-approved": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 32,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1108,
+				"contrast": 283,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-consumed": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 32,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1108,
+				"contrast": 325,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-integrity-only": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 32,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1108,
+				"contrast": 259,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-revision-mismatch": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 33,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1148,
+				"contrast": 303,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-stale-evidence": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 34,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1188,
+				"contrast": 323,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-stale-revision": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 34,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1188,
+				"contrast": 323,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-unreported": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 32,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1108,
+				"contrast": 295,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-approval-unverifiable": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 34,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 264,
+				"smallText": 1188,
+				"contrast": 323,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-drift-states": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 9,
+				"smallText": 46,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 344,
+				"smallText": 1668,
+				"contrast": 381,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-empty": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 6,
+				"contrast": 5,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 160,
+				"smallText": 260,
+				"contrast": 185,
+				"contrastIndeterminate": 0
+			}
+		},
+		"evidence-error": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 1,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 160,
+				"smallText": 80,
+				"contrast": 130,
+				"contrastIndeterminate": 0
+			}
+		},
+		"experiment-empty": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 1,
+				"contrast": 2,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 160,
+				"smallText": 80,
+				"contrast": 80,
+				"contrastIndeterminate": 0
+			}
+		},
+		"experiment-failed-rows": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 9,
+				"smallText": 92,
+				"contrast": 25,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2240,
+				"smallText": 3700,
+				"contrast": 895,
+				"contrastIndeterminate": 0
+			}
+		},
+		"experiment-no-ci": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 12,
+				"smallText": 87,
+				"contrast": 18,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 1872,
+				"smallText": 3500,
+				"contrast": 655,
+				"contrastIndeterminate": 0
+			}
+		},
+		"experiment-with-ci": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 12,
+				"smallText": 99,
+				"contrast": 24,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2352,
+				"smallText": 3980,
+				"contrast": 835,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-banner-variants": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-basemap-migrated": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"map-basemap-muted-default": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-basemap-outside-coverage": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"map-basemap-panel": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-basemap-placeholder": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"map-empty-default": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 40,
+				"smallText": 40,
+				"contrast": 260,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-empty-esri": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 40,
+				"smallText": 40,
+				"contrast": 260,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-empty-panel-open": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-error-imagery": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-error-partial-tiles": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-export-success": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 31,
+				"smallText": 1,
+				"contrast": 1,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 1320,
+				"smallText": 720,
+				"contrast": 1320,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-export-zero-output": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 31,
+				"smallText": 1,
+				"contrast": 1,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 1320,
+				"smallText": 720,
+				"contrast": 1320,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-features": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 40,
+				"smallText": 240,
+				"contrast": 280,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-layer-badge-counts": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layer-manager": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 13,
+				"smallText": 0,
+				"contrast": 26,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2280,
+				"smallText": 1840,
+				"contrast": 2610,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-layer-provenance": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 16,
+				"smallText": 0,
+				"contrast": 50,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2400,
+				"smallText": 2040,
+				"contrast": 3870,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-swipe": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 1,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 120,
+				"smallText": 240,
+				"contrast": 340,
+				"contrastIndeterminate": 0
+			}
+		},
+		"map-sync-hydrating": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-sync-loading": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-time-slider": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 2,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 160,
+				"smallText": 240,
+				"contrast": 380,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-capsule": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 37,
+				"contrast": 12,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1400,
+				"contrast": 660,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-mismatch": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 39,
+				"contrast": 12,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1460,
+				"contrast": 676,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-missing": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 39,
+				"contrast": 12,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1460,
+				"contrast": 676,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-no-timezone": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 37,
+				"contrast": 12,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1400,
+				"contrast": 660,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-session": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 37,
+				"contrast": 12,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1400,
+				"contrast": 660,
+				"contrastIndeterminate": 0
+			}
+		},
+		"replay-warnings": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 37,
+				"contrast": 12,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 312,
+				"smallText": 1400,
+				"contrast": 660,
+				"contrastIndeterminate": 0
+			}
+		},
+		"studio-catalogue": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"studio-catalogue-offline": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"studio-course-progress": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 15,
+				"contrast": 6,
+				"contrastIndeterminate": 11
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 600,
+				"smallText": 584,
+				"contrast": 280,
+				"contrastIndeterminate": 424
+			}
+		},
+		"studio-empty-state": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"studio-executable-module": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 7,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 440,
+				"smallText": 304,
+				"contrast": 170,
+				"contrastIndeterminate": 0
+			}
+		},
+		"studio-static-doc": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 7,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 440,
+				"smallText": 264,
+				"contrast": 180,
+				"contrastIndeterminate": 0
+			}
 		},
 		"toolcard-area-fail": {
 			"ref": {
@@ -500,834 +1345,6 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 40
-		},
-		"chat-history-list": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 2056,
-				"smallText": 0,
-				"contrast": 250,
-				"contrastIndeterminate": 0
-			}
-		},
-		"chat-home-empty-history": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 40,
-				"smallTarget": 840,
-				"smallText": 80,
-				"contrast": 40,
-				"contrastIndeterminate": 0
-			}
-		},
-		"chat-home-history": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 40,
-				"smallTarget": 2360,
-				"smallText": 80,
-				"contrast": 220,
-				"contrastIndeterminate": 0
-			}
-		},
-		"chat-task-text": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 40,
-				"smallTarget": 1944,
-				"smallText": 160,
-				"contrast": 130,
-				"contrastIndeterminate": 0
-			}
-		},
-		"chat-welcome": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 188,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 40
-			}
-		},
-		"design-primitives": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-all-statuses": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 12,
-				"smallText": 79,
-				"contrast": 22,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 424,
-				"smallText": 2948,
-				"contrast": 815,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-approval-approved": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 33,
-				"contrast": 4,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 264,
-				"smallText": 1108,
-				"contrast": 283,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-approval-consumed": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 33,
-				"contrast": 7,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 264,
-				"smallText": 1108,
-				"contrast": 325,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-approval-integrity-only": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 33,
-				"contrast": 5,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 264,
-				"smallText": 1108,
-				"contrast": 259,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-approval-revision-mismatch": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 34,
-				"contrast": 5,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 264,
-				"smallText": 1148,
-				"contrast": 303,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-approval-stale-evidence": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 35,
-				"contrast": 5,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 264,
-				"smallText": 1188,
-				"contrast": 323,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-approval-stale-revision": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 35,
-				"contrast": 5,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 264,
-				"smallText": 1188,
-				"contrast": 323,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-approval-unreported": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 33,
-				"contrast": 5,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 264,
-				"smallText": 1108,
-				"contrast": 295,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-approval-unverifiable": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 35,
-				"contrast": 5,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 264,
-				"smallText": 1188,
-				"contrast": 323,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-drift-states": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 10,
-				"smallText": 47,
-				"contrast": 9,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 344,
-				"smallText": 1668,
-				"contrast": 381,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-empty": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 5,
-				"smallText": 7,
-				"contrast": 6,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 160,
-				"smallText": 260,
-				"contrast": 185,
-				"contrastIndeterminate": 0
-			}
-		},
-		"evidence-error": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 5,
-				"smallText": 2,
-				"contrast": 4,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 160,
-				"smallText": 80,
-				"contrast": 130,
-				"contrastIndeterminate": 0
-			}
-		},
-		"experiment-empty": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 2,
-				"contrast": 2,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 160,
-				"smallText": 80,
-				"contrast": 80,
-				"contrastIndeterminate": 0
-			}
-		},
-		"experiment-failed-rows": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 10,
-				"smallText": 93,
-				"contrast": 25,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 2240,
-				"smallText": 3700,
-				"contrast": 895,
-				"contrastIndeterminate": 0
-			}
-		},
-		"experiment-no-ci": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 13,
-				"smallText": 88,
-				"contrast": 18,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 1872,
-				"smallText": 3500,
-				"contrast": 655,
-				"contrastIndeterminate": 0
-			}
-		},
-		"map-empty-default": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 40,
-				"smallText": 40,
-				"contrast": 260,
-				"contrastIndeterminate": 0
-			}
-		},
-		"map-empty-esri": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 40,
-				"smallText": 40,
-				"contrast": 260,
-				"contrastIndeterminate": 0
-			}
-		},
-		"map-export-success": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 32,
-				"smallText": 1,
-				"contrast": 1,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 1320,
-				"smallText": 720,
-				"contrast": 1320,
-				"contrastIndeterminate": 0
-			}
-		},
-		"map-export-zero-output": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 32,
-				"smallText": 1,
-				"contrast": 1,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 1320,
-				"smallText": 720,
-				"contrast": 1320,
-				"contrastIndeterminate": 0
-			}
-		},
-		"map-features": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 40,
-				"smallText": 240,
-				"contrast": 280,
-				"contrastIndeterminate": 0
-			}
-		},
-		"map-layer-manager": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 14,
-				"smallText": 0,
-				"contrast": 26,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 2280,
-				"smallText": 1840,
-				"contrast": 2610,
-				"contrastIndeterminate": 0
-			}
-		},
-		"map-layer-provenance": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 17,
-				"smallText": 0,
-				"contrast": 50,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 2400,
-				"smallText": 2040,
-				"contrast": 3870,
-				"contrastIndeterminate": 0
-			}
-		},
-		"map-swipe": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 2,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 120,
-				"smallText": 240,
-				"contrast": 340,
-				"contrastIndeterminate": 0
-			}
-		},
-		"map-time-slider": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 3,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 160,
-				"smallText": 240,
-				"contrast": 380,
-				"contrastIndeterminate": 0
-			}
-		},
-		"replay-capsule": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 9,
-				"smallText": 38,
-				"contrast": 13,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 312,
-				"smallText": 1400,
-				"contrast": 660,
-				"contrastIndeterminate": 0
-			}
-		},
-		"replay-mismatch": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 9,
-				"smallText": 40,
-				"contrast": 13,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 312,
-				"smallText": 1460,
-				"contrast": 676,
-				"contrastIndeterminate": 0
-			}
-		},
-		"replay-missing": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 9,
-				"smallText": 40,
-				"contrast": 13,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 312,
-				"smallText": 1460,
-				"contrast": 676,
-				"contrastIndeterminate": 0
-			}
-		},
-		"replay-no-timezone": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 9,
-				"smallText": 38,
-				"contrast": 13,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 312,
-				"smallText": 1400,
-				"contrast": 660,
-				"contrastIndeterminate": 0
-			}
-		},
-		"replay-session": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 9,
-				"smallText": 38,
-				"contrast": 13,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 312,
-				"smallText": 1400,
-				"contrast": 660,
-				"contrastIndeterminate": 0
-			}
-		},
-		"replay-warnings": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 9,
-				"smallText": 38,
-				"contrast": 13,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 312,
-				"smallText": 1400,
-				"contrast": 660,
-				"contrastIndeterminate": 0
-			}
-		},
-		"studio-course-progress": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 15,
-				"contrast": 6,
-				"contrastIndeterminate": 11
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 600,
-				"smallText": 584,
-				"contrast": 280,
-				"contrastIndeterminate": 424
-			}
-		},
-		"studio-executable-module": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 7,
-				"contrast": 4,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 440,
-				"smallText": 304,
-				"contrast": 170,
-				"contrastIndeterminate": 0
-			}
-		},
-		"studio-static-doc": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 7,
-				"contrast": 4,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 440,
-				"smallText": 264,
-				"contrast": 180,
-				"contrastIndeterminate": 0
-			}
-		},
-		"studio-catalogue-offline": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"studio-catalogue": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"studio-empty-state": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"map-banner-variants": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-basemap-muted-default": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-basemap-panel": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-empty-panel-open": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-error-imagery": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-error-partial-tiles": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-layer-badge-counts": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-sync-loading": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-sync-hydrating": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
 		}
 	},
 	"subsets": {
@@ -1426,9 +1443,9 @@
 				"evidence-all-statuses": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 68,
-						"smallText": 448,
-						"contrast": 140,
+						"smallTarget": 62,
+						"smallText": 442,
+						"contrast": 88,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1436,9 +1453,9 @@
 				"evidence-approval-approved": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 44,
-						"smallText": 172,
-						"contrast": 41,
+						"smallTarget": 38,
+						"smallText": 166,
+						"contrast": 35,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1446,9 +1463,9 @@
 				"evidence-approval-consumed": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 44,
-						"smallText": 172,
-						"contrast": 54,
+						"smallTarget": 38,
+						"smallText": 166,
+						"contrast": 35,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1456,9 +1473,9 @@
 				"evidence-approval-integrity-only": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 44,
-						"smallText": 172,
-						"contrast": 42,
+						"smallTarget": 38,
+						"smallText": 166,
+						"contrast": 35,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1466,9 +1483,9 @@
 				"evidence-approval-revision-mismatch": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 44,
-						"smallText": 178,
-						"contrast": 44,
+						"smallTarget": 38,
+						"smallText": 172,
+						"contrast": 38,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1476,9 +1493,9 @@
 				"evidence-approval-stale-evidence": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 44,
-						"smallText": 184,
-						"contrast": 47,
+						"smallTarget": 38,
+						"smallText": 178,
+						"contrast": 41,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1486,9 +1503,9 @@
 				"evidence-approval-stale-revision": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 44,
-						"smallText": 184,
-						"contrast": 47,
+						"smallTarget": 38,
+						"smallText": 178,
+						"contrast": 41,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1496,9 +1513,9 @@
 				"evidence-approval-unreported": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 44,
-						"smallText": 172,
-						"contrast": 45,
+						"smallTarget": 38,
+						"smallText": 166,
+						"contrast": 35,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1506,9 +1523,9 @@
 				"evidence-approval-unverifiable": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 44,
-						"smallText": 184,
-						"contrast": 47,
+						"smallTarget": 38,
+						"smallText": 178,
+						"contrast": 41,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1516,9 +1533,9 @@
 				"evidence-drift-states": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 56,
-						"smallText": 256,
-						"contrast": 64,
+						"smallTarget": 50,
+						"smallText": 250,
+						"contrast": 32,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1526,9 +1543,9 @@
 				"evidence-empty": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 28,
-						"smallText": 40,
-						"contrast": 37,
+						"smallTarget": 22,
+						"smallText": 34,
+						"contrast": 25,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1536,9 +1553,9 @@
 				"evidence-error": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 28,
-						"smallText": 12,
-						"contrast": 24,
+						"smallTarget": 22,
+						"smallText": 6,
+						"contrast": 18,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1546,8 +1563,8 @@
 				"experiment-empty": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 24,
-						"smallText": 12,
+						"smallTarget": 18,
+						"smallText": 6,
 						"contrast": 15,
 						"contrastIndeterminate": 0
 					},
@@ -1556,8 +1573,8 @@
 				"experiment-failed-rows": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 58,
-						"smallText": 556,
+						"smallTarget": 52,
+						"smallText": 550,
 						"contrast": 121,
 						"contrastIndeterminate": 0
 					},
@@ -1566,8 +1583,8 @@
 				"experiment-no-ci": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 70,
-						"smallText": 526,
+						"smallTarget": 64,
+						"smallText": 520,
 						"contrast": 91,
 						"contrastIndeterminate": 0
 					},
@@ -1576,8 +1593,8 @@
 				"experiment-with-ci": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 70,
-						"smallText": 598,
+						"smallTarget": 64,
+						"smallText": 592,
 						"contrast": 109,
 						"contrastIndeterminate": 0
 					},
@@ -1606,7 +1623,7 @@
 				"map-export-success": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 192,
+						"smallTarget": 186,
 						"smallText": 6,
 						"contrast": 147,
 						"contrastIndeterminate": 0
@@ -1616,7 +1633,7 @@
 				"map-export-zero-output": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 192,
+						"smallTarget": 186,
 						"smallText": 6,
 						"contrast": 147,
 						"contrastIndeterminate": 0
@@ -1636,7 +1653,7 @@
 				"map-layer-manager": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 84,
+						"smallTarget": 78,
 						"smallText": 0,
 						"contrast": 168,
 						"contrastIndeterminate": 0
@@ -1646,7 +1663,7 @@
 				"map-layer-provenance": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 102,
+						"smallTarget": 96,
 						"smallText": 0,
 						"contrast": 312,
 						"contrastIndeterminate": 0
@@ -1656,7 +1673,7 @@
 				"map-swipe": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 12,
+						"smallTarget": 6,
 						"smallText": 0,
 						"contrast": 0,
 						"contrastIndeterminate": 0
@@ -1666,7 +1683,7 @@
 				"map-time-slider": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 18,
+						"smallTarget": 12,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -1676,9 +1693,9 @@
 				"replay-capsule": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 48,
-						"smallText": 218,
-						"contrast": 102,
+						"smallTarget": 42,
+						"smallText": 214,
+						"contrast": 92,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1686,9 +1703,9 @@
 				"replay-mismatch": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 48,
-						"smallText": 230,
-						"contrast": 105,
+						"smallTarget": 42,
+						"smallText": 226,
+						"contrast": 95,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1696,9 +1713,9 @@
 				"replay-missing": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 48,
-						"smallText": 230,
-						"contrast": 105,
+						"smallTarget": 42,
+						"smallText": 226,
+						"contrast": 95,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1706,9 +1723,9 @@
 				"replay-no-timezone": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 48,
-						"smallText": 218,
-						"contrast": 102,
+						"smallTarget": 42,
+						"smallText": 214,
+						"contrast": 92,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1716,9 +1733,9 @@
 				"replay-session": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 48,
-						"smallText": 218,
-						"contrast": 102,
+						"smallTarget": 42,
+						"smallText": 214,
+						"contrast": 92,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1726,9 +1743,9 @@
 				"replay-warnings": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 48,
-						"smallText": 218,
-						"contrast": 102,
+						"smallTarget": 42,
+						"smallText": 214,
+						"contrast": 92,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2124,6 +2141,16 @@
 					"cells": 6
 				},
 				"chat-user-cancel": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-approval-protected-path-answered": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 30,
