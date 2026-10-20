@@ -23,6 +23,9 @@
  *  - routing: a repaired call can reach a lone UNTRUSTED owner of the tool name (it is still an ordinary
  *    use_mcp_tool call: approval is required and the approval card and the muted "Repaired ..." line name the
  *    server); a first-party-NAMED untrusted server is refused while a trusted one is connected, to avoid confusing the user (anti-confusion, not a security control: approval is the control);
+ *  - a trailing envelope missing its `</tool_calls>` is accepted only when every `<invoke>` is closed and nothing but
+ *    whitespace follows the last `</invoke>`;
+ *  - `task_progress` (Cline meta parameter) inside an MCP invoke is carried as the call's task_progress, not an argument;
  *  - an envelope still streaming is hidden from the transcript, and conversion happens once the message completes.
  */
 import { isFirstPartyServerName } from "@shared/aihydro/firstPartyServers"
@@ -129,6 +132,7 @@ const PROTOCOL_TAG_RE = new RegExp(
 	`</|<\\s*(?:${[...toolUseNames, ...toolParamNames, "tool_calls", "invoke", "parameter"].join("|")})\\b`,
 	"i",
 )
+const TASK_PROGRESS = "task_progress"
 const SAFE_NAME_RE = /^[A-Za-z0-9_.:-]+$/
 
 /** A raw (XML-spliced) value must not be able to open or close any protocol element. */
@@ -173,13 +177,27 @@ function toProtocolXml(
 		const tool = owners[0].tools.find((t) => t.name === name)!
 		const props = (tool.inputSchema as any)?.properties ?? {}
 		const args: Record<string, unknown> = {}
+		// task_progress is a Cline-protocol meta parameter (the system prompt asks every tool call to be able to
+		// carry it), not an argument of the MCP tool: strip it from `arguments` and pass it on as the call's own
+		// task_progress, exactly as a normal use_mcp_tool XML call does, so the focus chain updates and the MCP
+		// server never receives it. A tool whose own schema declares task_progress keeps it as an argument.
+		let taskProgress: string | undefined
 		for (const [k, v] of params) {
+			if (k === TASK_PROGRESS && !(TASK_PROGRESS in props)) {
+				taskProgress = v
+				continue
+			}
 			args[k] = coerce(v, props[k])
+		}
+		if (taskProgress !== undefined && !isInertValue(taskProgress)) {
+			return undefined // spliced into XML verbatim, like built-in params: tags are refused
 		}
 		// `<` is escaped as \u003c so the JSON round-trips as data but can never form a protocol tag in the XML text.
 		const json = JSON.stringify(args).replace(/</g, "\\u003c")
 		blocks.push(
-			`<use_mcp_tool>\n<server_name>${owners[0].name}</server_name>\n<tool_name>${name}</tool_name>\n<arguments>\n${json}\n</arguments>\n</use_mcp_tool>`,
+			`<use_mcp_tool>\n<server_name>${owners[0].name}</server_name>\n<tool_name>${name}</tool_name>\n<arguments>\n${json}\n</arguments>${
+				taskProgress !== undefined ? `\n<task_progress>${taskProgress}</task_progress>` : ""
+			}\n</use_mcp_tool>`,
 		)
 		routes.push({ server: owners[0].name, tool: name })
 	}
@@ -231,7 +249,18 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 				cursor = text.length // still streaming: hide it
 				break
 			}
-			// Unterminated: hide only the envelope itself (through its last complete invoke/parameter), keep the rest.
+			// Unclosed envelope (the model stopped without `</tool_calls>`). It is still a call when every invoke is
+			// properly closed and nothing but whitespace follows the last `</invoke>` (parseInvokes enforces both); an
+			// unclosed invoke, stray text or a nested envelope leaves it malformed. It is trailing by construction.
+			const invokes = parseInvokes(text.slice(start + OPEN.length))
+			const xml = invokes ? toProtocolXml(invokes, ctx, routes) : undefined
+			if (xml) {
+				out += xml
+				repaired++
+				cursor = text.length
+				break
+			}
+			// Malformed: hide only the envelope itself (through its last complete invoke/parameter), keep the rest.
 			const tail = text.slice(start)
 			const lastClose = Math.max(tail.lastIndexOf("</invoke>"), tail.lastIndexOf("</parameter>"))
 			const extentEnd = lastClose === -1 ? OPEN.length : lastClose + (tail.startsWith("</invoke>", lastClose) ? 9 : 12)
