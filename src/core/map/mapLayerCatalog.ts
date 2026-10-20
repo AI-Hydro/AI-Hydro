@@ -9,7 +9,6 @@ import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 export function defaultAihydroDir(): string {
 	return aihydroHome()
 }
-export const MAP_LAYER_CATALOG_FILE = aihydroPath("map_layer_catalog.json")
 /** Where the unscoped legacy catalog is renamed once one workspace has taken it over. */
 const LEGACY_MIGRATED_NAME = "map_layer_catalog.migrated.json"
 /**
