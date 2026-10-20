@@ -1,6 +1,7 @@
 import { aihydroHome, aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { createHash } from "crypto"
+import { constants as fsConstants } from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
@@ -15,6 +16,8 @@ export function defaultAihydroDir(): string {
  */
 const MIGRATED_MARKER_NAME = "map_layer_catalog.migrated"
 const UNSCOPED_NAME = "map_layer_catalog.json"
+/** Copy of the unscoped file taken before the first mirror write replaces its contents. Never overwritten. */
+const LEGACY_BACKUP_NAME = "map_layer_catalog.legacy-backup.json"
 /**
  * Per-workspace catalog file. The legacy global file is migrated into the first workspace that loads it (see
  * `readMapLayerCatalog`), so layers from other investigations no longer pile up in every window.
@@ -370,6 +373,33 @@ async function claimMigratedMarker(baseDir: string): Promise<boolean> {
 }
 
 /**
+ * Before the first mirror write: preserves the old unscoped file (exclusive copy, never over an existing backup)
+ * and then creates the migrated marker. Returns false when the backup failed, in which case the unscoped file
+ * must not be overwritten.
+ */
+async function prepareUnscopedMirror(baseDir: string): Promise<boolean> {
+	const marker = path.join(baseDir, MIGRATED_MARKER_NAME)
+	try {
+		await fs.access(marker)
+		return true
+	} catch {
+		// no marker yet: this is the first mirror write
+	}
+	try {
+		await fs.copyFile(path.join(baseDir, UNSCOPED_NAME), path.join(baseDir, LEGACY_BACKUP_NAME), fsConstants.COPYFILE_EXCL)
+	} catch (err) {
+		const code = (err as NodeJS.ErrnoException).code
+		// ENOENT: nothing to preserve. EEXIST: a backup already exists and is kept as is.
+		if (code !== "ENOENT" && code !== "EEXIST") {
+			console.warn("[mapLayerCatalog] legacy catalog backup failed; leaving the unscoped file untouched:", err)
+			return false
+		}
+	}
+	await claimMigratedMarker(baseDir)
+	return true
+}
+
+/**
  * Writes the workspace's scoped catalog and mirrors it to the unscoped `map_layer_catalog.json`.
  *
  * The mirror holds the ACTIVE workspace's catalog and exists only because aihydro-tools (the MCP map layer
@@ -382,7 +412,9 @@ export async function persistMapLayerCatalog(catalog: MapLayerCatalog, baseDir: 
 		const text = JSON.stringify(catalog, null, 2)
 		if (catalog.workspace_root) {
 			await writeFileAtomic(scopedMapLayerCatalogFile(catalog.workspace_root, baseDir), text)
-			await claimMigratedMarker(baseDir)
+			if (!(await prepareUnscopedMirror(baseDir))) {
+				return // scoped write done; mirror skipped so the old unscoped contents are not lost
+			}
 		}
 		await writeFileAtomic(path.join(baseDir, UNSCOPED_NAME), text)
 	} catch (err) {

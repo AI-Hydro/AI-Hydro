@@ -154,4 +154,36 @@ describe("mapLayerCatalog overflow and legacy migration", () => {
 		expect((await readMapLayerCatalog("/ws-a", dir))?.layers.map((l) => l.id)).to.deep.equal(["own"])
 		expect(JSON.parse(await fs.readFile(path.join(dir, "map_layer_catalog.json"), "utf8")).layers).to.have.length(0)
 	})
+
+	it("backs up the old unscoped contents byte-for-byte before the first mirror write, and never overwrites the backup", async () => {
+		const original = '{ "updated_at_ms": 7,\n  "layer_order": ["old"], "layers": [] }\n'
+		await fs.writeFile(path.join(dir, "map_layer_catalog.json"), original)
+		// A workspace with its own scoped catalog writes first (so no import happens).
+		await persistMapLayerCatalog(await buildMapLayerCatalogAsync([geo("a1")], ["a1"], "/ws-a"), dir)
+		expect(await fs.readFile(path.join(dir, "map_layer_catalog.legacy-backup.json"), "utf8")).to.equal(original)
+		expect(
+			(JSON.parse(await fs.readFile(path.join(dir, "map_layer_catalog.json"), "utf8")) as MapLayerCatalog).layers.map(
+				(l) => l.id,
+			),
+		).to.deep.equal(["a1"])
+		// Later writes keep the backup as is.
+		await persistMapLayerCatalog(await buildMapLayerCatalogAsync([geo("a2")], ["a2"], "/ws-a"), dir)
+		expect(await fs.readFile(path.join(dir, "map_layer_catalog.legacy-backup.json"), "utf8")).to.equal(original)
+	})
+
+	it("an existing backup is never overwritten", async () => {
+		await fs.writeFile(path.join(dir, "map_layer_catalog.legacy-backup.json"), "KEEP")
+		await fs.writeFile(path.join(dir, "map_layer_catalog.json"), "{}")
+		await persistMapLayerCatalog(await buildMapLayerCatalogAsync([geo("a1")], ["a1"], "/ws-a"), dir)
+		expect(await fs.readFile(path.join(dir, "map_layer_catalog.legacy-backup.json"), "utf8")).to.equal("KEEP")
+	})
+
+	it("if the backup cannot be made the unscoped file is left alone but the scoped write still succeeds", async () => {
+		// A directory in place of the unscoped file makes the backup copy fail with a non-ENOENT/EEXIST error on every OS.
+		await fs.mkdir(path.join(dir, "map_layer_catalog.json", "keep"), { recursive: true })
+		await persistMapLayerCatalog(await buildMapLayerCatalogAsync([geo("a1")], ["a1"], "/ws-a"), dir)
+		expect((await fs.stat(path.join(dir, "map_layer_catalog.json"))).isDirectory()).to.equal(true)
+		expect(await fs.readdir(dir)).to.not.include("map_layer_catalog.migrated")
+		expect((await readMapLayerCatalog("/ws-a", dir))?.layers.map((l) => l.id)).to.deep.equal(["a1"])
+	})
 })
