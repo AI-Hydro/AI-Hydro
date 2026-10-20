@@ -175,7 +175,7 @@ Every analysis result appears on a live map inside VS Code — no external GIS t
 - **8 file formats** — drag any GeoJSON, KML, KMZ, GPX, Shapefile (.zip), GeoTIFF, TopoJSON, or CSV onto the map to load it instantly
 - **Agent layer control** — the agent can update colours, opacity, class breaks, and choropleth symbology on existing layers via `map_update_layer` and `map_apply_symbology`, without duplicating files
 - **Symbology editor** — per-layer fill/stroke/opacity and colormap controls inline in the layer panel
-- **13 free basemaps** — USGS Imagery, USGS Topo, Esri Hillshade, Esri Ocean, Carto, Stadia, and more; no API token required
+- **Keyless basemaps** — a muted Esri Gray Canvas hydrology default, USGS Topo/Imagery/Shaded Relief (US only), Esri Hillshade/Imagery/Topo/Ocean; no API token required. CARTO, Stadia, Mapbox and Humanitarian OSM were removed (key or policy reasons)
 - **Persistent workspace** — basemap, view state, and layer visibility are saved across VS Code sessions
 
 ### AI-Hydro Studio — Built-in Python Kernel

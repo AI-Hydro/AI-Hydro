@@ -111,7 +111,35 @@ describe("mapWorkspace schema v2 (basemap migration)", () => {
 
 	it("an explicit choice that is no longer in the catalogue (Stadia, Mapbox) falls back to the default", () => {
 		localStorage.setItem(KEY, JSON.stringify({ version: 2, basemap: "stadia-terrain", basemapExplicit: true }))
-		expect(initialBasemap(loadMapWorkspace())).toEqual({ id: DEFAULT_BASEMAP_ID, explicit: false })
+		expect(initialBasemap(loadMapWorkspace())).toMatchObject({ id: DEFAULT_BASEMAP_ID, explicit: false })
+	})
+
+	it.each(["carto-light", "carto-dark", "carto-voyager"])(
+		"a saved keyed provider (%s) migrates to the default and reports why",
+		(id) => {
+			localStorage.setItem(KEY, JSON.stringify({ version: 2, basemap: id, basemapExplicit: true }))
+			expect(initialBasemap(loadMapWorkspace())).toEqual({
+				id: DEFAULT_BASEMAP_ID,
+				explicit: false,
+				migrated: { from: id, reason: "CARTO now requires an API key" },
+			})
+		},
+	)
+
+	it("a saved Humanitarian OSM choice migrates to the default and says why", () => {
+		localStorage.setItem(KEY, JSON.stringify({ version: 2, basemap: "osm-hot", basemapExplicit: true }))
+		const result = initialBasemap(loadMapWorkspace())
+		expect(result).toMatchObject({ id: DEFAULT_BASEMAP_ID, explicit: false, migrated: { from: "osm-hot" } })
+		expect(result.migrated?.reason).toMatch(/user-agent/)
+	})
+
+	it("an unknown saved id migrates with a generic reason; a valid or non-explicit save has no migration notice", () => {
+		expect(initialBasemap({ basemap: "zzz", basemapExplicit: true }).migrated).toEqual({
+			from: "zzz",
+			reason: "it is no longer available",
+		})
+		expect(initialBasemap({ basemap: "esri-topo", basemapExplicit: true }).migrated).toBeUndefined()
+		expect(initialBasemap({ basemap: undefined, basemapExplicit: false }).migrated).toBeUndefined()
 	})
 
 	it("migrateWorkspace rejects non-objects and unknown versions", () => {

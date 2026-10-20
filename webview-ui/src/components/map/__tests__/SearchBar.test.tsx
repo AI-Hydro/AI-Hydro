@@ -117,7 +117,10 @@ describe("SearchBar", () => {
 		type("second")
 		await flush()
 		await act(async () => {
-			resolveFirst({ ok: true, result: { hits: [{ label: "OLD 01", lat: 1, lon: 2, source: "gauge", meta: { gauge_id: "01" } }] } })
+			resolveFirst({
+				ok: true,
+				result: { hits: [{ label: "OLD 01", lat: 1, lon: 2, source: "gauge", meta: { gauge_id: "01" } }] },
+			})
 		})
 		expect(screen.queryByText("OLD 01")).toBeNull()
 		expect(screen.getByText("NEW 02")).toBeTruthy()

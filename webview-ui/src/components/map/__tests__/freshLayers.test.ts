@@ -2,7 +2,14 @@ import { PathLayer } from "@deck.gl/layers"
 import { describe, expect, it } from "vitest"
 import { freshLayers } from "../freshLayers"
 
-const transects = [{ path: [[0, 0], [1, 1]] as [number, number][] }]
+const transects = [
+	{
+		path: [
+			[0, 0],
+			[1, 1],
+		] as [number, number][],
+	},
+]
 const makeLayer = () => new PathLayer({ id: "__saved-transects", data: transects, getPath: (t: any) => t.path })
 
 /**

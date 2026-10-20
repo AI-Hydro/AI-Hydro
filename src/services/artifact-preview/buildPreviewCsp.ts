@@ -75,7 +75,6 @@ const ARTIFACT_SCRIPT_CDNS: ReadonlyArray<string> = [
 const ARTIFACT_TILE_CDNS: ReadonlyArray<string> = [
 	"https://*.tile.openstreetmap.org",
 	"https://*.tile.opentopomap.org",
-	"https://*.basemaps.cartocdn.com",
 	"https://server.arcgisonline.com",
 	"https://*.stamen.com",
 	"https://*.tile.stamen.com",

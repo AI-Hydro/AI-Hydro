@@ -2,6 +2,7 @@ import type { MapLayer } from "@shared/proto/cline/map"
 import { useEffect, useState } from "react"
 import { applyColormap, dataUrlToImage, rasterCache } from "./formats/rasterCache"
 import { resolveFileUri } from "./resolveFileUri"
+import { fingerprintBlob } from "./tileHealth"
 
 export interface ResourceState {
 	status: "loading" | "error"
@@ -157,11 +158,16 @@ function decodeBlobAsImageElement(blob: Blob, tileUrl: string): Promise<HTMLImag
 	})
 }
 
-export async function loadMapTile(tile: { url?: string | null; signal?: AbortSignal }): Promise<ImageBitmap | HTMLImageElement> {
+export async function loadMapTile(
+	tile: { url?: string | null; signal?: AbortSignal },
+	onFingerprint?: (fingerprint: string) => void,
+): Promise<ImageBitmap | HTMLImageElement> {
 	if (!tile.url) throw new Error("Tile URL is missing")
 	const response = await fetch(tile.url, { signal: tile.signal })
 	if (!response.ok) throw new Error(`Tile request failed (HTTP ${response.status})`)
 	const blob = await response.blob()
+	// Basemaps pass a callback so a provider answering 200 with one placeholder image can be noticed.
+	if (onFingerprint) void fingerprintBlob(blob).then(onFingerprint, () => undefined)
 	let image: ImageBitmap | HTMLImageElement
 	try {
 		image = await createImageBitmap(blob)
@@ -173,4 +179,11 @@ export async function loadMapTile(tile: { url?: string | null; signal?: AbortSig
 		throw new DOMException("Tile request cancelled", "AbortError")
 	}
 	return image
+}
+
+/** Fetches one tile and returns its content fingerprint; rejects on HTTP errors, network errors, abort or hashing failure. */
+export async function fetchTileFingerprint(url: string, signal?: AbortSignal): Promise<string> {
+	const response = await fetch(url, { signal })
+	if (!response.ok) throw new Error(`Tile request failed (HTTP ${response.status})`)
+	return fingerprintBlob(await response.blob())
 }

@@ -99,7 +99,13 @@ try {
 					name: "Smoke profile",
 					notes: "",
 					aiPrompt: "",
-					geometry: { type: "LineString", coordinates: [[79.9, 24.9], [80.1, 25.1]] },
+					geometry: {
+						type: "LineString",
+						coordinates: [
+							[79.9, 24.9],
+							[80.1, 25.1],
+						],
+					},
 					color: "#f97316",
 					tags: [],
 					collectionIds: [],
@@ -171,7 +177,11 @@ try {
 	const noRendererError = async (label) => {
 		await page.waitForTimeout(700)
 		const alerts = (await page.getByRole("alert").allTextContents()).join(" | ")
-		assert.equal(await page.getByText("Map renderer", { exact: false }).count(), 0, `${label}: renderer error shown: ${alerts}`)
+		assert.equal(
+			await page.getByText("Map renderer", { exact: false }).count(),
+			0,
+			`${label}: renderer error shown: ${alerts}`,
+		)
 		assert.equal(await page.getByText("assertion", { exact: false }).count(), 0, `${label}: assertion text shown`)
 		assert.deepEqual(errors, [], `${label}: uncaught browser errors`)
 	}
@@ -204,18 +214,24 @@ try {
 	assert.equal(await page.getByRole("alert").count(), 0)
 	assert.equal(await page.getByRole("button", { name: "Research Plate Export", exact: true }).isEnabled(), true)
 	assert.deepEqual(errors, [])
-	// Basemap limits: the default is the muted Carto no-labels base; the USGS hydrography overlay is US-only and
+	// Basemap limits: the default is the muted Esri Gray Canvas base; the USGS hydrography overlay is US-only and
 	// the station is in India, so it must not be requested at all (extent); and zooming far past the source's
 	// native zoom must overzoom, never request a level the source does not serve.
-	assert.ok(requested.some((url) => /(light|dark)_nolabels/.test(url)), "default basemap should be Carto no-labels")
+	assert.ok(
+		requested.some((url) => /World_(Light|Dark)_Gray_Base/.test(url)),
+		"default basemap should be Esri Gray Canvas",
+	)
 	assert.equal(requested.filter((url) => /USGSHydroCached/.test(url)).length, 0, "US-only overlay requested outside its extent")
-	requested.length = 0
+	// The map may already sit at the source's last native level, where overzoom needs no new tiles, so the
+	// zoom check covers every basemap tile requested in the whole run, not only those after the zoom clicks.
 	for (let i = 0; i < 18; i++) await page.getByRole("button", { name: "Zoom in", exact: true }).click()
 	await page.waitForLoadState("networkidle")
 	await page.waitForTimeout(1000)
-	const zooms = requested.map((url) => Number(url.match(/\/(\d+)\/\d+\/\d+\.png/)?.[1])).filter(Number.isFinite)
-	assert.ok(zooms.length > 0, "zooming should request tiles")
-	assert.ok(Math.max(...zooms) <= 19, `tile requested past native zoom: z=${Math.max(...zooms)}`)
+	const zooms = requested
+		.map((url) => Number((url.match(/\/tile\/(\d+)\/\d+\/\d+(?:\?|$)/) ?? url.match(/\/(\d+)\/\d+\/\d+\.png/))?.[1]))
+		.filter(Number.isFinite)
+	assert.ok(zooms.length > 0, "the basemap should request tiles")
+	assert.ok(Math.max(...zooms) <= 16, `tile requested past native zoom: z=${Math.max(...zooms)}`)
 	assert.deepEqual(errors, [])
 	const canvas = await page.locator("canvas#ai-hydro-research-map").evaluate((canvas) => {
 		const copy = document.createElement("canvas")
