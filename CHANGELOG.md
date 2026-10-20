@@ -24,6 +24,10 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 - A catalogue module's trust bar now reads **Read-only course copy**: "This copy was downloaded without a signature, so AI-Hydro will not run its Python. Install the signed Learning Pack to run cells." It carries a host-chrome **Install Learning Pack…** button (real click only; page content cannot trigger it) that opens the normal install flow. `docs/studio-trust-model.md` now says a pack is "signed by the key with this fingerprint" instead of claiming signatures prove who built it.
 
+### Fixed — Learning Pack verifier rejects a leading UTF-8 BOM (vision-2040, branch `vision2040/verifier-bom`)
+
+- `parseCanonicalJson` decoded with a `TextDecoder` that strips a leading BOM by default, so its "must not contain a UTF-8 BOM" check never fired and a BOM-prefixed contract JSON file (for example `pack.json`) verified. It now decodes with `ignoreBOM: true`, so such a pack is `invalid` (`BOM`). **This tightens acceptance:** a pack that was previously accepted only because its BOM was ignored is now rejected. The signature and checksums always covered the exact bytes, so no valid-signature pack becomes forgeable either way; the vector in the test is re-checksummed and re-signed so the BOM is its only defect.
+
 ### Fixed — keyless basemaps (vision-2040, branch `vision2040/basemap-keyless`)
 
 - **Default basemap was a watermark.** CARTO now answers every keyless tile request (any style, any location) with one "API KEY REQUIRED" image, so the default and the Carto Light/Dark/Voyager entries were unusable. The default "Hydrology default (muted)" now uses Esri Light/Dark Gray Canvas (global, keyless, attribution shown); the Carto entries are removed (no CARTO key setting exists).

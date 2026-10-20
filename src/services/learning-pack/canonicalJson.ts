@@ -91,7 +91,8 @@ export function parseStrictJsonSource(bytes: Uint8Array, label: string): unknown
 export function parseCanonicalJson(bytes: Uint8Array, label: string): unknown {
 	let text: string
 	try {
-		text = new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+		// ignoreBOM keeps a leading BOM in the text (the decoder strips it by default) so the check below can see it.
+		text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes)
 	} catch {
 		throw new StrictJsonError(`${label} is not valid UTF-8`, "INVALID_UTF8")
 	}
