@@ -31,6 +31,8 @@ export interface ConnectorDefinition {
 	tags: string[]
 	docsUrl?: string
 	comingSoon: boolean
+	/** Data source the AI-Hydro tools already use with no account or setup. Built-in only; never taken from remote data. */
+	builtIn?: boolean
 	/**
 	 * Pre-filled chat prompt for the "Set up with AI →" button. Omit for coming-soon connectors.
 	 * BUILT-IN ONLY: a `setupPrompt` arriving in the remote catalog is always discarded
@@ -254,11 +256,11 @@ function cleanActions(builtin: ConnectorAction[], remoteActions: unknown): Conne
  * It can never supply a `setupPrompt`, change `comingSoon` / `authType`, or introduce a
  * command. Remote ids unknown to the client are shown as display-only "coming soon" cards.
  */
-export function mergeConnectorCatalog(remoteCatalog: unknown, builtins: ConnectorDefinition[]): ConnectorDefinition[] {
-	if (!Array.isArray(remoteCatalog) || remoteCatalog.length === 0) {
+export function mergeConnectorCatalog(remoteInput: unknown, builtins: ConnectorDefinition[]): ConnectorDefinition[] {
+	if (!Array.isArray(remoteInput) || remoteInput.length === 0) {
 		return builtins
 	}
-	remoteCatalog = remoteCatalog.slice(0, MAX_REMOTE_CONNECTORS)
+	const remoteCatalog: unknown[] = remoteInput.slice(0, MAX_REMOTE_CONNECTORS)
 	const builtinById = new Map(builtins.map((c) => [c.id, c]))
 	const merged: ConnectorDefinition[] = []
 	const used = new Set<string>()
