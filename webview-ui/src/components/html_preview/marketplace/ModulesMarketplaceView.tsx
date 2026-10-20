@@ -146,22 +146,26 @@ const ModulesMarketplaceView = () => {
 		}
 		setError(null)
 
-		Promise.all([
+		const message = (err: unknown) => (err instanceof Error && err.message ? err.message : "Failed to load marketplace data")
+		Promise.allSettled([
 			HtmlPreviewServiceClient.refreshModulesMarketplace(EmptyRequest.create({})),
-			HtmlPreviewServiceClient.refreshCoursesMarketplace(EmptyRequest.create({})).catch(() => null),
-		])
-			.then(([modulesResp, coursesResp]) => {
-				setCatalog(modulesResp)
-				setCourses(coursesResp)
-				setIsLoading(false)
-				setIsRefreshing(false)
-			})
-			.catch((err) => {
-				console.error("Error refreshing marketplace:", err)
-				setError("Failed to load marketplace data")
-				setIsLoading(false)
-				setIsRefreshing(false)
-			})
+			HtmlPreviewServiceClient.refreshCoursesMarketplace(EmptyRequest.create({})),
+		]).then(([modulesRes, coursesRes]) => {
+			// A failed fetch is an error state with Retry, never an empty catalogue.
+			if (modulesRes.status === "fulfilled") {
+				setCatalog(modulesRes.value)
+			}
+			if (coursesRes.status === "fulfilled") {
+				setCourses(coursesRes.value)
+			}
+			if (modulesRes.status === "rejected" || coursesRes.status === "rejected") {
+				const reason = modulesRes.status === "rejected" ? modulesRes.reason : (coursesRes as PromiseRejectedResult).reason
+				console.error("Error refreshing marketplace:", reason)
+				setError(message(reason))
+			}
+			setIsLoading(false)
+			setIsRefreshing(false)
+		})
 	}
 
 	const updateRecognition = (moduleId: string, starred: boolean, aiHydroStars: number) => {

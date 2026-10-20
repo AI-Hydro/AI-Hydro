@@ -2,6 +2,7 @@ import { MarketplaceStarRequest } from "@shared/proto/cline/common"
 import type { LearningModuleItem } from "@shared/proto/cline/html_preview"
 import { InstallModuleRequest } from "@shared/proto/cline/html_preview"
 import { useState } from "react"
+import { provenanceLine } from "./provenanceLabels"
 import { httpUrlOrEmpty } from "./safeUrl"
 import { HtmlPreviewServiceClient } from "@/services/grpc-client"
 
@@ -175,6 +176,9 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 						{item.estimatedMinutes > 0 && (
 							<span style={{ marginLeft: item.author ? 8 : 0 }}>· {item.estimatedMinutes} min</span>
 						)}
+					</div>
+					<div data-testid="module-provenance" style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)", marginTop: 2 }}>
+						{provenanceLine(item.license)}
 					</div>
 					{httpUrlOrEmpty(item.authorUrl) && (
 						<a
