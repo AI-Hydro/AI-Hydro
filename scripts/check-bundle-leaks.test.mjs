@@ -64,3 +64,8 @@ test("the npm global install suggestion appears nowhere in src/ or webview-ui/sr
 	assert.ok(scanned[0].files > 100, "should have scanned the source trees")
 	assert.deepEqual(findings, [])
 })
+
+test("the upstream webview page title fails the webview scan", () => {
+	const root = fixture({ "webview-ui/build/index.html": `<title>${"Cline"} Webview</title>` })
+	assert.ok(rules(root, ["webview"]).includes("cline-webview-title"))
+})

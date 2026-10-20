@@ -60,13 +60,43 @@ describe("mergeConnectorCatalog (untrusted remote catalog)", () => {
 		]
 		const actions = gee(mergeConnectorCatalog(remote, BUILTIN_CONNECTORS)).actions!
 		expect(actions.map((a) => a.id)).to.deep.equal(["connect"])
-		expect(actions[0].label).to.equal("Link") // remote may relabel an allowlisted action
+		expect(actions[0].label).to.equal("Connect") // labels stay built-in
 		expect(JSON.stringify(actions)).to.not.contain("terminal")
+	})
+
+	it("does not let remote data relabel one action as another", () => {
+		const remote = [
+			{
+				...liveGee,
+				actions: [{ id: "disconnect", label: "Test", commandId: "aihydro.gee.disconnect" }],
+			},
+		]
+		const a = gee(mergeConnectorCatalog(remote, BUILTIN_CONNECTORS)).actions!
+		expect(a).to.have.length(1)
+		expect(a[0].label).to.equal("Disconnect")
+	})
+
+	it("caps the number of remote entries", () => {
+		const many = Array.from({ length: 500 }, (_, i) => ({ id: `c${i}`, displayName: `C${i}` }))
+		const merged = mergeConnectorCatalog(many, BUILTIN_CONNECTORS)
+		expect(merged.length).to.be.at.most(64 + BUILTIN_CONNECTORS.length)
+	})
+
+	it("marks USGS and Planetary Computer as built in, and remote cannot unset it", () => {
+		const remote = [{ id: "usgs_nwis", displayName: "USGS", comingSoon: true, builtIn: false }]
+		const merged = mergeConnectorCatalog(remote, BUILTIN_CONNECTORS)
+		for (const id of ["usgs_nwis", "planetary_computer"]) {
+			const c = merged.find((x) => x.id === id)!
+			expect(c.builtIn).to.equal(true)
+			expect(c.comingSoon).to.equal(false)
+		}
 	})
 
 	it("falls back to built-in actions when the remote actions are all invalid", () => {
 		const remote = [{ ...liveGee, actions: [{ id: "x", label: "x", commandId: "evil.command" }] }]
-		expect(gee(mergeConnectorCatalog(remote, BUILTIN_CONNECTORS)).actions).to.deep.equal(gee(BUILTIN_CONNECTORS as never).actions)
+		expect(gee(mergeConnectorCatalog(remote, BUILTIN_CONNECTORS)).actions).to.deep.equal(
+			gee(BUILTIN_CONNECTORS as never).actions,
+		)
 	})
 
 	it("cannot attach Earth Engine actions to another connector", () => {
@@ -76,7 +106,9 @@ describe("mergeConnectorCatalog (untrusted remote catalog)", () => {
 	})
 
 	it("lets remote entries update display text only", () => {
-		const remote = [{ ...liveGee, displayName: "Earth Engine (renamed)", description: "New text", authType: "none", comingSoon: true }]
+		const remote = [
+			{ ...liveGee, displayName: "Earth Engine (renamed)", description: "New text", authType: "none", comingSoon: true },
+		]
 		const g = gee(mergeConnectorCatalog(remote, BUILTIN_CONNECTORS))
 		expect(g.displayName).to.equal("Earth Engine (renamed)")
 		expect(g.description).to.equal("New text")
@@ -98,6 +130,7 @@ describe("mergeConnectorCatalog (untrusted remote catalog)", () => {
 
 	it("isGeeActionId only accepts the four allowlisted ids", () => {
 		for (const id of ["connect", "test", "configure", "disconnect"]) expect(isGeeActionId(id)).to.equal(true)
-		for (const id of ["docs", "toString", "__proto__", "aihydro.gee.connect", "", undefined, 3]) expect(isGeeActionId(id)).to.equal(false)
+		for (const id of ["docs", "toString", "__proto__", "aihydro.gee.connect", "", undefined, 3])
+			expect(isGeeActionId(id)).to.equal(false)
 	})
 })

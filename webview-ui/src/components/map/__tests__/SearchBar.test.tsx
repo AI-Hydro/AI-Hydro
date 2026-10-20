@@ -60,6 +60,29 @@ describe("SearchBar", () => {
 		expect(geocoderSearch).toHaveBeenCalledTimes(2)
 	})
 
+	it("a debounced hydrology response after Enter does not wipe the place results", async () => {
+		geocoderSearch.mockResolvedValue([{ label: "Fish River, AL", lat: 30.5, lon: -87.8 }])
+		const input = type("fish river")
+		await act(async () => {
+			fireEvent.keyDown(input, { key: "Enter" })
+		})
+		expect(screen.getByText("Fish River, AL")).toBeTruthy()
+		await flush() // the pending 400 ms hydrology debounce fires now
+		expect(screen.getByText("Fish River, AL")).toBeTruthy()
+	})
+
+	it("pressing Enter twice shows results, not an abort error", async () => {
+		geocoderSearch.mockResolvedValue([{ label: "Fish River, AL", lat: 30.5, lon: -87.8 }])
+		const input = type("fish river")
+		await flush()
+		await act(async () => {
+			fireEvent.keyDown(input, { key: "Enter" })
+			fireEvent.keyDown(input, { key: "Enter" })
+		})
+		expect(screen.getByText("Fish River, AL")).toBeTruthy()
+		expect(screen.queryByText(/Aborted/)).toBeNull()
+	})
+
 	it("does not contain the old hard-coded gauge list", async () => {
 		type("01031500")
 		await flush()

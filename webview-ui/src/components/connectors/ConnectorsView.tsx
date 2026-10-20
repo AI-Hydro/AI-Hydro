@@ -121,14 +121,14 @@ const ConnectorsView = ({ onDone }: ConnectorsViewProps) => {
 					gap: "12px",
 				}}>
 				<p style={{ margin: 0, fontSize: "13px", color: "var(--vscode-descriptionForeground)" }}>
-					Connect AI-Hydro to external data sources and compute services. Use the buttons on a card to connect or test it;{" "}
-					<strong>Set up with AI</strong> asks the agent to walk you through it instead.
+					Connect AI-Hydro to external data sources and compute services. Use the buttons on a card to connect or test
+					it; <strong>Set up with AI</strong> asks the agent to walk you through it instead.
 				</p>
 
 				{connectors.map((c) => (
 					<ConnectorCard
-						connector={c}
 						busyAction={busyAction}
+						connector={c}
 						details={details[c.id] ?? {}}
 						key={c.id}
 						onAction={handleAction}
@@ -153,6 +153,7 @@ const PILL: Record<ConnectorStatus, { bg: string; color: string; border: string;
 	error: { bg: "rgba(239,68,68,0.12)", color: "#f87171", border: "rgba(239,68,68,0.3)" },
 	unknown: { bg: "transparent", color: "var(--vscode-descriptionForeground)", border: "var(--vscode-panel-border)" },
 	"coming-soon": { bg: "transparent", color: "var(--vscode-badge-foreground)", border: "var(--vscode-panel-border)" },
+	"built-in": { bg: "transparent", color: "var(--vscode-descriptionForeground)", border: "var(--vscode-panel-border)" },
 }
 
 const STATUS_LABEL: Record<ConnectorStatus, string> = {
@@ -161,6 +162,7 @@ const STATUS_LABEL: Record<ConnectorStatus, string> = {
 	error: "Error",
 	unknown: "Unknown",
 	"coming-soon": "Coming soon",
+	"built-in": "Built in (no account needed)",
 }
 
 const StatusPill = ({ status }: { status: ConnectorStatus }) => {
@@ -200,7 +202,7 @@ type ConnectorCardProps = {
 }
 
 const ConnectorCard = ({ connector, status, details, busyAction, onAction, onSetupWithAI }: ConnectorCardProps) => {
-	const effectiveStatus: ConnectorStatus = connector.comingSoon ? "coming-soon" : status
+	const effectiveStatus: ConnectorStatus = connector.comingSoon ? "coming-soon" : connector.builtIn ? "built-in" : status
 	const isConnected = effectiveStatus === "connected"
 
 	return (
@@ -325,12 +327,21 @@ const ConnectorCard = ({ connector, status, details, busyAction, onAction, onSet
 							padding: "4px 2px",
 						}}
 						target="_blank">
-						Docs ↗
+						Docs ↗ <span style={{ opacity: 0.7 }}>({docsHost(connector.docsUrl)})</span>
 					</a>
 				)}
 			</div>
 		</div>
 	)
+}
+
+/** Remote data may supply the docs link, so always show where it points. */
+function docsHost(url: string): string {
+	try {
+		return new URL(url).host
+	} catch {
+		return "unknown host"
+	}
 }
 
 // ---------------------------------------------------------------------------

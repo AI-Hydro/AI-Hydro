@@ -60,9 +60,8 @@ export async function isRecognitionTelemetryAllowed(): Promise<boolean> {
 	let allowed = false
 	try {
 		const host = await HostProvider.env.getTelemetrySettings({})
-		allowed =
-			(host.isEnabled === Setting.ENABLED || host.isEnabled === Setting.UNSUPPORTED) &&
-			StateManager.get().getGlobalSettingsKey("telemetrySetting") !== "disabled"
+		// UNSUPPORTED (a host that cannot report the setting) counts as disabled: fail closed.
+		allowed = host.isEnabled === Setting.ENABLED && StateManager.get().getGlobalSettingsKey("telemetrySetting") !== "disabled"
 	} catch {
 		allowed = false
 	}

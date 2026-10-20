@@ -16,7 +16,7 @@
  *     `aihydro.connectors.status`, keyed by connectorId.
  */
 
-export type ConnectorStatus = "connected" | "disconnected" | "error" | "unknown" | "coming-soon"
+export type ConnectorStatus = "connected" | "disconnected" | "error" | "unknown" | "coming-soon" | "built-in"
 
 export type ConnectorAuthType = "oauth" | "api-key" | "service-account" | "none"
 
@@ -75,6 +75,10 @@ export interface ConnectorStatusEntry {
 
 export type ConnectorStatusMap = Record<string, ConnectorStatusEntry>
 
+/** Limits applied to the untrusted remote catalog (bytes on fetch, entries on fetch and on merge). */
+export const MAX_REMOTE_CONNECTORS = 64
+export const MAX_REMOTE_CATALOG_BYTES = 256 * 1024
+
 export const CONNECTOR_STATUS_STATE_KEY = "aihydro.connectors.status"
 
 export function secretStorageKey(connectorId: string, secretName: string): string {
@@ -88,7 +92,7 @@ export function secretStorageKey(connectorId: string, secretName: string): strin
 const docs = {
 	gee: "https://developers.google.com/earth-engine",
 	hawqs: "https://hawqs.tamu.edu/",
-	nwis: "https://waterdata.usgs.gov/nwis",
+	nwis: "https://waterdata.usgs.gov/",
 	hydroshare: "https://www.hydroshare.org/",
 	planetary: "https://planetarycomputer.microsoft.com/",
 	opentopo: "https://opentopography.org/",
@@ -132,13 +136,14 @@ export const BUILTIN_CONNECTORS: ConnectorDefinition[] = [
 		id: "usgs_nwis",
 		displayName: "USGS / NWIS",
 		description:
-			"National Water Information System — real-time and historical streamflow, groundwater, and water-quality observations across the United States.",
+			"USGS water data — real-time and historical streamflow, groundwater, and water-quality observations across the United States. Used anonymously by the AI-Hydro tools; no setup needed.",
 		category: "data-access",
 		icon: "pulse",
 		authType: "none",
 		tags: ["streamflow", "groundwater", "USA", "real-time"],
 		docsUrl: docs.nwis,
-		comingSoon: true,
+		comingSoon: false,
+		builtIn: true,
 	},
 	{
 		id: "hydroshare",
@@ -156,13 +161,14 @@ export const BUILTIN_CONNECTORS: ConnectorDefinition[] = [
 		id: "planetary_computer",
 		displayName: "Microsoft Planetary Computer",
 		description:
-			"STAC-indexed petabytes of environmental data — Landsat, Sentinel, NAIP, DEMs, ERA5 — with a hosted Dask compute backend.",
+			"STAC-indexed environmental data — Landsat, Sentinel, NAIP, DEMs. The AI-Hydro tools read the public STAC catalog anonymously; no setup needed.",
 		category: "remote-sensing",
 		icon: "milestone",
-		authType: "api-key",
+		authType: "none",
 		tags: ["STAC", "Landsat", "Sentinel", "Dask", "raster"],
 		docsUrl: docs.planetary,
-		comingSoon: true,
+		comingSoon: false,
+		builtIn: true,
 	},
 	{
 		id: "opentopography",
@@ -232,8 +238,9 @@ function cleanActions(builtin: ConnectorAction[], remoteActions: unknown): Conne
 			continue
 		}
 		seen.add(known.id)
-		// Remote may relabel / reorder allowlisted actions; the command comes from the built-in entry.
-		out.push({ ...known, label: cleanText((raw as { label?: unknown }).label, 40) ?? known.label })
+		// Remote may only reorder/select allowlisted actions. Label and command both come from the built-in entry,
+		// so remote data cannot relabel (e.g.) Disconnect as "Test".
+		out.push(known)
 	}
 	return out.length > 0 ? out : builtin
 }
@@ -243,7 +250,7 @@ function cleanActions(builtin: ConnectorAction[], remoteActions: unknown): Conne
  *
  * Trust model: the remote JSON is untrusted display data. It may update display text
  * (name, description, tags, category, icon, https docs link) of connectors that already
- * exist built-in, and it may reorder/relabel actions that map to an allowlisted command.
+ * exist built-in, and it may select/reorder actions that map to an allowlisted command (labels stay built-in).
  * It can never supply a `setupPrompt`, change `comingSoon` / `authType`, or introduce a
  * command. Remote ids unknown to the client are shown as display-only "coming soon" cards.
  */
@@ -251,6 +258,7 @@ export function mergeConnectorCatalog(remoteCatalog: unknown, builtins: Connecto
 	if (!Array.isArray(remoteCatalog) || remoteCatalog.length === 0) {
 		return builtins
 	}
+	remoteCatalog = remoteCatalog.slice(0, MAX_REMOTE_CONNECTORS)
 	const builtinById = new Map(builtins.map((c) => [c.id, c]))
 	const merged: ConnectorDefinition[] = []
 	const used = new Set<string>()
@@ -266,7 +274,10 @@ export function mergeConnectorCatalog(remoteCatalog: unknown, builtins: Connecto
 		used.add(id)
 		const base = builtinById.get(id)
 		const tags = Array.isArray(r.tags)
-			? r.tags.map((t) => cleanText(t, 24)).filter((t): t is string => Boolean(t)).slice(0, 8)
+			? r.tags
+					.map((t) => cleanText(t, 24))
+					.filter((t): t is string => Boolean(t))
+					.slice(0, 8)
 			: undefined
 		const icon = typeof r.icon === "string" && /^[a-z0-9-]{1,40}$/.test(r.icon) ? r.icon : undefined
 		const display = {

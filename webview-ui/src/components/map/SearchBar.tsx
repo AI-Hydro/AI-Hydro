@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { collectHydroSearchProblems } from "./hydroSearchProblems"
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
-import { placeGeocoder } from "./placeGeocoder"
 import { loadMapWorkspace, type MapBookmark, saveMapWorkspace } from "./mapWorkspace"
+import { placeGeocoder } from "./placeGeocoder"
 
 export interface SearchResult {
 	label: string
@@ -275,6 +275,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 	const hydroSeqRef = useRef(0)
 	const hydroResultsRef = useRef<SearchResult[]>([])
 	const [searchedPlaces, setSearchedPlaces] = useState(false)
+	// Place-name results for the query they were fetched for, so a later (or debounced) hydro response for the
+	// same text merges with them instead of overwriting them.
+	const placeResultsRef = useRef<{ query: string; results: SearchResult[] } | null>(null)
 
 	/**
 	 * Coordinate + USGS gauge / NID dam lookup (local Python CLI, not a public web service).
@@ -318,13 +321,21 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 			if (seq !== hydroSeqRef.current) {
 				return
 			}
-			const all = [...(coord ? [coord] : []), ...hydro]
-			hydroResultsRef.current = all
+			const base = [...(coord ? [coord] : []), ...hydro]
+			hydroResultsRef.current = base
+			const placeSearched = placeResultsRef.current?.query === q.trim()
+			const places = placeSearched ? (placeResultsRef.current?.results ?? []) : []
+			if (!placeSearched) {
+				placeResultsRef.current = null
+			}
+			const all = [...base, ...places]
 			setResults(all)
-			setSearchedPlaces(false)
+			setSearchedPlaces(places.length > 0)
 			setSelectedIdx(-1)
 			if (problems.length > 0) {
 				setNotice({ kind: "problem", text: `USGS lookup incomplete: ${problems.join("; ")}` })
+			} else if (placeSearched && places.length === 0 && all.length === 0) {
+				setNotice({ kind: "empty", text: "No place found for that name." })
 			} else if (all.length === 0 && q.trim().length >= 2) {
 				setNotice({ kind: "empty", text: "No gauge, dam or coordinate match. Press Enter to search place names." })
 			} else {
@@ -353,6 +364,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 				return
 			}
 			const places: SearchResult[] = hits.map((h) => ({ ...h, source: "nominatim" as const }))
+			placeResultsRef.current = { query: q.trim(), results: places }
 			const all = [...hydroResultsRef.current.filter((r) => r.source !== "nominatim"), ...places]
 			setResults(all)
 			setSearchedPlaces(true)
@@ -473,7 +485,10 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 					style={{
 						fontSize: 11,
 						marginTop: 4,
-						color: notice.kind === "empty" ? "var(--vscode-descriptionForeground)" : "var(--vscode-editorWarning-foreground, #cca700)",
+						color:
+							notice.kind === "empty"
+								? "var(--vscode-descriptionForeground)"
+								: "var(--vscode-editorWarning-foreground, #cca700)",
 					}}>
 					{notice.text}
 				</div>

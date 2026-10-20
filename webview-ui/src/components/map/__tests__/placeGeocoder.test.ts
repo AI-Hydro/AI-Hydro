@@ -64,6 +64,17 @@ describe("placeGeocoder (Nominatim usage policy)", () => {
 		expect(hits[0]).toMatchObject({ label: "Fish River, AL", lat: 30.5, lon: -87.8, bbox: [-88, 30, -87, 31] })
 	})
 
+	it("an aborted first caller does not fail a second caller sharing the in-flight request", async () => {
+		const { geocoder, fetchFn } = makeGeocoder()
+		const first = new AbortController()
+		const p1 = geocoder.search("fish river", first.signal)
+		const p2 = geocoder.search("fish river", new AbortController().signal)
+		first.abort()
+		await expect(p1).rejects.toThrow(/Aborted/)
+		await expect(p2).resolves.toHaveLength(1)
+		expect(fetchFn).toHaveBeenCalledTimes(1)
+	})
+
 	it("surfaces HTTP errors and does not cache them", async () => {
 		const fetchFn = vi.fn(async () => ({ ok: false, status: 429, json: async () => [] }) as unknown as Response)
 		const geocoder = createPlaceGeocoder({ fetchFn: fetchFn as unknown as typeof fetch, sleep: async () => {} })

@@ -35,6 +35,7 @@ const regex = (re) => (text) => {
 export const RULES = [
 	{ id: "npm-global-install", test: literal(NPM_INSTALL), targets: ["src", "dist", "webview"] },
 	{ id: "cline.bot", test: literal("cline" + ".bot"), targets: ["dist", "webview"] },
+	{ id: "cline-webview-title", test: literal("Cline" + " Webview"), targets: ["webview"] },
 	{ id: "cline-repo-link", test: literal("github.com/cline" + "/cline"), targets: ["dist", "webview"] },
 	{ id: "cline-wiki-link", test: literal("github.com/cline" + "/cline/wiki"), targets: ["dist", "webview"] },
 	{

@@ -60,7 +60,7 @@ pseudonymous, not anonymous: the same install always sends the same hash.
 Nothing is sent to this host, including count look-ups and star toggles, unless
 **both** VS Code's telemetry setting (`telemetry.telemetryLevel`, reported to
 extensions as `vscode.env.isTelemetryEnabled`) **and** AI-Hydro's own telemetry
-setting allow it. If either is off, or cannot be read, no request is made and
+setting allow it. If either is off, or the host cannot report it, or it cannot be read, no request is made and
 marketplace counts and stars show as unavailable. See
 `recognition-worker/README.md` for the server side. Retiring this call entirely
 is under consideration.

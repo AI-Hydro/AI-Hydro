@@ -44,17 +44,15 @@ export function createPlaceGeocoder(options: PlaceGeocoderOptions = {}) {
 	let lastRequestAt = Number.NEGATIVE_INFINITY
 	let queue: Promise<unknown> = Promise.resolve()
 
-	async function fetchHits(q: string, signal?: AbortSignal): Promise<GeocodeHit[]> {
+	// The shared network request is never bound to a caller's AbortSignal: a second caller (e.g. Enter pressed
+	// twice) may be handed the same in-flight promise, and one caller's abort must not fail it for the other.
+	async function fetchHits(q: string): Promise<GeocodeHit[]> {
 		const wait = lastRequestAt + minIntervalMs - now()
 		if (wait > 0) {
 			await sleep(wait)
 		}
-		if (signal?.aborted) {
-			throw new DOMException("Aborted", "AbortError")
-		}
 		lastRequestAt = now()
 		const resp = await fetchFn(`${NOMINATIM_URL}?q=${encodeURIComponent(q)}&format=json&limit=5&polygon_geojson=0`, {
-			signal,
 			headers: { "Accept-Language": "en" },
 		})
 		if (!resp.ok) {
@@ -78,6 +76,30 @@ export function createPlaceGeocoder(options: PlaceGeocoderOptions = {}) {
 			}))
 	}
 
+	/** Reject only this caller on abort; the shared request keeps running and still fills the cache. */
+	function forCaller<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+		if (!signal) {
+			return promise
+		}
+		if (signal.aborted) {
+			return Promise.reject(new DOMException("Aborted", "AbortError"))
+		}
+		return new Promise<T>((resolve, reject) => {
+			const onAbort = () => reject(new DOMException("Aborted", "AbortError"))
+			signal.addEventListener("abort", onAbort, { once: true })
+			promise.then(
+				(v) => {
+					signal.removeEventListener("abort", onAbort)
+					resolve(v)
+				},
+				(e) => {
+					signal.removeEventListener("abort", onAbort)
+					reject(e)
+				},
+			)
+		})
+	}
+
 	return {
 		/** Resolve a place name. Served from cache when possible; otherwise at most one request per interval. */
 		search(rawQuery: string, signal?: AbortSignal): Promise<GeocodeHit[]> {
@@ -91,9 +113,9 @@ export function createPlaceGeocoder(options: PlaceGeocoderOptions = {}) {
 			}
 			const pending = inflight.get(key)
 			if (pending) {
-				return pending
+				return forCaller(pending, signal)
 			}
-			const run = queue.then(() => fetchHits(key, signal))
+			const run = queue.then(() => fetchHits(key))
 			queue = run.catch(() => undefined)
 			const tracked = run
 				.then((hits) => {
@@ -110,7 +132,7 @@ export function createPlaceGeocoder(options: PlaceGeocoderOptions = {}) {
 					inflight.delete(key)
 				})
 			inflight.set(key, tracked)
-			return tracked
+			return forCaller(tracked, signal)
 		},
 		clearCache() {
 			cache.clear()

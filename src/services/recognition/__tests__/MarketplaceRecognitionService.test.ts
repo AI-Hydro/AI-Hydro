@@ -1,7 +1,7 @@
 import { HostProvider } from "@hosts/host-provider"
 import { Setting } from "@shared/proto/host/env"
-import { expect } from "chai"
 import axios from "axios"
+import { expect } from "chai"
 import sinon from "sinon"
 import { StateManager } from "@/core/storage/StateManager"
 import { MarketplaceRecognitionService } from "../MarketplaceRecognitionService"
@@ -39,6 +39,12 @@ describe("MarketplaceRecognitionService telemetry gate", () => {
 		expect(getStub.called).to.equal(false)
 		expect(counts.size).to.equal(0)
 		expect(star.starred).to.equal(false)
+	})
+
+	it("treats an UNSUPPORTED host setting as disabled (fail closed)", async () => {
+		hostSetting = Setting.UNSUPPORTED
+		await MarketplaceRecognitionService.recordEvent(event)
+		expect(postStub.called).to.equal(false)
 	})
 
 	it("sends nothing when the extension's own telemetry setting is disabled", async () => {
