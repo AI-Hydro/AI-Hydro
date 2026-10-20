@@ -65,6 +65,9 @@ const HtmlPreviewContext = createContext<HtmlPreviewContextType>({
 	setManifest: () => {},
 })
 
+/** Preview ids are `<source>_<hash of the path>`; log only a short prefix so traces carry no stable file identity. */
+const shortId = (id: string) => id.slice(0, 10)
+
 export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [items, setItems] = useState<HtmlPreviewItem[]>([])
 	const [activeItemId, setActiveItemId] = useState<string | null>(null)
@@ -73,6 +76,10 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 		setManifestsById((prev) => ({ ...prev, [itemId]: manifest }))
 	}, [])
 	const activeItemIdRef = useRef(activeItemId)
+	const itemsRef = useRef(items)
+	useEffect(() => {
+		itemsRef.current = items
+	}, [items])
 	// Debug identity for this provider instance, so a trace can tell which of several
 	// webview reloads/mounts a log line (or a late callback) belongs to.
 	const instanceIdRef = useRef(Math.random().toString(36).slice(2, 7))
@@ -84,11 +91,24 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 	const recordOp = useCallback((op: PreviewItemOp) => {
 		inflightSnapshotsRef.current.forEach((ops) => ops.push(op))
 	}, [])
-	const fetchSnapshot = useCallback(async () => {
+	// Latest-wins: replies are numbered by request order, and a reply older than one already
+	// applied is dropped, so a slow older snapshot can never roll the list back (for example
+	// bring back an "allowed" item that a newer snapshot already shows revoked).
+	const requestSeqRef = useRef(0)
+	const lastAppliedSeqRef = useRef(0)
+	const fetchSnapshot = useCallback(async (): Promise<HtmlPreviewItem[] | null> => {
 		const laterOps: PreviewItemOp[] = []
+		const seq = ++requestSeqRef.current
 		inflightSnapshotsRef.current.add(laterOps)
 		try {
 			const response = await HtmlPreviewServiceClient.getHtmlPreviewState(EmptyRequest.create())
+			if (seq < lastAppliedSeqRef.current) {
+				console.debug(
+					`[HtmlPreviewContext:${instanceIdRef.current}] snapshot #${seq} ignored (newer #${lastAppliedSeqRef.current} already applied)`,
+				)
+				return null
+			}
+			lastAppliedSeqRef.current = seq
 			const items = reconcileSnapshot(response.items, laterOps)
 			console.debug(
 				`[HtmlPreviewContext:${instanceIdRef.current}] snapshot applied host=${response.items.length} later_ops=${laterOps.length} result=${items.length}`,
@@ -108,6 +128,9 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 	const refreshItems = useCallback(async () => {
 		try {
 			const nextItems = await fetchSnapshot()
+			if (!nextItems) {
+				return
+			}
 			setItems(nextItems)
 			if (nextItems.length > 0 && !activeItemIdRef.current) {
 				setActiveItemId(nextItems[nextItems.length - 1].id)
@@ -171,7 +194,7 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 		const subscription = HtmlPreviewServiceClient.subscribeToHtmlPreviews(EmptyRequest.create(), {
 			onResponse: (item: HtmlPreviewItem) => {
 				const op = item.metadata?.__operation
-				debug(`stream item id=${item.id} op=${op ?? "upsert"}`)
+				debug(`stream item id=${shortId(item.id)} op=${op ?? "upsert"}`)
 				if (op === "clear") {
 					recordOp({ kind: "clear" })
 					setItems([])
@@ -275,8 +298,11 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 				)
 				// Fetch the updated item list, then activate the newly loaded item
 				// using tolerant path comparison (the extension may normalise slashes).
-				const nextItems = await fetchSnapshot()
-				setItems(nextItems)
+				const fetched = await fetchSnapshot()
+				if (fetched) {
+					setItems(fetched)
+				}
+				const nextItems = fetched ?? itemsRef.current
 				const newItem =
 					nextItems.find((i) => pathsEqual(i.filePath, filePath)) ??
 					(nextItems.length > 0 ? nextItems[nextItems.length - 1] : null)

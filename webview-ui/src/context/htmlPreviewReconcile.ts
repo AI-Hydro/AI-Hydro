@@ -6,6 +6,20 @@ import type { HtmlPreviewItem } from "@shared/proto/cline/html_preview"
  */
 export type PreviewItemOp = { kind: "upsert"; item: HtmlPreviewItem } | { kind: "remove"; id: string } | { kind: "clear" }
 
+/**
+ * Items carry no version, so when an upsert replaces an item that is already present and the
+ * two disagree on the execution allowance, order cannot tell which is newer. Fail safe: a
+ * revoked allowance on either side wins, so a replayed older "allowed" item never re-displays
+ * a revoked document as allowed. (This is display only; the host enforces the allowance on
+ * every run.)
+ */
+function mergeAllowance(existing: HtmlPreviewItem, incoming: HtmlPreviewItem): HtmlPreviewItem {
+	if (existing.metadata?.executionAllowed === "false" && incoming.metadata?.executionAllowed === "true") {
+		return { ...incoming, metadata: { ...incoming.metadata, executionAllowed: "false" } }
+	}
+	return incoming
+}
+
 export function applyPreviewItemOp(items: HtmlPreviewItem[], op: PreviewItemOp): HtmlPreviewItem[] {
 	switch (op.kind) {
 		case "clear":
@@ -36,5 +50,21 @@ export function applyPreviewItemOp(items: HtmlPreviewItem[], op: PreviewItemOp):
  * document. Replaying the later operations over the snapshot keeps them.
  */
 export function reconcileSnapshot(snapshot: HtmlPreviewItem[], laterOps: readonly PreviewItemOp[]): HtmlPreviewItem[] {
-	return laterOps.reduce(applyPreviewItemOp, [...snapshot])
+	const snapshotById = new Map(snapshot.map((i) => [i.id, i]))
+	return laterOps.reduce(
+		(items, op) => {
+			if (op.kind !== "upsert") {
+				return applyPreviewItemOp(items, op)
+			}
+			// Only compared against the snapshot's own copy: live stream updates apply as-is (a
+			// genuine re-allow still shows), and a later op in the replay supersedes an earlier one.
+			// See mergeAllowance for the fail-safe rule.
+			const fromSnapshot = snapshotById.get(op.item.id)
+			return applyPreviewItemOp(items, {
+				kind: "upsert",
+				item: fromSnapshot ? mergeAllowance(fromSnapshot, op.item) : op.item,
+			})
+		},
+		[...snapshot],
+	)
 }

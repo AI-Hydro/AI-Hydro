@@ -293,4 +293,94 @@ describe("HtmlPreviewContext", () => {
 			expect(screen.queryByTestId("item-html_1")).not.toBeInTheDocument()
 		})
 	})
+
+	const withAllowance = (id: string, allowed: boolean): HtmlPreviewItem => ({
+		...mk(id, id),
+		metadata: { trustSource: "learning-pack", executionAllowed: allowed ? "true" : "false" },
+	})
+	const AllowanceConsumer: React.FC = () => {
+		const { items, refreshItems } = useHtmlPreviewContext()
+		return (
+			<div>
+				<div data-testid="allowed">{items.map((i) => i.metadata?.executionAllowed ?? "-").join(",") || "empty"}</div>
+				<button data-testid="refresh" onClick={() => void refreshItems()}>
+					refresh
+				</button>
+			</div>
+		)
+	}
+
+	it("ignores an older snapshot reply that arrives after a newer one", async () => {
+		const resolvers: Array<(value: { items: HtmlPreviewItem[] }) => void> = []
+		mockGetHtmlPreviewState.mockImplementation(() => new Promise((resolve) => resolvers.push(resolve)))
+		mockSubscribeToHtmlPreviews.mockReturnValue(() => {})
+
+		render(
+			<HtmlPreviewContextProvider>
+				<AllowanceConsumer />
+			</HtmlPreviewContextProvider>,
+		)
+		await waitFor(() => expect(resolvers.length).toBe(1))
+		fireEvent.click(screen.getByTestId("refresh"))
+		await waitFor(() => expect(resolvers.length).toBe(2))
+
+		// Newer reply (revoked) lands first, then the older one (allowed) is delivered late.
+		await act(async () => {
+			resolvers[1]({ items: [withAllowance("html_1", false)] })
+		})
+		await waitFor(() => expect(screen.getByTestId("allowed").textContent).to.equal("false"))
+		await act(async () => {
+			resolvers[0]({ items: [withAllowance("html_1", true)] })
+		})
+		expect(screen.getByTestId("allowed").textContent).to.equal("false")
+	})
+
+	it("does not let a replayed stream upsert re-allow an item the snapshot shows revoked", async () => {
+		let onResponseHandler: ((item: HtmlPreviewItem) => void) | undefined
+		let resolveSnapshot: ((value: { items: HtmlPreviewItem[] }) => void) | undefined
+		mockGetHtmlPreviewState.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveSnapshot = resolve
+				}),
+		)
+		mockSubscribeToHtmlPreviews.mockImplementation((_req, handlers) => {
+			onResponseHandler = handlers.onResponse
+			return () => {}
+		})
+
+		render(
+			<HtmlPreviewContextProvider>
+				<AllowanceConsumer />
+			</HtmlPreviewContextProvider>,
+		)
+		await waitFor(() => expect(resolveSnapshot).toBeDefined())
+		// An older "allowed" item streams in before the (newer) revoked snapshot arrives.
+		await act(async () => {
+			onResponseHandler?.(withAllowance("html_1", true))
+		})
+		await act(async () => {
+			resolveSnapshot?.({ items: [withAllowance("html_1", false)] })
+		})
+		expect(screen.getByTestId("allowed").textContent).to.equal("false")
+	})
+
+	it("still shows a live re-allow streamed after the list has settled", async () => {
+		let onResponseHandler: ((item: HtmlPreviewItem) => void) | undefined
+		mockGetHtmlPreviewState.mockResolvedValue({ items: [withAllowance("html_1", false)] })
+		mockSubscribeToHtmlPreviews.mockImplementation((_req, handlers) => {
+			onResponseHandler = handlers.onResponse
+			return () => {}
+		})
+		render(
+			<HtmlPreviewContextProvider>
+				<AllowanceConsumer />
+			</HtmlPreviewContextProvider>,
+		)
+		await waitFor(() => expect(screen.getByTestId("allowed").textContent).to.equal("false"))
+		await act(async () => {
+			onResponseHandler?.(withAllowance("html_1", true))
+		})
+		expect(screen.getByTestId("allowed").textContent).to.equal("true")
+	})
 })

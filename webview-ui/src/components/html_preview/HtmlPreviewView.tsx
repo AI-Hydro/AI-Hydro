@@ -475,7 +475,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 	const viewInstanceId = useRef(Math.random().toString(36).slice(2, 7)).current
 	useEffect(() => {
 		console.debug(
-			`[HtmlPreviewView:${viewInstanceId}] item=${item?.id ?? "none"} trust=${item?.metadata?.trustSource ?? "-"} allowed=${item?.metadata?.executionAllowed ?? "-"} bytes=${item?.htmlContent?.length ?? 0}`,
+			`[HtmlPreviewView:${viewInstanceId}] item=${item?.id ? item.id.slice(0, 10) : "none"} trust=${item?.metadata?.trustSource ?? "-"} allowed=${item?.metadata?.executionAllowed ?? "-"} bytes=${item?.htmlContent?.length ?? 0}`,
 		)
 	}, [viewInstanceId, item?.id, item?.metadata?.trustSource, item?.metadata?.executionAllowed, item?.htmlContent?.length])
 	useEffect(() => () => window.clearTimeout(pathCopiedTimerRef.current), [])

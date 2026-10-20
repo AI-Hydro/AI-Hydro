@@ -483,7 +483,14 @@ export class VscodeHtmlPreviewProvider {
 						break
 					}
 					default:
-						console.warn("[VscodeHtmlPreviewProvider] Unhandled message:", JSON.stringify(message))
+						// Type only: message bodies can carry document text, paths or tokens, and this log is
+						// captured as CI failure evidence.
+						console.warn(
+							"[VscodeHtmlPreviewProvider] Unhandled message type:",
+							typeof (message as { type?: unknown })?.type === "string"
+								? (message as { type: string }).type.slice(0, 80)
+								: typeof message,
+						)
 				}
 			},
 			null,

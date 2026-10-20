@@ -51,7 +51,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 	}, [panelInstanceId])
 	useEffect(() => {
 		console.debug(
-			`[HtmlPreviewPanel:${panelInstanceId}] render state items=${items.length} active=${activeItemId ?? "none"} workspaceFiles=${workspaceHtmlFiles.length}`,
+			`[HtmlPreviewPanel:${panelInstanceId}] render state items=${items.length} active=${activeItemId ? activeItemId.slice(0, 10) : "none"} workspaceFiles=${workspaceHtmlFiles.length}`,
 		)
 	}, [panelInstanceId, items.length, activeItemId, workspaceHtmlFiles.length])
 	const activeItem = items.find((i) => i.id === activeItemId) || items[items.length - 1]
