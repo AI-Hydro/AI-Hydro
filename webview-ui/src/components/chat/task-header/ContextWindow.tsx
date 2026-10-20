@@ -14,6 +14,7 @@ interface ContextWindowInfoProps {
 	tokensOut?: number
 	cacheWrites?: number
 	cacheReads?: number
+	totalCost?: number
 	size?: number
 }
 
@@ -64,6 +65,7 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 	tokensOut,
 	cacheWrites,
 	cacheReads,
+	totalCost,
 }) => {
 	const [isOpened, setIsOpened] = useState(false)
 	const [threshold, setThreshold] = useState(useAutoCondense ? autoCondenseThreshold : 0)
@@ -206,7 +208,7 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 		<div className="flex flex-col my-1.5" onMouseLeave={debounceCloseHover}>
 			<div className="flex gap-1 flex-row @max-xs:flex-col @max-xs:items-start items-center text-sm">
 				<div className="flex items-center gap-1.5 flex-1 whitespace-nowrap text-xs">
-					<span className="cursor-pointer" title="Current tokens used in this request">
+					<span className="cursor-pointer" title="Context now: tokens in the latest request (not cumulative)">
 						{formatTokenNumber(tokenData.used)}
 					</span>
 					<div className="flex relative items-center gap-1 flex-1 w-full h-full" onMouseEnter={() => setIsOpened(true)}>
@@ -222,6 +224,7 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 									tokensIn={tokensIn}
 									tokensOut={tokensOut}
 									tokenUsed={tokenData.used}
+									totalCost={totalCost}
 								/>
 							}
 							disableAnimation={true}

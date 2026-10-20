@@ -7,6 +7,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
+import { normalizeOpenAiStyleUsage } from "../transform/usage"
 
 interface OpenAiHandlerOptions extends CommonApiHandlerOptions {
 	openAiApiKey?: string
@@ -122,14 +123,14 @@ export class OpenAiHandler implements ApiHandler {
 			}
 
 			if (chunk.usage) {
+				// prompt_tokens includes cached tokens; a "cache miss" is uncached input, not a cache write.
+				const u = normalizeOpenAiStyleUsage(chunk.usage)
 				yield {
 					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0,
-					outputTokens: chunk.usage.completion_tokens || 0,
-					// @ts-ignore-next-line
-					cacheReadTokens: chunk.usage.prompt_tokens_details?.cached_tokens || 0,
-					// @ts-ignore-next-line
-					cacheWriteTokens: chunk.usage.prompt_cache_miss_tokens || 0,
+					inputTokens: u.uncachedInputTokens,
+					outputTokens: u.outputTokens,
+					cacheReadTokens: u.cacheReadTokens,
+					cacheWriteTokens: 0,
 				}
 			}
 		}

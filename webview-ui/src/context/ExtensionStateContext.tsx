@@ -14,7 +14,7 @@ import { convertProtoToAiHydroMessage } from "@shared/proto-conversions/aihydro-
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import type React from "react"
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import { Environment } from "../../../src/config"
+import { Environment } from "@shared/environment"
 import {
 	basetenDefaultModelId,
 	basetenModels,
@@ -46,7 +46,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	mcpServers: McpServer[]
 	mcpMarketplaceCatalog: McpMarketplaceCatalog
 	totalTasksSize: number | null
-	lastDismissedCliBannerVersion: number
 
 	availableTerminalProfiles: TerminalProfile[]
 
@@ -272,7 +271,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		remoteConfigSettings: {},
 		backgroundCommandRunning: false,
 		backgroundCommandTaskId: undefined,
-		lastDismissedCliBannerVersion: 0,
 		subagentsEnabled: false,
 		finalAnswerAuditEnabled: true,
 

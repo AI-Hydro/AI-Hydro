@@ -1,6 +1,5 @@
 import React from "react"
 import Announcement from "@/components/chat/Announcement"
-import CliInstallBanner, { CURRENT_CLI_BANNER_VERSION } from "@/components/common/CliInstallBanner"
 import InfoBanner, { CURRENT_INFO_BANNER_VERSION } from "@/components/common/InfoBanner"
 import HistoryPreview from "@/components/history/HistoryPreview"
 import HomeHeader from "@/components/welcome/HomeHeader"
@@ -20,13 +19,10 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 	version,
 	taskHistory,
 }) => {
-	const { lastDismissedInfoBannerVersion, lastDismissedCliBannerVersion } = useExtensionState()
+	const { lastDismissedInfoBannerVersion } = useExtensionState()
 
 	const shouldShowInfoBanner = lastDismissedInfoBannerVersion < CURRENT_INFO_BANNER_VERSION
 	// const shouldShowNewModelBanner = lastDismissedModelBannerVersion < CURRENT_MODEL_BANNER_VERSION
-
-	// Show CLI banner if not dismissed
-	const shouldShowCliBanner = lastDismissedCliBannerVersion < CURRENT_CLI_BANNER_VERSION
 
 	return (
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">
@@ -34,7 +30,6 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({
 				{shouldShowInfoBanner && <InfoBanner />}
 				{showAnnouncement && <Announcement hideAnnouncement={hideAnnouncement} version={version} />}
 				{/* {shouldShowNewModelBanner && <NewModelBanner />} */}
-				{shouldShowCliBanner && <CliInstallBanner />}
 				<HomeHeader />
 				<StarterInvestigations />
 				{taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}

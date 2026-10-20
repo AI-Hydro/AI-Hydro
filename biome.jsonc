@@ -151,6 +151,7 @@
 				"!src/core/controller/ui/geeConnect.ts",
 				"!src/core/controller/ui/geeDisconnect.ts",
 				"!src/core/controller/ui/geeChooseProject.ts",
+				"!src/core/controller/ui/geeTest.ts",
 				"!src/core/controller/ui/getGeeStatus.ts"
 			],
 			"plugins": [
