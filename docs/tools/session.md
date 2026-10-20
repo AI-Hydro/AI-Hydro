@@ -33,7 +33,7 @@ The response includes:
 - `has_interpretation` — whether a scientific interpretation has been authored yet
 - `mcp_python` — the Python interpreter running the MCP server
 - `mcp_pip` — corresponding pip path
-- `available_packages` — dict of `{package_name: version}` for all installed packages
+- `available_packages` — dict of `{package_name: version}` for all installed packages. **Only returned when `start_session` is called with `include_packages=True`** (it is ~12k characters and a slow `pip list`, so it is off by default)
 
 This makes it safe to write Python scripts without guessing interpreter paths or assuming what is installed.
 
