@@ -20,6 +20,12 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - The in-chat Leaflet preview bridge: `carto-dark` is now an alias of `esri-dark-gray` and `osm` an alias of `esri-topo`; CARTO is dropped from the artifact-preview CSP. Humanitarian OSM (OSM France) is removed: its usage page limits use to non-profit sites and apps sending an identifying user-agent, which a webview cannot do; a saved choice migrates with a notice.
 - Provider verification (keyless, coverage, max zoom, attribution, terms) is recorded in `webview-ui/src/components/map/basemaps.ts` and enforced by the catalogue tests.
 
+### Fixed — DeepSeek unclosed envelope and task_progress (vision-2040, branch `vision2040/deepseek-unclosed-envelope`)
+
+- A DeepSeek native envelope that ends without `</tool_calls>` is now repaired when every `<invoke>` is closed and only whitespace follows the last `</invoke>` (an unclosed invoke or trailing text stays malformed).
+- A Cline `task_progress` parameter inside an MCP invoke is no longer sent to the MCP server: it is carried as the call's own task_progress so the focus chain updates. A tool that declares `task_progress` in its own schema keeps it as an argument.
+- Only an envelope that starts its line is repaired; one after prose on the same line (for example a message that ends mid-quote) is neutralised and never runs.
+
 ### Fixed — native tool-call repair follow-up (vision-2040, branch `vision2040/native-repair-followup`)
 
 - A DeepSeek native envelope that is not the last thing in the message (prose or a closing fence after it) or is unclosed no longer vanishes: the text is shown, nothing runs, and one muted line says "Native tool call not at end of message; not run." (or the malformed notice).

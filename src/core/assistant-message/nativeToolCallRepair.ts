@@ -18,11 +18,14 @@
  *  - text inside code fences / inline code is documentation, not a call, and is left untouched;
  *  - values are inert: a parameter value that could open/close a protocol element is refused (built-in tools) or
  *    JSON-escaped (MCP arguments), so one envelope can never smuggle in a second tool call;
- *  - only a TRAILING envelope is converted, and the host enables this only for model families that emit native
+ *  - only an envelope that starts its line (message start, or only whitespace before it) and is TRAILING is converted, and the host enables this only for model families that emit native
  *    tool calls; envelopes in prose, quotes, indented or fenced code are documentation;
  *  - routing: a repaired call can reach a lone UNTRUSTED owner of the tool name (it is still an ordinary
  *    use_mcp_tool call: approval is required and the approval card and the muted "Repaired ..." line name the
  *    server); a first-party-NAMED untrusted server is refused while a trusted one is connected, to avoid confusing the user (anti-confusion, not a security control: approval is the control);
+ *  - a trailing envelope missing its `</tool_calls>` is accepted only when every `<invoke>` is closed and nothing but
+ *    whitespace follows the last `</invoke>`;
+ *  - `task_progress` (Cline meta parameter) inside an MCP invoke is carried as the call's task_progress, not an argument;
  *  - an envelope still streaming is hidden from the transcript, and conversion happens once the message completes.
  */
 import { isFirstPartyServerName } from "@shared/aihydro/firstPartyServers"
@@ -129,6 +132,7 @@ const PROTOCOL_TAG_RE = new RegExp(
 	`</|<\\s*(?:${[...toolUseNames, ...toolParamNames, "tool_calls", "invoke", "parameter"].join("|")})\\b`,
 	"i",
 )
+const TASK_PROGRESS = "task_progress"
 const SAFE_NAME_RE = /^[A-Za-z0-9_.:-]+$/
 
 /** A raw (XML-spliced) value must not be able to open or close any protocol element. */
@@ -171,15 +175,30 @@ function toProtocolXml(
 			return undefined
 		}
 		const tool = owners[0].tools.find((t) => t.name === name)!
-		const props = (tool.inputSchema as any)?.properties ?? {}
+		const rawProps = (tool.inputSchema as any)?.properties
+		const props: Record<string, unknown> = rawProps && typeof rawProps === "object" ? rawProps : {}
 		const args: Record<string, unknown> = {}
+		// task_progress is a Cline-protocol meta parameter (the system prompt asks every tool call to be able to
+		// carry it), not an argument of the MCP tool: strip it from `arguments` and pass it on as the call's own
+		// task_progress, exactly as a normal use_mcp_tool XML call does, so the focus chain updates and the MCP
+		// server never receives it. A tool whose own schema declares task_progress keeps it as an argument.
+		let taskProgress: string | undefined
 		for (const [k, v] of params) {
+			if (k === TASK_PROGRESS && !(TASK_PROGRESS in props)) {
+				taskProgress = v
+				continue
+			}
 			args[k] = coerce(v, props[k])
+		}
+		if (taskProgress !== undefined && !isInertValue(taskProgress)) {
+			return undefined // spliced into XML verbatim, like built-in params: tags are refused
 		}
 		// `<` is escaped as \u003c so the JSON round-trips as data but can never form a protocol tag in the XML text.
 		const json = JSON.stringify(args).replace(/</g, "\\u003c")
 		blocks.push(
-			`<use_mcp_tool>\n<server_name>${owners[0].name}</server_name>\n<tool_name>${name}</tool_name>\n<arguments>\n${json}\n</arguments>\n</use_mcp_tool>`,
+			`<use_mcp_tool>\n<server_name>${owners[0].name}</server_name>\n<tool_name>${name}</tool_name>\n<arguments>\n${json}\n</arguments>${
+				taskProgress !== undefined ? `\n<task_progress>${taskProgress}</task_progress>` : ""
+			}\n</use_mcp_tool>`,
 		)
 		routes.push({ server: owners[0].name, tool: name })
 	}
@@ -224,6 +243,16 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 			cursor = stop
 			continue
 		}
+		const lineStart = text.lastIndexOf("\n", start - 1) + 1
+		if (text.slice(lineStart, start).trim() !== "") {
+			// Inline after prose on the same line (e.g. a message that ends mid-quote): a mention, never a call.
+			// Neutralise through the closing tag, or to the end of the message when unclosed.
+			const closeAt = text.indexOf(CLOSE, start + OPEN.length)
+			const stop = closeAt === -1 ? text.length : closeAt + CLOSE.length
+			out += text.slice(cursor, start) + neutralise(text.slice(start, stop))
+			cursor = stop
+			continue
+		}
 		out += text.slice(cursor, start)
 		const end = text.indexOf(CLOSE, start + OPEN.length)
 		if (end === -1) {
@@ -231,7 +260,18 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 				cursor = text.length // still streaming: hide it
 				break
 			}
-			// Unterminated: hide only the envelope itself (through its last complete invoke/parameter), keep the rest.
+			// Unclosed envelope (the model stopped without `</tool_calls>`). It is still a call when every invoke is
+			// properly closed and nothing but whitespace follows the last `</invoke>` (parseInvokes enforces both); an
+			// unclosed invoke, stray text or a nested envelope leaves it malformed. It is trailing by construction.
+			const invokes = parseInvokes(text.slice(start + OPEN.length))
+			const xml = invokes ? toProtocolXml(invokes, ctx, routes) : undefined
+			if (xml) {
+				out += xml
+				repaired++
+				cursor = text.length
+				break
+			}
+			// Malformed: hide only the envelope itself (through its last complete invoke/parameter), keep the rest.
 			const tail = text.slice(start)
 			const lastClose = Math.max(tail.lastIndexOf("</invoke>"), tail.lastIndexOf("</parameter>"))
 			const extentEnd = lastClose === -1 ? OPEN.length : lastClose + (tail.startsWith("</invoke>", lastClose) ? 9 : 12)
