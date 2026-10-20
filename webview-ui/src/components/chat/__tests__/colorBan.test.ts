@@ -102,7 +102,7 @@ describe("green is reserved for approved claims", () => {
 		expect(SCANNED.flatMap((entry) => sourceFiles(join(SRC, entry))).length).toBeGreaterThan(50)
 		for (const entry of SCANNED) {
 			for (const file of sourceFiles(join(SRC, entry))) {
-				const rel = relative(SRC, file)
+				const rel = relative(SRC, file).split("\\").join("/")
 				if (ALLOWED.has(rel)) {
 					continue
 				}
