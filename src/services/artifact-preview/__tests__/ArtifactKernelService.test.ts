@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process"
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -10,14 +11,28 @@ import type { KernelProfile } from "../KernelProfile"
 
 const RUNNER = path.resolve(process.cwd(), "src", "services", "artifact-preview", "artifact_kernel_runner.py")
 const PYTHON = process.env.AIHYDRO_TEST_PYTHON || process.env.AIHYDRO_E2E_PYTHON || "python3"
+// A cold matplotlib import (font cache build on a fresh CI runner) can take longer than a
+// single test's response timeout, and every test SIGKILLs its kernel, so the cache would
+// never finish. Pay that cost once, here, before any kernel is timed.
+function warmPythonImports(python: string): Promise<void> {
+	return new Promise((resolve) => {
+		execFile(python, ["-c", "import matplotlib.pyplot"], { timeout: 170_000 }, () => resolve())
+	})
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // Real kernel processes, real protocol: only the VS Code surface is faked.
 describe("ArtifactKernelService (real kernel)", function () {
-	this.timeout(60_000)
+	this.timeout(90_000)
 	let root: string
 	let service: ArtifactKernelService
 	const vsc = vscode as any
+
+	before(async function () {
+		this.timeout(180_000)
+		await warmPythonImports(PYTHON)
+	})
 
 	beforeEach(function () {
 		if (!existsSync(RUNNER)) this.skip()
@@ -43,11 +58,12 @@ describe("ArtifactKernelService (real kernel)", function () {
 		sinon.stub(service, "resolveProfile").resolves(profile)
 	})
 
-	afterEach(() => {
+	afterEach(async () => {
 		service.dispose()
 		sinon.restore()
 		delete vsc.workspace.workspaceFolders
-		rmSync(root, { recursive: true, force: true })
+		await sleep(300) // let the killed kernel release its working directory (Windows holds it)
+		rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
 	})
 
 	it("interrupts a 5 s sleep at 1 s, ends within ~1.5 s, reports the kernel's own outcome, and keeps variables", async () => {
@@ -152,7 +168,10 @@ describe("ArtifactKernelService (real kernel)", function () {
 
 	it("a kernel crash during Stop is not reported as recovered", async () => {
 		await service.execute("kept = 1", "art")
-		const run = service.execute("import os, time\ntry:\n    time.sleep(30)\nexcept KeyboardInterrupt:\n    os._exit(3)", "art")
+		const run = service.execute(
+			"import os, time\ntry:\n    time.sleep(30)\nexcept KeyboardInterrupt:\n    os._exit(3)",
+			"art",
+		)
 		await sleep(500)
 		const outcome = await service.interruptKernel("art", "test")
 		const result = await run
@@ -161,7 +180,9 @@ describe("ArtifactKernelService (real kernel)", function () {
 	})
 
 	it("a run record that cannot be written does not fail the finished run", async () => {
-		vsc.workspace.workspaceFolders = [{ uri: { fsPath: path.join(root, "ws", "no-such", "\0bad"), toString: () => "file://bad" } }]
+		vsc.workspace.workspaceFolders = [
+			{ uri: { fsPath: path.join(root, "ws", "no-such", "\0bad"), toString: () => "file://bad" } },
+		]
 		const result = await service.execute("print('fine')", "art", "test", undefined, "cell-x")
 		expect(result.status).to.equal("ok")
 		expect(result.stdout).to.equal("fine\n")

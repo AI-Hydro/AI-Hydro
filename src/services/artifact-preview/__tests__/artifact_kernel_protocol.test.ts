@@ -1,4 +1,4 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
+import { type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import * as path from "node:path"
 import { expect } from "chai"
@@ -46,7 +46,7 @@ class Kernel {
 		this.child.stdin.write(`${JSON.stringify(message)}\n`)
 	}
 
-	response(id: string, timeoutMs = 10_000): Promise<Response> {
+	response(id: string, timeoutMs = 30_000): Promise<Response> {
 		const early = this.arrived.get(id)
 		if (early) {
 			this.arrived.delete(id)
@@ -71,16 +71,27 @@ class Kernel {
 	}
 }
 
+// A cold matplotlib import (font cache build on a fresh CI runner) can take longer than a
+// single test's response timeout, and every test SIGKILLs its kernel, so the cache would
+// never finish. Pay that cost once, here, before any kernel is timed.
+function warmPythonImports(python: string): Promise<void> {
+	return new Promise((resolve) => {
+		execFile(python, ["-c", "import matplotlib.pyplot"], { timeout: 170_000 }, () => resolve())
+	})
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 describe("artifact_kernel_runner.py protocol", function () {
-	this.timeout(30_000)
+	this.timeout(60_000)
 	let kernel: Kernel | undefined
 
-	before(function () {
+	before(async function () {
 		if (!existsSync(RUNNER)) {
 			this.skip()
 		}
+		this.timeout(180_000)
+		await warmPythonImports(PYTHON)
 	})
 	afterEach(() => kernel?.stop())
 
