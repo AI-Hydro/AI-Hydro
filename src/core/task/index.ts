@@ -12,6 +12,7 @@ import {
 import { ContextManager } from "@core/context/context-management/ContextManager"
 import { checkContextWindowExceededError } from "@core/context/context-management/context-error-handling"
 import { getContextWindowInfo } from "@core/context/context-management/context-window-utils"
+import { buildContextTruncationNotice } from "@core/context/context-management/truncationNotice"
 import { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import { ModelContextTracker } from "@core/context/context-tracking/ModelContextTracker"
 import {
@@ -58,7 +59,9 @@ import { listFiles } from "@services/glob/list-files"
 import { Logger } from "@services/logging/Logger"
 import { McpHub } from "@services/mcp/McpHub"
 import { recordedOutcomeFor } from "@shared/aihydro/askOutcome"
+import { type CommandExit, describeExit } from "@shared/aihydro/commandEvidence"
 import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
+import type { McpNotificationLevel, SayEvidence } from "@shared/aihydro/infoNotice"
 import { ApiConfiguration } from "@shared/api"
 import { findLast, findLastIndex } from "@shared/array"
 import { combineApiRequests } from "@shared/combineApiRequests"
@@ -299,9 +302,11 @@ export class Task {
 		this.workspaceManager = workspaceManager
 
 		// Set up MCP notification callback for real-time notifications
-		this.mcpHub.setNotificationCallback(async (serverName: string, _level: string, message: string) => {
-			// Display notification in chat immediately
-			await this.say("mcp_notification", `[${serverName}] ${message}`)
+		this.mcpHub.setNotificationCallback(async (serverName: string, level: string, message: string) => {
+			// Display notification in chat immediately; the level rides on the row so the transcript can lift warnings
+			await this.say("mcp_notification", `[${serverName}] ${message}`, undefined, undefined, undefined, {
+				mcpLevel: level as McpNotificationLevel,
+			})
 		})
 
 		this.taskId = taskId
@@ -673,6 +678,7 @@ export class Task {
 		images?: string[],
 		files?: string[],
 		partial?: boolean,
+		evidence?: SayEvidence,
 	): Promise<number | undefined> {
 		if (this.taskState.abort) {
 			throw new Error("AI-Hydro instance aborted")
@@ -704,6 +710,7 @@ export class Task {
 						images,
 						files,
 						partial,
+						...evidence,
 					})
 					await this.postStateToWebview()
 					return sayTs
@@ -736,6 +743,7 @@ export class Task {
 						text,
 						images,
 						files,
+						...evidence,
 					})
 					await this.postStateToWebview()
 					return sayTs
@@ -752,6 +760,7 @@ export class Task {
 				text,
 				images,
 				files,
+				...evidence,
 			})
 			await this.postStateToWebview()
 			return sayTs
@@ -1231,6 +1240,8 @@ export class Task {
 				output += "\nCommand was taking a while to run so it was auto terminated after 30s"
 			}
 
+			await this.recordCommandExit(result.exitCode)
+
 			// Format the result similar to terminal output
 			return [
 				false,
@@ -1243,6 +1254,17 @@ export class Task {
 			const errorMessage = error instanceof Error ? error.message : String(error)
 			return [false, `Error executing command: ${errorMessage}`]
 		}
+	}
+
+	/** Record how the latest command row ended (a number from the process, or "unknown"); never inferred from output. */
+	private async recordCommandExit(exit: unknown): Promise<CommandExit> {
+		const recorded: CommandExit = typeof exit === "number" ? exit : "unknown"
+		const messages = this.messageStateHandler.getAiHydroMessages()
+		const index = findLastIndex(messages, (m) => m.ask === "command" || m.say === "command")
+		if (index !== -1) {
+			await this.messageStateHandler.updateAiHydroMessage(index, { exitCode: recorded })
+		}
+		return recorded
 	}
 
 	async executeCommandTool(command: string, timeoutSeconds: number | undefined): Promise<[boolean, ToolResponse]> {
@@ -1365,6 +1387,9 @@ export class Task {
 			this.activeForegroundCommand = undefined
 			this.controller.updateBackgroundCommandState(false, this.taskId)
 
+			// A "continue while running" row must get the settled exit code, not the provisional one.
+			await Promise.race([process.exitSettled ?? Promise.resolve(), setTimeoutPromise(500)])
+			await this.recordCommandExit(process.exitCode)
 			// Mark the command message as completed
 			const aihydroMessages = this.messageStateHandler.getAiHydroMessages()
 			const lastCommandIndex = findLastIndex(aihydroMessages, (m) => m.ask === "command" || m.say === "command")
@@ -1650,6 +1675,9 @@ export class Task {
 		}
 
 		if (completed) {
+			// Record the exit code on the row before the result goes back (ToolExecutor derives execOutcome from it).
+			await Promise.race([process.exitSettled, setTimeoutPromise(500)])
+			const exitNote = describeExit(await this.recordCommandExit(process.exitCode))
 			// For subagents: try to surface structured result.json written by the subagent.
 			if (isSubagent && subagentJob) {
 				const _job = subagentJob
@@ -1678,7 +1706,7 @@ export class Task {
 					]
 				}
 			}
-			return [false, `Command executed.${result.length > 0 ? `\nOutput:\n${result}` : ""}`]
+			return [false, `Command executed (${exitNote}).${result.length > 0 ? `\nOutput:\n${result}` : ""}`]
 		} else {
 			return [
 				false,
@@ -1769,9 +1797,10 @@ export class Task {
 	private async handleContextWindowExceededError(): Promise<void> {
 		const apiConversationHistory = this.messageStateHandler.getApiConversationHistory()
 
+		const previousDeletedRange = this.taskState.conversationHistoryDeletedRange
 		this.taskState.conversationHistoryDeletedRange = this.contextManager.getNextTruncationRange(
 			apiConversationHistory,
-			this.taskState.conversationHistoryDeletedRange,
+			previousDeletedRange,
 			"quarter", // Force aggressive truncation
 		)
 		await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
@@ -1780,6 +1809,14 @@ export class Task {
 			await ensureTaskDirectoryExists(this.taskId),
 			apiConversationHistory,
 		)
+
+		// Say so: the model just lost earlier turns, and until now the user was never told.
+		const truncation = buildContextTruncationNotice(
+			previousDeletedRange,
+			this.taskState.conversationHistoryDeletedRange,
+			apiConversationHistory.length,
+		)
+		await this.say("info", truncation.text, undefined, undefined, undefined, { infoNotice: truncation.notice })
 
 		this.taskState.didAutomaticallyRetryFailedApiRequest = true
 	}
@@ -2868,8 +2905,8 @@ export class Task {
 			// through the normal approval flow. A malformed one gets exactly one muted line, raw text behind a disclosure.
 			const nativeRepair = this.repairNativeToolCallText(assistantMessage, true)
 			const nativePlan = planFinalNativePass(this.repairNativeToolCallText(assistantMessage, false).text, nativeRepair)
-			for (const notice of nativePlan.notices) {
-				await this.say("info", notice)
+			for (const { text, notice } of nativePlan.notices) {
+				await this.say("info", text, undefined, undefined, undefined, { infoNotice: notice })
 			}
 			if (nativePlan.reparseText !== undefined) {
 				const prevLength = this.taskState.assistantMessageContent.length

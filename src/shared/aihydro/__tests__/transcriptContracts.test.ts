@@ -52,6 +52,13 @@ describe("legacy info notice registry", () => {
 		expect(isLiftedNotice({ class: "native_call_repaired", severity: "info" })).to.equal(false)
 		expect(isLiftedNotice({ class: "context_truncated", severity: "warning" })).to.equal(true)
 	})
+
+	it("trusts the class over a stored severity", () => {
+		expect(isLiftedNotice({ class: "context_truncated", severity: "info" })).to.equal(true)
+		expect(isLiftedNotice({ class: "malformed_tool_call", severity: "" })).to.equal(true)
+		expect(isLiftedNotice({ class: "future_class", severity: "info" })).to.equal(true)
+		expect(isLiftedNotice({ class: "native_call_repaired", severity: "warning" })).to.equal(false)
+	})
 })
 
 describe("answer audit payload", () => {

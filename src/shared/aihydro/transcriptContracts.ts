@@ -47,9 +47,16 @@ export function classifyLegacyInfoNotice(text: string | undefined): ClassifiedIn
 	return { class: UNCLASSIFIED_CLASS, severity: "warning" }
 }
 
-/** True when the notice must stay visible outside a collapsed group (warning severity, or a class we do not know). */
+/**
+ * True when the notice must stay visible outside a collapsed group. The class is trusted over the stored severity:
+ * a known class folds only if its own table severity is "info" (so only `native_call_repaired`); an unknown class is
+ * always lifted, whatever severity was stored with it.
+ */
 export function isLiftedNotice(notice: { class: string; severity: string }): boolean {
-	return notice.severity !== "info" || !(INFO_CLASSES as readonly string[]).includes(notice.class)
+	if (!(INFO_CLASSES as readonly string[]).includes(notice.class)) {
+		return true
+	}
+	return INFO_CLASS_SEVERITY[notice.class as InfoClass] !== "info"
 }
 
 // ── Answer audit ────────────────────────────────────────────────────────────────────────────────────────────────

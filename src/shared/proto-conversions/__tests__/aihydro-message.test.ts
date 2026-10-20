@@ -79,6 +79,11 @@ describe("aihydro-message proto round trip (W2-0 M2)", () => {
 		})
 	}
 
+	it("execOutcome unknown (a command whose exit was not observed) round-trips", () => {
+		const m: AiHydroMessage = { ts: 1700000000002, type: "say", say: "command", text: "ls", execOutcome: "unknown" }
+		expect(roundTrip(m)).to.deep.equal(m)
+	})
+
 	for (const ask of Object.keys(ASK_KINDS) as AiHydroAsk[]) {
 		for (const askOutcome of ["approved", "denied"] as const) {
 			it(`ask:${ask} keeps its kind and askOutcome=${askOutcome}`, () => {

@@ -1,3 +1,5 @@
+import type { CommandPolicyClass } from "@shared/aihydro/commandEvidence"
+import { INFO_CLASS_SEVERITY, INFO_CLASSES, type InfoNotice, type McpNotificationLevel } from "@shared/aihydro/infoNotice"
 import {
 	AiHydroAsk as AppAiHydroAsk,
 	AiHydroMessage as AppAiHydroMessage,
@@ -213,6 +215,13 @@ export function convertAiHydroMessageToProto(message: AppAiHydroMessage): ProtoC
 		askQuestion: undefined,
 		askNewTask: undefined,
 		apiReqInfo: undefined,
+		infoClass: message.infoNotice?.class ?? "",
+		infoSeverity: message.infoNotice?.severity ?? "",
+		infoDetailJson: message.infoNotice?.detail ? JSON.stringify(message.infoNotice.detail) : "",
+		mcpLevel: message.mcpLevel ?? "",
+		exitCodeState: message.exitCode === undefined ? "" : message.exitCode === "unknown" ? "unknown" : "known",
+		exitCode: typeof message.exitCode === "number" ? message.exitCode : 0,
+		policyClass: message.policyClass ?? "",
 		// Outcome evidence the host records; empty/false = absent (the readers treat both the same way).
 		askOutcome: message.askOutcome ?? "",
 		execOutcome: message.execOutcome ?? "",
@@ -269,7 +278,7 @@ export function convertProtoToAiHydroMessage(protoMessage: ProtoClineMessage): A
 	if (protoMessage.askOutcome === "approved" || protoMessage.askOutcome === "denied") {
 		message.askOutcome = protoMessage.askOutcome
 	}
-	if (protoMessage.execOutcome === "completed" || protoMessage.execOutcome === "failed") {
+	if (protoMessage.execOutcome === "completed" || protoMessage.execOutcome === "failed" || protoMessage.execOutcome === "unknown") {
 		message.execOutcome = protoMessage.execOutcome
 	}
 	if (protoMessage.commandCompleted) {
@@ -291,6 +300,40 @@ export function convertProtoToAiHydroMessage(protoMessage: ProtoClineMessage): A
 			protoMessage.conversationHistoryDeletedRange.startIndex,
 			protoMessage.conversationHistoryDeletedRange.endIndex,
 		]
+	}
+
+	// AI-Hydro host evidence: only set when recorded, so old tasks stay byte-identical.
+	if (protoMessage.infoClass !== "") {
+		// Trust the class over the stored severity; an unknown class with an empty or garbled severity is a warning,
+		// so only a known informational class (native_call_repaired) can fold.
+		const known = (INFO_CLASSES as readonly string[]).includes(protoMessage.infoClass)
+		const notice: InfoNotice = {
+			class: protoMessage.infoClass as InfoNotice["class"],
+			severity: known
+				? INFO_CLASS_SEVERITY[protoMessage.infoClass as InfoNotice["class"]]
+				: protoMessage.infoSeverity === "info"
+					? "info"
+					: "warning",
+		}
+		if (protoMessage.infoDetailJson !== "") {
+			try {
+				notice.detail = JSON.parse(protoMessage.infoDetailJson)
+			} catch {
+				// a malformed detail never hides the notice itself
+			}
+		}
+		message.infoNotice = notice
+	}
+	if (protoMessage.mcpLevel !== "") {
+		message.mcpLevel = protoMessage.mcpLevel as McpNotificationLevel
+	}
+	if (protoMessage.exitCodeState === "known") {
+		message.exitCode = protoMessage.exitCode
+	} else if (protoMessage.exitCodeState === "unknown") {
+		message.exitCode = "unknown"
+	}
+	if (protoMessage.policyClass !== "") {
+		message.policyClass = protoMessage.policyClass as CommandPolicyClass
 	}
 
 	return message

@@ -216,10 +216,20 @@ message ClineMessage {
   ClineAskNewTask ask_new_task = 21;
   ClineApiReqInfo api_req_info = 22;
 
+  // AI-Hydro host evidence (Wave 2 W2-0h). High field numbers (1004-1010) keep these clear of upstream/Cline additions; 1001-1003 belong to W2-0.
+  // Empty string / absent = not recorded (old tasks), never a default meaning.
+  string info_class = 1004;          // say:info structured class (context_truncated, malformed_tool_call, ...)
+  string info_severity = 1005;       // "info" | "warning"
+  string info_detail_json = 1006;    // JSON object of notice specifics (counts, ranges); "" = none
+  string mcp_level = 1007;           // mcp_notification level (debug|info|warning|error)
+  string exit_code_state = 1008;     // command rows: "" = not recorded, "known", "unknown"
+  int32 exit_code = 1009;            // meaningful only when exit_code_state == "known"
+  string policy_class = 1010;        // command rows the host policy flagged
+
   // AI-Hydro-only fields (high numbers: upstream Cline additions never collide).
   // Empty string = absent. Values: "approved" | "denied".
   string ask_outcome = 1001;
-  // Empty string = absent. Values: "completed" | "failed".
+  // Empty string = absent. Values: "completed" | "failed" | "unknown" (a command whose exit code was not observed).
   string exec_outcome = 1002;
   // Only `true` is meaningful; false = absent.
   bool command_completed = 1003;

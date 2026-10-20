@@ -1,3 +1,4 @@
+import type { SayEvidence } from "@shared/aihydro/infoNotice"
 import type { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
 import type { AiHydroDefaultTool } from "@shared/tools"
 import type { AiHydroAskResponse } from "@shared/WebviewMessage"
@@ -12,7 +13,14 @@ import type { TaskConfig } from "./TaskConfig"
  */
 export interface StronglyTypedUIHelpers {
 	// Core UI methods
-	say: (type: AiHydroSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
+	say: (
+		type: AiHydroSay,
+		text?: string,
+		images?: string[],
+		files?: string[],
+		partial?: boolean,
+		evidence?: SayEvidence,
+	) => Promise<number | undefined>
 
 	ask: (
 		type: AiHydroAsk,

@@ -236,6 +236,12 @@ export const screens: ScreenDef[] = [
 		"This needs a file outside the workspace.",
 	),
 	chatTx(
+		"chat-approval-protected-path-answered",
+		"Answered approval outside the workspace",
+		tx.protectedPathApprovedTask,
+		"The hosts entry is in place.",
+	),
+	chatTx(
 		"chat-finished-claims",
 		"Finished answer with claim chips",
 		tx.finishedClaimsTask,

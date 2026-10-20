@@ -1,3 +1,4 @@
+import type { InfoSeverity } from "@shared/aihydro/infoNotice"
 import type React from "react"
 
 /**
@@ -14,14 +15,19 @@ export function splitNotice(text: string | undefined): { line: string; detail?: 
 	return { line: value.slice(0, sep).trim(), detail: value.slice(sep + 2).trim() || undefined }
 }
 
-export const MutedNotice: React.FC<{ text?: string }> = ({ text }) => {
+/** `severity` comes from the host-recorded `infoNotice`; absent (an old task) renders the plain muted line. */
+export const MutedNotice: React.FC<{ text?: string; severity?: InfoSeverity }> = ({ text, severity }) => {
 	const { line, detail } = splitNotice(text)
 	if (!line) {
 		return null
 	}
 	return (
-		<div className="text-xs opacity-60 py-0.5" data-testid="muted-notice">
-			<span aria-hidden="true" className="codicon codicon-info mr-1 align-middle" />
+		<div className="text-xs opacity-60 py-0.5" data-severity={severity} data-testid="muted-notice">
+			<span
+				aria-hidden="true"
+				className={`codicon ${severity === "warning" ? "codicon-warning" : "codicon-info"} mr-1 align-middle`}
+				style={severity === "warning" ? { color: "var(--vscode-editorWarning-foreground)" } : undefined}
+			/>
 			<span className="ph-no-capture">{line}</span>
 			{detail && (
 				<details className="mt-1">

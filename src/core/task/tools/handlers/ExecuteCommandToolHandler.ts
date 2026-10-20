@@ -5,6 +5,7 @@ import { getHostProtectedRoots } from "@core/task/protectedRoots"
 import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
 import { isSubagentCommand, SUBAGENT_NO_YOLO_NOTICE } from "@integrations/cli-subagents/subagent_command"
 import { showSystemNotification } from "@integrations/notifications"
+import { findLastIndex } from "@shared/array"
 import { COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
 import { AiHydroAsk } from "@shared/ExtensionMessage"
 import { arePathsEqual } from "@utils/path"
@@ -232,6 +233,16 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		if (executionDir !== config.cwd) {
 			// Use && to chain commands so they run in sequence
 			finalCommand = `cd "${executionDir}" && ${finalCommand}`
+		}
+
+		// Mark a policy-flagged command (subagent launch, protected path, danger grant, ...) on its row so the
+		// transcript can lift it without re-deriving the policy.
+		if (policy.policyClass) {
+			const rows = config.messageState.getAiHydroMessages()
+			const rowIndex = findLastIndex(rows, (m) => m.ask === "command" || m.say === "command")
+			if (rowIndex !== -1) {
+				await config.messageState.updateAiHydroMessage(rowIndex, { policyClass: policy.policyClass })
+			}
 		}
 
 		const [userRejected, result] = await config.callbacks.executeCommandTool(finalCommand, timeoutSeconds)

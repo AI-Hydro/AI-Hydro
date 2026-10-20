@@ -5,6 +5,8 @@ import { GlobalStateAndSettings } from "@shared/storage/state-keys"
 import type { Environment } from "../config"
 import { AiHydroFeatureSetting } from "./AiHydroFeatureSetting"
 import { AutoApprovalSettings } from "./AutoApprovalSettings"
+import type { CommandExit, CommandPolicyClass } from "./aihydro/commandEvidence"
+import type { InfoNotice, McpNotificationLevel } from "./aihydro/infoNotice"
 import { AiHydroRulesToggles } from "./aihydro-rules"
 import { ApiConfiguration } from "./api"
 import { BrowserSettings } from "./BrowserSettings"
@@ -142,7 +144,15 @@ export interface AiHydroMessage {
 	/** Recorded by the host when the user answers a tool/command/MCP/browser ask. Absent = no evidence either way. */
 	askOutcome?: "approved" | "denied"
 	/** Recorded by the host when a call's result is returned (ToolExecutor). Absent = no completion evidence. */
-	execOutcome?: "completed" | "failed"
+	execOutcome?: "completed" | "failed" | "unknown"
+	/** `say: "info"` rows: which kind of notice and how serious. `text` still carries the words; absent on old tasks. */
+	infoNotice?: InfoNotice
+	/** `mcp_notification` rows: the level the server sent (absent on old tasks; treat as "info"). */
+	mcpLevel?: McpNotificationLevel
+	/** Command rows: process exit code, or "unknown" when the host could not observe it. Absent = not recorded. */
+	exitCode?: CommandExit
+	/** Command rows the host's policy flagged (subagent launch, protected path, danger grant, ...). */
+	policyClass?: CommandPolicyClass
 	lastCheckpointHash?: string
 	isCheckpointCheckedOut?: boolean
 	isOperationOutsideWorkspace?: boolean
