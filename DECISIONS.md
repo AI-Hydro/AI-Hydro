@@ -126,3 +126,8 @@ A captured canvas cannot certify tile completeness or scientific validation. Kno
 ## 2026-09-08 — Coordinated renderer versions and StrictMode acceptance
 
 Pin all direct deck.gl modules to 9.3.11 and retain the resolved luma.gl 9.3.6 lock graph. Actual MapView StrictMode testing reproduced the old observer/device initialization failure; upstream fix: https://github.com/visgl/luma.gl/pull/2540. Do not suppress browser errors or disable StrictMode. The browser harness must verify settled recovery and actual rendered pixels, not merely the transient disappearance of an alert or existence of a canvas.
+
+
+## 2026-10-19 — Approval AP1: the host classifies, the model never attests
+
+`execute_command` auto-runs only when a host-side allowlist says read-only; `requires_approval` can only tighten. Claim approval commands are hard-denied by text match (best effort, indirection documented), subagents never start in YOLO, protected state (MCP settings, extension storage, approval/trust/registry, ~/.ssh) always asks, settings-file edits that loosen policy need UI confirmation, and a single `isServerTrusted` (name plus recorded launcher) replaces three name-based trust checks. Every layer is a speed bump against a same-user process; the boundary is a touch-required signature. Not done in AP1 (AP2): annotation-driven MCP auto-run, the inline prompt UI, the consecutive-read ceiling (M6, nothing auto-runs reads yet). Plan and limits: plans/approval-redesign-ap1-2026-10-19.md.

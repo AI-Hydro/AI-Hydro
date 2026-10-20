@@ -211,7 +211,10 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 
 			// ADR-002b A4: an APPROVAL_REQUIRED refusal offers "Approve in
 			// terminal" (types the command; the human presses Enter). No signing here.
-			notifyApprovalRequired(toolResultText, server_name)
+			notifyApprovalRequired(
+				toolResultText,
+				config.services.mcpHub.connections?.find((conn: any) => conn.server.name === server_name)?.server,
+			)
 
 			// webview extracts images from the text response to display in the UI
 			const toolResultToDisplay = toolResultText + toolResultImages?.map((image: any) => `\n\n${image}`).join("")
