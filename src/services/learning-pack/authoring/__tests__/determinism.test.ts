@@ -24,7 +24,9 @@ const GOLDEN = {
 	keyId: "sha256:324be2dea8bc44461b0233e51fa48902ed6b1cc671e7739af2551e0bfe68f54e",
 }
 
-describe("deterministic archives (A7)", () => {
+describe("deterministic archives (A7)", function () {
+	// Git, scrypt and signing are slow on shared Windows runners; the mocha default is 2 s.
+	this.timeout(60_000)
 	async function release() {
 		const built = await assembleUnsignedPack(
 			buildInput({ buildKind: "release", publisherSpkiDer: publicKeySpkiDer(FIXED_TEST_KEY) }),

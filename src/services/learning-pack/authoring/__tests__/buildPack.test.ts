@@ -28,7 +28,9 @@ async function verifyWithThrowawayKey(files: ReadonlyMap<string, Uint8Array>) {
 	return inspectLearningPackArchiveBytes(writeStoredZip(archive), RUNTIME)
 }
 
-describe("assembleUnsignedPack", () => {
+describe("assembleUnsignedPack", function () {
+	// Git, scrypt and signing are slow on shared Windows runners; the mocha default is 2 s.
+	this.timeout(60_000)
 	it("builds a pack the real verifier accepts, with namespaced IDs from idMap and idPrefix", async () => {
 		const built = await assembleUnsignedPack(buildInput())
 		const manifest = json(built.files, "pack.json")

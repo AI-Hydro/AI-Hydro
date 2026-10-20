@@ -27,7 +27,9 @@ async function entriesOf(archive: Uint8Array): Promise<Map<string, Uint8Array>> 
 	return new Map(read.files)
 }
 
-describe("signPack", () => {
+describe("signPack", function () {
+	// Git, scrypt and signing are slow on shared Windows runners; the mocha default is 2 s.
+	this.timeout(60_000)
 	describe("round trip", () => {
 		it("a development build signed with an ephemeral key verifies and installs as signed-untrusted (A1)", async () => {
 			const built = await assembleUnsignedPack(buildInput())

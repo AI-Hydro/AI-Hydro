@@ -66,7 +66,9 @@ function git(cwd: string, ...args: string[]): void {
 	})
 }
 
-describe("aihydro-pack CLI", () => {
+describe("aihydro-pack CLI", function () {
+	// Git, scrypt and signing are slow on shared Windows runners; the mocha default is 2 s.
+	this.timeout(60_000)
 	let root: string
 	let repo: string
 	let courseDir: string

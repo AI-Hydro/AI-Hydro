@@ -61,7 +61,9 @@ describe("assertOwnerContext", () => {
 	})
 })
 
-describe("key files", () => {
+describe("key files", function () {
+	// Git, scrypt and signing are slow on shared Windows runners; the mocha default is 2 s.
+	this.timeout(60_000)
 	let root: string
 
 	beforeEach(async () => {
@@ -243,7 +245,9 @@ describe("key files", () => {
 	})
 })
 
-describe("encrypted PKCS#8", () => {
+describe("encrypted PKCS#8", function () {
+	// Git, scrypt and signing are slow on shared Windows runners; the mocha default is 2 s.
+	this.timeout(60_000)
 	it("is scrypt-protected PBES2 that Node's own reader opens, not the weak PBKDF2 default", () => {
 		const { privateKey } = generateKeyPairSync("ed25519")
 		const pem = exportPrivateKeyPem(privateKey, PASSPHRASE)
@@ -263,7 +267,9 @@ describe("encrypted PKCS#8", () => {
 	})
 })
 
-describe("TTY passphrase reader", () => {
+describe("TTY passphrase reader", function () {
+	// Git, scrypt and signing are slow on shared Windows runners; the mocha default is 2 s.
+	this.timeout(60_000)
 	function fakeTty(options?: { isTTY?: boolean; keys?: string }) {
 		const events: string[] = []
 		let listener: ((chunk: Buffer) => void) | undefined
