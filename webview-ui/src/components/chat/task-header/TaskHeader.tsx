@@ -183,6 +183,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							onSendMessage={onSendMessage}
 							tokensIn={tokensIn}
 							tokensOut={tokensOut}
+							totalCost={totalCost}
 							useAutoCondense={false} // Disable auto-condense configuration in UI for now
 						/>
 

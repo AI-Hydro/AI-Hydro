@@ -5,6 +5,7 @@
 		"moduleResolution": "node"
 	},
 	"ts-node": {
+		"files": true,
 		"require": [
 			"tsconfig-paths/register"
 		]

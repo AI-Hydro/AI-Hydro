@@ -24,11 +24,21 @@ If you want to allow Cline to do something without asking, you can set the Auto 
     -   **Edit all files**
         -   Extends modification permission to files outside your workspace
 
--   **Execute safe commands**
+-   **Run read-only commands**
 
-    -   Allows execution of terminal commands that the model deems non-destructive
+    -   Runs a command without asking only when AI-Hydro itself classifies it as read-only: a short allowlist of programs and subcommands (`ls`, `cat`, `grep`, `git status`, and similar), optionally piped into other read-only commands. The model's own claim that a command is safe is not used; it can only make a command ask more, never less.
+    -   Anything outside the allowlist asks: unknown programs, `;` / `&&` / `||`, redirection, `$(...)` and backticks, here-docs, scripts such as `python -c` or `sh -c`, `curl`, installs, and anything that mentions protected paths.
+    -   This is a conservative filter, not a sandbox.
+    -   Read-only `git` commands auto-run only in a trusted workspace, because a repository's own git config can make git run programs; workspace trust is the real protection against a hostile repository's git config (the environment hardening AI-Hydro adds is only a second layer and cannot cover every config key).
     -   **Execute all commands**
-        -   Permits execution of any terminal command without asking
+        -   Permits execution of any terminal command without asking. The exceptions below still apply.
+
+-   **Always blocked or asked, whatever the settings (including YOLO)**
+
+    -   Claim approval is never run by the agent. A command that mentions `aihydro-approve` or `ai_hydro.approval` is refused; run claim approval yourself in your own terminal. This is a text match and cannot catch indirection (a variable that builds the name, a script file, an encoded payload). The approval CLI additionally refuses to run in a terminal the extension marked as agent-run (`AIHYDRO_AGENT_CONTEXT`). A process running as your own user can still bypass both; only a touch-required (`sk-`) signature stops that.
+    -   Launching an `aihydro` subagent always asks, is refused when subagents are disabled, and never starts in YOLO mode.
+    -   File edits, and commands that mention the MCP settings file, the extension storage directory, `$AIHYDRO_HOME/{approvals,trust,registry}` or `~/.ssh` always ask, even with "Edit" auto-approve on.
+    -   Edits to the MCP settings file made outside the AI-Hydro UI that would let tools run without asking (a new `autoApprove` entry, trust turned on, a `deny`/`alwaysAsk` entry removed) are applied only after you confirm them.
 
 -   **Use the browser**
 

@@ -1,5 +1,6 @@
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { memo, useCallback, useMemo, useState } from "react"
+import { formatUsageHeadline } from "@shared/getApiMetrics"
 import { formatLargeNumber as formatTokenNumber } from "@/utils/format"
 
 interface TokenUsageInfoProps {
@@ -7,6 +8,7 @@ interface TokenUsageInfoProps {
 	tokensOut?: number
 	cacheWrites?: number
 	cacheReads?: number
+	totalCost?: number
 }
 
 interface TokenDetail {
@@ -58,27 +60,28 @@ const AccordionItem = memo<{
 })
 AccordionItem.displayName = "AccordionItem"
 
-// Constants
-const TOKEN_DETAILS_CONFIG: Omit<TokenDetail, "value">[] = [
-	{ title: "Prompt Tokens", icon: "codicon-arrow-up" },
-	{ title: "Completion Tokens", icon: "codicon-arrow-down" },
-	{ title: "Cache Writes", icon: "codicon-arrow-left" },
-	{ title: "Cache Reads", icon: "codicon-arrow-right" },
-]
-
+// Labels follow the meter convention in shared/getApiMetrics.ts: "Uncached input" excludes cache hits and writes,
+// so the four rows are disjoint and add up to the task total.
 const TokenUsageDetails = memo<TokenUsageInfoProps>(({ tokensIn, tokensOut, cacheWrites, cacheReads }) => {
-	const contextTokenDetails = useMemo(() => {
-		const values = [tokensIn, tokensOut, cacheWrites || 0, cacheReads || 0]
-		return TOKEN_DETAILS_CONFIG.map((config, index) => ({ ...config, value: values[index] })).filter((item) => item.value)
-	}, [tokensIn, tokensOut, cacheWrites, cacheReads])
+	const rows = useMemo(
+		() =>
+			[
+				{ title: "Uncached input", icon: "codicon-arrow-up", value: tokensIn || 0 },
+				{ title: "Cache reads (hits)", icon: "codicon-arrow-right", value: cacheReads || 0 },
+				// Only providers that bill a cache write (Anthropic, Bedrock, Vertex) report any.
+				{ title: "Cache writes", icon: "codicon-arrow-left", value: cacheWrites || 0 },
+				{ title: "Output", icon: "codicon-arrow-down", value: tokensOut || 0 },
+			] satisfies TokenDetail[],
+		[tokensIn, tokensOut, cacheWrites, cacheReads],
+	).filter((row) => row.value)
 
-	if (!tokensIn) {
+	if (rows.length === 0) {
 		return <div>No token usage data available</div>
 	}
 
 	return (
 		<div className="space-y-2">
-			{contextTokenDetails.map((item) => (
+			{rows.map((item) => (
 				<div className="flex items-center justify-between" key={item.icon}>
 					<div className="flex items-center gap-1">
 						<i className={`codicon ${item.icon} text-xs`} />
@@ -99,6 +102,7 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 	tokensOut,
 	cacheWrites,
 	cacheReads,
+	totalCost,
 	percentage,
 	autoCompactThreshold = 0,
 }) => {
@@ -121,10 +125,21 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 		})
 	}, [])
 
-	const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
+	const totalInput = (tokensIn || 0) + (cacheWrites || 0) + (cacheReads || 0)
+	const totalTokens = totalInput + (tokensOut || 0)
+	const headline = formatUsageHeadline({
+		contextNow: tokenUsed,
+		contextWindow,
+		totalTokens,
+		cachedPercent: totalInput > 0 ? Math.round(((cacheReads || 0) / totalInput) * 100) : undefined,
+		totalCost,
+	})
 
 	return (
 		<div className="context-window-tooltip-content flex flex-col gap-2 bg-menu rounded shadow-sm border border-menu-border z-100 w-60 p-4">
+			<div className="text-xs leading-relaxed" data-testid="usage-headline">
+				{headline}
+			</div>
 			{autoCompactThreshold > 0 && (
 				<AccordionItem
 					isExpanded={expandedSections.has("threshold")}
@@ -145,7 +160,7 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 			<AccordionItem
 				isExpanded={expandedSections.has("context")}
 				onToggle={(event) => toggleSection("context", event)}
-				title="Context Window"
+				title="Context now"
 				value={percentage ? `${percentage.toFixed(1)}% used` : formatTokenNumber(contextWindow)}>
 				<div className="space-y-1">
 					<div className="flex justify-between">
@@ -167,7 +182,7 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 				<AccordionItem
 					isExpanded={expandedSections.has("tokens")}
 					onToggle={(event) => toggleSection("tokens", event)}
-					title="Token Usage"
+					title="This task"
 					value={`${formatTokenNumber(totalTokens)} total`}>
 					<TokenUsageDetails
 						cacheReads={cacheReads}

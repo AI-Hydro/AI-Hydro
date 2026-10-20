@@ -86,7 +86,8 @@ export class MapHydrologyService {
 
 			const child = spawn(pythonCmd, ["-m", "ai_hydro.hydro_map_cli", "--json", ...args], {
 				cwd: extensionRoot,
-				env: process.env,
+				// Marks the child as running in an agent context, so the claim-approval CLI refuses to run in it (AP1, B4).
+				env: { ...process.env, AIHYDRO_AGENT_CONTEXT: "1" },
 				stdio: ["ignore", "pipe", "pipe"],
 			})
 

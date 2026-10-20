@@ -42,7 +42,6 @@ export interface GlobalState {
 	hooksEnabled: boolean
 	lastDismissedInfoBannerVersion: number
 	lastDismissedModelBannerVersion: number
-	lastDismissedCliBannerVersion: number
 }
 
 export interface Settings {

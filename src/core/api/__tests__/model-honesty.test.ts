@@ -105,19 +105,27 @@ describe("model layer honesty", () => {
 
 	describe("new Claude models are registered, without invented facts", () => {
 		for (const id of ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]) {
-			it(`${id}: id registered (Anthropic, Bedrock); prices undefined; pricing flagged unverified`, () => {
-				for (const info of [
-					(anthropicModels as Record<string, any>)[id],
-					(bedrockModels as Record<string, any>)[`anthropic.${id}`],
-				]) {
-					info.pricingUnverified.should.equal(true)
-					for (const k of ["inputPrice", "outputPrice", "cacheWritesPrice", "cacheReadsPrice"]) {
-						;(info[k] === undefined).should.equal(true, k)
-					}
-					// capability claims we cannot source stay unset
-					;(info.supportsAdaptiveThinking === undefined).should.equal(true)
-					;(info.supportsXhighEffort === undefined).should.equal(true)
-					info.supportsTemperature.should.equal(false)
+			it(`${id}: Claude API entry carries the documented limits, flags and prices`, () => {
+				const info = (anthropicModels as Record<string, any>)[id]
+				info.contextWindow.should.equal(1_000_000)
+				info.maxTokens.should.equal(128_000)
+				info.supportsAdaptiveThinking.should.equal(true)
+				info.supportsEffort.should.equal(true)
+				info.supportsXhighEffort.should.equal(true)
+				;(info.supportsThinkingBudget === undefined).should.equal(true)
+				info.supportsTemperature.should.equal(false)
+				;(info.pricingUnverified === undefined).should.equal(true)
+				for (const k of ["inputPrice", "outputPrice", "cacheWritesPrice", "cacheReadsPrice"]) {
+					info[k].should.be.a.Number()
+				}
+			})
+			it(`${id}: Bedrock entry shares limits/flags but keeps platform pricing unverified`, () => {
+				const info = (bedrockModels as Record<string, any>)[`anthropic.${id}`]
+				info.pricingUnverified.should.equal(true)
+				info.contextWindow.should.equal(1_000_000)
+				info.supportsAdaptiveThinking.should.equal(true)
+				for (const k of ["inputPrice", "outputPrice", "cacheWritesPrice", "cacheReadsPrice"]) {
+					;(info[k] === undefined).should.equal(true, k)
 				}
 			})
 		}
@@ -142,7 +150,7 @@ describe("model layer honesty", () => {
 
 	describe("cost honesty", () => {
 		it("unverified-pricing models report cost unavailable, not $0", () => {
-			assessApiCost((anthropicModels as Record<string, any>)["claude-opus-5-5"], 10, 10).should.equal("unavailable")
+			assessApiCost((bedrockModels as Record<string, any>)["anthropic.claude-opus-5-5"], 10, 10).should.equal("unavailable")
 		})
 		it("caching models with an undefined cache price report a lower bound", () => {
 			assessApiCost({ supportsPromptCache: true, inputPrice: 1, outputPrice: 2 }, 100, 0).should.equal("lower-bound")
@@ -206,11 +214,11 @@ describe("model layer honesty", () => {
 			}
 		})
 
-		it("5.x (unverified capabilities): conservative request - no temperature, no thinking params, caching on", () => {
-			const b = body("claude-opus-5-5", { budget: 4096, effort: "high" })
+		it("5.x: adaptive thinking and effort are sent from the documented flags, never budget_tokens or temperature", () => {
+			const b = body("claude-opus-5-5", { budget: 4096, effort: "xhigh" })
 			b.should.not.have.property("temperature")
-			b.should.not.have.property("thinking")
-			b.should.not.have.property("output_config")
+			b.thinking.should.eql({ type: "adaptive", display: "summarized" })
+			b.output_config.should.eql({ effort: "xhigh" })
 			JSON.stringify(b).should.not.containEql("budget_tokens")
 		})
 

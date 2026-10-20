@@ -116,7 +116,6 @@ export interface ExtensionState {
 	multiRootSetting: AiHydroFeatureSetting
 	lastDismissedInfoBannerVersion: number
 	lastDismissedModelBannerVersion: number
-	lastDismissedCliBannerVersion: number
 	hooksEnabled?: AiHydroFeatureSetting
 	remoteConfigSettings?: Partial<GlobalStateAndSettings>
 	subagentsEnabled?: boolean

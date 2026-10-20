@@ -55,6 +55,7 @@ describe("previewHtml", () => {
 		createdAt: Date.now(),
 		html: "<div>stub</div>",
 		byteLength: 16,
+		trustSource: "document",
 		metadata: { source: "inline" },
 		...overrides,
 	})

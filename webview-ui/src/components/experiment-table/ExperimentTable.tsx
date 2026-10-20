@@ -282,18 +282,6 @@ export const ExperimentTable: React.FC = () => {
 		[data],
 	)
 
-	const loadDemo = useCallback(() => {
-		setSessionId("demo-reproducibility-cockpit")
-		setExperimentId("panel_smoke_exp")
-		setLoading(true)
-		setError(null)
-		setEmptyMessage(null)
-		setData(null)
-		setCompareData(null)
-		setCompareExperimentId("")
-		postMessage({ type: "load_experiment", session_id: "demo-reproducibility-cockpit", experiment_id: "panel_smoke_exp" })
-	}, [])
-
 	const tableData = React.useMemo(() => {
 		if (!data?.defn || !data.results) {
 			return null
@@ -472,9 +460,6 @@ export const ExperimentTable: React.FC = () => {
 							<option key={sid} value={sid} />
 						))}
 					</datalist>
-					<button className={BUTTON_BASE} onClick={loadDemo} type="button">
-						Demo
-					</button>
 					<button
 						className="text-[10px] rounded border border-[var(--vscode-button-border,var(--vscode-panel-border))] bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] px-2 py-0.5 cursor-pointer hover:bg-[var(--vscode-button-hoverBackground)] disabled:opacity-50"
 						disabled={loading}

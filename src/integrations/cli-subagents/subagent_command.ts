@@ -1,6 +1,6 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { randomBytes } from "crypto"
 import * as fs from "fs"
-import * as os from "os"
 import * as path from "path"
 
 /**
@@ -8,6 +8,28 @@ import * as path from "path"
  * with optional additional flags after the closing quote
  */
 const AIHYDRO_COMMAND_PATTERN = /^aihydro\s+(['"])(.+?)\1(\s+.*)?$/
+
+/**
+ * Keep only `--workdir <dir>` from the model-supplied flags that follow the prompt. Anything else (`-y`, `--yolo`,
+ * `-s yolo_mode_toggled=true`, ...) is dropped: flags after the injected ones would otherwise override them.
+ * `--profile` is consumed separately before this runs. The host refuses such launches earlier
+ * (commandPolicy.subagentLaunchRefusal); this is the second line.
+ */
+export function sanitizeSubagentFlags(flags: string): string {
+	const tokens = flags.trim().split(/\s+/).filter(Boolean)
+	const kept: string[] = []
+	for (let i = 0; i < tokens.length; i++) {
+		if (tokens[i] === "--workdir" && tokens[i + 1] !== undefined && !tokens[i + 1].startsWith("-")) {
+			kept.push(tokens[i], tokens[i + 1])
+			i += 1
+		}
+	}
+	return kept.length > 0 ? ` ${kept.join(" ")}` : ""
+}
+
+/** Shown to the user when a subagent launch is approved. */
+export const SUBAGENT_NO_YOLO_NOTICE =
+	"AI-Hydro is launching a subagent WITHOUT YOLO mode. It does not inherit this task's auto-approve settings, so it uses the aihydro CLI's own approval policy and may stop to ask for approval in its terminal."
 
 /** Available named subagent profiles. */
 export type SubagentProfile = "explorer" | "data-runner" | null
@@ -42,7 +64,7 @@ export function isSubagentCommand(command: string): boolean {
 
 /**
  * Prepare a subagent command: generate a job directory, augment the prompt with
- * result-writing instructions, and inject autonomous-execution flags.
+ * result-writing instructions, and inject the subagent flags (never YOLO, see injectSubagentSettings).
  *
  * The subagent is instructed to write a structured JSON result to
  * `resultDir/result.json` using write_to_file before it finishes. The parent
@@ -67,7 +89,7 @@ export function prepareSubagentCommand(command: string): SubagentJob | null {
 	}
 
 	const jobId = randomBytes(6).toString("hex") // 12 hex chars, e.g. "a3f7c9d1b2e4"
-	const resultDir = path.join(os.homedir(), ".aihydro", "subagents", jobId)
+	const resultDir = aihydroPath("subagents", jobId)
 	fs.mkdirSync(resultDir, { recursive: true })
 
 	// Write initial status — readable by Python's jobs.get_job_status(jobId)
@@ -111,9 +133,9 @@ export function prepareSubagentCommand(command: string): SubagentJob | null {
 		additionalFlags = additionalFlags.replace(profileMatch[0], "")
 	}
 
-	const augmentedCommand = `aihydro ${quote}${originalPrompt}${resultInstruction}${quote}${additionalFlags}`
+	const augmentedCommand = `aihydro ${quote}${originalPrompt}${resultInstruction}${quote}${sanitizeSubagentFlags(additionalFlags)}`
 
-	// Apply standard autonomous-execution flags
+	// Apply the standard subagent flags (no YOLO)
 	let finalCommand = injectSubagentSettings(augmentedCommand)
 
 	// Prepend AIHYDRO_PROFILE env var so the subagent's process.env carries the profile.
@@ -129,12 +151,21 @@ export function prepareSubagentCommand(command: string): SubagentJob | null {
  * Transforms simplified AI-Hydro CLI command syntax with subagent settings.
  *
  * Converts: aihydro "prompt" or aihydro 'prompt'
- * To: aihydro "prompt" -s yolo_mode_toggled=true -s max_consecutive_mistakes=6 -F plain -y --oneshot
+ * To: aihydro "prompt" -s yolo_mode_toggled=false -s max_consecutive_mistakes=6 -F plain --oneshot
  *
  * Preserves additional flags like --workdir:
- * aihydro "prompt" --workdir ./path → aihydro "prompt" -s ... -F plain -y --oneshot --workdir ./path
+ * aihydro "prompt" --workdir ./path → aihydro "prompt" -s ... -F plain --oneshot --workdir ./path
  *
- * This enables autonomous subagent execution with proper CLI flags for automation.
+ * Approval redesign AP1 (B2): the subagent is NEVER launched in YOLO. Earlier versions injected
+ * `yolo_mode_toggled=true` and `-y`, which turned every subagent launch into a silent escalation to "approve
+ * everything" for shell and MCP tools the parent's host could no longer see. The launch itself is gated by
+ * ExecuteCommandToolHandler (always asks, refused when subagents are disabled).
+ *
+ * The parent's approval policy is NOT forwarded: the aihydro CLI is not part of this repository and its
+ * settings keys could not be verified, so no policy flags are invented. `yolo_mode_toggled=false` is passed
+ * explicitly so a YOLO setting saved in the CLI's own config does not apply either. The subagent runs under
+ * the CLI's own default approval policy and may pause for approval in its terminal. SUBAGENT_NO_YOLO_NOTICE
+ * says so to the user at launch.
  *
  * @param command - The command string to potentially transform
  * @returns The transformed command if it matches the pattern, otherwise the original command
@@ -161,14 +192,14 @@ function injectSubagentSettings(command: string): string {
 	const prePromptFlags: string[] = []
 
 	// Flags/settings to insert after the prompt
-	const postPromptFlags = ["-s yolo_mode_toggled=true", "-s max_consecutive_mistakes=6", "-F plain", "-y", "--oneshot"]
+	const postPromptFlags = ["-s yolo_mode_toggled=false", "-s max_consecutive_mistakes=6", "-F plain", "--oneshot"]
 
 	const match = command.match(AIHYDRO_COMMAND_PATTERN)
 
 	if (match) {
 		const quote = match[1]
 		const prompt = match[2]
-		const additionalFlags = match[3] || ""
+		const additionalFlags = sanitizeSubagentFlags(match[3] || "")
 		const prePromptPart = prePromptFlags.length > 0 ? prePromptFlags.join(" ") + " " : ""
 		return `aihydro ${prePromptPart}${quote}${prompt}${quote} ${postPromptFlags.join(" ")}${additionalFlags}`
 	}

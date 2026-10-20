@@ -97,6 +97,13 @@ import { ensureLocalAiHydroDirExists } from "../context/instructions/user-instru
 import { refreshWorkflowToggles } from "../context/instructions/user-instructions/workflows"
 import { Controller } from "../controller"
 import { StateManager } from "../storage/StateManager"
+import {
+	matchProtectedCommand,
+	mentionsAihydroProgram,
+	PROTECTED_COMMAND_DENY_MESSAGE,
+	SUBAGENTS_DISABLED_MESSAGE,
+	subagentLaunchRefusal,
+} from "./commandPolicy"
 import { FocusChainManager } from "./focus-chain"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
@@ -1154,6 +1161,8 @@ export class Task {
 			const childProcess = execa(command, {
 				shell: true,
 				cwd: this.cwd,
+				// Approval redesign AP1 (B4): agent-run commands are marked, so the approval CLI refuses them.
+				env: { AIHYDRO_AGENT_CONTEXT: "1" },
 				reject: false,
 				all: true, // Merge stdout and stderr
 			})
@@ -1220,6 +1229,21 @@ export class Task {
 	}
 
 	async executeCommandTool(command: string, timeoutSeconds: number | undefined): Promise<[boolean, ToolResponse]> {
+		// Defence in depth behind ExecuteCommandToolHandler (approval redesign AP1): whatever reaches the terminal,
+		// the claim-approval CLI is never run by the agent and a subagent is never launched while disabled.
+		if (matchProtectedCommand(command)) {
+			return [false, formatResponse.toolError(PROTECTED_COMMAND_DENY_MESSAGE)]
+		}
+		if (mentionsAihydroProgram(command)) {
+			if (!this.stateManager.getGlobalSettingsKey("subagentsEnabled")) {
+				return [false, formatResponse.toolError(SUBAGENTS_DISABLED_MESSAGE)]
+			}
+			const refusal = subagentLaunchRefusal(command)
+			if (refusal) {
+				return [false, formatResponse.toolError(refusal)]
+			}
+		}
+
 		// For AI-Hydro CLI subagents: prepare a job (result dir, augmented prompt, flags).
 		const isSubagent = isSubagentCommand(command)
 		// CLI subagents legitimately run for minutes and manage their own job lifecycle,
@@ -1811,6 +1835,7 @@ export class Task {
 		const isCliSubagent = isCliSubagentContext({
 			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
 			maxConsecutiveMistakes: this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes"),
+			agentContext: process.env.AIHYDRO_AGENT_CONTEXT === "1",
 		})
 
 		const promptContext: SystemPromptContext = {

@@ -1,6 +1,5 @@
 import * as fs from "node:fs/promises"
-import * as os from "node:os"
-import * as path from "node:path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { prerelease } from "semver"
 import * as vscode from "vscode"
 import type { Controller } from "@/core/controller"
@@ -64,9 +63,10 @@ async function readLegacyOwnership(): Promise<LegacyOwnership> {
 	const courseIds = new Set<string>()
 	const moduleIds = new Set<string>()
 	try {
-		const registry = JSON.parse(
-			await fs.readFile(path.join(os.homedir(), ".aihydro", "modules", "installed.json"), "utf8"),
-		) as Record<string, { id?: unknown; courseId?: unknown }>
+		const registry = JSON.parse(await fs.readFile(aihydroPath("modules", "installed.json"), "utf8")) as Record<
+			string,
+			{ id?: unknown; courseId?: unknown }
+		>
 		for (const [key, entry] of Object.entries(registry)) {
 			moduleIds.add(typeof entry.id === "string" ? entry.id : key)
 			if (typeof entry.courseId === "string") courseIds.add(entry.courseId)
@@ -75,7 +75,7 @@ async function readLegacyOwnership(): Promise<LegacyOwnership> {
 		// No legacy registry is a normal clean install.
 	}
 	try {
-		for (const entry of await fs.readdir(path.join(os.homedir(), ".aihydro", "courses"), { withFileTypes: true })) {
+		for (const entry of await fs.readdir(aihydroPath("courses"), { withFileTypes: true })) {
 			if (entry.isDirectory()) courseIds.add(entry.name)
 		}
 	} catch {

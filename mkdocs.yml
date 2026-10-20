@@ -186,6 +186,7 @@ nav:
     - Project & Literature: tools/project.md
     - Session Tools: tools/session.md
     - Cell Format Reference: html-preview-cells.md
+    - Studio Trust Model: studio-trust-model.md
 
   - Plugins:
     - Overview: plugins/overview.md

@@ -7,8 +7,7 @@
  *      AND an iframe that renders the artifact via `srcdoc` (preferred) or
  *      `src` pointing at `webview.asWebviewUri()` (fallback for huge files).
  *
- *   2. When `srcdoc` is used the iframe is same-origin with the parent
- *      webview and inherits this CSP directly — so anything the artifact
+ *   2. When `srcdoc` is used the iframe inherits this CSP directly — so anything the artifact
  *      script tags pull must be in this allowlist.
  *
  *   3. When `src=<webviewUri>` is used the iframe is loaded from a
@@ -33,21 +32,20 @@
  *      properly sized, but `tiles=0` and no zoom controls — because the
  *      inline `L.map(…)` init script was silently blocked by CSP.
  *
- *   5. SECURITY NOTE — `allow-same-origin` on the `srcdoc` iframe
- *      (HtmlPreviewView.tsx's `SANDBOX_ATTR`) is a deliberate, documented
- *      trade-off, not an oversight (audit finding E-3, 2026-07-09). Dropping
- *      it would sandbox the iframe into a unique opaque origin, which breaks
- *      `captureFrameDiag()` — the Details diagnostics panel that reads
- *      `iframe.contentDocument`/`contentWindow` directly to show script/
- *      stylesheet inventory, Leaflet/Folium map-div sizing, and captured
- *      runtime errors. That diagnostic is what turns "the map is blank" into
- *      an actionable message, and rebuilding it on postMessage alone (every
- *      artifact would need cooperative instrumentation for every DOM query
- *      the diagnostics strip performs) is a larger refactor than this pass.
- *      What we *can* and do narrow without that cost is `connect-src`
- *      (below): previously `https:` (any HTTPS host — an open exfiltration
- *      channel for anything rendered into the iframe), now scoped to the
- *      same origins already trusted for scripts/tiles.
+ *   5. SECURITY NOTE — the `srcdoc` iframe is sandboxed WITHOUT `allow-same-origin`
+ *      (HtmlPreviewView.tsx's `SANDBOX_ATTR`), so the document runs in an opaque origin and
+ *      cannot read or script the shell (audit finding E-3, closed 2026-10-20 after the Studio
+ *      trust review showed a same-origin document could forge the shell's own controls). The
+ *      Details diagnostics that used to read `iframe.contentDocument` now arrive over
+ *      postMessage (DIAG_SCRIPT answers `aihydro-diag-request`) and are clamped by the shell.
+ *
+ *      Why this CSP still carries `'unsafe-inline'` for scripts: a `srcdoc` document inherits
+ *      its embedding document's CSP, and pre-generated artifacts (Folium, Plotly, Bokeh) need
+ *      inline scripts that cannot be given a nonce (see point 4). A nonce-only shell CSP would
+ *      break them. With the iframe isolated that is acceptable: the shell's own markup is not
+ *      reachable from document script, and document script has no route to the shell except
+ *      messages the shell treats as untrusted data. `connect-src` stays scoped to the same
+ *      origins already trusted for scripts and tiles (previously any HTTPS host).
  */
 
 export interface BuildPreviewCspOptions {

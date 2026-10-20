@@ -3,7 +3,6 @@
 
 import assert from "node:assert"
 import * as fs from "node:fs"
-import os from "node:os"
 import { DIFF_VIEW_URI_SCHEME } from "@hosts/vscode/VscodeDiffViewProvider"
 import * as vscode from "vscode"
 import { previewHtml } from "./core/controller/htmlPreview/previewHtml"
@@ -32,6 +31,7 @@ import { PreviewHtmlRequest } from "./shared/proto/cline/html_preview"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
 
 import path from "node:path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { ExtensionContext } from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-grpc-client"
@@ -52,6 +52,7 @@ import { ExtensionRegistryInfo } from "./registry"
 import { AuthService } from "./services/auth/AuthService"
 import { LogoutReason } from "./services/auth/types"
 import { telemetryService } from "./services/telemetry"
+import { setWorkspaceTrustProvider } from "./core/task/workspaceTrust"
 import { SharedUriHandler } from "./services/uri/SharedUriHandler"
 import { ShowMessageType } from "./shared/proto/host/window"
 import { fileExistsAtPath } from "./utils/fs"
@@ -239,6 +240,8 @@ async function warnIfWorkspaceOnCloudStorage(context: vscode.ExtensionContext): 
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
 	setupHostProvider(context)
+	// Read-only git auto-run needs a trusted workspace (a hostile .git/config runs programs); see readOnlyClassifier.ts.
+	setWorkspaceTrustProvider(() => vscode.workspace.isTrusted)
 
 	const webview = (await initialize(context)) as VscodeWebviewProvider
 
@@ -808,7 +811,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// The aihydro-tools `show_html_preview(file_path)` MCP tool drops a JSON
 	// marker file into ~/.aihydro/preview-requests/. We watch that directory
 	// and open any file referenced there in the HTML Preview panel.
-	const PREVIEW_REQUESTS_DIR = path.join(os.homedir(), ".aihydro", "preview-requests")
+	const PREVIEW_REQUESTS_DIR = aihydroPath("preview-requests")
 	void fs.promises.mkdir(PREVIEW_REQUESTS_DIR, { recursive: true }).catch(() => {})
 
 	const handlePreviewRequest = async (requestPath: string) => {

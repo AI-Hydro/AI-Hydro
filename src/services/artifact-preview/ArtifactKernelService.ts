@@ -8,7 +8,8 @@ import {
 	discoverPythonEnvironments,
 	getWorkspaceFolderPath,
 	getWorkspaceKey,
-	resolveDefaultProfile,
+	isWorkspaceDerived,
+	pickDefaultProfile,
 } from "./discoverPythonEnvironments"
 import type { KernelProfile } from "./KernelProfile"
 import { buildSessionKeyForArtifact } from "./kernelSessionKey"
@@ -58,6 +59,8 @@ interface ActiveExec {
 interface KernelSession {
 	sessionKey: string
 	artifactId: string
+	/** One namespace shared by every artifact (aihydro.htmlPreview.shareKernelAcrossArtifacts). */
+	shared: boolean
 	profile: KernelProfile
 	process: ChildProcessWithoutNullStreams
 	rl: readline.Interface
@@ -131,8 +134,10 @@ export class ArtifactKernelService {
 
 	constructor(private readonly context: vscode.ExtensionContext) {}
 
+	// Only an interpreter the user explicitly picked is persisted here (the old
+	// `activeProfile` key also held auto-selected defaults, including workspace venvs).
 	private profileStateKey(workspaceKey: string): string {
-		return `aihydro.htmlPreview.activeProfile.${workspaceKey}`
+		return `aihydro.htmlPreview.selectedProfile.${workspaceKey}`
 	}
 
 	private loadPersistedProfile(workspaceKey: string): string {
@@ -149,21 +154,22 @@ export class ArtifactKernelService {
 		}
 	}
 
+	private explicitProfileId(workspaceKey: string): string {
+		return this.activeProfileByWorkspace.get(workspaceKey) ?? this.loadPersistedProfile(workspaceKey)
+	}
+
 	async listEnvironments(): Promise<{ environments: KernelProfile[]; activeProfileId: string }> {
 		const environments = await discoverPythonEnvironments()
 		const workspaceKey = getWorkspaceKey()
-		let activeProfileId = this.activeProfileByWorkspace.get(workspaceKey) ?? this.loadPersistedProfile(workspaceKey)
-		if (!activeProfileId || !environments.some((e) => e.id === activeProfileId)) {
-			const defaultProfile = await resolveDefaultProfile()
-			activeProfileId = defaultProfile?.id ?? environments[0]?.id ?? ""
-			if (activeProfileId) {
-				this.activeProfileByWorkspace.set(workspaceKey, activeProfileId)
-				this.persistActiveProfile(workspaceKey, activeProfileId)
-			}
+		const explicit = this.explicitProfileId(workspaceKey)
+		if (explicit && environments.some((e) => e.id === explicit)) {
+			return { environments, activeProfileId: explicit }
 		}
-		return { environments, activeProfileId }
+		// No (valid) explicit choice: show the safe default without persisting it.
+		return { environments, activeProfileId: pickDefaultProfile(environments)?.id ?? "" }
 	}
 
+	/** An explicit user selection (kernel picker). The only way a workspace interpreter can run. */
 	setActiveProfile(profileId: string): void {
 		const workspaceKey = getWorkspaceKey()
 		this.activeProfileByWorkspace.set(workspaceKey, profileId)
@@ -171,7 +177,7 @@ export class ArtifactKernelService {
 	}
 
 	getActiveProfileId(): string {
-		return this.activeProfileByWorkspace.get(getWorkspaceKey()) ?? ""
+		return this.explicitProfileId(getWorkspaceKey())
 	}
 
 	async resolveProfile(profileId?: string): Promise<KernelProfile> {
@@ -179,15 +185,19 @@ export class ArtifactKernelService {
 		const id = profileId?.trim() || activeProfileId
 		const found = environments.find((e) => e.id === id)
 		if (found) {
+			if (isWorkspaceDerived(found) && found.id !== this.explicitProfileId(getWorkspaceKey())) {
+				throw new Error(
+					`"${found.label}" comes from the workspace, so it only runs if you select it in the kernel picker. Pick it there, or set aihydro.htmlPreview.pythonInterpreter.`,
+				)
+			}
 			return found
 		}
-		const fallback = await resolveDefaultProfile()
+		const fallback = pickDefaultProfile(environments)
 		if (!fallback) {
 			throw new Error(
-				"No Python interpreter found. Set aihydro.htmlPreview.pythonInterpreter, select a VS Code interpreter, or create .aihydro/venv in the workspace.",
+				"No Python interpreter found. Set aihydro.htmlPreview.pythonInterpreter, or select an interpreter in the kernel picker.",
 			)
 		}
-		this.setActiveProfile(fallback.id)
 		return fallback
 	}
 
@@ -246,6 +256,18 @@ export class ArtifactKernelService {
 		const aid = artifactId.trim()
 		for (const [key, session] of this.sessions) {
 			if (session.artifactId === aid) {
+				this.stopKernel(key)
+			}
+		}
+	}
+
+	/**
+	 * A shared kernel holds state from every artifact that ran in it, so revoking any one
+	 * document must not leave that namespace (and whatever it started) running.
+	 */
+	stopSharedSessions(): void {
+		for (const [key, session] of this.sessions) {
+			if (session.shared) {
 				this.stopKernel(key)
 			}
 		}
@@ -534,6 +556,7 @@ export class ArtifactKernelService {
 		const session: KernelSession = {
 			sessionKey,
 			artifactId,
+			shared: vscode.workspace.getConfiguration("aihydro.htmlPreview").get<boolean>("shareKernelAcrossArtifacts", false),
 			profile,
 			process: undefined as unknown as ChildProcessWithoutNullStreams,
 			rl: undefined as unknown as readline.Interface,
@@ -551,7 +574,9 @@ export class ArtifactKernelService {
 		// Secret-shaped vars (API keys, tokens, cloud credentials) are scrubbed
 		// before the child sees them — artifact code is workspace-trusted, not
 		// credential-trusted. See scrubKernelEnv.ts.
-		const env = { ...scrubKernelEnv(process.env), PYTHONUNBUFFERED: "1", ...profile.env }
+		// AIHYDRO_AGENT_CONTEXT is last so a kernel profile env cannot clear it (AP1, B4): artifact code is
+		// agent-influenced, and the claim-approval CLI refuses to run where the marker is set.
+		const env = { ...scrubKernelEnv(process.env), PYTHONUNBUFFERED: "1", ...profile.env, AIHYDRO_AGENT_CONTEXT: "1" }
 		const child = spawn(profile.interpreterPath, [runnerPath], {
 			cwd: profile.cwd,
 			env,

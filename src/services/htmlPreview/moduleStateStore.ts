@@ -14,11 +14,12 @@
  * Atomic write-then-rename keeps the file consistent across crashes. No caching:
  * one small disk read per module open is negligible.
  */
+
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 
-const STATE_DIR = path.join(os.homedir(), ".aihydro", "module_state")
+const STATE_DIR = aihydroPath("module_state")
 
 export interface ModuleState {
 	moduleKey: string
