@@ -174,6 +174,12 @@ function buildArtifactContextScript(item?: HtmlPreviewItem): string {
 
 type RenderPath = "srcdoc" | "src" | "none"
 
+/** A Python run waiting for the kernel. */
+interface QueuedRun {
+	code: string
+	cellId?: string
+}
+
 // Set by ArtifactPreviewService.registerFile() when the artifact's directory
 // looks like a rendered Quarto/multi-file site (site_libs/ + search.json
 // siblings). Not currently used to change the render path — see the
@@ -370,15 +376,17 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 	const [runAllCurrent, setRunAllCurrent] = useState(0)
 	const [runAllTotal, setRunAllTotal] = useState(0)
 	const registeredCellIdsRef = useRef<Set<string>>(new Set())
+	// True only while a runArtifactCode call is in flight.
 	const isRunningRef = useRef(false)
-	// Reactive-param sliders (aihydro.bindParam autorun / timeline scrubber) debounce
-	// re-runs at 80–250ms, far below a real Python round-trip. Without coalescing, a
-	// run that arrives while the kernel is busy was silently dropped, so the final
-	// slider value never executed and the output lagged behind the visible code. We
-	// keep only the LATEST dropped request and fire it on the trailing edge once the
-	// in-flight run finishes — latest-wins so intermediate drags don't queue up.
-	const pendingRunRef = useRef<{ code: string; language: string; cellId?: string } | null>(null)
-	const handleArtifactRunCodeRef = useRef<((code: string, language: string, cellId?: string) => void) | null>(null)
+	// True from the first to the last cell of a "Run all"; it only drives the UI.
+	const runAllActiveRef = useRef(false)
+	// Runs that arrive while the kernel is busy wait here and execute in arrival
+	// order (FIFO). Each one answers its own cell, so no "Running…" button is left
+	// stuck. Coalescing is limited to a rerun of the SAME cell that is still
+	// waiting (reactive-param sliders re-run one cell at 80–250ms, far faster than
+	// a Python round-trip): the waiting entry keeps its place and takes the newest
+	// code, so the output catches up to where the user left the control.
+	const runQueueRef = useRef<QueuedRun[]>([])
 	// Phase 4: Edit Mode state
 	const [editModeActive, setEditModeActive] = useState(false)
 	// UI Refinement: batch state from the iframe editor adapter
@@ -668,12 +676,6 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				})
 				return
 			}
-			if (isRunningRef.current) {
-				// Kernel busy: coalesce to the most recent request and run it on the
-				// trailing edge (see pendingRunRef above) instead of dropping it.
-				pendingRunRef.current = { code, language, cellId }
-				return
-			}
 			const artifactIdFromContext = item.id
 			if (cellId && registeredCellIdsRef.current.size > 0 && !registeredCellIdsRef.current.has(cellId)) {
 				postResultToIframe({
@@ -686,65 +688,72 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				})
 				return
 			}
-			isRunningRef.current = true
+			const queue = runQueueRef.current
+			const waiting = cellId ? queue.find((entry) => entry.cellId === cellId) : undefined
+			if (waiting) {
+				waiting.code = code
+			} else {
+				queue.push({ code, cellId })
+			}
 			setIsRunning(true)
+			if (isRunningRef.current) {
+				return // the drain loop below picks it up in order
+			}
+			isRunningRef.current = true
 			try {
-				const response = await HtmlPreviewServiceClient.runArtifactCode(
-					RunArtifactCodeRequest.create({
-						artifactId: artifactIdFromContext,
-						profileId: activeProfileId,
-						language: ArtifactCodeLanguage.ARTIFACT_CODE_LANGUAGE_PYTHON,
-						code,
-						cellId: cellId ?? "",
-					}),
-				)
-				const images =
-					response.imagesPngBase64?.length > 0
-						? response.imagesPngBase64
-						: (response.outputs ?? []).filter((o) => o.type === "image/png" && o.data).map((o) => o.data)
-				postResultToIframe({
-					type: "artifact/runCodeResult",
-					stdout: response.stdout,
-					stderr: response.stderr,
-					status: response.status,
-					error: response.error,
-					result_repr: response.resultRepr,
-					images,
-					outputs: response.outputs,
-					truncated: response.truncated,
-					cellId: response.cellId || cellId || "",
-				})
-				void refreshKernelInfo()
-			} catch (err) {
-				postResultToIframe({
-					type: "artifact/runCodeResult",
-					status: "error",
-					error: err instanceof Error ? err.message : String(err),
-					stdout: "",
-					stderr: "",
-					cellId: cellId ?? "",
-				})
+				while (queue.length > 0) {
+					const next = queue.shift()
+					if (next) {
+						await runOne(next)
+					}
+				}
 			} finally {
 				isRunningRef.current = false
-				setIsRunning(false)
-				// Trailing-edge drain: if slider input arrived while we were busy,
-				// run the latest coalesced request now so the output catches up to
-				// where the user actually left the control.
-				const pending = pendingRunRef.current
-				if (pending) {
-					pendingRunRef.current = null
-					handleArtifactRunCodeRef.current?.(pending.code, pending.language, pending.cellId)
+				setIsRunning(runAllActiveRef.current || queue.length > 0)
+			}
+
+			async function runOne({ code: runCode, cellId: runCellId }: QueuedRun) {
+				try {
+					const response = await HtmlPreviewServiceClient.runArtifactCode(
+						RunArtifactCodeRequest.create({
+							artifactId: artifactIdFromContext,
+							profileId: activeProfileId,
+							language: ArtifactCodeLanguage.ARTIFACT_CODE_LANGUAGE_PYTHON,
+							code: runCode,
+							cellId: runCellId ?? "",
+						}),
+					)
+					const images =
+						response.imagesPngBase64?.length > 0
+							? response.imagesPngBase64
+							: (response.outputs ?? []).filter((o) => o.type === "image/png" && o.data).map((o) => o.data)
+					postResultToIframe({
+						type: "artifact/runCodeResult",
+						stdout: response.stdout,
+						stderr: response.stderr,
+						status: response.status,
+						error: response.error,
+						result_repr: response.resultRepr,
+						images,
+						outputs: response.outputs,
+						truncated: response.truncated,
+						cellId: response.cellId || runCellId || "",
+					})
+					void refreshKernelInfo()
+				} catch (err) {
+					postResultToIframe({
+						type: "artifact/runCodeResult",
+						status: "error",
+						error: err instanceof Error ? err.message : String(err),
+						stdout: "",
+						stderr: "",
+						cellId: runCellId ?? "",
+					})
 				}
 			}
 		},
 		[item?.id, activeProfileId, postResultToIframe, refreshKernelInfo],
 	)
-
-	// Keep a ref to the latest callback so the trailing-edge drain in the finally
-	// block above can re-invoke it without a stale-closure or self-reference cycle.
-	useEffect(() => {
-		handleArtifactRunCodeRef.current = handleArtifactRunCode
-	}, [handleArtifactRunCode])
 
 	const handleProfileChange = useCallback(
 		async (profileId: string) => {
@@ -850,12 +859,12 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				setRunAllCurrent(data.current ?? 0)
 				setRunAllTotal(data.total ?? 0)
 				setIsRunning(true)
-				isRunningRef.current = true
+				runAllActiveRef.current = true
 				return
 			}
 			if (data.type === "artifact/runAllComplete") {
-				setIsRunning(false)
-				isRunningRef.current = false
+				runAllActiveRef.current = false
+				setIsRunning(isRunningRef.current || runQueueRef.current.length > 0)
 				setRunAllCurrent(0)
 				setRunAllTotal(0)
 				void refreshKernelInfo()
@@ -1084,18 +1093,37 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		if (!item?.id) {
 			return
 		}
+		// Cells still waiting never started; cancel them explicitly so their Run
+		// buttons clear (a stuck "Running…" is worse than a visible cancellation).
+		const cancelled = runQueueRef.current.splice(0)
+		for (const entry of cancelled) {
+			postResultToIframe({
+				type: "artifact/runCodeResult",
+				status: "interrupted",
+				error: "Cancelled: Stop was pressed before this cell started.",
+				stdout: "",
+				stderr: "",
+				cellId: entry.cellId ?? "",
+			})
+		}
 		try {
-			await HtmlPreviewServiceClient.interruptArtifactKernel(
+			// The host answers once the kernel has really stopped (or been restarted
+			// because it would not stop). The cell's own result, already on its way
+			// through handleArtifactRunCode, carries the outcome shown to the learner.
+			const outcome = await HtmlPreviewServiceClient.interruptArtifactKernel(
 				InterruptArtifactKernelRequest.create({ artifactId: item.id, profileId: activeProfileId }),
 			)
+			if (!outcome.recovered) {
+				console.warn("[HtmlPreviewView] Kernel did not stop on interrupt:", outcome.error)
+			}
 		} catch (err) {
 			console.error("[HtmlPreviewView] Failed to interrupt kernel:", err)
 		} finally {
-			setIsRunning(false)
-			isRunningRef.current = false
+			runAllActiveRef.current = false
+			setIsRunning(isRunningRef.current)
 			void refreshKernelInfo()
 		}
-	}, [item?.id, activeProfileId, refreshKernelInfo])
+	}, [item?.id, activeProfileId, refreshKernelInfo, postResultToIframe])
 
 	const handleRestartAndRunAll = useCallback(async () => {
 		await handleRestartKernel()
