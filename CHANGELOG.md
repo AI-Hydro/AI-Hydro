@@ -11,6 +11,14 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Fixed — keyless basemaps (vision-2040, branch `vision2040/basemap-keyless`)
+
+- **Default basemap was a watermark.** CARTO now answers every keyless tile request (any style, any location) with one "API KEY REQUIRED" image, so the default and the Carto Light/Dark/Voyager entries were unusable. The default "Hydrology default (muted)" now uses Esri Light/Dark Gray Canvas (global, keyless, attribution shown); the Carto entries are removed (no CARTO key setting exists).
+- A saved choice that no longer exists (Carto, Stadia, Mapbox, unknown) moves to the default with a one-time notice that names the reason.
+- **No more silent blank map.** US-only basemaps (USGS Topo/Imagery/Shaded Relief) carry coverage metadata; when the view is outside coverage a non-blocking notice says so and offers "Use Hydrology default". A basemap that answers every tile with one identical image shows a "Basemap unavailable" notice (a general placeholder check, not per-provider).
+- The in-chat Leaflet preview bridge's `carto-dark` basemap is now an alias of `esri-dark-gray`.
+- Provider verification (keyless, coverage, max zoom, attribution, terms) is recorded in `webview-ui/src/components/map/basemaps.ts` and enforced by the catalogue tests.
+
 ### Fixed — native tool-call repair follow-up (vision-2040, branch `vision2040/native-repair-followup`)
 
 - A DeepSeek native envelope that is not the last thing in the message (prose or a closing fence after it) or is unclosed no longer vanishes: the text is shown, nothing runs, and one muted line says "Native tool call not at end of message; not run." (or the malformed notice).

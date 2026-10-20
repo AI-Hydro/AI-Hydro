@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest"
 import {
 	classifyTileHealth,
 	clearTally,
+	fingerprintBytes,
 	loadedSources,
 	MIN_OVERLAY_SAMPLE,
+	PLACEHOLDER_MIN_TILES,
 	TILE_FAILURE_RATIO,
+	TilePlaceholderTracker,
+	type TileTallies,
 	tallyTile,
 	tileErrorsFrom,
 	tileNotesFrom,
-	type TileTallies,
 } from "../tileHealth"
 
 const run = (loaded: number, failed: number, message = "Tile request failed (HTTP 404)"): TileTallies => {
@@ -106,5 +109,47 @@ describe("sparse overlay sources", () => {
 	it("loadedSources lists only sources that drew a tile", () => {
 		expect([...loadedSources(overlayRun(2, 0, 0))]).toEqual(["basemap-usgs-hydro"])
 		expect(loadedSources(overlayRun(0, 5, 5)).size).toBe(0)
+	})
+})
+
+describe("TilePlaceholderTracker", () => {
+	const fill = (tracker: TilePlaceholderTracker, n: number, print: (i: number) => string) => {
+		for (let i = 0; i < n; i++) tracker.record("basemap", `z5/${i}/0`, print(i))
+	}
+	it("flags a source that returns one identical image for many distinct tiles", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, PLACEHOLDER_MIN_TILES, () => "2049:abc")
+		expect(tracker.suspected("basemap")).toBe(true)
+	})
+	it("does not flag before enough distinct tiles, nor the same address repeated", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, PLACEHOLDER_MIN_TILES - 1, () => "2049:abc")
+		expect(tracker.suspected("basemap")).toBe(false)
+		for (let i = 0; i < 50; i++) tracker.record("basemap", "z5/0/0", "2049:abc")
+		expect(tracker.suspected("basemap")).toBe(false)
+	})
+	it("does not flag a source whose tiles differ", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, 40, (i) => `100:${i}`)
+		expect(tracker.suspected("basemap")).toBe(false)
+	})
+	it("tolerates a few legitimately different tiles among identical ones", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, 100, (i) => (i < 4 ? `9:${i}` : "2049:abc"))
+		expect(tracker.suspected("basemap")).toBe(true)
+		const mixed = new TilePlaceholderTracker()
+		fill(mixed, 100, (i) => (i < 20 ? `9:${i}` : "2049:abc"))
+		expect(mixed.suspected("basemap")).toBe(false)
+	})
+	it("clear forgets a source", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, 20, () => "x")
+		tracker.clear("basemap")
+		expect(tracker.suspected("basemap")).toBe(false)
+	})
+	it("fingerprintBytes separates different content and equals itself", () => {
+		expect(fingerprintBytes(new Uint8Array([1, 2, 3]))).toBe(fingerprintBytes(new Uint8Array([1, 2, 3])))
+		expect(fingerprintBytes(new Uint8Array([1, 2, 3]))).not.toBe(fingerprintBytes(new Uint8Array([1, 2, 4])))
+		expect(fingerprintBytes(new Uint8Array([1, 2]))).not.toBe(fingerprintBytes(new Uint8Array([1, 2, 0])))
 	})
 })

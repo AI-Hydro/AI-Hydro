@@ -9,8 +9,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useBrushContext } from "../../context/BrushContext"
 import { useMapContext } from "../../context/MapContext"
 import { MapServiceClient } from "../../services/grpc-client"
-import { claimAgentCommand, escapeHtml } from "./agentCommandDedupe"
 import AnnotationsPanel from "./AnnotationsPanel"
+import { claimAgentCommand, escapeHtml } from "./agentCommandDedupe"
 import {
 	type AnnotationCollection,
 	loadAnnotations,
@@ -20,12 +20,22 @@ import {
 	saveAnnotations,
 	seedAnnotationsFromGeoJson,
 } from "./annotationStorage"
-import { attributionFor, extentsIntersect, type Extent, isKnownBaseMap, resolveBaseMap } from "./basemaps"
+import { BasemapNotice } from "./BasemapNotice"
+import {
+	attributionFor,
+	basemapCoverageStatus,
+	coverageNoticeText,
+	DEFAULT_BASEMAP_ID,
+	type Extent,
+	extentsIntersect,
+	isKnownBaseMap,
+	resolveBaseMap,
+} from "./basemaps"
 import FeatureIdentifier, { type ClickedFeature, type MapInspectPoint } from "./FeatureIdentifier"
-import { loadAndPushFileEntries, loadAndPushFiles } from "./formats"
 import { flyToTransition } from "./flyToTransition"
-import { freshLayers } from "./freshLayers"
+import { loadAndPushFileEntries, loadAndPushFiles } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
+import { freshLayers } from "./freshLayers"
 import {
 	addToMyGallery,
 	loadBookmarks,
@@ -57,6 +67,7 @@ import { terrainOffsetForManifest } from "./inundation3d/verticalAlignment"
 import { clusterGeoJSON, LayerClusterCache } from "./layerClusterCache"
 import { MapConnectionStatus } from "./MapConnectionStatus"
 import MapContextMenu from "./MapContextMenu"
+import { MapEmptyState, shouldShowEmptyState } from "./MapEmptyState"
 import MapLegend from "./MapLegend"
 import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
@@ -66,7 +77,6 @@ import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapH
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
 import { type CursorRasterReading, getLayerBounds, isGeoJsonLayer, sampleTopRasterAtPoint } from "./mapLayerAdapters"
 import { reportBasemapChanged, reportMapEvent, reportVisibleLayers } from "./mapSessionBridge"
-import { MAP_Z } from "./mapZ"
 import {
 	initialBasemap,
 	loadMapWorkspace,
@@ -74,24 +84,25 @@ import {
 	sanitizeViewStateForDeck,
 	saveMapWorkspace,
 } from "./mapWorkspace"
+import { MAP_Z } from "./mapZ"
 import { DASH_EXTENSION } from "./pathStyle"
 import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGalleryPanel"
 import { resolveFileUri } from "./resolveFileUri"
-import { MapEmptyState, shouldShowEmptyState } from "./MapEmptyState"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
 import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
-import { loadTransects, type MapTransect, newTransect, saveTransects, type TransectCollection } from "./transectStorage"
 import {
 	clearTally,
 	loadedSources,
+	type TileOutcome,
+	TilePlaceholderTracker,
+	type TileTallies,
 	tallyTile,
 	tileErrorsFrom,
 	tileNotesFrom,
-	type TileOutcome,
-	type TileTallies,
 } from "./tileHealth"
+import { loadTransects, type MapTransect, newTransect, saveTransects, type TransectCollection } from "./transectStorage"
 import { useMapTheme } from "./useMapTheme"
 import { loadMapTile, type ResourceState, useRasterResources } from "./useRasterResources"
 import VectorDrawTool, { type CompletedVectorDraw, type VectorDrawMode } from "./VectorDrawTool"
@@ -708,15 +719,32 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	)
 	const tileErrors = useMemo(() => tileErrorsFrom(tileTallies), [tileTallies])
 	const tileNotes = useMemo(() => tileNotesFrom(tileTallies), [tileTallies])
+	// Sources whose tiles are all byte-identical (a provider placeholder such as an API-key watermark).
+	const placeholderTracker = useRef(new TilePlaceholderTracker())
+	const [placeholderSuspected, setPlaceholderSuspected] = useState(false)
+	const reportTileFingerprint = useCallback((address: string, fingerprint: string) => {
+		const tracker = placeholderTracker.current
+		tracker.record("basemap", address, fingerprint)
+		setPlaceholderSuspected((previous) => {
+			const next = tracker.suspected("basemap")
+			return previous === next ? previous : next
+		})
+	}, [])
 	const clearTileSource = useCallback((id: string) => {
 		talliesRef.current = clearTally(talliesRef.current, id)
 		setTileTallies(talliesRef.current)
+		if (id === "basemap") {
+			placeholderTracker.current.clear("basemap")
+			setPlaceholderSuspected(false)
+		}
 	}, [])
 	const retryResources = useCallback(() => {
 		resourceGeneration.current += 1
 		talliesRef.current = {}
 		setTileTallies({})
 		setRendererError(null)
+		placeholderTracker.current.clear()
+		setPlaceholderSuspected(false)
 		setResourceRetry((value) => value + 1)
 	}, [])
 	useEffect(() => {
@@ -922,6 +950,48 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		observer.observe(node)
 		return () => observer.disconnect()
 	}, [])
+
+	// Basemap notices (non-blocking): outside a US-only source's coverage, suspected provider placeholder, and a
+	// saved basemap that was removed. Coverage is judged on the current viewport, so it clears when panning back.
+	const basemapNotices = useMemo(() => {
+		const notices: { key: string; text: string }[] = []
+		if (initialBase.migrated) {
+			notices.push({
+				key: `migrated:${initialBase.migrated.from}`,
+				text: `Your saved basemap "${initialBase.migrated.from}" is no longer available (${initialBase.migrated.reason}). Using the Hydrology default.`,
+			})
+		}
+		try {
+			const vp = new WebMercatorViewport({
+				width: dimensions.width,
+				height: dimensions.height,
+				longitude: viewState.longitude,
+				latitude: viewState.latitude,
+				zoom: viewState.zoom,
+			})
+			const [west, south, east, north] = vp.getBounds()
+			if (basemapCoverageStatus(resolvedBaseMap, [west, south, east, north]) === "outside") {
+				notices.push({ key: `coverage:${resolvedBaseMap.id}`, text: coverageNoticeText(resolvedBaseMap) })
+			}
+		} catch {
+			// An invalid transient view state produces no coverage notice.
+		}
+		if (placeholderSuspected) {
+			notices.push({
+				key: `placeholder:${resolvedBaseMap.id}`,
+				text: `Basemap unavailable: ${resolvedBaseMap.name} is returning the same image for every tile, which usually means a placeholder (for example an API-key notice). Choose another basemap.`,
+			})
+		}
+		return notices
+	}, [
+		initialBase.migrated,
+		dimensions,
+		viewState.longitude,
+		viewState.latitude,
+		viewState.zoom,
+		resolvedBaseMap,
+		placeholderSuspected,
+	])
 
 	// ── WebGL context-loss recovery ───────────────────────────────────────────
 	// VS Code webviews (especially on macOS with several panels open) can have
@@ -1372,7 +1442,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				url: resolvedBaseMap.url,
 				maxNativeZoom: resolvedBaseMap.maxNativeZoom,
 				extent: resolvedBaseMap.extent,
-				extents: undefined as Extent[] | undefined,
+				extents: resolvedBaseMap.extents,
+				fingerprint: true,
 			},
 			...resolvedBaseMap.overlays.map((overlay) => ({
 				tallyId: `basemap-${overlay.id}`,
@@ -1381,6 +1452,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				maxNativeZoom: overlay.maxNativeZoom,
 				extent: overlay.extent,
 				extents: overlay.extents,
+				fingerprint: false,
 			})),
 		]
 		return sources.map(
@@ -1399,7 +1471,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							const box: Extent = [bbox.west, bbox.south, bbox.east, bbox.north]
 							if (!source.extents.some((candidate) => extentsIntersect(candidate, box))) return null
 						}
-						return loadMapTile(tile)
+						return loadMapTile(tile, source.fingerprint ? (fp) => reportTileFingerprint(tile.url, fp) : undefined)
 					},
 					// A skipped tile (null content) is not a loaded tile: it must not earn attribution credit.
 					onTileLoad: (tile: any) => {
@@ -1423,7 +1495,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					},
 				}),
 		)
-	}, [resolvedBaseMap, resourceRetry, reportTileLoaded, reportTileError])
+	}, [resolvedBaseMap, resourceRetry, reportTileLoaded, reportTileError, reportTileFingerprint])
 
 	// Record which source URLs this render draws (late tile callbacks for an earlier basemap are ignored) and
 	// forget the previous basemap's tile health when the basemap changes, so its errors never linger.
@@ -3014,6 +3086,10 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				tileNotes={tileNotes}
 				visibleLayerIds={visibleLayerIds}
 			/>
+			<BasemapNotice
+				messages={basemapNotices}
+				onUseDefault={selectedBaseMap === DEFAULT_BASEMAP_ID ? undefined : resetBaseMap}
+			/>
 			{/* RIGHT MAP (or single map when not swiping) */}
 			<DeckGL
 				controller={{
@@ -3355,6 +3431,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			)}
 
 			<MapToolRibbon
+				activeTool={activeTool}
 				annotationsPanel={
 					<AnnotationsPanel
 						annotations={annotations}
@@ -3382,9 +3459,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						visibleLayerNames={Array.from(visibleLayerIds).map((id) => layers.find((l) => l.id === id)?.name || id)}
 					/>
 				}
-				clusterLayerIds={clusterLayerIds}
-				activeTool={activeTool}
 				basemapExplicit={basemapExplicit}
+				clusterLayerIds={clusterLayerIds}
 				currentBasemap={selectedBaseMap}
 				drawMode={drawMode}
 				floodPanel={
@@ -3519,7 +3595,6 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					containerRef.current?.querySelector<HTMLCanvasElement>("canvas#ai-hydro-research-map") ?? null
 				}
 				layerCount={layers.length}
-				visibleLayerCount={layers.filter((layer) => visibleLayerIds.has(layer.id)).length}
 				layerOpacities={layerOpacities}
 				layerOrder={layerOrder}
 				layers={sortedLayers}
@@ -3620,6 +3695,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					/>
 				}
 				viewState={viewState}
+				visibleLayerCount={layers.filter((layer) => visibleLayerIds.has(layer.id)).length}
 				visibleLayerIds={visibleLayerIds}
 			/>
 
@@ -3731,17 +3807,17 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			)}
 
 			<MapBottomBar
+				attribution={attributionFor(
+					resolvedBaseMap,
+					{ lon: viewState.longitude, lat: viewState.latitude },
+					loadedOverlayIds,
+				)}
 				bearing={viewState.bearing ?? 0}
 				cursorCoord={cursorCoord}
 				mapStyle={mapStyle}
 				onResetNorth={() => setViewState((prev) => ({ ...prev, bearing: 0, pitch: 0 }))}
 				onZoomIn={() => setViewState((prev) => ({ ...prev, zoom: Math.min(20, prev.zoom + 1) }))}
 				onZoomOut={() => setViewState((prev) => ({ ...prev, zoom: Math.max(0, prev.zoom - 1) }))}
-				attribution={attributionFor(
-					resolvedBaseMap,
-					{ lon: viewState.longitude, lat: viewState.latitude },
-					loadedOverlayIds,
-				)}
 				viewState={viewState}
 			/>
 

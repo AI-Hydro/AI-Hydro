@@ -8,10 +8,16 @@
  *   - extent: lon/lat bounds of the source. Tiles outside it are not requested (USGS caches are US only).
  *   - attribution: what the licence requires, shown for what is actually drawn.
  *
- * Tile hosts in use (all already used before this change; none added): basemap.nationalmap.gov (USGS),
- * services.arcgisonline.com and server.arcgisonline.com (Esri), a.basemaps.cartocdn.com (Carto),
- * a.tile.openstreetmap.fr (HOT). Stadia (needs an API key a vscode-webview origin cannot present) and the
- * Mapbox entries (which silently rendered a USGS style while claiming Mapbox) were removed.
+ * Tile hosts in use: basemap.nationalmap.gov (USGS), services.arcgisonline.com and server.arcgisonline.com
+ * (Esri), a.tile.openstreetmap.fr (HOT). Removed because they need an API key a vscode-webview origin cannot
+ * present or that we do not hold: Stadia, Mapbox, and (2026-10-20) CARTO. CARTO's keyless endpoints now answer
+ * every request, at every location and style, with one identical "API KEY REQUIRED" watermark tile (verified
+ * 2026-10-20: same bytes for light/dark/voyager at India and US tiles), so a catalogue entry would silently
+ * draw a watermark map. No CARTO key setting exists, so the entries are removed rather than gated.
+ *
+ * KEYLESS RULE: no entry may need a key. `basemaps.test.ts` enforces it (no `requiresKey`, no key-bearing URL
+ * parameters, every entry declares coverage, maxNativeZoom, attribution and a terms note). A provider that
+ * starts returning placeholders later is caught at runtime by `TilePlaceholderTracker` (tileHealth.ts).
  *
  * LOD VERIFICATION (recorded 2026-10-20; every maxNativeZoom checked against the service's published MapServer
  * JSON, `<service>/MapServer?f=json`):
@@ -65,9 +71,18 @@ export interface BaseMapOverlay {
 	attribution: string
 }
 
+/** `global` sources serve the whole world; `us` sources serve the United States only (USGS National Map). */
+export type BasemapCoverage = "global" | "us"
+
 export interface BaseMapStyle {
 	id: string
 	name: string
+	/** Where the source serves tiles. US-only sources must also carry `extents`. */
+	coverage: BasemapCoverage
+	/** Usage terms / policy note for this source (what was verified, and when). */
+	terms: string
+	/** Precise coverage boxes; the viewport is "outside coverage" when it intersects none of them. */
+	extents?: Extent[]
 	/** Tile URL (the light variant when `darkUrl` is set). */
 	url: string
 	/** Tile URL for dark and high-contrast themes. */
@@ -81,7 +96,17 @@ export interface BaseMapStyle {
 	note?: string
 }
 
-export const CARTO_ATTRIBUTION = "© OpenStreetMap contributors © CARTO"
+/**
+ * Ids that were in earlier catalogues and are gone for good, with the reason (shown once when a saved choice is
+ * migrated to the default).
+ */
+export const REMOVED_BASEMAPS: Record<string, string> = {
+	"carto-light": "CARTO now requires an API key",
+	"carto-dark": "CARTO now requires an API key",
+	"carto-voyager": "CARTO now requires an API key",
+	"stadia-terrain": "Stadia requires an API key",
+	"mapbox-dark": "Mapbox requires an access token",
+}
 
 /** USGS National Map hydrography (NHD) as transparent tiles: the emphasised river layer of the default. */
 export const USGS_HYDRO_OVERLAY: BaseMapOverlay = {
@@ -96,45 +121,62 @@ export const USGS_HYDRO_OVERLAY: BaseMapOverlay = {
 
 export const DEFAULT_BASEMAP_ID = "muted-hydro"
 
+const ESRI_CANVAS_ATTRIBUTION = "Sources: Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS User Community"
+const ESRI_TERMS =
+	"Esri ArcGIS Online tile service, no key required (verified 2026-10-20); licensed under the Esri Master License Agreement, attribution required. Light/Dark Gray Canvas is in mature support, retiring December 2029."
+const USGS_TERMS =
+	"USGS The National Map: public-domain data, no key; credit USGS. Detailed tiles exist for the United States only."
+
 export const BASE_MAP_STYLES: BaseMapStyle[] = [
 	// ── Hydrology default: muted, label-free base so rivers and data layers carry the colour ────────────────
 	{
 		id: DEFAULT_BASEMAP_ID,
 		name: "Hydrology default (muted)",
-		url: "https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png",
-		darkUrl: "https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png",
-		attribution: CARTO_ATTRIBUTION,
-		maxNativeZoom: 19,
+		coverage: "global",
+		url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+		darkUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+		attribution: ESRI_CANVAS_ATTRIBUTION,
+		maxNativeZoom: 16,
 		overlays: [USGS_HYDRO_OVERLAY],
-		note: "Muted base with rivers emphasised. River emphasis uses USGS hydrography and covers the United States only.",
+		terms: ESRI_TERMS,
+		note: "Esri Light/Dark Gray Canvas (global, muted) with rivers emphasised. River emphasis uses USGS hydrography and covers the United States only.",
 	},
 
 	// ── Hydrology / Earth-science alternatives (US coverage) ───────────────────────────────────────────────
 	{
 		id: "usgs-topo",
 		name: "USGS Topo",
+		coverage: "us",
 		url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
 		attribution: "USGS The National Map",
 		maxNativeZoom: 16,
 		extent: US_EXTENT,
+		extents: US_EXTENTS,
+		terms: USGS_TERMS,
 		note: "United States only.",
 	},
 	{
 		id: "usgs-imagery",
 		name: "USGS Imagery",
+		coverage: "us",
 		url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
 		attribution: "USGS The National Map",
 		maxNativeZoom: 16,
 		extent: US_EXTENT,
+		extents: US_EXTENTS,
+		terms: USGS_TERMS,
 		note: "United States only.",
 	},
 	{
 		id: "usgs-shaded-relief",
 		name: "USGS Shaded Relief",
+		coverage: "us",
 		url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}",
 		attribution: "USGS The National Map",
 		maxNativeZoom: 16,
 		extent: US_EXTENT,
+		extents: US_EXTENTS,
+		terms: USGS_TERMS,
 		note: "United States only.",
 	},
 
@@ -142,62 +184,50 @@ export const BASE_MAP_STYLES: BaseMapStyle[] = [
 	{
 		id: "esri-hillshade",
 		name: "Esri Hillshade",
+		coverage: "global",
 		url: "https://services.arcgisonline.com/arcgis/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
 		attribution: "© Esri — Sources: Esri, USGS, NOAA",
 		maxNativeZoom: 16,
+		terms: ESRI_TERMS,
 	},
 	{
 		id: "esri-imagery",
 		name: "Esri World Imagery",
+		coverage: "global",
 		url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
 		attribution: "© Esri — Sources: Esri, Maxar, Earthstar Geographics, USGS",
 		maxNativeZoom: 19,
+		terms: ESRI_TERMS,
 	},
 	{
 		id: "esri-topo",
 		name: "Esri World Topo",
+		coverage: "global",
 		url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
 		attribution: "© Esri",
 		maxNativeZoom: 19,
+		terms: ESRI_TERMS,
 	},
 	{
 		id: "esri-ocean",
 		name: "Esri Ocean",
+		coverage: "global",
 		url: "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
 		attribution: "© Esri — Sources: GEBCO, NOAA, Garmin",
 		maxNativeZoom: 16,
-	},
-
-	// ── Carto (OSM-derived, CDN) ───────────────────────────────────────────────────────────────────────────
-	{
-		id: "carto-light",
-		name: "Carto Light",
-		url: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-		attribution: CARTO_ATTRIBUTION,
-		maxNativeZoom: 19,
-	},
-	{
-		id: "carto-dark",
-		name: "Carto Dark",
-		url: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-		attribution: CARTO_ATTRIBUTION,
-		maxNativeZoom: 19,
-	},
-	{
-		id: "carto-voyager",
-		name: "Carto Voyager",
-		url: "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-		attribution: CARTO_ATTRIBUTION,
-		maxNativeZoom: 19,
+		terms: ESRI_TERMS,
 	},
 
 	// ── Alternate ──────────────────────────────────────────────────────────────────────────────────────────
 	{
 		id: "osm-hot",
 		name: "Humanitarian OSM",
+		coverage: "global",
 		url: "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
 		attribution: "© OpenStreetMap contributors © HOT",
 		maxNativeZoom: 19,
+		terms: "Community server run by OpenStreetMap France; best-effort, no published app-use policy found (the OSM Foundation tile policy covers tile.openstreetmap.org only). Light use only.",
+		note: "Community-run server; best effort.",
 	},
 ]
 
@@ -208,9 +238,16 @@ export interface ResolvedBaseMap {
 	url: string
 	maxNativeZoom: number
 	extent?: Extent
+	extents?: Extent[]
+	coverage: BasemapCoverage
 	overlays: BaseMapOverlay[]
 	/** Base attribution only; use `attributionFor` for what is drawn at a given view. */
 	attribution: string
+}
+
+/** Why a saved id is gone (a removed provider), or undefined when it is unknown for another reason / still valid. */
+export function removedBaseMapReason(id: string | undefined): string | undefined {
+	return id && !isKnownBaseMap(id) ? REMOVED_BASEMAPS[id] : undefined
 }
 
 export function isKnownBaseMap(id: string | undefined): boolean {
@@ -229,9 +266,32 @@ export function resolveBaseMap(id: string | undefined, theme: BaseMapTheme): Res
 		url: theme === "dark" && style.darkUrl ? style.darkUrl : style.url,
 		maxNativeZoom: style.maxNativeZoom,
 		extent: style.extent,
+		extents: style.extents,
+		coverage: style.coverage,
 		overlays: style.overlays ?? [],
 		attribution: style.attribution ?? "",
 	}
+}
+
+export type CoverageStatus = "covered" | "outside"
+
+/**
+ * Whether the viewport can show tiles from the basemap. Global sources always cover; a US-only source is
+ * "outside" when the viewport intersects none of its coverage boxes. Pure; the UI turns "outside" into a notice.
+ */
+export function basemapCoverageStatus(
+	resolved: Pick<ResolvedBaseMap, "coverage" | "extents" | "extent">,
+	viewport: Extent,
+): CoverageStatus {
+	if (resolved.coverage === "global") return "covered"
+	const boxes = resolved.extents ?? (resolved.extent ? [resolved.extent] : [])
+	if (boxes.length === 0) return "covered"
+	return boxes.some((box) => extentsIntersect(box, viewport)) ? "covered" : "outside"
+}
+
+/** The message for an "outside" viewport. */
+export function coverageNoticeText(resolved: Pick<ResolvedBaseMap, "name" | "coverage">): string {
+	return `${resolved.name} covers the United States only, so no tiles are shown here.`
 }
 
 export function extentContains(extent: Extent, lon: number, lat: number): boolean {

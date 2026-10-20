@@ -111,3 +111,54 @@ export function tileNotesFrom(tallies: TileTallies): Record<string, string> {
 	}
 	return notes
 }
+
+// ── Placeholder detection ───────────────────────────────────────────────────────────────────────────────────
+// Some providers answer HTTP 200 with the same "key required" or "not available" image for every request, so no
+// tile ever errors. A provider-independent signal: one source returns byte-identical tiles for (nearly) every
+// distinct tile address it was asked for. Real sources do repeat tiles over open ocean or blank areas, so this
+// is reported as a non-blocking suspicion ("basemap may be unavailable"), never as a failure.
+
+/** Distinct tile addresses a source must have served before sameness is meaningful. */
+export const PLACEHOLDER_MIN_TILES = 12
+/** Share of those tiles that must be byte-identical. */
+export const PLACEHOLDER_IDENTICAL_RATIO = 0.95
+
+/** Cheap content fingerprint of tile bytes (length plus FNV-1a hash). */
+export function fingerprintBytes(bytes: Uint8Array): string {
+	let hash = 0x811c9dc5
+	for (let i = 0; i < bytes.length; i++) {
+		hash ^= bytes[i]
+		hash = Math.imul(hash, 0x01000193) >>> 0
+	}
+	return `${bytes.length}:${hash.toString(16)}`
+}
+
+export class TilePlaceholderTracker {
+	private bySource = new Map<string, Map<string, Set<string>>>() // source -> fingerprint -> tile addresses
+
+	record(source: string, tileAddress: string, fingerprint: string): void {
+		const prints = this.bySource.get(source) ?? new Map<string, Set<string>>()
+		const addresses = prints.get(fingerprint) ?? new Set<string>()
+		addresses.add(tileAddress)
+		prints.set(fingerprint, addresses)
+		this.bySource.set(source, prints)
+	}
+
+	/** True when `source` looks like it is serving one placeholder image. */
+	suspected(source: string): boolean {
+		const prints = this.bySource.get(source)
+		if (!prints) return false
+		let total = 0
+		let top = 0
+		for (const addresses of prints.values()) {
+			total += addresses.size
+			top = Math.max(top, addresses.size)
+		}
+		return total >= PLACEHOLDER_MIN_TILES && top / total >= PLACEHOLDER_IDENTICAL_RATIO
+	}
+
+	clear(source?: string): void {
+		if (source === undefined) this.bySource.clear()
+		else this.bySource.delete(source)
+	}
+}

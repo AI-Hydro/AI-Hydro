@@ -10,6 +10,57 @@
 		}
 	},
 	"screens": {
+		"map-basemap-migrated": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"map-basemap-outside-coverage": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"map-basemap-placeholder": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
 		"experiment-with-ci": {
 			"ref": {
 				"noName": 0,
@@ -1584,6 +1635,36 @@
 					"cells": 6
 				},
 				"map-sync-hydrating": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-basemap-migrated": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-basemap-outside-coverage": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-basemap-placeholder": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,
