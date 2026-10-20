@@ -106,22 +106,32 @@ describe("backend research surfaces", () => {
 		)
 	})
 
-	it("preserves formal links and generates candidates only for actual unlinked runs", async () => {
+	it("preserves formal links and never turns an unlinked run into a claim", async () => {
 		const value = snapshot()
 		value.claims = {
 			c1: { claim: "Synthetic result", status: "tested", evidence_spans: [{ source_type: "run", source_id: "first" }] },
 		}
 		const claims = await loadClaimSurface("study", async () => value)
-		expect(claims.claims.map((claim) => claim.claimId)).to.deep.equal(["c1", "candidate:second"])
+		// `second` is a recorded run that no claim cites: it stays in Replay and is not a claim.
+		expect(claims.claims.map((claim) => claim.claimId)).to.deep.equal(["c1"])
 		expect(claims.claims[0].evidenceSpans[0].sourceId).to.equal("first")
+		expect(claims.claims.some((claim) => claim.claimType === "evidence_candidate")).to.equal(false)
 	})
 
-	it("keeps supported claims without evidence visibly flagged for review", async () => {
+	it("returns zero claims for a session whose runs are all unlinked", async () => {
+		const value = snapshot()
+		value.claims = {}
+		const surface = await loadClaimSurface("study", async () => value)
+		expect(surface.claims).to.deep.equal([])
+	})
+
+	it("shows the server's status for a supported claim without evidence (no client rewrite)", async () => {
 		const value = snapshot()
 		value.claims = { c1: { claim: "Unsupported assertion", status: "supported" } }
 		const surface = await loadClaimSurface("study", async () => value)
-		expect(surface.claims[0].status).to.equal("weakly_supported")
-		expect(surface.claims[0].limitations.join(" ")).to.contain("No evidence spans")
+		expect(surface.claims[0].status).to.equal("supported")
+		expect(surface.claims[0].evidenceSpans).to.deep.equal([])
+		expect(surface.claims[0].limitations).to.deep.equal([])
 	})
 
 	it("preserves capsule provenance supplied by the backend", async () => {

@@ -1,6 +1,8 @@
 import { partitionMinimalRuns } from "@shared/aihydro/claimApproval"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
+import { checkStatusToken, NEUTRAL_TOKEN } from "../../design/approvalPresentation"
+import { evidenceState } from "../../design/evidenceStates"
 
 interface QualityFlag {
 	validator: string
@@ -76,42 +78,27 @@ function reviewState(entry: RunEntry): RunReviewState {
 	}
 }
 
+// Recorded checks are package-recorded facts, never approval: a pass is neutral, not green.
 function statusColor(status: string): string {
-	switch (status) {
-		case "pass":
-		case "match":
-			return "var(--vscode-testing-iconPassed)"
-		case "warn":
-		case "warning":
-		case "advisory":
-		case "missing":
-			return "var(--vscode-testing-iconQueued)"
-		case "fail":
-		case "failed":
-		case "invalid":
-		case "error":
-		case "mismatch":
-			return "var(--vscode-testing-iconFailed)"
-		default:
-			return "var(--vscode-disabledForeground)"
-	}
+	return checkStatusToken(status)
 }
 
 function runStatus(entry: RunEntry): { icon: string; label: string; color: string } {
 	if (entry.minimal) {
-		return { icon: "codicon-circle-outline", label: "recorded call", color: "var(--vscode-disabledForeground)" }
+		return { icon: "codicon-circle-outline", label: "recorded call", color: evidenceState("unverified").token }
 	}
 	const state = reviewState(entry)
 	if (state.failures > 0 || entry.diff_status === "mismatch") {
 		return { icon: "codicon-error", label: "failed", color: "var(--vscode-testing-iconFailed)" }
 	}
 	if (state.checks === 0 && !entry.diff_status) {
-		return { icon: "codicon-question", label: "not checked", color: "var(--vscode-disabledForeground)" }
+		return { icon: "codicon-question", label: "not checked", color: evidenceState("unverified").token }
 	}
 	if (state.needsReview) {
 		return { icon: "codicon-warning", label: "needs review", color: "var(--vscode-testing-iconQueued)" }
 	}
-	return { icon: "codicon-pass-filled", label: "recorded checks passed", color: "var(--vscode-testing-iconPassed)" }
+	// Neutral on purpose: a validator pass is recorded by the package, it is not an approval.
+	return { icon: "codicon-check", label: "recorded checks passed", color: NEUTRAL_TOKEN }
 }
 
 function runShortId(runId: string): string {
@@ -402,16 +389,6 @@ export const ReplayPanel: React.FC = () => {
 		postMessage({ type: "load_replay", session_id: sessionId.trim() })
 	}, [sessionId])
 
-	const loadDemo = useCallback(() => {
-		setSessionId("demo-reproducibility-cockpit")
-		setLoading(true)
-		setError(null)
-		setData(null)
-		setFocusRunId(null)
-		setSelectedRunId(null)
-		postMessage({ type: "load_replay", session_id: "demo-reproducibility-cockpit" })
-	}, [])
-
 	const { visible: shownEntries, minimalCount } = React.useMemo(
 		() => partitionMinimalRuns(data?.entries ?? [], showMinimal),
 		[data, showMinimal],
@@ -455,8 +432,15 @@ export const ReplayPanel: React.FC = () => {
 		setSelectedRunId(filteredEntries[0]?.run_id ?? null)
 	}, [filteredEntries, selectedRunId])
 
-	useEffect(() => {
-		const handler = (e: KeyboardEvent) => {
+	// Arrow keys move the run selection only while focus is inside the run timeline. They are never
+	// captured globally, so the session list (datalist), the filter input and the selects keep their
+	// own keyboard behaviour.
+	const onTimelineKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLDivElement>) => {
+			const target = e.target as HTMLElement | null
+			if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) {
+				return
+			}
 			if (!filteredEntries.length) {
 				return
 			}
@@ -473,10 +457,9 @@ export const ReplayPanel: React.FC = () => {
 			} else if (e.key === "Escape") {
 				setSelectedRunId(null)
 			}
-		}
-		window.addEventListener("keydown", handler)
-		return () => window.removeEventListener("keydown", handler)
-	}, [filteredEntries, selectedRunId])
+		},
+		[filteredEntries, selectedRunId],
+	)
 
 	const summary = React.useMemo(() => {
 		if (!data?.entries.length) {
@@ -522,9 +505,6 @@ export const ReplayPanel: React.FC = () => {
 							<option key={sid} value={sid} />
 						))}
 					</datalist>
-					<button className={BUTTON_BASE} onClick={loadDemo} type="button">
-						Demo
-					</button>
 					<button
 						className="text-[10px] rounded border border-[var(--vscode-button-border,var(--vscode-panel-border))] bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] px-2 py-0.5 cursor-pointer hover:bg-[var(--vscode-button-hoverBackground)] disabled:opacity-50"
 						disabled={loading}
@@ -551,7 +531,7 @@ export const ReplayPanel: React.FC = () => {
 			{!data && !loading && !error && (
 				<div className="flex flex-col items-center justify-center flex-1 opacity-65 text-center px-4">
 					<span className="codicon codicon-history text-[32px] mb-2" />
-					<p className="text-sm">Enter a session id/path or click Demo to inspect provenance runs.</p>
+					<p className="text-sm">Enter a session id or capsule path to inspect its recorded runs.</p>
 					{recentSessions.length > 0 && (
 						<p className="text-[10px] mt-1 opacity-75">Recent sessions: {recentSessions.slice(0, 5).join(", ")}</p>
 					)}
@@ -568,27 +548,23 @@ export const ReplayPanel: React.FC = () => {
 			{data && !loading && (
 				<div className="flex flex-col flex-1 overflow-hidden">
 					{summary && (
-						<div className="flex items-center gap-4 px-3 py-1.5 border-b border-[var(--vscode-panel-border)] shrink-0 text-[10px] opacity-75">
+						<div className="flex items-center gap-4 px-3 py-1.5 border-b border-[var(--vscode-panel-border)] shrink-0 text-[10px] text-[var(--vscode-descriptionForeground)]">
 							<span>
 								<span className="codicon codicon-run-all text-[10px] mr-1" />
 								{summary.total} runs
 							</span>
 							<span
+								data-testid="need-review-count"
 								style={{
-									color:
-										summary.needsReview > 0
-											? "var(--vscode-testing-iconQueued)"
-											: "var(--vscode-testing-iconPassed)",
+									color: summary.needsReview > 0 ? "var(--vscode-testing-iconQueued)" : NEUTRAL_TOKEN,
 								}}>
 								<span className="codicon codicon-warning text-[10px] mr-1" />
 								{summary.needsReview} need review
 							</span>
 							<span
+								data-testid="failed-count"
 								style={{
-									color:
-										summary.failed > 0
-											? "var(--vscode-testing-iconFailed)"
-											: "var(--vscode-testing-iconPassed)",
+									color: summary.failed > 0 ? "var(--vscode-testing-iconFailed)" : NEUTRAL_TOKEN,
 								}}>
 								{summary.failed} failed
 							</span>
@@ -633,7 +609,12 @@ export const ReplayPanel: React.FC = () => {
 					</div>
 
 					<div className="grid grid-cols-[minmax(340px,42%)_1fr] flex-1 min-h-0">
-						<div className="overflow-auto border-r border-[var(--vscode-panel-border)]">
+						<div
+							aria-label="Run timeline"
+							className="overflow-auto border-r border-[var(--vscode-panel-border)]"
+							data-testid="run-timeline"
+							onKeyDown={onTimelineKeyDown}
+							role="group">
 							{filteredEntries.length === 0 ? (
 								<div className="text-center py-8 opacity-55 text-[11px]">No matching runs.</div>
 							) : (
@@ -653,7 +634,7 @@ export const ReplayPanel: React.FC = () => {
 
 					<div className="shrink-0 border-t border-[var(--vscode-panel-border)] px-3 py-1 text-[9px] opacity-50 flex items-center gap-2">
 						<span className="codicon codicon-keyboard text-[9px]" />
-						↑↓ navigate · click run for detail · Esc clear selection
+						↑↓ navigate (focus the run list) · click run for detail · Esc clear selection
 						<span className="ml-auto">
 							{filteredEntries.length} of {data.entries.length} shown
 						</span>

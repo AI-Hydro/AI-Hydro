@@ -49,10 +49,10 @@ const APPROVED_CLAIM = {
 	approval: {
 		state: "approved",
 		for_revision_digest: "sha256:abc",
-		channel: "ssh_sig",
+		channel: "ssh_sig_sk_system_trust",
 		trust_root: "system",
 		principal: "alice",
-		policy: "p1",
+		policy: "signed_required",
 	},
 }
 
@@ -67,7 +67,7 @@ describe("slice 2 / ADR-002b surface normalisation", () => {
 		expect(claim.driftReason).to.equal("statement edited")
 		expect(claim.driftEvidenceChecked).to.equal(true)
 		expect(claim.approvalState).to.equal("approved")
-		expect(claim.approvalChannel).to.equal("ssh_sig")
+		expect(claim.approvalChannel).to.equal("ssh_sig_sk_system_trust")
 		expect(claim.approvalTrustRoot).to.equal("system")
 		expect(claim.approvalForRevisionDigest).to.equal("sha256:abc")
 	})
@@ -131,29 +131,115 @@ describe("approval-state rendering logic", () => {
 		expect(a.label).to.equal("Approval pending refresh")
 		expect(describeDrift({ state: "pending_refresh" }).label).to.equal("Drift pending refresh")
 	})
-	it("styles only an explicit approved state as approved, with channel and trust root", () => {
-		const d = describeApproval({ state: "approved", channel: "ssh_sig", trustRoot: "system" })
+	// A complete verifier stamp: the only shape that may be rendered as human-verified.
+	const GOOD = {
+		state: "approved",
+		channel: "ssh_sig_sk_system_trust",
+		trustRoot: "system",
+		policy: "signed_required",
+		principal: "alice",
+		forRevisionDigest: "sha256:abc",
+		currentRevisionDigest: "sha256:abc",
+	}
+	it("styles an explicit approved state with a complete signed system stamp as approved", () => {
+		const d = describeApproval(GOOD)
 		expect(d.approved).to.equal(true)
-		expect(d.label).to.equal("Approved (signed · system trust)")
+		expect(d.tone).to.equal("approved")
+		expect(d.label).to.equal("Approved (signed \u00b7 system trust)")
 	})
-	it("accepts a supplied trust root as approved", () => {
-		expect(describeApproval({ state: "approved", channel: "ssh_sig", trustRoot: "supplied" }).approved).to.equal(true)
+	for (const [channel, trustRoot] of [
+		["ssh_sig_system_trust", "system"],
+		["ssh_sig_sk_system_trust", "system"],
+		["ssh_sig_supplied", "supplied"],
+		["ssh_sig_sk_supplied", "supplied"],
+	]) {
+		it(`accepts ${channel} under a ${trustRoot} root as approved`, () => {
+			expect(describeApproval({ ...GOOD, channel, trustRoot }).approved).to.equal(true)
+		})
+	}
+	// Fail-closed table: every row removes or corrupts one allowlist condition; none may be approved.
+	const FAIL_CLOSED: Array<[string, Partial<typeof GOOD>]> = [
+		["missing channel", { channel: undefined }],
+		["empty channel", { channel: "" }],
+		["whitespace channel", { channel: "   " }],
+		["unknown channel", { channel: "mystery" }],
+		["bare legacy ssh_sig channel", { channel: "ssh_sig" }],
+		["same-user CLI channel", { channel: "cli_same_user" }],
+		["user-trust channel under a system root", { channel: "ssh_sig_user_trust" }],
+		["supplied channel under a system root", { channel: "ssh_sig_supplied" }],
+		["system channel under a supplied root", { trustRoot: "supplied" }],
+		["missing trust root", { trustRoot: undefined }],
+		["empty trust root", { trustRoot: "" }],
+		["user_writable trust root", { trustRoot: "user_writable", channel: "ssh_sig_user_trust" }],
+		["missing policy", { policy: undefined }],
+		["empty policy", { policy: "" }],
+		["opt-out policy", { policy: "unsigned_opt_out" }],
+		["unknown policy", { policy: "p1" }],
+		["missing for-digest", { forRevisionDigest: undefined }],
+		["empty for-digest", { forRevisionDigest: "" }],
+		["missing current digest", { currentRevisionDigest: undefined }],
+		["empty current digest", { currentRevisionDigest: "" }],
+		["both digests missing", { forRevisionDigest: undefined, currentRevisionDigest: undefined }],
+		["differing digests", { currentRevisionDigest: "sha256:def" }],
+	]
+	for (const [name, override] of FAIL_CLOSED) {
+		for (const state of ["approved", "consumed"]) {
+			it(`${state} with ${name} is never approved`, () => {
+				const d = describeApproval({ ...GOOD, state, ...override })
+				expect(d.approved).to.equal(false)
+				expect(d.tone).to.not.equal("approved")
+				expect(d.label).to.not.match(/^Approved/)
+			})
+		}
+	}
+	it("explains why a stamp is not verified, listing every gap", () => {
+		const d = describeApproval({ state: "approved", forRevisionDigest: "", currentRevisionDigest: "" })
+		expect(d.tone).to.equal("integrity")
+		expect(d.detail).to.contain("trust root not reported")
+		expect(d.detail).to.contain("channel not reported")
+		expect(d.detail).to.contain("policy not reported")
+		expect(d.detail).to.contain("revision digest not reported")
+	})
+	it("renders an approved and promoted (consumed) claim with a verified stamp as Approved \u00b7 promoted", () => {
+		const d = describeApproval({ ...GOOD, state: "consumed" })
+		expect(d.approved).to.equal(true)
+		expect(d.tone).to.equal("approved")
+		expect(d.promoted).to.equal(true)
+		expect(d.label).to.equal("Approved \u00b7 promoted")
+		expect(d.label).to.not.contain("already used")
+	})
+	it("renders a consumed claim with a user-trust stamp as integrity only, still promoted, never green", () => {
+		const d = describeApproval({
+			...GOOD,
+			state: "consumed",
+			channel: "ssh_sig_user_trust",
+			trustRoot: "user_writable",
+		})
+		expect(d.approved).to.equal(false)
+		expect(d.tone).to.equal("integrity")
+		expect(d.promoted).to.equal(true)
+		expect(d.label).to.equal("Accepted (integrity only) \u00b7 promoted")
+	})
+	it("renders a consumed claim with no stamp at all as not approved", () => {
+		const d = describeApproval({ state: "consumed" })
+		expect(d.approved).to.equal(false)
+		expect(d.promoted).to.equal(true)
+		expect(d.tone).to.equal("integrity")
+	})
+	it("does not mark a non-promoted approved claim as promoted", () => {
+		expect(describeApproval(GOOD).promoted).to.equal(undefined)
 	})
 	for (const [channel, trustRoot, policy] of [
-		["ssh_sig_user_trust", "user_writable", ""],
-		["ssh_sig", "user_writable", ""],
-		["cli_same_user", "system", ""],
-		["ssh_sig", "system", "unsigned_opt_out"],
-		["ssh_sig", "", ""],
+		["ssh_sig_user_trust", "user_writable", "signed_required"],
+		["cli_same_user", "user_writable", "unsigned_opt_out"],
+		["ssh_sig_sk_system_trust", "system", "unsigned_opt_out"],
 	]) {
-		it(`renders ${channel}/${trustRoot || "no root"}/${policy || "no policy"} as integrity only, not approved`, () => {
-			const d = describeApproval({ state: "approved", channel, trustRoot, policy })
+		it(`renders ${channel}/${trustRoot}/${policy} as integrity only, not approved`, () => {
+			const d = describeApproval({ ...GOOD, channel, trustRoot, policy })
 			expect(d.approved).to.equal(false)
 			expect(d.tone).to.equal("integrity")
 			expect(d.label).to.equal("Accepted (integrity only)")
-			if (policy) {
-				expect(d.detail).to.contain(`policy: ${policy}`)
-			}
+			expect(d.detail).to.contain(`policy: ${policy}`)
 		})
 	}
 	for (const state of [

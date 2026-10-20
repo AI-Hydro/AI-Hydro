@@ -1,5 +1,6 @@
 import { ensureSettingsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { execa } from "@packages/execa"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { looksLikeFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
 import { ShowMessageType } from "@shared/proto/host/window"
 import { ExecuteCommandInTerminalRequest } from "@shared/proto/host/workspace"
@@ -12,8 +13,8 @@ import { HostProvider } from "@/hosts/host-provider"
 import { loadFirstPartyLauncher, recordFirstPartyLauncher } from "./firstPartyLauncher"
 
 const SERVER_NAME = "ai-hydro"
-const CACHE_DIR = path.join(os.homedir(), ".aihydro", "cache")
-const ACTIVE_WORKSPACE_FILE = path.join(os.homedir(), ".aihydro", "active_workspace.json")
+const CACHE_DIR = aihydroPath("cache")
+const ACTIVE_WORKSPACE_FILE = aihydroPath("active_workspace.json")
 const PIP_COMMAND = "pip install aihydro-tools"
 
 /**
