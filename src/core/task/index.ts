@@ -6,6 +6,7 @@ import { parseAssistantMessageV2 } from "@core/assistant-message"
 import {
 	type NativeToolCallContext,
 	type NativeToolCallRepairResult,
+	planFinalNativePass,
 	repairNativeToolCallsForModel,
 } from "@core/assistant-message/nativeToolCallRepair"
 import { ContextManager } from "@core/context/context-management/ContextManager"
@@ -2865,17 +2866,18 @@ export class Task {
 			// stream pass only hid the envelope; now the complete, trailing envelope becomes a real tool call that goes
 			// through the normal approval flow. A malformed one gets exactly one muted line, raw text behind a disclosure.
 			const nativeRepair = this.repairNativeToolCallText(assistantMessage, true)
-			if (nativeRepair.malformed.length > 0) {
-				await this.say("info", `malformed tool call; retried\n\n${nativeRepair.malformed.join("\n\n")}`)
+			const nativePlan = planFinalNativePass(this.repairNativeToolCallText(assistantMessage, false).text, nativeRepair)
+			for (const notice of nativePlan.notices) {
+				await this.say("info", notice)
 			}
-			if (nativeRepair.repaired > 0) {
-				const routed = nativeRepair.routes.map((r) => (r.server ? `${r.tool} on '${r.server}'` : r.tool)).join(", ")
-				await this.say("info", `Repaired a native tool call: ${routed}.`)
+			if (nativePlan.reparseText !== undefined) {
 				const prevLength = this.taskState.assistantMessageContent.length
-				this.taskState.assistantMessageContent = parseAssistantMessageV2(nativeRepair.text)
+				this.taskState.assistantMessageContent = parseAssistantMessageV2(nativePlan.reparseText)
 				if (this.taskState.assistantMessageContent.length > prevLength) {
 					this.taskState.userMessageContentReady = false
 				}
+				// Not awaited, like every other call in this loop: it can block on a user approval, and the loop
+				// already waits for `userMessageContentReady` below. The present lock serialises overlapping calls.
 				this.presentAssistantMessage()
 			}
 

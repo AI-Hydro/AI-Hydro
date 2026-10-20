@@ -20,8 +20,12 @@
  *    JSON-escaped (MCP arguments), so one envelope can never smuggle in a second tool call;
  *  - only a TRAILING envelope is converted, and the host enables this only for model families that emit native
  *    tool calls; envelopes in prose, quotes, indented or fenced code are documentation;
+ *  - routing: a repaired call can reach a lone UNTRUSTED owner of the tool name (it is still an ordinary
+ *    use_mcp_tool call: approval is required and the approval card and the muted "Repaired ..." line name the
+ *    server); only a first-party-named untrusted look-alike is refused while a trusted server is connected;
  *  - an envelope still streaming is hidden from the transcript, and conversion happens once the message completes.
  */
+import { isFirstPartyServerName } from "@shared/aihydro/firstPartyServers"
 import { toolUseNames } from "@shared/tools"
 import { isDeepSeekModelFamily } from "@utils/model-utils"
 import { toolParamNames } from "."
@@ -40,6 +44,8 @@ export interface NativeToolCallRepairResult {
 	malformed: string[]
 	/** Where each repaired call was routed (final pass), for the one muted line shown to the user. */
 	routes: Array<{ server?: string; tool: string }>
+	/** Closed envelopes left in `text` as ordinary prose because they were not the trailing element (final pass). */
+	leftAsText: number
 }
 
 const OPEN = "<tool_calls>"
@@ -129,7 +135,8 @@ function toProtocolXml(
 	const blocks: string[] = []
 	for (const { name, params } of invokes) {
 		if (BUILTIN.has(name)) {
-			// Built-in params are spliced into XML verbatim, so a value that could open/close a protocol element is refused.
+			// Built-in params are spliced into XML verbatim, so a value that could open/close a protocol element is
+			// refused (e.g. HTML/XML in write_to_file content): such writes must go through the normal tool format.
 			if (params.some(([k, v]) => !KNOWN_PARAMS.has(k) || !isInertValue(v))) {
 				return undefined
 			}
@@ -148,6 +155,12 @@ function toProtocolXml(
 		}
 		if (owners.length !== 1 || !SAFE_NAME_RE.test(owners[0].name)) {
 			return undefined // unknown, or ambiguous across servers: never guess
+		}
+		// A trusted first-party server is connected but does not have this tool, and the only owner wears a
+		// first-party NAME without being trusted: that is a look-alike, never a route (other third-party servers
+		// are routed normally; the approval card names the server either way).
+		if (!owners[0].trusted && isFirstPartyServerName(owners[0].name) && ctx.servers.some((s) => s.trusted)) {
+			return undefined
 		}
 		const tool = owners[0].tools.find((t) => t.name === name)!
 		const props = (tool.inputSchema as any)?.properties ?? {}
@@ -172,7 +185,13 @@ function toProtocolXml(
  *              as malformed; anything else (quoted, indented, followed by more text) is left as ordinary text.
  */
 export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, final: boolean): NativeToolCallRepairResult {
-	const none = { text, repaired: 0, malformed: [] as string[], routes: [] as Array<{ server?: string; tool: string }> }
+	const none = {
+		text,
+		repaired: 0,
+		malformed: [] as string[],
+		routes: [] as Array<{ server?: string; tool: string }>,
+		leftAsText: 0,
+	}
 	if (!text.includes(OPEN)) {
 		return none
 	}
@@ -181,6 +200,7 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 	let repaired = 0
 	const malformed: string[] = []
 	const routes: Array<{ server?: string; tool: string }> = []
+	let leftAsText = 0
 	while (cursor < text.length) {
 		const start = text.indexOf(OPEN, cursor)
 		if (start === -1) {
@@ -216,6 +236,7 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 		if (text.slice(afterEnvelope).trim() !== "") {
 			// Not the trailing element: prose that mentions an envelope, not a call. Leave it as it is.
 			out += raw
+			leftAsText++
 			cursor = afterEnvelope
 			continue
 		}
@@ -229,7 +250,7 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 		}
 		cursor = afterEnvelope
 	}
-	return { text: out, repaired, malformed, routes }
+	return { text: out, repaired, malformed, routes, leftAsText }
 }
 
 /**
@@ -243,7 +264,34 @@ export function repairNativeToolCallsForModel(
 	final: boolean,
 ): NativeToolCallRepairResult {
 	if (!isDeepSeekModelFamily(modelId)) {
-		return { text, repaired: 0, malformed: [], routes: [] }
+		return { text, repaired: 0, malformed: [], routes: [], leftAsText: 0 }
 	}
 	return repairNativeToolCalls(text, ctx, final)
+}
+
+/**
+ * What the task loop must do after the stream completes. The streaming pass HID every envelope, so whenever the
+ * final text differs from the streamed text the transcript must be re-parsed, otherwise text the model wrote
+ * (prose after an envelope, the rest of a message with an unclosed envelope) would silently vanish.
+ */
+export interface FinalNativePassPlan {
+	/** Muted `info` lines to emit, in order. */
+	notices: string[]
+	/** When set, re-parse this text into the transcript (and present it). */
+	reparseText?: string
+}
+
+export function planFinalNativePass(streamedText: string, final: NativeToolCallRepairResult): FinalNativePassPlan {
+	const notices: string[] = []
+	if (final.malformed.length > 0) {
+		notices.push(`malformed tool call; retried\n\n${final.malformed.join("\n\n")}`)
+	}
+	if (final.repaired > 0) {
+		const routed = final.routes.map((r) => (r.server ? `${r.tool} on '${r.server}'` : r.tool)).join(", ")
+		notices.push(`Repaired a native tool call: ${routed}.`)
+	}
+	if (final.leftAsText > 0) {
+		notices.push("Native tool call not at end of message; not run.")
+	}
+	return { notices, reparseText: final.text !== streamedText ? final.text : undefined }
 }

@@ -162,7 +162,15 @@ private_data/
 
 ## MCP Server Status
 
-In **Hydro Tools & Data Sources**, each server row shows **Trusted** or **Not trusted** with the reason. "Trusted" means the server's launch (command, arguments, environment variables and working directory) matches the first-party launcher AI-Hydro recorded; only then are its instructions sent to the model and claim-approval prompts and read-only subagent tools enabled. "Not trusted" explains why: a different server name, a changed launch line, different environment or working directory, a remote server, or a third-party server. If the recorded server is disabled and exactly one other enabled server has the first-party launch shape, AI-Hydro asks once at startup whether to trust it (it re-points silently only when the launch is identical to the one it already verified). Restart AI-Hydro to re-evaluate after editing the MCP settings.
+In **Hydro Tools & Data Sources**, each server row shows **Trusted** or **Not trusted** with the reason. "Trusted" means the server's launch (command, arguments, environment variables and working directory) matches the first-party launcher AI-Hydro recorded; only then are its instructions sent to the model and claim-approval prompts and read-only subagent tools enabled. "Not trusted" explains why: a different server name, a changed launch line, different environment or working directory, a remote server, or a third-party server. If the recorded server is disabled and exactly one other enabled server has the first-party launch shape, AI-Hydro asks once at startup whether to trust it (it re-points silently only when the launch is identical to the one it already verified). Restart AI-Hydro to re-evaluate after editing the MCP settings. The environment comparison covers the `env` and `cwd` in the server's settings entry only: a `PATH` inherited from the process environment is not part of the identity, so a bare command (`aihydro-mcp`) is resolved by whatever PATH the extension host has.
+
+### DeepSeek native tool-call envelopes
+
+DeepSeek models sometimes write a tool call as plain text (`<tool_calls><invoke name=...>`). For DeepSeek models only, a **trailing** envelope is turned into a normal tool call once the message completes; it needs the same approval as any other call. Limits worth knowing:
+
+- Built-in tool parameters that contain tags (for example HTML or XML in a file write) are refused in this envelope; the call is reported as malformed and the model retries through the normal tool format.
+- A repaired call goes to the one server that exposes the tool. If that server is not trusted it can still be routed to: it is an ordinary approval, and both the approval card and the muted "Repaired a native tool call" line name the server. A first-party-named server that is not trusted is refused while a trusted first-party server is connected.
+- An envelope that is not the last thing in the message (prose or a closing code fence follows it), is quoted or indented, or is unclosed is not run. The text stays visible and one muted line says "Native tool call not at end of message; not run." (or "malformed tool call; retried" with the raw text behind a disclosure).
 
 If the server is not responding, check:
 
