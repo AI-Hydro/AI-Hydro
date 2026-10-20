@@ -505,6 +505,55 @@ describe("aihydro-pack CLI", function () {
 				).to.equal(0)
 			})
 
+			it("treats file names literally: a gitignored x[12].csv is not covered by a tracked x1.csv", async () => {
+				await fs.mkdir(path.join(repo, "data"))
+				await fs.writeFile(path.join(repo, "data/x1.csv"), "tracked\n")
+				await fs.writeFile(path.join(repo, ".gitignore"), "data/*.csv\n")
+				git(repo, "add", "-A")
+				git(repo, "add", "-f", "data/x1.csv") // force-add past the ignore rule
+				git(repo, "commit", "-q", "-m", "tracked x1")
+				await fs.writeFile(path.join(repo, "data/x[12].csv"), "IGNORED BYTES\n")
+				const configPath = path.join(root, "glob.config.json")
+				await fs.writeFile(
+					configPath,
+					JSON.stringify({
+						...JSON.parse(await fs.readFile(config(), "utf8")),
+						files: [{ source: "data/x[12].csv", dest: "datasets/x.csv" }],
+					}),
+				)
+				const out = path.join(root, "r.unsigned.aihydropack")
+				const result = await release([], out, configPath)
+				expect(result.code, result.err).to.equal(1)
+				expect(result.err).to.contain("not tracked")
+				expect(await exists(out)).to.equal(false)
+			})
+
+			for (const flag of ["--assume-unchanged", "--skip-worktree"]) {
+				it(`refuses a tracked module that was edited after git update-index ${flag}`, async () => {
+					const file = "modules/water-basics/module.html"
+					git(repo, "update-index", flag, file)
+					await fs.appendFile(path.join(repo, file), "<!-- edited, hidden from git status -->")
+					const status = execFileSync("git", ["status", "--porcelain"], {
+						cwd: repo,
+						encoding: "utf8",
+						env: cleanEnv(),
+					})
+					expect(status.trim(), "git status must be blind to the edit for this test to mean anything").to.equal("")
+					const out = path.join(root, "r.unsigned.aihydropack")
+					const result = await release([], out)
+					expect(result.code, result.err).to.equal(1)
+					expect(result.err).to.contain("differs from the committed file")
+					expect(result.err).to.contain(file)
+					expect(await exists(out)).to.equal(false)
+				})
+			}
+
+			it("accepts an untouched tree, and a course in a subdirectory of the repository", async () => {
+				const out = path.join(root, "r.unsigned.aihydropack")
+				const result = await release([], out)
+				expect(result.code, result.err).to.equal(0)
+			})
+
 			it("accepts the same file once it is tracked", async () => {
 				await fs.mkdir(path.join(repo, "data"))
 				await fs.writeFile(path.join(repo, "data/x.csv"), "a,b\n1,2\n")

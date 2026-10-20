@@ -47,8 +47,8 @@ export interface SourceBundle {
 	modules: ReadonlyMap<string, Uint8Array>
 	/** Extra file bytes keyed by their pack path (already confined to assets/datasets/citations/environments). */
 	extraFiles: ReadonlyMap<string, Uint8Array>
-	/** Absolute paths of every source file that was read (for the release "tracked in git" check). */
-	sourcePaths?: readonly string[]
+	/** Absolute path to bytes of every source file that was read (for the release "matches the commit" check). */
+	sourceFiles?: ReadonlyMap<string, Uint8Array>
 }
 
 export type BuildKind = "release" | "development"

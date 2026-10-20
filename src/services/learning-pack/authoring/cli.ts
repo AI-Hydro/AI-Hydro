@@ -28,7 +28,7 @@ import {
 } from "./keys"
 import { PackConfigError, parsePackConfig } from "./packConfig"
 import { SignError, signPack } from "./signPack"
-import { assertSourcesTracked, loadSources, readSourceProvenance } from "./sourceLoader"
+import { assertSourcesMatchCommit, loadSources, readSourceProvenance } from "./sourceLoader"
 
 export interface CliContext {
 	argv: readonly string[]
@@ -203,7 +203,7 @@ async function buildCommand(ctx: CliContext): Promise<number> {
 		env: ctx.env,
 		sourceCommitOverride: values["source-commit"],
 	})
-	if (kind === "release") assertSourcesTracked(rootDir, sources.sourcePaths ?? [])
+	if (kind === "release") assertSourcesMatchCommit(rootDir, sources.sourceFiles ?? new Map())
 	const built = await assembleUnsignedPack({
 		config,
 		sources,

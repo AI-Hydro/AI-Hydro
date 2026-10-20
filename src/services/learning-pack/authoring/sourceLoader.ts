@@ -4,6 +4,7 @@
  */
 
 import { spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { parseStrictJsonSource } from "../canonicalJson"
@@ -62,22 +63,24 @@ export async function loadSources({ courseDir, rootDir, config }: LoadSourcesInp
 		throw new PackBuildError(error instanceof Error ? error.message : String(error))
 	}
 	const modules = new Map<string, Uint8Array>()
-	const sourcePaths = [path.resolve(courseDir, "course.json")]
+	const sourceFiles = new Map<string, Uint8Array>([[path.resolve(courseDir, "course.json"), courseBytes]])
 	const listed = (course as { modules?: unknown }).modules
 	if (Array.isArray(listed)) {
 		for (const entry of listed as { id?: unknown; path?: unknown }[]) {
 			if (typeof entry?.id !== "string" || typeof entry.path !== "string") continue
 			const absolute = path.resolve(courseDir, entry.path)
-			modules.set(entry.id, await readContainedFile(rootDir, path.relative(rootDir, absolute), `module ${entry.id}`))
-			sourcePaths.push(absolute)
+			const bytes = await readContainedFile(rootDir, path.relative(rootDir, absolute), `module ${entry.id}`)
+			modules.set(entry.id, bytes)
+			sourceFiles.set(absolute, bytes)
 		}
 	}
 	const extraFiles = new Map<string, Uint8Array>()
 	for (const { source, dest } of config.files) {
-		extraFiles.set(dest, await readContainedFile(rootDir, source, `files[${dest}]`))
-		sourcePaths.push(path.resolve(rootDir, source))
+		const bytes = await readContainedFile(rootDir, source, `files[${dest}]`)
+		extraFiles.set(dest, bytes)
+		sourceFiles.set(path.resolve(rootDir, source), bytes)
 	}
-	return { course, modules, extraFiles, sourcePaths }
+	return { course, modules, extraFiles, sourceFiles }
 }
 
 export interface SourceProvenance {
@@ -91,6 +94,8 @@ function git(cwd: string, args: string[]): { ok: boolean; stdout: string } {
 	// Never read the repo's own config for anything that can run a program.
 	const result = spawnSync("git", ["-c", "core.fsmonitor=false", "-c", "core.pager=cat", ...args], {
 		cwd,
+		// File names are literal: `x[12].csv` must never match a tracked `x1.csv` (pathspec globbing).
+		env: { ...process.env, GIT_LITERAL_PATHSPECS: "1" },
 		encoding: "utf8",
 		shell: false,
 		maxBuffer: 16 * 1024 * 1024,
@@ -152,24 +157,31 @@ export function readSourceProvenance(
 	}
 }
 
+/** The git blob ID of these exact bytes (what `git hash-object` would print with no filters). */
+export function gitBlobId(bytes: Uint8Array): string {
+	return createHash("sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex")
+}
+
 /**
- * For a release build: every source file that goes into the pack must be tracked by git, so a gitignored or
- * untracked file cannot be signed under a commit that does not contain it.
+ * For a release build: every source file that goes into the pack must be tracked by git AND its bytes must be
+ * exactly the blob committed at HEAD. The byte comparison does not trust the index or the work-tree status, so
+ * `--assume-unchanged`, `--skip-worktree`, line-ending filters and any future dirty-state gap cannot let bytes
+ * ship under a commit that does not contain them.
  */
-export function assertSourcesTracked(rootDir: string, sourcePaths: readonly string[]): void {
-	const relative = sourcePaths.map((file) => path.relative(rootDir, file).split(path.sep).join("/"))
-	for (let index = 0; index < relative.length; index += 200) {
-		const batch = relative.slice(index, index + 200)
-		const result = git(rootDir, ["ls-files", "--error-unmatch", "--", ...batch])
-		if (!result.ok) {
-			const tracked = new Set(
-				git(rootDir, ["ls-files", "--", ...batch])
-					.stdout.split("\n")
-					.filter(Boolean),
-			)
-			const missing = batch.filter((file) => !tracked.has(file))
+export function assertSourcesMatchCommit(rootDir: string, sourceFiles: ReadonlyMap<string, Uint8Array>): void {
+	const prefix = git(rootDir, ["rev-parse", "--show-prefix"]).stdout.trim()
+	for (const [file, bytes] of sourceFiles) {
+		const relative = path.relative(rootDir, file).split(path.sep).join("/")
+		const tracked = git(rootDir, ["ls-files", "--error-unmatch", "--", relative])
+		if (!tracked.ok) {
 			throw new PackBuildError(
-				`A release build may only include files tracked by git; not tracked (untracked or ignored): ${missing.join(", ") || batch.join(", ")}`,
+				`A release build may only include files tracked by git; not tracked (untracked or ignored): ${relative}`,
+			)
+		}
+		const committed = git(rootDir, ["rev-parse", "--verify", "--quiet", `HEAD:${prefix}${relative}`])
+		if (!committed.ok || committed.stdout.trim() !== gitBlobId(bytes)) {
+			throw new PackBuildError(
+				`A release build may only include bytes committed at HEAD; ${relative} differs from the committed file (edited, line-ending filter, or not in HEAD)`,
 			)
 		}
 	}
