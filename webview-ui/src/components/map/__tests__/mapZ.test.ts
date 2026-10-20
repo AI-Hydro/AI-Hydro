@@ -26,7 +26,13 @@ describe("map z-index scale", () => {
 
 	it("index.css map overlay rules use the --map-z-* variables, and the variables mirror MAP_Z", () => {
 		const css = readFileSync(join(mapDir, "..", "..", "index.css"), "utf8")
-		for (const [name, value] of [["overlay", MAP_Z.overlay], ["panel", MAP_Z.panel], ["menu", MAP_Z.menu], ["toast", MAP_Z.toast], ["modal", MAP_Z.modal]] as const) {
+		for (const [name, value] of [
+			["overlay", MAP_Z.overlay],
+			["panel", MAP_Z.panel],
+			["menu", MAP_Z.menu],
+			["toast", MAP_Z.toast],
+			["modal", MAP_Z.modal],
+		] as const) {
 			expect(css).toContain(`--map-z-${name}: ${value};`)
 		}
 		for (const selector of [".map-search-container", ".map-bottom-bar", ".map-export-panel", ".map-cluster-legend"]) {

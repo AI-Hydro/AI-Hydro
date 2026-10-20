@@ -46,7 +46,7 @@ The Map panel renders geospatial analysis outputs as interactive layers inside V
 - Auto-receives layers from analysis tools (`delineate_watershed`, `compute_twi`, `create_cn_grid`)
 - Drag-and-drop file loading — GeoJSON, KML, KMZ, GPX, Shapefile, GeoTIFF, CSV
 - Per-layer symbology editor with colour picker, opacity, and colormap selection
-- free basemaps (muted hydrology default, USGS, Esri, Carto, HOT), no API token
+- keyless basemaps (muted hydrology default on Esri Gray Canvas, USGS (US only), Esri), no API token
 - Agent can style and update layers via `map_update_layer` and `map_apply_symbology` MCP tools
 
 ---

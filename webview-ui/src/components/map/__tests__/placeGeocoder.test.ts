@@ -4,7 +4,9 @@ import { createPlaceGeocoder, NOMINATIM_MIN_INTERVAL_MS, normalizeQuery } from "
 
 const okResponse = (rows: unknown[]) => ({ ok: true, status: 200, json: async () => rows }) as unknown as Response
 
-function makeGeocoder(rows: unknown[] = [{ display_name: "Fish River, AL", lat: "30.5", lon: "-87.8", boundingbox: ["30", "31", "-88", "-87"] }]) {
+function makeGeocoder(
+	rows: unknown[] = [{ display_name: "Fish River, AL", lat: "30.5", lon: "-87.8", boundingbox: ["30", "31", "-88", "-87"] }],
+) {
 	let t = 1_000_000
 	const fetchFn = vi.fn(async () => okResponse(rows))
 	const sleeps: number[] = []

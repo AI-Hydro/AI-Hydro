@@ -6,9 +6,10 @@ description: AI-Hydro VS Code extension changelog — release notes, breaking ch
 
 ### Map fixes
 
+- **Broken basemaps:** CARTO now requires an API key (keyless tiles are a watermark), so the default and the three Carto entries drew "API KEY REQUIRED". The default is now Esri Gray Canvas; Carto entries are removed and saved Carto choices migrate to the default with a notice. US-only USGS basemaps show a "covers the United States only" notice outside coverage, and a source returning one identical image for every tile shows a "Basemap unavailable" notice.
 - **Renderer crash on Retry imagery, WebGL context restore and swipe mode** ("deck.gl: assertion failed"): each Deck now gets fresh layer instances.
 - **Basemaps:** per-source native zoom and US extents for USGS caches, errors cleared on basemap change, ratio-based tile alerts with a quiet note for a few missing tiles, dismissible banner with wording per error kind. Stadia and the Mapbox entries are removed.
-- **Muted hydrology default basemap** (Carto no-labels per theme + USGS hydrography overlay). Existing profiles migrate once; "Reset to hydrology default" added.
+- **Muted hydrology default basemap** (Esri Light/Dark Gray Canvas per theme + USGS hydrography overlay; was Carto no-labels, which now returns an API-key watermark). Existing profiles migrate once; "Reset to hydrology default" added.
 - **Layers:** workspace files are listed ("Workspace files you can add") instead of auto-registered; the badge counts visible layers; restored layers are scoped to the workspace and capped.
 - **Review follow-ups:** sparse USGS overlay 404s no longer raise "failed" alerts (minimum sample, per-region extents, attribution only once tiles load); layers beyond the restore cap stay in the catalog with a "Restore older layers" action; legacy global catalog is imported once (marker file) and the unscoped file stays as an active-workspace mirror for aihydro-tools, after a one-time backup to `map_layer_catalog.legacy-backup.json`; no empty-state flash while restoring; geo-scan exclusions and multi-root keys; saved bookmarks, aliases, ROI and ribbon size survive load/save.
 - **Panels:** one source of truth for the open panel, one z-index scale, empty state only after sync and never with a panel open; dashed lines now render (`PathStyleExtension`).

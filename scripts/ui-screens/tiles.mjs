@@ -5,10 +5,10 @@
 import { deflateSync } from "node:zlib"
 
 const BASEMAP_PATTERNS = [
-	// Hydrology default (Carto no-labels, per theme) and its transparent USGS hydrography overlay.
+	// Hydrology default (Esri Light/Dark Gray Canvas, per theme) and its transparent USGS hydrography overlay.
 	[/USGSHydroCached/, "usgs-hydro", [0, 102, 204], { overlay: true }],
-	[/light_nolabels/, "muted-hydro-light", [233, 233, 231]],
-	[/dark_nolabels/, "muted-hydro-dark", [36, 38, 42]],
+	[/World_Light_Gray_Base/, "muted-hydro-light", [233, 233, 231]],
+	[/World_Dark_Gray_Base/, "muted-hydro-dark", [36, 38, 42]],
 	[/USGSTopo/, "usgs-topo", [226, 222, 205]],
 	[/USGSImageryOnly/, "usgs-imagery", [66, 82, 60]],
 	[/USGSShadedReliefOnly/, "usgs-shaded-relief", [200, 198, 190]],
@@ -16,8 +16,6 @@ const BASEMAP_PATTERNS = [
 	[/World_Imagery/, "esri-imagery", [74, 90, 64]],
 	[/World_Topo_Map/, "esri-topo", [232, 228, 214]],
 	[/World_Ocean_Base/, "esri-ocean", [170, 205, 225]],
-	[/light_all/, "carto-light", [236, 236, 236]],
-	[/dark_all/, "carto-dark", [38, 38, 40]],
 ]
 
 export function basemapIdForUrl(url) {
@@ -62,26 +60,43 @@ const chunk = (type, data) => {
 const lonLatToTile = (lon, lat, z) => {
 	const n = 2 ** z
 	const latRad = (lat * Math.PI) / 180
-	return [Math.floor(((lon + 180) / 360) * n), Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n)]
+	return [
+		Math.floor(((lon + 180) / 360) * n),
+		Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n),
+	]
 }
 const TILE_FAULTS = {
 	"map-error-imagery": { kind: "total" },
 	"map-error-partial-tiles": { kind: "partial" },
 }
+/** Screens where the basemap answers every tile with one identical image (a provider placeholder). */
+const PLACEHOLDER_SCREENS = new Set(["map-basemap-placeholder"])
+export const isPlaceholderScreen = (screenId) => PLACEHOLDER_SCREENS.has(screenId)
+
+/** z/y/x of an Esri tile URL (`.../tile/{z}/{y}/{x}`), or null. */
+export const esriTileAddress = (url) => {
+	const m = url.match(/\/tile\/(\d+)\/(\d+)\/(\d+)(?:\?|$)/)
+	return m ? { z: Number(m[1]), y: Number(m[2]), x: Number(m[3]) } : null
+}
+
 export function tileFaultStatus(screenId, url) {
 	const fault = TILE_FAULTS[screenId]
-	if (!fault || !/(light|dark)_nolabels/.test(url)) return null
+	if (!fault || !/World_(Light|Dark)_Gray_Base/.test(url)) return null
 	if (fault.kind === "total") return 403
-	const m = url.match(/\/(\d+)\/(\d+)\/(\d+)\.png/)
-	if (!m) return null
-	const [z, x, y] = [Number(m[1]), Number(m[2]), Number(m[3])]
+	const address = esriTileAddress(url)
+	if (!address) return null
+	const { z, x, y } = address
 	const [fx, fy] = lonLatToTile(-90, 39, 10)
 	return z === 10 && x === fx && y === fy ? 404 : null
 }
 
 const cache = new Map()
-export function tilePng(color, { overlay = false } = {}) {
-	const key = `${color.join(",")}${overlay ? ":overlay" : ""}`
+/**
+ * `variant` (a small integer derived from the tile address) nudges one pixel so tiles of one basemap are not
+ * byte-identical, as real tiles are not; the placeholder screen omits it on purpose.
+ */
+export function tilePng(color, { overlay = false, variant } = {}) {
+	const key = `${color.join(",")}${overlay ? ":overlay" : ""}${variant === undefined ? "" : `:v${variant}`}`
 	if (cache.has(key)) return cache.get(key)
 	const size = 256
 	const bpp = overlay ? 4 : 3
@@ -103,7 +118,7 @@ export function tilePng(color, { overlay = false } = {}) {
 		for (let x = 0; x < size; x++) {
 			const grid = x % 64 === 0 || y % 64 === 0
 			const river = Math.abs(x - y * 0.6 - 40) < 2 // faint synthetic "river" so the tile reads as a map
-			const shade = grid ? -14 : river ? -30 : 0
+			const shade = grid ? -14 : river ? -30 : variant !== undefined && x === 1 && y === 1 ? (variant % 7) + 1 : 0
 			const o = y * (size * 3 + 1) + 1 + x * 3
 			raw[o] = Math.max(0, Math.min(255, color[0] + shade))
 			raw[o + 1] = Math.max(0, Math.min(255, color[1] + shade + (river ? 20 : 0)))

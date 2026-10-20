@@ -122,7 +122,9 @@ describe("MapToolRibbon basemap panel", () => {
 	it("offers Reset to hydrology default once the user has chosen a basemap", () => {
 		setWidth(1280)
 		const reset = vi.fn()
-		render(<MapToolRibbon {...props} activeTool="basemap" basemapExplicit currentBasemap="esri-topo" onBasemapReset={reset} />)
+		render(
+			<MapToolRibbon {...props} activeTool="basemap" basemapExplicit currentBasemap="esri-topo" onBasemapReset={reset} />,
+		)
 		fireEvent.click(screen.getByRole("button", { name: "Reset to hydrology default" }))
 		expect(reset).toHaveBeenCalledOnce()
 	})
