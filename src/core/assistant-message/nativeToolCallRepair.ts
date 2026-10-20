@@ -22,7 +22,7 @@
  *    tool calls; envelopes in prose, quotes, indented or fenced code are documentation;
  *  - routing: a repaired call can reach a lone UNTRUSTED owner of the tool name (it is still an ordinary
  *    use_mcp_tool call: approval is required and the approval card and the muted "Repaired ..." line name the
- *    server); only a first-party-named untrusted look-alike is refused while a trusted server is connected;
+ *    server); a first-party-NAMED untrusted server is refused while a trusted one is connected, to avoid confusing the user (anti-confusion, not a security control: approval is the control);
  *  - an envelope still streaming is hidden from the transcript, and conversion happens once the message completes.
  */
 import { isFirstPartyServerName } from "@shared/aihydro/firstPartyServers"
@@ -46,6 +46,8 @@ export interface NativeToolCallRepairResult {
 	routes: Array<{ server?: string; tool: string }>
 	/** Closed envelopes left in `text` as ordinary prose because they were not the trailing element (final pass). */
 	leftAsText: number
+	/** The raw (unescaped) envelope text left as prose, for the disclosure on the notice. */
+	leftAsTextRaw?: string
 }
 
 const OPEN = "<tool_calls>"
@@ -55,6 +57,11 @@ const PARAM_RE = /<parameter\s+name\s*=\s*"([^"]+)"\s*>([\s\S]*?)<\/parameter>/g
 
 const BUILTIN = new Set<string>(toolUseNames as string[])
 const KNOWN_PARAMS = new Set<string>(toolParamNames as readonly string[])
+
+/** Make text inert for the protocol parser: no `<` survives, so no tag can open. Markdown renders `&lt;` as `<`. */
+function neutralise(text: string): string {
+	return text.replace(/</g, "&lt;")
+}
 
 /** True when `index` sits inside a fenced code block or an inline code span on its line. */
 function insideCode(text: string, index: number): boolean {
@@ -156,8 +163,9 @@ function toProtocolXml(
 		if (owners.length !== 1 || !SAFE_NAME_RE.test(owners[0].name)) {
 			return undefined // unknown, or ambiguous across servers: never guess
 		}
-		// A trusted first-party server is connected but does not have this tool, and the only owner wears a
-		// first-party NAME without being trusted: that is a look-alike, never a route (other third-party servers
+		// Anti-confusion, NOT a security control: a trusted first-party server is connected but does not have this
+		// tool, and the only owner wears a first-party NAME without being trusted. Routing there would confuse the
+		// user (the card would read like the real server), so it is refused (other third-party servers
 		// are routed normally; the approval card names the server either way).
 		if (!owners[0].trusted && isFirstPartyServerName(owners[0].name) && ctx.servers.some((s) => s.trusted)) {
 			return undefined
@@ -201,6 +209,7 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 	const malformed: string[] = []
 	const routes: Array<{ server?: string; tool: string }> = []
 	let leftAsText = 0
+	let leftAsTextRaw: string | undefined
 	while (cursor < text.length) {
 		const start = text.indexOf(OPEN, cursor)
 		if (start === -1) {
@@ -208,8 +217,11 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 			break
 		}
 		if (insideCode(text, start)) {
-			out += text.slice(cursor, start + OPEN.length)
-			cursor = start + OPEN.length
+			// Documentation, not a call. Neutralise the envelope so the normal parser cannot read tags inside it.
+			const codeEnd = text.indexOf(CLOSE, start + OPEN.length)
+			const stop = codeEnd === -1 ? start + OPEN.length : codeEnd + CLOSE.length
+			out += text.slice(cursor, start) + neutralise(text.slice(start, stop))
+			cursor = stop
 			continue
 		}
 		out += text.slice(cursor, start)
@@ -234,10 +246,19 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 			continue
 		}
 		if (text.slice(afterEnvelope).trim() !== "") {
-			// Not the trailing element: prose that mentions an envelope, not a call. Leave it as it is.
-			out += raw
-			leftAsText++
-			cursor = afterEnvelope
+			// Not the trailing element: prose that mentions an envelope, not a call. It must stay INERT: the text is
+			// re-parsed by the normal protocol parser, which would read any protocol tag nested inside the envelope
+			// (e.g. <execute_command> in a parameter) as a real tool call. So the whole extent, through the LAST
+			// closing tag so a nested envelope cannot end it early, is neutralised (`<` -> `&lt;`). Escaping is
+			// chosen over dropping parsed blocks by source range because the parser keeps no offsets and the escaped
+			// text is guaranteed never to contain a protocol tag, whatever the parser does later.
+			const lastClose = text.lastIndexOf(CLOSE)
+			const stop = lastClose + CLOSE.length
+			const region = text.slice(start, stop)
+			out += neutralise(region)
+			leftAsText += region.split(OPEN).length - 1
+			leftAsTextRaw = leftAsTextRaw === undefined ? region : `${leftAsTextRaw}\n\n${region}`
+			cursor = stop
 			continue
 		}
 		const invokes = parseInvokes(text.slice(start + OPEN.length, end))
@@ -250,7 +271,7 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 		}
 		cursor = afterEnvelope
 	}
-	return { text: out, repaired, malformed, routes, leftAsText }
+	return { text: out, repaired, malformed, routes, leftAsText, leftAsTextRaw }
 }
 
 /**
@@ -291,7 +312,9 @@ export function planFinalNativePass(streamedText: string, final: NativeToolCallR
 		notices.push(`Repaired a native tool call: ${routed}.`)
 	}
 	if (final.leftAsText > 0) {
-		notices.push("Native tool call not at end of message; not run.")
+		// Raw text behind the disclosure so it is visible even when the earlier text block was already presented
+		// (a real tool call after a non-trailing envelope does not re-present the text block before it).
+		notices.push(`Native tool call not at end of message; not run.${final.leftAsTextRaw ? `\n\n${final.leftAsTextRaw}` : ""}`)
 	}
 	return { notices, reparseText: final.text !== streamedText ? final.text : undefined }
 }
