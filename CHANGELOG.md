@@ -11,6 +11,10 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Fixed — Learning Pack verifier rejects a leading UTF-8 BOM (vision-2040, branch `vision2040/verifier-bom`)
+
+- `parseCanonicalJson` decoded with a `TextDecoder` that strips a leading BOM by default, so its "must not contain a UTF-8 BOM" check never fired and a BOM-prefixed contract JSON file (for example `pack.json`) verified. It now decodes with `ignoreBOM: true`, so such a pack is `invalid` (`BOM`). **This tightens acceptance:** a pack that was previously accepted only because its BOM was ignored is now rejected. The signature and checksums always covered the exact bytes, so no valid-signature pack becomes forgeable either way; the vector in the test is re-checksummed and re-signed so the BOM is its only defect.
+
 ### Fixed — DeepSeek unclosed envelope and task_progress (vision-2040, branch `vision2040/deepseek-unclosed-envelope`)
 
 - A DeepSeek native envelope that ends without `</tool_calls>` is now repaired when every `<invoke>` is closed and only whitespace follows the last `</invoke>` (an unclosed invoke or trailing text stays malformed).
