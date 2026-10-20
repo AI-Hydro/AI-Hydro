@@ -29,7 +29,10 @@ describe("ArtifactKernelService (real kernel)", function () {
 		mkdirSync(workspace)
 		vsc.window.createOutputChannel = () => ({ appendLine: () => {} })
 		vsc.workspace.workspaceFolders = [{ uri: { fsPath: workspace, toString: () => `file://${workspace}` } }]
-		service = new ArtifactKernelService({ extensionPath: path.join(root, "ext"), globalState: { get: () => "", update: () => {} } } as any)
+		service = new ArtifactKernelService({
+			extensionPath: path.join(root, "ext"),
+			globalState: { get: () => "", update: () => {} },
+		} as any)
 		const profile: KernelProfile = {
 			id: "test",
 			label: "test",
@@ -99,7 +102,10 @@ describe("ArtifactKernelService (real kernel)", function () {
 	it("Stop on a cell that will not stop reports the restart, never 'Interrupted'", async () => {
 		service.interruptGraceMs = 400
 		await service.execute("kept = 5", "art")
-		const run = service.execute("import time\nwhile True:\n    try:\n        time.sleep(0.02)\n    except BaseException:\n        pass", "art")
+		const run = service.execute(
+			"import time\nwhile True:\n    try:\n        time.sleep(0.02)\n    except BaseException:\n        pass",
+			"art",
+		)
 		await sleep(500)
 		const outcome = await service.interruptKernel("art", "test")
 		const result = await run
@@ -131,5 +137,34 @@ describe("ArtifactKernelService (real kernel)", function () {
 		expect(record.outputDigests.stdout).to.match(/^sha256:[0-9a-f]{64}$/)
 		expect(record.packagesDigest).to.match(/^sha256:[0-9a-f]{64}$/)
 		expect(record.recording).to.equal("practice-not-server-recorded")
+	})
+
+	it("Stop during kernel start-up cancels the pending run instead of reporting recovered for nothing", async () => {
+		const run = service.execute("import time\ntime.sleep(5)\nprint('RAN')", "art", "test", undefined, "early")
+		await sleep(50) // the interpreter is still starting; no session.current yet
+		const outcome = await service.interruptKernel("art", "test")
+		const result = await run
+		expect(result.status).to.equal("interrupted")
+		expect(result.error).to.include("Cancelled")
+		expect(result.stdout).to.not.include("RAN")
+		expect(outcome.recovered).to.equal(true) // nothing was executing: the run never started
+	})
+
+	it("a kernel crash during Stop is not reported as recovered", async () => {
+		await service.execute("kept = 1", "art")
+		const run = service.execute("import os, time\ntry:\n    time.sleep(30)\nexcept KeyboardInterrupt:\n    os._exit(3)", "art")
+		await sleep(500)
+		const outcome = await service.interruptKernel("art", "test")
+		const result = await run
+		expect(result.status).to.equal("error")
+		expect(outcome.recovered).to.equal(false)
+	})
+
+	it("a run record that cannot be written does not fail the finished run", async () => {
+		vsc.workspace.workspaceFolders = [{ uri: { fsPath: path.join(root, "ws", "no-such", "\0bad"), toString: () => "file://bad" } }]
+		const result = await service.execute("print('fine')", "art", "test", undefined, "cell-x")
+		expect(result.status).to.equal("ok")
+		expect(result.stdout).to.equal("fine\n")
+		expect(result.provenanceId).to.equal(undefined)
 	})
 })

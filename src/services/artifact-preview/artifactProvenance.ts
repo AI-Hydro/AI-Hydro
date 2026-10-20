@@ -49,7 +49,9 @@ export function hashOutputs(result: RunArtifactCodeResult): OutputDigests {
 		stdout: hashCode(result.stdout),
 		stderr: hashCode(result.stderr),
 		resultRepr: hashCode(result.resultRepr),
-		imagesPng: result.imagesPngBase64.map((b64) => `sha256:${createHash("sha256").update(Buffer.from(b64, "base64")).digest("hex")}`),
+		imagesPng: result.imagesPngBase64.map(
+			(b64) => `sha256:${createHash("sha256").update(Buffer.from(b64, "base64")).digest("hex")}`,
+		),
 	}
 }
 

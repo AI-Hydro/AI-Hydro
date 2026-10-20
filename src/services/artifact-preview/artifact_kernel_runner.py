@@ -163,10 +163,10 @@ def _deliver_interrupt() -> None:
         # then the handler raises (PEP 475 only retries if it does not).
         signal.pthread_kill(main_ident, signal.SIGINT)
     else:
-        # Windows: sets the SIGINT event that time.sleep waits on.
-        import _thread
-
-        _thread.interrupt_main()
+        # Windows: raise() runs CPython's C-level SIGINT handler, which sets the
+        # SIGINT event that time.sleep and other waits block on.  (_thread.interrupt_main
+        # only sets the pending flag and does not wake a sleeping main thread there.)
+        signal.raise_signal(signal.SIGINT)
 
 
 def _collect_matplotlib_images() -> list[str]:
@@ -589,32 +589,41 @@ class _UnsupportedSyntax(Exception):
     """A cell used IPython-only syntax; the message is shown to the learner verbatim."""
 
 
+def _interrupted_result(exc: BaseException | None = None) -> dict[str, Any]:
+    return {
+        "stdout": "",
+        "stderr": "",
+        "error": _user_traceback(exc) if exc is not None else "KeyboardInterrupt\n",
+        "result_repr": "",
+        "images_png_base64": [],
+        "status": "interrupted",
+    }
+
+
 def _run_exec(namespace: dict[str, Any], exec_id: str, code: str) -> dict[str, Any]:
     """Run one exec with interrupts armed for exactly this request."""
     _STATE.current_id = exec_id
     _STATE.executing = True
     try:
-        if exec_id in _CANCELLED_IDS:
-            raise KeyboardInterrupt
-        if code.lstrip().startswith(_VIDEO_SENTINEL):
-            return _exec_video_code(namespace, code)
-        return _exec_code(namespace, code)
+        try:
+            if exec_id in _CANCELLED_IDS:
+                raise KeyboardInterrupt
+            if code.lstrip().startswith(_VIDEO_SENTINEL):
+                return _exec_video_code(namespace, code)
+            return _exec_code(namespace, code)
+        finally:
+            # Disarm first: nothing below may be interrupted by a late signal.
+            _STATE.executing = False
+            _STATE.current_id = ""
+            _STATE.interrupt_target = ""
     except KeyboardInterrupt as exc:
         # An interrupt raced the cell's own cleanup; report it as interrupted.
+        _STATE.executing = False
         sys.stdout, sys.stderr = _REAL_STDOUT, _REAL_STDERR
         _discard_matplotlib_figures()
-        return {
-            "stdout": "",
-            "stderr": "",
-            "error": _user_traceback(exc),
-            "result_repr": "",
-            "images_png_base64": [],
-            "status": "interrupted",
-        }
+        return _interrupted_result(exc)
     finally:
         _STATE.executing = False
-        _STATE.current_id = ""
-        _STATE.interrupt_target = ""
         _QUEUED_IDS.discard(exec_id)
         _CANCELLED_IDS.discard(exec_id)
 
@@ -673,6 +682,12 @@ def main() -> None:
         try:
             namespace = _dispatch(namespace, msg)
         except KeyboardInterrupt:
+            # A signal escaped every guard. The host must still get an answer for an
+            # exec, or it would wait for its timeout.
+            _STATE.executing = False
+            sys.stdout, sys.stderr = _REAL_STDOUT, _REAL_STDERR
+            if isinstance(msg, dict) and msg.get("op", "exec") == "exec":
+                _write_response({"id": str(msg.get("id", "")), **_interrupted_result()})
             continue
 
 

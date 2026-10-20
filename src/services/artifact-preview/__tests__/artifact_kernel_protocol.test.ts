@@ -4,8 +4,8 @@ import * as path from "node:path"
 import { expect } from "chai"
 import { afterEach, describe, it } from "mocha"
 
-// Resolved from the repo root (where mocha runs) rather than import.meta/__dirname,
-// so this spec loads under both the CommonJS and ESM unit-test loaders.
+// Resolved from the repo root (where mocha runs) rather than from the module's own
+// location, so this spec loads under both the CommonJS and ESM unit-test loaders.
 const RUNNER = path.resolve(process.cwd(), "src", "services", "artifact-preview", "artifact_kernel_runner.py")
 const PYTHON = process.env.AIHYDRO_TEST_PYTHON || process.env.AIHYDRO_E2E_PYTHON || "python3"
 
@@ -148,6 +148,7 @@ describe("artifact_kernel_runner.py protocol", function () {
 
 		it("reports a cell that swallows KeyboardInterrupt as still running (host then restarts)", async () => {
 			kernel = new Kernel()
+			await kernel.exec("warm", "1") // interrupt only a cell that has started
 			kernel.send({
 				op: "exec",
 				id: "stubborn",
@@ -200,9 +201,12 @@ describe("artifact_kernel_runner.py protocol", function () {
 			kernel = new Kernel()
 			const result = await kernel.exec(
 				"fd",
-				["import os, subprocess, sys", "os.write(1, b'RAW-FD-1\\n')", "subprocess.run([sys.executable, '-c', 'print(\"CHILD\")'])", "print('visible')"].join(
-					"\n",
-				),
+				[
+					"import os, subprocess, sys",
+					"os.write(1, b'RAW-FD-1\\n')",
+					"subprocess.run([sys.executable, '-c', 'print(\"CHILD\")'])",
+					"print('visible')",
+				].join("\n"),
 			)
 			expect(result.status).to.equal("ok")
 			expect(result.stdout).to.equal("visible\n")
@@ -228,7 +232,10 @@ describe("artifact_kernel_runner.py protocol", function () {
 
 		it("trims runner internals from tracebacks but keeps the user's frames", async () => {
 			kernel = new Kernel()
-			const result = await kernel.exec("tb", "def inner():\n    return 1 / 0\n\ndef outer():\n    return inner()\n\nouter()")
+			const result = await kernel.exec(
+				"tb",
+				"def inner():\n    return 1 / 0\n\ndef outer():\n    return inner()\n\nouter()",
+			)
 			expect(result.status).to.equal("error")
 			expect(result.error).to.not.include("artifact_kernel_runner")
 			expect(result.error).to.not.include("exec(compile")

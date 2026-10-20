@@ -43,6 +43,39 @@ export interface RunArtifactCodeResult {
 	provenanceId?: string
 }
 
+/** One execute() call from arrival until it settles, so Stop can cancel runs that have not started. */
+interface RunTicket {
+	cancelled: boolean
+	started: boolean
+	done: Promise<void>
+}
+
+/** Kill a kernel and anything it spawned (subprocess.Popen children, multiprocessing workers). */
+function killProcessTree(child: ChildProcessWithoutNullStreams, hard: boolean): void {
+	const pid = child.pid
+	try {
+		if (pid !== undefined && process.platform === "win32") {
+			// /T walks the tree, /F because a hung kernel will not honour a polite request.
+			spawn("taskkill", ["/T", "/F", "/PID", String(pid)], { stdio: "ignore", windowsHide: true }).on("error", () => {
+				child.kill()
+			})
+			return
+		}
+		if (pid !== undefined) {
+			// The kernel leads its own process group (spawned detached), so -pid reaches the whole tree.
+			process.kill(-pid, hard ? "SIGKILL" : "SIGTERM")
+			return
+		}
+	} catch {
+		// fall through to the single-process kill
+	}
+	try {
+		child.kill(hard ? "SIGKILL" : undefined)
+	} catch {
+		// already gone
+	}
+}
+
 /** The exec currently running in a kernel (at most one: execution is serialised per session). */
 interface ActiveExec {
 	id: string
@@ -128,6 +161,8 @@ export class ArtifactKernelService {
 	private readonly execChains = new Map<string, Promise<void>>()
 	/** Sessions whose kernel died while idle after running cells: tell the learner on the next run. */
 	private readonly lostState = new Map<string, string>()
+	/** Runs from arrival to settlement, per session; lets Stop cancel runs still waiting or starting up. */
+	private readonly tickets = new Map<string, Set<RunTicket>>()
 	/** Overridable so tests can exercise the give-up path without waiting seconds. */
 	interruptGraceMs = INTERRUPT_GRACE_MS
 	private readonly outputChannel = vscode.window.createOutputChannel("AI-Hydro HTML Preview")
@@ -289,11 +324,7 @@ export class ArtifactKernelService {
 		}
 		session.pending.clear()
 		session.rl.close()
-		try {
-			session.process.kill(hard ? "SIGKILL" : undefined)
-		} catch {
-			// ignore
-		}
+		killProcessTree(session.process, hard)
 		this.sessions.delete(sessionKey)
 	}
 
@@ -310,20 +341,26 @@ export class ArtifactKernelService {
 	async interruptKernel(artifactId: string, profileId?: string): Promise<{ recovered: boolean; error?: string }> {
 		const sessionKey = this.resolveSessionKey(artifactId, profileId)
 		const session = this.sessions.get(sessionKey)
-		const exec = session?.current
-		if (!session || !exec) {
-			return { recovered: true }
+		// Runs that have not started (queued behind another, or waiting for the kernel to
+		// spawn) are cancelled so they never execute after Stop.
+		const waiting = [...(this.tickets.get(sessionKey) ?? [])].filter((t) => !t.started)
+		for (const ticket of waiting) {
+			ticket.cancelled = true
 		}
-		this.beginInterrupt(session, exec, "user")
-		await exec.done
-		if (exec.outcome === "restarted") {
+		const exec = session?.current
+		if (session && exec) {
+			this.beginInterrupt(session, exec, "user")
+			await exec.done
+		}
+		await Promise.all(waiting.map((t) => t.done))
+		if (exec?.outcome === "restarted") {
 			return {
 				recovered: false,
 				error: "The running code did not stop, so the kernel was restarted. Kernel restarted: variables were cleared.",
 			}
 		}
-		if (exec.outcome === "failed") {
-			return { recovered: false, error: session.lastError || "The kernel stopped responding." }
+		if (exec?.outcome === "failed") {
+			return { recovered: false, error: "The kernel exited while it was being interrupted. Variables were cleared." }
 		}
 		return { recovered: true }
 	}
@@ -381,7 +418,21 @@ export class ArtifactKernelService {
 		// Cells for one kernel run strictly one at a time, in arrival order.  The
 		// timeout clock therefore starts when a cell starts, not while it waits.
 		const previous = this.execChains.get(sessionKey) ?? Promise.resolve()
-		const run = previous.then(() => this.executeSerialized(code, artifactId, profile, timeoutMs, cellId))
+		const ticket: RunTicket = { cancelled: false, started: false, done: Promise.resolve() }
+		const tickets = this.tickets.get(sessionKey) ?? new Set<RunTicket>()
+		tickets.add(ticket)
+		this.tickets.set(sessionKey, tickets)
+		const run = previous.then(() => this.executeSerialized(code, artifactId, profile, ticket, timeoutMs, cellId))
+		ticket.done = run.then(
+			() => undefined,
+			() => undefined,
+		)
+		void ticket.done.then(() => {
+			tickets.delete(ticket)
+			if (tickets.size === 0 && this.tickets.get(sessionKey) === tickets) {
+				this.tickets.delete(sessionKey)
+			}
+		})
 		const tail = run.then(
 			() => undefined,
 			() => undefined,
@@ -399,11 +450,29 @@ export class ArtifactKernelService {
 		code: string,
 		artifactId: string,
 		profile: KernelProfile,
+		ticket: RunTicket,
 		timeoutMs?: number,
 		cellId?: string,
 	): Promise<RunArtifactCodeResult> {
 		const sessionKey = buildSessionKeyForArtifact(artifactId, profile.id)
+		const cancelledResult = (): RunArtifactCodeResult => ({
+			stdout: "",
+			stderr: "",
+			status: "interrupted",
+			error: "Cancelled: Stop was pressed before this cell started.",
+			resultRepr: "",
+			imagesPngBase64: [],
+			videosMp4Base64: [],
+			truncated: false,
+		})
+		if (ticket.cancelled) {
+			return cancelledResult()
+		}
 		const session = await this.ensureSession(artifactId, profile)
+		if (ticket.cancelled) {
+			return cancelledResult()
+		}
+		ticket.started = true
 		// A kernel that died while idle took the learner's variables with it;
 		// ensureSession() has just replaced it, so say so on this run.
 		const lostReason = this.lostState.get(sessionKey)
@@ -476,22 +545,29 @@ export class ArtifactKernelService {
 		}
 
 		const durationMs = Date.now() - startMs
-		const provenanceId = await writeCellProvenance(getWorkspaceFolderPath(), {
-			artifactId,
-			cellId: cellId?.trim() || "legacy",
-			codeHash: hashCode(code),
-			codeText: code,
-			pythonExecutable: profile.interpreterPath,
-			pythonVersion: session.pythonVersion,
-			packagesDigest: session.packagesDigest,
-			cwd: profile.cwd,
-			profileId: profile.id,
-			startedAt,
-			durationMs,
-			status: mapResultStatus(result),
-			outputDigests: hashOutputs(result),
-			recording: "practice-not-server-recorded",
-		} satisfies CellProvenanceRecord)
+		// The run has finished; failing to record it (read-only workspace, full disk) must not
+		// turn a successful result into an error.
+		let provenanceId: string | undefined
+		try {
+			provenanceId = await writeCellProvenance(getWorkspaceFolderPath(), {
+				artifactId,
+				cellId: cellId?.trim() || "legacy",
+				codeHash: hashCode(code),
+				codeText: code,
+				pythonExecutable: profile.interpreterPath,
+				pythonVersion: session.pythonVersion,
+				packagesDigest: session.packagesDigest,
+				cwd: profile.cwd,
+				profileId: profile.id,
+				startedAt,
+				durationMs,
+				status: mapResultStatus(result),
+				outputDigests: hashOutputs(result),
+				recording: "practice-not-server-recorded",
+			} satisfies CellProvenanceRecord)
+		} catch (error) {
+			this.outputChannel.appendLine(`[${profile.label}][${artifactId}] Could not write run record: ${String(error)}`)
+		}
 
 		return { ...result, provenanceId }
 	}
@@ -581,6 +657,8 @@ export class ArtifactKernelService {
 			cwd: profile.cwd,
 			env,
 			stdio: ["pipe", "pipe", "pipe"],
+			// Own process group on POSIX so killProcessTree() can reach the kernel's children.
+			detached: process.platform !== "win32",
 		})
 
 		session.process = child
@@ -597,6 +675,9 @@ export class ArtifactKernelService {
 			session.lastError = `Kernel exited with code ${code ?? "unknown"}`
 			if (session.stopping) {
 				return
+			}
+			if (session.current) {
+				session.current.outcome ??= "failed"
 			}
 			const hadPending = session.pending.size > 0
 			if (!hadPending && session.execCount > 0) {
