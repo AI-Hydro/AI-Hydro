@@ -112,12 +112,17 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 	)
 }
 
-/** "Restored N of M saved layers" from the `_hydrated` / `_hydrated_of` metadata the host stamps on restored layers. */
-export function restoredLayersNote(layers: MapLayer[]): string | null {
+/**
+ * "N restored from earlier sessions" from the `_hydrated` / `_hydrated_of` metadata the host stamps on restored
+ * layers. Layers beyond the restore cap are kept on disk, not loaded; say so (the Layers panel offers to load them).
+ * `olderCount` is the host's authoritative count of kept-but-unloaded layers; without it the count is derived.
+ */
+export function restoredLayersNote(layers: MapLayer[], olderCount?: number): string | null {
 	const restored = layers.filter((layer) => layer.metadata?._hydrated === "1")
-	if (restored.length === 0) return null
+	if (restored.length === 0 && !olderCount) return null
 	const savedTotal = Math.max(0, ...restored.map((layer) => Number.parseInt(layer.metadata?._hydrated_of ?? "", 10) || 0))
-	return savedTotal > restored.length
-		? `${restored.length} restored from earlier sessions (${savedTotal} saved; only the most recent ${restored.length} were restored).`
-		: `${restored.length} restored from earlier sessions.`
+	const kept = olderCount ?? Math.max(0, savedTotal - restored.length)
+	const keptNote = `${kept} older saved layer${kept === 1 ? " is" : "s are"} kept but not loaded.`
+	if (restored.length === 0) return keptNote
+	return kept > 0 ? `${restored.length} restored from earlier sessions. ${keptNote}` : `${restored.length} restored from earlier sessions.`
 }

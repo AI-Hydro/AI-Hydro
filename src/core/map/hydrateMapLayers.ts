@@ -105,7 +105,7 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 	})
 }
 
-async function buildLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLayer | null> {
+export async function buildLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLayer | null> {
 	const t = entry.layer_type
 
 	if (t === "raster") {
@@ -143,6 +143,28 @@ async function buildLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLaye
 }
 
 /**
+ * Build and add layers for catalog entries. The UI reads `_hydrated_of` to say "Restored N of M saved layers"
+ * rather than hiding the rest. Entries that cannot be rebuilt (missing file) are skipped, never fatal.
+ * Returns the ids of the layers added, in order.
+ */
+export async function restoreCatalogEntries(controller: Controller, entries: MapLayerCatalogEntry[], total: number): Promise<string[]> {
+	const added: string[] = []
+	for (const entry of entries) {
+		try {
+			const layer = await buildLayerFromEntry(entry)
+			if (layer) {
+				layer.metadata = { ...(layer.metadata ?? {}), _hydrated_of: String(total) }
+				controller.addMapLayer(layer)
+				added.push(layer.id)
+			}
+		} catch (err) {
+			console.warn(`[hydrateMapLayers] Skipping layer ${entry.id}:`, err)
+		}
+	}
+	return added
+}
+
+/**
  * Read the persisted catalog and restore layers into the controller.
  * Called from Controller constructor (after mapSessionService.initialize).
  */
@@ -157,28 +179,17 @@ export async function hydrateMapLayersFromCatalog(controller: Controller, curren
 		return
 	}
 
-	// Scope to the current workspace and cap the count (see restoreSelection.ts).
+	// Scope to the current workspace and cap the count (see restoreSelection.ts). Older entries are handed to
+	// the controller, which keeps them in the catalog and offers "Restore older layers".
 	const selection = selectCatalogEntriesToRestore(catalog, currentScope)
+	controller.setMapOverflowEntries(selection.overflow)
 
-	let restored = 0
-	for (const entry of selection.entries) {
-		try {
-			const layer = await buildLayerFromEntry(entry)
-			if (layer) {
-				// The UI reads `_hydrated_of` to say "Restored N of M saved layers" rather than hiding the rest.
-				layer.metadata = { ...(layer.metadata ?? {}), _hydrated_of: String(selection.total) }
-				controller.addMapLayer(layer)
-				restored++
-			}
-		} catch (err) {
-			console.warn(`[hydrateMapLayers] Skipping layer ${entry.id}:`, err)
-		}
-	}
+	const restored = await restoreCatalogEntries(controller, selection.entries, selection.total)
 
 	console.log(
-		`[hydrateMapLayers] Restored ${restored} / ${selection.total} layers from catalog` +
+		`[hydrateMapLayers] Restored ${restored.length} / ${selection.total} layers from catalog` +
 			(selection.outOfScope ? ` (${selection.outOfScope} belong to another workspace)` : "") +
-			(selection.capped ? ` (${selection.capped} older layers not restored; cap reached)` : ""),
+			(selection.capped ? ` (${selection.capped} older layers kept on disk, not loaded; cap reached)` : ""),
 	)
 }
 

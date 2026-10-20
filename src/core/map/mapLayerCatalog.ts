@@ -5,16 +5,23 @@ import * as os from "os"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 
-export const MAP_LAYER_CATALOG_FILE = path.join(os.homedir(), ".aihydro", "map_layer_catalog.json")
-/**
- * Per-workspace catalog file. The legacy global file above is only read as a one-time fallback for a workspace
- * that has no catalog of its own yet, so layers from other investigations no longer pile up in every window.
- */
-export function scopedMapLayerCatalogFile(workspaceRoot: string): string {
-	const key = createHash("sha1").update(workspaceRoot).digest("hex").slice(0, 12)
-	return path.join(os.homedir(), ".aihydro", `map_layer_catalog.${key}.json`)
+// TODO(AI-Hydro/AI-Hydro#60): route these through aihydroPath() once the aihydroHome() helper lands on main.
+/** Directory holding the catalog files (`~/.aihydro`). Overridable per call so tests never touch the real one. */
+export function defaultAihydroDir(): string {
+	return path.join(os.homedir(), ".aihydro")
 }
-const MAP_LAYER_GEOJSON_CACHE_DIR = path.join(os.homedir(), ".aihydro", "map_layer_geojson_cache")
+export const MAP_LAYER_CATALOG_FILE = path.join(defaultAihydroDir(), "map_layer_catalog.json")
+/** Where the unscoped legacy catalog is renamed once one workspace has taken it over. */
+const LEGACY_MIGRATED_NAME = "map_layer_catalog.migrated.json"
+/**
+ * Per-workspace catalog file. The legacy global file is migrated into the first workspace that loads it (see
+ * `readMapLayerCatalog`), so layers from other investigations no longer pile up in every window.
+ */
+export function scopedMapLayerCatalogFile(workspaceRoot: string, baseDir: string = defaultAihydroDir()): string {
+	const key = createHash("sha1").update(workspaceRoot).digest("hex").slice(0, 12)
+	return path.join(baseDir, `map_layer_catalog.${key}.json`)
+}
+const MAP_LAYER_GEOJSON_CACHE_DIR = path.join(defaultAihydroDir(), "map_layer_geojson_cache")
 // Tool-pushed layers may be arbitrarily large (>512 KB). We always cache them
 // so they can be restored on extension reload. User-loaded layers keep the old cap.
 const MAX_GEOJSON_CACHE_BYTES_USER = 512_000
@@ -289,10 +296,15 @@ async function previewLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 	}
 }
 
+/**
+ * @param preserved Catalog entries that are on disk but not loaded (older than the restore cap). They are
+ *   carried through every rewrite, in front of the live layers, so a rewrite never destroys them.
+ */
 export async function buildMapLayerCatalogAsync(
 	layers: MapLayer[],
 	layerOrder: string[],
 	workspaceRoot?: string,
+	preserved: MapLayerCatalogEntry[] = [],
 ): Promise<MapLayerCatalog> {
 	const order = layerOrder.length > 0 ? layerOrder.filter((id) => layers.some((l) => l.id === id)) : layers.map((l) => l.id)
 	for (const layer of layers) {
@@ -310,11 +322,13 @@ export async function buildMapLayerCatalogAsync(
 		const previewPath = await previewLayerGeojsonIfNeeded(layer)
 		entries.push(layerToCatalogEntry(layer, cachePath, previewPath))
 	}
+	const liveIds = new Set(entries.map((entry) => entry.id))
+	const carried = preserved.filter((entry) => !liveIds.has(entry.id))
 	return {
 		...(workspaceRoot ? { workspace_root: workspaceRoot } : {}),
 		updated_at_ms: Date.now(),
-		layer_order: order,
-		layers: entries,
+		layer_order: [...carried.map((entry) => entry.id), ...order],
+		layers: [...carried, ...entries],
 	}
 }
 
@@ -336,9 +350,11 @@ export function buildMapLayerCatalog(layers: MapLayer[], layerOrder: string[]): 
 	}
 }
 
-export async function persistMapLayerCatalog(catalog: MapLayerCatalog): Promise<void> {
+export async function persistMapLayerCatalog(catalog: MapLayerCatalog, baseDir: string = defaultAihydroDir()): Promise<void> {
 	try {
-		const file = catalog.workspace_root ? scopedMapLayerCatalogFile(catalog.workspace_root) : MAP_LAYER_CATALOG_FILE
+		const file = catalog.workspace_root
+			? scopedMapLayerCatalogFile(catalog.workspace_root, baseDir)
+			: path.join(baseDir, "map_layer_catalog.json")
 		await fs.mkdir(path.dirname(file), { recursive: true })
 		await fs.writeFile(file, JSON.stringify(catalog, null, 2), "utf8")
 	} catch (err) {
@@ -346,15 +362,40 @@ export async function persistMapLayerCatalog(catalog: MapLayerCatalog): Promise<
 	}
 }
 
-export async function readMapLayerCatalog(workspaceRoot?: string): Promise<MapLayerCatalog | null> {
-	const candidates = workspaceRoot ? [scopedMapLayerCatalogFile(workspaceRoot), MAP_LAYER_CATALOG_FILE] : [MAP_LAYER_CATALOG_FILE]
-	for (const file of candidates) {
-		try {
-			const raw = await fs.readFile(file, "utf8")
-			return JSON.parse(raw) as MapLayerCatalog
-		} catch {
-			// try the next candidate
-		}
+async function readCatalogFile(file: string): Promise<MapLayerCatalog | null> {
+	try {
+		return JSON.parse(await fs.readFile(file, "utf8")) as MapLayerCatalog
+	} catch {
+		return null
 	}
-	return null
+}
+
+/**
+ * Reads the catalog for a workspace. A workspace with no catalog of its own takes over the legacy unscoped file
+ * exactly once: the file is first renamed to `map_layer_catalog.migrated.json` (an atomic claim, so two windows
+ * racing for it cannot both import it), then its contents are written to this workspace's scoped file. Other
+ * workspaces then find no legacy file and start empty. With no workspace folder the legacy file is read in place.
+ */
+export async function readMapLayerCatalog(workspaceRoot?: string, baseDir: string = defaultAihydroDir()): Promise<MapLayerCatalog | null> {
+	const legacyFile = path.join(baseDir, "map_layer_catalog.json")
+	if (!workspaceRoot) {
+		return readCatalogFile(legacyFile)
+	}
+	const scoped = await readCatalogFile(scopedMapLayerCatalogFile(workspaceRoot, baseDir))
+	if (scoped) {
+		return scoped
+	}
+	const migratedFile = path.join(baseDir, LEGACY_MIGRATED_NAME)
+	try {
+		await fs.rename(legacyFile, migratedFile)
+	} catch {
+		return null // no legacy file, or another workspace claimed it first
+	}
+	const legacy = await readCatalogFile(migratedFile)
+	if (!legacy) {
+		return null
+	}
+	const migrated: MapLayerCatalog = { ...legacy, workspace_root: workspaceRoot }
+	await persistMapLayerCatalog(migrated, baseDir)
+	return migrated
 }

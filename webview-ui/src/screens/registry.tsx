@@ -366,6 +366,7 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-empty-panel-open", "No layers with a tool panel open (no empty-state card)", {
 		steps: [{ click: 'button[aria-label="Basemap"]' }, { wait: 500 }],
 	}),
+	mapScreen("map-sync-hydrating", "Saved layers still restoring (no empty-state card)", { mapHydrating: true }),
 	mapScreen("map-sync-loading", "Layer sync still loading (no empty-state card)", { mapConnection: "loading" }),
 	// Ribbon badge counts visible layers only (2 of 4 shown); the tooltip and panel header read "N visible · M hidden".
 	mapScreen("map-layer-badge-counts", "Layer badge counts visible layers only", {
@@ -374,6 +375,11 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-features", "Map with basin, gauge, rivers and raster (toolbar visible)", { layers: featureLayers() }),
 	mapScreen("map-layer-manager", "Map layer manager open", {
 		layers: featureLayers(),
+		steps: [{ click: 'button[aria-label^="Layer manager"]' }, { wait: 500 }],
+	}),
+	mapScreen("map-layer-manager-older-kept", "Layer manager offering Restore older layers", {
+		layers: featureLayers().map((layer) => ({ ...layer, metadata: { ...layer.metadata, _hydrated: "1", _hydrated_of: "120" } })),
+		mapOlderCount: 78,
 		steps: [{ click: 'button[aria-label^="Layer manager"]' }, { wait: 500 }],
 	}),
 	mapScreen("map-layer-provenance", "Layer provenance tab with MISSING_PROVENANCE", {

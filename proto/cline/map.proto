@@ -191,6 +191,10 @@ message AddWorkspaceGeoFileResponse {
     string layer_id = 1;       // Layer created for the file
 }
 
+message RestoreOlderMapLayersResponse {
+    int32 restored = 1;        // Layers loaded from the older, kept-but-not-loaded part of the catalog
+}
+
 // Service for map operations
 service MapService {
     // Add a layer to the map
@@ -225,6 +229,9 @@ service MapService {
 
     // Add one workspace geo file to the map as a layer
     rpc addWorkspaceGeoFile(AddWorkspaceGeoFileRequest) returns (AddWorkspaceGeoFileResponse);
+
+    // Load the saved layers beyond the startup restore cap (they are kept on disk, not dropped)
+    rpc restoreOlderMapLayers(EmptyRequest) returns (RestoreOlderMapLayersResponse);
     rpc subscribeToMapEvents(EmptyRequest) returns (stream MapEvent);
     rpc prepareMapExport(PrepareMapExportRequest) returns (PrepareMapExportResponse);
     rpc saveMapExport(SaveMapExportRequest) returns (SaveMapExportResponse);

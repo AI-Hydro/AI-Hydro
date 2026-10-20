@@ -13,8 +13,9 @@ export interface MapEmptyStateProps {
 }
 
 /**
- * When the "No layers yet" card may show. All three must hold:
+ * When the "No layers yet" card may show. All four must hold:
  *   - the layer sync has finished (`connected`): while loading or stale an empty list says nothing about the map;
+ *   - the host's saved-layer restore has finished (`hydrating` false): layers may still be on their way;
  *   - there are no layers;
  *   - no tool panel is open: the card must never cover or sit beside a panel the user is working in.
  */
@@ -22,8 +23,10 @@ export function shouldShowEmptyState(state: {
 	connectionStatus: "loading" | "connected" | "stale"
 	layerCount: number
 	panelOpen: boolean
+	/** Host is still restoring saved layers. */
+	hydrating?: boolean
 }): boolean {
-	return state.connectionStatus === "connected" && state.layerCount === 0 && !state.panelOpen
+	return state.connectionStatus === "connected" && !state.hydrating && state.layerCount === 0 && !state.panelOpen
 }
 
 /** Empty map: an opaque card with three real buttons. The agent action is labelled as one. */

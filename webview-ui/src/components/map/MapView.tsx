@@ -654,7 +654,7 @@ const useEscToClosePanels = ({
 }
 
 export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
-	const { layers, connectionStatus, connectionError, reconnect } = useMapContext()
+	const { layers, connectionStatus, connectionError, reconnect, restoreState } = useMapContext()
 	const [resourceRetry, setResourceRetry] = useState(0)
 	const { states: rasterStates, revision: rasterResourceRevision } = useRasterResources(layers, resourceRetry)
 	const [rendererError, setRendererError] = useState<string | null>(null)
@@ -3197,7 +3197,12 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 
 			{/* Only once the layer sync has finished (a loading or stale sync says nothing about emptiness) and
 			    never behind or beside an open tool panel. */}
-			{shouldShowEmptyState({ connectionStatus, layerCount: layers.length, panelOpen: activeTool !== null }) && (
+			{shouldShowEmptyState({
+				connectionStatus,
+				layerCount: layers.length,
+				panelOpen: activeTool !== null,
+				hydrating: restoreState.hydrating,
+			}) && (
 				<MapEmptyState onFilesPicked={(files) => void ingestFiles(files)} onFindGauge={() => setSearchOpen(true)} />
 			)}
 

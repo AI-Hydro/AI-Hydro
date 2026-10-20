@@ -5,7 +5,18 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import type { ActiveRoi } from "../components/map/mapWorkspace"
 import { MapServiceClient } from "../services/grpc-client"
 
+/** Saved-layer restore progress reported by the host (see Controller.getMapRestoreState). */
+export interface MapRestoreState {
+	/** Startup restore still running: an empty layer list says nothing yet. */
+	hydrating: boolean
+	/** Saved layers beyond the restore cap: kept on disk, not loaded. */
+	olderCount: number
+}
+
 interface MapContextType {
+	restoreState: MapRestoreState
+	/** Load the saved layers that were kept but not restored at startup. Resolves with how many were loaded. */
+	restoreOlderLayers: () => Promise<number>
 	connectionStatus: "loading" | "connected" | "stale"
 	connectionError: string | undefined
 	reconnect: () => void
@@ -36,8 +47,17 @@ function protoToActiveRoi(roi?: MapRoi): ActiveRoi | undefined {
 	}
 }
 
+function restoreStateFrom(metadata: Record<string, string> | undefined): MapRestoreState {
+	// A host without restore reporting is treated as not hydrating, so the empty card is never hidden forever.
+	return {
+		hydrating: metadata?.hydrating === "1",
+		olderCount: Number.parseInt(metadata?.older_count ?? "0", 10) || 0,
+	}
+}
+
 export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [layers, setLayers] = useState<MapLayer[]>([])
+	const [restoreState, setRestoreState] = useState<MapRestoreState>({ hydrating: true, olderCount: 0 })
 	const [activeRoi, setActiveRoi] = useState<ActiveRoi | undefined>()
 	const [boundClaimId, setBoundClaimId] = useState<string | undefined>()
 	const [connectionStatus, setConnectionStatus] = useState<"loading" | "connected" | "stale">("loading")
@@ -83,6 +103,7 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		let unsubscribeSession = () => {}
 		setConnectionStatus("loading")
 		setConnectionError(undefined)
+		setRestoreState((previous) => ({ ...previous, hydrating: true }))
 		const fail = (reason: unknown) => {
 			if (!active) return
 			active = false
@@ -114,7 +135,12 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 						layersReady = false
 						return
 					}
+					if (operation === "restore_state") {
+						setRestoreState(restoreStateFrom(layer.metadata))
+						return
+					}
 					if (operation === "snapshot_complete") {
+						setRestoreState(restoreStateFrom(layer.metadata))
 						if (!staged) {
 							fail(new Error("Map snapshot completion arrived without a start."))
 							return
@@ -205,6 +231,11 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		}
 	}, [])
 
+	const restoreOlderLayers = useCallback(async (): Promise<number> => {
+		const response = await MapServiceClient.restoreOlderMapLayers(EmptyRequest.create({}))
+		return response.restored
+	}, [])
+
 	const addLayer = useCallback((layer: MapLayer) => {
 		setLayers((prevLayers) => {
 			const existingIndex = prevLayers.findIndex((l) => l.id === layer.id)
@@ -235,6 +266,8 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 	return (
 		<MapContext.Provider
 			value={{
+				restoreState,
+				restoreOlderLayers,
 				connectionStatus,
 				connectionError,
 				reconnect,

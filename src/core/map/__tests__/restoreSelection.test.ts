@@ -26,6 +26,9 @@ describe("selectCatalogEntriesToRestore", () => {
 		expect(sel.entries[sel.entries.length - 1].id).to.equal(ids[ids.length - 1])
 		expect(sel.total).to.equal(ids.length)
 		expect(sel.capped).to.equal(60)
+		// The skipped entries are returned (oldest first), not discarded, so the controller can keep them on disk.
+		expect(sel.overflow.map((e) => e.id)).to.deep.equal(ids.slice(0, 60))
+		expect([...sel.overflow, ...sel.entries].map((e) => e.id)).to.deep.equal(ids)
 	})
 
 	it("restores nothing from a catalog written for another workspace", () => {

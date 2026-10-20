@@ -316,7 +316,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	onShowAllLayers,
 	onHideAllLayers,
 }) => {
-	const { layers, addLayer, removeLayer, clearLayers } = useMapContext()
+	const { layers, addLayer, removeLayer, clearLayers, restoreState, restoreOlderLayers } = useMapContext()
+	const [restoringOlder, setRestoringOlder] = useState(false)
+	const [restoreError, setRestoreError] = useState<string | null>(null)
 	const persisted = useMemo(() => loadMapWorkspace(), [])
 	const [showDetails, setShowDetails] = useState<boolean>(persisted.layerPanel?.showDetails ?? false)
 	const [layerAliases, setLayerAliases] = useState<Record<string, string>>(persisted.layerAliases ?? {})
@@ -352,7 +354,18 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	const displayNames = useMemo(() => buildDisplayNames(layers, layerAliases), [layers, layerAliases])
 	const visibleCount = useMemo(() => layers.filter((layer) => visibleLayerIds.has(layer.id)).length, [layers, visibleLayerIds])
-	const restoredNote = useMemo(() => restoredLayersNote(layers), [layers])
+	const restoredNote = useMemo(() => restoredLayersNote(layers, restoreState.olderCount), [layers, restoreState.olderCount])
+	const restoreOlder = async () => {
+		setRestoringOlder(true)
+		setRestoreError(null)
+		try {
+			await restoreOlderLayers()
+		} catch (error) {
+			setRestoreError(error instanceof Error ? error.message : "Could not restore older layers.")
+		} finally {
+			setRestoringOlder(false)
+		}
+	}
 
 	const commitRename = async (layer: MapLayer) => {
 		const trimmed = renameDraft.trim()
@@ -1347,7 +1360,32 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 			</div>
 
 			{restoredNote && (
-				<div style={{ padding: "4px 8px", fontSize: 11, opacity: 0.8, borderTop: `1px solid ${border}` }}>{restoredNote}</div>
+				<div style={{ padding: "4px 8px", fontSize: 11, borderTop: `1px solid ${border}` }}>
+					<div style={{ opacity: 0.8 }}>{restoredNote}</div>
+					{restoreState.olderCount > 0 && (
+						<button
+							disabled={restoringOlder}
+							onClick={() => void restoreOlder()}
+							style={{
+								marginTop: 4,
+								padding: "3px 8px",
+								fontSize: 11,
+								color: fg,
+								background: subtle,
+								border: `1px solid ${border}`,
+								borderRadius: 3,
+								cursor: restoringOlder ? "default" : "pointer",
+							}}
+							type="button">
+							{restoringOlder ? "Restoring…" : `Restore older layers (${restoreState.olderCount})`}
+						</button>
+					)}
+					{restoreError && (
+						<div role="alert" style={{ marginTop: 4, color: danger }}>
+							{restoreError}
+						</div>
+					)}
+				</div>
 			)}
 
 			<WorkspaceFilesSection border={border} fg={fg} layers={layers} subtle={subtle} />

@@ -9,6 +9,7 @@ const mock = vi.hoisted(() => ({
 	getMapSession: vi.fn(),
 	stopLayers: vi.fn(),
 	stopSession: vi.fn(),
+	restoreOlder: vi.fn(),
 }))
 vi.mock("@/services/grpc-client", () => ({
 	MapServiceClient: {
@@ -16,6 +17,7 @@ vi.mock("@/services/grpc-client", () => ({
 		subscribeToMapSession: mock.session,
 		setActiveRoi: mock.setActiveRoi,
 		getMapSession: mock.getMapSession,
+		restoreOlderMapLayers: mock.restoreOlder,
 	},
 }))
 let layerHandlers: any
@@ -47,6 +49,7 @@ function View() {
 			<span data-testid="roi">{state.activeRoi?.id ?? "none"}</span>
 			<span data-testid="status">{state.connectionStatus}</span>
 			<span>{state.connectionError}</span>
+			<span data-testid="restore">{`${state.restoreState.hydrating}/${state.restoreState.olderCount}`}</span>
 			<button onClick={state.reconnect}>Reconnect</button>
 		</>
 	)
@@ -276,5 +279,34 @@ describe("Map ROI lifecycle", () => {
 		refresh.resolve({ activeRoi: { id: "late", name: "late", source: "test", geojson: "{}" } })
 		await pendingRefresh
 		expect(screen.queryByTestId("roi")).not.toBeInTheDocument()
+	})
+})
+
+describe("Saved-layer restore state", () => {
+	it("stays hydrating until the host says restore finished, then reports the kept-but-unloaded count", () => {
+		mount()
+		expect(screen.getByTestId("restore")).toHaveTextContent("true/0")
+		act(() => {
+			layerHandlers.onResponse(marker("snapshot_start"))
+			layerHandlers.onResponse({ id: "__map_sync__", metadata: { __operation: "snapshot_complete", hydrating: "1", older_count: "0" } })
+			sessionHandlers.onResponse({})
+		})
+		expect(screen.getByTestId("status")).toHaveTextContent("connected")
+		expect(screen.getByTestId("restore")).toHaveTextContent("true/0")
+		act(() => layerHandlers.onResponse({ id: "__map_restore__", metadata: { __operation: "restore_state", hydrating: "0", older_count: "78" } }))
+		expect(screen.getByTestId("restore")).toHaveTextContent("false/78")
+		// The marker is not a layer.
+		expect(screen.getByTestId("layers")).toBeEmptyDOMElement()
+	})
+	it("a host that does not report restore state is treated as not hydrating", () => {
+		mount()
+		sync([])
+		expect(screen.getByTestId("restore")).toHaveTextContent("false/0")
+	})
+	it("restoreOlderLayers calls the host and returns how many loaded", async () => {
+		mock.restoreOlder.mockResolvedValue({ restored: 78 })
+		mount()
+		sync([])
+		await expect(context.restoreOlderLayers()).resolves.toBe(78)
 	})
 })

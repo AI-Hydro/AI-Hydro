@@ -3,7 +3,7 @@ import { buildApiHandler } from "@core/api"
 import { LedgerEventWatcher } from "@core/ledger/LedgerEventWatcher"
 import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
-import { buildMapLayerCatalogAsync, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
+import { buildMapLayerCatalogAsync, type MapLayerCatalogEntry, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
 import { type MapLayerPatch, mergeMapLayerPatch } from "@core/map/mergeMapLayerPatch"
 import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
@@ -110,6 +110,12 @@ export class Controller {
 	// Map layer storage, streaming, and Python event bridge
 	private mapLayers: Map<string, MapLayer> = new Map()
 	private mapLayerOrder: string[] = []
+	/** Catalog entries older than the restore cap: not loaded, but carried through every catalog rewrite. */
+	private mapOverflowEntries: MapLayerCatalogEntry[] = []
+	/** True until the startup catalog restore has finished (the empty-state card must not show before then). */
+	private mapHydrating = true
+	/** Resolves when startup hydration is done; catalog rewrites wait for it so they cannot clobber unrestored data. */
+	private mapHydration: Promise<void> = Promise.resolve()
 	private mapLayerSubscribers: Set<(layer: MapLayer) => void> = new Set()
 	private mapEventWatcher: MapEventWatcher
 	private mapCommandWatcher: MapCommandWatcher
@@ -204,11 +210,13 @@ export class Controller {
 		this.mapEventWatcher.start()
 		// Restore layers from the persisted catalog so Python-pushed layers
 		// survive VS Code window reloads without re-running MCP tools.
-		void import("@core/map/hydrateMapLayers").then(({ hydrateMapLayersFromCatalog }) => {
-			hydrateMapLayersFromCatalog(this, this.currentMapScope()).catch((err) =>
-				console.warn("[Controller] Layer hydration failed (non-fatal):", err),
-			)
-		})
+		this.mapHydration = import("@core/map/hydrateMapLayers")
+			.then(({ hydrateMapLayersFromCatalog }) => hydrateMapLayersFromCatalog(this, this.currentMapScope()))
+			.catch((err) => console.warn("[Controller] Layer hydration failed (non-fatal):", err))
+			.finally(() => {
+				this.mapHydrating = false
+				this.emitMapRestoreState()
+			})
 		// Phase 1: PreviewSessionService mirrors events to ~/.aihydro/preview_session/
 		// and ~/.aihydro/preview_events/ for MCP-tool consumption.
 		// PreviewCommandWatcher polls ~/.aihydro/preview_commands/ for agent commands
@@ -1402,8 +1410,57 @@ export class Controller {
 	}
 
 	private async syncMapLayerCatalog(): Promise<void> {
-		const catalog = await buildMapLayerCatalogAsync(this.getMapLayers(), this.mapLayerOrder, this.currentMapScope())
+		// Never rewrite the catalog before startup restore has read it: the rewrite would drop what it has not loaded.
+		await this.mapHydration
+		const catalog = await buildMapLayerCatalogAsync(
+			this.getMapLayers(),
+			this.mapLayerOrder,
+			this.currentMapScope(),
+			this.mapOverflowEntries,
+		)
 		await persistMapLayerCatalog(catalog)
+	}
+
+	/** Entries beyond the restore cap (set by startup hydration). They stay in the catalog file. */
+	setMapOverflowEntries(entries: MapLayerCatalogEntry[]): void {
+		this.mapOverflowEntries = entries
+	}
+
+	getMapRestoreState(): { hydrating: boolean; olderCount: number } {
+		return { hydrating: this.mapHydrating, olderCount: this.mapOverflowEntries.length }
+	}
+
+	/** Tells map subscribers whether restore is still running and how many older layers are kept but not loaded. */
+	private emitMapRestoreState(): void {
+		const state = this.getMapRestoreState()
+		this.notifyMapLayerSubscribers(
+			MapLayer.create({
+				id: "__map_restore__",
+				visible: false,
+				metadata: {
+					__operation: "restore_state",
+					hydrating: state.hydrating ? "1" : "0",
+					older_count: String(state.olderCount),
+				},
+			}),
+		)
+	}
+
+	/** Loads the layers kept beyond the restore cap, placing them before the current layers. Returns how many loaded. */
+	async restoreOlderMapLayers(): Promise<number> {
+		await this.mapHydration
+		const entries = this.mapOverflowEntries
+		if (entries.length === 0) {
+			return 0
+		}
+		this.mapOverflowEntries = []
+		const { restoreCatalogEntries } = await import("@core/map/hydrateMapLayers")
+		const added = await restoreCatalogEntries(this, entries, entries.length + this.mapLayers.size)
+		const addedSet = new Set(added)
+		this.mapLayerOrder = [...added, ...this.mapLayerOrder.filter((id) => !addedSet.has(id))]
+		this.emitMapRestoreState()
+		void this.syncMapLayerCatalog()
+		return added.length
 	}
 
 	private notifyMapLayerSubscribers(layer: MapLayer): void {

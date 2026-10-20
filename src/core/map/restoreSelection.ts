@@ -7,6 +7,8 @@
  *      workspace, nothing is restored. Legacy catalogs without a scope are treated as unscoped.
  *   2. Cap: at most MAX_RESTORED_LAYERS entries are restored, the most recently added ones (the end of the
  *      display order). The total is reported so the UI can say "Restored N of M" instead of hiding the rest.
+ *      Entries beyond the cap are returned as `overflow`; the controller carries them through every catalog
+ *      rewrite so they stay on disk and can be restored later.
  */
 import type { MapLayerCatalog, MapLayerCatalogEntry } from "./mapLayerCatalog"
 
@@ -21,6 +23,8 @@ export interface RestoreSelection {
 	outOfScope: number
 	/** Entries skipped by the cap. */
 	capped: number
+	/** The skipped entries themselves (oldest first): kept on disk and restorable on request, never dropped. */
+	overflow: MapLayerCatalogEntry[]
 }
 
 export function orderedCatalogEntries(catalog: MapLayerCatalog): MapLayerCatalogEntry[] {
@@ -38,8 +42,9 @@ export function selectCatalogEntriesToRestore(
 ): RestoreSelection {
 	const all = orderedCatalogEntries(catalog)
 	if (catalog.workspace_root && currentScope && catalog.workspace_root !== currentScope) {
-		return { entries: [], total: all.length, outOfScope: all.length, capped: 0 }
+		return { entries: [], total: all.length, outOfScope: all.length, capped: 0, overflow: [] }
 	}
-	const entries = all.length > cap ? all.slice(all.length - cap) : all
-	return { entries, total: all.length, outOfScope: 0, capped: all.length - entries.length }
+	const split = Math.max(0, all.length - cap)
+	const entries = all.slice(split)
+	return { entries, total: all.length, outOfScope: 0, capped: split, overflow: all.slice(0, split) }
 }
