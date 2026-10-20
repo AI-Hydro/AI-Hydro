@@ -22,6 +22,7 @@ import { shouldInlineHtml } from "@services/artifact-preview/inlineHtmlPolicy"
 import { geoFormatConverter } from "@services/geo/GeoFormatConverter"
 import { GeoConversionError } from "@services/geo/types"
 import { McpHub } from "@services/mcp/McpHub"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { ApiProvider, ModelInfo } from "@shared/api"
 import { ChatContent } from "@shared/ChatContent"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
@@ -862,13 +863,10 @@ export class Controller {
 			// "Installed", progress rings, and a "Continue" affordance without an
 			// extra round-trip.
 			const fsp = await import("fs/promises")
-			const osMod = await import("os")
 			const pathMod = await import("path")
 			let registry: Record<string, any> = {}
 			try {
-				registry = JSON.parse(
-					await fsp.readFile(pathMod.join(osMod.homedir(), ".aihydro", "modules", "installed.json"), "utf-8"),
-				)
+				registry = JSON.parse(await fsp.readFile(aihydroPath("modules", "installed.json"), "utf-8"))
 			} catch {
 				// no modules installed yet
 			}

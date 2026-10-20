@@ -41,6 +41,6 @@ Downloads require `https`, redirects are re-checked against the allowlist, modul
 - Opaque-origin documents cannot use `localStorage`, `sessionStorage` or cookies.
 - Learning Pack signatures prove who built a pack, not that its code is harmless; **Allow execution** is still your decision.
 
-## Follow-ups
+## State directory
 
-- `TODO(PR60)`: resolve the `~/.aihydro` base path through `AIHYDRO_HOME` (marketplace install roots, pack store, course pointer files) once AI-Hydro/AI-Hydro#60 merges, so the trust classification and the install locations agree.
+The Learning Pack store, the marketplace install roots (`modules/`, `courses/`) and the trust classification all resolve the AI-Hydro state directory through `aihydroHome()` (`$AIHYDRO_HOME`, otherwise `~/.aihydro`), so what is installed and what is classified as unsigned always agree.

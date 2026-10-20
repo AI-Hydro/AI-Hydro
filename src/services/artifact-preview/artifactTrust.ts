@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises"
-import * as os from "node:os"
 import * as path from "node:path"
 import { type ArtifactTrustSource, isTrustedArtifactSource } from "@shared/artifactTrust"
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import { isIsolatedLocalE2E } from "@/services/test/isIsolatedLocalE2E"
 
 /**
@@ -83,14 +83,14 @@ export function containedBy(candidate: string, parent: string): boolean {
 }
 
 /** Marketplace install roots (modules and courses). Their content is unsigned. */
-export function marketplaceInstallRoots(home = os.homedir()): string[] {
-	return [path.join(home, ".aihydro", "modules"), path.join(home, ".aihydro", "courses")]
+export function marketplaceInstallRoots(aihydroDir = aihydroHome()): string[] {
+	return [path.join(aihydroDir, "modules"), path.join(aihydroDir, "courses")]
 }
 
 /** Symlink-safe: both sides are resolved with realpath before comparing. */
-export async function isUnsignedMarketplacePath(fsPath: string, home = os.homedir()): Promise<boolean> {
+export async function isUnsignedMarketplacePath(fsPath: string, aihydroDir = aihydroHome()): Promise<boolean> {
 	const resolved = await realpathOr(fsPath)
-	for (const root of marketplaceInstallRoots(home)) {
+	for (const root of marketplaceInstallRoots(aihydroDir)) {
 		if (containedBy(resolved, await realpathOr(root))) {
 			return true
 		}
@@ -127,12 +127,12 @@ async function isE2ETrustedFixture(fsPath: string, env: NodeJS.ProcessEnv): Prom
  */
 export async function classifyArtifactFile(
 	fsPath: string,
-	opts: { installedPack: boolean; home?: string; env?: NodeJS.ProcessEnv },
+	opts: { installedPack: boolean; aihydroDir?: string; env?: NodeJS.ProcessEnv },
 ): Promise<ArtifactTrustSource> {
 	if (opts.installedPack) {
 		return "learning-pack"
 	}
-	if (await isUnsignedMarketplacePath(fsPath, opts.home)) {
+	if (await isUnsignedMarketplacePath(fsPath, opts.aihydroDir)) {
 		return "unsigned-module"
 	}
 	if (await isE2ETrustedFixture(fsPath, opts.env ?? process.env)) {

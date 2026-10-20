@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import * as fs from "node:fs/promises"
-import * as os from "node:os"
 import * as path from "node:path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { minVersion } from "semver"
 import { type InstalledLearningPackVersion, loadLearningPackRegistry } from "./learningPackLifecycle"
 import { learningPackStoragePaths } from "./lifecycleStorage"
@@ -42,7 +42,7 @@ export function parseInstalledLearningPackScope(value: unknown): InstalledLearni
 }
 
 export function defaultLearningPackRoot(): string {
-	return process.env.AIHYDRO_LEARNING_PACK_ROOT || path.join(os.homedir(), ".aihydro", "learning-packs")
+	return process.env.AIHYDRO_LEARNING_PACK_ROOT || aihydroPath("learning-packs")
 }
 
 export function containedBy(candidate: string, parent: string): boolean {

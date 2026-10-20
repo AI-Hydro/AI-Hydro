@@ -1,9 +1,8 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { Empty } from "@shared/proto/cline/common"
 import type { DeleteSkillRequest } from "@shared/proto/cline/skills"
 import { SkillSource } from "@shared/proto/cline/skills"
 import * as fs from "fs/promises"
-import * as os from "os"
-import * as path from "path"
 import type { Controller } from "../index"
 import { resolveSkillDir } from "./skillPaths"
 
@@ -17,7 +16,7 @@ export async function deleteSkill(_controller: Controller, request: DeleteSkillR
 		await fs.rm(skillDir, { recursive: true, force: true })
 
 		// Remove from installed.json
-		const registryPath = path.join(os.homedir(), ".aihydro", "skills", "installed.json")
+		const registryPath = aihydroPath("skills", "installed.json")
 		try {
 			const registry = JSON.parse(await fs.readFile(registryPath, "utf-8"))
 			delete registry[skillId]

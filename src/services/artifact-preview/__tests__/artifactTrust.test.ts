@@ -103,10 +103,12 @@ describe("executionDenialMessage", () => {
 describe("artifact source classification", () => {
 	let tmp: string
 	let home: string
+	let aihydroDir: string
 
 	beforeEach(() => {
 		tmp = mkdtempSync(path.join(os.tmpdir(), "aihydro-trust-"))
 		home = path.join(tmp, "home")
+		aihydroDir = path.join(home, ".aihydro")
 		mkdirSync(home, { recursive: true })
 	})
 	afterEach(() => rmSync(tmp, { recursive: true, force: true }))
@@ -125,12 +127,12 @@ describe("artifact source classification", () => {
 
 	it("is a static document by default", async () => {
 		const file = writeDoc("ws/dashboard.html", "<html>external</html>")
-		expect(await classifyArtifactFile(file, { installedPack: false, home, env: {} })).to.equal("document")
+		expect(await classifyArtifactFile(file, { installedPack: false, aihydroDir, env: {} })).to.equal("document")
 	})
 
 	it("is a learning pack module when the verified pack registry resolves it", async () => {
 		const file = writeDoc("ws/m.html", "<html></html>")
-		expect(await classifyArtifactFile(file, { installedPack: true, home, env: {} })).to.equal("learning-pack")
+		expect(await classifyArtifactFile(file, { installedPack: true, aihydroDir, env: {} })).to.equal("learning-pack")
 	})
 
 	it("has no provenance-record trust origin: a record in the workspace or home grants nothing", async () => {
@@ -138,17 +140,17 @@ describe("artifact source classification", () => {
 		const file = writeDoc("repo/cloned.html", body)
 		writeDoc("repo/.aihydro/artifact-records/x.json", JSON.stringify({ schema: "aihydro-artifact-record-v1" }))
 		writeDoc("home/.aihydro/artifact-records/x.json", JSON.stringify({ schema: "aihydro-artifact-record-v1" }))
-		expect(await classifyArtifactFile(file, { installedPack: false, home, env: {} })).to.equal("document")
+		expect(await classifyArtifactFile(file, { installedPack: false, aihydroDir, env: {} })).to.equal("document")
 	})
 
 	it("marks files under the marketplace install roots as unsigned modules", async () => {
 		const moduleFile = writeDoc("home/.aihydro/modules/m1/module.html", "<html></html>")
 		const courseFile = writeDoc("home/.aihydro/courses/c1/m1/module.html", "<html></html>")
-		expect(await isUnsignedMarketplacePath(moduleFile, home)).to.equal(true)
-		expect(await isUnsignedMarketplacePath(courseFile, home)).to.equal(true)
+		expect(await isUnsignedMarketplacePath(moduleFile, aihydroDir)).to.equal(true)
+		expect(await isUnsignedMarketplacePath(courseFile, aihydroDir)).to.equal(true)
 		const lookalike = writeDoc("home/.aihydro/modules-evil/x.html", "<html></html>")
-		expect(await isUnsignedMarketplacePath(lookalike, home)).to.equal(false)
-		expect(await classifyArtifactFile(moduleFile, { installedPack: false, home, env: {} })).to.equal("unsigned-module")
+		expect(await isUnsignedMarketplacePath(lookalike, aihydroDir)).to.equal(false)
+		expect(await classifyArtifactFile(moduleFile, { installedPack: false, aihydroDir, env: {} })).to.equal("unsigned-module")
 	})
 
 	it("sees through a symlink into the marketplace install root", async function () {
@@ -160,7 +162,7 @@ describe("artifact source classification", () => {
 		} catch {
 			this.skip() // symlinks need privileges on some Windows runners
 		}
-		expect(await classifyArtifactFile(link, { installedPack: false, home, env: {} })).to.equal("unsigned-module")
+		expect(await classifyArtifactFile(link, { installedPack: false, aihydroDir, env: {} })).to.equal("unsigned-module")
 	})
 
 	describe("e2e-fixture", () => {
@@ -168,20 +170,20 @@ describe("artifact source classification", () => {
 			const listed = writeDoc("ws/fixtures/a.html", "<html></html>")
 			const other = writeDoc("ws/other/b.html", "<html></html>")
 			const env = e2eEnv(path.join(tmp, "ws", "fixtures"))
-			expect(await classifyArtifactFile(listed, { installedPack: false, home, env })).to.equal("e2e-fixture")
-			expect(await classifyArtifactFile(other, { installedPack: false, home, env })).to.equal("document")
+			expect(await classifyArtifactFile(listed, { installedPack: false, aihydroDir, env })).to.equal("e2e-fixture")
+			expect(await classifyArtifactFile(other, { installedPack: false, aihydroDir, env })).to.equal("document")
 			// Same variable without the isolated-host markers is ignored.
 			expect(
 				await classifyArtifactFile(listed, {
 					installedPack: false,
-					home,
+					aihydroDir,
 					env: { AIHYDRO_E2E_TRUSTED_FIXTURES: path.join(tmp, "ws", "fixtures") },
 				}),
 			).to.equal("document")
 			expect(
 				await classifyArtifactFile(listed, {
 					installedPack: false,
-					home,
+					aihydroDir,
 					env: { ...env, AIHYDRO_ENVIRONMENT: "production" },
 				}),
 			).to.equal("document")
@@ -189,8 +191,8 @@ describe("artifact source classification", () => {
 
 		it("never overrides the unsigned marketplace label", async () => {
 			const file = writeDoc("home/.aihydro/modules/m1/module.html", "<html></html>")
-			const env = e2eEnv(path.join(home, ".aihydro", "modules"))
-			expect(await classifyArtifactFile(file, { installedPack: false, home, env })).to.equal("unsigned-module")
+			const env = e2eEnv(path.join(aihydroDir, "modules"))
+			expect(await classifyArtifactFile(file, { installedPack: false, aihydroDir, env })).to.equal("unsigned-module")
 		})
 	})
 })
