@@ -14,6 +14,7 @@ import { ApiHandler, type CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { normalizeOpenAiStyleUsage, OpenAiStyleUsageInput } from "../transform/usage"
 
 export interface OcaHandlerOptions extends CommonApiHandlerOptions {
 	ocaBaseUrl?: string
@@ -233,24 +234,15 @@ export class OcaHandler implements ApiHandler {
 				const totalCost =
 					(inputCost * chunk.usage.prompt_tokens) / 1e6 + (outputCost * chunk.usage.completion_tokens) / 1e6
 
-				// Extract cache-related information if available
-				// Need to use type assertion since these properties are not in the standard OpenAI types
-				const usage = chunk.usage as {
-					prompt_tokens: number
-					completion_tokens: number
-					cache_creation_input_tokens?: number
-					prompt_cache_miss_tokens?: number
-					cache_read_input_tokens?: number
-					prompt_cache_hit_tokens?: number
-				}
-
-				const cacheWriteTokens = usage.cache_creation_input_tokens || usage.prompt_cache_miss_tokens || 0
-				const cacheReadTokens = usage.cache_read_input_tokens || usage.prompt_cache_hit_tokens || 0
+				// Detect the shape (Anthropic-style creation/read, or DeepSeek-style hit/miss) and report the meter convention.
+				const u = normalizeOpenAiStyleUsage(chunk.usage as OpenAiStyleUsageInput)
+				const cacheWriteTokens = u.cacheWriteTokens
+				const cacheReadTokens = u.cacheReadTokens
 
 				yield {
 					type: "usage",
-					inputTokens: usage.prompt_tokens || 0,
-					outputTokens: usage.completion_tokens || 0,
+					inputTokens: u.uncachedInputTokens,
+					outputTokens: u.outputTokens,
 					cacheWriteTokens: cacheWriteTokens > 0 ? cacheWriteTokens : undefined,
 					cacheReadTokens: cacheReadTokens > 0 ? cacheReadTokens : undefined,
 					totalCost,
