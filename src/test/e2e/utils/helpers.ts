@@ -1,13 +1,5 @@
 import { execFileSync } from "node:child_process"
-import {
-	existsSync,
-	mkdirSync,
-	mkdtempSync,
-	type PathLike,
-	type RmOptions,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, type PathLike, type RmOptions, rmSync, writeFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ElectronApplication, expect, type Frame, type Page, test } from "@playwright/test"
@@ -572,11 +564,29 @@ export const e2e = test
 		},
 	})
 	.extend({
-		page: async ({ app }, use) => {
+		page: async ({ app }, use, testInfo) => {
 			const page = await app.firstWindow()
+			// Playwright's `trace` option only covers contexts it creates itself; this window comes
+			// from _electron.launch, so tracing is started here. Traces and a screenshot are kept for
+			// failures only (retain-on-failure) so passing runs stay light.
+			const tracing = page.context().tracing
+			let tracingStarted = false
+			try {
+				await tracing.start({ screenshots: true, snapshots: true })
+				tracingStarted = true
+			} catch {
+				// Diagnostics must never fail a test.
+			}
 			try {
 				await use(page)
 			} finally {
+				const failed = testInfo.status !== testInfo.expectedStatus
+				if (failed && !page.isClosed()) {
+					await page.screenshot({ path: testInfo.outputPath("failure.png") }).catch(() => undefined)
+				}
+				if (tracingStarted) {
+					await tracing.stop(failed ? { path: testInfo.outputPath("trace.zip") } : undefined).catch(() => undefined)
+				}
 				// Ensure proper cleanup: Close the page if it's still open and not already closed by app.close()
 				// This provides a common teardown mechanism for all e2e tests without requiring explicit page.close() calls
 				if (!page.isClosed()) {

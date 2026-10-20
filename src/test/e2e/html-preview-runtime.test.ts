@@ -1,7 +1,7 @@
 import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { expect, type Frame, type Locator, type Page } from "@playwright/test"
+import { expect, type Frame, type Locator, type Page, test } from "@playwright/test"
 import { allowArtifactExecution, E2ETestHelper, e2e, writeUserSettings } from "./utils/helpers"
 
 const runtimeE2E = e2e.extend<{ workspaceDir: string; e2eTrustedPaths: string[] }>({
@@ -84,6 +84,12 @@ async function openQuickInputWithRow(page: Page, shortcut: string, text: string,
 			await quickOpenInput.waitFor({ state: "visible", timeout: 10_000 })
 			await quickOpenInput.fill(text)
 			await expect(file).toBeVisible({ timeout: 15_000 })
+			if (attempt > 1) {
+				// Keep flake frequency visible in CI instead of silently absorbing it.
+				const description = `quick input "${text}" needed ${attempt} attempts (${shortcut})`
+				test.info().annotations.push({ type: "quick-input-retry", description })
+				console.warn(`quick-input-retry: ${description}`)
+			}
 			return quickOpenInput
 		} catch (error) {
 			lastError = error
@@ -486,6 +492,7 @@ runtimeE2E("A document script cannot grant itself execution or reach the shell @
 	expect(reached.parentDom).toBe("SecurityError")
 	expect(reached.parentProps).toBe("SecurityError")
 	expect(reached.top).toBe("SecurityError")
+	expect(reached.error, "attack script must not have thrown").toBeUndefined()
 	// Popups (one closed at once, one with a severed opener) forged host-only replies too. Whether the
 	// host window lets them open is environment-dependent, so only record it; what must hold is below.
 	expect(Array.isArray((reached as unknown as { popups?: unknown[] }).popups)).toBe(true)
