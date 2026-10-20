@@ -9,7 +9,7 @@ import { ArtifactKernelService } from "../ArtifactKernelService"
 import type { KernelProfile } from "../KernelProfile"
 
 const RUNNER = path.resolve(process.cwd(), "src", "services", "artifact-preview", "artifact_kernel_runner.py")
-const PYTHON = process.env.AIHYDRO_TEST_PYTHON || "python3"
+const PYTHON = process.env.AIHYDRO_TEST_PYTHON || process.env.AIHYDRO_E2E_PYTHON || "python3"
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // Real kernel processes, real protocol: only the VS Code surface is faked.

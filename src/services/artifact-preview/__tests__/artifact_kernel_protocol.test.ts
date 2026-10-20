@@ -7,7 +7,7 @@ import { afterEach, describe, it } from "mocha"
 // Resolved from the repo root (where mocha runs) rather than import.meta/__dirname,
 // so this spec loads under both the CommonJS and ESM unit-test loaders.
 const RUNNER = path.resolve(process.cwd(), "src", "services", "artifact-preview", "artifact_kernel_runner.py")
-const PYTHON = process.env.AIHYDRO_TEST_PYTHON || "python3"
+const PYTHON = process.env.AIHYDRO_TEST_PYTHON || process.env.AIHYDRO_E2E_PYTHON || "python3"
 
 type Response = Record<string, any>
 
