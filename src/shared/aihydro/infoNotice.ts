@@ -53,11 +53,14 @@ export function infoNoticeFor(infoClass: InfoClass, detail?: InfoDetail): InfoNo
 /** Level an MCP server attached to a notification (RFC 5424 names, as in the MCP logging capability). */
 export type McpNotificationLevel = "debug" | "info" | "notice" | "warning" | "error" | "critical" | "alert" | "emergency"
 
-const ELEVATED: readonly string[] = ["warning", "error", "critical", "alert", "emergency"]
+const QUIET: readonly string[] = ["debug", "info", "notice"]
 
-/** Warning and above: the presenter lifts these and the row uses the warning style. */
+/**
+ * Warning and above: the presenter lifts these and the row uses the warning style. A missing level is an old row
+ * (quiet); a non-empty level we do not recognise is elevated, so it is lifted rather than folded away.
+ */
 export function isElevatedMcpLevel(level: string | undefined): boolean {
-	return level !== undefined && ELEVATED.includes(level)
+	return level !== undefined && level !== "" && !QUIET.includes(level)
 }
 
 /** Host-recorded evidence a `say` may attach to its row (spread onto the message; absent = none recorded). */

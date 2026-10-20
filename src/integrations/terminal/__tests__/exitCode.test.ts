@@ -2,7 +2,7 @@ import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
-import { parseExitFromChunk } from "../shellExit"
+import { ExitMarkScanner, parseExitFromChunk } from "../shellExit"
 import { TerminalProcess } from "../TerminalProcess"
 
 const ESC = "\x1b"
@@ -23,6 +23,32 @@ describe("parseExitFromChunk (OSC 633;D)", () => {
 	it("a D with no code is unknown; no D is undefined", () => {
 		expect(parseExitFromChunk(`${osc("C")}x${osc("D")}`)).to.equal("unknown")
 		expect(parseExitFromChunk("plain output")).to.equal(undefined)
+	})
+})
+
+describe("exit mark spoofing and split sequences", () => {
+	it("output text that merely contains 633;D;0 is not a mark", () => {
+		expect(parseExitFromChunk(`${osc("C")}echo 633;D;0 and ]633;D;0 and \x1b]633;D;0 unterminated`)).to.equal(undefined)
+		expect(parseExitFromChunk(`${osc("C")}fake 633;D;0\n${osc("D;3")}`)).to.equal(3)
+	})
+
+	it("a mark split across chunks is reassembled, at any split point", () => {
+		const whole = `${osc("C")}out\n${osc("D;42")}`
+		for (let i = 1; i < whole.length; i++) {
+			const sc = new ExitMarkScanner()
+			sc.push(whole.slice(0, i))
+			expect(sc.push(whole.slice(i)), `split at ${i}`).to.equal(42)
+		}
+	})
+
+	it("an unterminated trailing sequence yields no code yet", () => {
+		const sc = new ExitMarkScanner()
+		expect(sc.push(`${osc("C")}x\x1b]633;D;1`)).to.equal(undefined)
+		expect(sc.push("\x07")).to.equal(1)
+	})
+
+	it("accepts the ST terminator", () => {
+		expect(parseExitFromChunk(`${osc("C")}x\x1b]633;D;5\x1b\\`)).to.equal(5)
 	})
 })
 

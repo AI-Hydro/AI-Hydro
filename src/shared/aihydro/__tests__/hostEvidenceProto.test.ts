@@ -36,6 +36,19 @@ describe("host evidence survives the proto/partial path (W2-0h)", () => {
 		expect(roundTrip(cmd(1)).policyClass).to.equal("subagent_launch")
 	})
 
+	it("severity comes from the class; an unknown class with garbled severity is a warning", () => {
+		const p = (infoClass: string, infoSeverity: string) =>
+			convertProtoToAiHydroMessage({
+				...convertAiHydroMessageToProto({ ts: 1, type: "say", say: "info", text: "x" }),
+				infoClass,
+				infoSeverity,
+			}).infoNotice?.severity
+		expect(p("native_call_repaired", "")).to.equal("info")
+		expect(p("context_truncated", "info")).to.equal("warning") // stored severity disagrees: class wins
+		expect(p("some_future_class", "")).to.equal("warning")
+		expect(p("some_future_class", "garbage")).to.equal("warning")
+	})
+
 	it("an old row (plain string info, no evidence) gains no evidence fields", () => {
 		const out = roundTrip({ ts: 3, type: "say", say: "info", text: "malformed tool call; retried" })
 		expect(out).to.deep.equal({ ts: 3, type: "say", say: "info", text: "malformed tool call; retried" })

@@ -1386,6 +1386,8 @@ export class Task {
 			this.activeForegroundCommand = undefined
 			this.controller.updateBackgroundCommandState(false, this.taskId)
 
+			// A "continue while running" row must get the settled exit code, not the provisional one.
+			await Promise.race([process.exitSettled ?? Promise.resolve(), setTimeoutPromise(500)])
 			await this.recordCommandExit(process.exitCode)
 			// Mark the command message as completed
 			const aihydroMessages = this.messageStateHandler.getAiHydroMessages()

@@ -25,7 +25,8 @@ describe("infoNotice (W2-0h)", () => {
 		for (const l of ["warning", "error", "critical", "alert", "emergency"]) {
 			expect(isElevatedMcpLevel(l), l).to.equal(true)
 		}
-		for (const l of ["debug", "info", "notice", undefined]) {
+		expect(isElevatedMcpLevel("fatal"), "unrecognised non-empty level").to.equal(true)
+		for (const l of ["debug", "info", "notice", "", undefined]) {
 			expect(isElevatedMcpLevel(l), String(l)).to.equal(false)
 		}
 	})

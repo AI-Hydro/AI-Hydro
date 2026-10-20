@@ -1,5 +1,5 @@
 import type { CommandPolicyClass } from "@shared/aihydro/commandEvidence"
-import type { InfoNotice, McpNotificationLevel } from "@shared/aihydro/infoNotice"
+import { INFO_CLASS_SEVERITY, INFO_CLASSES, type InfoNotice, type McpNotificationLevel } from "@shared/aihydro/infoNotice"
 import {
 	AiHydroAsk as AppAiHydroAsk,
 	AiHydroMessage as AppAiHydroMessage,
@@ -285,9 +285,16 @@ export function convertProtoToAiHydroMessage(protoMessage: ProtoClineMessage): A
 
 	// AI-Hydro host evidence: only set when recorded, so old tasks stay byte-identical.
 	if (protoMessage.infoClass !== "") {
+		// Trust the class over the stored severity; an unknown class with an empty or garbled severity is a warning,
+		// so only a known informational class (native_call_repaired) can fold.
+		const known = (INFO_CLASSES as readonly string[]).includes(protoMessage.infoClass)
 		const notice: InfoNotice = {
 			class: protoMessage.infoClass as InfoNotice["class"],
-			severity: protoMessage.infoSeverity === "warning" ? "warning" : "info",
+			severity: known
+				? INFO_CLASS_SEVERITY[protoMessage.infoClass as InfoNotice["class"]]
+				: protoMessage.infoSeverity === "info"
+					? "info"
+					: "warning",
 		}
 		if (protoMessage.infoDetailJson !== "") {
 			try {

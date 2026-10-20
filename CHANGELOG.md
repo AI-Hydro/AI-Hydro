@@ -20,7 +20,7 @@ Events that were silent or indistinguishable now leave honest data on their rows
 - **MCP notification level** is carried on `mcp_notification` rows (`mcpLevel`); warning and above use the warning colour.
 - **Command exit code.** The VS Code terminal path records the exit code (shell-integration end event, falling back to the OSC 633;D mark) on the command row as `exitCode`. A non-zero code sets `execOutcome: "failed"`. When the code cannot be observed (no shell integration, detached or cancelled command, standalone host) the row records `exitCode: "unknown"` and `execOutcome: "unknown"`, never success. The model-facing result now reads "Command executed (exit code N)." or "(exit code unavailable)".
 - **Policy class on commands.** Command rows the host policy flagged carry `policyClass`: `subagent_launch`, `protected_path`, `auto_run_all`, `model_requested_approval`, `not_read_only`. Unflagged: "auto-run off" asks and host-classified read-only runs.
-- **Proto path.** Additive `ClineMessage` fields 1001-1007 (`info_class`, `info_severity`, `info_detail_json`, `mcp_level`, `exit_code_state`, `exit_code`, `policy_class`) round-trip through `convertAiHydroMessageToProto` / `convertProtoToAiHydroMessage`. `execOutcome` gains the value `"unknown"`; W2-0's mapper fix must carry it.
+- **Proto path.** Additive `ClineMessage` fields 1004-1010 (`info_class`, `info_severity`, `info_detail_json`, `mcp_level`, `exit_code_state`, `exit_code`, `policy_class`) round-trip through `convertAiHydroMessageToProto` / `convertProtoToAiHydroMessage`. `execOutcome` gains the value `"unknown"`; W2-0's mapper fix must carry it.
 
 ### Fixed — keyless basemaps (vision-2040, branch `vision2040/basemap-keyless`)
 
