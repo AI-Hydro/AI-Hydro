@@ -34,7 +34,8 @@ export interface FirstPartyLauncher {
 	/**
 	 * Hash of the launch CONTEXT the extension registered: the entry's `env` and `cwd` (see `launchContextHash`).
 	 * `PYTHONPATH`/`PATH` in `env` or a different `cwd` change what the same command line actually runs, so they are
-	 * part of the identity. A record written before this field existed has none and is read as the EMPTY context:
+	 * part of the identity. It covers ONLY the entry's own `env` and `cwd`: a PATH inherited from the process
+	 * environment is not hashed, so a bare command is resolved by the host's PATH at launch. A record written before this field existed has none and is read as the EMPTY context:
 	 * an entry that carries env/cwd then fails toward a human confirmation, never a silent adoption.
 	 */
 	launchHash?: string

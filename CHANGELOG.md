@@ -11,6 +11,13 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Fixed — native tool-call repair follow-up (vision-2040, branch `vision2040/native-repair-followup`)
+
+- A DeepSeek native envelope that is not the last thing in the message (prose or a closing fence after it) or is unclosed no longer vanishes: the text is shown, nothing runs, and one muted line says "Native tool call not at end of message; not run." (or the malformed notice).
+- A first-party-named but untrusted server is no longer a routing target for a repaired call while a trusted first-party server is connected (anti-confusion, not a security control; approval is the control).
+- Security fix: a non-trailing envelope is now neutralised (`<` escaped) before the transcript is re-parsed, so protocol tags nested inside it (for example `<execute_command>` in a parameter) can never become a tool call; its raw text is shown behind the muted notice.
+- Documented: built-in parameters with tags are refused in the envelope, a repaired call can reach a lone untrusted owner (approval names the server), and the trust hash does not cover a process-inherited PATH.
+
 ### Fixed — session-study quick fixes (vision-2040, branch `vision2040/session-study-quick`; study items U1 U2 U5 U6 M2 S6 M5)
 
 - **Scroll to bottom no longer hides the buttons.** It is a 24px floating round button (bottom right of the transcript, accessible name "Scroll to bottom"); Run / Deny, Start New Task and other asks always render their buttons.
