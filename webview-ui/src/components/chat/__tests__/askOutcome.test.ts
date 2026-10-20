@@ -1,5 +1,5 @@
-import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import { callRowIndexToRecord, deriveCallState, recordedOutcomeFor } from "@shared/aihydro/askOutcome"
+import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
 
 const ask = (extra: Partial<AiHydroMessage> = {}): AiHydroMessage => ({ ts: 1, type: "ask", ask: "tool", text: "{}", ...extra })
@@ -85,6 +85,11 @@ describe("deriveCallState: say rows are emitted before the tool starts", () => {
 	it("unknown when the turn advanced with no evidence (recorded before completion was tracked)", () => {
 		const row = say(1, "tool")
 		expect(deriveCallState(row, [row, say(2, "api_req_started")])).toBe("unknown")
+	})
+	it("unknown, not running forever, when a later ask (e.g. resume_task after an interruption) follows with no evidence", () => {
+		const row = say(1, "tool")
+		const resume: AiHydroMessage = { ts: 2, type: "ask", ask: "resume_task", text: "" }
+		expect(deriveCallState(row, [row, resume])).toBe("unknown")
 	})
 })
 

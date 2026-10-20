@@ -1,4 +1,3 @@
-import { callRowIndexToRecord } from "@shared/aihydro/askOutcome"
 import * as path from "node:path"
 import { ApiHandler, ApiProviderInfo } from "@core/api"
 import { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
@@ -9,6 +8,7 @@ import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import { featureFlagsService } from "@services/feature-flags"
 import { McpHub } from "@services/mcp/McpHub"
 import { telemetryService } from "@services/telemetry"
+import { callRowIndexToRecord } from "@shared/aihydro/askOutcome"
 import { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
 import { AiHydroDefaultTool } from "@shared/tools"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
@@ -23,6 +23,7 @@ import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
+import { explorerBlockReason } from "./explorerPolicy"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
@@ -50,7 +51,6 @@ import { WriteToFileToolHandler } from "./tools/handlers/WriteToFileToolHandler"
 import { IPartialBlockHandler, SharedToolHandler, ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator"
 import { repairToolParams } from "./tools/ToolInputRepair"
 import { ToolValidator } from "./tools/ToolValidator"
-import { explorerBlockReason } from "./explorerPolicy"
 import { TaskConfig, validateTaskConfig } from "./tools/types/TaskConfig"
 import { createUIHelpers } from "./tools/types/UIHelpers"
 import { ToolDisplayUtils } from "./tools/utils/ToolDisplayUtils"
@@ -279,11 +279,20 @@ export class ToolExecutor {
 		"is blocked by the .aihydroignore",
 	]
 
+	/**
+	 * A tool error is reported at the head of the result. Only the first few hundred characters are checked, so a
+	 * successful result that merely contains a marker (e.g. reading a file that quotes one) is not marked failed.
+	 */
+	static isToolErrorResult(content: string): boolean {
+		const head = content.slice(0, 300)
+		return ToolExecutor.TOOL_ERROR_MARKERS.some((marker) => head.includes(marker))
+	}
+
 	private recordIfToolError(content: ToolResponse, block: ToolUse) {
 		if (typeof content !== "string") {
 			return
 		}
-		if (!ToolExecutor.TOOL_ERROR_MARKERS.some((marker) => content.includes(marker))) {
+		if (!ToolExecutor.isToolErrorResult(content)) {
 			return
 		}
 		const entry = `[${block.name}] ${content.replace(/\s+/g, " ").trim()}`.slice(0, 300)
@@ -298,7 +307,7 @@ export class ToolExecutor {
 	 * instead of inferring it from the approval. A denied call never ran, so it is not marked.
 	 */
 	private async recordExecution(content: ToolResponse): Promise<void> {
-		const failed = typeof content === "string" && ToolExecutor.TOOL_ERROR_MARKERS.some((marker) => content.includes(marker))
+		const failed = typeof content === "string" && ToolExecutor.isToolErrorResult(content)
 		const index = callRowIndexToRecord(this.messageStateHandler.getAiHydroMessages())
 		if (index >= 0) {
 			await this.messageStateHandler.updateAiHydroMessage(index, { execOutcome: failed ? "failed" : "completed" })

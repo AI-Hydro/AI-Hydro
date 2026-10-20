@@ -130,7 +130,9 @@ export function deriveCallState(message: AiHydroMessage, messages: readonly AiHy
 	if (evidence === "running") {
 		return "running"
 	}
-	const turnAdvanced = later.some((row) => row.say === "api_req_started")
+	// The turn has moved on once a new API request starts or any later ask appears (including resume_task after an
+	// interruption); without evidence the call is then "unknown", never "running" forever.
+	const turnAdvanced = later.some((row) => row.say === "api_req_started" || row.type === "ask")
 	return turnAdvanced ? "unknown" : "running"
 }
 
