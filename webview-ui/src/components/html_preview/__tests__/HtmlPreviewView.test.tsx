@@ -116,7 +116,7 @@ function openKebabMenu() {
 describe("HtmlPreviewView", () => {
 	it("renders empty state when no item is provided", () => {
 		render(<HtmlPreviewView />)
-		expect(screen.getByText("No HTML preview active")).toBeInTheDocument()
+		expect(screen.getByText("No document open in AI-Hydro Studio")).toBeInTheDocument()
 	})
 
 	it("falls back to src=item.webviewUri when htmlContent is empty", () => {
@@ -325,6 +325,47 @@ describe("HtmlPreviewView", () => {
 				"*",
 			)
 		})
+	})
+
+	it("runs A, B and C clicked while the kernel is busy in order, answering each cell once", async () => {
+		runArtifactCodeMock.mockReset()
+		let releaseA: (() => void) | undefined
+		const calls: string[] = []
+		runArtifactCodeMock.mockImplementation(async (req: { code: string }) => {
+			calls.push(req.code)
+			if (req.code === "A") {
+				await new Promise<void>((resolve) => {
+					releaseA = resolve
+				})
+			}
+			return { stdout: `${req.code}\n`, stderr: "", status: "ok", error: "", resultRepr: "" }
+		})
+		const { container } = render(<HtmlPreviewView item={trustedAllowedItem} />)
+		const iframe = container.querySelector("iframe") as HTMLIFrameElement
+		const postMessage = vi.fn()
+		Object.defineProperty(iframe, "contentWindow", { value: { postMessage }, configurable: true })
+		const send = (code: string, cellId: string) => {
+			const event = new MessageEvent("message", {
+				data: { source: "aihydro-artifact", type: "artifact/runCode", language: "python", code, cellId },
+			})
+			Object.defineProperty(event, "source", { value: iframe.contentWindow, configurable: true })
+			window.dispatchEvent(event)
+		}
+		send("A", "cell-a")
+		await vi.waitFor(() => expect(calls).toEqual(["A"]))
+		send("B", "cell-b")
+		send("C", "cell-c")
+		send("C2", "cell-c") // same cell still waiting: coalesces to the newest code, keeps its place
+		releaseA?.()
+		await vi.waitFor(() => expect(calls).toEqual(["A", "B", "C2"]))
+		await vi.waitFor(() => {
+			const answered = postMessage.mock.calls
+				.map((c) => c[0])
+				.filter((m) => m?.type === "artifact/runCodeResult")
+				.map((m) => m.cellId)
+			expect(answered).toEqual(["cell-a", "cell-b", "cell-c"])
+		})
+		runArtifactCodeMock.mockReset()
 	})
 
 	it("shows kernel restart in the toolbar", () => {

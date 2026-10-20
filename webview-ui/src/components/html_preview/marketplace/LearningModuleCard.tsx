@@ -2,8 +2,9 @@ import { MarketplaceStarRequest } from "@shared/proto/cline/common"
 import type { LearningModuleItem } from "@shared/proto/cline/html_preview"
 import { InstallModuleRequest } from "@shared/proto/cline/html_preview"
 import { useState } from "react"
-import { httpUrlOrEmpty } from "./safeUrl"
 import { HtmlPreviewServiceClient } from "@/services/grpc-client"
+import { provenanceLine } from "./provenanceLabels"
+import { httpUrlOrEmpty } from "./safeUrl"
 
 interface LearningModuleCardProps {
 	item: LearningModuleItem
@@ -130,13 +131,13 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 						height: 44,
 						borderRadius: 6,
 						flexShrink: 0,
-						background: `linear-gradient(135deg, #0e639c 0%, #06b6d4 100%)`,
+						background: "var(--vscode-button-background, #0e639c)",
 						display: "flex",
 						alignItems: "center",
 						justifyContent: "center",
 						fontSize: 20,
 						fontWeight: 700,
-						color: "#fff",
+						color: "var(--vscode-button-foreground, #fff)",
 					}}>
 					{topicInitial}
 				</div>
@@ -158,12 +159,14 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 						</span>
 						<span
 							style={{
-								fontSize: 10,
+								fontSize: 11,
 								fontWeight: 600,
 								padding: "2px 7px",
 								borderRadius: 10,
 								background: lvl.bg,
-								color: lvl.text,
+								// Foreground text with a hue border: the hue alone failed contrast on tinted fills in light themes.
+								color: "var(--vscode-foreground)",
+								border: `1px solid ${lvl.text}`,
 								textTransform: "capitalize",
 								flexShrink: 0,
 							}}>
@@ -176,6 +179,11 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 							<span style={{ marginLeft: item.author ? 8 : 0 }}>· {item.estimatedMinutes} min</span>
 						)}
 					</div>
+					<div
+						data-testid="module-provenance"
+						style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)", marginTop: 2 }}>
+						{provenanceLine(item.license)}
+					</div>
 					{httpUrlOrEmpty(item.authorUrl) && (
 						<a
 							href={httpUrlOrEmpty(item.authorUrl)}
@@ -184,7 +192,7 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 							style={{
 								color: cyan,
 								display: "inline-block",
-								fontSize: 10,
+								fontSize: 11,
 								marginTop: 2,
 								textDecoration: "none",
 							}}
@@ -208,6 +216,8 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 							fontSize: 13,
 							lineHeight: 1,
 							padding: "4px 7px",
+							minHeight: 24,
+							minWidth: 24,
 						}}
 						title={starred ? "Remove your AI-Hydro star" : "Star this module in AI-Hydro"}
 						type="button">
@@ -218,6 +228,7 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 						onClick={handleInstall}
 						style={{
 							padding: "5px 12px",
+							minHeight: 24,
 							fontSize: 11,
 							fontWeight: 600,
 							background:
@@ -264,30 +275,34 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 
 			{/* Stats row: AI-Hydro recognition + community reactions + downloads */}
 			<div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-				<span
-					style={{
-						display: "flex",
-						alignItems: "center",
-						gap: 4,
-						fontSize: 11,
-						color: "var(--vscode-descriptionForeground)",
-					}}
-					title="AI-Hydro installs">
-					<span className="codicon codicon-cloud-download" style={{ fontSize: 12 }} />
-					<span>{formatCount(aiHydroInstalls)} AI-Hydro installs</span>
-				</span>
-				<span
-					style={{
-						display: "flex",
-						alignItems: "center",
-						gap: 4,
-						fontSize: 11,
-						color: starred ? "#facc15" : "var(--vscode-descriptionForeground)",
-					}}
-					title="AI-Hydro user stars">
-					<span style={{ fontSize: 12, lineHeight: 1 }}>{starred ? "★" : "☆"}</span>
-					<span>{formatCount(aiHydroStars)} AI-Hydro stars</span>
-				</span>
+				{Number(aiHydroInstalls) > 0 && (
+					<span
+						style={{
+							display: "flex",
+							alignItems: "center",
+							gap: 4,
+							fontSize: 11,
+							color: "var(--vscode-descriptionForeground)",
+						}}
+						title="AI-Hydro installs">
+						<span className="codicon codicon-cloud-download" style={{ fontSize: 12 }} />
+						<span>{formatCount(aiHydroInstalls)} AI-Hydro installs</span>
+					</span>
+				)}
+				{Number(aiHydroStars) > 0 && (
+					<span
+						style={{
+							display: "flex",
+							alignItems: "center",
+							gap: 4,
+							fontSize: 11,
+							color: starred ? "#facc15" : "var(--vscode-descriptionForeground)",
+						}}
+						title="AI-Hydro user stars">
+						<span style={{ fontSize: 12, lineHeight: 1 }}>{starred ? "★" : "☆"}</span>
+						<span>{formatCount(aiHydroStars)} AI-Hydro stars</span>
+					</span>
+				)}
 				{item.githubReactions > 0 && (
 					<a
 						href={httpUrlOrEmpty(item.discussionUrl) || httpUrlOrEmpty(item.githubUrl) || undefined}
@@ -346,7 +361,7 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 				{courseTitle && (
 					<span
 						style={{
-							fontSize: 10,
+							fontSize: 11,
 							padding: "2px 7px",
 							borderRadius: 10,
 							background: "rgba(0,221,255,0.12)",
@@ -354,14 +369,14 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 							fontWeight: 500,
 						}}
 						title={`Part of the "${courseTitle}" course`}>
-						<span className="codicon codicon-mortar-board" style={{ fontSize: 10, marginRight: 4 }} />
+						<span className="codicon codicon-mortar-board" style={{ fontSize: 11, marginRight: 4 }} />
 						Part of: {courseTitle}
 					</span>
 				)}
 				{item.topic && (
 					<span
 						style={{
-							fontSize: 10,
+							fontSize: 11,
 							padding: "2px 7px",
 							borderRadius: 10,
 							background: "rgba(0,184,212,0.12)",
@@ -375,7 +390,7 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 					<span
 						key={tag}
 						style={{
-							fontSize: 10,
+							fontSize: 11,
 							padding: "2px 7px",
 							borderRadius: 10,
 							background: "var(--vscode-textBlockQuote-background, rgba(255,255,255,0.05))",
@@ -389,7 +404,7 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 						href={httpUrlOrEmpty(item.githubUrl)}
 						onClick={(e) => e.stopPropagation()}
 						rel="noopener noreferrer"
-						style={{ marginLeft: "auto", fontSize: 10, color: cyan, textDecoration: "none" }}
+						style={{ marginLeft: "auto", fontSize: 11, color: cyan, textDecoration: "none" }}
 						target="_blank">
 						GitHub ↗
 					</a>
@@ -399,7 +414,7 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 						href={httpUrlOrEmpty(item.citationUrl)}
 						onClick={(e) => e.stopPropagation()}
 						rel="noopener noreferrer"
-						style={{ fontSize: 10, color: cyan, textDecoration: "none" }}
+						style={{ fontSize: 11, color: cyan, textDecoration: "none" }}
 						target="_blank">
 						Cite ↗
 					</a>

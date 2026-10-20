@@ -1,9 +1,10 @@
-import { httpUrlOrEmpty } from "./safeUrl"
 import { MarketplaceStarRequest } from "@shared/proto/cline/common"
 import type { CourseCatalogItem } from "@shared/proto/cline/html_preview"
 import { InstallCourseRequest } from "@shared/proto/cline/html_preview"
 import { useState } from "react"
 import { HtmlPreviewServiceClient } from "@/services/grpc-client"
+import { licenseLabel, provenanceLine } from "./provenanceLabels"
+import { httpUrlOrEmpty } from "./safeUrl"
 
 interface CourseCardProps {
 	course: CourseCatalogItem
@@ -266,6 +267,11 @@ const CourseCard = ({ course, setError, onInstalled, onRecognitionChange }: Cour
 							{course.authorAffiliation && <span> · {course.authorAffiliation}</span>}
 							{course.estimatedHours > 0 && <span> · ~{course.estimatedHours}h</span>}
 						</div>
+						<div
+							data-testid="course-provenance"
+							style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)" }}>
+							{provenanceLine(course.license, "course")}
+						</div>
 					</div>
 
 					<div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", flexShrink: 0 }}>
@@ -358,30 +364,34 @@ const CourseCard = ({ course, setError, onInstalled, onRecognitionChange }: Cour
 
 				{/* Stats row: AI-Hydro recognition */}
 				<div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-					<span
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 4,
-							fontSize: 11,
-							color: "var(--vscode-descriptionForeground)",
-						}}
-						title="AI-Hydro installs">
-						<span className="codicon codicon-cloud-download" style={{ fontSize: 12 }} />
-						<span>{formatCount(aiHydroInstalls)} AI-Hydro installs</span>
-					</span>
-					<span
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 4,
-							fontSize: 11,
-							color: starred ? "#facc15" : "var(--vscode-descriptionForeground)",
-						}}
-						title="AI-Hydro user stars">
-						<span style={{ fontSize: 12, lineHeight: 1 }}>{starred ? "★" : "☆"}</span>
-						<span>{formatCount(aiHydroStars)} AI-Hydro stars</span>
-					</span>
+					{Number(aiHydroInstalls) > 0 && (
+						<span
+							style={{
+								display: "flex",
+								alignItems: "center",
+								gap: 4,
+								fontSize: 11,
+								color: "var(--vscode-descriptionForeground)",
+							}}
+							title="AI-Hydro installs">
+							<span className="codicon codicon-cloud-download" style={{ fontSize: 12 }} />
+							<span>{formatCount(aiHydroInstalls)} AI-Hydro installs</span>
+						</span>
+					)}
+					{Number(aiHydroStars) > 0 && (
+						<span
+							style={{
+								display: "flex",
+								alignItems: "center",
+								gap: 4,
+								fontSize: 11,
+								color: starred ? "#facc15" : "var(--vscode-descriptionForeground)",
+							}}
+							title="AI-Hydro user stars">
+							<span style={{ fontSize: 12, lineHeight: 1 }}>{starred ? "★" : "☆"}</span>
+							<span>{formatCount(aiHydroStars)} AI-Hydro stars</span>
+						</span>
+					)}
 				</div>
 
 				<div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -474,7 +484,15 @@ const CourseCard = ({ course, setError, onInstalled, onRecognitionChange }: Cour
 			)}
 
 			{/* License + Citation — surfaced in the expanded view (parity with the Gallery) */}
-			{expanded && (course.license || course.citation || course.citationUrl) && (
+			{expanded && (
+				<div
+					data-testid="course-license-detail"
+					style={{ padding: "0 16px 6px 16px", fontSize: 11, color: "var(--vscode-descriptionForeground)" }}>
+					<span style={{ fontWeight: 600 }}>License: </span>
+					{licenseLabel(course.license)}
+				</div>
+			)}
+			{expanded && (course.citation || course.citationUrl) && (
 				<div
 					style={{
 						padding: "0 16px 14px 16px",
@@ -484,12 +502,6 @@ const CourseCard = ({ course, setError, onInstalled, onRecognitionChange }: Cour
 						fontSize: 11,
 						color: "var(--vscode-descriptionForeground)",
 					}}>
-					{course.license && (
-						<div>
-							<span style={{ fontWeight: 600 }}>License: </span>
-							{course.license}
-						</div>
-					)}
 					{(course.citation || course.citationUrl) && (
 						<div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
 							<span style={{ fontWeight: 600 }}>Citation:</span>

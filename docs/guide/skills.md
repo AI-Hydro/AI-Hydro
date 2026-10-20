@@ -89,7 +89,7 @@ The agent will:
 1. Call `list_skills()` — sees `interactive-module-builder` matches
 2. Call `load_skill("interactive-module-builder")` — reads the 200-line skill
 3. Follow the skill's standardization contract: 8 required sections, exact cell format, branded hero, provenance footer, references, checklist
-4. Call `show_html_preview(file_path=...)` — auto-open in the HTML Preview panel
+4. Call `show_html_preview(file_path=...)` — opens the file in AI-Hydro Studio
 
 You'll see the skill load in the tool call log before the agent starts planning.
 

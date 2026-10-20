@@ -457,6 +457,7 @@ body.aihydro-module, .aihydro-module {
 .aihydro-stderr { color: #f48771; }
 .aihydro-stdout { color: var(--aihydro-text-accent); }
 .aihydro-error  { color: #f87171; }
+.aihydro-practice-label { margin-top: 6px; font-size: 11px; opacity: 0.6; font-style: italic; }
 .aihydro-output-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .aihydro-output-images img { max-width: 100%; height: auto; border-radius: 4px; }
 .aihydro-output-video { margin-top: 8px; }
@@ -782,6 +783,7 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
     if (outputs.length === 0) {
       container.textContent = formatLegacy(msg);
       if (msg.images && msg.images.length) renderImages(container, msg.images);
+      appendPracticeLabel(container, msg);
       return;
     }
     outputs.forEach(function(o) {
@@ -817,6 +819,17 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
       t.textContent = "Output truncated.";
       container.appendChild(t);
     }
+    appendPracticeLabel(container, msg);
+  }
+
+  // Studio runs execute in a local kernel the server never sees (ADR-008
+  // invariant 4), so every result says so until server-recorded kernel sessions exist.
+  function appendPracticeLabel(container, msg) {
+    if (msg.status === "denied") return;
+    var label = document.createElement("div");
+    label.className = "aihydro-practice-label";
+    label.textContent = "Practice run: not server-recorded";
+    container.appendChild(label);
   }
 
   function renderVideo(container, b64) {
@@ -1134,7 +1147,13 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
     var cells = pythonCells();
     var idx = 0;
     runAllQueue = {
-      onResult: function() {
+      onResult: function(result) {
+        if (result && result.status === "interrupted") {
+          // Stop means stop: do not carry on with the remaining cells.
+          runAllQueue = null;
+          postToParent(artifactPayload({ type: "artifact/runAllComplete" }));
+          return;
+        }
         idx++;
         if (idx >= cells.length) {
           runAllQueue = null;

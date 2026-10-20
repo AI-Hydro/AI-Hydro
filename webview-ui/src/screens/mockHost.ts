@@ -25,6 +25,14 @@ export function hostCall(service: string, method: string, _request: unknown): Pr
 		const items = screen?.htmlPreviews ?? []
 		return Promise.resolve({ items, itemCount: items.length })
 	}
+	if (
+		service === "HtmlPreviewServiceClient" &&
+		(method === "refreshModulesMarketplace" || method === "refreshCoursesMarketplace")
+	) {
+		if (screen?.marketplace?.error) return Promise.reject(new Error(screen.marketplace.error))
+		const items = (method === "refreshModulesMarketplace" ? screen?.marketplace?.modules : screen?.marketplace?.courses) ?? []
+		return Promise.resolve({ items })
+	}
 	if (service === "HtmlPreviewServiceClient" && method === "listPythonEnvironments") {
 		return Promise.resolve({ environments: [], defaultProfileId: "" })
 	}

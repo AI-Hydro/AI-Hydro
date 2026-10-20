@@ -68,3 +68,6 @@ examples/courses/
 # UI screen harness baselines (images are not committed; see docs/ui)
 webview-ui/screens-baseline/*/
 failure-evidence
+
+# Studio run records hold cell source text
+.aihydro/runs/

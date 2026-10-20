@@ -87,7 +87,7 @@ jobs:
       - name: Run deterministic trust, identity, event, and navigation contracts
         shell: bash
         run: |
-          npm run test:unit -- --grep 'HTML Preview Python execution policy|ArtifactTrustStore|ArtifactPreviewService execution gate|handlePreviewAgentTaskMessage trust gate|PreviewSessionService observable module identity|PreviewCommandWatcher agent module identity|HTML Preview agent navigation intent|runArtifactCode'
+          npm run test:unit -- --grep 'HTML Preview Python execution policy|ArtifactTrustStore|ArtifactPreviewService execution gate|handlePreviewAgentTaskMessage trust gate|PreviewSessionService observable module identity|PreviewCommandWatcher agent module identity|HTML Preview agent navigation intent|runArtifactCode|artifact_kernel_runner.py protocol|ArtifactKernelService \(real kernel\)|PreviewSessionService archive-on-remove'
           cd webview-ui
           npx vitest run src/components/html_preview/__tests__/courseAgentNavigation.test.ts
 

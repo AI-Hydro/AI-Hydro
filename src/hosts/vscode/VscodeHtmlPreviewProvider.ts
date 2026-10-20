@@ -3,13 +3,6 @@ import type { Controller } from "@core/controller"
 import { handlePreviewAgentTaskMessage } from "@core/htmlPreview/handlePreviewAgentTask"
 import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import * as vscode from "vscode"
-import {
-	type ArtifactLookup,
-	decideActiveCourse,
-	decideModuleState,
-	decidePreviewEvent,
-	decideSaveDocument,
-} from "./previewMessageGuards"
 import type { ArtifactRef } from "@/services/artifact-preview/ArtifactPreviewService"
 import { buildPreviewCsp } from "@/services/artifact-preview/buildPreviewCsp"
 import { loadCourseManifest } from "@/services/htmlPreview/courseLoader"
@@ -27,6 +20,13 @@ import {
 	learningPackProgressKey,
 	parseInstalledLearningPackScope,
 } from "@/services/learning-pack/runtimeIntegration"
+import {
+	type ArtifactLookup,
+	decideActiveCourse,
+	decideModuleState,
+	decidePreviewEvent,
+	decideSaveDocument,
+} from "./previewMessageGuards"
 
 /**
  * Owns the single AI-Hydro HTML Preview webview panel.
@@ -587,7 +587,7 @@ export class VscodeHtmlPreviewProvider {
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta http-equiv="Content-Security-Policy" content="${csp}">
 	<link href="${styleUri}" rel="stylesheet">
-	<title>AI-Hydro HTML Preview</title>
+	<title>AI-Hydro Studio</title>
 	<style>
 		html, body, #root { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; }
 		.html-preview-standalone { width: 100%; height: 100%; }

@@ -5,8 +5,8 @@ import { HtmlPreviewMode, type PreviewHtmlRequest } from "@shared/proto/cline/ht
 import { ShowMessageType } from "@shared/proto/host/window"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
-import { learningPackArtifactMetadata, resolveInstalledLearningPackStatus } from "@/services/learning-pack/runtimeIntegration"
 import { classifyArtifactFile } from "@/services/artifact-preview/artifactTrust"
+import { learningPackArtifactMetadata, resolveInstalledLearningPackStatus } from "@/services/learning-pack/runtimeIntegration"
 import type { Controller } from ".."
 
 /**
@@ -72,7 +72,7 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 			} catch {
 				HostProvider.window.showMessage({
 					type: ShowMessageType.WARNING,
-					message: `AI-Hydro HTML Preview: file not found at "${fsPath}". It may have been moved or deleted; remove it from the preview list if it's no longer needed.`,
+					message: `AI-Hydro Studio: file not found at "${fsPath}". It may have been moved or deleted; remove it from the preview list if it's no longer needed.`,
 				})
 				return Empty.create()
 			}
@@ -103,7 +103,7 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 			console.error("[previewHtml] Request has neither html_content nor file_path")
 			HostProvider.window.showMessage({
 				type: ShowMessageType.WARNING,
-				message: "AI-Hydro HTML Preview: nothing to preview (request had no content or path).",
+				message: "AI-Hydro Studio: nothing to preview (request had no content or path).",
 			})
 			return Empty.create()
 		}
@@ -115,7 +115,7 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 		console.error(`[previewHtml] Failed to register artifact:`, msg)
 		HostProvider.window.showMessage({
 			type: ShowMessageType.ERROR,
-			message: `AI-Hydro HTML Preview: ${msg}`,
+			message: `AI-Hydro Studio: ${msg}`,
 		})
 		throw error
 	}
