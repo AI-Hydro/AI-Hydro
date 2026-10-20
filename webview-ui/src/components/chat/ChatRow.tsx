@@ -1773,7 +1773,7 @@ export const ChatRowContent = memo(
 									</div>
 									<div style={{ paddingTop: 8 }}>
 										<p className="text-sm text-[var(--vscode-descriptionForeground)]">
-											{previewMeta.title || "HTML preview"} opened in external browser
+											{previewMeta.title || "Document"} opened in external browser
 										</p>
 									</div>
 								</>
@@ -1816,11 +1816,11 @@ export const ChatRowContent = memo(
 										className="codicon codicon-browser"
 										style={{ color: normalColor, marginBottom: "-1.5px" }}
 									/>
-									<span className="font-bold">HTML Preview created</span>
+									<span className="font-bold">Opened in AI-Hydro Studio</span>
 								</div>
 								<div style={{ paddingTop: 8 }}>
 									<Markdown
-										markdown={`Opened in standalone panel: **${previewMeta.title || "HTML Preview"}**${
+										markdown={`In the Studio panel: **${previewMeta.title || "AI-Hydro Studio"}**${
 											previewMeta.filePath ? `\n\nFile: \`${previewMeta.filePath}\`` : ""
 										}`}
 									/>

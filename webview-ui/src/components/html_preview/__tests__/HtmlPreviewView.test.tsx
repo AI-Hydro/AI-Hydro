@@ -116,7 +116,7 @@ function openKebabMenu() {
 describe("HtmlPreviewView", () => {
 	it("renders empty state when no item is provided", () => {
 		render(<HtmlPreviewView />)
-		expect(screen.getByText("No HTML preview active")).toBeInTheDocument()
+		expect(screen.getByText("No document open in AI-Hydro Studio")).toBeInTheDocument()
 	})
 
 	it("falls back to src=item.webviewUri when htmlContent is empty", () => {

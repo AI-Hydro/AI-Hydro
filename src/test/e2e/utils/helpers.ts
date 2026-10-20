@@ -66,7 +66,7 @@ export async function allowArtifactExecution(page: Page, cellId?: string, timeou
 				for (const frame of page.frames()) {
 					if (frame.isDetached()) continue
 					try {
-						if ((await frame.title()) !== "AI-Hydro HTML Preview") continue
+						if ((await frame.title()) !== "AI-Hydro Studio") continue
 						const allow = frame.getByTestId("artifact-trust-allow")
 						if ((await allow.count()) === 1) {
 							await allow.click()

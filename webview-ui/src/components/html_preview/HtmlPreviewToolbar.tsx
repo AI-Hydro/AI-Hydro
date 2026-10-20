@@ -354,7 +354,7 @@ export const HtmlPreviewToolbar: React.FC<HtmlPreviewToolbarProps> = (props) => 
 								overflow: "hidden",
 								textOverflow: "ellipsis",
 							}}>
-							{item.title || "HTML Preview"}
+							{item.title || "AI-Hydro Studio"}
 						</span>
 					</div>
 					<div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -409,7 +409,7 @@ export const HtmlPreviewToolbar: React.FC<HtmlPreviewToolbarProps> = (props) => 
 							textOverflow: "ellipsis",
 							maxWidth: 200,
 						}}>
-						{item.title || "HTML Preview"}
+						{item.title || "AI-Hydro Studio"}
 					</span>
 					{shortPath && (
 						<span

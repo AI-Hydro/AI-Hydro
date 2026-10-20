@@ -207,7 +207,7 @@ untrustedE2E(
 
 		const artifact = await openGoldenModule(page)
 		await expect(artifact.getByRole("heading", { name: "Interactive Module Contract Fixture" })).toBeVisible()
-		const shell = await waitForFrame(page, async (frame) => (await frame.title()) === "AI-Hydro HTML Preview")
+		const shell = await waitForFrame(page, async (frame) => (await frame.title()) === "AI-Hydro Studio")
 		await expect(shell.getByText("Workspace is not trusted — Python execution is disabled.")).toBeVisible()
 		await runCell(artifact, "fixture-state-create")
 		await expect(artifact.locator('[data-aihydro-cell-id="fixture-state-create"] .aihydro-output')).toContainText(

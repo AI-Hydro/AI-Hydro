@@ -132,7 +132,7 @@ async function waitForFrame(page: Page, predicate: (frame: Frame) => Promise<boo
 }
 
 async function waitForShell(page: Page): Promise<Frame> {
-	return waitForFrame(page, async (frame) => (await frame.title()) === "AI-Hydro HTML Preview")
+	return waitForFrame(page, async (frame) => (await frame.title()) === "AI-Hydro Studio")
 }
 
 async function hasArtifactCell(page: Page, cellId: string): Promise<boolean> {
@@ -207,7 +207,7 @@ async function openWorkspaceFile(page: Page, relativePath: string): Promise<void
 	await page.getByRole("button", { name: "Open Quick Access" }).click()
 	const commandInput = page.locator(".quick-input-widget input")
 	await commandInput.waitFor({ state: "visible", timeout: 10_000 })
-	await commandInput.fill(">Add to AI-Hydro HTML Preview")
+	await commandInput.fill(">Add to AI-Hydro Studio")
 	await page.keyboard.press("Enter")
 }
 

@@ -82,10 +82,10 @@ async function openWorkspaceFile(page: Page, relativePath: string, confirmPlainH
 		await page.keyboard.press("F1")
 		const commandInput = page.locator(".quick-input-widget input:visible").last()
 		await commandInput.waitFor({ state: "visible", timeout: 10_000 })
-		await commandInput.fill(">Add to AI-Hydro HTML Preview")
+		await commandInput.fill(">Add to AI-Hydro Studio")
 		const addToPreviewCommand = page
 			.locator(".quick-input-list .monaco-list-row")
-			.filter({ hasText: "Add to AI-Hydro HTML Preview" })
+			.filter({ hasText: "Add to AI-Hydro Studio" })
 			.first()
 		await expect(addToPreviewCommand).toBeVisible({ timeout: 30_000 })
 		await page.keyboard.press("Enter")
@@ -120,14 +120,14 @@ async function waitForFrame(page: Page, predicate: (frame: Frame) => Promise<boo
 }
 
 async function waitForShell(page: Page): Promise<Frame> {
-	return waitForFrame(page, async (frame) => (await frame.title()) === "AI-Hydro HTML Preview")
+	return waitForFrame(page, async (frame) => (await frame.title()) === "AI-Hydro Studio")
 }
 
 async function waitForShellWithSrcdoc(page: Page, marker: string, timeout = 30_000): Promise<Frame> {
 	return waitForFrame(
 		page,
 		async (frame) => {
-			if ((await frame.title()) !== "AI-Hydro HTML Preview") {
+			if ((await frame.title()) !== "AI-Hydro Studio") {
 				return false
 			}
 			const srcdoc = await frame.locator("iframe").first().getAttribute("srcdoc")
@@ -143,7 +143,7 @@ async function countCourseOptions(page: Page): Promise<number> {
 			continue
 		}
 		try {
-			if ((await frame.title()) === "AI-Hydro HTML Preview") {
+			if ((await frame.title()) === "AI-Hydro Studio") {
 				return frame.getByTitle("Course options").count()
 			}
 		} catch {
@@ -155,7 +155,7 @@ async function countCourseOptions(page: Page): Promise<number> {
 
 async function waitForCourseShell(page: Page): Promise<Frame> {
 	return waitForFrame(page, async (frame) => {
-		if ((await frame.title()) !== "AI-Hydro HTML Preview") {
+		if ((await frame.title()) !== "AI-Hydro Studio") {
 			return false
 		}
 		if ((await frame.getByTitle("Course options").count()) !== 1) {
