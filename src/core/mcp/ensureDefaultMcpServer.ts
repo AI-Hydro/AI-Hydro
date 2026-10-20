@@ -1,7 +1,7 @@
 import { ensureSettingsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { execa } from "@packages/execa"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
-import { looksLikeFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
+import { launchContextHash, looksLikeFirstPartyLauncher, recordedLaunchHash } from "@shared/aihydro/firstPartyServers"
 import { ShowMessageType } from "@shared/proto/host/window"
 import { ExecuteCommandInTerminalRequest } from "@shared/proto/host/workspace"
 import { fileExistsAtPath } from "@utils/fs"
@@ -95,8 +95,9 @@ function getPipScriptCandidates(): string[] {
  */
 async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown): Promise<void> {
 	try {
-		const { command, args } = (entry ?? {}) as { command?: unknown; args?: unknown }
+		const { command, args, env, cwd } = (entry ?? {}) as { command?: unknown; args?: unknown; env?: unknown; cwd?: unknown }
 		const current = {
+			launchHash: launchContextHash({ env, cwd }),
 			name: SERVER_NAME,
 			command: typeof command === "string" ? command : "",
 			args: Array.isArray(args) ? (args as unknown[]).filter((a): a is string => typeof a === "string") : [],
@@ -105,7 +106,8 @@ async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown):
 		const sameLaunch =
 			recorded?.command === current.command &&
 			recorded.args.length === current.args.length &&
-			recorded.args.every((a, i) => a === current.args[i])
+			recorded.args.every((a, i) => a === current.args[i]) &&
+			recordedLaunchHash(recorded) === current.launchHash
 		if (sameLaunch) {
 			return
 		}
@@ -131,7 +133,7 @@ async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown):
 			type: ShowMessageType.WARNING,
 			message:
 				`The "${SERVER_NAME}" MCP server now launches \`${[current.command, ...current.args].join(" ")}\`, which differs from the ` +
-				"launcher AI-Hydro registered. Until you confirm, it is not treated as the first-party server " +
+				"launcher (command, arguments, environment variables or working directory) AI-Hydro registered. Until you confirm, it is not treated as the first-party server " +
 				"(claim-approval prompts and read-only subagent tools are off).",
 			options: { items: [trust, "Dismiss"], modal: true },
 		})
@@ -299,6 +301,7 @@ export async function ensureDefaultMcpServer(context: vscode.ExtensionContext): 
 			name: SERVER_NAME,
 			command: serverConfig.command,
 			args: serverConfig.args,
+			launchHash: launchContextHash(serverConfig),
 		})
 		console.log("[AI-Hydro] Auto-registered aihydro-tools MCP server")
 	} catch (error) {

@@ -23,7 +23,7 @@ function parseLauncher(value: unknown): FirstPartyLauncher | undefined {
 	if (!value || typeof value !== "object") {
 		return undefined
 	}
-	const { name, command, args } = value as Record<string, unknown>
+	const { name, command, args, launchHash } = value as Record<string, unknown>
 	if (
 		typeof name !== "string" ||
 		typeof command !== "string" ||
@@ -32,7 +32,7 @@ function parseLauncher(value: unknown): FirstPartyLauncher | undefined {
 	) {
 		return undefined
 	}
-	return { name, command, args: args as string[] }
+	return { name, command, args: args as string[], ...(typeof launchHash === "string" ? { launchHash } : {}) }
 }
 
 /** Read the record without installing it. Missing or malformed means no record (fail closed). */
@@ -56,7 +56,11 @@ export async function recordFirstPartyLauncher(settingsDir: string, launcher: Fi
 	await fs.mkdir(settingsDir, { recursive: true })
 	await fs.writeFile(
 		path.join(settingsDir, FIRST_PARTY_LAUNCHER_FILE),
-		JSON.stringify({ name: launcher.name, command: launcher.command, args: launcher.args }, null, 2),
+		JSON.stringify(
+			{ name: launcher.name, command: launcher.command, args: launcher.args, launchHash: launcher.launchHash },
+			null,
+			2,
+		),
 	)
 	setRecordedFirstPartyLauncher(launcher)
 }
@@ -82,7 +86,7 @@ export async function migrateFirstPartyAnchor(
 ): Promise<FirstPartyAnchorMigrationOutcome> {
 	const entries: SettingsServerEntry[] = Object.entries(servers ?? {}).map(([name, raw]) => {
 		const e = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
-		return { name, type: e.type, command: e.command, args: e.args, disabled: e.disabled }
+		return { name, type: e.type, command: e.command, args: e.args, disabled: e.disabled, env: e.env, cwd: e.cwd }
 	})
 	const recorded = (await readFirstPartyLauncher(settingsDir)) ?? undefined
 	const plan = planFirstPartyAnchor(entries, recorded)
@@ -96,11 +100,17 @@ export async function migrateFirstPartyAnchor(
 				name: plan.candidate.name,
 				command: plan.candidate.command,
 				args: plan.candidate.args,
+				launchHash: plan.candidate.launchHash,
 			})
 			return "renamed"
 		}
 		case "confirm": {
-			const launcher = { name: plan.candidate.name, command: plan.candidate.command, args: plan.candidate.args }
+			const launcher = {
+				name: plan.candidate.name,
+				command: plan.candidate.command,
+				args: plan.candidate.args,
+				launchHash: plan.candidate.launchHash,
+			}
 			if (!(await confirm(launcher, recorded))) {
 				return "declined"
 			}

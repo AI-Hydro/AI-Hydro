@@ -66,6 +66,11 @@ export function isGPT5ModelFamily(id: string): boolean {
 	return modelId.includes("gpt-5") || modelId.includes("gpt5")
 }
 
+/** Any DeepSeek model (direct or routed, e.g. "deepseek/deepseek-chat"): the family that emits native `<tool_calls>` text. */
+export function isDeepSeekModelFamily(id: string): boolean {
+	return id.toLowerCase().includes("deepseek")
+}
+
 /**
  * Capable open-weight models in the DeepSeek-v4 series. These are strong enough
  * to warrant flagship-grade harness treatment (richer prompt, auto-condense,

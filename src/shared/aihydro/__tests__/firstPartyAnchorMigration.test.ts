@@ -4,8 +4,10 @@ import {
 	explainServerTrust,
 	type FirstPartyLauncher,
 	isServerTrusted,
+	launchContextHash,
 	planFirstPartyAnchor,
 	type SettingsServerEntry,
+	sha256Hex,
 } from "../firstPartyServers"
 
 const RECORDED: FirstPartyLauncher = { name: "ai-hydro", command: "/opt/miniconda3/bin/aihydro-mcp", args: [] }
@@ -131,5 +133,86 @@ describe("explainServerTrust (UI trust state)", () => {
 		const e = explainServerTrust(conn("ai-hydro", RECORDED.command), RECORDED)
 		expect(e).to.deep.include({ trusted: true })
 		expect(e.reason).to.match(/^Trusted:/)
+	})
+})
+
+describe("launch context identity (env, cwd) in first-party trust", () => {
+	const withCtx = (name: string, command: string, extra: Record<string, unknown>) => ({
+		name,
+		config: JSON.stringify({ type: "stdio", command, args: [], ...extra }),
+	})
+	const CTX = { env: { TMPDIR: "/c", TMP: "/c" }, cwd: "/c" }
+	const rec: FirstPartyLauncher = { ...RECORDED, launchHash: launchContextHash(CTX) }
+
+	it("is trusted only when env AND cwd match the recorded context (key order irrelevant)", () => {
+		expect(isServerTrusted(withCtx("ai-hydro", RECORDED.command, CTX), rec)).to.equal(true)
+		expect(
+			isServerTrusted(withCtx("ai-hydro", RECORDED.command, { env: { TMP: "/c", TMPDIR: "/c" }, cwd: "/c" }), rec),
+		).to.equal(true)
+	})
+
+	it("adversarial: PYTHONPATH injection, a different cwd, and a different PATH under a bare command are not trusted", () => {
+		const bare: FirstPartyLauncher = {
+			name: "ai-hydro",
+			command: "aihydro-mcp",
+			args: [],
+			launchHash: launchContextHash(CTX),
+		}
+		for (const extra of [
+			{ ...CTX, env: { ...CTX.env, PYTHONPATH: "/attacker" } },
+			{ ...CTX, cwd: "/attacker" },
+			{ ...CTX, env: { ...CTX.env, PATH: "/attacker/bin" } },
+			{ cwd: "/c" }, // env dropped
+			{ env: CTX.env }, // cwd dropped
+			{ ...CTX, env: "x" },
+		]) {
+			expect(isServerTrusted(withCtx("ai-hydro", "aihydro-mcp", extra), bare), JSON.stringify(extra)).to.equal(false)
+		}
+		const e = explainServerTrust(
+			withCtx("ai-hydro", RECORDED.command, { ...CTX, env: { ...CTX.env, PYTHONPATH: "/a" } }),
+			rec,
+		)
+		expect(e.trusted).to.equal(false)
+		expect(e.reason).to.include("environment")
+	})
+
+	it("a legacy record (no hash) reads as the empty context: an entry with env/cwd is NOT trusted until confirmed", () => {
+		expect(isServerTrusted(withCtx("ai-hydro", RECORDED.command, {}), RECORDED)).to.equal(true)
+		expect(isServerTrusted(withCtx("ai-hydro", RECORDED.command, CTX), RECORDED)).to.equal(false)
+	})
+
+	it("migration: same command/args but different env or cwd -> confirm, never a silent rename", () => {
+		const disabled = entry("ai-hydro", RECORDED.command, [], { disabled: true })
+		for (const extra of [{ env: { PYTHONPATH: "/attacker" } }, { cwd: "/attacker" }, { env: { PATH: "/attacker/bin" } }]) {
+			const plan = planFirstPartyAnchor([disabled, entry("aihydro-tools", RECORDED.command, [], extra as any)], RECORDED)
+			expect(plan.action, JSON.stringify(extra)).to.equal("confirm")
+		}
+		// identical context to a hashed record still renames silently
+		const hashed: FirstPartyLauncher = { ...RECORDED, launchHash: launchContextHash(CTX) }
+		expect(
+			planFirstPartyAnchor([disabled, entry("aihydro-tools", RECORDED.command, [], CTX as any)], hashed).action,
+		).to.equal("rename")
+		// legacy record + entry carrying env: confirm
+		expect(
+			planFirstPartyAnchor([disabled, entry("aihydro-tools", RECORDED.command, [], CTX as any)], RECORDED).action,
+		).to.equal("confirm")
+	})
+
+	it("a non-boolean `disabled` is invalid under the settings schema: neither enabled nor a candidate", () => {
+		const recorded = entry("ai-hydro", RECORDED.command, [], { disabled: "true" as any })
+		expect(planFirstPartyAnchor([recorded, entry("aihydro-tools", RECORDED.command)], RECORDED).action).to.equal("rename")
+		const plan = planFirstPartyAnchor(
+			[
+				entry("ai-hydro", RECORDED.command, [], { disabled: true }),
+				entry("aihydro-tools", RECORDED.command, [], { disabled: "no" as any }),
+			],
+			RECORDED,
+		)
+		expect(plan.action).to.equal("none")
+	})
+
+	it("sha256 matches the known vector", () => {
+		expect(sha256Hex("abc")).to.equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+		expect(sha256Hex("")).to.equal("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 	})
 })

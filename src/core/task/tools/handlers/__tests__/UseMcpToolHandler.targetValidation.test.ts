@@ -4,7 +4,10 @@ import { checkMcpToolName, closestNames } from "../mcpToolNameValidation"
 import { UseMcpToolHandler } from "../UseMcpToolHandler"
 
 const tools = ["list_claims", "add_claim", "get_claim", "start_session", "fetch_camels_us"].map((name) => ({ name }))
-const connections = [{ server: { name: "aihydro-tools", tools } }, { server: { name: "no-list" } }] as any[]
+const connections = [
+	{ server: { name: "aihydro-tools", status: "connected", tools } },
+	{ server: { name: "no-list", status: "connected" } },
+] as any[]
 
 function makeConfig(conns: any[] | undefined = connections) {
 	const callbacks = {
@@ -57,6 +60,30 @@ describe("use_mcp_tool target validation (M2)", () => {
 		expect(checkMcpToolName(connections, "aihydro-tools", "add_claim")).to.deep.equal({ ok: true })
 		expect(checkMcpToolName(connections, "no-list", "anything")).to.deep.equal({ ok: true })
 		expect(checkMcpToolName(undefined, "x", "y")).to.deep.equal({ ok: true })
+	})
+
+	it("an unknown tool list (failed tools/list -> undefined) or a not-connected server never blocks a call", async () => {
+		const unknown = [
+			{ server: { name: "s", status: "connected", tools: undefined } },
+			{ server: { name: "d", status: "disconnected", tools: [] } },
+		] as any[]
+		expect(checkMcpToolName(unknown, "s", "anything")).to.deep.equal({ ok: true })
+		expect(checkMcpToolName(unknown, "d", "anything")).to.deep.equal({ ok: true })
+		const { config, callbacks, mcpHub } = makeConfig(unknown)
+		await new UseMcpToolHandler().execute(config, block("anything", "s"))
+		expect(callbacks.ask.called || mcpHub.callTool.called, "reached the normal approval/call path").to.equal(true)
+	})
+
+	it("a connected server with a known list still refuses a missing tool; unknown-server message lists only connected servers", () => {
+		const conns = [
+			{ server: { name: "up", status: "connected", tools: [{ name: "a" }] } },
+			{ server: { name: "down", status: "disconnected", tools: [] } },
+		] as any[]
+		const r = checkMcpToolName(conns, "up", "b")
+		expect(r.ok).to.equal(false)
+		const u = checkMcpToolName(conns, "ghost", "b") as any
+		expect(u.message).to.include("up")
+		expect(u.message).to.not.include("down")
 	})
 
 	it("closestNames ranks related names first and caps the list", () => {

@@ -3,12 +3,12 @@
  * (e.g. a built-in tool name addressed to an MCP server) must get a structured, actionable error WITHOUT the
  * user being asked to approve a call that cannot succeed.
  *
- * Never guesses: when a server's tool list is not known (undefined), validation is skipped and the normal
+ * Never guesses: when a server's tool list is not known (undefined, or the server is not connected), validation is skipped and the normal
  * approval flow runs.
  */
 
 export interface McpConnectionLike {
-	server: { name: string; tools?: Array<{ name: string }> }
+	server: { name: string; status?: string; tools?: Array<{ name: string }> }
 }
 
 export type McpToolNameCheck =
@@ -55,7 +55,8 @@ export function checkMcpToolName(
 	}
 	const connection = connections.find((c) => c.server.name === serverName)
 	if (!connection) {
-		const servers = connections.map((c) => c.server.name)
+		// List only servers that are actually usable now; a disconnected one would be a misleading suggestion.
+		const servers = connections.filter((c) => c.server.status === "connected").map((c) => c.server.name)
 		const suggestions = closestNames(serverName, servers)
 		return {
 			ok: false,
@@ -64,7 +65,12 @@ export function checkMcpToolName(
 			message: `MCP server '${serverName}' is not connected. Connected servers: ${servers.length ? servers.join(", ") : "(none)"}. Nothing was run and the user was not asked.`,
 		}
 	}
+	// Validate only against a list we KNOW: a server that is not connected, or whose tools/list failed (the host
+	// stores `undefined` for that), is not evidence that the tool is missing. The normal call path reports it.
 	const tools = connection.server.tools
+	if (connection.server.status !== undefined && connection.server.status !== "connected") {
+		return { ok: true }
+	}
 	if (!Array.isArray(tools)) {
 		return { ok: true }
 	}

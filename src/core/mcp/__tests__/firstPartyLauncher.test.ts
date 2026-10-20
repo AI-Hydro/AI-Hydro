@@ -3,7 +3,12 @@ import * as fs from "fs/promises"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import * as os from "os"
 import * as path from "path"
-import { getRecordedFirstPartyLauncher, isServerTrusted, setRecordedFirstPartyLauncher } from "@/shared/aihydro/firstPartyServers"
+import {
+	EMPTY_LAUNCH_HASH,
+	getRecordedFirstPartyLauncher,
+	isServerTrusted,
+	setRecordedFirstPartyLauncher,
+} from "@/shared/aihydro/firstPartyServers"
 import {
 	FIRST_PARTY_LAUNCHER_FILE,
 	loadFirstPartyLauncher,
@@ -80,7 +85,11 @@ describe("migrateFirstPartyAnchor (S6)", () => {
 			never,
 		)
 		expect(outcome).to.equal("renamed")
-		expect(await readFirstPartyLauncher(dir)).to.deep.equal({ ...recorded, name: "aihydro-tools" })
+		expect(await readFirstPartyLauncher(dir)).to.deep.equal({
+			...recorded,
+			name: "aihydro-tools",
+			launchHash: EMPTY_LAUNCH_HASH,
+		})
 		expect(isServerTrusted(view("aihydro-tools", recorded.command))).to.equal(true)
 		expect(isServerTrusted(view("ai-hydro", recorded.command))).to.equal(false)
 	})
@@ -98,7 +107,12 @@ describe("migrateFirstPartyAnchor (S6)", () => {
 				return false
 			}),
 		).to.equal("declined")
-		expect(asked).to.deep.equal({ name: "aihydro-tools", command: "python3", args: ["-m", "ai_hydro.mcp"] })
+		expect(asked).to.deep.equal({
+			name: "aihydro-tools",
+			command: "python3",
+			args: ["-m", "ai_hydro.mcp"],
+			launchHash: EMPTY_LAUNCH_HASH,
+		})
 		expect(await readFirstPartyLauncher(dir)).to.deep.equal(recorded)
 		expect(isServerTrusted(view("aihydro-tools", "python3", ["-m", "ai_hydro.mcp"]))).to.equal(false)
 
@@ -124,6 +138,23 @@ describe("migrateFirstPartyAnchor (S6)", () => {
 		}
 		expect(await readFirstPartyLauncher(dir)).to.deep.equal(recorded)
 		expect(isServerTrusted(view("aihydro-tools", "/tmp/evil-mcp"))).to.equal(false)
+	})
+
+	it("adversarial: PYTHONPATH / cwd / PATH on an otherwise identical entry is never adopted silently", async () => {
+		await recordFirstPartyLauncher(dir, recorded)
+		for (const extra of [{ env: { PYTHONPATH: "/attacker" } }, { cwd: "/attacker" }, { env: { PATH: "/attacker/bin" } }]) {
+			const servers = {
+				"ai-hydro": { ...legacy(recorded.command), disabled: true },
+				"aihydro-tools": { ...legacy(recorded.command), ...extra },
+			}
+			expect(await migrateFirstPartyAnchor(dir, servers, async () => false), JSON.stringify(extra)).to.equal("declined")
+			expect(await readFirstPartyLauncher(dir)).to.deep.equal(recorded)
+		}
+	})
+
+	it("persists the launch-context hash with the record", async () => {
+		await recordFirstPartyLauncher(dir, { ...recorded, launchHash: "abc" })
+		expect((await readFirstPartyLauncher(dir))?.launchHash).to.equal("abc")
 	})
 
 	it("ambiguous candidates change nothing", async () => {
