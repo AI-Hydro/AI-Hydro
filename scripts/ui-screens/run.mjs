@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url"
 import { createRequire } from "node:module"
 import { chromium } from "playwright"
 import { pageChecker } from "./checker.mjs"
-import { basemapIdForUrl, tilePng } from "./tiles.mjs"
+import { basemapIdForUrl, tileFaultStatus, tilePng } from "./tiles.mjs"
 import { startServer, THEMES } from "./server.mjs"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
@@ -128,12 +128,28 @@ async function newContext() {
 			externalHosts.set(host, (externalHosts.get(host) ?? 0) + 1)
 			const looksLikeTile = request.resourceType() === "image" || /\/(tile|\d+\/\d+\/\d+)|\.png|\.jpe?g|\.webp/i.test(url)
 			if (looksLikeTile) {
-				const { color } = basemapIdForUrl(url)
+				// Error screens inject tile failures keyed by screen id (still a harness-answered response).
+				let screenId = ""
+				try {
+					screenId = new URL(request.frame()?.page()?.url() ?? "about:blank").pathname.replace(/^.*\/screen\//, "")
+				} catch {
+					screenId = ""
+				}
+				const faultStatus = tileFaultStatus(decodeURIComponent(screenId), url)
+				if (faultStatus) {
+					return route.fulfill({
+						status: faultStatus,
+						contentType: "text/plain",
+						headers: { "Access-Control-Allow-Origin": "*", [FIXTURE_HEADER]: "1" },
+						body: "injected tile fault (UI screen harness)",
+					})
+				}
+				const { color, overlay } = basemapIdForUrl(url)
 				return route.fulfill({
 					status: 200,
 					contentType: "image/png",
 					headers: { "Access-Control-Allow-Origin": "*", [FIXTURE_HEADER]: "1" },
-					body: tilePng(color),
+					body: tilePng(color, { overlay }),
 				})
 			}
 			return route.fulfill({

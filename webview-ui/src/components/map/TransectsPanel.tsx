@@ -17,6 +17,7 @@ import {
 	type TransectPriority,
 	type TransectStatus,
 } from "./transectStorage"
+import { MAP_Z } from "./mapZ"
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -516,7 +517,7 @@ export default function TransectsPanel({
 								position: "absolute",
 								right: 0,
 								top: "calc(100% + 4px)",
-								zIndex: 200,
+								zIndex: MAP_Z.menu,
 								background: isDark ? "#1e1e2e" : "#fff",
 								border: sectionBorder,
 								borderRadius: 6,

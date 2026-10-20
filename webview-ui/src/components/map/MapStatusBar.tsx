@@ -1,5 +1,6 @@
 import type { MapViewState } from "@deck.gl/core"
 import React, { useMemo, useState } from "react"
+import { MAP_Z } from "./mapZ"
 
 interface MapStatusBarProps {
 	cursorCoord: { lon: number; lat: number } | null
@@ -122,7 +123,7 @@ export const MapStatusBar: React.FC<MapStatusBarProps> = ({ cursorCoord, viewSta
 					position: "absolute",
 					bottom: 8,
 					left: 10,
-					zIndex: 5,
+					zIndex: MAP_Z.overlay,
 					padding: "3px 8px",
 					background: bg,
 					color: fg,
@@ -154,7 +155,7 @@ export const MapStatusBar: React.FC<MapStatusBarProps> = ({ cursorCoord, viewSta
 					position: "absolute",
 					bottom: 8,
 					right: 10,
-					zIndex: 5,
+					zIndex: MAP_Z.overlay,
 					padding: "3px 8px",
 					background: bg,
 					color: fg,

@@ -3,12 +3,13 @@ import { buildApiHandler } from "@core/api"
 import { LedgerEventWatcher } from "@core/ledger/LedgerEventWatcher"
 import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
-import { buildMapLayerCatalogAsync, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
+import { buildMapLayerCatalogAsync, type MapLayerCatalogEntry, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
 import { type MapLayerPatch, mergeMapLayerPatch } from "@core/map/mergeMapLayerPatch"
 import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
 import { FileScanner, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
+import { realPathInsideFolder } from "@core/workspace/workspaceGeoPaths"
 import { setupWorkspaceManager } from "@core/workspace/setup"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { getBoundStudy } from "@integrations/aihydro-session/boundStudy"
@@ -112,6 +113,12 @@ export class Controller {
 	// Map layer storage, streaming, and Python event bridge
 	private mapLayers: Map<string, MapLayer> = new Map()
 	private mapLayerOrder: string[] = []
+	/** Catalog entries older than the restore cap: not loaded, but carried through every catalog rewrite. */
+	private mapOverflowEntries: MapLayerCatalogEntry[] = []
+	/** True until the startup catalog restore has finished (the empty-state card must not show before then). */
+	private mapHydrating = true
+	/** Resolves when startup hydration is done; catalog rewrites wait for it so they cannot clobber unrestored data. */
+	private mapHydration: Promise<void> = Promise.resolve()
 	private mapLayerSubscribers: Set<(layer: MapLayer) => void> = new Set()
 	private mapEventWatcher: MapEventWatcher
 	private mapCommandWatcher: MapCommandWatcher
@@ -206,11 +213,13 @@ export class Controller {
 		this.mapEventWatcher.start()
 		// Restore layers from the persisted catalog so Python-pushed layers
 		// survive VS Code window reloads without re-running MCP tools.
-		void import("@core/map/hydrateMapLayers").then(({ hydrateMapLayersFromCatalog }) => {
-			hydrateMapLayersFromCatalog(this).catch((err) =>
-				console.warn("[Controller] Layer hydration failed (non-fatal):", err),
-			)
-		})
+		this.mapHydration = import("@core/map/hydrateMapLayers")
+			.then(({ hydrateMapLayersFromCatalog }) => hydrateMapLayersFromCatalog(this, this.currentMapScope()))
+			.catch((err) => console.warn("[Controller] Layer hydration failed (non-fatal):", err))
+			.finally(() => {
+				this.mapHydrating = false
+				this.emitMapRestoreState()
+			})
 		// Phase 1: PreviewSessionService mirrors events to ~/.aihydro/preview_session/
 		// and ~/.aihydro/preview_events/ for MCP-tool consumption.
 		// PreviewCommandWatcher polls ~/.aihydro/preview_commands/ for agent commands
@@ -1393,9 +1402,63 @@ export class Controller {
 		return merged
 	}
 
+	/** Workspace folder that scopes the persisted layer catalog ("" when no folder is open). */
+	private currentMapScope(): string {
+		return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
+	}
+
 	private async syncMapLayerCatalog(): Promise<void> {
-		const catalog = await buildMapLayerCatalogAsync(this.getMapLayers(), this.mapLayerOrder)
+		// Never rewrite the catalog before startup restore has read it: the rewrite would drop what it has not loaded.
+		await this.mapHydration
+		const catalog = await buildMapLayerCatalogAsync(
+			this.getMapLayers(),
+			this.mapLayerOrder,
+			this.currentMapScope(),
+			this.mapOverflowEntries,
+		)
 		await persistMapLayerCatalog(catalog)
+	}
+
+	/** Entries beyond the restore cap (set by startup hydration). They stay in the catalog file. */
+	setMapOverflowEntries(entries: MapLayerCatalogEntry[]): void {
+		this.mapOverflowEntries = entries
+	}
+
+	getMapRestoreState(): { hydrating: boolean; olderCount: number } {
+		return { hydrating: this.mapHydrating, olderCount: this.mapOverflowEntries.length }
+	}
+
+	/** Tells map subscribers whether restore is still running and how many older layers are kept but not loaded. */
+	private emitMapRestoreState(): void {
+		const state = this.getMapRestoreState()
+		this.notifyMapLayerSubscribers(
+			MapLayer.create({
+				id: "__map_restore__",
+				visible: false,
+				metadata: {
+					__operation: "restore_state",
+					hydrating: state.hydrating ? "1" : "0",
+					older_count: String(state.olderCount),
+				},
+			}),
+		)
+	}
+
+	/** Loads the layers kept beyond the restore cap, placing them before the current layers. Returns how many loaded. */
+	async restoreOlderMapLayers(): Promise<number> {
+		await this.mapHydration
+		const entries = this.mapOverflowEntries
+		if (entries.length === 0) {
+			return 0
+		}
+		this.mapOverflowEntries = []
+		const { restoreCatalogEntries } = await import("@core/map/hydrateMapLayers")
+		const added = await restoreCatalogEntries(this, entries, entries.length + this.mapLayers.size)
+		const addedSet = new Set(added)
+		this.mapLayerOrder = [...added, ...this.mapLayerOrder.filter((id) => !addedSet.has(id))]
+		this.emitMapRestoreState()
+		void this.syncMapLayerCatalog()
+		return added.length
 	}
 
 	private notifyMapLayerSubscribers(layer: MapLayer): void {
@@ -1874,143 +1937,177 @@ export class Controller {
 	}
 
 	/**
-	 * Load all workspace geo data files as hidden map layers
-	 * Supports multiple formats: GeoJSON, KML, GPX, TopoJSON, FlatGeobuf, Shapefiles
-	 * Called when map panel opens to auto-discover workspace files
+	 * Add ONE workspace geo file to the map as a visible layer (user-initiated, from the Layers panel).
+	 * Returns the layer id. Throws when the file cannot be read or converted.
+	 */
+	private async addWorkspaceFileAsLayer(file: WorkspaceGeoJsonFile): Promise<string> {
+		let geojsonContent: string
+		let originalFormat = "geojson"
+
+		// Check if file requires format conversion
+		if (file.requiresConversion) {
+			console.log(`[Controller] Converting ${file.extension} file: ${file.name}`)
+
+			// Special handling for shapefiles - need to read companion files
+			if (file.extension.toLowerCase() === ".shp") {
+				// Shapefile requires .shp, .shx, and .dbf files
+				const basePath = file.uri.fsPath.replace(/\.shp$/i, "")
+				const shpPath = `${basePath}.shp`
+				const shxPath = `${basePath}.shx`
+				const dbfPath = `${basePath}.dbf`
+				const prjPath = `${basePath}.prj`
+
+				console.log(`[Controller] Reading shapefile components from: ${basePath}`)
+
+				// Read all required files
+				const shpBuffer = await fs.readFile(shpPath)
+				const shxBuffer = await fs.readFile(shxPath)
+				const dbfBuffer = await fs.readFile(dbfPath)
+
+				// PRJ file is optional
+				let prjContent: string | undefined
+				try {
+					prjContent = await fs.readFile(prjPath, "utf8")
+				} catch (_error) {
+					console.log(`[Controller] No .prj file found (optional)`)
+				}
+
+				// Combine into object for shpjs
+				const shapefileData = {
+					shp: shpBuffer,
+					shx: shxBuffer,
+					dbf: dbfBuffer,
+					prj: prjContent,
+				}
+
+				// Convert using the combined data
+				const conversionResult = await geoFormatConverter.convert(shapefileData as any, file.extension, {
+					includeStyles: true,
+				})
+
+				geojsonContent = JSON.stringify(conversionResult.geojson)
+				originalFormat = conversionResult.metadata.originalFormat
+
+				console.log(
+					`[Controller] Successfully converted shapefile to GeoJSON (${conversionResult.metadata.featureCount} features)`,
+				)
+			} else {
+				// For other formats, determine if we need buffer or string
+				const needsBuffer = [".fgb"].includes(file.extension.toLowerCase())
+
+				// Read raw file content
+				let rawContent: string | Buffer
+				if (needsBuffer) {
+					// Read as Buffer for binary formats (flatgeobuf)
+					const fileBuffer = await fs.readFile(file.uri.fsPath)
+					rawContent = fileBuffer
+				} else {
+					// Read as string for text formats (KML, GPX, TopoJSON)
+					rawContent = await this.readWorkspaceGeoJson(file)
+				}
+
+				// Convert to GeoJSON
+				try {
+					const conversionResult = await geoFormatConverter.convert(rawContent, file.extension, {
+						includeStyles: true,
+					})
+
+					geojsonContent = JSON.stringify(conversionResult.geojson)
+					originalFormat = conversionResult.metadata.originalFormat
+
+					console.log(
+						`[Controller] Successfully converted ${file.extension} to GeoJSON (${conversionResult.metadata.featureCount} features)`,
+					)
+				} catch (conversionError) {
+					if (conversionError instanceof GeoConversionError) {
+						console.error(`[Controller] Conversion failed for ${file.name}:`, conversionError.message)
+						throw conversionError
+					}
+					throw conversionError
+				}
+			}
+		} else {
+			// Already GeoJSON, read directly
+			geojsonContent = await this.readWorkspaceGeoJson(file)
+		}
+
+		// Parse to validate
+		const _geojson = JSON.parse(geojsonContent)
+
+		// Generate layer ID from file path. In a multi-root workspace the folder is part of the identity, so the
+		// same relative path in two folders yields two layers; single-folder ids are unchanged.
+		const multiRoot = (vscode.workspace.workspaceFolders?.length ?? 0) > 1
+		const idSource = multiRoot ? `${file.workspaceFolderName}/${file.relativePath}` : file.relativePath
+		const layerId = `workspace_${idSource.replace(/[^a-zA-Z0-9]/g, "_")}`
+
+		// Determine format icon for display
+		const formatIcon = this.getFormatIcon(file.extension)
+
+		// Create MapLayer with workspace metadata
+		const layer = {
+			id: layerId,
+			name: file.name,
+			layerType: "polygon" as const,
+			geojson: geojsonContent,
+			visible: true,
+			style: {
+				fillColor: "#0066CC",
+				fillOpacity: 0.5,
+				color: "#0066CC",
+				strokeColor: "#0066CC",
+				strokeWidth: 3,
+				weight: 3,
+				opacity: 1,
+			},
+			metadata: {
+				source: "workspace",
+				path: file.relativePath,
+				workspace_folder: file.workspaceFolder,
+				lastModified: file.lastModified.toString(),
+				originalFormat,
+				formatIcon,
+			},
+		}
+
+		// Add layer to controller (this will notify subscribers)
+		this.addMapLayer(layer)
+
+		console.log(`[Controller] Added workspace layer: ${file.name} (${originalFormat})`)
+
+		return layerId
+	}
+
+	/** Add a workspace file chosen by the user (by workspace-relative path) as a layer. */
+	async addWorkspaceGeoFileByPath(relativePath: string, workspaceFolder = ""): Promise<string> {
+		const matches = this.workspaceGeoJsonFiles.filter(
+			(candidate) =>
+				candidate.relativePath === relativePath && (!workspaceFolder || candidate.workspaceFolder === workspaceFolder),
+		)
+		if (matches.length === 0) {
+			throw new Error(`Workspace file not found: ${relativePath}`)
+		}
+		if (matches.length > 1) {
+			throw new Error(`${relativePath} exists in more than one workspace folder; choose one from the list.`)
+		}
+		const file = matches[0]
+		// The list was checked when scanned; re-check so a symlink swapped in since then cannot escape the folder.
+		if (!(await realPathInsideFolder(file.workspaceFolder, file.uri.fsPath))) {
+			throw new Error(`${relativePath} resolves outside its workspace folder and was not added.`)
+		}
+		return await this.addWorkspaceFileAsLayer(file)
+	}
+
+	/**
+	 * Load ALL workspace geo files as map layers. NOT called automatically: opening the map used to register every
+	 * valid `*.json` in the workspace, which flooded the layer list (decision D3). The Layers panel lists the files
+	 * instead and the user adds them one at a time via addWorkspaceGeoFileByPath.
 	 */
 	async loadWorkspaceGeoJsonLayers(): Promise<void> {
 		console.log(`[Controller] Loading ${this.workspaceGeoJsonFiles.length} workspace geo data files as map layers`)
 
 		for (const file of this.workspaceGeoJsonFiles) {
 			try {
-				let geojsonContent: string
-				let originalFormat = "geojson"
-
-				// Check if file requires format conversion
-				if (file.requiresConversion) {
-					console.log(`[Controller] Converting ${file.extension} file: ${file.name}`)
-
-					// Special handling for shapefiles - need to read companion files
-					if (file.extension.toLowerCase() === ".shp") {
-						// Shapefile requires .shp, .shx, and .dbf files
-						const basePath = file.uri.fsPath.replace(/\.shp$/i, "")
-						const shpPath = `${basePath}.shp`
-						const shxPath = `${basePath}.shx`
-						const dbfPath = `${basePath}.dbf`
-						const prjPath = `${basePath}.prj`
-
-						console.log(`[Controller] Reading shapefile components from: ${basePath}`)
-
-						// Read all required files
-						const shpBuffer = await fs.readFile(shpPath)
-						const shxBuffer = await fs.readFile(shxPath)
-						const dbfBuffer = await fs.readFile(dbfPath)
-
-						// PRJ file is optional
-						let prjContent: string | undefined
-						try {
-							prjContent = await fs.readFile(prjPath, "utf8")
-						} catch (_error) {
-							console.log(`[Controller] No .prj file found (optional)`)
-						}
-
-						// Combine into object for shpjs
-						const shapefileData = {
-							shp: shpBuffer,
-							shx: shxBuffer,
-							dbf: dbfBuffer,
-							prj: prjContent,
-						}
-
-						// Convert using the combined data
-						const conversionResult = await geoFormatConverter.convert(shapefileData as any, file.extension, {
-							includeStyles: true,
-						})
-
-						geojsonContent = JSON.stringify(conversionResult.geojson)
-						originalFormat = conversionResult.metadata.originalFormat
-
-						console.log(
-							`[Controller] Successfully converted shapefile to GeoJSON (${conversionResult.metadata.featureCount} features)`,
-						)
-					} else {
-						// For other formats, determine if we need buffer or string
-						const needsBuffer = [".fgb"].includes(file.extension.toLowerCase())
-
-						// Read raw file content
-						let rawContent: string | Buffer
-						if (needsBuffer) {
-							// Read as Buffer for binary formats (flatgeobuf)
-							const fileBuffer = await fs.readFile(file.uri.fsPath)
-							rawContent = fileBuffer
-						} else {
-							// Read as string for text formats (KML, GPX, TopoJSON)
-							rawContent = await this.readWorkspaceGeoJson(file)
-						}
-
-						// Convert to GeoJSON
-						try {
-							const conversionResult = await geoFormatConverter.convert(rawContent, file.extension, {
-								includeStyles: true,
-							})
-
-							geojsonContent = JSON.stringify(conversionResult.geojson)
-							originalFormat = conversionResult.metadata.originalFormat
-
-							console.log(
-								`[Controller] Successfully converted ${file.extension} to GeoJSON (${conversionResult.metadata.featureCount} features)`,
-							)
-						} catch (conversionError) {
-							if (conversionError instanceof GeoConversionError) {
-								console.error(`[Controller] Conversion failed for ${file.name}:`, conversionError.message)
-								throw conversionError
-							}
-							throw conversionError
-						}
-					}
-				} else {
-					// Already GeoJSON, read directly
-					geojsonContent = await this.readWorkspaceGeoJson(file)
-				}
-
-				// Parse to validate
-				const _geojson = JSON.parse(geojsonContent)
-
-				// Generate layer ID from file path
-				const layerId = `workspace_${file.relativePath.replace(/[^a-zA-Z0-9]/g, "_")}`
-
-				// Determine format icon for display
-				const formatIcon = this.getFormatIcon(file.extension)
-
-				// Create MapLayer with workspace metadata
-				const layer = {
-					id: layerId,
-					name: file.name,
-					layerType: "polygon" as const,
-					geojson: geojsonContent,
-					visible: true,
-					style: {
-						fillColor: "#0066CC",
-						fillOpacity: 0.5,
-						color: "#0066CC",
-						strokeColor: "#0066CC",
-						strokeWidth: 3,
-						weight: 3,
-						opacity: 1,
-					},
-					metadata: {
-						source: "workspace",
-						path: file.relativePath,
-						lastModified: file.lastModified.toString(),
-						originalFormat,
-						formatIcon,
-					},
-				}
-
-				// Add layer to controller (this will notify subscribers)
-				this.addMapLayer(layer)
-
-				console.log(`[Controller] Added workspace layer: ${file.name} (${originalFormat}, hidden by default)`)
+				await this.addWorkspaceFileAsLayer(file)
 			} catch (error) {
 				console.error(`[Controller] Failed to load workspace file ${file.relativePath}:`, error)
 				// Continue with next file instead of stopping completely

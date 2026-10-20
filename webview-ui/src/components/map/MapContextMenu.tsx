@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import type { ClickedFeature } from "./FeatureIdentifier"
+import { MAP_Z } from "./mapZ"
 
 export type FeatureContext = "watershed" | "river" | "feature" | "empty"
 
@@ -178,7 +179,7 @@ const MapContextMenu: React.FC<MapContextMenuProps> = ({
 				position: "absolute",
 				left: x,
 				top: y,
-				zIndex: 20,
+				zIndex: MAP_Z.menu,
 				minWidth: 200,
 				maxWidth: 248,
 				background: bg,

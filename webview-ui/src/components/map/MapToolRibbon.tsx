@@ -25,6 +25,7 @@ import { BasemapList } from "./BaseMapSelector"
 import HydrographyPanel from "./HydrographyPanel"
 import { LayerPanelContent } from "./LayerPanel"
 import MapExport from "./MapExport"
+import { MAP_Z } from "./mapZ"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import ResearchGalleryPanel from "./ResearchGalleryPanel"
 
@@ -70,24 +71,31 @@ interface MapToolRibbonProps {
 	mapStyle: "dark" | "light"
 	currentBasemap: string
 	onBasemapChange: (id: string) => void
-	hasMapboxToken?: boolean
+	/** True when the current basemap was chosen by the user (not the hydrology default). */
+	basemapExplicit?: boolean
+	/** Clear the user's basemap choice and return to the hydrology default. */
+	onBasemapReset?: () => void
+	/**
+	 * The open tool panel. MapView owns this so there is ONE source of truth for which panel is open (the
+	 * empty state, Escape handling and the search/gallery/export/transect panels all derive from it).
+	 * When omitted the ribbon keeps its own state.
+	 */
+	activeTool?: RibbonTool
+	onActiveToolChange?: (tool: RibbonTool) => void
 	visibleLayerIds: Set<string>
 	onVisibilityChange: (layerId: string, visible: boolean) => void
 	onZoomToLayer?: (layer: MapLayer) => void
 	layerOrder: string[]
 	onReorder: (newOrder: string[]) => void
+	/** All layers the host holds. */
 	layerCount: number
+	/** Layers currently shown. The badge counts these; the tooltip gives "N visible · M hidden". */
+	visibleLayerCount?: number
 	measureMode?: "distance" | "area" | null
 	onMeasureModeChange?: (mode: "distance" | "area" | null) => void
 	drawMode?: "polygon" | "line" | "point" | null
 	onDrawModeChange?: (mode: "polygon" | "line" | "point" | null) => void
 	onFitExtent?: () => void
-	searchOpen?: boolean
-	onSearchToggle?: () => void
-	galleryOpen?: boolean
-	onGalleryToggle?: () => void
-	exportOpen?: boolean
-	onExportToggle?: () => void
 	layerOpacities?: Record<string, number>
 	onOpacityChange?: (layerId: string, opacity: number) => void
 	clusterLayerIds?: Set<string>
@@ -102,9 +110,6 @@ interface MapToolRibbonProps {
 	annotationsPanel?: React.ReactNode
 	/** Swipe UI rendered inside the Swipe ribbon panel */
 	swipePanel?: React.ReactNode
-	/** Transect tool active state */
-	transectActive?: boolean
-	onTransectToggle?: () => void
 	/** Transect UI rendered inside the Transect ribbon panel */
 	transectsPanel?: React.ReactNode
 	/** Gallery UI rendered inside the Gallery ribbon panel */
@@ -174,24 +179,22 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	mapStyle,
 	currentBasemap,
 	onBasemapChange,
-	hasMapboxToken,
+	basemapExplicit,
+	onBasemapReset,
+	activeTool,
+	onActiveToolChange,
 	visibleLayerIds,
 	onVisibilityChange,
 	onZoomToLayer,
 	layerOrder,
 	onReorder,
 	layerCount,
+	visibleLayerCount,
 	measureMode,
 	onMeasureModeChange,
 	drawMode,
 	onDrawModeChange,
 	onFitExtent,
-	searchOpen,
-	onSearchToggle,
-	galleryOpen,
-	onGalleryToggle,
-	exportOpen,
-	onExportToggle,
 	layerOpacities,
 	onOpacityChange,
 	clusterLayerIds,
@@ -203,8 +206,6 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	searchPanel,
 	annotationsPanel,
 	swipePanel,
-	transectActive,
-	onTransectToggle,
 	transectsPanel,
 	galleryPanel,
 	timeSliderPanel,
@@ -212,31 +213,17 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	boundClaimId,
 }) => {
 	const persisted = loadMapWorkspace()
-	const [active, setActive] = useState<RibbonTool>(null)
+	const [internalActive, setInternalActive] = useState<RibbonTool>(null)
+	const active: RibbonTool = activeTool !== undefined ? activeTool : internalActive
 	const [panelWidth, setPanelWidth] = useState<number>(persisted.ribbonPanel?.width ?? 280)
 	const [panelHeight, setPanelHeight] = useState<number>(persisted.ribbonPanel?.height ?? 380)
+	const visibleCount = visibleLayerCount ?? layerCount
+	const hiddenCount = Math.max(0, layerCount - visibleCount)
+	const layerSummary = `${visibleCount} visible · ${hiddenCount} hidden`
 
 	useEffect(() => {
 		saveMapWorkspace({ ribbonPanel: { width: panelWidth, height: panelHeight } })
 	}, [panelWidth, panelHeight])
-
-	useEffect(() => {
-		if (searchOpen && active !== "search") {
-			const size = TOOL_PANEL_SIZE.search
-			setPanelWidth(size.width)
-			setPanelHeight(size.height)
-			setActive("search")
-		}
-	}, [searchOpen, active])
-
-	useEffect(() => {
-		if (galleryOpen && active !== "gallery") {
-			const size = TOOL_PANEL_SIZE.gallery
-			setPanelWidth(size.width)
-			setPanelHeight(size.height)
-			setActive("gallery")
-		}
-	}, [galleryOpen, active])
 
 	const isDark = mapStyle === "dark"
 	const fg = isDark ? "var(--vscode-foreground, #ddd)" : "var(--vscode-foreground, #222)"
@@ -269,16 +256,35 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 		setPanelHeight(clampPanelHeight(size.height, tool))
 	}
 
-	const toggle = (tool: RibbonTool) =>
-		setActive((cur) => {
-			if (cur === tool) {
-				return null
-			}
-			if (tool) {
-				applyToolSize(tool)
-			}
-			return tool
-		})
+	// Size the panel for whichever tool opens, however it was opened (ribbon click or MapView, e.g. the empty
+	// state's "Find a gauge").
+	useEffect(() => {
+		if (active) {
+			applyToolSize(active)
+		}
+	}, [active])
+
+	/**
+	 * The one way a panel opens or closes. Leaving a tool ends its map mode (measure / draw), so a tool is never
+	 * left running behind another panel and two ribbon items are never lit at once.
+	 */
+	const changeTool = (next: RibbonTool) => {
+		if (next === active) {
+			return
+		}
+		if (active === "measure") {
+			onMeasureModeChange?.(null)
+		}
+		if (active === "draw") {
+			onDrawModeChange?.(null)
+		}
+		if (activeTool === undefined) {
+			setInternalActive(next)
+		}
+		onActiveToolChange?.(next)
+	}
+
+	const toggle = (tool: Exclude<RibbonTool, null>) => changeTool(active === tool ? null : tool)
 
 	const onResizeWidthStart = (e: React.MouseEvent) => {
 		e.preventDefault()
@@ -315,28 +321,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	const showLabels = useWideViewport()
 	const ribbonWidth = showLabels ? 188 : 44
 
-	// Close panel handler — also clears measure mode / search / export when closing
-	const closePanel = () => {
-		if (active === "measure") {
-			onMeasureModeChange?.(null)
-		}
-		if (active === "transect") {
-			onTransectToggle?.()
-		}
-		if (active === "draw") {
-			onDrawModeChange?.(null)
-		}
-		if (active === "search") {
-			onSearchToggle?.()
-		}
-		if (active === "gallery") {
-			onGalleryToggle?.()
-		}
-		if (active === "export") {
-			onExportToggle?.()
-		}
-		setActive(null)
-	}
+	const closePanel = () => changeTool(null)
 
 	const ribbonGroups: RibbonGroup[] = [
 		{
@@ -354,9 +339,9 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					key: "layers",
 					icon: "layers",
 					text: "Layers",
-					label: layerCount > 0 ? `Layer manager (${layerCount})` : "Layer manager",
+					label: layerCount > 0 ? `Layer manager (${layerSummary})` : "Layer manager",
 					active: active === "layers",
-					badge: layerCount > 0 ? layerCount : undefined,
+					badge: layerCount > 0 ? visibleCount : undefined,
 					onClick: () => toggle("layers"),
 				},
 				{
@@ -364,11 +349,8 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					icon: "compass",
 					text: "Gallery",
 					label: "Research Gallery",
-					active: active === "gallery" || !!galleryOpen,
-					onClick: () => {
-						toggle("gallery")
-						onGalleryToggle?.()
-					},
+					active: active === "gallery",
+					onClick: () => toggle("gallery"),
 				},
 				{
 					key: "hydrography",
@@ -397,11 +379,8 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					icon: "search",
 					text: "Search",
 					label: "Search",
-					active: active === "search" || !!searchOpen,
-					onClick: () => {
-						toggle("search")
-						onSearchToggle?.()
-					},
+					active: active === "search",
+					onClick: () => toggle("search"),
 				},
 			],
 		},
@@ -414,13 +393,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					text: "Draw",
 					label: "Draw geometry",
 					active: active === "draw",
-					onClick: () => {
-						onMeasureModeChange?.(null)
-						if (active === "transect") {
-							onTransectToggle?.()
-						}
-						toggle("draw")
-					},
+					onClick: () => toggle("draw"),
 				},
 				{
 					key: "annotations",
@@ -435,26 +408,16 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					icon: "symbol-ruler",
 					text: "Measure",
 					label: "Measure",
-					active: active === "measure" || !!measureMode,
-					onClick: () => {
-						onDrawModeChange?.(null)
-						toggle("measure")
-					},
+					active: active === "measure",
+					onClick: () => toggle("measure"),
 				},
 				{
 					key: "transect",
 					icon: "graph-line",
 					text: "Transect",
 					label: "Transect profile",
-					active: active === "transect" || !!transectActive,
-					onClick: () => {
-						onMeasureModeChange?.(null)
-						onDrawModeChange?.(null)
-						if (active !== "transect") {
-							onTransectToggle?.()
-						}
-						toggle("transect")
-					},
+					active: active === "transect",
+					onClick: () => toggle("transect"),
 				},
 				{
 					key: "flood",
@@ -502,7 +465,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					icon: "export",
 					text: "Export",
 					label: "Export snapshot",
-					active: active === "export" || !!exportOpen,
+					active: active === "export",
 					onClick: () => toggle("export"),
 				},
 			],
@@ -519,7 +482,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 						position: "absolute",
 						top: 10,
 						right: ribbonWidth + 8,
-						zIndex: 4,
+						zIndex: MAP_Z.panel,
 						width: clampPanelWidth(panelWidth, active),
 						height: clampPanelHeight(panelHeight, active),
 						minWidth: active ? TOOL_PANEL_SIZE[active].minWidth : 220,
@@ -548,7 +511,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 							bottom: 0,
 							width: active === "export" ? 9 : 4,
 							cursor: "ew-resize",
-							zIndex: 1,
+							zIndex: MAP_Z.local,
 							background: active === "export" ? "rgba(255,255,255,0.08)" : "transparent",
 						}}
 						title="Drag left edge to resize"
@@ -590,7 +553,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 							{active === "basemap"
 								? "Basemap"
 								: active === "layers"
-									? `Layers (${layerCount})`
+									? `Layers (${layerSummary})`
 									: active === "gallery"
 										? "Research Gallery"
 										: active === "search"
@@ -621,6 +584,8 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 								border: "none",
 								borderRadius: 3,
 								padding: "2px 6px",
+								minWidth: 24,
+								minHeight: 24,
 								cursor: "pointer",
 								fontSize: 13,
 								lineHeight: 1,
@@ -643,7 +608,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 							bottom: 0,
 							height: active === "export" ? 9 : 5,
 							cursor: "ns-resize",
-							zIndex: 1,
+							zIndex: MAP_Z.local,
 							background: active === "export" ? "rgba(255,255,255,0.08)" : "transparent",
 						}}
 						title="Drag bottom edge to resize height"
@@ -654,8 +619,9 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 						{active === "basemap" && (
 							<BasemapList
 								currentStyle={currentBasemap}
-								hasMapboxToken={hasMapboxToken}
+								explicit={basemapExplicit}
 								mapStyle={mapStyle}
+								onResetToDefault={onBasemapReset}
 								onStyleChange={onBasemapChange}
 							/>
 						)}
@@ -842,7 +808,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 						position: "absolute",
 						top: 10,
 						right: ribbonWidth + 14,
-						zIndex: 5,
+						zIndex: MAP_Z.panel,
 						background: "rgba(80,200,120,0.18)",
 						border: "1px solid rgba(80,200,120,0.45)",
 						borderRadius: 12,
@@ -864,7 +830,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					position: "absolute",
 					top: 10,
 					right: 10,
-					zIndex: 5,
+					zIndex: MAP_Z.panel,
 					width: ribbonWidth,
 					maxHeight: "calc(100% - 20px)",
 					overflowY: "auto",

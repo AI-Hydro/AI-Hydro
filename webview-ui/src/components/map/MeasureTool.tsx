@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { fmtArea, fmtDist, type GeoPoint, haversineKm, lineLengthKm, polygonAreaKm2 } from "./geoMeasureMath"
+import { MAP_Z } from "./mapZ"
 
 export type MeasureMode = "distance" | "area" | null
 
@@ -171,7 +172,7 @@ export const MeasureTool: React.FC<MeasureToolProps> = ({
 				position: "absolute",
 				top: 12,
 				left: 12,
-				zIndex: 4,
+				zIndex: MAP_Z.overlay,
 				padding: "10px 14px",
 				background: isDark ? "rgba(20,20,28,0.92)" : "rgba(252,252,252,0.93)",
 				border: `1px solid ${isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"}`,

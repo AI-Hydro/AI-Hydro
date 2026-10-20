@@ -5,9 +5,15 @@
 import * as path from "path"
 import * as vscode from "vscode"
 import { isValidGeoJSONString } from "./GeoJsonValidator"
+import { isExcludedWorkspaceGeoPath, WORKSPACE_GEO_EXCLUDE_GLOB } from "./geoScanExclusions"
+import { realPathInsideFolder } from "./workspaceGeoPaths"
 
 export interface WorkspaceGeoJsonFile {
 	uri: vscode.Uri
+	/** Workspace folder the file belongs to (fsPath). Together with `relativePath` it is the file's identity. */
+	workspaceFolder: string
+	/** Display name of that folder (shown when the workspace has several). */
+	workspaceFolderName: string
 	relativePath: string
 	name: string
 	extension: string
@@ -49,7 +55,7 @@ export class FileScanner {
 				// Includes: GeoJSON, KML, GPX, TopoJSON, FlatGeobuf, Shapefiles
 				const pattern = new vscode.RelativePattern(folder, "**/*.{geojson,json,kml,gpx,topojson,topo.json,fgb,shp}")
 				// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required for file scanning
-				const uris = await vscode.workspace.findFiles(pattern, "**/node_modules/**")
+				const uris = await vscode.workspace.findFiles(pattern, WORKSPACE_GEO_EXCLUDE_GLOB)
 
 				console.log(`[FileScanner] Found ${uris.length} potential geo data files in ${folder.name}`)
 
@@ -71,6 +77,17 @@ export class FileScanner {
 			const extension = path.extname(uri.fsPath).toLowerCase()
 			const relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath)
 			const name = path.basename(uri.fsPath)
+
+			// The watcher glob is workspace-wide, so excluded directories must be re-checked here.
+			if (isExcludedWorkspaceGeoPath(relativePath)) {
+				return
+			}
+
+			// A symlink that leaves the workspace folder is not a workspace file.
+			if (!(await realPathInsideFolder(workspaceFolder.uri.fsPath, uri.fsPath))) {
+				console.log(`[FileScanner] Skipped (resolves outside the workspace folder): ${relativePath}`)
+				return
+			}
 
 			// Determine if file needs conversion
 			const requiresConversion = this.needsConversion(extension)
@@ -96,6 +113,8 @@ export class FileScanner {
 
 			const file: WorkspaceGeoJsonFile = {
 				uri,
+				workspaceFolder: workspaceFolder.uri.fsPath,
+				workspaceFolderName: workspaceFolder.name,
 				relativePath,
 				name,
 				extension,

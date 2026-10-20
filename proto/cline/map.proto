@@ -171,6 +171,33 @@ message SaveMapExportResponse {
     string message = 3;
 }
 
+// A geo data file found in the workspace that the user can add to the map
+message WorkspaceGeoFile {
+    string relative_path = 1;  // Workspace-relative path (unique key)
+    string name = 2;           // File name
+    string extension = 3;      // Lower-case extension including the dot
+    string workspace_folder = 4; // Workspace folder path; with relative_path it identifies the file in multi-root workspaces
+    string folder_name = 5;    // Display name of that folder
+}
+
+message ListWorkspaceGeoFilesResponse {
+    repeated WorkspaceGeoFile files = 1;
+    int32 total_count = 2;     // Files found; `files` may be capped
+}
+
+message AddWorkspaceGeoFileRequest {
+    string relative_path = 1;
+    string workspace_folder = 2; // Empty is accepted only when relative_path is unambiguous
+}
+
+message AddWorkspaceGeoFileResponse {
+    string layer_id = 1;       // Layer created for the file
+}
+
+message RestoreOlderMapLayersResponse {
+    int32 restored = 1;        // Layers loaded from the older, kept-but-not-loaded part of the catalog
+}
+
 // Service for map operations
 service MapService {
     // Add a layer to the map
@@ -199,6 +226,15 @@ service MapService {
     rpc reportMapEvent(ReportMapEventRequest) returns (Empty);
     rpc getRecentMapEvents(GetRecentMapEventsRequest) returns (MapEventsResponse);
     rpc subscribeToMapSession(EmptyRequest) returns (stream MapSessionState);
+
+    // List workspace geo files the user can add (never auto-registered as layers)
+    rpc listWorkspaceGeoFiles(EmptyRequest) returns (ListWorkspaceGeoFilesResponse);
+
+    // Add one workspace geo file to the map as a layer
+    rpc addWorkspaceGeoFile(AddWorkspaceGeoFileRequest) returns (AddWorkspaceGeoFileResponse);
+
+    // Load the saved layers beyond the startup restore cap (they are kept on disk, not dropped)
+    rpc restoreOlderMapLayers(EmptyRequest) returns (RestoreOlderMapLayersResponse);
     rpc subscribeToMapEvents(EmptyRequest) returns (stream MapEvent);
     rpc prepareMapExport(PrepareMapExportRequest) returns (PrepareMapExportResponse);
     rpc saveMapExport(SaveMapExportRequest) returns (SaveMapExportResponse);

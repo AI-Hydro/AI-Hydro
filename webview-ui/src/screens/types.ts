@@ -46,6 +46,12 @@ export interface ScreenDef {
 	state?: Partial<ExtensionState>
 	ledger?: { sessionId: string; claims: ClaimRecord[]; error?: string }
 	layers?: MapLayer[]
+	/** Map layer-sync state the fixture reports (default "connected"). "loading" never completes. */
+	mapConnection?: "loading" | "connected" | "stale"
+	/** Host is still restoring saved layers (the empty-state card must stay hidden). */
+	mapHydrating?: boolean
+	/** Saved layers kept on disk beyond the restore cap (the Layers panel offers "Restore older layers"). */
+	mapOlderCount?: number
 	/** Artifacts the fixture host reports from saveMapExport (0 exercises the zero-output state). */
 	exportOutputs?: number
 	htmlPreviews?: HtmlPreviewItem[]

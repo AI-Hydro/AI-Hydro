@@ -22,6 +22,7 @@ import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 import { buildInundation3dLayerFromPath } from "./inundation3dLayer"
 import { type MapLayerCatalogEntry, readMapLayerCatalog } from "./mapLayerCatalog"
+import { selectCatalogEntriesToRestore } from "./restoreSelection"
 
 async function readFileToBase64(filePath: string): Promise<string | null> {
 	try {
@@ -104,7 +105,7 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 	})
 }
 
-async function buildLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLayer | null> {
+export async function buildLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLayer | null> {
 	const t = entry.layer_type
 
 	if (t === "raster") {
@@ -142,13 +143,39 @@ async function buildLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLaye
 }
 
 /**
+ * Build and add layers for catalog entries. The UI reads `_hydrated_of` to say "Restored N of M saved layers"
+ * rather than hiding the rest. Entries that cannot be rebuilt (missing file) are skipped, never fatal.
+ * Returns the ids of the layers added, in order.
+ */
+export async function restoreCatalogEntries(
+	controller: Controller,
+	entries: MapLayerCatalogEntry[],
+	total: number,
+): Promise<string[]> {
+	const added: string[] = []
+	for (const entry of entries) {
+		try {
+			const layer = await buildLayerFromEntry(entry)
+			if (layer) {
+				layer.metadata = { ...(layer.metadata ?? {}), _hydrated_of: String(total) }
+				controller.addMapLayer(layer)
+				added.push(layer.id)
+			}
+		} catch (err) {
+			console.warn(`[hydrateMapLayers] Skipping layer ${entry.id}:`, err)
+		}
+	}
+	return added
+}
+
+/**
  * Read the persisted catalog and restore layers into the controller.
  * Called from Controller constructor (after mapSessionService.initialize).
  */
-export async function hydrateMapLayersFromCatalog(controller: Controller): Promise<void> {
+export async function hydrateMapLayersFromCatalog(controller: Controller, currentScope?: string): Promise<void> {
 	let catalog
 	try {
-		catalog = await readMapLayerCatalog()
+		catalog = await readMapLayerCatalog(currentScope)
 	} catch {
 		return
 	}
@@ -156,29 +183,18 @@ export async function hydrateMapLayersFromCatalog(controller: Controller): Promi
 		return
 	}
 
-	const order = catalog.layer_order ?? []
-	// Process in display order so mapLayerOrder is correct
-	const entriesInOrder = [
-		...order.map((id) => catalog.layers.find((l) => l.id === id)).filter((e): e is MapLayerCatalogEntry => !!e),
-		...catalog.layers.filter((l) => !order.includes(l.id)),
-	]
+	// Scope to the current workspace and cap the count (see restoreSelection.ts). Older entries are handed to
+	// the controller, which keeps them in the catalog and offers "Restore older layers".
+	const selection = selectCatalogEntriesToRestore(catalog, currentScope)
+	controller.setMapOverflowEntries(selection.overflow)
 
-	let restored = 0
-	for (const entry of entriesInOrder) {
-		try {
-			const layer = await buildLayerFromEntry(entry)
-			if (layer) {
-				controller.addMapLayer(layer)
-				restored++
-			}
-		} catch (err) {
-			console.warn(`[hydrateMapLayers] Skipping layer ${entry.id}:`, err)
-		}
-	}
+	const restored = await restoreCatalogEntries(controller, selection.entries, selection.total)
 
-	if (restored > 0) {
-		console.log(`[hydrateMapLayers] Restored ${restored} / ${entriesInOrder.length} layers from catalog`)
-	}
+	console.log(
+		`[hydrateMapLayers] Restored ${restored.length} / ${selection.total} layers from catalog` +
+			(selection.outOfScope ? ` (${selection.outOfScope} belong to another workspace)` : "") +
+			(selection.capped ? ` (${selection.capped} older layers kept on disk, not loaded; cap reached)` : ""),
+	)
 }
 
 /**

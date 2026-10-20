@@ -20,9 +20,10 @@ import {
 import { finalAnswerTask, mcpCallTask, plainTextTask, refusalTask, taskItem } from "./fixtures/chat"
 import { approvalClaims, claim, driftClaims, FIXTURE_SESSION, statusClaims } from "./fixtures/claims"
 import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/experiments"
-import { basinPolygon, featureLayers, framedWorkspace, MAP_STORAGE_KEY } from "./fixtures/map"
+import { basinPolygon, featureLayers, framedWorkspace, gaugePoint, MAP_STORAGE_KEY } from "./fixtures/map"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
+import { MapBannerVariantsScreen } from "./MapBannerVariantsScreen"
 import { PrimitivesScreen } from "./PrimitivesScreen"
 import type { ScreenDef } from "./types"
 
@@ -348,6 +349,30 @@ export const screens: ScreenDef[] = [
 		storage: { [MAP_STORAGE_KEY]: framedWorkspace("esri-topo") },
 	}),
 	mapScreen("map-empty-default", "Map empty state, default basemap"),
+	// Hydrology default basemap: muted base, USGS hydrography overlay, no labels (light and dark come from the theme).
+	mapScreen("map-basemap-muted-default", "Map on the muted hydrology default basemap", { layers: [basinPolygon, gaugePoint] }),
+	mapScreen("map-basemap-panel", "Basemap panel with Reset to hydrology default", {
+		layers: [basinPolygon],
+		steps: [{ click: 'button[aria-label="Basemap"]' }, { wait: 500 }],
+	}),
+	{
+		id: "map-banner-variants",
+		title: "Map resource notices: imagery, renderer, both, quiet note",
+		group: "map",
+		surface: "editor",
+		render: () => <MapBannerVariantsScreen />,
+	},
+	mapScreen("map-error-imagery", "Map with every basemap tile failing (alert, Retry imagery)", { layers: [basinPolygon] }),
+	mapScreen("map-error-partial-tiles", "Map with one basemap tile missing (quiet note, no alert)", { layers: [basinPolygon] }),
+	mapScreen("map-empty-panel-open", "No layers with a tool panel open (no empty-state card)", {
+		steps: [{ click: 'button[aria-label="Basemap"]' }, { wait: 500 }],
+	}),
+	mapScreen("map-sync-hydrating", "Saved layers still restoring (no empty-state card)", { mapHydrating: true }),
+	mapScreen("map-sync-loading", "Layer sync still loading (no empty-state card)", { mapConnection: "loading" }),
+	// Ribbon badge counts visible layers only (2 of 4 shown); the tooltip and panel header read "N visible · M hidden".
+	mapScreen("map-layer-badge-counts", "Layer badge counts visible layers only", {
+		layers: featureLayers().map((layer, index) => (index % 2 === 1 ? { ...layer, visible: false } : layer)),
+	}),
 	mapScreen("map-features", "Map with basin, gauge, rivers and raster (toolbar visible)", { layers: featureLayers() }),
 	mapScreen("map-layer-manager", "Map layer manager open", {
 		layers: featureLayers(),

@@ -1,117 +1,19 @@
 import React from "react"
+import { BASE_MAP_STYLES, type BaseMapStyle, DEFAULT_BASEMAP_ID } from "./basemaps"
+import { MAP_Z } from "./mapZ"
 
-export interface BaseMapStyle {
-	id: string
-	name: string
-	url: string
-	attribution?: string
-	requiresToken?: boolean
-}
-
-/**
- * Hydrology-first basemap catalogue.
- *
- * Ordering reflects expected utility for AI-Hydro workflows:
- *   1. USGS topo + imagery + shaded relief    (water-focused, free, no token)
- *   2. Esri Hillshade + Imagery + Topo        (best CDN coverage, no token)
- *   3. Carto Light/Dark                       (clean overlay base, no token)
- *   4. Stadia terrain + OSM HOT               (alternatives if Esri/USGS unreachable)
- *   5. Restricted: OpenStreetMap.org direct   (volunteer servers — opt-in only)
- *   6. Token-gated: Mapbox styles             (require user-supplied token)
- */
-export const BASE_MAP_STYLES: BaseMapStyle[] = [
-	// ── Hydrology / Earth-science friendly defaults ──────────────────────────
-	{
-		id: "usgs-topo",
-		name: "USGS Topo",
-		url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
-		attribution: "USGS The National Map",
-	},
-	{
-		id: "usgs-imagery",
-		name: "USGS Imagery",
-		url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
-		attribution: "USGS The National Map",
-	},
-	{
-		id: "usgs-shaded-relief",
-		name: "USGS Shaded Relief",
-		url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}",
-		attribution: "USGS The National Map",
-	},
-
-	// ── Esri (global, robust, no token) ──────────────────────────────────────
-	{
-		id: "esri-hillshade",
-		name: "Esri Hillshade",
-		url: "https://services.arcgisonline.com/arcgis/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}",
-		attribution: "© Esri — Sources: Esri, USGS, NOAA",
-	},
-	{
-		id: "esri-imagery",
-		name: "Esri World Imagery",
-		url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-		attribution: "© Esri — Sources: Esri, Maxar, Earthstar Geographics, USGS",
-	},
-	{
-		id: "esri-topo",
-		name: "Esri World Topo",
-		url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-		attribution: "© Esri",
-	},
-	{
-		id: "esri-ocean",
-		name: "Esri Ocean",
-		url: "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
-		attribution: "© Esri — Sources: GEBCO, NOAA, Garmin",
-	},
-
-	// ── Carto (clean overlay base, OSM-derived, CDN, free for non-commercial) ──
-	{
-		id: "carto-light",
-		name: "Carto Light",
-		url: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-		attribution: "© OpenStreetMap © CartoDB",
-	},
-	{
-		id: "carto-dark",
-		name: "Carto Dark",
-		url: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-		attribution: "© OpenStreetMap © CartoDB",
-	},
-	{
-		id: "carto-voyager",
-		name: "Carto Voyager",
-		url: "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-		attribution: "© OpenStreetMap © CartoDB",
-	},
-
-	// ── Alternates / specialty ───────────────────────────────────────────────
-	{
-		id: "stadia-terrain",
-		name: "Stadia Terrain",
-		url: "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.jpg",
-		attribution: "© Stadia Maps © Stamen Design © OpenStreetMap",
-	},
-	{
-		id: "osm-hot",
-		name: "Humanitarian OSM",
-		url: "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
-		attribution: "© OpenStreetMap © HOT",
-	},
-
-	// ── Mapbox (token-gated) ─────────────────────────────────────────────────
-	{ id: "mapbox-dark", name: "Mapbox Dark", url: "mapbox://styles/mapbox/dark-v10", requiresToken: true },
-	{ id: "mapbox-light", name: "Mapbox Light", url: "mapbox://styles/mapbox/light-v10", requiresToken: true },
-	{ id: "mapbox-outdoors", name: "Mapbox Outdoors", url: "mapbox://styles/mapbox/outdoors-v10", requiresToken: true },
-	{ id: "mapbox-satellite", name: "Mapbox Satellite", url: "mapbox://styles/mapbox/satellite-v9", requiresToken: true },
-]
+// The catalogue lives in basemaps.ts (pure data: zoom limits, extents, attribution). Re-exported so existing
+// importers keep working.
+export { BASE_MAP_STYLES, type BaseMapStyle }
 
 interface BaseMapSelectorProps {
 	currentStyle: string
 	onStyleChange: (styleId: string) => void
-	hasMapboxToken?: boolean
 	mapStyle?: "light" | "dark"
+	/** True when the current basemap is one the user picked (not the hydrology default). */
+	explicit?: boolean
+	/** Clears the user's choice and returns to the hydrology default. */
+	onResetToDefault?: () => void
 }
 
 /**
@@ -122,10 +24,13 @@ interface BaseMapSelectorProps {
 export const BasemapList: React.FC<BaseMapSelectorProps> = ({
 	currentStyle,
 	onStyleChange,
-	hasMapboxToken = false,
 	mapStyle = "dark",
+	explicit = false,
+	onResetToDefault,
 }) => {
-	const availableStyles = BASE_MAP_STYLES.filter((style) => !style.url.startsWith("mapbox://") || hasMapboxToken)
+	const availableStyles = BASE_MAP_STYLES
+	const selectedStyle = availableStyles.find((s) => s.id === currentStyle)
+	const resetUseful = onResetToDefault && (explicit || currentStyle !== DEFAULT_BASEMAP_ID)
 
 	const isDark = mapStyle === "dark"
 	const fg = isDark ? "var(--vscode-foreground, #ddd)" : "var(--vscode-foreground, #222)"
@@ -171,7 +76,7 @@ export const BasemapList: React.FC<BaseMapSelectorProps> = ({
 				)
 			})}
 
-			{availableStyles[0]?.attribution && (
+			{(selectedStyle?.attribution || selectedStyle?.note) && (
 				<div
 					style={{
 						padding: "8px 8px 4px",
@@ -181,7 +86,32 @@ export const BasemapList: React.FC<BaseMapSelectorProps> = ({
 						opacity: 0.8,
 						lineHeight: 1.4,
 					}}>
-					{availableStyles.find((s) => s.id === currentStyle)?.attribution ?? ""}
+					{selectedStyle?.note && <div style={{ marginBottom: 4 }}>{selectedStyle.note}</div>}
+					{selectedStyle?.attribution}
+				</div>
+			)}
+
+			{onResetToDefault && (
+				<div style={{ padding: "8px 8px 4px" }}>
+					<button
+						disabled={!resetUseful}
+						onClick={onResetToDefault}
+						style={{
+							width: "100%",
+							padding: "6px 8px",
+							fontSize: 12,
+							fontFamily: "inherit",
+							color: fg,
+							background: "transparent",
+							border: `1px solid ${resetUseful ? accent : subtle}`,
+							borderRadius: 3,
+							cursor: resetUseful ? "pointer" : "default",
+							opacity: resetUseful ? 1 : 0.6,
+						}}
+						title="Use the muted hydrology basemap and stop keeping a manual choice"
+						type="button">
+						Reset to hydrology default
+					</button>
 				</div>
 			)}
 		</div>
@@ -192,13 +122,8 @@ export const BasemapList: React.FC<BaseMapSelectorProps> = ({
  * BaseMapSelector — legacy floating-dropdown variant. Kept for the in-chat
  * map tab where the ribbon is overkill. New surfaces should use BasemapList.
  */
-export const BaseMapSelector: React.FC<BaseMapSelectorProps> = ({
-	currentStyle,
-	onStyleChange,
-	hasMapboxToken = false,
-	mapStyle = "dark",
-}) => {
-	const availableStyles = BASE_MAP_STYLES.filter((style) => !style.url.startsWith("mapbox://") || hasMapboxToken)
+export const BaseMapSelector: React.FC<BaseMapSelectorProps> = ({ currentStyle, onStyleChange, mapStyle = "dark" }) => {
+	const availableStyles = BASE_MAP_STYLES
 	const selected = availableStyles.find((s) => s.id === currentStyle)
 
 	return (
@@ -207,7 +132,7 @@ export const BaseMapSelector: React.FC<BaseMapSelectorProps> = ({
 				position: "absolute",
 				top: 10,
 				right: 10,
-				zIndex: 5,
+				zIndex: MAP_Z.panel,
 				background:
 					mapStyle === "dark"
 						? "var(--vscode-editor-background, rgba(30,30,30,0.95))"

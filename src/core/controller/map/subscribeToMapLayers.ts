@@ -40,13 +40,21 @@ export async function subscribeToMapLayers(
 		else void send(layer)
 	})
 	if (requestId) getRequestRegistry().registerRequest(requestId, cleanup, { type: "map_layer_subscription" }, responseStream)
-	const marker = (operation: string) => MapLayer.create({ id: "__map_sync__", metadata: { __operation: operation } })
+	const marker = (operation: string, extra: Record<string, string> = {}) =>
+		MapLayer.create({ id: "__map_sync__", metadata: { __operation: operation, ...extra } })
 	// Capture synchronously after subscribing, before any asynchronous delivery.
 	const snapshot = [...controller.getMapLayers()]
 	await send(marker("snapshot_start"))
 	// Large inline blobs are stripped from the snapshot; the webview loads them from disk.
 	for (const layer of snapshot) await send(sanitizeMapLayerForWebview(layer))
-	await send(marker("snapshot_complete"))
+	// Restore progress rides on the marker so the webview never shows "No layers yet" while layers are still loading.
+	const restore = controller.getMapRestoreState()
+	await send(
+		marker("snapshot_complete", {
+			hydrating: restore.hydrating ? "1" : "0",
+			older_count: String(restore.olderCount),
+		}),
+	)
 	initializing = false
 	for (const layer of pending.splice(0)) void send(layer)
 	await tail

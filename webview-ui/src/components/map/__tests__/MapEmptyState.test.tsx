@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { MapEmptyState } from "../MapEmptyState"
+import { MapEmptyState, shouldShowEmptyState } from "../MapEmptyState"
 
 const mock = vi.hoisted(() => ({ start: vi.fn() }))
 vi.mock("../mapAgentBridge", () => ({ startMapAgentTask: mock.start }))
@@ -54,5 +54,29 @@ describe("MapEmptyState", () => {
 		expect(prompt).toMatch(/stop and ask/i)
 		expect(prompt).not.toMatch(/\d/)
 		await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Agent task started"))
+	})
+})
+
+describe("shouldShowEmptyState", () => {
+	it("shows only when the sync is complete, there are no layers and no panel is open", () => {
+		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 0, panelOpen: false })).toBe(true)
+	})
+	it("never during the loading sync or when stale (an empty list says nothing then)", () => {
+		expect(shouldShowEmptyState({ connectionStatus: "loading", layerCount: 0, panelOpen: false })).toBe(false)
+		expect(shouldShowEmptyState({ connectionStatus: "stale", layerCount: 0, panelOpen: false })).toBe(false)
+	})
+	it("never while a tool panel is open", () => {
+		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 0, panelOpen: true })).toBe(false)
+	})
+	it("never while the host is still restoring saved layers", () => {
+		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 0, panelOpen: false, hydrating: true })).toBe(
+			false,
+		)
+		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 0, panelOpen: false, hydrating: false })).toBe(
+			true,
+		)
+	})
+	it("never when there are layers", () => {
+		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 3, panelOpen: false })).toBe(false)
 	})
 })

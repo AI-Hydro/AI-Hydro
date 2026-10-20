@@ -1917,7 +1917,7 @@ vscode-dropdown::part(listbox) {
 	position: absolute;
 	top: 12px;
 	left: 12px;
-	z-index: 5;
+	z-index: var(--map-z-panel);
 	backdrop-filter: blur(8px);
 	-webkit-backdrop-filter: blur(8px);
 	background: color-mix(in srgb, var(--vscode-editor-background) 80%, transparent);
@@ -1939,7 +1939,7 @@ vscode-dropdown::part(listbox) {
 	font-size: 13px;
 	opacity: 0.55;
 	pointer-events: none;
-	z-index: 1;
+	z-index: var(--map-z-local);
 }
 
 .map-search-field-spinner {
@@ -1984,7 +1984,7 @@ vscode-dropdown::part(listbox) {
 .map-search-results {
 	position: relative;
 	margin-top: 6px;
-	z-index: 10;
+	z-index: var(--map-z-menu);
 	background: color-mix(in srgb, var(--vscode-editor-background) 95%, transparent);
 	border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 50%, transparent);
 	border-radius: 4px;
@@ -2019,7 +2019,7 @@ vscode-dropdown::part(listbox) {
 	position: absolute;
 	top: 12px;
 	left: 12px;
-	z-index: 4;
+	z-index: var(--map-z-overlay);
 	padding: 8px 12px;
 	background: color-mix(in srgb, var(--vscode-editor-background) 88%, transparent);
 	border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 50%, transparent);
@@ -2042,7 +2042,7 @@ vscode-dropdown::part(listbox) {
 	position: absolute;
 	top: 12px;
 	left: 12px;
-	z-index: 4;
+	z-index: var(--map-z-panel);
 	padding: 10px 14px;
 	background: color-mix(in srgb, var(--vscode-editor-background) 95%, transparent);
 	border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 50%, transparent);
@@ -2061,6 +2061,18 @@ vscode-dropdown::part(listbox) {
 	cursor: pointer;
 }
 
+/* ===== Map overlay z-index scale (mirrors MAP_Z in components/map/mapZ.ts) ===== */
+:root {
+	--map-z-canvas: 0;
+	--map-z-local: 1;
+	--map-z-overlay: 10;
+	--map-z-empty-state: 20;
+	--map-z-panel: 30;
+	--map-z-menu: 40;
+	--map-z-toast: 50;
+	--map-z-modal: 60;
+}
+
 /* ===== Map Bottom Bar ===== */
 
 .map-bottom-bar {
@@ -2068,7 +2080,7 @@ vscode-dropdown::part(listbox) {
 	bottom: 8px;
 	left: 8px;
 	right: 8px;
-	z-index: 5;
+	z-index: var(--map-z-overlay);
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -2192,7 +2204,7 @@ vscode-dropdown::part(listbox) {
 	position: absolute;
 	top: 52px;
 	left: 12px;
-	z-index: 5;
+	z-index: var(--map-z-overlay);
 	display: flex;
 	align-items: center;
 	gap: 6px;
@@ -2357,7 +2369,7 @@ vscode-dropdown::part(listbox) {
 .map-measure-crosshair {
 	position: absolute;
 	inset: 0;
-	z-index: 3;
+	z-index: var(--map-z-overlay);
 	cursor: crosshair;
 	pointer-events: none;
 }
@@ -2367,7 +2379,7 @@ vscode-dropdown::part(listbox) {
 	position: absolute;
 	bottom: 42px;
 	left: 12px;
-	z-index: 4;
+	z-index: var(--map-z-overlay);
 	padding: 5px 10px;
 	background: color-mix(in srgb, var(--vscode-editor-background) 88%, transparent);
 	border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 50%, transparent);

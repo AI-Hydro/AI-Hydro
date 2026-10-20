@@ -168,10 +168,11 @@ export const featureLayers = (): MapLayer[] => [rasterLayer(), basinPolygon, riv
 
 /** localStorage payload so the camera frames the synthetic geometry deterministically. */
 export const MAP_STORAGE_KEY = "aihydro.map.workspace.v1"
+/** Schema v2: a basemap is only honoured when `basemapExplicit` is true (the user picked it). */
 export const framedWorkspace = (basemap?: string, showDetails = false): string =>
 	JSON.stringify({
-		version: 1,
-		...(basemap ? { basemap } : {}),
+		version: 2,
+		...(basemap ? { basemap, basemapExplicit: true } : {}),
 		viewState: { longitude: CENTER[0], latitude: CENTER[1], zoom: 8.5, pitch: 0, bearing: 0 },
 		layerPanel: { showDetails },
 	})

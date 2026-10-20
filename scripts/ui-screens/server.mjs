@@ -82,7 +82,7 @@ let cached;
 export const useMapContext = () => {
   const screen = getActiveScreen();
   if (!cached || cached.__screen !== screen) {
-    cached = {__screen: screen, layers: screen?.layers ?? [], connectionStatus: "connected", connectionError: undefined, reconnect() {}, activeRoi: undefined, boundClaimId: undefined,
+    cached = {__screen: screen, layers: screen?.layers ?? [], connectionStatus: screen?.mapConnection ?? "connected", restoreState: {hydrating: screen?.mapHydrating ?? false, olderCount: screen?.mapOlderCount ?? 0}, restoreOlderLayers: async () => 0, connectionError: undefined, reconnect() {}, activeRoi: undefined, boundClaimId: undefined,
       addLayer() {}, removeLayer() {}, clearLayers() {}, getLayer: (id) => (screen?.layers ?? []).find((l) => l.id === id), setActiveRoiOnHost: async () => {}, refreshSessionRoi: async () => {}};
   }
   return cached;

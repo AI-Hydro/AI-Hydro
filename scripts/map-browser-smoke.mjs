@@ -54,7 +54,7 @@ const server = await createServer({
 				if (id === "\0smoke-grpc")
 					return `const client = new Proxy({}, {get: (_, name) => name === "prepareMapExport" ? async () => ({accepted: true, basePath: "/synthetic-smoke-no-disk-write"}) : name === "saveMapExport" ? async request => {window.__savedMapExport = request; return {ok: true, outputs: []}} : name.startsWith("subscribe") ? () => () => {} : async () => ({})}); ${clients.map((name) => `export const ${name} = client;`).join("\n")}`
 				if (id === "\0smoke-context")
-					return `const state = {layers: ${JSON.stringify(fixture)}, connectionStatus: "connected", reconnect: () => {}}; export const useMapContext = () => state;`
+					return `const state = {layers: ${JSON.stringify(fixture)}, connectionStatus: "connected", restoreState: {hydrating: false, olderCount: 0}, restoreOlderLayers: async () => 0, reconnect: () => {}}; export const useMapContext = () => state;`
 				if (id === "\0smoke-entry")
 					return `import "/src/index.css"; import React from "react"; import {createRoot} from "react-dom/client"; import {MapView} from "/src/components/map/MapView.tsx"; import {BrushContextProvider} from "/src/context/BrushContext.tsx"; createRoot(document.getElementById("root")).render(React.createElement(React.StrictMode, null, React.createElement(BrushContextProvider, null, React.createElement(MapView))));`
 			},
@@ -88,6 +88,50 @@ try {
 			setState() {},
 		})
 	})
+	// Seed a saved transect and an annotation so every overlay layer is live (the renderer crash needs them).
+	await page.addInitScript(() => {
+		const now = new Date().toISOString()
+		localStorage.setItem(
+			"aihydro.map.transects.v1",
+			JSON.stringify([
+				{
+					id: "smoke_transect",
+					name: "Smoke profile",
+					notes: "",
+					aiPrompt: "",
+					geometry: { type: "LineString", coordinates: [[79.9, 24.9], [80.1, 25.1]] },
+					color: "#f97316",
+					tags: [],
+					collectionIds: [],
+					status: "open",
+					priority: null,
+					createdAt: now,
+					updatedAt: now,
+				},
+			]),
+		)
+		localStorage.setItem(
+			"aihydro.map.annotations.v2",
+			JSON.stringify([
+				{
+					id: "smoke_annotation",
+					name: "Smoke annotation",
+					notes: "",
+					aiPrompt: "",
+					color: "#3b82f6",
+					type: "point",
+					geometry: { type: "Point", coordinates: [80.05, 25.02] },
+					tags: [],
+					images: [],
+					collectionIds: [],
+					status: "open",
+					priority: "low",
+					createdAt: now,
+					updatedAt: now,
+				},
+			]),
+		)
+	})
 	const errors = []
 	page.on("pageerror", (error) => {
 		errors.push(error.message)
@@ -103,9 +147,12 @@ try {
 		return canvas.toDataURL().split(",")[1]
 	})
 	let failing = true
-	// Every external response is controlled; no real provider requests or credentials.
-	await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) =>
-		route.fulfill(
+	// Every external request is logged (to assert zoom/extent limits) and answered locally; no real provider
+	// requests or credentials.
+	const requested = []
+	await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => {
+		requested.push(route.request().url())
+		return route.fulfill(
 			failing
 				? { status: 403, body: "intentional smoke failure" }
 				: {
@@ -114,11 +161,38 @@ try {
 						headers: { "Access-Control-Allow-Origin": "*" },
 						body: Buffer.from(png, "base64"),
 					},
-		),
-	)
+		)
+	})
 	await page.goto(server.resolvedUrls.local[0], { waitUntil: "networkidle", timeout: 120000 })
 	await page.locator("canvas#ai-hydro-research-map").waitFor({ timeout: 30000 })
 	await page.getByRole("alert").filter({ hasText: "HTTP 403" }).waitFor({ timeout: 30000 })
+	// Renderer lifecycle: Retry (still failing, three times), a forced WebGL context restore and swipe mode all
+	// remount a Deck. Each must hand it fresh layer instances (no "deck.gl: assertion failed" renderer error).
+	const noRendererError = async (label) => {
+		await page.waitForTimeout(700)
+		const alerts = (await page.getByRole("alert").allTextContents()).join(" | ")
+		assert.equal(await page.getByText("Map renderer", { exact: false }).count(), 0, `${label}: renderer error shown: ${alerts}`)
+		assert.equal(await page.getByText("assertion", { exact: false }).count(), 0, `${label}: assertion text shown`)
+		assert.deepEqual(errors, [], `${label}: uncaught browser errors`)
+	}
+	for (let i = 1; i <= 3; i++) {
+		await page.getByRole("button", { name: "Retry imagery", exact: true }).click()
+		await page.getByRole("alert").filter({ hasText: "HTTP 403" }).waitFor({ timeout: 30000 })
+		await noRendererError(`retry ${i}`)
+	}
+	await page
+		.locator("canvas#ai-hydro-research-map")
+		.evaluate((canvas) => canvas.dispatchEvent(new Event("webglcontextrestored")))
+	await page.locator("canvas#ai-hydro-research-map").waitFor({ timeout: 30000 })
+	await noRendererError("context restore")
+	await page.getByRole("button", { name: /^Swipe/ }).click()
+	await page.getByLabel("Enable Swipe Tool").check()
+	await page.locator("canvas").nth(1).waitFor({ timeout: 30000 })
+	await noRendererError("swipe mode")
+	await page.getByRole("button", { name: "Retry imagery", exact: true }).click()
+	await noRendererError("retry in swipe mode")
+	await page.getByLabel("Enable Swipe Tool").uncheck({ timeout: 90000 })
+	await page.getByRole("button", { name: "Close panel", exact: true }).click()
 	await page.getByRole("button", { name: "Export snapshot", exact: true }).click()
 	assert.equal(await page.getByRole("button", { name: "Research Plate Export", exact: true }).isDisabled(), true)
 	// Keep export readiness visible while retrying the underlying map.
@@ -129,6 +203,19 @@ try {
 	await page.waitForTimeout(1000)
 	assert.equal(await page.getByRole("alert").count(), 0)
 	assert.equal(await page.getByRole("button", { name: "Research Plate Export", exact: true }).isEnabled(), true)
+	assert.deepEqual(errors, [])
+	// Basemap limits: the default is the muted Carto no-labels base; the USGS hydrography overlay is US-only and
+	// the station is in India, so it must not be requested at all (extent); and zooming far past the source's
+	// native zoom must overzoom, never request a level the source does not serve.
+	assert.ok(requested.some((url) => /(light|dark)_nolabels/.test(url)), "default basemap should be Carto no-labels")
+	assert.equal(requested.filter((url) => /USGSHydroCached/.test(url)).length, 0, "US-only overlay requested outside its extent")
+	requested.length = 0
+	for (let i = 0; i < 18; i++) await page.getByRole("button", { name: "Zoom in", exact: true }).click()
+	await page.waitForLoadState("networkidle")
+	await page.waitForTimeout(1000)
+	const zooms = requested.map((url) => Number(url.match(/\/(\d+)\/\d+\/\d+\.png/)?.[1])).filter(Number.isFinite)
+	assert.ok(zooms.length > 0, "zooming should request tiles")
+	assert.ok(Math.max(...zooms) <= 19, `tile requested past native zoom: z=${Math.max(...zooms)}`)
 	assert.deepEqual(errors, [])
 	const canvas = await page.locator("canvas#ai-hydro-research-map").evaluate((canvas) => {
 		const copy = document.createElement("canvas")
@@ -163,7 +250,9 @@ try {
 				"actual MapView WebGL mount",
 				"visible HTTP failure",
 				"research export blocked",
+				"retry x3, WebGL context restore and swipe mode without a renderer error",
 				"retry recovery",
+				"muted default basemap, US-only overlay not requested outside its extent, no tile past native zoom",
 				"rendered station pixels",
 				"readable canvas",
 				"PNG composition and provenance bridge",
