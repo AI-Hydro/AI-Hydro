@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import * as sinon from "sinon"
 import { resetTelemetryService } from "@/services/telemetry"
 import { TelemetryService } from "@/services/telemetry/TelemetryService"
-import { AiHydroDefaultTool } from "@/shared/tools"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@/shared/AutoApprovalSettings"
+import { AiHydroDefaultTool } from "@/shared/tools"
 import { setWorkspaceTrustProvider } from "../../../workspaceTrust"
 import { AutoApprove } from "../../autoApprove"
 import { ExecuteCommandToolHandler } from "../ExecuteCommandToolHandler"
@@ -59,7 +59,15 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 		}
 		const stateManager = { getGlobalSettingsKey: (key: string) => state[key] }
 		const calls = { ask: [] as string[], say: [] as [string, string | undefined][], executed: [] as string[] }
+		// The UI rows the handler's callbacks would have created (the handler marks its command row's policyClass).
+		const rows: any[] = []
 		const config: any = {
+			messageState: {
+				getAiHydroMessages: () => rows,
+				updateAiHydroMessage: async (i: number, patch: object) => {
+					Object.assign(rows[i], patch)
+				},
+			},
 			ulid: "u",
 			cwd: "/work",
 			yoloModeToggled: !!opts.yolo,
@@ -79,10 +87,12 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 			callbacks: {
 				say: async (type: string, text?: string) => {
 					calls.say.push([type, text])
+					rows.push({ type: "say", say: type, text })
 					return undefined
 				},
 				ask: async (_type: string, text?: string) => {
 					calls.ask.push(text ?? "")
+					rows.push({ type: "ask", ask: _type, text })
 					return { response: opts.approve === false ? "noButtonClicked" : "yesButtonClicked" }
 				},
 				removeLastPartialMessageIfExistsWithType: async () => {},
@@ -93,18 +103,18 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 				},
 			},
 		}
-		return { config, calls }
+		return { config, calls, rows }
 	}
 
 	const run = (command: string, requiresApproval: boolean, opts: Parameters<typeof makeConfig>[0] = {}) => {
-		const { config, calls } = makeConfig(opts)
+		const { config, calls, rows } = makeConfig(opts)
 		const handler = new ExecuteCommandToolHandler({} as any)
 		const block: any = {
 			name: AiHydroDefaultTool.BASH,
 			params: { command, requires_approval: String(requiresApproval) },
 			partial: false,
 		}
-		return handler.execute(config, block).then((result) => ({ result, calls }))
+		return handler.execute(config, block).then((result) => ({ result, calls, rows }))
 	}
 
 	it("T14 python -c with requires_approval=false asks under default settings (the model's flag is not trusted)", async () => {
@@ -192,5 +202,17 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 	it("a command that mentions a protected path asks even under execute-all", async () => {
 		const { calls } = await run("cat ~/.ssh/id_ed25519", false, { safe: true, all: true })
 		expect(calls.ask).to.have.length(1)
+	})
+
+	it("W2-0h marks a policy-flagged command row with its policyClass; unremarkable commands carry none", async function () {
+		if (process.platform === "win32") {
+			this.skip()
+		}
+		const readOnly = await run("ls", false)
+		expect(readOnly.rows.find((r) => r.say === "command")?.policyClass).to.equal(undefined)
+		const allOn = await run("python -c 'print(1)'", false, { all: true })
+		expect(allOn.rows.find((r) => r.say === "command")?.policyClass).to.equal("auto_run_all")
+		const modelAsked = await run("ls", true)
+		expect(modelAsked.rows.find((r) => r.ask === "command")?.policyClass).to.equal("model_requested_approval")
 	})
 })

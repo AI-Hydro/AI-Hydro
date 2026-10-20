@@ -1,4 +1,5 @@
 import { type CallState, deriveCallState } from "@shared/aihydro/askOutcome"
+import { isElevatedMcpLevel } from "@shared/aihydro/infoNotice"
 import { getPairing, isScienceServer } from "@shared/aihydro/toolCallPresenter"
 import { COMMAND_OUTPUT_STRING, COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
 import {
@@ -1485,11 +1486,18 @@ export const ChatRowContent = memo(
 					case "mcp_server_response":
 						return <McpResponseDisplay responseText={message.text || ""} />
 					case "info":
-						return <MutedNotice text={message.text} />
+						return <MutedNotice severity={message.infoNotice?.severity} text={message.text} />
 					case "mcp_notification":
 						return (
-							<div className="chat-row-mcp-notification">
-								<i className="codicon codicon-bell chat-row-mcp-notification-icon" />
+							<div className="chat-row-mcp-notification" data-level={message.mcpLevel}>
+								<i
+									className="codicon codicon-bell chat-row-mcp-notification-icon"
+									style={
+										isElevatedMcpLevel(message.mcpLevel)
+											? { color: "var(--vscode-editorWarning-foreground)" }
+											: undefined
+									}
+								/>
 								<div className="flex-1 break-words">
 									<span style={{ fontWeight: 500 }}>MCP Notification: </span>
 									<span className="ph-no-capture">{message.text}</span>

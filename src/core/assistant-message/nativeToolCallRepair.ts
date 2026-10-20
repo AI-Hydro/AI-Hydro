@@ -29,6 +29,7 @@
  *  - an envelope still streaming is hidden from the transcript, and conversion happens once the message completes.
  */
 import { isFirstPartyServerName } from "@shared/aihydro/firstPartyServers"
+import { type InfoNotice, infoNoticeFor } from "@shared/aihydro/infoNotice"
 import { toolUseNames } from "@shared/tools"
 import { isDeepSeekModelFamily } from "@utils/model-utils"
 import { toolParamNames } from "."
@@ -336,25 +337,31 @@ export function repairNativeToolCallsForModel(
  * (prose after an envelope, the rest of a message with an unclosed envelope) would silently vanish.
  */
 export interface FinalNativePassPlan {
-	/** Muted `info` lines to emit, in order. */
-	notices: string[]
+	/** Muted `info` lines to emit, in order: the words plus the structured class/severity recorded on the row. */
+	notices: Array<{ text: string; notice: InfoNotice }>
 	/** When set, re-parse this text into the transcript (and present it). */
 	reparseText?: string
 }
 
 export function planFinalNativePass(streamedText: string, final: NativeToolCallRepairResult): FinalNativePassPlan {
-	const notices: string[] = []
+	const notices: Array<{ text: string; notice: InfoNotice }> = []
 	if (final.malformed.length > 0) {
-		notices.push(`malformed tool call; retried\n\n${final.malformed.join("\n\n")}`)
+		notices.push({
+			text: `malformed tool call; retried\n\n${final.malformed.join("\n\n")}`,
+			notice: infoNoticeFor("malformed_tool_call"),
+		})
 	}
 	if (final.repaired > 0) {
 		const routed = final.routes.map((r) => (r.server ? `${r.tool} on '${r.server}'` : r.tool)).join(", ")
-		notices.push(`Repaired a native tool call: ${routed}.`)
+		notices.push({ text: `Repaired a native tool call: ${routed}.`, notice: infoNoticeFor("native_call_repaired") })
 	}
 	if (final.leftAsText > 0) {
 		// Raw text behind the disclosure so it is visible even when the earlier text block was already presented
 		// (a real tool call after a non-trailing envelope does not re-present the text block before it).
-		notices.push(`Native tool call not at end of message; not run.${final.leftAsTextRaw ? `\n\n${final.leftAsTextRaw}` : ""}`)
+		notices.push({
+			text: `Native tool call not at end of message; not run.${final.leftAsTextRaw ? `\n\n${final.leftAsTextRaw}` : ""}`,
+			notice: infoNoticeFor("native_call_not_run"),
+		})
 	}
 	return { notices, reparseText: final.text !== streamedText ? final.text : undefined }
 }

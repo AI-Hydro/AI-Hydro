@@ -208,6 +208,16 @@ message ClineMessage {
   ClineAskQuestion ask_question = 20;
   ClineAskNewTask ask_new_task = 21;
   ClineApiReqInfo api_req_info = 22;
+
+  // AI-Hydro host evidence (Wave 2 W2-0h). High field numbers keep these clear of upstream/Cline additions.
+  // Empty string / absent = not recorded (old tasks), never a default meaning.
+  string info_class = 1001;          // say:info structured class (context_truncated, malformed_tool_call, ...)
+  string info_severity = 1002;       // "info" | "warning"
+  string info_detail_json = 1003;    // JSON object of notice specifics (counts, ranges); "" = none
+  string mcp_level = 1004;           // mcp_notification level (debug|info|warning|error)
+  string exit_code_state = 1005;     // command rows: "" = not recorded, "known", "unknown"
+  int32 exit_code = 1006;            // meaningful only when exit_code_state == "known"
+  string policy_class = 1007;        // command rows the host policy flagged
 }
 
 // UiService provides methods for managing UI interactions

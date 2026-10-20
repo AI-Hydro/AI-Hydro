@@ -9,6 +9,8 @@ import { featureFlagsService } from "@services/feature-flags"
 import { McpHub } from "@services/mcp/McpHub"
 import { telemetryService } from "@services/telemetry"
 import { callRowIndexToRecord } from "@shared/aihydro/askOutcome"
+import { execOutcomeFor } from "@shared/aihydro/commandEvidence"
+import type { SayEvidence } from "@shared/aihydro/infoNotice"
 import { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
 import { AiHydroDefaultTool } from "@shared/tools"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
@@ -114,6 +116,7 @@ export class ToolExecutor {
 			images?: string[],
 			files?: string[],
 			partial?: boolean,
+			evidence?: SayEvidence,
 		) => Promise<number | undefined>,
 		private ask: (
 			type: AiHydroAsk,
@@ -308,9 +311,10 @@ export class ToolExecutor {
 	 */
 	private async recordExecution(content: ToolResponse): Promise<void> {
 		const failed = typeof content === "string" && ToolExecutor.isToolErrorResult(content)
-		const index = callRowIndexToRecord(this.messageStateHandler.getAiHydroMessages())
+		const messages = this.messageStateHandler.getAiHydroMessages()
+		const index = callRowIndexToRecord(messages)
 		if (index >= 0) {
-			await this.messageStateHandler.updateAiHydroMessage(index, { execOutcome: failed ? "failed" : "completed" })
+			await this.messageStateHandler.updateAiHydroMessage(index, { execOutcome: execOutcomeFor(messages[index], failed) })
 		}
 	}
 

@@ -6,6 +6,7 @@ import type { BrowserSession } from "@services/browser/BrowserSession"
 import type { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import type { McpHub } from "@services/mcp/McpHub"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
+import type { SayEvidence } from "@shared/aihydro/infoNotice"
 import type { BrowserSettings } from "@shared/BrowserSettings"
 import type { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
 import type { FocusChainSettings } from "@shared/FocusChainSettings"
@@ -80,7 +81,14 @@ export interface TaskServices {
  * All callback functions available to tool handlers
  */
 export interface TaskCallbacks {
-	say: (type: AiHydroSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
+	say: (
+		type: AiHydroSay,
+		text?: string,
+		images?: string[],
+		files?: string[],
+		partial?: boolean,
+		evidence?: SayEvidence,
+	) => Promise<number | undefined>
 
 	ask: (
 		type: AiHydroAsk,

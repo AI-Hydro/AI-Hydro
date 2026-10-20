@@ -1,8 +1,10 @@
 import { TerminalOutputFailureReason, telemetryService } from "@services/telemetry"
+import type { CommandExit } from "@shared/aihydro/commandEvidence"
 import { EventEmitter } from "events"
 import * as vscode from "vscode"
 import { stripAnsi } from "./ansiUtils"
 import { getLatestTerminalOutput } from "./get-latest-output"
+import { parseExitFromChunk } from "./shellExit"
 
 export interface TerminalProcessEvents {
 	line: [line: string]
@@ -15,6 +17,8 @@ export interface TerminalProcessEvents {
 // how long to wait after a process outputs anything before we consider it "cool" again
 const PROCESS_HOT_TIMEOUT_NORMAL = 2_000
 const PROCESS_HOT_TIMEOUT_COMPILING = 15_000
+// how long to wait for VS Code's end-of-execution event (which carries the exit code) after the output stream closes
+const EXIT_EVENT_GRACE_MS = 300
 
 export class TerminalProcess extends EventEmitter<TerminalProcessEvents> {
 	waitForShellIntegration: boolean = true
@@ -23,6 +27,11 @@ export class TerminalProcess extends EventEmitter<TerminalProcessEvents> {
 	private fullOutput: string = ""
 	private lastRetrievedIndex: number = 0
 	isHot: boolean = false
+	/**
+	 * How the command ended, set before "completed" is emitted: the code shell integration reported, or "unknown"
+	 * (no shell integration, no code reported). Undefined until the run finishes. Never inferred from the output.
+	 */
+	exitCode: CommandExit | undefined
 	private hotTimer: NodeJS.Timeout | null = null
 
 	async run(terminal: vscode.Terminal, command: string) {
@@ -43,12 +52,44 @@ export class TerminalProcess extends EventEmitter<TerminalProcessEvents> {
 			// Track that we're using shell integration
 			const execution = terminal.shellIntegration.executeCommand(command)
 			const stream = execution.read()
+			// The exit code arrives on the end event; the stream's OSC 633;D mark is the fallback.
+			let exitFromEvent: CommandExit | undefined
+			let exitFromStream: CommandExit | undefined
+			let signalExitEvent: () => void = () => {}
+			const exitEvent = new Promise<void>((resolve) => {
+				signalExitEvent = resolve
+			})
+			let endListener: vscode.Disposable | undefined
+			// Newer than the engine floor we type against (see TerminalManager), so reach it through a local shape.
+			const onEnd = (
+				vscode.window as unknown as {
+					onDidEndTerminalShellExecution?: (
+						listener: (e: { execution: unknown; exitCode: number | undefined }) => void,
+					) => vscode.Disposable
+				}
+			).onDidEndTerminalShellExecution
+			if (onEnd) {
+				try {
+					endListener = onEnd((e) => {
+						if (e.execution === execution) {
+							exitFromEvent = e.exitCode === undefined ? "unknown" : e.exitCode
+							signalExitEvent()
+						}
+					})
+				} catch {
+					// older host: stream mark only
+				}
+			}
 			// todo: need to handle errors
 			let isFirstChunk = true
 			let didOutputNonCommand = false
 			let didEmitEmptyLine = false
 
 			for await (let data of stream) {
+				const exitInChunk = parseExitFromChunk(data)
+				if (exitInChunk !== undefined) {
+					exitFromStream = exitInChunk
+				}
 				// 1. Process chunk and remove artifacts
 				if (isFirstChunk) {
 					/*
@@ -189,6 +230,14 @@ export class TerminalProcess extends EventEmitter<TerminalProcessEvents> {
 
 			this.emitRemainingBufferIfListening()
 
+			// Resolve the exit code before anything observes "completed". The end event can trail the stream by a
+			// moment, so wait briefly for it unless the stream already gave a numeric code.
+			if (endListener && typeof exitFromStream !== "number" && exitFromEvent === undefined) {
+				await Promise.race([exitEvent, new Promise<void>((resolve) => setTimeout(resolve, EXIT_EVENT_GRACE_MS))])
+			}
+			endListener?.dispose()
+			this.exitCode = typeof exitFromEvent === "number" ? exitFromEvent : (exitFromStream ?? exitFromEvent ?? "unknown")
+
 			// the command process is finished, let's check the output to see if we need to use the terminal capture fallback
 			if (!this.fullOutput.trim()) {
 				// No output captured via shell integration, trying fallback
@@ -232,6 +281,8 @@ export class TerminalProcess extends EventEmitter<TerminalProcessEvents> {
 			} else {
 				telemetryService.captureTerminalExecution(false, "none")
 			}
+			// ...and nothing tells us how it ended: record that, never assume success.
+			this.exitCode = "unknown"
 			// For terminals without shell integration, we can't know when the command completes
 			// So we'll just emit the continue event after a delay
 			this.emit("completed")

@@ -11,6 +11,17 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Added — host evidence for the chat transcript (vision-2040 Wave 2, PR W2-0h, branch `vision2040/w2-0h`)
+
+Events that were silent or indistinguishable now leave honest data on their rows, so the transcript presenter can lift them. No redesign: each shows as one muted line or a colour change.
+
+- **Context truncation is no longer silent.** When the provider rejects a request as too large and history is dropped, an `info` row says how many earlier messages were dropped and how many of the total are kept (`context_truncated`, warning; detail carries the deleted range and counts).
+- **Structured `info` notices.** `say: "info"` rows carry `infoNotice {class, severity, detail?}` beside the unchanged `text`. Classes: `context_truncated`, `malformed_tool_call`, `native_call_not_run` (warnings), `native_call_repaired` (info), `unknown_tool` and `server_not_connected` (warnings). Old tasks keep plain-string `info` rows and render exactly as before. Types live in `src/shared/aihydro/infoNotice.ts`; W2-0's legacy-prefix registry should import them from there (whichever PR merges second reconciles).
+- **MCP notification level** is carried on `mcp_notification` rows (`mcpLevel`); warning and above use the warning colour.
+- **Command exit code.** The VS Code terminal path records the exit code (shell-integration end event, falling back to the OSC 633;D mark) on the command row as `exitCode`. A non-zero code sets `execOutcome: "failed"`. When the code cannot be observed (no shell integration, detached or cancelled command, standalone host) the row records `exitCode: "unknown"` and `execOutcome: "unknown"`, never success. The model-facing result now reads "Command executed (exit code N)." or "(exit code unavailable)".
+- **Policy class on commands.** Command rows the host policy flagged carry `policyClass`: `subagent_launch`, `protected_path`, `auto_run_all`, `model_requested_approval`, `not_read_only`. Unflagged: "auto-run off" asks and host-classified read-only runs.
+- **Proto path.** Additive `ClineMessage` fields 1001-1007 (`info_class`, `info_severity`, `info_detail_json`, `mcp_level`, `exit_code_state`, `exit_code`, `policy_class`) round-trip through `convertAiHydroMessageToProto` / `convertProtoToAiHydroMessage`. `execOutcome` gains the value `"unknown"`; W2-0's mapper fix must carry it.
+
 ### Fixed — DeepSeek unclosed envelope and task_progress (vision-2040, branch `vision2040/deepseek-unclosed-envelope`)
 
 - A DeepSeek native envelope that ends without `</tool_calls>` is now repaired when every `<invoke>` is closed and only whitespace follows the last `</invoke>` (an unclosed invoke or trailing text stays malformed).

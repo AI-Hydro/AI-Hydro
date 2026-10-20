@@ -216,7 +216,7 @@ describe("repairNativeToolCalls (DeepSeek native tool-call envelope)", () => {
 			expect(r.executed).to.deep.equal(["use_mcp_tool:delineate_watershed"])
 			expect(r.shown).to.deep.equal(["Delineating now."])
 			expect(r.plan.notices).to.have.length(1)
-			expect(r.plan.notices[0]).to.match(/^Repaired a native tool call: delineate_watershed on 'aihydro-tools'\.$/)
+			expect(r.plan.notices[0].text).to.match(/^Repaired a native tool call: delineate_watershed on 'aihydro-tools'\.$/)
 		})
 
 		it("an envelope followed by prose runs nothing, shows the text, and says so once", () => {
@@ -226,7 +226,7 @@ describe("repairNativeToolCalls (DeepSeek native tool-call envelope)", () => {
 				expect(r.shown.join("\n"), tail).to.include("&lt;tool_calls>")
 				expect(r.shown.join("\n"), tail).to.include(tail)
 				expect(r.plan.notices).to.have.length(1)
-				expect(r.plan.notices[0]).to.match(/^Native tool call not at end of message; not run\.\n\n<tool_calls>/)
+				expect(r.plan.notices[0].text).to.match(/^Native tool call not at end of message; not run\.\n\n<tool_calls>/)
 			}
 		})
 
@@ -236,7 +236,7 @@ describe("repairNativeToolCalls (DeepSeek native tool-call envelope)", () => {
 			)
 			expect(r.executed).to.deep.equal([])
 			expect(r.shown.join("\n")).to.include("Then the answer.")
-			expect(r.plan.notices[0]).to.match(/^malformed tool call; retried/)
+			expect(r.plan.notices[0].text).to.match(/^malformed tool call; retried/)
 		})
 
 		const blocksOf = (m: string) => {
@@ -262,8 +262,8 @@ describe("repairNativeToolCalls (DeepSeek native tool-call envelope)", () => {
 				const { r, tools } = blocksOf(probe)
 				expect(tools, probe).to.have.length(0)
 				expect(r.executed, probe).to.deep.equal([])
-				expect(r.plan.notices[0], probe).to.match(/^Native tool call not at end of message; not run\./)
-				expect(r.plan.notices[0]).to.include("<tool_calls>") // raw text behind the notice
+				expect(r.plan.notices[0].text, probe).to.match(/^Native tool call not at end of message; not run\./)
+				expect(r.plan.notices[0].text).to.include("<tool_calls>") // raw text behind the notice
 			}
 		})
 
@@ -334,7 +334,7 @@ describe("repairNativeToolCalls (DeepSeek native tool-call envelope)", () => {
 			expect(tools[0].params.task_progress.trim()).to.equal(
 				"- [ ] Bind/resume session ...\n- [ ] Report tools, data sources, and unchecked items",
 			)
-			expect(planFinalNativePass(SESSION_ROW, out).notices[0]).to.match(/^Repaired a native tool call/)
+			expect(planFinalNativePass(SESSION_ROW, out).notices[0].text).to.match(/^Repaired a native tool call/)
 		})
 
 		it("an unclosed envelope is still hidden while streaming and still gated to DeepSeek", () => {
@@ -445,5 +445,31 @@ describe("repairNativeToolCalls (DeepSeek native tool-call envelope)", () => {
 			expect(JSON.parse(tool.params.arguments)).to.not.have.property("task_progress")
 			expect(tool.params.task_progress).to.include("Bind/resume session")
 		})
+	})
+})
+
+describe("planFinalNativePass structured notices (W2-0h)", () => {
+	const finalOf = (over: Partial<ReturnType<typeof repairNativeToolCalls>>) =>
+		({ text: "", repaired: 0, malformed: [], routes: [], leftAsText: 0, ...over }) as ReturnType<typeof repairNativeToolCalls>
+
+	it("tags each repair class with its class and severity while keeping the words", () => {
+		const plan = planFinalNativePass(
+			"x",
+			finalOf({
+				malformed: ["<tool_calls>bad"],
+				repaired: 1,
+				routes: [{ tool: "t", server: "s" }],
+				leftAsText: 1,
+				leftAsTextRaw: "<tool_calls>raw</tool_calls>",
+			}),
+		)
+		expect(plan.notices.map((n) => [n.notice.class, n.notice.severity])).to.deep.equal([
+			["malformed_tool_call", "warning"],
+			["native_call_repaired", "info"],
+			["native_call_not_run", "warning"],
+		])
+		expect(plan.notices[0].text).to.match(/^malformed tool call; retried/)
+		expect(plan.notices[1].text).to.match(/^Repaired a native tool call: t on 's'\./)
+		expect(plan.notices[2].text).to.match(/^Native tool call not at end of message; not run\./)
 	})
 })

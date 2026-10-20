@@ -22,8 +22,9 @@
  * plans/approval-redesign-ap1-2026-10-19.md.
  */
 
-import { classifyCommand, commandRunsGit, type ShellEnvironment } from "./readOnlyClassifier"
+import type { CommandPolicyClass } from "@shared/aihydro/commandEvidence"
 import { hardenGitEnvironment } from "./gitHardening"
+import { classifyCommand, commandRunsGit, type ShellEnvironment } from "./readOnlyClassifier"
 
 // ---------------------------------------------------------------------------------------------------------------
 // 1. Protected commands (hard deny)
@@ -254,8 +255,8 @@ export interface CommandPolicyInput {
 
 export type CommandPolicyResult =
 	| { action: "deny"; reason: string; message: string }
-	| { action: "ask"; reason: string }
-	| { action: "run"; reason: string }
+	| { action: "ask"; reason: string; policyClass?: CommandPolicyClass }
+	| { action: "run"; reason: string; policyClass?: CommandPolicyClass }
 
 /**
  * The single ordered decision for a command. First match wins.
@@ -297,20 +298,22 @@ export function decideCommand(input: CommandPolicyInput): CommandPolicyResult {
 		if (refusal) {
 			return { action: "deny", reason: "subagent launch sets its own policy", message: refusal }
 		}
-		return { action: "ask", reason: "subagent launch always asks" }
+		return { action: "ask", reason: "subagent launch always asks", policyClass: "subagent_launch" }
 	}
 	if (input.touchesProtectedPath) {
-		return { action: "ask", reason: "touches a protected path" }
+		return { action: "ask", reason: "touches a protected path", policyClass: "protected_path" }
 	}
 	if (!input.autoApproveSafe) {
 		return { action: "ask", reason: "command auto-run is off" }
 	}
 	if (input.autoApproveAll) {
-		return { action: "run", reason: "execute-all-commands is on" }
+		return { action: "run", reason: "execute-all-commands is on", policyClass: "auto_run_all" }
 	}
 	if (input.modelRequiresApproval) {
-		return { action: "ask", reason: "the model asked for approval" }
+		return { action: "ask", reason: "the model asked for approval", policyClass: "model_requested_approval" }
 	}
 	const verdict = classifyCommand(input.command, input.shellEnvironment)
-	return verdict.readOnly ? { action: "run", reason: HOST_READ_ONLY_REASON } : { action: "ask", reason: verdict.reason }
+	return verdict.readOnly
+		? { action: "run", reason: HOST_READ_ONLY_REASON }
+		: { action: "ask", reason: verdict.reason, policyClass: "not_read_only" }
 }

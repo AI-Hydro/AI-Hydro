@@ -1,5 +1,6 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
+import { infoNoticeFor, type McpNotificationLevel } from "@shared/aihydro/infoNotice"
 import { AiHydroAsk, AiHydroAskUseMcpServer } from "@shared/ExtensionMessage"
 import { buildAiHydroCallContext } from "@/core/mcp/aihydroContext"
 import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
@@ -76,6 +77,10 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 				targetCheck.reason === "unknown_tool"
 					? `Skipped: '${tool_name}' is not a tool on '${server_name}'. Asked the model to retry.`
 					: `Skipped: MCP server '${server_name}' is not connected. Asked the model to retry.`,
+				undefined,
+				undefined,
+				undefined,
+				{ infoNotice: infoNoticeFor(targetCheck.reason === "unknown_tool" ? "unknown_tool" : "server_not_connected") },
 			)
 			return formatResponse.toolError(targetCheck.message)
 		}
@@ -163,7 +168,14 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			// Check for any pending notifications before the tool call
 			const notificationsBefore = config.services.mcpHub.getPendingNotifications()
 			for (const notification of notificationsBefore) {
-				await config.callbacks.say("mcp_notification", `[${notification.serverName}] ${notification.message}`)
+				await config.callbacks.say(
+					"mcp_notification",
+					`[${notification.serverName}] ${notification.message}`,
+					undefined,
+					undefined,
+					undefined,
+					{ mcpLevel: notification.level as McpNotificationLevel },
+				)
 			}
 
 			// Wave 3 Axis 3 + Design A: inject _chat_id + _workspace into every
@@ -201,7 +213,14 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			// Check for any pending notifications after the tool call
 			const notificationsAfter = config.services.mcpHub.getPendingNotifications()
 			for (const notification of notificationsAfter) {
-				await config.callbacks.say("mcp_notification", `[${notification.serverName}] ${notification.message}`)
+				await config.callbacks.say(
+					"mcp_notification",
+					`[${notification.serverName}] ${notification.message}`,
+					undefined,
+					undefined,
+					undefined,
+					{ mcpLevel: notification.level as McpNotificationLevel },
+				)
 			}
 
 			// Process tool result

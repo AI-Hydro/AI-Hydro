@@ -92,3 +92,34 @@ describe("use_mcp_tool target validation (M2)", () => {
 		expect(names.length).to.be.at.most(5)
 	})
 })
+
+describe("use_mcp_tool structured evidence (W2-0h)", () => {
+	it("tags the skipped-call info with its class, and the words stay", async () => {
+		const unknownTool = makeConfig()
+		await new UseMcpToolHandler().execute(unknownTool.config, block("ask_followup_question"))
+		const [type, text, , , , evidence] = unknownTool.callbacks.say.getCall(0).args
+		expect(type).to.equal("info")
+		expect(text).to.match(/^Skipped: 'ask_followup_question' is not a tool on 'aihydro-tools'/)
+		expect(evidence).to.deep.equal({ infoNotice: { class: "unknown_tool", severity: "warning" } })
+
+		const ghost = makeConfig()
+		await new UseMcpToolHandler().execute(ghost.config, block("list_claims", "ghost"))
+		expect(ghost.callbacks.say.getCall(0).args[5]).to.deep.equal({
+			infoNotice: { class: "server_not_connected", severity: "warning" },
+		})
+	})
+
+	it("carries the MCP notification level on the row", async () => {
+		const { config, callbacks, mcpHub } = makeConfig([
+			{ server: { name: "aihydro-tools", status: "connected", tools: [{ name: "list_claims", autoApprove: true }] } },
+		])
+		let calls = 0
+		;(mcpHub as any).getPendingNotifications = () =>
+			calls++ === 0 ? [{ serverName: "aihydro-tools", level: "warning", message: "rate limited", timestamp: 1 }] : []
+		config.callbacks.shouldAutoApproveTool = sinon.stub().returns(true)
+		await new UseMcpToolHandler().execute(config, block("list_claims")).catch(() => {})
+		const notice = callbacks.say.getCalls().find((c) => c.args[0] === "mcp_notification")
+		expect(notice?.args[1]).to.equal("[aihydro-tools] rate limited")
+		expect(notice?.args[5]).to.deep.equal({ mcpLevel: "warning" })
+	})
+})
