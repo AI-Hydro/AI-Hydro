@@ -1,7 +1,13 @@
 import * as path from "node:path"
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import { type ArtifactLookup, decideActiveCourse, decideModuleState, decidePreviewEvent, decideSaveDocument } from "../previewMessageGuards"
+import {
+	type ArtifactLookup,
+	decideActiveCourse,
+	decideModuleState,
+	decidePreviewEvent,
+	decideSaveDocument,
+} from "../previewMessageGuards"
 
 const ROOT = path.resolve(path.sep, "ws", "course")
 const FILE = path.join(ROOT, "m1", "module.html")
@@ -44,7 +50,9 @@ describe("decidePreviewEvent", () => {
 	})
 
 	it("keeps the claimed source for an allowed document", () => {
-		expect(decidePreviewEvent(ev({ source: "bridge" }), lookup({ allowed: ["file_a"] }), new Map())?.event.source).to.equal("bridge")
+		expect(decidePreviewEvent(ev({ source: "bridge" }), lookup({ allowed: ["file_a"] }), new Map())?.event.source).to.equal(
+			"bridge",
+		)
 	})
 
 	it("never moves identity for a document that is not allowed", () => {
@@ -84,8 +92,15 @@ describe("decideSaveDocument", () => {
 	})
 
 	it("refuses another path, an unknown artifact, and empty or oversize html", () => {
-		expect(decideSaveDocument({ artifactId: "file_a", filePath: "/etc/passwd", html: "x" }, lookup())).to.include({ ok: false })
-		expect(decideSaveDocument({ artifactId: "file_a", filePath: path.join(ROOT, "m1", "..", "..", "evil.html"), html: "x" }, lookup())).to.include({ ok: false })
+		expect(decideSaveDocument({ artifactId: "file_a", filePath: "/etc/passwd", html: "x" }, lookup())).to.include({
+			ok: false,
+		})
+		expect(
+			decideSaveDocument(
+				{ artifactId: "file_a", filePath: path.join(ROOT, "m1", "..", "..", "evil.html"), html: "x" },
+				lookup(),
+			),
+		).to.include({ ok: false })
 		expect(decideSaveDocument({ artifactId: "ghost", filePath: FILE, html: "x" }, lookup())).to.include({ ok: false })
 		expect(decideSaveDocument({ artifactId: "file_a", html: "" }, lookup())).to.include({ ok: false })
 		expect(decideSaveDocument({ filePath: FILE, html: "x" }, lookup())).to.include({ ok: false })
@@ -106,7 +121,12 @@ describe("decideActiveCourse", () => {
 	})
 
 	it("refuses a pointer that does not contain the artifact, is not course.json, or has a mismatched root", () => {
-		expect(decideActiveCourse(msg({ courseRoot: path.resolve(path.sep, "other"), coursePath: path.resolve(path.sep, "other", "course.json") }), lookup())).to.deep.equal({ ok: false })
+		expect(
+			decideActiveCourse(
+				msg({ courseRoot: path.resolve(path.sep, "other"), coursePath: path.resolve(path.sep, "other", "course.json") }),
+				lookup(),
+			),
+		).to.deep.equal({ ok: false })
 		expect(decideActiveCourse(msg({ coursePath: path.join(ROOT, "passwd") }), lookup())).to.deep.equal({ ok: false })
 		expect(decideActiveCourse(msg({ courseRoot: path.join(ROOT, "m1") }), lookup())).to.deep.equal({ ok: false })
 		expect(decideActiveCourse(msg({ artifactId: "ghost" }), lookup())).to.deep.equal({ ok: false })
@@ -116,12 +136,19 @@ describe("decideActiveCourse", () => {
 describe("decideModuleState", () => {
 	it("requires the key to match the host record", () => {
 		expect(decideModuleState({ artifactId: "file_a", action: "get", moduleKey: FILE }, lookup())).to.include({ ok: true })
-		expect(decideModuleState({ artifactId: "file_a", action: "get", moduleKey: "/somewhere/else" }, lookup())).to.include({ ok: false })
+		expect(decideModuleState({ artifactId: "file_a", action: "get", moduleKey: "/somewhere/else" }, lookup())).to.include({
+			ok: false,
+		})
 		expect(decideModuleState({ action: "get", moduleKey: FILE }, lookup())).to.include({ ok: false })
 	})
 
 	it("lets only an allowed document write, and clamps what it writes", () => {
-		const set = { artifactId: "file_a", action: "set", moduleKey: FILE, values: { a: "1", b: 2, ["k".repeat(300)]: "x", big: "y".repeat(20000) } }
+		const set = {
+			artifactId: "file_a",
+			action: "set",
+			moduleKey: FILE,
+			values: { a: "1", b: 2, ["k".repeat(300)]: "x", big: "y".repeat(20000) },
+		}
 		expect(decideModuleState(set, lookup())).to.include({ ok: false })
 		const ok = decideModuleState(set, lookup({ allowed: ["file_a"] }))
 		expect(ok).to.deep.equal({ ok: true, values: { a: "1" } })
@@ -132,7 +159,9 @@ describe("decideModuleState", () => {
 		const scope = { packId: "p", courseId: "c", edition: "student", moduleId: "m" }
 		const base = { artifactId: "file_a", action: "get", moduleKey: FILE }
 		expect(decideModuleState({ ...base, learningPackScope: scope }, lookup({ meta }))).to.include({ ok: true })
-		expect(decideModuleState({ ...base, learningPackScope: { ...scope, packId: "other" } }, lookup({ meta }))).to.include({ ok: false })
+		expect(decideModuleState({ ...base, learningPackScope: { ...scope, packId: "other" } }, lookup({ meta }))).to.include({
+			ok: false,
+		})
 		expect(decideModuleState({ ...base, learningPackScope: scope }, lookup())).to.include({ ok: false })
 	})
 })

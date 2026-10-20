@@ -1,7 +1,13 @@
 import type { Controller } from "@core/controller"
 import { handlePreviewAgentTaskMessage } from "@core/htmlPreview/handlePreviewAgentTask"
 import * as vscode from "vscode"
-import { type ArtifactLookup, decideActiveCourse, decideModuleState, decidePreviewEvent, decideSaveDocument } from "./previewMessageGuards"
+import {
+	type ArtifactLookup,
+	decideActiveCourse,
+	decideModuleState,
+	decidePreviewEvent,
+	decideSaveDocument,
+} from "./previewMessageGuards"
 import type { ArtifactRef } from "@/services/artifact-preview/ArtifactPreviewService"
 import { buildPreviewCsp } from "@/services/artifact-preview/buildPreviewCsp"
 import { loadCourseManifest } from "@/services/htmlPreview/courseLoader"
@@ -280,7 +286,10 @@ export class VscodeHtmlPreviewProvider {
 						try {
 							const decision = decideSaveDocument(message, artifactLookup(mainWebview.controller))
 							if (decision.ok) {
-								await vscode.workspace.fs.writeFile(vscode.Uri.file(decision.fsPath), Buffer.from(decision.html, "utf8"))
+								await vscode.workspace.fs.writeFile(
+									vscode.Uri.file(decision.fsPath),
+									Buffer.from(decision.html, "utf8"),
+								)
 								panel.webview.postMessage({ type: "aihydro-save-complete", filePath: decision.fsPath, ok: true })
 							} else {
 								panel.webview.postMessage({ type: "aihydro-save-complete", ok: false, error: decision.error })

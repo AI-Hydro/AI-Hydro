@@ -68,7 +68,9 @@ export function decidePreviewEvent(
 	// artifact already holds (a document must not impersonate another module).
 	if (trusted && kind === "manifest.loaded" && typeof parsed.id === "string" && SAFE_CANONICAL_ID.test(parsed.id)) {
 		const canonicalId = parsed.id
-		const takenByOther = [...fileIdToModuleId.entries()].some(([file, canonical]) => file !== rawId && canonical === canonicalId)
+		const takenByOther = [...fileIdToModuleId.entries()].some(
+			([file, canonical]) => file !== rawId && canonical === canonicalId,
+		)
 		if (!takenByOther && fileIdToModuleId.get(rawId) !== canonicalId && rawId !== canonicalId) {
 			identityMove = { rawId, canonicalId }
 		}
