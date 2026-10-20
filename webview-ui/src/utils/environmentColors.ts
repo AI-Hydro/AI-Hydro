@@ -1,4 +1,4 @@
-import type { Environment } from "../../../src/config"
+import type { Environment } from "@shared/environment"
 
 /**
  * Gets the appropriate color for the current environment.

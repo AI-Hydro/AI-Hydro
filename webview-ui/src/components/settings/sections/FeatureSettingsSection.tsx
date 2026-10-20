@@ -2,7 +2,7 @@ import { SUPPORTED_DICTATION_LANGUAGES } from "@shared/DictationSettings"
 import { McpDisplayMode } from "@shared/McpDisplayMode"
 import { EmptyRequest } from "@shared/proto/index.cline"
 import { OpenaiReasoningEffort } from "@shared/storage/types"
-import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { memo, useEffect, useState } from "react"
 import HeroTooltip from "@/components/common/HeroTooltip"
 import McpDisplayModeDropdown from "@/components/mcp/chat-display/McpDisplayModeDropdown"
@@ -81,35 +81,10 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 										className="codicon codicon-warning mr-1"
 										style={{ fontSize: "12px", marginTop: "1px", flexShrink: 0 }}></span>
 									<span>
-										AI-Hydro CLI is required for subagents. Install it with:{" "}
-										<code className="ml-1 px-1 rounded bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] opacity-90">
-											npm install -g aihydro
-										</code>
-										, then run
-										<code className="ml-1 px-1 rounded bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] opacity-90">
-											aihydro auth
-										</code>
-										To authenticate with AI-Hydro or configure an API provider.
+										Subagents need a separate AI-Hydro command-line tool, which is not available in this
+										release. The toggle is disabled until it is.
 									</span>
 								</p>
-								{!isAiHydroCliInstalled && (
-									<VSCodeButton
-										appearance="secondary"
-										onClick={async () => {
-											try {
-												await StateServiceClient.installAiHydroCli(EmptyRequest.create())
-											} catch (error) {
-												console.error("Failed to initiate CLI installation:", error)
-											}
-										}}
-										style={{
-											transform: "scale(0.85)",
-											transformOrigin: "left center",
-											marginLeft: "-2px",
-										}}>
-										Install Now
-									</VSCodeButton>
-								)}
 							</div>
 							<VSCodeCheckbox
 								checked={subagentsEnabled}

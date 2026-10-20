@@ -58,6 +58,9 @@ jobs:
       - name: Production bundle must not contain the UI harness
         run: npm run ui:screens:verify-bundle
 
+      - name: Webview bundle must not contain upstream or unsafe-install strings
+        run: node scripts/check-bundle-leaks.mjs --target webview
+
       - name: Render screens and enforce the checker budget
         run: >-
           node scripts/ui-screens/run.mjs

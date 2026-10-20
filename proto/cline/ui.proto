@@ -257,6 +257,11 @@ service UiService {
   // Get live GEE authentication status
   rpc getGeeStatus(EmptyRequest) returns (GeeStatusResponse);
 
+  // Run one allowlisted Earth Engine connector action (connect | test | configure | disconnect).
+  // The request carries only the action id; the host maps it to a built-in command and
+  // rejects anything not on the allowlist.
+  rpc runGeeAction(StringRequest) returns (GeeStatusResponse);
+
   // Send text to the chat input and navigate to chat view
   rpc sendToChat(StringRequest) returns (Empty);
 

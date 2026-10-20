@@ -1,8 +1,6 @@
-export enum Environment {
-	production = "production",
-	staging = "staging",
-	local = "local",
-}
+import { Environment } from "./shared/environment"
+
+export { Environment }
 
 export interface EnvironmentConfig {
 	environment: Environment

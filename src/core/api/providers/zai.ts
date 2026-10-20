@@ -42,7 +42,7 @@ export class ZAiHandler implements ApiHandler {
 					baseURL: this.useChinaApi() ? "https://open.bigmodel.cn/api/paas/v4" : "https://api.z.ai/api/paas/v4",
 					apiKey: this.options.zaiApiKey,
 					defaultHeaders: {
-						"HTTP-Referer": "https://cline.bot",
+						"HTTP-Referer": "https://github.com/AI-Hydro/AI-Hydro",
 						"X-Title": "AI-Hydro",
 						"X-AI-Hydro-Version": extensionVersion,
 					},

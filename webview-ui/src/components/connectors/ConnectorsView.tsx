@@ -1,4 +1,4 @@
-import { BUILTIN_CONNECTORS, type ConnectorDefinition, type ConnectorStatus } from "@shared/connectors"
+import { BUILTIN_CONNECTORS, type ConnectorDefinition, type ConnectorStatus, mergeConnectorCatalog } from "@shared/connectors"
 import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
 import type { GeeStatusResponse } from "@shared/proto/cline/ui"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
@@ -51,12 +51,9 @@ const ConnectorsView = ({ onDone }: ConnectorsViewProps) => {
 					return
 				}
 				try {
-					const remote: ConnectorDefinition[] = JSON.parse(resp.catalogJson ?? "[]")
-					if (!Array.isArray(remote) || remote.length === 0) {
-						return
-					}
-					const remoteIds = new Set(remote.map((c) => c.id))
-					setConnectors([...remote, ...BUILTIN_CONNECTORS.filter((c) => !remoteIds.has(c.id))])
+					// Remote JSON is untrusted display data: setupPrompt is discarded and actions[]
+					// only map to the built-in allowlist (see mergeConnectorCatalog).
+					setConnectors(mergeConnectorCatalog(JSON.parse(resp.catalogJson ?? "[]"), BUILTIN_CONNECTORS))
 				} catch {
 					// keep BUILTIN_CONNECTORS
 				}
@@ -72,6 +69,32 @@ const ConnectorsView = ({ onDone }: ConnectorsViewProps) => {
 			mountedRef.current = false
 		}
 	}, [applyGeeResponse])
+
+	const [busyAction, setBusyAction] = useState<string | null>(null)
+
+	const handleAction = useCallback(
+		async (connector: ConnectorDefinition, actionId: string) => {
+			if (connector.id !== GEE_ID) {
+				return
+			}
+			setBusyAction(actionId)
+			try {
+				await UiServiceClient.runGeeAction(StringRequest.create({ value: actionId }))
+			} catch {
+				// the re-probe below shows the real state
+			}
+			try {
+				applyGeeResponse(await UiServiceClient.getGeeStatus(EmptyRequest.create({})))
+			} catch {
+				// leave the last known status
+			} finally {
+				if (mountedRef.current) {
+					setBusyAction(null)
+				}
+			}
+		},
+		[applyGeeResponse],
+	)
 
 	const handleSetupWithAI = useCallback((connector: ConnectorDefinition) => {
 		if (!connector.setupPrompt) {
@@ -98,15 +121,17 @@ const ConnectorsView = ({ onDone }: ConnectorsViewProps) => {
 					gap: "12px",
 				}}>
 				<p style={{ margin: 0, fontSize: "13px", color: "var(--vscode-descriptionForeground)" }}>
-					Connect AI-Hydro to external data sources and compute services. Click <strong>Set up with AI</strong> and the
-					agent will guide you through authentication and configuration.
+					Connect AI-Hydro to external data sources and compute services. Use the buttons on a card to connect or test
+					it; <strong>Set up with AI</strong> asks the agent to walk you through it instead.
 				</p>
 
 				{connectors.map((c) => (
 					<ConnectorCard
+						busyAction={busyAction}
 						connector={c}
 						details={details[c.id] ?? {}}
 						key={c.id}
+						onAction={handleAction}
 						onSetupWithAI={handleSetupWithAI}
 						status={statuses[c.id] ?? (c.comingSoon ? "coming-soon" : "disconnected")}
 					/>
@@ -128,6 +153,7 @@ const PILL: Record<ConnectorStatus, { bg: string; color: string; border: string;
 	error: { bg: "rgba(239,68,68,0.12)", color: "#f87171", border: "rgba(239,68,68,0.3)" },
 	unknown: { bg: "transparent", color: "var(--vscode-descriptionForeground)", border: "var(--vscode-panel-border)" },
 	"coming-soon": { bg: "transparent", color: "var(--vscode-badge-foreground)", border: "var(--vscode-panel-border)" },
+	"built-in": { bg: "transparent", color: "var(--vscode-descriptionForeground)", border: "var(--vscode-panel-border)" },
 }
 
 const STATUS_LABEL: Record<ConnectorStatus, string> = {
@@ -136,6 +162,7 @@ const STATUS_LABEL: Record<ConnectorStatus, string> = {
 	error: "Error",
 	unknown: "Unknown",
 	"coming-soon": "Coming soon",
+	"built-in": "Built in (no account needed)",
 }
 
 const StatusPill = ({ status }: { status: ConnectorStatus }) => {
@@ -169,11 +196,13 @@ type ConnectorCardProps = {
 	connector: ConnectorDefinition
 	status: ConnectorStatus
 	details: Record<string, string>
+	busyAction: string | null
+	onAction: (connector: ConnectorDefinition, actionId: string) => void
 	onSetupWithAI: (connector: ConnectorDefinition) => void
 }
 
-const ConnectorCard = ({ connector, status, details, onSetupWithAI }: ConnectorCardProps) => {
-	const effectiveStatus: ConnectorStatus = connector.comingSoon ? "coming-soon" : status
+const ConnectorCard = ({ connector, status, details, busyAction, onAction, onSetupWithAI }: ConnectorCardProps) => {
+	const effectiveStatus: ConnectorStatus = connector.comingSoon ? "coming-soon" : connector.builtIn ? "built-in" : status
 	const isConnected = effectiveStatus === "connected"
 
 	return (
@@ -258,10 +287,31 @@ const ConnectorCard = ({ connector, status, details, onSetupWithAI }: ConnectorC
 				</div>
 			)}
 
+			{busyAction === "connect" && connector.id === GEE_ID && (
+				<p style={{ margin: "10px 0 0", fontSize: "11px", color: "var(--vscode-descriptionForeground)" }}>
+					A browser window may open for Google sign-in. This can take a few minutes.
+				</p>
+			)}
+
 			{/* Action row */}
-			<div style={{ display: "flex", gap: "8px", marginTop: "12px", alignItems: "center" }}>
+			<div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px", alignItems: "center" }}>
+				{!connector.comingSoon &&
+					connector.actions?.map((a) => (
+						<VSCodeButton
+							appearance={a.primary ? "primary" : "secondary"}
+							data-testid={`connector-action-${connector.id}-${a.id}`}
+							disabled={busyAction !== null}
+							key={a.id}
+							onClick={() => onAction(connector, a.id)}
+							style={{ fontSize: "12px" }}>
+							{busyAction === a.id ? `${a.label}…` : a.label}
+						</VSCodeButton>
+					))}
 				{!connector.comingSoon && connector.setupPrompt && (
-					<VSCodeButton appearance="primary" onClick={() => onSetupWithAI(connector)} style={{ fontSize: "12px" }}>
+					<VSCodeButton
+						appearance={connector.actions?.length ? "secondary" : "primary"}
+						onClick={() => onSetupWithAI(connector)}
+						style={{ fontSize: "12px" }}>
 						<span className="codicon codicon-sparkle" style={{ marginRight: "5px" }} />
 						Set up with AI
 					</VSCodeButton>
@@ -277,12 +327,21 @@ const ConnectorCard = ({ connector, status, details, onSetupWithAI }: ConnectorC
 							padding: "4px 2px",
 						}}
 						target="_blank">
-						Docs ↗
+						Docs ↗ <span style={{ opacity: 0.7 }}>({docsHost(connector.docsUrl)})</span>
 					</a>
 				)}
 			</div>
 		</div>
 	)
+}
+
+/** Remote data may supply the docs link, so always show where it points. */
+function docsHost(url: string): string {
+	try {
+		return new URL(url).host
+	} catch {
+		return "unknown host"
+	}
 }
 
 // ---------------------------------------------------------------------------
