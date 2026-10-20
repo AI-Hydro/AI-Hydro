@@ -436,6 +436,14 @@ runtimeE2E("A document script cannot grant itself execution or reach the shell @
 	expect(reached.parentDom).toBe("SecurityError")
 	expect(reached.parentProps).toBe("SecurityError")
 	expect(reached.top).toBe("SecurityError")
+	// Popups (one closed at once, one with a severed opener) forged host-only replies too. Whether the
+	// host window lets them open is environment-dependent, so only record it; what must hold is below.
+	expect(Array.isArray((reached as unknown as { popups?: unknown[] }).popups)).toBe(true)
+	// Give any popup time to post and close before asserting that nothing moved.
+	await page.waitForTimeout(2_000)
+	// The host stamps every reply the shell acts on with a per-panel secret the document cannot read.
+	const panelToken = await shell.evaluate(() => (window as unknown as { __aihydroPanelToken?: string }).__aihydroPanelToken)
+	expect(typeof panelToken === "string" && panelToken.length >= 32).toBe(true)
 
 	// Nothing took effect: still not allowed, no bridge, no staged agent prompt, no progress.
 	// (The fixture also forges host-only replies and navigation; the shell's rejection of those

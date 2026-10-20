@@ -27,12 +27,23 @@ function isThisWindow(candidate: Window): boolean {
  * extension host comes from outside this window (VS Code delivers it through the enclosing
  * frames), so walking the sender's `parent`/`opener` chain never reaches this window.
  *
- * This is deliberately "reject document-derived senders" rather than "accept only a known host
- * window": VS Code does not promise which window object delivers host messages, but a document
- * can only ever be below this window. `parent`, `opener` and equality are the cross-origin-safe
- * operations on a WindowProxy. A null source (synthetic events in unit tests) is accepted.
+ * The sender walk is deliberately "reject document-derived senders" rather than "accept only a known
+ * host window": VS Code does not promise which window object delivers host messages, but a document
+ * can only ever be below this window. It has two known blind spots, both closed by the token above:
+ * a null `source` (a window discarded in the same task) and a popup that severed its `opener`.
  */
 export function isFromHost(event: MessageEvent): boolean {
+	// Layer 1, authoritative when the host issued one: the per-panel token the host embeds in the shell
+	// HTML and attaches to every reply this shell acts on. A sandboxed document cannot read it, so no
+	// window it posts from (nested frame, popup, popup with a severed opener, a window closed right after
+	// posting so that `source` arrives null) can supply it.
+	const expected = (window as { __aihydroPanelToken?: unknown }).__aihydroPanelToken
+	if (typeof expected === "string" && expected) {
+		const data = event.data as { token?: unknown } | null
+		if (!data || data.token !== expected) return false
+	}
+	// Layer 2: refuse any sender that descends from this window. Also the only layer when no token is
+	// configured (unit tests, a non-VS Code host).
 	let sender = event.source as Window | null
 	if (!sender || isThisWindow(sender)) return true
 	for (let hops = 0; hops < 16; hops++) {

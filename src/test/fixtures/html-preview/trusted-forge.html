@@ -36,6 +36,22 @@
 			window.parent.postMessage({ type: "aihydro-course-progress-result", requestId: "r", progress: { completed: { y: 1 } } }, "*");
 			window.parent.postMessage({ type: "aihydro-module-state-result", requestId: "r", state: { values: { a: "b" } } }, "*");
 			window.parent.postMessage({ type: "aihydro-preview-agent-result", requestId: "r", ok: true }, "*");
+			// The same forgeries from windows the shell cannot attribute to the document: a popup that
+			// posts and closes at once (the event may arrive with a null source), and a popup that
+			// severs its opener first (it then looks like a top-level window).
+			function popupScript(sever) {
+				return "<script>(function(){var shell=window.opener&&window.opener.parent;" + (sever ? "window.opener=null;" : "") +
+					"var forged=[{type:'aihydro-agent-navigate',courseId:'c',moduleId:'m'},{type:'aihydro-course-progress-result',requestId:'r',progress:{completed:{m:1}}},{type:'aihydro-module-state-result',requestId:'r',state:{values:{a:'b'}}},{type:'aihydro-preview-agent-result',requestId:'r',ok:true}];" +
+					"try{forged.forEach(function(m){shell.postMessage(m,'*')})}catch(e){}window.close();})()<\/script>";
+			}
+			result.popups = [];
+			[false, true].forEach(function (sever) {
+				try {
+					var url = URL.createObjectURL(new Blob([popupScript(sever)], { type: "text/html" }));
+					var w = window.open(url, "_blank");
+					result.popups.push(w ? (sever ? "severed-opened" : "opened") : "blocked");
+				} catch (e) { result.popups.push(e.name); }
+			});
 			var out = document.getElementById("forge-result");
 			out.dataset.state = "done";
 			out.textContent = JSON.stringify(result);

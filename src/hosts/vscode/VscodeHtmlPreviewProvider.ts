@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto"
 import type { Controller } from "@core/controller"
 import { handlePreviewAgentTaskMessage } from "@core/htmlPreview/handlePreviewAgentTask"
 import { aihydroHome } from "@shared/aihydro/aihydroHome"
@@ -65,6 +66,14 @@ export class VscodeHtmlPreviewProvider {
 	private static controller: Controller | undefined
 	private static disposables: vscode.Disposable[] = []
 	private static currentNonce = ""
+	/**
+	 * Per-panel secret, embedded in the shell HTML and attached to every host reply the shell acts on
+	 * (course, progress, module state, agent-task result, agent navigation). A sandboxed document can
+	 * neither read the shell HTML nor learn the token, so it cannot forge a host reply no matter which
+	 * window it posts from (a nested frame, a popup, a popup whose opener it severed, or a discarded
+	 * window that arrives with a null source).
+	 */
+	private static panelToken = ""
 	/**
 	 * Maps VS Code internal file/artifact IDs (e.g. "file_0155f6f2094bdd2f") to
 	 * the canonical module ID from the HTML manifest (e.g. "dem-to-twi").
@@ -182,6 +191,7 @@ export class VscodeHtmlPreviewProvider {
 		// Build the React shell HTML. We need a fresh nonce on every (re)load
 		// so the parent CSP can pin script execution.
 		VscodeHtmlPreviewProvider.currentNonce = generateNonce()
+		VscodeHtmlPreviewProvider.panelToken = randomBytes(24).toString("hex")
 		panel.webview.html = VscodeHtmlPreviewProvider.buildShellHtml(panel.webview, VscodeHtmlPreviewProvider.currentNonce)
 		// Push fresh state so the webview's React app gets the new webviewUris.
 		void VscodeHtmlPreviewProvider.controller?.postStateToWebview()
@@ -259,13 +269,14 @@ export class VscodeHtmlPreviewProvider {
 									mainWebview.controller,
 									message as { requestId?: string; prompt?: string; artifactId?: string },
 									async (response) => {
-										await panel.webview.postMessage(response)
+										await panel.webview.postMessage({ ...response, token: VscodeHtmlPreviewProvider.panelToken })
 									},
 								)
 							} catch (err) {
 								console.warn("[VscodeHtmlPreviewProvider] preview-agent-task failed:", err)
 								panel.webview.postMessage({
 									type: "aihydro-preview-agent-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 									requestId: message.requestId,
 									ok: false,
 									error: err instanceof Error ? err.message : String(err),
@@ -274,6 +285,7 @@ export class VscodeHtmlPreviewProvider {
 						} else {
 							panel.webview.postMessage({
 								type: "aihydro-preview-agent-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId: message.requestId,
 								ok: false,
 								error: "No main webview controller available",
@@ -344,6 +356,7 @@ export class VscodeHtmlPreviewProvider {
 							if (packScope) progress = { ...progress, courseId }
 							panel.webview.postMessage({
 								type: "aihydro-course-progress-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								courseId,
 								progress,
@@ -351,6 +364,7 @@ export class VscodeHtmlPreviewProvider {
 						} catch (err) {
 							panel.webview.postMessage({
 								type: "aihydro-course-progress-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								courseId,
 								progress: null,
@@ -370,6 +384,7 @@ export class VscodeHtmlPreviewProvider {
 							const result = await loadCourseManifest(filePath)
 							panel.webview.postMessage({
 								type: "aihydro-course-loaded",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								filePath,
 								course: result.course,
@@ -378,6 +393,7 @@ export class VscodeHtmlPreviewProvider {
 						} catch (err) {
 							panel.webview.postMessage({
 								type: "aihydro-course-loaded",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								filePath,
 								course: null,
@@ -446,6 +462,7 @@ export class VscodeHtmlPreviewProvider {
 							}
 							panel.webview.postMessage({
 								type: "aihydro-module-state-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								moduleKey,
 								state,
@@ -453,6 +470,7 @@ export class VscodeHtmlPreviewProvider {
 						} catch (err) {
 							panel.webview.postMessage({
 								type: "aihydro-module-state-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								moduleKey,
 								state: null,
@@ -520,6 +538,7 @@ export class VscodeHtmlPreviewProvider {
 						if (!decision.intent) return
 						panel.webview.postMessage({
 							type: "aihydro-agent-navigate",
+								token: VscodeHtmlPreviewProvider.panelToken,
 							...decision.intent,
 						})
 					} catch (err) {
@@ -578,6 +597,7 @@ export class VscodeHtmlPreviewProvider {
 			window.CSSStyleSheet = function CSSStyleSheet() {};
 		}
 		window.AIHYDRO_HTML_PREVIEW_STANDALONE = true;
+		window.__aihydroPanelToken = ${JSON.stringify(VscodeHtmlPreviewProvider.panelToken)};
 		// See WebviewProvider.ts for why: guards against a documented blank-webview
 		// crash in some runtimes when @vscode/webview-ui-toolkit's fast-element
 		// lazily calls new CSSStyleSheet().

@@ -36,6 +36,47 @@ describe("isFromHost", () => {
 	})
 })
 
+describe("isFromHost with a per-panel token", () => {
+	const TOKEN = "t0k3n-abc"
+	const setToken = (value: string | undefined) => {
+		;(window as { __aihydroPanelToken?: string }).__aihydroPanelToken = value
+	}
+	const host = () => {
+		const top = { opener: null } as { parent: unknown; opener: unknown }
+		top.parent = top
+		return top
+	}
+
+	it("accepts a host reply that carries the token and rejects one that does not", () => {
+		setToken(TOKEN)
+		try {
+			expect(isFromHost(withSource(host(), { type: "aihydro-course-loaded", token: TOKEN }))).toBe(true)
+			expect(isFromHost(withSource(host(), { type: "aihydro-course-loaded" }))).toBe(false)
+			expect(isFromHost(withSource(host(), { type: "aihydro-course-loaded", token: "guess" }))).toBe(false)
+			expect(isFromHost(withSource(host(), null))).toBe(false)
+		} finally {
+			setToken(undefined)
+		}
+	})
+
+	it("rejects forged replies whatever the sender looks like: null source, severed opener, nested frame", () => {
+		setToken(TOKEN)
+		try {
+			const forged = { type: "aihydro-agent-navigate", courseId: "c", moduleId: "m" }
+			// A window closed right after posting: the event arrives with source === null.
+			expect(isFromHost(withSource(null, forged))).toBe(false)
+			// A popup that set window.opener = null looks like a top-level window.
+			expect(isFromHost(withSource(host(), forged))).toBe(false)
+			const iframe = document.createElement("iframe")
+			document.body.appendChild(iframe)
+			expect(isFromHost(withSource(iframe.contentWindow, forged))).toBe(false)
+			iframe.remove()
+		} finally {
+			setToken(undefined)
+		}
+	})
+})
+
 describe("isFromChildFrame", () => {
 	it("accepts a direct child frame and rejects anything else", () => {
 		const iframe = document.createElement("iframe")
