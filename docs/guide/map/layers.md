@@ -35,7 +35,7 @@ The **Layers panel** (📑) is the central control surface for everything on the
 
 ### Workspace files you can add
 
-Opening the map no longer registers every GeoJSON/KML/… file in the workspace as a layer. The Layer manager lists them under **Workspace files you can add** (dependency, `.git`, `.worktrees`, `_archive` and build folders are skipped); **Add** puts one on the map. The ribbon badge counts **visible** layers; its tooltip reads "N visible · M hidden". Layers restored from an earlier session are scoped to the current workspace and capped at the 40 most recent; the panel states how many were restored out of how many were saved.
+Opening the map no longer registers every GeoJSON/KML/… file in the workspace as a layer. The Layer manager lists them under **Workspace files you can add** (dependency, `.git`, `.worktrees`, `_archive` and build folders are skipped); **Add** puts one on the map. The ribbon badge counts **visible** layers; its tooltip reads "N visible · M hidden". Layers restored from an earlier session are scoped to the current workspace and capped at the 40 most recent; older layers are kept on disk (never dropped) and the panel offers **Restore older layers (N)** to load them. The old unscoped `map_layer_catalog.json` is migrated into the first workspace that opens it and renamed `map_layer_catalog.migrated.json`. Workspace files are keyed by folder plus path (multi-root safe), symlinks leaving the folder are not listed, and `env`, `.tox`, `site-packages`, `.ipynb_checkpoints`, `.cache` and `target` are skipped too. "No layers yet" appears only after restore has finished.
 
 ---
 
