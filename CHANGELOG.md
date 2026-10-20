@@ -21,7 +21,7 @@ Events that were silent or indistinguishable now leave honest data on their rows
 - **Command exit code.** The VS Code terminal path records the exit code (shell-integration end event, falling back to the OSC 633;D mark) on the command row as `exitCode`. A non-zero code sets `execOutcome: "failed"`. When the code cannot be observed (no shell integration, detached or cancelled command, standalone host) the row records `exitCode: "unknown"` and `execOutcome: "unknown"`, never success. The model-facing result now reads "Command executed (exit code N)." or "(exit code unavailable)".
 - **Policy class on commands.** Command rows the host policy flagged carry `policyClass`: `subagent_launch`, `protected_path`, `auto_run_all`, `model_requested_approval`, `not_read_only`. Unflagged: "auto-run off" asks and host-classified read-only runs.
 - **Proto path.** Additive `ClineMessage` fields 1001-1007 (`info_class`, `info_severity`, `info_detail_json`, `mcp_level`, `exit_code_state`, `exit_code`, `policy_class`) round-trip through `convertAiHydroMessageToProto` / `convertProtoToAiHydroMessage`. `execOutcome` gains the value `"unknown"`; W2-0's mapper fix must carry it.
-=======
+
 ### Fixed — keyless basemaps (vision-2040, branch `vision2040/basemap-keyless`)
 
 - **Default basemap was a watermark.** CARTO now answers every keyless tile request (any style, any location) with one "API KEY REQUIRED" image, so the default and the Carto Light/Dark/Voyager entries were unusable. The default "Hydrology default (muted)" now uses Esri Light/Dark Gray Canvas (global, keyless, attribution shown); the Carto entries are removed (no CARTO key setting exists).
@@ -30,7 +30,6 @@ Events that were silent or indistinguishable now leave honest data on their rows
 - **No more silent blank map.** US-only basemaps (USGS Topo/Imagery/Shaded Relief) carry coverage metadata; when the view is outside coverage a non-blocking notice says so and offers "Use Hydrology default". A basemap that answers every tile in view with one identical image and returns the same image for a fixed land control tile (z3, 45-90E, 0-41N) shows a "Basemap unavailable" notice (a general placeholder check, not per-provider; open ocean alone never triggers it; a control tile that cannot be fetched or hashed claims nothing and is not retried).
 - The in-chat Leaflet preview bridge: `carto-dark` is now an alias of `esri-dark-gray` and `osm` an alias of `esri-topo`; CARTO is dropped from the artifact-preview CSP. Humanitarian OSM (OSM France) is removed: its usage page limits use to non-profit sites and apps sending an identifying user-agent, which a webview cannot do; a saved choice migrates with a notice.
 - Provider verification (keyless, coverage, max zoom, attribution, terms) is recorded in `webview-ui/src/components/map/basemaps.ts` and enforced by the catalogue tests.
->>>>>>> origin/main
 
 ### Fixed — DeepSeek unclosed envelope and task_progress (vision-2040, branch `vision2040/deepseek-unclosed-envelope`)
 
