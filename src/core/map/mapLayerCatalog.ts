@@ -1,16 +1,15 @@
+import { aihydroHome, aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { createHash } from "crypto"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 
-// TODO(AI-Hydro/AI-Hydro#60): route these through aihydroPath() once the aihydroHome() helper lands on main.
-/** Directory holding the catalog files (`~/.aihydro`). Overridable per call so tests never touch the real one. */
+/** Directory holding the catalog files. Resolved per call (honours AIHYDRO_HOME); overridable so tests never touch the real one. */
 export function defaultAihydroDir(): string {
-	return path.join(os.homedir(), ".aihydro")
+	return aihydroHome()
 }
-export const MAP_LAYER_CATALOG_FILE = path.join(defaultAihydroDir(), "map_layer_catalog.json")
+export const MAP_LAYER_CATALOG_FILE = aihydroPath("map_layer_catalog.json")
 /** Where the unscoped legacy catalog is renamed once one workspace has taken it over. */
 const LEGACY_MIGRATED_NAME = "map_layer_catalog.migrated.json"
 /**
@@ -21,7 +20,7 @@ export function scopedMapLayerCatalogFile(workspaceRoot: string, baseDir: string
 	const key = createHash("sha1").update(workspaceRoot).digest("hex").slice(0, 12)
 	return path.join(baseDir, `map_layer_catalog.${key}.json`)
 }
-const MAP_LAYER_GEOJSON_CACHE_DIR = path.join(defaultAihydroDir(), "map_layer_geojson_cache")
+const geojsonCacheDir = () => aihydroPath("map_layer_geojson_cache")
 // Tool-pushed layers may be arbitrarily large (>512 KB). We always cache them
 // so they can be restored on extension reload. User-loaded layers keep the old cap.
 const MAX_GEOJSON_CACHE_BYTES_USER = 512_000
@@ -269,9 +268,9 @@ async function cacheLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 		return ""
 	}
 	try {
-		await fs.mkdir(MAP_LAYER_GEOJSON_CACHE_DIR, { recursive: true })
+		await fs.mkdir(geojsonCacheDir(), { recursive: true })
 		const safeId = layer.id.replace(/[^a-zA-Z0-9_-]/g, "_")
-		const cachePath = path.join(MAP_LAYER_GEOJSON_CACHE_DIR, `${safeId}.geojson`)
+		const cachePath = path.join(geojsonCacheDir(), `${safeId}.geojson`)
 		await fs.writeFile(cachePath, geojson, "utf8")
 		return cachePath
 	} catch {

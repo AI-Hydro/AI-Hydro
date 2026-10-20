@@ -43,7 +43,9 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 			})
 		: undefined
 	// Only an explicit, verified approval gets the approved styling; everything else keeps its status color.
-	const approved = approval?.approved === true && statusKey !== "stale" && statusKey !== "retracted"
+	// A contradicted claim never shows green: the contradiction must stay visible even if it was once approved.
+	const approved =
+		approval?.approved === true && statusKey !== "stale" && statusKey !== "retracted" && statusKey !== "contradicted"
 	const { bg, text } = approved ? APPROVED_COLOR : statusColor
 	const label = statusColor.label
 
@@ -55,9 +57,9 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 					leading-5 cursor-pointer border-0 ${bg} ${text}
 					hover:opacity-90 transition-opacity select-none
 				`}
+				data-approved={approved ? "true" : "false"}
 				onClick={() => setOpen((o) => !o)}
 				title={claim?.statement || `Claim ${claimId}`}
-				data-approved={approved ? "true" : "false"}
 				type="button">
 				<span className={`codicon ${approved ? "codicon-verified-filled" : "codicon-beaker"} text-[9px]`} />
 				<span>{claimId}</span>

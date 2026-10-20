@@ -1,9 +1,9 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { InstallCourseRequest, InstallCourseResponse } from "@shared/proto/cline/html_preview"
 import { InstallCourseResponse as InstallCourseResponseProto } from "@shared/proto/cline/html_preview"
 import axios from "axios"
 import { createHash } from "crypto"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import {
 	type CourseRegistryEntry,
@@ -34,14 +34,14 @@ export async function installCourse(controller: Controller, request: InstallCour
 		const resolvedCourseId = String(manifest.courseId || manifest.course_id || courseId || "")
 		if (!resolvedCourseId) throw new Error("Course manifest has no courseId")
 
-		const courseDir = path.join(os.homedir(), ".aihydro", "courses", resolvedCourseId)
+		const courseDir = aihydroPath("courses", resolvedCourseId)
 		await fs.mkdir(courseDir, { recursive: true })
 
 		const modules: any[] = Array.isArray(manifest.modules) ? manifest.modules : []
 		if (modules.length === 0) throw new Error("Course manifest has no modules")
 
 		// 2. Load the module registry once.
-		const registryPath = path.join(os.homedir(), ".aihydro", "modules", "installed.json")
+		const registryPath = aihydroPath("modules", "installed.json")
 		let registry: Record<string, ModuleRegistryEntry> = {}
 		try {
 			registry = JSON.parse(await fs.readFile(registryPath, "utf-8"))

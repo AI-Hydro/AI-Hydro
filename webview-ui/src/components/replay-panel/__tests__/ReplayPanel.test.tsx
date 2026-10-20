@@ -131,3 +131,107 @@ describe("Replay minimal rows", () => {
 		expect(screen.getByTestId("toggle-minimal-runs").textContent).toBe("Hide 2 recorded calls (1 with record errors)")
 	})
 })
+
+describe("Replay: green means approved", () => {
+	const GREEN = "testing-iconPassed"
+
+	function showEntries(entries: Array<Record<string, unknown>>) {
+		const view = render(<ReplayPanel />)
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: { type: "replay_data", session_id: "synthetic", source: "session", entries },
+				}),
+			),
+		)
+		return view
+	}
+	const run = (run_id: string, evidence: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
+		run_id,
+		session_id: "synthetic",
+		tool_name: `tool_${run_id}`,
+		timestamp: "2026-01-01T12:00:00Z",
+		key_outputs: { nse: 0.8 },
+		evidence,
+		...extra,
+	})
+
+	it("renders 'recorded checks passed' and a pass chip without the success token", () => {
+		const { container } = showEntries([run("a", { quality_flags: [{ validator: "mass_balance", status: "pass" }] })])
+		expect(screen.getAllByText("recorded checks passed").length).toBeGreaterThan(0)
+		expect(container.innerHTML).not.toContain(GREEN)
+	})
+
+	it("renders '0 need review' and '0 failed' neutral", () => {
+		const { container } = showEntries([run("a", { quality_flags: [{ validator: "mass_balance", status: "pass" }] })])
+		expect(screen.getByTestId("need-review-count").textContent).toContain("0 need review")
+		expect(screen.getByTestId("failed-count").textContent).toContain("0 failed")
+		expect(container.innerHTML).not.toContain(GREEN)
+	})
+
+	it("keeps warnings and failures in their own colours", () => {
+		const { container } = showEntries([run("a", { quality_flags: [{ validator: "mass_balance", status: "fail" }] })])
+		expect(container.innerHTML).toContain("testing-iconFailed")
+		expect(container.innerHTML).not.toContain(GREEN)
+	})
+
+	it("has no Demo control", () => {
+		showEntries([])
+		expect(screen.queryByRole("button", { name: "Demo" })).not.toBeInTheDocument()
+		expect(document.body.textContent).not.toMatch(/demo/i)
+	})
+})
+
+describe("Replay: arrow keys are scoped to the run timeline", () => {
+	function showTwoRuns() {
+		render(<ReplayPanel />)
+		const row = (run_id: string) => ({
+			run_id,
+			session_id: "synthetic",
+			tool_name: `tool_${run_id}`,
+			timestamp: "2026-01-01T12:00:00Z",
+			key_outputs: { nse: 0.8 },
+		})
+		act(() =>
+			window.dispatchEvent(
+				new MessageEvent("message", {
+					data: { type: "replay_data", session_id: "synthetic", source: "session", entries: [row("r1"), row("r2")] },
+				}),
+			),
+		)
+	}
+	const selectedTitle = () => screen.getAllByTitle(/^r\d$/).at(0)?.getAttribute("title")
+
+	it("moves the selection when ArrowDown is pressed inside the timeline", () => {
+		showTwoRuns()
+		expect(selectedTitle()).toBe("r1")
+		const notPrevented = fireEvent.keyDown(screen.getByTestId("run-timeline"), { key: "ArrowDown" })
+		expect(notPrevented).toBe(false) // preventDefault was called: the timeline consumed it
+		expect(selectedTitle()).toBe("r2")
+	})
+
+	it("leaves arrow keys alone in the session input and the filter input", () => {
+		showTwoRuns()
+		for (const input of [
+			screen.getByPlaceholderText("session_id or capsule path"),
+			screen.getByPlaceholderText(/Filter by tool/),
+		]) {
+			const notPrevented = fireEvent.keyDown(input, { key: "ArrowDown" })
+			expect(notPrevented).toBe(true) // not prevented: the input keeps its caret / datalist behaviour
+		}
+		expect(selectedTitle()).toBe("r1")
+	})
+
+	it("does not capture arrow keys on the window", () => {
+		showTwoRuns()
+		const notPrevented = fireEvent.keyDown(window, { key: "ArrowDown" })
+		expect(notPrevented).toBe(true)
+		expect(selectedTitle()).toBe("r1")
+	})
+
+	it("does not clear the selection with Escape pressed in the filter input", () => {
+		showTwoRuns()
+		fireEvent.keyDown(screen.getByPlaceholderText(/Filter by tool/), { key: "Escape" })
+		expect(selectedTitle()).toBe("r1")
+	})
+})

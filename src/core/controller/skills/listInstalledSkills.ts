@@ -1,7 +1,7 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { EmptyRequest } from "@shared/proto/cline/common"
 import { SkillCatalog, SkillItem, SkillSource } from "@shared/proto/cline/skills"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import type { Controller } from "../index"
 
@@ -34,7 +34,7 @@ function parseFrontmatter(raw: string): Record<string, string | string[]> {
 }
 
 export async function listInstalledSkills(_controller: Controller, _request: EmptyRequest): Promise<SkillCatalog> {
-	const skillsBase = path.join(os.homedir(), ".aihydro", "skills")
+	const skillsBase = aihydroPath("skills")
 	const items: SkillItem[] = []
 
 	// Load installed registry

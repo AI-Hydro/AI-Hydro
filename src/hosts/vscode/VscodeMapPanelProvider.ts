@@ -3,6 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import type { Controller } from "@core/controller"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import axios from "axios"
 import * as vscode from "vscode"
 import { AiHydroEnv } from "@/config"
@@ -28,8 +29,8 @@ async function resolveMapFilePath(filePath: string): Promise<string> {
 	const expanded = expandHomePath(filePath)
 	const candidates = [expanded]
 	if (!path.isAbsolute(expanded)) {
-		candidates.push(path.join(os.homedir(), ".aihydro", "map_layer_geojson_cache", expanded))
-		candidates.push(path.join(os.homedir(), ".aihydro", expanded))
+		candidates.push(aihydroPath("map_layer_geojson_cache", expanded))
+		candidates.push(aihydroPath(expanded))
 		for (const folder of vscode.workspace.workspaceFolders ?? []) {
 			candidates.push(path.join(folder.uri.fsPath, expanded))
 		}

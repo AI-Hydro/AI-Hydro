@@ -15,9 +15,9 @@
  */
 
 import type { Controller } from "@core/controller"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 import { buildInundation3dLayerFromPath } from "./inundation3dLayer"
@@ -64,7 +64,7 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 		try {
 			const resolvedSourcePath = path.isAbsolute(sourcePath)
 				? sourcePath
-				: path.join(os.homedir(), ".aihydro", "map_layer_geojson_cache", sourcePath)
+				: aihydroPath("map_layer_geojson_cache", sourcePath)
 			const raw = await fs.readFile(resolvedSourcePath, "utf8")
 			const preview = await ensureGeoJsonPreviewArtifact(entry.id, raw)
 			if (preview) {
