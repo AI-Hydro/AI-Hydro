@@ -17,6 +17,12 @@
  *   `aihydro-tools/ai_hydro/mcp/tools_preview.py`.
  *
  * Phase 4: comment store integration for `user.comment` events.
+ *
+ * Archive-on-remove: closing or clearing a preview deletes the *live* mirror
+ * (so `preview_list_modules` stops reporting it) but first writes the module's
+ * events, cell registry and manifest to
+ * `~/.aihydro/preview_archive/<moduleId>/<timestamp>.json`.  History is never
+ * dropped silently; the archive keeps the newest MAX_ARCHIVES_PER_MODULE.
  */
 
 import * as fs from "fs/promises"
@@ -33,6 +39,18 @@ const MAX_DISK_EVENTS_PER_MODULE = 200
 
 const PREVIEW_SESSION_DIR = path.join(os.homedir(), ".aihydro", "preview_session")
 const PREVIEW_EVENTS_DIR = path.join(os.homedir(), ".aihydro", "preview_events")
+const PREVIEW_ARCHIVE_DIR = path.join(os.homedir(), ".aihydro", "preview_archive")
+const MAX_ARCHIVES_PER_MODULE = 20
+
+export interface PreviewSessionArchive {
+	kind: "preview-session-archive"
+	moduleId: string
+	archivedAtMs: number
+	reason: string
+	manifest?: PreviewManifest
+	cells: PreviewCellRegistryEntry[]
+	events: PreviewEvent[]
+}
 
 export interface PreviewEvent {
 	eventId: string
@@ -95,7 +113,10 @@ export class PreviewSessionService {
 	private nextSeq = 1
 	private diskQueue: Promise<void> = Promise.resolve()
 
-	constructor() {
+	private readonly archiveDir: string
+
+	constructor(options: { archiveDir?: string } = {}) {
+		this.archiveDir = options.archiveDir ?? PREVIEW_ARCHIVE_DIR
 		// The preview_session / preview_events directories are *ephemeral* live
 		// state — they describe what is open in the HTML Preview right now, which
 		// MCP tools like `preview_list_modules` surface to the agent.  Anything
@@ -114,8 +135,26 @@ export class PreviewSessionService {
 		])
 	}
 
-	/** Drop all in-memory sessions and their mirrored disk state. */
+	/** Resolves once every queued disk write (mirrors, archives) has finished. */
+	flush(): Promise<void> {
+		return this.diskQueue
+	}
+
+	/** Archived histories for a module, oldest first (file names are timestamps). */
+	async listArchives(moduleId: string): Promise<string[]> {
+		try {
+			const entries = await fs.readdir(path.join(this.archiveDir, PreviewSessionService.safeId(moduleId)))
+			return entries.filter((name) => name.endsWith(".json")).sort()
+		} catch {
+			return []
+		}
+	}
+
+	/** Drop all in-memory sessions and their mirrored disk state, archiving their history first. */
 	clearAll(): void {
+		for (const session of this.sessions.values()) {
+			this.archiveSession(session, "all previews cleared")
+		}
 		this.sessions.clear()
 		this.enqueueDisk(() => PreviewSessionService.purgeDiskState())
 	}
@@ -211,6 +250,10 @@ export class PreviewSessionService {
 	}
 
 	clearModule(moduleId: string): void {
+		const session = this.sessions.get(moduleId)
+		if (session) {
+			this.archiveSession(session, "preview removed")
+		}
 		this.sessions.delete(moduleId)
 		// Also drop the mirrored disk state so the agent's `preview_list_modules`
 		// stops reporting a module the moment its preview is closed/cleared.
@@ -270,6 +313,56 @@ export class PreviewSessionService {
 			this.enqueueDisk(() => this.mirrorEventToDisk(event))
 		}
 		this.enqueueDisk(() => this.mirrorSnapshotToDisk(canonical))
+	}
+
+	private static safeId(id: string): string {
+		return id.replace(/[^a-zA-Z0-9._-]+/g, "_") || "unknown"
+	}
+
+	/** Snapshot now (the session is about to be dropped), write later. */
+	private archiveSession(session: ModuleSession, reason: string): void {
+		if (session.events.length === 0 && session.cells.size === 0) {
+			return
+		}
+		const archivedAtMs = Date.now()
+		const archive: PreviewSessionArchive = {
+			kind: "preview-session-archive",
+			moduleId: session.moduleId,
+			archivedAtMs,
+			reason,
+			manifest: session.manifest,
+			cells: Array.from(session.cells.values()),
+			events: [...session.events],
+		}
+		this.enqueueDisk(() => this.writeArchive(archive))
+	}
+
+	private async writeArchive(archive: PreviewSessionArchive): Promise<void> {
+		try {
+			const dir = path.join(this.archiveDir, PreviewSessionService.safeId(archive.moduleId))
+			await fs.mkdir(dir, { recursive: true })
+			// Fixed-width millisecond stamp so names sort chronologically; a counter
+			// suffix keeps two archives written in the same millisecond apart.
+			let name = `${String(archive.archivedAtMs).padStart(15, "0")}.json`
+			for (let n = 1; n < 100; n++) {
+				try {
+					await fs.writeFile(path.join(dir, name), JSON.stringify(archive, null, 2), { encoding: "utf8", flag: "wx" })
+					break
+				} catch (err) {
+					if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
+						throw err
+					}
+					name = `${String(archive.archivedAtMs).padStart(15, "0")}-${n}.json`
+				}
+			}
+			const entries = (await fs.readdir(dir)).filter((entry) => entry.endsWith(".json")).sort()
+			if (entries.length > MAX_ARCHIVES_PER_MODULE) {
+				const excess = entries.slice(0, entries.length - MAX_ARCHIVES_PER_MODULE)
+				await Promise.all(excess.map((entry) => fs.unlink(path.join(dir, entry)).catch(() => undefined)))
+			}
+		} catch (err) {
+			console.warn("[PreviewSessionService] archive write failed:", err)
+		}
 	}
 
 	private enqueueDisk(operation: () => Promise<void>): void {
