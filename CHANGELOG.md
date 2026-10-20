@@ -11,6 +11,15 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Changed — Studio: one name, honest sidebar, working catalogue installs (vision-2040, branch `vision2040/studio-p1p2`)
+
+- **One name: "AI-Hydro Studio".** Toolbar tooltip, Explorer menu ("Add to AI-Hydro Studio"), settings descriptions, panel and webview titles, chat card, error and confirmation messages and the `preview_html` tool description no longer say "HTML Preview" or "AI-Hydro Preview panel". Command ids, `preview_html`, `aihydro.htmlPreview.*` and proto names are unchanged. A guard test (`studioNamingGuard.test.ts`) fails if an old name returns in `package.json` contributes, webview strings or extension/agent-facing text.
+- **Catalogue installs work against the live index.** The live index lists every `downloadUrl`/`manifestUrl` on `raw.githubusercontent.com`, which the allowlist denied. It now admits that host only under the exact prefix `https://raw.githubusercontent.com/AI-Hydro/Modules/main/` (repo plus named branch, same shape as the skills policy; no org-wide rule, SHA/fork paths, query, fragment, port, userinfo or percent-encoding). https stays required.
+- **Network failures are errors.** A failed catalogue fetch rejects the RPC and the marketplace shows the error with Retry; it no longer shows "No courses found".
+- **No invented licence.** A catalogue entry that declares no licence shows "License not declared" (it used to show CC-BY-4.0). Every catalogue card states "Unsigned catalogue module".
+- **Honest sidebar.** The static Skills section is removed (the Skills toolbar button remains). "Comments" is now "Edit requests to the agent" and no longer shows Send/Clear buttons that did nothing; sending stays in the Edit Mode bar. The empty state offers real starting points (Browse courses, Add a document, Install Learning Pack, ask the agent for a report) instead of HTML-file instructions.
+- Known gap: the server-side docstrings of `show_html_preview` (aihydro-tools) still say "HTML Preview panel"; that repository is out of this change.
+
 ### Fixed — release-blocking trust and leak issues (vision-2040, branch `vision2040/trust-leaks`)
 
 - **Removed every `npm install -g` suggestion (P0-1; the package name was unregistered when found, and the CLI it installs is not a shipped, reviewed product).** The home-screen CLI banner, the `installAiHydroCli`/`installClineCli`/`updateCliBannerVersion` RPCs and handlers, the Settings "Install Now" button and the `lastDismissedCliBannerVersion` state key are gone. The subagents toggle stays disabled with a plain explanation. A source-tree test and the new bundle guard fail if the string returns.
