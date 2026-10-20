@@ -28,8 +28,8 @@ function convertAiHydroAskToProtoEnum(ask: AppAiHydroAsk | undefined): ClineAsk 
 		auto_approval_max_req_reached: ClineAsk.AUTO_APPROVAL_MAX_REQ_REACHED,
 		browser_action_launch: ClineAsk.BROWSER_ACTION_LAUNCH,
 		use_mcp_server: ClineAsk.USE_MCP_SERVER,
-		install_dependencies: ClineAsk.FOLLOWUP,
-		workspace_env_setup: ClineAsk.FOLLOWUP,
+		install_dependencies: ClineAsk.INSTALL_DEPENDENCIES,
+		workspace_env_setup: ClineAsk.WORKSPACE_ENV_SETUP,
 		new_task: ClineAsk.NEW_TASK,
 		condense: ClineAsk.CONDENSE,
 		summarize_task: ClineAsk.SUMMARIZE_TASK,
@@ -68,6 +68,8 @@ function convertProtoEnumToAiHydroAsk(ask: ClineAsk): AppAiHydroAsk | undefined 
 		[ClineAsk.CONDENSE]: "condense",
 		[ClineAsk.SUMMARIZE_TASK]: "summarize_task",
 		[ClineAsk.REPORT_BUG]: "report_bug",
+		[ClineAsk.INSTALL_DEPENDENCIES]: "install_dependencies",
+		[ClineAsk.WORKSPACE_ENV_SETUP]: "workspace_env_setup",
 	}
 
 	return mapping[ask]
@@ -94,7 +96,7 @@ function convertAiHydroSayToProtoEnum(say: AppAiHydroSay | undefined): ClineSay 
 		command_output: ClineSay.COMMAND_OUTPUT_SAY,
 		tool: ClineSay.TOOL_SAY,
 		shell_integration_warning: ClineSay.SHELL_INTEGRATION_WARNING,
-		shell_integration_warning_with_suggestion: ClineSay.SHELL_INTEGRATION_WARNING,
+		shell_integration_warning_with_suggestion: ClineSay.SHELL_INTEGRATION_WARNING_WITH_SUGGESTION,
 		browser_action_launch: ClineSay.BROWSER_ACTION_LAUNCH_SAY,
 		browser_action: ClineSay.BROWSER_ACTION,
 		browser_action_result: ClineSay.BROWSER_ACTION_RESULT,
@@ -108,7 +110,8 @@ function convertAiHydroSayToProtoEnum(say: AppAiHydroSay | undefined): ClineSay 
 		checkpoint_created: ClineSay.CHECKPOINT_CREATED,
 		load_mcp_documentation: ClineSay.LOAD_MCP_DOCUMENTATION,
 		info: ClineSay.INFO,
-		html_preview: ClineSay.INFO,
+		html_preview: ClineSay.HTML_PREVIEW,
+		answer_audit: ClineSay.ANSWER_AUDIT,
 		task_progress: ClineSay.TASK_PROGRESS,
 		error_retry: ClineSay.ERROR_RETRY,
 	}
@@ -157,6 +160,9 @@ function convertProtoEnumToAiHydroSay(say: ClineSay): AppAiHydroSay | undefined 
 		[ClineSay.INFO]: "info",
 		[ClineSay.TASK_PROGRESS]: "task_progress",
 		[ClineSay.ERROR_RETRY]: "error_retry",
+		[ClineSay.HTML_PREVIEW]: "html_preview",
+		[ClineSay.ANSWER_AUDIT]: "answer_audit",
+		[ClineSay.SHELL_INTEGRATION_WARNING_WITH_SUGGESTION]: "shell_integration_warning_with_suggestion",
 	}
 
 	return mapping[say]
@@ -216,6 +222,10 @@ export function convertAiHydroMessageToProto(message: AppAiHydroMessage): ProtoC
 		exitCodeState: message.exitCode === undefined ? "" : message.exitCode === "unknown" ? "unknown" : "known",
 		exitCode: typeof message.exitCode === "number" ? message.exitCode : 0,
 		policyClass: message.policyClass ?? "",
+		// Outcome evidence the host records; empty/false = absent (the readers treat both the same way).
+		askOutcome: message.askOutcome ?? "",
+		execOutcome: message.execOutcome ?? "",
+		commandCompleted: message.commandCompleted === true,
 	}
 
 	return protoMessage
@@ -264,6 +274,15 @@ export function convertProtoToAiHydroMessage(protoMessage: ProtoClineMessage): A
 	}
 	if (protoMessage.lastCheckpointHash !== "") {
 		message.lastCheckpointHash = protoMessage.lastCheckpointHash
+	}
+	if (protoMessage.askOutcome === "approved" || protoMessage.askOutcome === "denied") {
+		message.askOutcome = protoMessage.askOutcome
+	}
+	if (protoMessage.execOutcome === "completed" || protoMessage.execOutcome === "failed" || protoMessage.execOutcome === "unknown") {
+		message.execOutcome = protoMessage.execOutcome
+	}
+	if (protoMessage.commandCompleted) {
+		message.commandCompleted = true
 	}
 	if (protoMessage.isCheckpointCheckedOut) {
 		message.isCheckpointCheckedOut = protoMessage.isCheckpointCheckedOut

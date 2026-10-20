@@ -22,6 +22,10 @@ Events that were silent or indistinguishable now leave honest data on their rows
 - **Policy class on commands.** Command rows the host policy flagged carry `policyClass`: `subagent_launch`, `protected_path`, `auto_run_all`, `model_requested_approval`, `not_read_only`. Unflagged: "auto-run off" asks and host-classified read-only runs.
 - **Proto path.** Additive `ClineMessage` fields 1004-1010 (`info_class`, `info_severity`, `info_detail_json`, `mcp_level`, `exit_code_state`, `exit_code`, `policy_class`) round-trip through `convertAiHydroMessageToProto` / `convertProtoToAiHydroMessage`. `execOutcome` gains the value `"unknown"`; W2-0's mapper fix must carry it.
 
+### Fixed — Learning Pack verifier rejects a leading UTF-8 BOM (vision-2040, branch `vision2040/verifier-bom`)
+
+- `parseCanonicalJson` decoded with a `TextDecoder` that strips a leading BOM by default, so its "must not contain a UTF-8 BOM" check never fired and a BOM-prefixed contract JSON file (for example `pack.json`) verified. It now decodes with `ignoreBOM: true`, so such a pack is `invalid` (`BOM`). **This tightens acceptance:** a pack that was previously accepted only because its BOM was ignored is now rejected. The signature and checksums always covered the exact bytes, so no valid-signature pack becomes forgeable either way; the vector in the test is re-checksummed and re-signed so the BOM is its only defect.
+
 ### Fixed — keyless basemaps (vision-2040, branch `vision2040/basemap-keyless`)
 
 - **Default basemap was a watermark.** CARTO now answers every keyless tile request (any style, any location) with one "API KEY REQUIRED" image, so the default and the Carto Light/Dark/Voyager entries were unusable. The default "Hydrology default (muted)" now uses Esri Light/Dark Gray Canvas (global, keyless, attribution shown); the Carto entries are removed (no CARTO key setting exists).
@@ -30,6 +34,12 @@ Events that were silent or indistinguishable now leave honest data on their rows
 - **No more silent blank map.** US-only basemaps (USGS Topo/Imagery/Shaded Relief) carry coverage metadata; when the view is outside coverage a non-blocking notice says so and offers "Use Hydrology default". A basemap that answers every tile in view with one identical image and returns the same image for a fixed land control tile (z3, 45-90E, 0-41N) shows a "Basemap unavailable" notice (a general placeholder check, not per-provider; open ocean alone never triggers it; a control tile that cannot be fetched or hashed claims nothing and is not retried).
 - The in-chat Leaflet preview bridge: `carto-dark` is now an alias of `esri-dark-gray` and `osm` an alias of `esri-topo`; CARTO is dropped from the artifact-preview CSP. Humanitarian OSM (OSM France) is removed: its usage page limits use to non-profit sites and apps sending an identifying user-agent, which a webview cannot do; a saved choice migrates with a notice.
 - Provider verification (keyless, coverage, max zoom, attribution, terms) is recorded in `webview-ui/src/components/map/basemaps.ts` and enforced by the catalogue tests.
+
+### Changed — Wave 2 chat redesign groundwork, W2-0 (vision-2040, branch `vision2040/w2-0`; no user-visible change)
+
+- **Proto round trip.** `convertAiHydroMessageToProto`/`convertProtoToAiHydroMessage` now preserve every say and ask kind and the `askOutcome`, `execOutcome` and `commandCompleted` fields (the partial-update path used to drop them, and `html_preview`, `shell_integration_warning_with_suggestion`, `install_dependencies` and `workspace_env_setup` were mapped to other kinds). AI-Hydro-only kinds use enum numbers of 1000 or more and the new fields use numbers 1001 to 1003, so upstream Cline additions cannot collide; `ANSWER_AUDIT = 1001` is reserved and not emitted yet. Tested over every enum value.
+- **Frozen contracts** in `src/shared/aihydro/transcriptContracts.ts`: `AnswerAuditPayload` v1 (with `AnswerRevisionEvent` and the draft-storage decision), the `InfoNotice {class, severity}` shape and a legacy prefix registry for existing plain-string info notices (unmatched text is lifted).
+- **Screen harness.** `expectAbsent` assertion (with a self-test), plus synthetic transcript screens for the turn machinery, lifted failures, long tool runs, approvals, claims, the legacy audit text, truncation, condense, non-zero exit, cancel, resume, rewind, checked-out checkpoint and an old task without outcome fields. Their budgets record today's counts (new entries only).
 
 ### Fixed — DeepSeek unclosed envelope and task_progress (vision-2040, branch `vision2040/deepseek-unclosed-envelope`)
 

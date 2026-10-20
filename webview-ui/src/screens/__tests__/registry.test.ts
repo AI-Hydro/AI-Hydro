@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import * as tx from "../fixtures/transcripts"
 import { screens } from "../registry"
 
 describe("screen harness registry", () => {
@@ -44,5 +45,50 @@ describe("screen harness registry", () => {
 		for (const s of screens.filter((x) => x.id.startsWith("toolcard-"))) {
 			expect(["recorded", "spliced"], s.id).toContain(s.fixtureKind)
 		}
+	})
+
+	it("registers the Wave 2 transcript screens with unique, ordered message timestamps", () => {
+		const ids = [
+			"chat-turn-machinery",
+			"chat-failure-lifted",
+			"chat-run-8-tools",
+			"chat-approval-mcp",
+			"chat-approval-command",
+			"chat-approval-edit",
+			"chat-approval-protected-path",
+			"chat-finished-claims",
+			"chat-answer-audit-violations",
+			"chat-context-truncation",
+			"chat-condense",
+			"chat-command-nonzero-exit",
+			"chat-user-cancel",
+			"chat-resume",
+			"chat-rewind",
+			"chat-checkpoint-checked-out",
+			"chat-old-task-no-outcomes",
+		]
+		for (const id of ids) {
+			const screen = screens.find((s) => s.id === id)
+			expect(screen, id).toBeDefined()
+			const messages = screen?.state?.aihydroMessages ?? []
+			expect(messages.length, id).toBeGreaterThan(2)
+			const stamps = messages.map((m) => m.ts)
+			expect(new Set(stamps).size, `${id}: duplicate ts`).toBe(stamps.length)
+			expect(
+				[...stamps].sort((a, b) => a - b),
+				`${id}: ts out of order`,
+			).toEqual(stamps)
+		}
+		expect(Object.keys(tx).length).toBeGreaterThanOrEqual(ids.length)
+	})
+
+	it("the old-task fixture carries no recorded outcomes, the lifecycle fixtures keep their evidence", () => {
+		for (const m of tx.oldTaskNoOutcomesTask) {
+			expect(m.askOutcome).toBeUndefined()
+			expect(m.execOutcome).toBeUndefined()
+		}
+		expect(tx.checkpointCheckedOutTask.some((m) => m.isCheckpointCheckedOut)).toBe(true)
+		expect(tx.protectedPathApprovalTask.some((m) => m.isOperationOutsideWorkspace)).toBe(true)
+		expect(tx.rewindTask.some((m) => m.say === "deleted_api_reqs")).toBe(true)
 	})
 })

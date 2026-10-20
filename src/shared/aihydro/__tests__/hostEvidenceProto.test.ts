@@ -33,6 +33,9 @@ describe("host evidence survives the proto/partial path (W2-0h)", () => {
 		expect(roundTrip(cmd(0)).exitCode).to.equal(0)
 		expect(roundTrip(cmd("unknown")).exitCode).to.equal("unknown")
 		expect(roundTrip(cmd(undefined))).to.not.have.property("exitCode")
+		const unknownRow: AiHydroMessage = { ...cmd("unknown"), execOutcome: "unknown" }
+		expect(roundTrip(unknownRow).execOutcome).to.equal("unknown")
+		expect(roundTrip({ ...cmd(2), execOutcome: "failed" }).execOutcome).to.equal("failed")
 		expect(roundTrip(cmd(1)).policyClass).to.equal("subagent_launch")
 	})
 

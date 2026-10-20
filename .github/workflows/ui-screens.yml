@@ -52,6 +52,9 @@ jobs:
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
 
+      - name: Harness assertion self-test
+        run: npm run ui:screens:selftest
+
       - name: Build webview
         run: npm run build:webview
 
