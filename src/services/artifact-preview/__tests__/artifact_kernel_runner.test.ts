@@ -23,6 +23,11 @@ function runKernel(lines: string[]): Promise<Record<string, unknown>[]> {
 			for (const line of parts) {
 				if (line.trim()) {
 					outputs.push(JSON.parse(line) as Record<string, unknown>)
+					// Close stdin only once every request is answered: a kernel whose host has
+					// gone away deliberately exits rather than finish a long cell (e.g. a manim render).
+					if (outputs.length >= lines.length) {
+						child.stdin.end()
+					}
 				}
 			}
 		})
@@ -40,7 +45,6 @@ function runKernel(lines: string[]): Promise<Record<string, unknown>[]> {
 		for (const line of lines) {
 			child.stdin.write(`${line}\n`)
 		}
-		child.stdin.end()
 	})
 }
 

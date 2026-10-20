@@ -87,7 +87,7 @@ jobs:
       - name: Run deterministic trust, identity, event, and navigation contracts
         shell: bash
         run: |
-          npm run test:unit -- --grep 'HTML Preview Python execution policy|ArtifactTrustStore|ArtifactPreviewService execution gate|handlePreviewAgentTaskMessage trust gate|PreviewSessionService observable module identity|PreviewCommandWatcher agent module identity|HTML Preview agent navigation intent|runArtifactCode'
+          npm run test:unit -- --grep 'HTML Preview Python execution policy|ArtifactTrustStore|ArtifactPreviewService execution gate|handlePreviewAgentTaskMessage trust gate|PreviewSessionService observable module identity|PreviewCommandWatcher agent module identity|HTML Preview agent navigation intent|runArtifactCode|artifact_kernel_runner.py protocol|ArtifactKernelService \(real kernel\)|PreviewSessionService archive-on-remove'
           cd webview-ui
           npx vitest run src/components/html_preview/__tests__/courseAgentNavigation.test.ts
 
@@ -103,11 +103,31 @@ jobs:
 
       - name: Sanitize allowlisted failure evidence
         if: failure()
-        run: node scripts/sanitize-e2e-artifacts.mjs test-results/playwright test-results/sanitized
+        # Text evidence (error-context.md, logs) is redacted and secret-scanned. Playwright writes
+        # per-test output under test-results/<test>/ (recordings go to test-results/playwright).
+        run: node scripts/sanitize-e2e-artifacts.mjs test-results failure-evidence/sanitized
+
+      - name: Collect failure traces and screenshots
+        if: failure()
+        shell: bash
+        # ARTIFACT POLICY: traces, screenshots and host logs cannot be redacted, so they are
+        # uploaded only when ALL of these hold: (1) the job failed, (2) retention is 3 days, and
+        # (3) this job has no repository secrets in its environment. Condition 3 is checked by
+        # grepping this file for the secrets context: there must be no such reference. The job drives a mock API
+        # server with test-only credentials and runs with `permissions: contents: read`. If a
+        # secret is ever added to this job, remove this step and the diagnostics path below.
+        run: |
+          mkdir -p failure-evidence/diagnostics
+          find test-results -type f \( -name 'trace.zip' -o -name 'failure.png' -o -name '*.log' -path '*host-logs*' \) | while read -r f; do
+            dest="failure-evidence/diagnostics/$(dirname "${f#test-results/}")"
+            mkdir -p "$dest"
+            cp "$f" "$dest/"
+          done
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: html-preview-runtime-${{ matrix.runner }}
-          path: test-results/sanitized/
+          path: failure-evidence/
+          retention-days: 3
           if-no-files-found: ignore

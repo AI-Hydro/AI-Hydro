@@ -1,6 +1,6 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { type HtmlPreviewItem, HtmlPreviewMode } from "@shared/proto/cline/html_preview"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import HtmlPreviewView, { sanitizeFrameDiag } from "../HtmlPreviewView"
 
@@ -116,7 +116,7 @@ function openKebabMenu() {
 describe("HtmlPreviewView", () => {
 	it("renders empty state when no item is provided", () => {
 		render(<HtmlPreviewView />)
-		expect(screen.getByText("No HTML preview active")).toBeInTheDocument()
+		expect(screen.getByText("No document open in AI-Hydro Studio")).toBeInTheDocument()
 	})
 
 	it("falls back to src=item.webviewUri when htmlContent is empty", () => {
@@ -218,6 +218,31 @@ describe("HtmlPreviewView", () => {
 		expect(await screen.findByText("Path copied!")).toBeInTheDocument()
 	})
 
+	it("cancels the copied-flag timer when unmounted right after a copy", async () => {
+		vi.useFakeTimers()
+		const clearSpy = vi.spyOn(window, "clearTimeout")
+		const errors: unknown[] = []
+		const onError = (event: ErrorEvent) => errors.push(event.error)
+		window.addEventListener("error", onError)
+		try {
+			const { unmount } = render(<HtmlPreviewView item={baseItem} />)
+			openKebabMenu()
+			await act(async () => {
+				fireEvent.click(screen.getByText("Copy file path"))
+			})
+			const clearsBeforeUnmount = clearSpy.mock.calls.length
+			unmount()
+			// Unmount must clear the pending 1.5s reset (otherwise it fires after teardown).
+			expect(clearSpy.mock.calls.length).toBeGreaterThan(clearsBeforeUnmount)
+			expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
+			expect(errors).toEqual([])
+		} finally {
+			window.removeEventListener("error", onError)
+			clearSpy.mockRestore()
+			vi.useRealTimers()
+		}
+	})
+
 	it("opens the source file in the default browser via the extension", () => {
 		openUrlMock.mockClear()
 		render(<HtmlPreviewView item={baseItem} />)
@@ -302,6 +327,47 @@ describe("HtmlPreviewView", () => {
 		})
 	})
 
+	it("runs A, B and C clicked while the kernel is busy in order, answering each cell once", async () => {
+		runArtifactCodeMock.mockReset()
+		let releaseA: (() => void) | undefined
+		const calls: string[] = []
+		runArtifactCodeMock.mockImplementation(async (req: { code: string }) => {
+			calls.push(req.code)
+			if (req.code === "A") {
+				await new Promise<void>((resolve) => {
+					releaseA = resolve
+				})
+			}
+			return { stdout: `${req.code}\n`, stderr: "", status: "ok", error: "", resultRepr: "" }
+		})
+		const { container } = render(<HtmlPreviewView item={trustedAllowedItem} />)
+		const iframe = container.querySelector("iframe") as HTMLIFrameElement
+		const postMessage = vi.fn()
+		Object.defineProperty(iframe, "contentWindow", { value: { postMessage }, configurable: true })
+		const send = (code: string, cellId: string) => {
+			const event = new MessageEvent("message", {
+				data: { source: "aihydro-artifact", type: "artifact/runCode", language: "python", code, cellId },
+			})
+			Object.defineProperty(event, "source", { value: iframe.contentWindow, configurable: true })
+			window.dispatchEvent(event)
+		}
+		send("A", "cell-a")
+		await vi.waitFor(() => expect(calls).toEqual(["A"]))
+		send("B", "cell-b")
+		send("C", "cell-c")
+		send("C2", "cell-c") // same cell still waiting: coalesces to the newest code, keeps its place
+		releaseA?.()
+		await vi.waitFor(() => expect(calls).toEqual(["A", "B", "C2"]))
+		await vi.waitFor(() => {
+			const answered = postMessage.mock.calls
+				.map((c) => c[0])
+				.filter((m) => m?.type === "artifact/runCodeResult")
+				.map((m) => m.cellId)
+			expect(answered).toEqual(["cell-a", "cell-b", "cell-c"])
+		})
+		runArtifactCodeMock.mockReset()
+	})
+
 	it("shows kernel restart in the toolbar", () => {
 		render(<HtmlPreviewView item={baseItem} />)
 		openKebabMenu()
@@ -338,7 +404,10 @@ describe("HtmlPreviewView", () => {
 			const { container } = render(<HtmlPreviewView item={inlineItem} />)
 			const reply = postFromIframe(container.querySelector("iframe") as HTMLIFrameElement, runCodeMessage)
 			await vi.waitFor(() =>
-				expect(reply).toHaveBeenCalledWith(expect.objectContaining({ type: "artifact/runCodeResult", status: "denied" }), "*"),
+				expect(reply).toHaveBeenCalledWith(
+					expect.objectContaining({ type: "artifact/runCodeResult", status: "denied" }),
+					"*",
+				),
 			)
 			expect(runArtifactCodeMock).not.toHaveBeenCalled()
 		})

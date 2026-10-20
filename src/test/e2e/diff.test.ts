@@ -37,7 +37,7 @@ e2e.describe("Diff Editor", () => {
 			})
 
 			// Back to home page with history
-			await sidebar.getByRole("button", { name: "Start a New Task" }).click()
+			await sidebar.getByRole("button", { name: "New task", exact: true }).click()
 			await expect(sidebar.getByText("Recent Tasks")).toBeVisible()
 			await expect(sidebar.getByText("Hello, AI-Hydro!")).toBeVisible() // History with the previous sent message
 			const historyCard = sidebar.getByRole("article").filter({ hasText: "Hello, AI-Hydro!" })

@@ -1,5 +1,5 @@
 /** Synthetic Studio / HTML-preview items. Content is invented placeholder text. */
-import { HtmlPreviewMode, type HtmlPreviewItem } from "@shared/proto/cline/html_preview"
+import { type HtmlPreviewItem, HtmlPreviewMode } from "@shared/proto/cline/html_preview"
 
 const page = (title: string, body: string) =>
 	`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title><style>body{font:14px system-ui;margin:24px;line-height:1.5;color:#222;background:#fff}h1{font-size:1.4em}</style></head><body>${body}</body></html>`
@@ -83,3 +83,37 @@ export const courseProgress = {
 	currentModuleId: "m2",
 	completed: { m1: { completedAt: 1_700_000_050_000, timeSpentMs: 1_200_000 } },
 }
+
+/** FIXTURE catalogue entries (synthetic): one with no declared licence, one with a declared licence. */
+export const catalogueModules: Record<string, unknown>[] = [
+	{
+		moduleId: "fixture-hydrograph",
+		title: "Fixture: reading a hydrograph",
+		description: "Synthetic catalogue entry with no declared licence.",
+		version: "0.1.0",
+		author: "Fixture Author",
+		license: "",
+		level: "intro",
+		estimatedMinutes: 20,
+		tags: [],
+		topic: "fixture",
+		aiHydroInstalls: 0,
+		aiHydroStars: 0,
+		downloadUrl: "https://raw.githubusercontent.com/AI-Hydro/Modules/main/fixture/module.html",
+	},
+	{
+		moduleId: "fixture-baseflow",
+		title: "Fixture: baseflow separation",
+		description: "Synthetic catalogue entry with a declared licence.",
+		version: "0.2.0",
+		author: "Fixture Author",
+		license: "MIT",
+		level: "intermediate",
+		estimatedMinutes: 30,
+		tags: [],
+		topic: "fixture",
+		aiHydroInstalls: 0,
+		aiHydroStars: 0,
+		downloadUrl: "https://raw.githubusercontent.com/AI-Hydro/Modules/main/fixture2/module.html",
+	},
+]

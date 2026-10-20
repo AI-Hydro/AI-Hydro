@@ -43,6 +43,7 @@ import { fixWithAiHydro } from "./core/controller/commands/fixWithAiHydro"
 import { improveWithAiHydro } from "./core/controller/commands/improveWithAiHydro"
 import { sendAddToInputEvent } from "./core/controller/ui/subscribeToAddToInput"
 import { sendFocusChatInputEvent } from "./core/controller/ui/subscribeToFocusChatInput"
+import { setWorkspaceTrustProvider } from "./core/task/workspaceTrust"
 import { workspaceResolver } from "./core/workspace"
 import { focusChatInput, getContextForCommand } from "./hosts/vscode/commandUtils"
 import { abortCommitGeneration, generateCommitMessage } from "./hosts/vscode/commit-message-generator"
@@ -52,7 +53,6 @@ import { ExtensionRegistryInfo } from "./registry"
 import { AuthService } from "./services/auth/AuthService"
 import { LogoutReason } from "./services/auth/types"
 import { telemetryService } from "./services/telemetry"
-import { setWorkspaceTrustProvider } from "./core/task/workspaceTrust"
 import { SharedUriHandler } from "./services/uri/SharedUriHandler"
 import { ShowMessageType } from "./shared/proto/host/window"
 import { fileExistsAtPath } from "./utils/fs"
@@ -550,15 +550,13 @@ export async function activate(context: vscode.ExtensionContext) {
 					addedCount++
 				} catch (err) {
 					vscode.window.showErrorMessage(
-						`AI-Hydro HTML Preview: Failed to add ${path.basename(uri.fsPath)}: ${err instanceof Error ? err.message : String(err)}`,
+						`AI-Hydro Studio: Failed to add ${path.basename(uri.fsPath)}: ${err instanceof Error ? err.message : String(err)}`,
 					)
 				}
 			}
 			if (addedCount > 0) {
 				await VscodeHtmlPreviewProvider.createOrShow()
-				vscode.window.showInformationMessage(
-					`Added ${addedCount} file${addedCount === 1 ? "" : "s"} to AI-Hydro HTML Preview.`,
-				)
+				vscode.window.showInformationMessage(`Added ${addedCount} file${addedCount === 1 ? "" : "s"} to AI-Hydro Studio.`)
 			}
 		}),
 	)
@@ -705,7 +703,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				}),
 			)
 			promptedHtmlUris.add(uri.toString())
-			console.log("[AI-Hydro] Auto-opened AI-Hydro module in HTML Preview:", uri.fsPath)
+			console.log("[AI-Hydro] Auto-opened AI-Hydro module in Studio:", uri.fsPath)
 			return true
 		} catch (err) {
 			console.warn("[AI-Hydro] autoOpenIfAiHydroModule failed:", err)
@@ -727,11 +725,11 @@ export async function activate(context: vscode.ExtensionContext) {
 			return
 		}
 		const action = await vscode.window.showInformationMessage(
-			`"${path.basename(uri.fsPath)}" is an HTML file. Add it to the AI-Hydro HTML Preview?`,
-			"Add to HTML Preview",
+			`"${path.basename(uri.fsPath)}" is an HTML file. Add it to AI-Hydro Studio?`,
+			"Add to Studio",
 			"Keep in Editor",
 		)
-		if (action === "Add to HTML Preview") {
+		if (action === "Add to Studio") {
 			try {
 				// Use filePath-only loading so previewHtml reads content on demand.
 				await previewHtml(
@@ -749,7 +747,7 @@ export async function activate(context: vscode.ExtensionContext) {
 					/* ignore */
 				}
 			} catch (err) {
-				vscode.window.showErrorMessage(`AI-Hydro HTML Preview: ${err instanceof Error ? err.message : String(err)}`)
+				vscode.window.showErrorMessage(`AI-Hydro Studio: ${err instanceof Error ? err.message : String(err)}`)
 			}
 		}
 	}

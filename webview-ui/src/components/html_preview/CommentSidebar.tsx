@@ -1,7 +1,7 @@
 /**
- * CommentSidebar — pending comments + draft batch for the active module.
+ * CommentSidebar — queue of pending edit requests to the agent for the active module.
  *
- * Lives in the Files/Modules/Skills/Comments accordion stack.  Listens to
+ * Lives in the Files/Modules/Edit requests accordion stack.  Listens to
  * `aihydro-preview-event` messages of kind `user.comment.draft`,
  * `user.batch_changes`, and `user.batch.cleared` to maintain a running
  * list of pending changes.
@@ -91,10 +91,10 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 					color: "var(--vscode-descriptionForeground, #888)",
 					lineHeight: 1.5,
 				}}>
-				No pending comments.
+				No pending edit requests.
 				<br />
 				<span style={{ opacity: 0.7 }}>
-					Enter <b>Edit Mode</b>, then select text or click any cell/map/figure to add a comment.
+					Turn on <b>Edit Mode</b>, then select text or click a cell, map or figure to ask the agent for a change.
 				</span>
 			</div>
 		)
@@ -102,28 +102,34 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 
 	return (
 		<div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 8px" }}>
-			{/* Send batch primary button */}
-			<button
-				onClick={handleSend}
-				style={{
-					display: "inline-flex",
-					alignItems: "center",
-					justifyContent: "center",
-					gap: 6,
-					padding: "7px 10px",
-					borderRadius: 8,
-					border: "none",
-					background: "linear-gradient(135deg, #00A3FF, #00DDFF)",
-					color: "#0a0a15",
-					fontFamily: "Poppins, system-ui, sans-serif",
-					fontSize: 11,
-					fontWeight: 700,
-					cursor: "pointer",
-				}}
-				type="button">
-				<span className="codicon codicon-send" style={{ fontSize: 12 }} />
-				Send {pending.length} change{pending.length === 1 ? "" : "s"} to agent
-			</button>
+			{/* Send/Clear act on the document iframe; without a live window they would be dead, so they are not shown. */}
+			{iframeWindow ? (
+				<button
+					onClick={handleSend}
+					style={{
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						gap: 6,
+						padding: "7px 10px",
+						borderRadius: 8,
+						border: "none",
+						background: "linear-gradient(135deg, #00A3FF, #00DDFF)",
+						color: "#0a0a15",
+						fontFamily: "Poppins, system-ui, sans-serif",
+						fontSize: 11,
+						fontWeight: 700,
+						cursor: "pointer",
+					}}
+					type="button">
+					<span className="codicon codicon-send" style={{ fontSize: 12 }} />
+					Send {pending.length} change{pending.length === 1 ? "" : "s"} to agent
+				</button>
+			) : (
+				<div style={{ fontSize: 11, color: "var(--vscode-descriptionForeground, #888)", lineHeight: 1.5 }}>
+					Send these requests from the Edit Mode bar above the document.
+				</div>
+			)}
 
 			{/* Pending list */}
 			{pending.map((p) => (
@@ -147,7 +153,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 						}}>
 						{p.target === "component"
 							? `${p.component?.kind ?? "Component"}${p.component?.id ? `: ${p.component.id}` : ""}`
-							: "Text comment"}
+							: "Text edit request"}
 					</div>
 					{p.target === "text" && p.anchor?.quote && (
 						<div
@@ -169,23 +175,24 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 				</div>
 			))}
 
-			{/* Clear all */}
-			<button
-				onClick={handleClear}
-				style={{
-					padding: "4px 8px",
-					background: "transparent",
-					border: "1px solid rgba(125,211,252,0.18)",
-					borderRadius: 6,
-					color: "#94a3b8",
-					fontFamily: "Poppins, system-ui, sans-serif",
-					fontSize: 10,
-					cursor: "pointer",
-					marginTop: 4,
-				}}
-				type="button">
-				Clear all
-			</button>
+			{iframeWindow && (
+				<button
+					onClick={handleClear}
+					style={{
+						padding: "4px 8px",
+						background: "transparent",
+						border: "1px solid rgba(125,211,252,0.18)",
+						borderRadius: 6,
+						color: "#94a3b8",
+						fontFamily: "Poppins, system-ui, sans-serif",
+						fontSize: 10,
+						cursor: "pointer",
+						marginTop: 4,
+					}}
+					type="button">
+					Clear all
+				</button>
+			)}
 		</div>
 	)
 }

@@ -362,7 +362,7 @@ The simplification is **display-only** — your source file is unchanged. Hover 
 
 ---
 
-## HTML Preview — Manim Video Cells
+## AI-Hydro Studio — Manim Video Cells
 
 ### Manim cell shows "Manim is not installed"
 
@@ -399,7 +399,7 @@ Low-quality render (`480p 15fps`) is used by default. Complex scenes with many o
 
 ---
 
-## HTML Preview — `preview_list_modules` shows unexpected entries
+## AI-Hydro Studio — `preview_list_modules` shows unexpected entries
 
 If `preview_list_modules` returns entries the agent doesn't recognise (e.g. `file_xxx` IDs or modules you've already closed), reload VS Code (`Cmd+Shift+P → Reload Window`). The session bridge purges all stale entries on every launch. Alternatively click **Clear all previews** in the preview sidebar — this also wipes the session state immediately.
 

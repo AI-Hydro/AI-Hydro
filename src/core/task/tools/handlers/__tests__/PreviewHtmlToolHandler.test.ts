@@ -26,7 +26,7 @@ describe("PreviewHtmlToolHandler", () => {
 				type: "tool_use",
 				partial: false,
 			}
-			expect(handler.getDescription(block)).to.equal("[preview_html - HTML Preview]")
+			expect(handler.getDescription(block)).to.equal("[preview_html - AI-Hydro Studio]")
 		})
 	})
 

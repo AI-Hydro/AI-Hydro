@@ -7,6 +7,7 @@ import {
 	decideModuleState,
 	decidePreviewEvent,
 	decideSaveDocument,
+	decideShellReady,
 } from "../previewMessageGuards"
 
 const ROOT = path.resolve(path.sep, "ws", "course")
@@ -163,5 +164,28 @@ describe("decideModuleState", () => {
 			ok: false,
 		})
 		expect(decideModuleState({ ...base, learningPackScope: scope }, lookup())).to.include({ ok: false })
+	})
+})
+
+describe("decideShellReady", () => {
+	it("re-pushes only for the current document's token", () => {
+		expect(decideShellReady({ token: "tok-2" }, "tok-2")).to.equal("repush")
+	})
+
+	it("ignores a stale document whose token was replaced by a newer load", () => {
+		// Two mounts: the host minted tok-1, then tok-2 when it reassigned the shell HTML.
+		expect(decideShellReady({ token: "tok-1" }, "tok-2")).to.equal("ignore")
+		expect(decideShellReady({ token: "tok-2" }, "tok-2")).to.equal("repush")
+	})
+
+	it("ignores missing, non-string or empty tokens (a document that cannot read the token)", () => {
+		expect(decideShellReady({}, "tok")).to.equal("ignore")
+		expect(decideShellReady({ token: 7 }, "tok")).to.equal("ignore")
+		expect(decideShellReady({ token: "" }, "")).to.equal("ignore")
+	})
+
+	it("serves a repeated request after a lost first reply", () => {
+		expect(decideShellReady({ token: "tok" }, "tok")).to.equal("repush")
+		expect(decideShellReady({ token: "tok" }, "tok")).to.equal("repush")
 	})
 })

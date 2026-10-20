@@ -36,17 +36,17 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { TelemetryService } from "../telemetry/TelemetryService"
 import { DEFAULT_REQUEST_TIMEOUT_MS } from "./constants"
-import { buildStdioServerEnv } from "./serverEnv"
-import { StreamableHttpReconnectHandler } from "./StreamableHttpReconnectHandler"
-import { BaseConfigSchema, McpSettingsSchema, ServerConfigSchema } from "./schemas"
 import {
 	describeLoosening,
-	markAutoApprove,
 	McpPolicyGate,
+	markAutoApprove,
 	type PolicyChange,
 	revertSettingsFile,
 	type ServersLike,
 } from "./policyGate"
+import { StreamableHttpReconnectHandler } from "./StreamableHttpReconnectHandler"
+import { BaseConfigSchema, McpSettingsSchema, ServerConfigSchema } from "./schemas"
+import { buildStdioServerEnv } from "./serverEnv"
 import { McpConnection, McpServerConfig, Transport } from "./types"
 export class McpHub {
 	getMcpServersPath: () => Promise<string>
@@ -555,7 +555,11 @@ export class McpHub {
 		connection.server.error = newError //.slice(0, 800)
 	}
 
-	private async fetchToolsList(serverName: string): Promise<McpTool[]> {
+	/**
+	 * `undefined` means the list is UNKNOWN (request failed or timed out), which is different from a known-empty
+	 * list: callers that validate tool names (use_mcp_tool) must skip validation rather than refuse every call.
+	 */
+	private async fetchToolsList(serverName: string): Promise<McpTool[] | undefined> {
 		try {
 			const connection = this.connections.find((conn) => conn.server.name === serverName)
 
@@ -579,7 +583,7 @@ export class McpHub {
 			return tools
 		} catch (error) {
 			console.error(`Failed to fetch tools for ${serverName}:`, error)
-			return []
+			return undefined
 		}
 	}
 

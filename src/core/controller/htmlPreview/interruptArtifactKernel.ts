@@ -1,6 +1,11 @@
 import { type InterruptArtifactKernelRequest, InterruptArtifactKernelResponse } from "@shared/proto/cline/html_preview"
 import type { Controller } from ".."
 
+/**
+ * Stop-only: this deliberately skips ensurePythonExecutionAllowed(). Interrupting can only
+ * end code that is already running (or cancel runs that never started); it cannot start
+ * or execute anything, so revoked or denied execution must still be able to stop a kernel.
+ */
 export async function interruptArtifactKernel(
 	controller: Controller,
 	request: InterruptArtifactKernelRequest,

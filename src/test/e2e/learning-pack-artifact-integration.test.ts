@@ -131,8 +131,7 @@ async function waitForFrame(page: Page, predicate: (frame: Frame) => Promise<boo
 async function waitForCourseShell(page: Page): Promise<Frame> {
 	return waitForFrame(
 		page,
-		async (frame) =>
-			(await frame.title()) === "AI-Hydro HTML Preview" && (await frame.getByTitle("Course options").count()) === 1,
+		async (frame) => (await frame.title()) === "AI-Hydro Studio" && (await frame.getByTitle("Course options").count()) === 1,
 	)
 }
 
@@ -152,7 +151,7 @@ async function waitForCellFrame(page: Page, cellId: string): Promise<Frame> {
 				let belongsToActivePreview = false
 				while (ancestor && !ancestor.isDetached()) {
 					if (
-						(await ancestor.title()) === "AI-Hydro HTML Preview" &&
+						(await ancestor.title()) === "AI-Hydro Studio" &&
 						(await ancestor.getByTitle("Course options").count()) === 1
 					) {
 						belongsToActivePreview = true
@@ -770,7 +769,7 @@ async function interruptInstalledModule(page: Page, contract: BookModuleRuntimeC
 		const stop = runningShell.getByTitle("Interrupt execution")
 		await expect(stop).toBeEnabled({ timeout: 30_000 })
 		await stop.evaluate((element: HTMLElement) => element.click())
-		await expect(output).toContainText("Interrupted by user", { timeout: 30_000 })
+		await expect(output).toContainText("KeyboardInterrupt", { timeout: 30_000 })
 		await expect(output).not.toContainText("installed_pack_interrupt_finished")
 		await expect.poll(() => runningShell.getByTitle("Interrupt execution").count(), { timeout: 20_000 }).toBe(0)
 	} finally {

@@ -4,6 +4,7 @@ import { RemoveHtmlPreviewItemRequest } from "@shared/proto/cline/html_preview"
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { HtmlPreviewServiceClient } from "../services/grpc-client"
 import { useExtensionState } from "./ExtensionStateContext"
+import { applyPreviewItemOp, type PreviewItemOp, reconcileSnapshot } from "./htmlPreviewReconcile"
 
 /**
  * HtmlPreviewContext — webview-side state for the AI-Hydro HTML Preview panel.
@@ -40,6 +41,8 @@ export interface AiHydroModuleManifest {
 
 interface HtmlPreviewContextType {
 	items: HtmlPreviewItem[]
+	/** True once a preview snapshot from the host has been applied at least once. */
+	snapshotLoaded: boolean
 	activeItemId: string | null
 	setActiveItemId: (id: string | null) => void
 	refreshItems: () => Promise<void>
@@ -53,6 +56,7 @@ interface HtmlPreviewContextType {
 
 const HtmlPreviewContext = createContext<HtmlPreviewContextType>({
 	items: [],
+	snapshotLoaded: false,
 	activeItemId: null,
 	setActiveItemId: () => {},
 	refreshItems: async () => {},
@@ -64,14 +68,60 @@ const HtmlPreviewContext = createContext<HtmlPreviewContextType>({
 	setManifest: () => {},
 })
 
+/** Preview ids are `<source>_<hash of the path>`; log only a short prefix so traces carry no stable file identity. */
+const shortId = (id: string) => id.slice(0, 10)
+
 export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [items, setItems] = useState<HtmlPreviewItem[]>([])
 	const [activeItemId, setActiveItemId] = useState<string | null>(null)
+	const [snapshotLoaded, setSnapshotLoaded] = useState(false)
 	const [manifestsById, setManifestsById] = useState<Record<string, AiHydroModuleManifest>>({})
 	const setManifest = useCallback((itemId: string, manifest: AiHydroModuleManifest) => {
 		setManifestsById((prev) => ({ ...prev, [itemId]: manifest }))
 	}, [])
 	const activeItemIdRef = useRef(activeItemId)
+	const itemsRef = useRef(items)
+	useEffect(() => {
+		itemsRef.current = items
+	}, [items])
+	// Debug identity for this provider instance, so a trace can tell which of several
+	// webview reloads/mounts a log line (or a late callback) belongs to.
+	const instanceIdRef = useRef(Math.random().toString(36).slice(2, 7))
+	const debug = useCallback((message: string, extra?: unknown) => {
+		console.debug(`[HtmlPreviewContext:${instanceIdRef.current}] ${message}`, extra ?? "")
+	}, [])
+	// Operations that arrived while a snapshot request is in flight (see htmlPreviewReconcile.ts).
+	const inflightSnapshotsRef = useRef(new Set<PreviewItemOp[]>())
+	const recordOp = useCallback((op: PreviewItemOp) => {
+		inflightSnapshotsRef.current.forEach((ops) => ops.push(op))
+	}, [])
+	// Latest-wins: replies are numbered by request order, and a reply older than one already
+	// applied is dropped, so a slow older snapshot can never roll the list back (for example
+	// bring back an "allowed" item that a newer snapshot already shows revoked).
+	const requestSeqRef = useRef(0)
+	const lastAppliedSeqRef = useRef(0)
+	const fetchSnapshot = useCallback(async (): Promise<HtmlPreviewItem[] | null> => {
+		const laterOps: PreviewItemOp[] = []
+		const seq = ++requestSeqRef.current
+		inflightSnapshotsRef.current.add(laterOps)
+		try {
+			const response = await HtmlPreviewServiceClient.getHtmlPreviewState(EmptyRequest.create())
+			if (seq < lastAppliedSeqRef.current) {
+				console.debug(
+					`[HtmlPreviewContext:${instanceIdRef.current}] snapshot #${seq} ignored (newer #${lastAppliedSeqRef.current} already applied)`,
+				)
+				return null
+			}
+			lastAppliedSeqRef.current = seq
+			const items = reconcileSnapshot(response.items, laterOps)
+			console.debug(
+				`[HtmlPreviewContext:${instanceIdRef.current}] snapshot applied host=${response.items.length} later_ops=${laterOps.length} result=${items.length}`,
+			)
+			return items
+		} finally {
+			inflightSnapshotsRef.current.delete(laterOps)
+		}
+	}, [])
 	const lastVersionRef = useRef<number>(-1)
 	const extensionState = useExtensionState()
 
@@ -81,39 +131,47 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 
 	const refreshItems = useCallback(async () => {
 		try {
-			const response = await HtmlPreviewServiceClient.getHtmlPreviewState(EmptyRequest.create())
-			setItems(response.items)
-			if (response.items.length > 0 && !activeItemIdRef.current) {
-				setActiveItemId(response.items[response.items.length - 1].id)
+			const nextItems = await fetchSnapshot()
+			if (!nextItems) {
+				return
+			}
+			setItems(nextItems)
+			setSnapshotLoaded(true)
+			if (nextItems.length > 0 && !activeItemIdRef.current) {
+				setActiveItemId(nextItems[nextItems.length - 1].id)
 			}
 		} catch (error) {
 			console.error("[HtmlPreviewContext] Failed to fetch preview state:", error)
 		}
-	}, [])
+	}, [fetchSnapshot])
 
-	const removeItem = useCallback(async (id: string) => {
-		let nextItems: HtmlPreviewItem[] = []
-		setItems((prev) => {
-			nextItems = prev.filter((i) => i.id !== id)
-			return nextItems
-		})
-		setManifestsById((prev) => {
-			if (!(id in prev)) {
-				return prev
+	const removeItem = useCallback(
+		async (id: string) => {
+			recordOp({ kind: "remove", id })
+			let nextItems: HtmlPreviewItem[] = []
+			setItems((prev) => {
+				nextItems = prev.filter((i) => i.id !== id)
+				return nextItems
+			})
+			setManifestsById((prev) => {
+				if (!(id in prev)) {
+					return prev
+				}
+				const next = { ...prev }
+				delete next[id]
+				return next
+			})
+			if (activeItemIdRef.current === id) {
+				setActiveItemId(nextItems.length > 0 ? nextItems[nextItems.length - 1].id : null)
 			}
-			const next = { ...prev }
-			delete next[id]
-			return next
-		})
-		if (activeItemIdRef.current === id) {
-			setActiveItemId(nextItems.length > 0 ? nextItems[nextItems.length - 1].id : null)
-		}
-		try {
-			await HtmlPreviewServiceClient.removeHtmlPreviewItem(RemoveHtmlPreviewItemRequest.create({ id }))
-		} catch (error) {
-			console.error("[HtmlPreviewContext] Failed to remove preview item:", error)
-		}
-	}, [])
+			try {
+				await HtmlPreviewServiceClient.removeHtmlPreviewItem(RemoveHtmlPreviewItemRequest.create({ id }))
+			} catch (error) {
+				console.error("[HtmlPreviewContext] Failed to remove preview item:", error)
+			}
+		},
+		[recordOp],
+	)
 
 	// React to htmlPreviewVersion changes from ExtensionState — this is the
 	// reliable signal that the controller mutated HTML previews.
@@ -127,6 +185,7 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 
 	useEffect(() => {
 		// Initial pull + streaming subscription.
+		debug("mount: subscribing and requesting snapshot")
 		refreshItems()
 
 		const handleClearEvent = (e: Event) => {
@@ -140,12 +199,15 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 		const subscription = HtmlPreviewServiceClient.subscribeToHtmlPreviews(EmptyRequest.create(), {
 			onResponse: (item: HtmlPreviewItem) => {
 				const op = item.metadata?.__operation
+				debug(`stream item id=${shortId(item.id)} op=${op ?? "upsert"}`)
 				if (op === "clear") {
+					recordOp({ kind: "clear" })
 					setItems([])
 					setActiveItemId(null)
 					return
 				}
 				if (op === "remove") {
+					recordOp({ kind: "remove", id: item.id })
 					let nextItems: HtmlPreviewItem[] = []
 					setItems((prev) => {
 						nextItems = prev.filter((i) => i.id !== item.id)
@@ -156,15 +218,8 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 					}
 					return
 				}
-				setItems((prev) => {
-					const idx = prev.findIndex((i) => i.id === item.id)
-					if (idx >= 0) {
-						const next = [...prev]
-						next[idx] = item
-						return next
-					}
-					return [...prev, item]
-				})
+				recordOp({ kind: "upsert", item })
+				setItems((prev) => applyPreviewItemOp(prev, { kind: "upsert", item }))
 				if (!activeItemIdRef.current) {
 					setActiveItemId(item.id)
 				}
@@ -178,12 +233,14 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 		})
 
 		return () => {
+			debug("unmount: unsubscribing")
 			window.removeEventListener("htmlPreviewClear", handleClearEvent)
 			subscription()
 		}
-	}, [refreshItems, removeItem])
+	}, [refreshItems, removeItem, recordOp, debug])
 
 	const clearAllItems = useCallback(async () => {
+		recordOp({ kind: "clear" })
 		setItems([])
 		setActiveItemId(null)
 		setManifestsById({})
@@ -193,7 +250,7 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 		} catch (error) {
 			console.error("[HtmlPreviewContext] Failed to clear all previews:", error)
 		}
-	}, [])
+	}, [recordOp])
 
 	const addItemFromContent = useCallback(async (title: string, htmlContent: string, filePath?: string) => {
 		try {
@@ -246,11 +303,14 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 				)
 				// Fetch the updated item list, then activate the newly loaded item
 				// using tolerant path comparison (the extension may normalise slashes).
-				const response = await HtmlPreviewServiceClient.getHtmlPreviewState(EmptyRequest.create())
-				setItems(response.items)
+				const fetched = await fetchSnapshot()
+				if (fetched) {
+					setItems(fetched)
+				}
+				const nextItems = fetched ?? itemsRef.current
 				const newItem =
-					response.items.find((i) => pathsEqual(i.filePath, filePath)) ??
-					(response.items.length > 0 ? response.items[response.items.length - 1] : null)
+					nextItems.find((i) => pathsEqual(i.filePath, filePath)) ??
+					(nextItems.length > 0 ? nextItems[nextItems.length - 1] : null)
 				if (newItem) {
 					setActiveItemId(newItem.id)
 				}
@@ -259,13 +319,14 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 				throw error
 			}
 		},
-		[items, pathsEqual],
+		[items, pathsEqual, fetchSnapshot],
 	)
 
 	return (
 		<HtmlPreviewContext.Provider
 			value={{
 				items,
+				snapshotLoaded,
 				activeItemId,
 				setActiveItemId,
 				refreshItems,

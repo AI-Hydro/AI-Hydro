@@ -136,7 +136,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 					<div className="inline-flex items-center justify-end select-none flex-shrink-0">
 						{boundStudy && (
 							<div
-								className="task-header-chip mr-1 max-w-[160px]"
+								className="task-header-chip mr-1 max-w-[220px]"
 								id="bound-study"
 								title={
 									boundStudy.siteName
@@ -144,9 +144,13 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 										: `Bound study: ${boundStudy.studyId}`
 								}>
 								<span className="codicon codicon-database text-[10px] opacity-70"></span>
-								<span className="overflow-hidden text-ellipsis whitespace-nowrap">
-									{boundStudy.siteName || boundStudy.studyId}
-								</span>
+								{/* The gauge/study id is the identifier users look for: always first and never truncated. */}
+								<span className="shrink-0 font-medium">{boundStudy.studyId}</span>
+								{boundStudy.siteName && (
+									<span className="overflow-hidden text-ellipsis whitespace-nowrap min-w-0 opacity-80">
+										· {boundStudy.siteName}
+									</span>
+								)}
 							</div>
 						)}
 						{isCostAvailable && (

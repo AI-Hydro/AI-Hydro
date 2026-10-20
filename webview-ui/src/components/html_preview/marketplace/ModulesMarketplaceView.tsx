@@ -69,6 +69,8 @@ const ModulesMarketplaceView = () => {
 	const [courses, setCourses] = useState<CourseCatalog | null>(null)
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
+	// True while the last catalogue fetch failed: empty lists are then unknown, not "none".
+	const [loadFailed, setLoadFailed] = useState(false)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [searchQuery, setSearchQuery] = useState("")
 	const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
@@ -146,22 +148,28 @@ const ModulesMarketplaceView = () => {
 		}
 		setError(null)
 
-		Promise.all([
+		const message = (err: unknown) => (err instanceof Error && err.message ? err.message : "Failed to load marketplace data")
+		Promise.allSettled([
 			HtmlPreviewServiceClient.refreshModulesMarketplace(EmptyRequest.create({})),
-			HtmlPreviewServiceClient.refreshCoursesMarketplace(EmptyRequest.create({})).catch(() => null),
-		])
-			.then(([modulesResp, coursesResp]) => {
-				setCatalog(modulesResp)
-				setCourses(coursesResp)
-				setIsLoading(false)
-				setIsRefreshing(false)
-			})
-			.catch((err) => {
-				console.error("Error refreshing marketplace:", err)
-				setError("Failed to load marketplace data")
-				setIsLoading(false)
-				setIsRefreshing(false)
-			})
+			HtmlPreviewServiceClient.refreshCoursesMarketplace(EmptyRequest.create({})),
+		]).then(([modulesRes, coursesRes]) => {
+			// A failed fetch is an error state with Retry, never an empty catalogue.
+			if (modulesRes.status === "fulfilled") {
+				setCatalog(modulesRes.value)
+			}
+			if (coursesRes.status === "fulfilled") {
+				setCourses(coursesRes.value)
+			}
+			const failed = modulesRes.status === "rejected" || coursesRes.status === "rejected"
+			setLoadFailed(failed)
+			if (failed) {
+				const reason = modulesRes.status === "rejected" ? modulesRes.reason : (coursesRes as PromiseRejectedResult).reason
+				console.error("Error refreshing marketplace:", reason)
+				setError(message(reason))
+			}
+			setIsLoading(false)
+			setIsRefreshing(false)
+		})
 	}
 
 	const updateRecognition = (moduleId: string, starred: boolean, aiHydroStars: number) => {
@@ -211,27 +219,6 @@ const ModulesMarketplaceView = () => {
 		)
 	}
 
-	if (error && !catalog) {
-		return (
-			<div
-				style={{
-					display: "flex",
-					flexDirection: "column",
-					justifyContent: "center",
-					alignItems: "center",
-					height: "100%",
-					padding: "20px",
-					gap: "12px",
-				}}>
-				<div style={{ color: "var(--vscode-errorForeground)" }}>{error}</div>
-				<VSCodeButton appearance="secondary" onClick={() => fetchMarketplace(true)}>
-					<span className="codicon codicon-refresh" style={{ marginRight: "6px" }} />
-					Retry
-				</VSCodeButton>
-			</div>
-		)
-	}
-
 	const TabButton = ({ id, label, count }: { id: HubTab; label: string; count?: number }) => (
 		<button
 			onClick={() => setActiveTab(id)}
@@ -248,7 +235,7 @@ const ModulesMarketplaceView = () => {
 			}}
 			type="button">
 			{label}
-			{typeof count === "number" && count > 0 && <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.7 }}>{count}</span>}
+			{typeof count === "number" && count > 0 && <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.7 }}>{count}</span>}
 		</button>
 	)
 
@@ -269,7 +256,32 @@ const ModulesMarketplaceView = () => {
 				<TabButton count={myCourses.length} id="learning" label="My Learning" />
 			</div>
 
-			{error && <div style={{ padding: "8px 20px", color: "var(--vscode-errorForeground)", fontSize: 12 }}>{error}</div>}
+			{error && (
+				<div
+					role="alert"
+					style={{
+						padding: "8px 20px",
+						color: "var(--vscode-foreground)",
+						fontSize: 12,
+						display: "flex",
+						alignItems: "center",
+						gap: 8,
+						flexWrap: "wrap",
+					}}>
+					<span
+						aria-hidden="true"
+						className="codicon codicon-error"
+						style={{ color: "var(--vscode-errorForeground)" }}
+					/>
+					<span>{error}</span>
+					{loadFailed && (
+						<VSCodeButton appearance="secondary" onClick={() => fetchMarketplace(true)}>
+							<span className="codicon codicon-refresh" style={{ marginRight: "6px" }} />
+							Retry
+						</VSCodeButton>
+					)}
+				</div>
+			)}
 
 			{/* ---------- COURSES TAB ---------- */}
 			{activeTab === "courses" && (
@@ -355,9 +367,11 @@ const ModulesMarketplaceView = () => {
 
 					<div style={{ display: "flex", flexDirection: "column" }}>
 						{courseItems.length === 0 ? (
-							<div style={{ padding: 20, color: "var(--vscode-descriptionForeground)", textAlign: "center" }}>
-								No courses found in the marketplace
-							</div>
+							loadFailed ? null : (
+								<div style={{ padding: 20, color: "var(--vscode-descriptionForeground)", textAlign: "center" }}>
+									No courses found in the marketplace
+								</div>
+							)
 						) : filteredCourses.length === 0 ? (
 							<div style={{ padding: 20, color: "var(--vscode-descriptionForeground)", textAlign: "center" }}>
 								No matching courses found
@@ -457,11 +471,13 @@ const ModulesMarketplaceView = () => {
 
 					<div style={{ display: "flex", flexDirection: "column" }}>
 						{filteredItems.length === 0 ? (
-							<div style={{ padding: 20, color: "var(--vscode-descriptionForeground)", textAlign: "center" }}>
-								{searchQuery || selectedTopic
-									? "No matching modules found"
-									: "No learning modules found in the marketplace"}
-							</div>
+							loadFailed ? null : (
+								<div style={{ padding: 20, color: "var(--vscode-descriptionForeground)", textAlign: "center" }}>
+									{searchQuery || selectedTopic
+										? "No matching modules found"
+										: "No learning modules found in the marketplace"}
+								</div>
+							)
 						) : (
 							filteredItems.map((item) => (
 								<LearningModuleCard
@@ -482,22 +498,24 @@ const ModulesMarketplaceView = () => {
 			{activeTab === "learning" && (
 				<div style={{ display: "flex", flexDirection: "column" }}>
 					{myCourses.length === 0 ? (
-						<div style={{ padding: 24, color: "var(--vscode-descriptionForeground)", textAlign: "center" }}>
-							<div style={{ fontSize: 13, marginBottom: 6 }}>You haven't started any courses yet.</div>
-							<button
-								onClick={() => setActiveTab("courses")}
-								style={{
-									appearance: "none",
-									background: "transparent",
-									border: "none",
-									color: cyan,
-									cursor: "pointer",
-									fontSize: 12,
-								}}
-								type="button">
-								Browse courses →
-							</button>
-						</div>
+						loadFailed ? null : (
+							<div style={{ padding: 24, color: "var(--vscode-descriptionForeground)", textAlign: "center" }}>
+								<div style={{ fontSize: 13, marginBottom: 6 }}>You haven't started any courses yet.</div>
+								<button
+									onClick={() => setActiveTab("courses")}
+									style={{
+										appearance: "none",
+										background: "transparent",
+										border: "none",
+										color: cyan,
+										cursor: "pointer",
+										fontSize: 12,
+									}}
+									type="button">
+									Browse courses →
+								</button>
+							</div>
+						)
 					) : (
 						myCourses.map((course) => {
 							const total = course.modules.length
@@ -545,6 +563,7 @@ const ModulesMarketplaceView = () => {
 										onClick={() => handleContinueCourse(course.courseId, course.manifestUrl)}
 										style={{
 											alignSelf: "flex-start",
+											minHeight: 24,
 											padding: "5px 12px",
 											fontSize: 11,
 											fontWeight: 600,

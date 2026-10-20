@@ -25,12 +25,12 @@ import { GeoConversionError } from "@services/geo/types"
 import { McpHub } from "@services/mcp/McpHub"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { ApiProvider, ModelInfo } from "@shared/api"
+import { ARTIFACT_TRUST_METADATA_KEYS } from "@shared/artifactTrust"
 import { ChatContent } from "@shared/ChatContent"
 import { MAX_REMOTE_CATALOG_BYTES, MAX_REMOTE_CONNECTORS } from "@shared/connectors"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { McpMarketplaceCatalog } from "@shared/mcp"
-import { ARTIFACT_TRUST_METADATA_KEYS } from "@shared/artifactTrust"
 import { HtmlPreviewItem, HtmlPreviewMode, LearningModuleCatalog } from "@shared/proto/cline/html_preview"
 import type { ClaimUpdate } from "@shared/proto/cline/ledger"
 import { MapLayer } from "@shared/proto/cline/map"
@@ -821,7 +821,7 @@ export class Controller {
 						description: item.description || "",
 						version: remoteVersion,
 						author: item.author || "",
-						license: item.license || "CC-BY-4.0",
+						license: typeof item.license === "string" ? item.license.trim() : "", // never default: undeclared stays undeclared
 						topic: item.topic || "",
 						level: item.level || "intro",
 						estimatedMinutes: item.estimatedMinutes || item.estimated_minutes || 0,
@@ -922,7 +922,7 @@ export class Controller {
 					author: item.author || authors[0]?.name || "",
 					authorAffiliation: item.authorAffiliation || item.author_affiliation || authors[0]?.affiliation || "",
 					version: item.version || "0.1.0",
-					license: item.license || "CC-BY-4.0",
+					license: typeof item.license === "string" ? item.license.trim() : "", // never default: undeclared stays undeclared
 					estimatedHours: item.estimatedHours || item.estimated_hours || 0,
 					level: item.level || "intro",
 					tags: item.tags || [],
@@ -1667,6 +1667,18 @@ export class Controller {
 		this.htmlPreviewVersion++
 		const item = this.toHtmlPreviewItem(ref)
 		this.notifyHtmlPreviewSubscribers(item)
+		void this.postStateToWebview()
+	}
+
+	/**
+	 * Re-send every registered preview to the current subscribers and re-post state. Used when a
+	 * freshly (re)loaded Studio shell reports it is ready, to cover replies that were posted while
+	 * the previous document was being replaced.
+	 */
+	republishHtmlPreviews(): void {
+		for (const item of this.getHtmlPreviews()) {
+			this.notifyHtmlPreviewSubscribers(item)
+		}
 		void this.postStateToWebview()
 	}
 

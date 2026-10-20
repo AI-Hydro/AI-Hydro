@@ -35,7 +35,7 @@ export class PreviewHtmlToolHandler implements IFullyManagedTool {
 	}
 
 	getDescription(block: ToolUse): string {
-		const title = block.params.title || "HTML Preview"
+		const title = block.params.title || "AI-Hydro Studio"
 		return `[${block.name} - ${title}]`
 	}
 
@@ -100,7 +100,7 @@ export class PreviewHtmlToolHandler implements IFullyManagedTool {
 				await config.callbacks.say(
 					"html_preview",
 					JSON.stringify({
-						title: title || "HTML Preview",
+						title: title || "AI-Hydro Studio",
 						filePath,
 						mode: "external_browser",
 						size: resolvedContent.length,
@@ -108,7 +108,7 @@ export class PreviewHtmlToolHandler implements IFullyManagedTool {
 				)
 
 				return formatResponse.toolResult(
-					`HTML preview opened in your default external browser.${title ? ` Title: "${title}"` : ""}`,
+					`The document was opened in your default external browser (not in AI-Hydro Studio).${title ? ` Title: "${title}"` : ""}`,
 				)
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
@@ -125,7 +125,7 @@ export class PreviewHtmlToolHandler implements IFullyManagedTool {
 				PreviewHtmlRequest.create({
 					htmlContent: resolvedContent,
 					filePath: filePath || "",
-					title: title || (filePath ? `Preview: ${filePath.split("/").pop()}` : "HTML Preview"),
+					title: title || (filePath ? `Studio: ${filePath.split("/").pop()}` : "AI-Hydro Studio"),
 					interactive: mode === HtmlPreviewMode.INTERACTIVE,
 					mode,
 				}),
@@ -138,13 +138,13 @@ export class PreviewHtmlToolHandler implements IFullyManagedTool {
 			await config.callbacks.say(
 				"html_preview",
 				JSON.stringify({
-					title: title || "HTML Preview",
+					title: title || "AI-Hydro Studio",
 					filePath,
 					size: resolvedContent.length,
 				}),
 			)
 
-			return formatResponse.toolResult("HTML preview opened in the AI-Hydro Preview panel.")
+			return formatResponse.toolResult("Document opened in AI-Hydro Studio.")
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error)
 			await config.callbacks.say("error", `Failed to preview HTML: ${errorMessage}`)

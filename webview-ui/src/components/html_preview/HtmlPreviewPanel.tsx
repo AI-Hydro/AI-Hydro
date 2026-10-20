@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AccordionSection } from "@/components/common/AccordionSection"
+import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 import { useHtmlPreviewContext } from "../../context/HtmlPreviewContext"
 import { type ArtifactIdentity, deriveArtifactIdentity } from "./artifactIdentity"
@@ -9,6 +10,7 @@ import { courseNavigationKey, persistThenLoadCourseModule } from "./courseAgentN
 import HtmlPreviewView from "./HtmlPreviewView"
 import { learningPackScopeFromItem } from "./installedPackCsp"
 import ModulesMarketplaceView from "./marketplace/ModulesMarketplaceView"
+import { startShellReadyHandshake } from "./shellReadyHandshake"
 import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
 
@@ -33,6 +35,7 @@ import { useCourseProgress } from "./useCourseProgress"
 export const HtmlPreviewPanel: React.FC = () => {
 	const {
 		items,
+		snapshotLoaded,
 		activeItemId,
 		setActiveItemId,
 		removeItem,
@@ -41,7 +44,35 @@ export const HtmlPreviewPanel: React.FC = () => {
 		loadWorkspaceFile,
 		manifestsById,
 	} = useHtmlPreviewContext()
-	const { workspaceHtmlFiles } = useExtensionState()
+	const { workspaceHtmlFiles, didHydrateState } = useExtensionState()
+	// Catch-up handshake with the host (see shellReadyHandshake.ts): repeat until this shell has
+	// both host state and a preview snapshot.
+	const shellReadyRef = useRef(false)
+	shellReadyRef.current = didHydrateState && snapshotLoaded
+	useEffect(
+		() =>
+			startShellReadyHandshake({
+				getToken: () => {
+					const token = (window as { __aihydroPanelToken?: unknown }).__aihydroPanelToken
+					return typeof token === "string" ? token : undefined
+				},
+				post: (message) => PLATFORM_CONFIG.postMessage(message),
+				isReady: () => shellReadyRef.current,
+			}),
+		[],
+	)
+	// Debug trail for CI traces: which panel instance renders what, and when. Several webview
+	// instances can exist across reloads, so every line carries an instance id.
+	const panelInstanceId = useRef(Math.random().toString(36).slice(2, 7)).current
+	useEffect(() => {
+		console.debug(`[HtmlPreviewPanel:${panelInstanceId}] mounted`)
+		return () => console.debug(`[HtmlPreviewPanel:${panelInstanceId}] unmounted`)
+	}, [panelInstanceId])
+	useEffect(() => {
+		console.debug(
+			`[HtmlPreviewPanel:${panelInstanceId}] render state items=${items.length} active=${activeItemId ? activeItemId.slice(0, 10) : "none"} workspaceFiles=${workspaceHtmlFiles.length}`,
+		)
+	}, [panelInstanceId, items.length, activeItemId, workspaceHtmlFiles.length])
 	const activeItem = items.find((i) => i.id === activeItemId) || items[items.length - 1]
 	const learningPackScope = useMemo(() => learningPackScopeFromItem(activeItem), [activeItem?.id, activeItem?.metadata])
 	// Phase A: load course manifest for the active item's file (if any)
@@ -90,6 +121,14 @@ export const HtmlPreviewPanel: React.FC = () => {
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const [isDragOver, setIsDragOver] = useState(false)
 	const [loadStatus, setLoadStatus] = useState<{ kind: "idle" | "ok" | "err"; msg: string }>({ kind: "idle", msg: "" })
+	// The status line clears itself after a few seconds; a pending clear is cancelled on unmount
+	// and replaced by the next one so a stale timer cannot wipe a newer message.
+	const loadStatusTimerRef = useRef<number | undefined>(undefined)
+	useEffect(() => () => window.clearTimeout(loadStatusTimerRef.current), [])
+	const clearLoadStatusSoon = useCallback(() => {
+		window.clearTimeout(loadStatusTimerRef.current)
+		loadStatusTimerRef.current = window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
+	}, [])
 	const [confirmingClear, setConfirmingClear] = useState(false)
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 	const [activeSection, setActiveSection] = useState<"preview" | "modules">("preview")
@@ -135,7 +174,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 		if (fileInputRef.current) {
 			fileInputRef.current.value = ""
 		}
-		window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
+		clearLoadStatusSoon()
 	}
 
 	// ── Drag-and-drop ───────────────────────────────────────────────────────
@@ -176,9 +215,9 @@ export const HtmlPreviewPanel: React.FC = () => {
 			} else {
 				setLoadStatus({ kind: "err", msg: errors[0] ?? "No files loaded." })
 			}
-			window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
+			clearLoadStatusSoon()
 		},
-		[addItemFromContent],
+		[addItemFromContent, clearLoadStatusSoon],
 	)
 
 	// ── Clear all ───────────────────────────────────────────────────────────
@@ -209,9 +248,9 @@ export const HtmlPreviewPanel: React.FC = () => {
 				const msg = err instanceof Error ? err.message : String(err)
 				setLoadStatus({ kind: "err", msg: `Failed to load ${name}: ${msg}` })
 			}
-			window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
+			clearLoadStatusSoon()
 		},
-		[items, setActiveItemId, loadWorkspaceFile],
+		[items, setActiveItemId, loadWorkspaceFile, clearLoadStatusSoon],
 	)
 
 	const fg = "var(--vscode-foreground, #ddd)"
@@ -294,7 +333,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 					transition: "width 0.2s ease",
 				}}>
 				{/* Sidebar header removed — toolbar hamburger ≡ controls open/close,
-				    and the accordion sections (Files/Modules/Skills/Comments) need no title. */}
+				    and the accordion sections (Files/Modules/Edit requests) need no title. */}
 
 				{!sidebarCollapsed && (
 					<div style={{ flex: 1, overflow: "auto" }}>
@@ -377,7 +416,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 									{items.map((item) => {
 										const isActive = item.id === activeItemId
 										const manifest = manifestsById[item.id]
-										const displayTitle = manifest?.title || item.title || "Preview"
+										const displayTitle = manifest?.title || item.title || "Document"
 										const authorLine = manifest?.authors
 											?.map((a) => a?.name)
 											.filter(Boolean)
@@ -417,7 +456,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 										fontSize: 11,
 										color: "var(--vscode-descriptionForeground, #888)",
 									}}>
-									No HTML files in this workspace.
+									No documents yet.
 								</div>
 							)}
 						</AccordionSection>
@@ -455,37 +494,19 @@ export const HtmlPreviewPanel: React.FC = () => {
 										color: "var(--vscode-descriptionForeground, #888)",
 										lineHeight: 1.4,
 									}}>
-									Browse and install community modules from the AI-Hydro marketplace.
+									Browse the AI-Hydro catalogue. Catalogue modules are unsigned; each entry shows its declared
+									licence.
 								</div>
 							</div>
 						</AccordionSection>
 
-						{/* ─── Skills accordion ─────────────────────────────────── */}
-						<AccordionSection icon="symbol-class" persistKey="skills" title="Skills">
-							<div
-								style={{
-									padding: "8px 10px",
-									fontSize: 11,
-									color: "var(--vscode-descriptionForeground, #888)",
-									lineHeight: 1.5,
-								}}>
-								Skill management is in the main AI-Hydro chat panel sidebar. Use{" "}
-								<code style={{ background: "rgba(0,221,255,0.1)", padding: "1px 4px", borderRadius: 3 }}>
-									list_skills
-								</code>{" "}
-								and{" "}
-								<code style={{ background: "rgba(0,221,255,0.1)", padding: "1px 4px", borderRadius: 3 }}>
-									load_skill
-								</code>{" "}
-								MCP tools from the agent.
-							</div>
-						</AccordionSection>
-
-						{/* ─── Comments accordion ───────────────────────────────── */}
-						<AccordionSection icon="comment-discussion" persistKey="comments" title="Comments">
+						{/* ─── Edit requests accordion (queue of pending edit instructions to the agent) ─ */}
+						<AccordionSection icon="comment-discussion" persistKey="comments" title="Requests to agent">
 							{activeItem ? (
 								<CommentSidebar
-									iframeWindow={null /* future: pass actual iframe contentWindow */}
+									iframeWindow={
+										null /* Send/Clear live in the Edit Mode bar; the sidebar only lists the queue */
+									}
 									moduleId={activeItem.id}
 								/>
 							) : (
@@ -495,14 +516,14 @@ export const HtmlPreviewPanel: React.FC = () => {
 										fontSize: 11,
 										color: "var(--vscode-descriptionForeground, #888)",
 									}}>
-									Open a module to see and manage comments.
+									Open a document to see its pending edit requests.
 								</div>
 							)}
 						</AccordionSection>
 					</div>
 				)}
 
-				{/* Sidebar footer — Add File + Clear All */}
+				{/* Sidebar footer — Add document + Clear All */}
 				{!sidebarCollapsed && (
 					<div
 						style={{
@@ -517,6 +538,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 							style={{
 								width: "100%",
 								padding: "5px 0",
+								minHeight: 24,
 								fontSize: 11,
 								fontWeight: 500,
 								background: "var(--vscode-button-background, #0e639c)",
@@ -531,7 +553,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 							}}
 							type="button">
 							<span className="codicon codicon-add" style={{ fontSize: 11 }} />
-							Add File
+							Add document
 						</button>
 						{items.length > 0 &&
 							(confirmingClear ? (
@@ -579,9 +601,9 @@ export const HtmlPreviewPanel: React.FC = () => {
 										cursor: "pointer",
 										opacity: 0.7,
 									}}
-									title="Remove all loaded previews"
+									title="Remove all loaded documents"
 									type="button">
-									Clear all previews
+									Clear all documents
 								</button>
 							))}
 					</div>
@@ -599,7 +621,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 					overflow: "hidden",
 				}}>
 				{/* Panel chrome: tab bar only (header removed — its info is in the main toolbar).
-				    The "HTML Preview" title, side-panel toggle, and Modules link all live in
+				    The "AI-Hydro Studio" title, side-panel toggle, and Modules link all live in
 				    HtmlPreviewToolbar or the side-panel accordion now. Load status surfaces
 				    via the inline toast at the bottom (kept for error cases). */}
 				<div
@@ -646,8 +668,8 @@ export const HtmlPreviewPanel: React.FC = () => {
 										key={item.id}
 										onClick={() => setActiveItemId(item.id)}
 										role="tab"
-										title={item.title || "HTML Preview"}>
-										<span className="truncate max-w-[120px]">{item.title || "Preview"}</span>
+										title={item.title || "AI-Hydro Studio"}>
+										<span className="truncate max-w-[120px]">{item.title || "Document"}</span>
 										<span
 											aria-label={`Close ${item.title || "preview"}`}
 											className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-opacity cursor-pointer"
@@ -701,7 +723,12 @@ export const HtmlPreviewPanel: React.FC = () => {
 							<ModulesMarketplaceView />
 						</div>
 					) : items.length === 0 ? (
-						<EmptyState isDragOver={isDragOver} onAddFile={onPickFiles} workspaceCount={workspaceHtmlFiles.length} />
+						<EmptyState
+							isDragOver={isDragOver}
+							onAddFile={onPickFiles}
+							onBrowseCourses={() => setActiveSection("modules")}
+							workspaceCount={workspaceHtmlFiles.length}
+						/>
 					) : (
 						<HtmlPreviewView
 							item={activeItem}
@@ -717,17 +744,39 @@ export const HtmlPreviewPanel: React.FC = () => {
 
 // ─── Empty State ───────────────────────────────────────────────────────────
 
-const EmptyState: React.FC<{ onAddFile: () => void; isDragOver: boolean; workspaceCount: number }> = ({
-	onAddFile,
-	isDragOver,
-	workspaceCount,
-}) => {
+const EmptyState: React.FC<{
+	onAddFile: () => void
+	onBrowseCourses: () => void
+	isDragOver: boolean
+	workspaceCount: number
+}> = ({ onAddFile, onBrowseCourses, isDragOver, workspaceCount }) => {
 	const fg = "var(--vscode-foreground, #ddd)"
 	const border = "var(--vscode-panel-border, rgba(255,255,255,0.12))"
+	const primary: React.CSSProperties = {
+		padding: "8px 16px",
+		minHeight: 28,
+		fontSize: 12,
+		fontWeight: 500,
+		background: "var(--vscode-button-background, #0e639c)",
+		color: "var(--vscode-button-foreground, #fff)",
+		border: "none",
+		borderRadius: 4,
+		cursor: "pointer",
+		display: "flex",
+		alignItems: "center",
+		gap: 6,
+	}
+	const secondary: React.CSSProperties = {
+		...primary,
+		background: "var(--vscode-button-secondaryBackground, rgba(125,211,252,0.1))",
+		color: "var(--vscode-button-secondaryForeground, var(--vscode-foreground, #ccc))",
+		border: `1px solid ${border}`,
+	}
 
 	return (
 		<div
 			className="flex h-full w-full items-center justify-center"
+			data-testid="studio-empty-state"
 			style={{
 				background: "var(--vscode-editor-background)",
 				opacity: isDragOver ? 0.3 : 1,
@@ -735,96 +784,45 @@ const EmptyState: React.FC<{ onAddFile: () => void; isDragOver: boolean; workspa
 			}}>
 			<div
 				className="flex flex-col items-center gap-4"
-				style={{
-					maxWidth: 420,
-					padding: 32,
-					textAlign: "center",
-					color: fg,
-				}}>
-				{/* Icon */}
-				<div
-					style={{
-						width: 64,
-						height: 64,
-						borderRadius: 12,
-						background: "var(--vscode-button-background, #0e639c)",
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "center",
-						fontSize: 28,
-						marginBottom: 4,
-					}}>
-					📄
-				</div>
-
-				{/* Title */}
-				<h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: fg }}>No HTML previews yet</h3>
-
-				{/* Description */}
-				<p style={{ fontSize: 12, lineHeight: 1.6, opacity: 0.75, margin: 0, color: fg }}>
+				style={{ maxWidth: 440, padding: 32, textAlign: "center", color: fg }}>
+				<h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: fg }}>AI-Hydro Studio</h3>
+				<p style={{ fontSize: 12, lineHeight: 1.6, opacity: 0.8, margin: 0, color: fg }}>
+					Nothing is open yet. Start from one of these.
 					{workspaceCount > 0
-						? `${workspaceCount} HTML file${workspaceCount === 1 ? "" : "s"} discovered in workspace. Click one in the sidebar to load it.`
-						: "Workspace HTML files are auto-discovered when you open this panel."}
-					<br />
-					You can also add files manually or drag-and-drop them here.
+						? ` ${workspaceCount} HTML file${workspaceCount === 1 ? "" : "s"} in this workspace are listed under Files in the sidebar.`
+						: ""}
 				</p>
 
-				{/* Actions */}
-				<div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap", justifyContent: "center" }}>
-					<button
-						onClick={onAddFile}
-						style={{
-							padding: "8px 16px",
-							fontSize: 12,
-							fontWeight: 500,
-							background: "var(--vscode-button-background, #0e639c)",
-							color: "var(--vscode-button-foreground, #fff)",
-							border: "none",
-							borderRadius: 4,
-							cursor: "pointer",
-							display: "flex",
-							alignItems: "center",
-							gap: 6,
-						}}
-						type="button">
-						<span>＋</span>
-						<span>Add HTML File</span>
+				<div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+					<button onClick={onBrowseCourses} style={primary} type="button">
+						<span className="codicon codicon-library" />
+						<span>Browse courses</span>
+					</button>
+					<button onClick={onAddFile} style={secondary} type="button">
+						<span className="codicon codicon-add" />
+						<span>Add a document</span>
 					</button>
 				</div>
 
-				{/* Tips */}
-				<div
+				<ul
 					style={{
-						marginTop: 12,
-						padding: "10px 14px",
-						background: "var(--vscode-textBlockQuote-background, rgba(255,255,255,0.04))",
-						borderLeft: `3px solid var(--vscode-textBlockQuote-border, ${border})`,
-						borderRadius: "0 4px 4px 0",
+						fontSize: 11,
+						lineHeight: 1.7,
+						opacity: 0.8,
+						margin: 0,
+						paddingLeft: 16,
 						textAlign: "left",
+						color: fg,
 					}}>
-					<div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: fg }}>How to add files:</div>
-					<ul
-						style={{
-							fontSize: 11,
-							lineHeight: 1.7,
-							opacity: 0.7,
-							margin: 0,
-							paddingLeft: 16,
-							color: fg,
-						}}>
-						<li>Open this panel — workspace .html files auto-load</li>
-						<li>
-							Click <strong>＋ Add File</strong> to browse your disk
-						</li>
-						<li>Drag-and-drop HTML files directly onto this panel</li>
-						<li>
-							Right-click an .html file in VS Code Explorer → <strong>Add to AI-Hydro HTML Preview</strong>
-						</li>
-						<li>
-							Use the AI <strong>preview_html</strong> tool to render generated HTML
-						</li>
-					</ul>
-				</div>
+					<li>
+						<strong>Open a Learning Pack:</strong> run <em>AI-Hydro: Install Learning Pack</em> from the Command
+						Palette, or right-click a <code>.aihydropack</code> file in the Explorer.
+					</li>
+					<li>
+						<strong>Make a report:</strong> ask the AI-Hydro agent in the chat for a report or dashboard. It opens
+						here when it is ready.
+					</li>
+				</ul>
 			</div>
 		</div>
 	)

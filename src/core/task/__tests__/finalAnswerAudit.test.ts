@@ -86,7 +86,7 @@ describe("final-answer audit", () => {
 			expect(text).to.include("found 1 issue")
 			expect(text).to.include("study `study-1`")
 			expect(text).to.include("uncited_number")
-			expect(text).to.include("Fix: Add [run:<id>#nse]")
+			expect(text).to.include("`Fix: Add [run:<id>#nse]")
 			expect(text).to.include("answer above is unchanged")
 		})
 

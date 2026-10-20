@@ -50,99 +50,115 @@ const installedPackE2E = e2e.extend<{ workspaceDir: string }>({
 async function waitForPreviewShell(page: Page): Promise<Frame> {
 	let result: Frame | undefined
 	await expect
-		.poll(async () => {
-			for (const frame of page.frames()) {
-				try {
-					if ((await frame.title()) === "AI-Hydro HTML Preview") {
-						result = frame
-						return true
+		.poll(
+			async () => {
+				for (const frame of page.frames()) {
+					try {
+						if ((await frame.title()) === "AI-Hydro Studio") {
+							result = frame
+							return true
+						}
+					} catch {
+						// Panel frames are replaced during initial registration.
 					}
-				} catch {
-					// Panel frames are replaced during initial registration.
 				}
-			}
-			return false
-		}, { timeout: 30_000 })
+				return false
+			},
+			{ timeout: 30_000 },
+		)
 		.toBe(true)
 	return result as Frame
 }
 
-installedPackE2E("installs a local signed pack and enforces CSP through the real panel @phase1-pack", async ({
-	page,
-	workspaceDir,
-}) => {
-	let externalRequests = 0
-	await page.route("https://phase1-csp.invalid/**", async (route) => {
-		externalRequests++
-		await route.fulfill({ status: 200, contentType: "application/javascript", body: "window.externalScriptRan=true" })
-	})
-	await E2ETestHelper.openAiHydroSidebar(page)
-	await expect
-		.poll(async () => {
-			for (const frame of page.frames()) {
-				try {
-					if ((await frame.title()).startsWith("AI-Hydro")) return true
-				} catch {}
-			}
-			return false
-		}, { timeout: 20_000 })
-		.toBe(true)
-	await page.waitForTimeout(1_000)
-	const activationFailure = page.getByText(/Activating extension .* failed:/).first()
-	expect(await activationFailure.count()).toBe(0)
-	let commandResponse: Response | undefined
-	await expect
-		.poll(async () => {
-			try {
-				commandResponse = await fetch("http://127.0.0.1:9876/learning-pack-command", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						command: "aihydro.learningPacks.install",
-						options: {
-							archivePath: path.join(workspaceDir, "synthetic.aihydropack"),
-							approval: "install-once",
-						},
-					}),
-				})
-				return commandResponse.status
-			} catch {
-				return 0
-			}
-		}, { timeout: 30_000 })
-		.toBe(200)
-	const commandResult = (await commandResponse!.json()) as { result?: { status?: string } }
-	expect(commandResult.result?.status).toBe("installed")
+installedPackE2E(
+	"installs a local signed pack and enforces CSP through the real panel @phase1-pack",
+	async ({ page, workspaceDir }) => {
+		let externalRequests = 0
+		await page.route("https://phase1-csp.invalid/**", async (route) => {
+			externalRequests++
+			await route.fulfill({ status: 200, contentType: "application/javascript", body: "window.externalScriptRan=true" })
+		})
+		await E2ETestHelper.openAiHydroSidebar(page)
+		await expect
+			.poll(
+				async () => {
+					for (const frame of page.frames()) {
+						try {
+							if ((await frame.title()).startsWith("AI-Hydro")) return true
+						} catch {}
+					}
+					return false
+				},
+				{ timeout: 20_000 },
+			)
+			.toBe(true)
+		await page.waitForTimeout(1_000)
+		const activationFailure = page.getByText(/Activating extension .* failed:/).first()
+		expect(await activationFailure.count()).toBe(0)
+		let commandResponse: Response | undefined
+		await expect
+			.poll(
+				async () => {
+					try {
+						commandResponse = await fetch("http://127.0.0.1:9876/learning-pack-command", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({
+								command: "aihydro.learningPacks.install",
+								options: {
+									archivePath: path.join(workspaceDir, "synthetic.aihydropack"),
+									approval: "install-once",
+								},
+							}),
+						})
+						return commandResponse.status
+					} catch {
+						return 0
+					}
+				},
+				{ timeout: 30_000 },
+			)
+			.toBe(200)
+		const commandResult = (await commandResponse!.json()) as { result?: { status?: string } }
+		expect(commandResult.result?.status).toBe("installed")
 
-	const shell = await waitForPreviewShell(page)
-	const iframe = shell.locator("iframe").first()
-	await expect(iframe).toHaveAttribute("srcdoc", /data-phase1-installed-pack="true"/, { timeout: 30_000 })
-	const srcdoc = (await iframe.getAttribute("srcdoc")) ?? ""
-	expect(srcdoc).toContain("default-src 'none'")
-	expect(srcdoc).not.toContain("default-src *")
-	expect(srcdoc.indexOf("Content-Security-Policy")).toBeLessThan(srcdoc.indexOf("<script"))
-	await expect(shell.getByTitle("Course options")).toBeVisible()
+		const shell = await waitForPreviewShell(page)
+		const iframe = shell.locator("iframe").first()
+		await expect(iframe).toHaveAttribute("srcdoc", /data-phase1-installed-pack="true"/, { timeout: 30_000 })
+		const srcdoc = (await iframe.getAttribute("srcdoc")) ?? ""
+		expect(srcdoc).toContain("default-src 'none'")
+		expect(srcdoc).not.toContain("default-src *")
+		expect(srcdoc.indexOf("Content-Security-Policy")).toBeLessThan(srcdoc.indexOf("<script"))
+		await expect(shell.getByTitle("Course options")).toBeVisible()
 
-	let artifact: Frame | undefined
-	await expect
-		.poll(async () => {
-			// The document is sandboxed into an opaque origin, so its frame URL is not a reliable
-			// handle; find it by its own content instead.
-			artifact = undefined
-			for (const frame of page.frames()) {
-				if (frame === shell || frame.isDetached()) continue
-				try {
-					if ((await frame.locator('body[data-phase1-installed-pack="true"]').count()) === 1) artifact = frame
-				} catch {
-					// frame replaced while the panel settles
-				}
-			}
-			return Boolean(artifact)
-		}, { timeout: 30_000 })
-		.toBe(true)
-	await expect.poll(() => artifact!.evaluate(() => (window as Window & { inlineBridgeRan?: boolean }).inlineBridgeRan)).toBe(true)
-	expect(await artifact!.evaluate(() => (window as Window & { externalScriptRan?: boolean }).externalScriptRan)).not.toBe(true)
-	await expect.poll(() => artifact!.locator("#embedded").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
-	expect(await artifact!.locator("#external").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(0)
-	expect(externalRequests).toBe(0)
-})
+		let artifact: Frame | undefined
+		await expect
+			.poll(
+				async () => {
+					// The document is sandboxed into an opaque origin, so its frame URL is not a reliable
+					// handle; find it by its own content instead.
+					artifact = undefined
+					for (const frame of page.frames()) {
+						if (frame === shell || frame.isDetached()) continue
+						try {
+							if ((await frame.locator('body[data-phase1-installed-pack="true"]').count()) === 1) artifact = frame
+						} catch {
+							// frame replaced while the panel settles
+						}
+					}
+					return Boolean(artifact)
+				},
+				{ timeout: 30_000 },
+			)
+			.toBe(true)
+		await expect
+			.poll(() => artifact!.evaluate(() => (window as Window & { inlineBridgeRan?: boolean }).inlineBridgeRan))
+			.toBe(true)
+		expect(await artifact!.evaluate(() => (window as Window & { externalScriptRan?: boolean }).externalScriptRan)).not.toBe(
+			true,
+		)
+		await expect.poll(() => artifact!.locator("#embedded").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
+		expect(await artifact!.locator("#external").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(0)
+		expect(externalRequests).toBe(0)
+	},
+)
