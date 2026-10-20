@@ -269,14 +269,17 @@ export class VscodeHtmlPreviewProvider {
 									mainWebview.controller,
 									message as { requestId?: string; prompt?: string; artifactId?: string },
 									async (response) => {
-										await panel.webview.postMessage({ ...response, token: VscodeHtmlPreviewProvider.panelToken })
+										await panel.webview.postMessage({
+											...response,
+											token: VscodeHtmlPreviewProvider.panelToken,
+										})
 									},
 								)
 							} catch (err) {
 								console.warn("[VscodeHtmlPreviewProvider] preview-agent-task failed:", err)
 								panel.webview.postMessage({
 									type: "aihydro-preview-agent-result",
-								token: VscodeHtmlPreviewProvider.panelToken,
+									token: VscodeHtmlPreviewProvider.panelToken,
 									requestId: message.requestId,
 									ok: false,
 									error: err instanceof Error ? err.message : String(err),
@@ -538,7 +541,7 @@ export class VscodeHtmlPreviewProvider {
 						if (!decision.intent) return
 						panel.webview.postMessage({
 							type: "aihydro-agent-navigate",
-								token: VscodeHtmlPreviewProvider.panelToken,
+							token: VscodeHtmlPreviewProvider.panelToken,
 							...decision.intent,
 						})
 					} catch (err) {
