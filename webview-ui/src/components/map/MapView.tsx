@@ -20,7 +20,7 @@ import {
 	saveAnnotations,
 	seedAnnotationsFromGeoJson,
 } from "./annotationStorage"
-import { attributionFor, isKnownBaseMap, resolveBaseMap } from "./basemaps"
+import { attributionFor, extentsIntersect, type Extent, isKnownBaseMap, resolveBaseMap } from "./basemaps"
 import FeatureIdentifier, { type ClickedFeature, type MapInspectPoint } from "./FeatureIdentifier"
 import { loadAndPushFileEntries, loadAndPushFiles } from "./formats"
 import { flyToTransition } from "./flyToTransition"
@@ -85,6 +85,7 @@ import TransectsPanel from "./TransectsPanel"
 import { loadTransects, type MapTransect, newTransect, saveTransects, type TransectCollection } from "./transectStorage"
 import {
 	clearTally,
+	loadedSources,
 	tallyTile,
 	tileErrorsFrom,
 	tileNotesFrom,
@@ -758,6 +759,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const resetBaseMap = useCallback(() => selectBaseMap(initialBasemap({}).id, false), [selectBaseMap])
 	const mapTheme = useMapTheme()
 	const resolvedBaseMap = useMemo(() => resolveBaseMap(selectedBaseMap, mapTheme), [selectedBaseMap, mapTheme])
+	// Overlays with at least one loaded tile (attribution credits only what has actually drawn).
+	const loadedOverlayIds = useMemo(() => {
+		const loaded = loadedSources(tileTallies)
+		return new Set(resolvedBaseMap.overlays.filter((overlay) => loaded.has(`basemap-${overlay.id}`)).map((overlay) => overlay.id))
+	}, [tileTallies, resolvedBaseMap])
 	const [viewState, setViewState] = useState<MapViewState>(sanitizeViewState(persisted.viewState))
 	const [visibleLayerIds, setVisibleLayerIds] = useState<Set<string>>(
 		new Set(persisted.visibleLayerIds ?? layers.filter((layer) => layer.visible !== false).map((layer) => layer.id)),
@@ -1363,6 +1369,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				url: resolvedBaseMap.url,
 				maxNativeZoom: resolvedBaseMap.maxNativeZoom,
 				extent: resolvedBaseMap.extent,
+				extents: undefined as Extent[] | undefined,
 			},
 			...resolvedBaseMap.overlays.map((overlay) => ({
 				tallyId: `basemap-${overlay.id}`,
@@ -1370,6 +1377,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				url: overlay.url,
 				maxNativeZoom: overlay.maxNativeZoom,
 				extent: overlay.extent,
+				extents: overlay.extents,
 			})),
 		]
 		return sources.map(
@@ -1381,8 +1389,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					maxZoom: source.maxNativeZoom,
 					extent: source.extent,
 					tileSize: 256,
-					getTileData: loadMapTile,
-					onTileLoad: () => reportTileLoaded(source.tallyId, source.url, generation),
+					// Tiles outside every coverage box are not requested (no 404 noise from Canada, Mexico, ocean).
+					getTileData: (tile: any) => {
+						const bbox = tile?.bbox
+						if (source.extents && bbox) {
+							const box: Extent = [bbox.west, bbox.south, bbox.east, bbox.north]
+							if (!source.extents.some((candidate) => extentsIntersect(candidate, box))) return null
+						}
+						return loadMapTile(tile)
+					},
+					// A skipped tile (null content) is not a loaded tile: it must not earn attribution credit.
+					onTileLoad: (tile: any) => {
+						if (tile && "content" in tile && tile.content == null) return
+						reportTileLoaded(source.tallyId, source.url, generation)
+					},
 					onTileError: (error: unknown) => reportTileError(source.tallyId, source.url, generation, error),
 					renderSubLayers: (props: any) => {
 						const {
@@ -3711,7 +3731,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				onResetNorth={() => setViewState((prev) => ({ ...prev, bearing: 0, pitch: 0 }))}
 				onZoomIn={() => setViewState((prev) => ({ ...prev, zoom: Math.min(20, prev.zoom + 1) }))}
 				onZoomOut={() => setViewState((prev) => ({ ...prev, zoom: Math.max(0, prev.zoom - 1) }))}
-				attribution={attributionFor(resolvedBaseMap, { lon: viewState.longitude, lat: viewState.latitude })}
+				attribution={attributionFor(
+					resolvedBaseMap,
+					{ lon: viewState.longitude, lat: viewState.latitude },
+					loadedOverlayIds,
+				)}
 				viewState={viewState}
 			/>
 

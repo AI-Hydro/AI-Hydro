@@ -13,10 +13,22 @@
  * a.tile.openstreetmap.fr (HOT). Stadia (needs an API key a vscode-webview origin cannot present) and the
  * Mapbox entries (which silently rendered a USGS style while claiming Mapbox) were removed.
  *
- * LOD STATUS: maxNativeZoom values are NOT yet verified against each service's published `tileInfo.lods`
- * (`<service>/MapServer?f=json`); no tile host was contacted when they were set (2026-10-19). USGS, Esri
- * Hillshade/Ocean and the USGS hydrography overlay use the audit's working hypothesis of 16; verify and record
- * the date before relying on them.
+ * LOD VERIFICATION (recorded 2026-10-20; every maxNativeZoom checked against the service's published MapServer
+ * JSON, `<service>/MapServer?f=json`):
+ *   - USGSTopo, USGSImageryOnly, USGSShadedReliefOnly, USGSHydroCached: top-level maxScale 9027.977411, which is
+ *     level 16, so 16 is correct.
+ *       https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer?f=json
+ *       https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer?f=json
+ *       https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer?f=json
+ *       https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer?f=json
+ *   - Esri Ocean/World_Ocean_Base: LODs stop at 16, so 16 is correct.
+ *       https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer?f=json
+ *   - Esri World_Hillshade, World_Imagery, World_Topo_Map publish no maxScale (0) and a generic LOD list to 23.
+ *     The configured 16, 19 and 19 are at or below the served depth; overzoom is the safe failure mode.
+ *       https://services.arcgisonline.com/arcgis/rest/services/Elevation/World_Hillshade/MapServer?f=json
+ *       https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer?f=json
+ *       https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer?f=json
+ *   Carto and HOT are slippy-map CDNs with a level-19 convention and were not part of this check.
  */
 
 export type BaseMapTheme = "light" | "dark"
@@ -25,13 +37,31 @@ export type Extent = [west: number, south: number, east: number, north: number]
 /** Approximate US envelope for the USGS National Map caches (CONUS, Alaska, Hawaii, Puerto Rico/USVI). */
 export const US_EXTENT: Extent = [-180, 15, -64, 72]
 
+/**
+ * The same coverage as separate boxes: CONUS, Alaska, Hawaii, Puerto Rico/USVI. US_EXTENT also takes in Canada,
+ * Mexico and open ocean, where the sparse USGS caches legitimately return 404.
+ */
+export const US_EXTENTS: Extent[] = [
+	[-125, 24, -66.5, 50],
+	[-180, 51, -129, 72],
+	[-161, 18.5, -154.5, 22.5],
+	[-68, 17.5, -64.5, 18.8],
+]
+
+export function extentsIntersect(a: Extent, b: Extent): boolean {
+	return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1]
+}
+
 /** A transparent tile layer drawn above the base (rivers, labels). */
 export interface BaseMapOverlay {
 	id: string
 	name: string
 	url: string
 	maxNativeZoom: number
+	/** Bounding box of `extents` (what deck.gl uses to skip tiles). */
 	extent?: Extent
+	/** Precise coverage boxes; a tile that intersects none of them is not requested. */
+	extents?: Extent[]
 	attribution: string
 }
 
@@ -60,6 +90,7 @@ export const USGS_HYDRO_OVERLAY: BaseMapOverlay = {
 	url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/tile/{z}/{y}/{x}",
 	maxNativeZoom: 16,
 	extent: US_EXTENT,
+	extents: US_EXTENTS,
 	attribution: "Hydrography: USGS The National Map",
 }
 
@@ -207,15 +238,27 @@ export function extentContains(extent: Extent, lon: number, lat: number): boolea
 	return lon >= extent[0] && lon <= extent[2] && lat >= extent[1] && lat <= extent[3]
 }
 
+/** True when the point lies inside the overlay's coverage (any box of `extents`, else `extent`, else anywhere). */
+export function overlayCovers(overlay: BaseMapOverlay, lon: number, lat: number): boolean {
+	if (overlay.extents) return overlay.extents.some((box) => extentContains(box, lon, lat))
+	return !overlay.extent || extentContains(overlay.extent, lon, lat)
+}
+
 /**
  * Attribution for what is actually drawn: the base, plus each overlay whose coverage includes the view centre
- * (an overlay that draws nothing here is not credited).
+ * (an overlay that draws nothing here is not credited). When `loadedOverlayIds` is given, an overlay is also
+ * credited only once at least one of its tiles has actually loaded.
  */
-export function attributionFor(resolved: ResolvedBaseMap, center?: { lon: number; lat: number }): string {
+export function attributionFor(
+	resolved: ResolvedBaseMap,
+	center?: { lon: number; lat: number },
+	loadedOverlayIds?: ReadonlySet<string>,
+): string {
 	const parts = resolved.attribution ? [resolved.attribution] : []
 	for (const overlay of resolved.overlays) {
-		const drawn = !overlay.extent || !center || extentContains(overlay.extent, center.lon, center.lat)
-		if (drawn) {
+		const covered = !center || overlayCovers(overlay, center.lon, center.lat)
+		const loaded = !loadedOverlayIds || loadedOverlayIds.has(overlay.id)
+		if (covered && loaded) {
 			parts.push(overlay.attribution)
 		}
 	}

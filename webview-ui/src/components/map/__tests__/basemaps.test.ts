@@ -75,6 +75,19 @@ describe("attribution reflects what is drawn", () => {
 		expect(attributionFor(resolved, { lon: -90, lat: 39 })).toBe("© OpenStreetMap contributors © CARTO · Hydrography: USGS The National Map")
 		expect(attributionFor(resolved, { lon: 80, lat: 25 })).toBe("© OpenStreetMap contributors © CARTO")
 	})
+	it("does not credit the overlay over Canada, Mexico or ocean, but does over Alaska, Hawaii and Puerto Rico", () => {
+		const base = "© OpenStreetMap contributors © CARTO"
+		for (const [lon, lat] of [[-100, 56], [-102, 20], [-140, 35]]) expect(attributionFor(resolved, { lon, lat })).toBe(base)
+		for (const [lon, lat] of [[-150, 64], [-157.8, 21.3], [-66, 18.2]]) {
+			expect(attributionFor(resolved, { lon, lat })).toContain("USGS")
+		}
+	})
+	it("credits the overlay only once one of its tiles has loaded", () => {
+		const view = { lon: -90, lat: 39 }
+		expect(attributionFor(resolved, view, new Set())).toBe("© OpenStreetMap contributors © CARTO")
+		expect(attributionFor(resolved, view, new Set(["usgs-hydro"]))).toContain("Hydrography: USGS")
+		expect(attributionFor(resolved, { lon: 80, lat: 25 }, new Set(["usgs-hydro"]))).not.toContain("USGS")
+	})
 	it("an export lists the base and every overlay", () => {
 		expect(attributionList(resolved)).toEqual(["© OpenStreetMap contributors © CARTO", "Hydrography: USGS The National Map"])
 	})

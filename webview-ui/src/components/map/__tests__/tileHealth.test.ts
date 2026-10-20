@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { classifyTileHealth, clearTally, TILE_FAILURE_RATIO, tallyTile, tileErrorsFrom, tileNotesFrom, type TileTallies } from "../tileHealth"
+import { classifyTileHealth, clearTally, loadedSources, MIN_OVERLAY_SAMPLE, TILE_FAILURE_RATIO, tallyTile, tileErrorsFrom, tileNotesFrom, type TileTallies } from "../tileHealth"
 
 const run = (loaded: number, failed: number, message = "Tile request failed (HTTP 404)"): TileTallies => {
 	let t: TileTallies = {}
@@ -50,5 +50,45 @@ describe("tile health classification", () => {
 		const after = clearTally(before, "basemap")
 		expect(tileErrorsFrom(after)).toEqual({})
 		expect(clearTally(after, "basemap")).toBe(after)
+	})
+})
+
+describe("sparse overlay sources", () => {
+	const overlayRun = (loaded: number, failed: number, notFound: number, message = "Tile request failed (HTTP 500)"): TileTallies => {
+		let t: TileTallies = {}
+		for (let i = 0; i < loaded; i++) t = tallyTile(t, "basemap-usgs-hydro", { ok: true })
+		for (let i = 0; i < notFound; i++) t = tallyTile(t, "basemap-usgs-hydro", { ok: false, message: "Tile request failed (HTTP 404)" })
+		for (let i = 0; i < failed - notFound; i++) t = tallyTile(t, "basemap-usgs-hydro", { ok: false, message })
+		return t
+	}
+
+	it("404s never fail an overlay, even when nothing loaded", () => {
+		const t = overlayRun(0, 40, 40)
+		expect(classifyTileHealth(t["basemap-usgs-hydro"], { sparse: true })).toBe("partial")
+		expect(tileErrorsFrom(t)).toEqual({})
+		expect(tileNotesFrom(t)["basemap-usgs-hydro"]).toContain("no coverage")
+	})
+
+	it("the same 404-only tally on the base map (not sparse) still fails", () => {
+		expect(classifyTileHealth(run(0, 6).basemap)).toBe("failed")
+	})
+
+	it("needs a minimum sample before real failures classify as failed", () => {
+		expect(MIN_OVERLAY_SAMPLE).toBe(8)
+		expect(classifyTileHealth(overlayRun(0, 7, 0)["basemap-usgs-hydro"], { sparse: true })).toBe("partial")
+		expect(classifyTileHealth(overlayRun(0, 8, 0)["basemap-usgs-hydro"], { sparse: true })).toBe("failed")
+		expect(tileErrorsFrom(overlayRun(0, 8, 0))["basemap-usgs-hydro"]).toBe("Tile request failed (HTTP 500)")
+	})
+
+	it("404s do not dilute or inflate the ratio of real failures", () => {
+		// 10 loaded + 3 real failures = 23%: partial, regardless of 50 not-found tiles
+		expect(classifyTileHealth(overlayRun(10, 53, 50)["basemap-usgs-hydro"], { sparse: true })).toBe("partial")
+		// 6 loaded + 4 real failures = 40%: failed
+		expect(classifyTileHealth(overlayRun(6, 54, 50)["basemap-usgs-hydro"], { sparse: true })).toBe("failed")
+	})
+
+	it("loadedSources lists only sources that drew a tile", () => {
+		expect([...loadedSources(overlayRun(2, 0, 0))]).toEqual(["basemap-usgs-hydro"])
+		expect(loadedSources(overlayRun(0, 5, 5)).size).toBe(0)
 	})
 })

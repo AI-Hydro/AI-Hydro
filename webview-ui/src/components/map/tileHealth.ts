@@ -26,10 +26,42 @@ export type TileTallies = Record<string, TileTally>
 /** Failure share at or above which a source is reported as failed. */
 export const TILE_FAILURE_RATIO = 0.25
 
-export function classifyTileHealth(tally: TileTally | undefined): TileHealth {
+/** Overlay sources: tiles that must have been tried before a source can be classified failed. */
+export const MIN_OVERLAY_SAMPLE = 8
+
+/**
+ * Overlay sources (basemap-<overlay>) are sparse caches: a 404 is "no data here", never an outage. They also
+ * need a minimum sample before they can be called failed, so the first few edge tiles cannot raise an alert.
+ */
+export function isSparseSource(id: string): boolean {
+	return id.startsWith("basemap-")
+}
+
+export interface ClassifyOptions {
+	/** Sparse cache: 404s are excluded from the failure ratio and a minimum sample is required. */
+	sparse?: boolean
+}
+
+export function classifyTileHealth(tally: TileTally | undefined, options: ClassifyOptions = {}): TileHealth {
 	if (!tally || tally.failed === 0) return "ok"
-	if (tally.loaded === 0) return "failed"
-	return tally.failed / (tally.failed + tally.loaded) >= TILE_FAILURE_RATIO ? "failed" : "partial"
+	if (!options.sparse) {
+		if (tally.loaded === 0) return "failed"
+		return tally.failed / (tally.failed + tally.loaded) >= TILE_FAILURE_RATIO ? "failed" : "partial"
+	}
+	const realFailures = tally.failed - tally.notFound
+	if (realFailures <= 0) return "partial"
+	const sample = tally.loaded + realFailures
+	if (sample < MIN_OVERLAY_SAMPLE) return "partial"
+	return realFailures / sample >= TILE_FAILURE_RATIO ? "failed" : "partial"
+}
+
+/** Ids of sources with at least one loaded tile. */
+export function loadedSources(tallies: TileTallies): Set<string> {
+	return new Set(
+		Object.entries(tallies)
+			.filter(([, tally]) => tally.loaded > 0)
+			.map(([id]) => id),
+	)
 }
 
 export function isNotFoundMessage(message: string): boolean {
@@ -61,7 +93,7 @@ export function clearTally(previous: TileTallies, id: string): TileTallies {
 export function tileErrorsFrom(tallies: TileTallies): Record<string, string> {
 	const errors: Record<string, string> = {}
 	for (const [id, tally] of Object.entries(tallies)) {
-		if (classifyTileHealth(tally) === "failed") errors[id] = tally.lastError ?? "Tile request failed"
+		if (classifyTileHealth(tally, { sparse: isSparseSource(id) }) === "failed") errors[id] = tally.lastError ?? "Tile request failed"
 	}
 	return errors
 }
@@ -70,7 +102,7 @@ export function tileErrorsFrom(tallies: TileTallies): Record<string, string> {
 export function tileNotesFrom(tallies: TileTallies): Record<string, string> {
 	const notes: Record<string, string> = {}
 	for (const [id, tally] of Object.entries(tallies)) {
-		if (classifyTileHealth(tally) !== "partial") continue
+		if (classifyTileHealth(tally, { sparse: isSparseSource(id) }) !== "partial") continue
 		const gaps = tally.notFound
 		notes[id] =
 			`${tally.failed} tile${tally.failed === 1 ? "" : "s"} unavailable` +
