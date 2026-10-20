@@ -72,6 +72,11 @@ export interface ScreenDef {
 	pixelDiffThreshold?: number
 	/** Selectors that must be inside the viewport (structural assertion). */
 	expectVisible?: string[]
+	/**
+	 * Selectors that must have no rendered match (structural assertion; the inverse of expectVisible). Content that is
+	 * not rendered (display:none, closed <details>, an unmounted virtualised row) counts as absent.
+	 */
+	expectAbsent?: string[]
 	/** Scroller that must be pinned to its end (structural assertion). */
 	scrollPinned?: string
 	render: () => ReactNode

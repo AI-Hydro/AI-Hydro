@@ -10,6 +10,295 @@
 		}
 	},
 	"screens": {
+		"chat-answer-audit-violations": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-approval-command": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 1,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 12,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-approval-edit": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-approval-mcp": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-approval-protected-path": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-checkpoint-checked-out": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-command-nonzero-exit": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 1,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 15,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-condense": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 6,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-context-truncation": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 6,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-failure-lifted": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 6,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-finished-claims": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 2,
+				"contrast": 2,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 42,
+				"smallText": 12,
+				"contrast": 15,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-old-task-no-outcomes": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 1,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 15,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-resume": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-rewind": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-run-8-tools": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-turn-machinery": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 36,
+				"smallText": 0,
+				"contrast": 9,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-user-cancel": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"map-basemap-migrated": {
 			"ref": {
 				"noName": 0,
@@ -1670,6 +1959,176 @@
 						"smallTarget": 0,
 						"smallText": 0,
 						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-answer-audit-violations": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-approval-command": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 12,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-approval-edit": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-approval-mcp": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-approval-protected-path": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-checkpoint-checked-out": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-command-nonzero-exit": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 15,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-condense": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 6,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-context-truncation": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 6,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-failure-lifted": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 6,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-finished-claims": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 42,
+						"smallText": 12,
+						"contrast": 15,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-old-task-no-outcomes": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 15,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-resume": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-rewind": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-run-8-tools": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-turn-machinery": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 36,
+						"smallText": 0,
+						"contrast": 9,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-user-cancel": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6

@@ -23,6 +23,7 @@ import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/e
 import { basinPolygon, featureLayers, framedWorkspace, gaugePoint, MAP_STORAGE_KEY } from "./fixtures/map"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
+import * as tx from "./fixtures/transcripts"
 import { MapBannerVariantsScreen } from "./MapBannerVariantsScreen"
 import { PrimitivesScreen } from "./PrimitivesScreen"
 import type { ScreenDef } from "./types"
@@ -119,6 +120,23 @@ const taskState = (aihydroMessages: NonNullable<ScreenDef["state"]>["aihydroMess
 	...(withScienceServer ? { mcpServers: fixtureMcpServers } : {}),
 })
 
+/** A synthetic transcript screen pinned to its end; `visible` is text that must be inside the viewport. */
+const chatTx = (
+	id: string,
+	title: string,
+	messages: NonNullable<ScreenDef["state"]>["aihydroMessages"],
+	visible: string,
+	extra: Partial<ScreenDef> = {},
+): ScreenDef =>
+	chatScreen(id, title, {
+		state: taskState(messages, true),
+		expectVisible: [`text=${visible}`],
+		steps: SCROLL_TO_END,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
+		...extra,
+	})
+
 /** A science tool-call card on its own at sidebar width (the card is what the checker budget is measured on). */
 const toolCardScreen = (
 	id: string,
@@ -199,6 +217,52 @@ export const screens: ScreenDef[] = [
 		expectVisible: ["text=Fixture answer: no value here is a result."],
 		ledger: { sessionId: FIXTURE_SESSION, claims: statusClaims },
 	}),
+	// ── Wave 2 transcript fixtures (W2-0): the "before" state the redesign is measured against ──────
+	chatTx(
+		"chat-turn-machinery",
+		"Turn machinery: cost rows, thinking, checkpoints, retry notice, science calls",
+		tx.turnMachineryTask,
+		"Fixture answer, not a result.",
+	),
+	chatTx("chat-failure-lifted", "Failures that must stay visible", tx.failureLiftedTask, "which gauge should I use instead?"),
+	chatTx("chat-run-8-tools", "Eight science calls in one turn", tx.run8ToolsTask, "Eight recorded runs are listed above."),
+	chatTx("chat-approval-mcp", "Pending MCP approval", tx.approvalMcpTask, "I will call the forcing tool next."),
+	chatTx("chat-approval-command", "Pending command approval", tx.approvalCommandTask, "I will run the tests."),
+	chatTx("chat-approval-edit", "Pending edit approval with diff", tx.approvalEditTask, "The label is wrong; I will edit it."),
+	chatTx(
+		"chat-approval-protected-path",
+		"Pending approval outside the workspace",
+		tx.protectedPathApprovalTask,
+		"This needs a file outside the workspace.",
+	),
+	chatTx(
+		"chat-finished-claims",
+		"Finished answer with claim chips",
+		tx.finishedClaimsTask,
+		"Fixture answer: no value here is a result.",
+		{
+			ledger: { sessionId: FIXTURE_SESSION, claims: statusClaims },
+		},
+	),
+	chatTx(
+		"chat-answer-audit-violations",
+		"Answer audit violations (legacy text form)",
+		tx.answerAuditViolationsLegacyTask,
+		"no run supports this value",
+	),
+	chatTx("chat-context-truncation", "Context truncated for a request", tx.contextTruncationTask, "I have the context I need."),
+	chatTx("chat-condense", "Conversation condensed (summarizeTask)", tx.condenseTask, "Continuing from the summary."),
+	chatTx(
+		"chat-command-nonzero-exit",
+		"Command exited non-zero",
+		tx.commandNonZeroExitTask,
+		"The build failed with exit code 2.",
+	),
+	chatTx("chat-user-cancel", "User cancelled a request", tx.userCancelTask, "Partial output before the cancel"),
+	chatTx("chat-resume", "Task reopened, resume pending", tx.resumeTask, "I finished the first run earlier."),
+	chatTx("chat-rewind", "After a rewind (deleted_api_reqs)", tx.rewindTask, "Starting approach two after the rewind."),
+	chatTx("chat-checkpoint-checked-out", "Checkpoint checked out", tx.checkpointCheckedOutTask, "Edited the config."),
+	chatTx("chat-old-task-no-outcomes", "Old task without askOutcome/execOutcome", tx.oldTaskNoOutcomesTask, "Both steps ran."),
 	// ── Science tool-call cards (S3) ────────────────────────────────
 	toolCardScreen("toolcard-success", "Tool card: success, explicit gauge, area check pass", "recorded", successCall),
 	toolCardScreen("toolcard-refusal", "Tool card: terminal refusal (GAUGE_REQUIRED)", "spliced", refusalCall),
