@@ -2,13 +2,16 @@ import { useRef } from "react"
 import styled from "styled-components"
 
 export const PLAN_MODE_COLOR = "#4A90E2" // Ocean blue for planning
-export const ACT_MODE_COLOR = "#50C878" // Emerald green for action
+// Act is a theme accent, not green: green is reserved for approved claims. The text colour is paired with it so
+// contrast holds in every theme (including high-contrast).
+export const ACT_MODE_COLOR = "var(--vscode-button-background, #0e639c)"
+const ACT_MODE_TEXT = "var(--vscode-button-foreground, #ffffff)"
 
 type Mode = "plan" | "act"
 
 const SwitchOption = styled.button.withConfig({
-	shouldForwardProp: (prop) => !["isActive", "activeColor"].includes(prop),
-})<{ isActive: boolean; activeColor: string }>`
+	shouldForwardProp: (prop) => !["isActive", "activeColor", "activeText"].includes(prop),
+})<{ isActive: boolean; activeColor: string; activeText: string }>`
 	padding: 4px 10px;
 	min-height: 24px;
 	box-sizing: border-box;
@@ -18,9 +21,9 @@ const SwitchOption = styled.button.withConfig({
 	border: none;
 	font-family: inherit;
 	cursor: pointer;
-	/* Active text is black on the mode colour (white on emerald/blue is under 3:1); the option carries its own fill. */
+	/* Active text is paired with the mode colour (black on the light blue; the theme button foreground on Act). */
 	background-color: ${(props) => (props.isActive ? props.activeColor : "transparent")};
-	color: ${(props) => (props.isActive ? "#000000" : "var(--vscode-input-foreground)")};
+	color: ${(props) => (props.isActive ? props.activeText : "var(--vscode-input-foreground)")};
 	z-index: 1;
 	transition: color 0.2s ease;
 	font-size: 12px;
@@ -64,9 +67,10 @@ export function PlanActSwitch({ mode, onToggle, onHover }: PlanActSwitchProps) {
 		if (keepFocus) refs.current[target]?.focus()
 	}
 
-	const option = (value: Mode, label: string, activeColor: string) => (
+	const option = (value: Mode, label: string, activeColor: string, activeText: string) => (
 		<SwitchOption
 			activeColor={activeColor}
+			activeText={activeText}
 			aria-checked={mode === value}
 			isActive={mode === value}
 			onBlur={() => onHover?.(null)}
@@ -95,8 +99,8 @@ export function PlanActSwitch({ mode, onToggle, onHover }: PlanActSwitchProps) {
 				select(forward ? "act" : "plan", true)
 			}}
 			role="radiogroup">
-			{option("plan", "Plan", PLAN_MODE_COLOR)}
-			{option("act", "Act", ACT_MODE_COLOR)}
+			{option("plan", "Plan", PLAN_MODE_COLOR, "#000000")}
+			{option("act", "Act", ACT_MODE_COLOR, ACT_MODE_TEXT)}
 		</SwitchContainer>
 	)
 }

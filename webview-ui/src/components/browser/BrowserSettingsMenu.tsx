@@ -112,7 +112,7 @@ export const BrowserSettingsMenu = () => {
 		if (connectionInfo.isRemote) {
 			return connectionInfo.isConnected ? "var(--vscode-charts-blue)" : "var(--vscode-foreground)"
 		} else if (connectionInfo.isConnected) {
-			return "var(--vscode-charts-green)"
+			return "var(--vscode-charts-blue)"
 		} else {
 			return "var(--vscode-foreground)"
 		}
@@ -179,9 +179,7 @@ export const BrowserSettingsMenu = () => {
 						<div
 							className="flex-1 break-words"
 							style={{
-								color: connectionInfo.isConnected
-									? "var(--vscode-charts-green)"
-									: "var(--vscode-errorForeground)",
+								color: connectionInfo.isConnected ? "var(--vscode-charts-blue)" : "var(--vscode-errorForeground)",
 							}}>
 							{connectionInfo.isConnected ? "Connected" : "Disconnected"}
 						</div>

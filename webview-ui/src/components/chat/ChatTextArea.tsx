@@ -91,6 +91,8 @@ interface ChatTextAreaProps {
 	shouldDisableFilesAndImages: boolean
 	onHeightChange?: (height: number) => void
 	onFocusChange?: (isFocused: boolean) => void
+	/** Escape pressed in the prompt with no menu open. Stop-task is bound here, not on `window`. */
+	onEscape?: () => void
 }
 
 interface GitCommit {
@@ -235,6 +237,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			shouldDisableFilesAndImages,
 			onHeightChange,
 			onFocusChange,
+			onEscape,
 		},
 		ref,
 	) => {
@@ -580,6 +583,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 				// Safari does not support InputEvent.isComposing (always false), so we need to fallback to keyCode === 229 for it
 				const isComposing = isSafari ? event.nativeEvent.keyCode === 229 : (event.nativeEvent?.isComposing ?? false)
+				if (event.key === "Escape" && !isComposing) {
+					// Menus above consume Escape first; reaching here means the prompt itself has focus and no menu is open.
+					event.preventDefault()
+					onEscape?.()
+				}
 				if (event.key === "Enter" && !event.shiftKey && !isComposing) {
 					event.preventDefault()
 
@@ -655,6 +663,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			},
 			[
 				onSend,
+				onEscape,
 				showContextMenu,
 				searchQuery,
 				selectedMenuIndex,

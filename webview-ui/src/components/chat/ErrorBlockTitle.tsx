@@ -34,7 +34,7 @@ export const ErrorBlockTitle = ({
 				getIconSpan("error", "text-[var(--vscode-errorForeground)]")
 			)
 		) : cost != null ? (
-			getIconSpan("check", "text-[var(--vscode-charts-green)]")
+			getIconSpan("circle-small-filled", "text-[var(--vscode-descriptionForeground)]")
 		) : apiRequestFailedMessage ? (
 			getIconSpan("error", "text-[var(--vscode-errorForeground)]")
 		) : (
