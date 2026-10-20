@@ -812,7 +812,7 @@ export class Controller {
 						description: item.description || "",
 						version: remoteVersion,
 						author: item.author || "",
-						license: item.license || "CC-BY-4.0",
+						license: typeof item.license === "string" ? item.license.trim() : "", // never default: undeclared stays undeclared
 						topic: item.topic || "",
 						level: item.level || "intro",
 						estimatedMinutes: item.estimatedMinutes || item.estimated_minutes || 0,
@@ -913,7 +913,7 @@ export class Controller {
 					author: item.author || authors[0]?.name || "",
 					authorAffiliation: item.authorAffiliation || item.author_affiliation || authors[0]?.affiliation || "",
 					version: item.version || "0.1.0",
-					license: item.license || "CC-BY-4.0",
+					license: typeof item.license === "string" ? item.license.trim() : "", // never default: undeclared stays undeclared
 					estimatedHours: item.estimatedHours || item.estimated_hours || 0,
 					level: item.level || "intro",
 					tags: item.tags || [],

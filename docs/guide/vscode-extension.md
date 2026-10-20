@@ -1,5 +1,5 @@
 ---
-description: The AI-Hydro VS Code extension — chat, Map, HTML Preview, Skills, Connectors panels; MCP auto-registration; keyboard shortcuts; and .aihydroignore configuration.
+description: The AI-Hydro VS Code extension — chat, Map, Studio, Skills, Connectors panels; MCP auto-registration; keyboard shortcuts; and .aihydroignore configuration.
 ---
 
 # VS Code Extension
@@ -16,7 +16,7 @@ The AI-Hydro icon in the VS Code activity bar opens the primary sidebar, where t
 |---|---|---|
 | **Chat** | AI-Hydro icon in activity bar | Main conversation interface; tool call log; file diff viewer |
 | **Map** | Map button in sidebar toolbar | Interactive geospatial layer viewer — auto-receives analysis outputs |
-| **HTML Preview** | HTML Preview button in sidebar toolbar | Built-in Python kernel for interactive HTML artifacts and learning modules |
+| **AI-Hydro Studio** | AI-Hydro Studio button in sidebar toolbar | Built-in Python kernel for interactive HTML artifacts and learning modules |
 | **Skills** | Skills icon in sidebar toolbar | Browse installed skills and the marketplace; install workflow playbooks |
 | **Connectors** | Connectors icon in sidebar toolbar | Authenticate external data sources (Google Earth Engine, and more) |
 
@@ -47,9 +47,9 @@ The Map panel renders geospatial analysis outputs as interactive layers inside V
 
 ---
 
-## HTML Preview Panel
+## AI-Hydro Studio
 
-The HTML Preview panel is a built-in execution environment for interactive HTML artifacts. See the [HTML Preview guide](html-preview.md) for the full reference.
+AI-Hydro Studio is a built-in execution environment for interactive HTML artifacts. See the [AI-Hydro Studio guide](html-preview.md) for the full reference.
 
 **Key capabilities:**
 - Runs Python cells inside HTML files via a built-in kernel — no Jupyter server needed

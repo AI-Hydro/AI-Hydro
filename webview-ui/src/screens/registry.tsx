@@ -21,7 +21,7 @@ import { approvalClaims, claim, driftClaims, FIXTURE_SESSION, statusClaims } fro
 import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/experiments"
 import { featureLayers, framedWorkspace, MAP_STORAGE_KEY, basinPolygon } from "./fixtures/map"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
-import { courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
+import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
 import { PrimitivesScreen } from "./PrimitivesScreen"
 import type { ScreenDef } from "./types"
 
@@ -394,6 +394,46 @@ export const screens: ScreenDef[] = [
 	}),
 
 	// ── Studio / HTML preview (editor) ──────────────────────────────
+	{
+		id: "studio-empty-state",
+		title: "Studio: empty state with starting points",
+		group: "studio",
+		surface: "editor",
+		flags: [PREVIEW],
+		htmlPreviews: [],
+		onMessage: studioHost,
+		ready: '[data-testid="studio-empty-state"]',
+		render: app,
+	},
+	{
+		id: "studio-catalogue",
+		title: "Studio: module catalogue (licence and unsigned labels)",
+		group: "studio",
+		surface: "editor",
+		flags: [PREVIEW],
+		htmlPreviews: [],
+		marketplace: { modules: catalogueModules, courses: [] },
+		onMessage: studioHost,
+		steps: [
+			{ click: 'button:has-text("Browse courses")' },
+			{ wait: 600 },
+			{ click: 'button:has-text("Modules"):has-text("2")' },
+			{ wait: 600 },
+		],
+		render: app,
+	},
+	{
+		id: "studio-catalogue-offline",
+		title: "Studio: catalogue offline (error with Retry)",
+		group: "studio",
+		surface: "editor",
+		flags: [PREVIEW],
+		htmlPreviews: [],
+		marketplace: { error: "Could not load the modules catalogue. Check your connection and retry." },
+		onMessage: studioHost,
+		steps: [{ click: 'button:has-text("Browse courses")' }, { wait: 1000 }],
+		render: app,
+	},
 	{
 		id: "studio-static-doc",
 		title: "Studio: static document",

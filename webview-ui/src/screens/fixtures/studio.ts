@@ -83,3 +83,37 @@ export const courseProgress = {
 	currentModuleId: "m2",
 	completed: { m1: { completedAt: 1_700_000_050_000, timeSpentMs: 1_200_000 } },
 }
+
+/** FIXTURE catalogue entries (synthetic): one with no declared licence, one with a declared licence. */
+export const catalogueModules: Record<string, unknown>[] = [
+	{
+		moduleId: "fixture-hydrograph",
+		title: "Fixture: reading a hydrograph",
+		description: "Synthetic catalogue entry with no declared licence.",
+		version: "0.1.0",
+		author: "Fixture Author",
+		license: "",
+		level: "intro",
+		estimatedMinutes: 20,
+		tags: [],
+		topic: "fixture",
+		aiHydroInstalls: 0,
+		aiHydroStars: 0,
+		downloadUrl: "https://raw.githubusercontent.com/AI-Hydro/Modules/main/fixture/module.html",
+	},
+	{
+		moduleId: "fixture-baseflow",
+		title: "Fixture: baseflow separation",
+		description: "Synthetic catalogue entry with a declared licence.",
+		version: "0.2.0",
+		author: "Fixture Author",
+		license: "MIT",
+		level: "intermediate",
+		estimatedMinutes: 30,
+		tags: [],
+		topic: "fixture",
+		aiHydroInstalls: 0,
+		aiHydroStars: 0,
+		downloadUrl: "https://raw.githubusercontent.com/AI-Hydro/Modules/main/fixture2/module.html",
+	},
+]

@@ -34,6 +34,9 @@ describe("assertTrustedSkillUrl", () => {
 		"https://raw.githubusercontent.com/AI-Hydro/Skills/main",
 		"https://raw.githubusercontent.com/AI-Hydro/Skills/main/",
 		"https://raw.githubusercontent.com/AI-Hydro/skills/main/SKILL.md",
+		// the Modules raw prefix is for module/course installs only, never skills
+		"https://raw.githubusercontent.com/AI-Hydro/Modules/main/modules/x/SKILL.md",
+		"https://raw.githubusercontent.com/AI-Hydro/Modules/main/SKILL.md",
 		// other owners / lookalikes
 		"https://raw.githubusercontent.com/evil-org/Skills/main/SKILL.md",
 		"https://raw.githubusercontent.com/AI-Hydro-evil/Skills/main/SKILL.md",

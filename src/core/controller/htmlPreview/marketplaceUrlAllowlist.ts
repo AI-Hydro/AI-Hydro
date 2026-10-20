@@ -15,6 +15,13 @@ import { AiHydroEnv } from "@/config"
  * `modules.json`/`courses.json` index doesn't carry an integrity hash today,
  * and adding one requires a coordinated change to the index-generating repo
  * this extension doesn't own (tracked in audits/STATUS.md E-2 as a followup).
+ *
+ * The live index (ai-hydro.github.io/Modules/api/*.json) lists every
+ * `downloadUrl`/`manifestUrl` under https://raw.githubusercontent.com/, so that
+ * host is admitted too, but only under the repo + branch prefix in
+ * TRUSTED_RAW_MARKETPLACE_PREFIXES (never the bare host or the whole org).
+ * https is required throughout.
+ *
  * A host allowlist is the containment we can ship unilaterally: it stops a
  * compromised or malicious index entry from pointing the extension at
  * attacker-controlled infrastructure, even without hash pinning.
@@ -32,11 +39,52 @@ function trustedOrigins(): Set<string> {
 	return origins
 }
 
+/**
+ * raw.githubusercontent.com is shared by every GitHub account, and GitHub serves
+ * commits from forks (including unmerged PRs) under the upstream repo path by
+ * SHA, so an org-level rule would accept unreviewed content. Raw URLs are
+ * accepted only under an explicit repo + named-branch prefix, derived from the
+ * URLs the live index (Modules/api/{modules,courses}.json) actually uses.
+ * Same policy shape as skills/skillUrlPolicy.ts. Applies to module and course
+ * installs only (assertTrustedModuleContentUrl), never to skills.
+ */
+export const TRUSTED_RAW_MARKETPLACE_PREFIXES: readonly string[] = ["https://raw.githubusercontent.com/AI-Hydro/Modules/main/"]
+
+function isTrustedRawMarketplaceUrl(parsed: URL, rawUrl: string): boolean {
+	if (parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash) {
+		return false
+	}
+	// No percent-encoding: it could hide separators or dot segments.
+	if (parsed.pathname.includes("%") || rawUrl.includes("%")) {
+		return false
+	}
+	// `new URL` has already collapsed dot segments; anything left is hostile.
+	if (parsed.pathname.split("/").some((seg) => seg === ".." || seg === ".")) {
+		return false
+	}
+	const normalized = `${parsed.origin}${parsed.pathname}`
+	return TRUSTED_RAW_MARKETPLACE_PREFIXES.some((prefix) => normalized.startsWith(prefix) && normalized.length > prefix.length)
+}
+
 /** Body caps for marketplace downloads (a module is a single self-contained HTML file). */
 export const MAX_MODULE_BYTES = 8 * 1024 * 1024
 export const MAX_MANIFEST_BYTES = 1024 * 1024
 
+/**
+ * Base policy: configured marketplace origins only. Shared with skills, which
+ * keep their own repo-by-repo raw table (skills/skillUrlPolicy.ts) and must NOT
+ * inherit the Modules raw prefix.
+ */
 export function assertTrustedMarketplaceUrl(url: string, context: string): void {
+	assertUrl(url, context, false)
+}
+
+/** Module and course content: base policy plus the Modules raw prefix (live-index shape). */
+export function assertTrustedModuleContentUrl(url: string, context: string): void {
+	assertUrl(url, context, true)
+}
+
+function assertUrl(url: string, context: string, allowModulesRaw: boolean): void {
 	let parsed: URL
 	try {
 		parsed = new URL(url)
@@ -48,10 +96,16 @@ export function assertTrustedMarketplaceUrl(url: string, context: string): void 
 	if (parsed.protocol !== "https:") {
 		throw new Error(`${context}: unsupported protocol ${parsed.protocol} (https is required)`)
 	}
-	const allowed = trustedOrigins()
-	if (!allowed.has(parsed.origin)) {
-		throw new Error(`${context}: origin not in the marketplace allowlist: ${parsed.origin}`)
+	if (parsed.username || parsed.password) {
+		throw new Error(`${context}: URL not in the marketplace allowlist: embedded credentials are not permitted`)
 	}
+	if (trustedOrigins().has(parsed.origin)) {
+		return
+	}
+	if (allowModulesRaw && isTrustedRawMarketplaceUrl(parsed, url)) {
+		return
+	}
+	throw new Error(`${context}: origin not in the marketplace allowlist: ${parsed.origin}`)
 }
 
 /**
@@ -63,7 +117,7 @@ export function assertTrustedMarketplaceRedirect(options: Record<string, unknown
 		typeof options.href === "string"
 			? options.href
 			: `${options.protocol ?? ""}//${options.hostname ?? options.host ?? ""}${options.path ?? ""}`
-	assertTrustedMarketplaceUrl(href, `${context} redirect`)
+	assertTrustedModuleContentUrl(href, `${context} redirect`)
 }
 
 /**

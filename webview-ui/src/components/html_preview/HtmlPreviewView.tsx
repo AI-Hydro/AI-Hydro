@@ -1502,7 +1502,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 								display: "block",
 								backgroundColor: "#ffffff",
 							}}
-							title={item.title || "AI-Hydro HTML Preview"}
+							title={item.title || "AI-Hydro Studio"}
 						/>
 					</>
 				)}
@@ -1781,7 +1781,7 @@ const NoUriMessage: React.FC<{ item: HtmlPreviewItem }> = ({ item }) => (
 				id={item.id} · file={item.filePath || "(none)"}
 			</div>
 			<div style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>
-				Open the preview panel from the extension side first, then re-click the file. If this persists, the panel is open
+				Open AI-Hydro Studio from the extension side first, then re-click the file. If this persists, the panel is open
 				in a different column than the artifact registration happened in.
 			</div>
 		</div>
@@ -1813,7 +1813,7 @@ const EmptyState: React.FC = () => (
 				<line x1="3" x2="21" y1="9" y2="9" />
 				<line x1="9" x2="9" y1="21" y2="9" />
 			</svg>
-			<p style={{ fontSize: 13, fontWeight: 500 }}>No HTML preview active</p>
+			<p style={{ fontSize: 13, fontWeight: 500 }}>No document open in AI-Hydro Studio</p>
 			<p style={{ fontSize: 11, opacity: 0.7 }}>Click a workspace file in the sidebar.</p>
 		</div>
 	</div>

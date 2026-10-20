@@ -99,7 +99,7 @@ function truncateOutput(text: string): { text: string; truncated: boolean } {
 export class ArtifactKernelService {
 	private readonly sessions = new Map<string, KernelSession>()
 	private readonly activeProfileByWorkspace = new Map<string, string>()
-	private readonly outputChannel = vscode.window.createOutputChannel("AI-Hydro HTML Preview")
+	private readonly outputChannel = vscode.window.createOutputChannel("AI-Hydro Studio")
 
 	constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -177,7 +177,7 @@ export class ArtifactKernelService {
 		}
 		const profile = profileId?.trim() || this.getActiveProfileId()
 		if (!profile) {
-			throw new Error("No active Python profile. Select a kernel in the HTML Preview toolbar.")
+			throw new Error("No active Python profile. Select a kernel in the AI-Hydro Studio toolbar.")
 		}
 		return buildSessionKeyForArtifact(aid, profile)
 	}

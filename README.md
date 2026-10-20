@@ -128,7 +128,7 @@ See the [Plugin Guide](https://ai-hydro.github.io/AI-Hydro/plugins/overview/) to
 | **Modelling** | `train_hydro_model` — Differentiable HBV-light or NeuralHydrology LSTM |
 | **Modelling** | `get_model_results`, `get_training_status` — Results and training progress |
 | **Map** | `show_on_map`, `map_update_layer`, `map_apply_symbology`, `map_get_state`, `map_set_basemap` |
-| **HTML Preview** | `show_html_preview` — Open HTML artifacts in the built-in kernel panel |
+| **Studio** | `show_html_preview` — Open HTML artifacts in AI-Hydro Studio (built-in kernel) |
 | **GEE** | `gee.status`, `gee.preview_layer`, `gee.extract_timeseries` — Google Earth Engine integration |
 | **Skills** | `list_skills`, `load_skill`, `save_skill` — Workflow playbook discovery and management |
 | **Provenance** | `add_claim`, `add_assumption`, `check_water_balance_consistency`, `check_temporal_alignment` |
@@ -178,7 +178,7 @@ Every analysis result appears on a live map inside VS Code — no external GIS t
 - **13 free basemaps** — USGS Imagery, USGS Topo, Esri Hillshade, Esri Ocean, Carto, Stadia, and more; no API token required
 - **Persistent workspace** — basemap, view state, and layer visibility are saved across VS Code sessions
 
-### HTML Preview — Built-in Python Kernel
+### AI-Hydro Studio — Built-in Python Kernel
 
 A Jupyter-like execution environment embedded directly in VS Code, purpose-built for AI-generated interactive artifacts.
 

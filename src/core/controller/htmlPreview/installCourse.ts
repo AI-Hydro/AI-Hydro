@@ -15,7 +15,7 @@ import { MarketplaceRecognitionService } from "@/services/recognition/Marketplac
 import type { Controller } from "../index"
 import {
 	assertTrustedMarketplaceRedirect,
-	assertTrustedMarketplaceUrl,
+	assertTrustedModuleContentUrl,
 	MAX_MANIFEST_BYTES,
 	MAX_MODULE_BYTES,
 	resolveContainedInstallDir,
@@ -33,7 +33,7 @@ export async function installCourse(controller: Controller, request: InstallCour
 	const { courseId, manifestUrl } = request
 	try {
 		if (!manifestUrl) throw new Error("Missing course manifest URL")
-		assertTrustedMarketplaceUrl(manifestUrl, "installCourse manifestUrl")
+		assertTrustedModuleContentUrl(manifestUrl, "installCourse manifestUrl")
 
 		// 1. Fetch the course manifest.
 		const manifestResp = await axios.get(manifestUrl, {
@@ -91,7 +91,7 @@ export async function installCourse(controller: Controller, request: InstallCour
 			if (!downloadUrl) continue
 			const relPath = `${moduleId}/module.html`
 			try {
-				assertTrustedMarketplaceUrl(downloadUrl, `installCourse module ${moduleId} downloadUrl`)
+				assertTrustedModuleContentUrl(downloadUrl, `installCourse module ${moduleId} downloadUrl`)
 				const html = await axios.get(downloadUrl, {
 					responseType: "text",
 					timeout: 30000,
