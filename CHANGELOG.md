@@ -11,6 +11,10 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Fixed — Learning Pack verifier rejects a leading UTF-8 BOM (vision-2040, branch `vision2040/verifier-bom`)
+
+- `parseCanonicalJson` decoded with a `TextDecoder` that strips a leading BOM by default, so its "must not contain a UTF-8 BOM" check never fired and a BOM-prefixed contract JSON file (for example `pack.json`) verified. It now decodes with `ignoreBOM: true`, so such a pack is `invalid` (`BOM`). **This tightens acceptance:** a pack that was previously accepted only because its BOM was ignored is now rejected. The signature and checksums always covered the exact bytes, so no valid-signature pack becomes forgeable either way; the vector in the test is re-checksummed and re-signed so the BOM is its only defect.
+
 ### Fixed — keyless basemaps (vision-2040, branch `vision2040/basemap-keyless`)
 
 - **Default basemap was a watermark.** CARTO now answers every keyless tile request (any style, any location) with one "API KEY REQUIRED" image, so the default and the Carto Light/Dark/Voyager entries were unusable. The default "Hydrology default (muted)" now uses Esri Light/Dark Gray Canvas (global, keyless, attribution shown); the Carto entries are removed (no CARTO key setting exists).

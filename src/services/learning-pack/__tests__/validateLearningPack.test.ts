@@ -1,4 +1,5 @@
 import { expect } from "chai"
+import { createHash, createPublicKey, generateKeyPairSync, sign } from "node:crypto"
 import { canonicalJsonBytes } from "../canonicalJson"
 import { validateLearningPackFiles } from "../validateLearningPack"
 import { createValidLearningPackFiles, TEST_MODULE_IDS } from "./learningPackTestFixture"
@@ -17,6 +18,31 @@ describe("validateLearningPackFiles", () => {
 		const result = validateLearningPackFiles(files, { aiHydroVersion: "0.2.5" })
 		expect(result.status).to.equal("invalid")
 		expect(result.diagnostics[0].code).to.equal("DUPLICATE_KEY")
+	})
+
+	// A leading UTF-8 BOM used to slip through: TextDecoder strips it by default, so the BOM check never saw it and
+	// the stripped text was still canonical. The vector below is re-checksummed and re-signed, so the BOM is the only defect.
+	it("rejects a leading UTF-8 BOM on a contract JSON file even when the pack is re-checksummed and re-signed", () => {
+		const { privateKey } = generateKeyPairSync("ed25519")
+		const { files } = createValidLearningPackFiles({ privateKey })
+		files.set("pack.json", Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(files.get("pack.json")!)]))
+		const payload = [...files.entries()].filter(([name]) => name !== "checksums.json" && !name.startsWith("signatures/"))
+		const entries = payload
+			.map(([name, bytes]) => ({ path: name, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.byteLength }))
+			.sort((a, b) => (a.path < b.path ? -1 : 1))
+		const checksums = canonicalJsonBytes({ algorithm: "sha256", files: entries })
+		files.set("checksums.json", checksums)
+		files.set(
+			"signatures/ed25519.json",
+			canonicalJsonBytes({
+				algorithm: "Ed25519",
+				publicKeySpki: createPublicKey(privateKey).export({ format: "der", type: "spki" }).toString("base64"),
+				signature: sign(null, checksums, privateKey).toString("base64"),
+			}),
+		)
+		const result = validateLearningPackFiles(files, { aiHydroVersion: "0.2.5" })
+		expect(result.status).to.equal("invalid")
+		expect(result.diagnostics[0].code).to.equal("BOM")
 	})
 
 	it("rejects semantically valid but noncanonical JSON", () => {
