@@ -44,3 +44,13 @@ it("a new message appears after an earlier one was dismissed", () => {
 	expect(screen.getByRole("status")).toHaveTextContent("second")
 	expect(screen.getByRole("status")).not.toHaveTextContent("first")
 })
+
+it("re-arms a dismissed notice when its condition clears and later returns", () => {
+	const message = { key: "coverage:usgs-topo", text: "USGS Topo covers the United States only, so no tiles are shown here." }
+	const { rerender } = render(<BasemapNotice messages={[message]} />)
+	fireEvent.click(screen.getByRole("button", { name: "Dismiss basemap notice" }))
+	expect(screen.queryByRole("status")).toBeNull()
+	rerender(<BasemapNotice messages={[]} />) // panned back into coverage
+	rerender(<BasemapNotice messages={[message]} />) // panned out again
+	expect(screen.getByRole("status")).toHaveTextContent("covers the United States only")
+})

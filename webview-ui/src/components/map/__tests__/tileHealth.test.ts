@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest"
 import {
 	classifyTileHealth,
 	clearTally,
+	controlTileUrl,
+	fingerprintBlob,
 	fingerprintBytes,
 	loadedSources,
 	MIN_OVERLAY_SAMPLE,
+	PLACEHOLDER_ADDRESS_RING,
+	PLACEHOLDER_MAX_SAMPLE,
 	PLACEHOLDER_MIN_TILES,
 	TILE_FAILURE_RATIO,
 	TilePlaceholderTracker,
@@ -113,43 +117,101 @@ describe("sparse overlay sources", () => {
 })
 
 describe("TilePlaceholderTracker", () => {
-	const fill = (tracker: TilePlaceholderTracker, n: number, print: (i: number) => string) => {
-		for (let i = 0; i < n; i++) tracker.record("basemap", `z5/${i}/0`, print(i))
+	// Real Esri World_Light_Gray_Base open-ocean tiles at z5/z6 (measured 2026-10-20): 12 of 13 share one image
+	// (2419 bytes, md5 364b7bd4...). Land control tile (z3 India) is a different image.
+	const OCEAN = "2419:364b7bd4"
+	const LAND = "7584:169ced3d"
+	const PLACEHOLDER = "2049:502fc5f6"
+	const fill = (tracker: TilePlaceholderTracker, n: number, print: (i: number) => string, from = 0) => {
+		for (let i = from; i < from + n; i++) tracker.record(`z5/${i}/0`, print(i))
 	}
-	it("flags a source that returns one identical image for many distinct tiles", () => {
+
+	it("open ocean is not a placeholder: 12 of 13 identical tiles stay below the identical share", () => {
 		const tracker = new TilePlaceholderTracker()
-		fill(tracker, PLACEHOLDER_MIN_TILES, () => "2049:abc")
-		expect(tracker.suspected("basemap")).toBe(true)
+		fill(tracker, 13, (i) => (i === 0 ? "1800:aaaaaaaa" : OCEAN))
+		expect(tracker.dominant()).toBeUndefined()
+		expect(tracker.needsControl()).toBe(false)
+		expect(tracker.suspected()).toBe(false)
 	})
-	it("does not flag before enough distinct tiles, nor the same address repeated", () => {
+
+	it("a fully uniform ocean viewport needs a control, and a different land control clears it for good", () => {
 		const tracker = new TilePlaceholderTracker()
-		fill(tracker, PLACEHOLDER_MIN_TILES - 1, () => "2049:abc")
-		expect(tracker.suspected("basemap")).toBe(false)
-		for (let i = 0; i < 50; i++) tracker.record("basemap", "z5/0/0", "2049:abc")
-		expect(tracker.suspected("basemap")).toBe(false)
+		fill(tracker, 20, () => OCEAN)
+		expect(tracker.dominant()).toBe(OCEAN)
+		expect(tracker.needsControl()).toBe(true)
+		expect(tracker.suspected()).toBe(false) // no control yet: never claim a broken provider on sameness alone
+		tracker.setControl(LAND)
+		expect(tracker.suspected()).toBe(false)
+		expect(tracker.needsControl()).toBe(false)
+		expect(tracker.wantsFingerprint()).toBe(false) // decided: hashing stops
 	})
-	it("does not flag a source whose tiles differ", () => {
+
+	it("a placeholder is flagged when the land control returns the same image", () => {
 		const tracker = new TilePlaceholderTracker()
-		fill(tracker, 40, (i) => `100:${i}`)
-		expect(tracker.suspected("basemap")).toBe(false)
+		fill(tracker, PLACEHOLDER_MIN_TILES, () => PLACEHOLDER)
+		expect(tracker.needsControl()).toBe(true)
+		tracker.setControl(PLACEHOLDER)
+		expect(tracker.suspected()).toBe(true)
+		expect(tracker.needsControl()).toBe(false)
 	})
-	it("tolerates a few legitimately different tiles among identical ones", () => {
+
+	it("does not ask for a control before enough distinct tiles, and the same address repeated counts once", () => {
 		const tracker = new TilePlaceholderTracker()
-		fill(tracker, 100, (i) => (i < 4 ? `9:${i}` : "2049:abc"))
-		expect(tracker.suspected("basemap")).toBe(true)
-		const mixed = new TilePlaceholderTracker()
-		fill(mixed, 100, (i) => (i < 20 ? `9:${i}` : "2049:abc"))
-		expect(mixed.suspected("basemap")).toBe(false)
+		fill(tracker, PLACEHOLDER_MIN_TILES - 1, () => PLACEHOLDER)
+		expect(tracker.needsControl()).toBe(false)
+		for (let i = 0; i < 50; i++) tracker.record("z5/0/0", PLACEHOLDER)
+		expect(tracker.needsControl()).toBe(false)
 	})
-	it("clear forgets a source", () => {
+
+	it("tiles that differ never need a control, and hashing stops after the sample cap", () => {
 		const tracker = new TilePlaceholderTracker()
-		fill(tracker, 20, () => "x")
-		tracker.clear("basemap")
-		expect(tracker.suspected("basemap")).toBe(false)
+		fill(tracker, PLACEHOLDER_MAX_SAMPLE, (i) => `100:${i}`)
+		expect(tracker.dominant()).toBeUndefined()
+		expect(tracker.needsControl()).toBe(false)
+		expect(tracker.suspected()).toBe(false)
+		expect(tracker.wantsFingerprint()).toBe(false)
 	})
+
+	it("tolerates a few legitimately different tiles among identical ones, but not many", () => {
+		const few = new TilePlaceholderTracker()
+		fill(few, 60, (i) => (i < 2 ? `9:${i}` : PLACEHOLDER))
+		expect(few.dominant()).toBe(PLACEHOLDER)
+		const many = new TilePlaceholderTracker()
+		fill(many, 60, (i) => (i < 20 ? `9:${i}` : PLACEHOLDER))
+		expect(many.dominant()).toBeUndefined()
+	})
+
+	it("memory is bounded: the address ring never exceeds its size", () => {
+		const tracker = new TilePlaceholderTracker()
+		for (let i = 0; i < 10_000; i++) tracker.record(`z9/${i}/0`, `1:${i}`)
+		expect((tracker as unknown as { ring: string[] }).ring.length).toBeLessThanOrEqual(PLACEHOLDER_ADDRESS_RING)
+		expect((tracker as unknown as { counts: Map<string, number> }).counts.size).toBeLessThanOrEqual(PLACEHOLDER_MAX_SAMPLE)
+	})
+
+	it("clear forgets everything and resumes sampling", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, 20, () => PLACEHOLDER)
+		tracker.setControl(LAND)
+		tracker.clear()
+		expect(tracker.wantsFingerprint()).toBe(true)
+		expect(tracker.dominant()).toBeUndefined()
+	})
+
+	it("controlTileUrl fills the template with the land control address", () => {
+		expect(controlTileUrl("https://h/tile/{z}/{y}/{x}")).toBe("https://h/tile/3/3/5")
+		expect(controlTileUrl("https://h/{z}/{x}/{y}.png")).toBe("https://h/3/5/3.png")
+	})
+
 	it("fingerprintBytes separates different content and equals itself", () => {
 		expect(fingerprintBytes(new Uint8Array([1, 2, 3]))).toBe(fingerprintBytes(new Uint8Array([1, 2, 3])))
 		expect(fingerprintBytes(new Uint8Array([1, 2, 3]))).not.toBe(fingerprintBytes(new Uint8Array([1, 2, 4])))
 		expect(fingerprintBytes(new Uint8Array([1, 2]))).not.toBe(fingerprintBytes(new Uint8Array([1, 2, 0])))
+	})
+
+	it("fingerprintBlob is stable and distinguishes content", async () => {
+		const blobOf = (bytes: number[]) => ({ arrayBuffer: async () => new Uint8Array(bytes).buffer }) as unknown as Blob
+		const a = await fingerprintBlob(blobOf([1, 2, 3]))
+		expect(a).toBe(await fingerprintBlob(blobOf([1, 2, 3])))
+		expect(a).not.toBe(await fingerprintBlob(blobOf([1, 2, 4])))
 	})
 })

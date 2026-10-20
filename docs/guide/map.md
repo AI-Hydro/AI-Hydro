@@ -43,7 +43,7 @@ All basemaps work without an API token or account. CARTO basemaps were removed (
 
 ### Hydrology default (muted)
 
-New profiles open on a muted, global base (Esri Light Gray Canvas / Dark Gray Canvas, chosen by VS Code theme: light for light themes, dark for dark and high-contrast; zoom 0-16) so rivers and your layers carry the colour. Inside the United States the USGS National Map hydrography is drawn above it to emphasise rivers; elsewhere only the muted base is drawn. Attribution: Sources: Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS User Community (plus USGS where the river overlay is in view). Esri lists Light/Dark Gray Canvas as mature support, retiring in December 2029.
+New profiles open on a muted, global base (Esri Light Gray Canvas / Dark Gray Canvas, chosen by VS Code theme: light for light themes, dark for dark and high-contrast; zoom 0-16) so rivers and your layers carry the colour. Inside the United States the USGS National Map hydrography is drawn above it to emphasise rivers; elsewhere only the muted base is drawn. Attribution: Sources: Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS User Community (plus USGS where the river overlay is in view). Esri's item pages list World Light Gray Base and World Dark Gray Base as mature support, retiring in December 2029 (no day given).
 
 Profiles saved by an older version are moved to this default **once**, and a saved choice that no longer exists (for example a CARTO basemap) is also moved to it, with a one-time notice saying why. After that your own choice always wins; **Reset to hydrology default** in the Basemap panel brings the default back.
 
@@ -57,17 +57,17 @@ Profiles saved by an older version are moved to this default **once**, and a sav
 | Esri Hillshade | High-resolution DEM shading |
 | Esri Ocean | Bathymetry and coastal work |
 
-The USGS caches are requested only inside US coverage (CONUS, Alaska, Hawaii, Puerto Rico/USVI). When the view is outside it, the map shows a notice ("USGS Topo covers the United States only, so no tiles are shown here.") with a **Use Hydrology default** button instead of a silently blank map. Every basemap is capped at the zoom its service serves (the last level is stretched rather than requesting missing tiles).
+The USGS caches are requested only inside US coverage (CONUS, Alaska, Hawaii, Puerto Rico/USVI; the western Aleutians and the Northwestern Hawaiian Islands are not included, so a view of only those reports no coverage). When the view is outside it, the map shows a notice ("USGS Topo covers the United States only, so no tiles are shown here.") with a **Use Hydrology default** button instead of a silently blank map. Every basemap is capped at the zoom its service serves (the last level is stretched rather than requesting missing tiles).
 
 ### General purpose
 
-Esri World Topo · Esri World Imagery · Humanitarian (HOT, a community-run server: best effort, light use).
+Esri World Topo · Esri World Imagery · Humanitarian (HOT), an optional, never-default basemap on OpenStreetMap France's community server. OSM France's usage page (https://www.openstreetmap.fr/usage/, read 2026-10-20; it does not name the HOT layer) allows free use only with visible attribution, public access, a non-profit site or free non-profit app, and moderate traffic, and says service may be suspended without notice. Use it lightly.
 
-If a basemap answers every tile with one identical image (a provider placeholder such as an API-key notice), a "Basemap unavailable" notice appears with the same switch button. This is a general check, not tied to one provider; over open ocean or blank terrain a source can legitimately repeat tiles, so it is a notice, not an error.
+If a basemap answers every tile in view with one identical image **and** returns that same image for a fixed land control tile (z3 over India), a "Basemap unavailable" notice appears with the same switch button. The control matters: real sources repeat tiles over open ocean (Esri Gray Canvas ocean tiles at zoom 5-6 are byte-identical), so sameness in the view alone never raises the notice. The check is general, not tied to one provider, and stops hashing tiles once it has decided.
 
 A few missing tiles show a small status note; the "Map display incomplete" alert appears only when most tiles fail, can be dismissed, and offers **Retry imagery** (tile problems) or **Reload map renderer** (renderer problems).
 
-> **Note on OpenStreetMap direct**: tile.openstreetmap.org is best-effort and requires an app-specific User-Agent and honoured cache headers, which an embedded webview cannot set, so it is not offered. The Esri basemaps are OSM-derived in part and are the supported general-purpose choice.
+> **Note on OpenStreetMap direct**: tile.openstreetmap.org is best-effort and requires an app-specific User-Agent and honoured cache headers, which an embedded webview cannot set, so it is not offered. The Esri basemaps are the general-purpose choice. Esri's item pages state the Esri Master License Agreement; this project has not verified that the agreement permits keyless use of services.arcgisonline.com in an application, so check Esri's current terms before relying on these basemaps in a published product.
 
 ---
 

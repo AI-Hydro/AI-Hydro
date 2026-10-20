@@ -9,6 +9,7 @@ import {
 	extentContains,
 	isKnownBaseMap,
 	mapThemeFromBodyClasses,
+	normalizeViewportLongitudes,
 	removedBaseMapReason,
 	resolveBaseMap,
 	US_EXTENT,
@@ -108,12 +109,37 @@ describe("coverage", () => {
 	it("Canada and open ocean are outside (the boxes are tighter than the bounding extent)", () => {
 		expect(basemapCoverageStatus(topo, [-100, 55, -95, 58])).toBe("outside")
 	})
+	it("panning past the antimeridian still tests the right longitudes", () => {
+		// 190..230 east is 170W..130W: Alaska/CONUS west coast, covered; 100..140 east is Asia, outside.
+		expect(basemapCoverageStatus(topo, [190, 55, 230, 65])).toBe("covered")
+		expect(basemapCoverageStatus(topo, [-190, 55, -150, 65])).toBe("covered") // 170E..150W crosses +-180
+		expect(basemapCoverageStatus(topo, [-260, 20, -220, 40])).toBe("outside") // 100E..140E
+		expect(basemapCoverageStatus(topo, [100, 20, 140, 40])).toBe("outside")
+		expect(basemapCoverageStatus(topo, [460, 20, 500, 40])).toBe("outside")
+	})
+	it("a view wider than the world, or crossing +-180, normalises to boxes inside [-180, 180]", () => {
+		expect(normalizeViewportLongitudes([-200, -60, 200, 60])).toEqual([[-180, -60, 180, 60]])
+		expect(normalizeViewportLongitudes([170, 50, 200, 60])).toEqual([
+			[170, 50, 180, 60],
+			[-180, 50, -160, 60],
+		])
+		expect(normalizeViewportLongitudes([-10, 0, 10, 5])).toEqual([[-10, 0, 10, 5]])
+	})
 	it("global sources always cover", () => {
 		expect(basemapCoverageStatus(resolveBaseMap(DEFAULT_BASEMAP_ID, "dark"), [60, 5, 95, 35])).toBe("covered")
 		expect(basemapCoverageStatus(resolveBaseMap("esri-topo", "dark"), [60, 5, 95, 35])).toBe("covered")
 	})
 	it("the notice names the basemap and says it is US-only", () => {
 		expect(coverageNoticeText(topo)).toBe("USGS Topo covers the United States only, so no tiles are shown here.")
+	})
+})
+
+describe("optional community basemap", () => {
+	it("HOT is not the default and its terms note cites the server's usage-policy page", () => {
+		const hot = BASE_MAP_STYLES.find((s) => s.id === "osm-hot")
+		expect(hot?.id).not.toBe(DEFAULT_BASEMAP_ID)
+		expect(hot?.terms).toContain("https://www.openstreetmap.fr/usage/")
+		expect(hot?.note).toMatch(/Optional/)
 	})
 })
 

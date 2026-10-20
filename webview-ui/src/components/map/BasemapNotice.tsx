@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { MAP_Z } from "./mapZ"
 
 /**
@@ -18,6 +18,16 @@ export interface BasemapNoticeProps {
 
 export const BasemapNotice: React.FC<BasemapNoticeProps> = ({ messages, onUseDefault }) => {
 	const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+	// A dismissal lasts only while its message stays on screen: when the condition clears (the view pans back
+	// into coverage) and later returns, the notice is shown again.
+	const activeKeys = messages.map((message) => message.key).join("\u0000")
+	useEffect(() => {
+		const active = new Set(activeKeys ? activeKeys.split("\u0000") : [])
+		setDismissed((previous) => {
+			const kept = new Set([...previous].filter((key) => active.has(key)))
+			return kept.size === previous.size ? previous : kept
+		})
+	}, [activeKeys])
 	const visible = messages.filter((message) => !dismissed.has(message.key))
 	if (visible.length === 0) return null
 	const button: React.CSSProperties = { minHeight: 24, minWidth: 24, padding: "2px 8px" }

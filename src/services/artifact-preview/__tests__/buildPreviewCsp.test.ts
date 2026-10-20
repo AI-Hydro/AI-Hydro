@@ -45,10 +45,10 @@ describe("buildPreviewCsp", () => {
 		expect(csp).to.match(/frame-src[^;]*https:\/\/\*\.vscode-cdn\.net/)
 	})
 
-	it("allows OpenStreetMap and CartoDB tile origins in img-src", () => {
+	it("allows OpenStreetMap tile origins in img-src and no longer lists CARTO (keyless tiles are watermarks)", () => {
 		const csp = buildPreviewCsp({ cspSource, nonce, allowScripts: true })
 		expect(csp).to.contain("https://*.tile.openstreetmap.org")
-		expect(csp).to.contain("https://*.basemaps.cartocdn.com")
+		expect(csp).to.not.contain("cartocdn.com")
 	})
 
 	it("declares default-src 'none' so nothing is allowed by accident", () => {

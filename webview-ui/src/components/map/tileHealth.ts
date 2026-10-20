@@ -115,15 +115,35 @@ export function tileNotesFrom(tallies: TileTallies): Record<string, string> {
 // ── Placeholder detection ───────────────────────────────────────────────────────────────────────────────────
 // Some providers answer HTTP 200 with the same "key required" or "not available" image for every request, so no
 // tile ever errors. A provider-independent signal: one source returns byte-identical tiles for (nearly) every
-// distinct tile address it was asked for. Real sources do repeat tiles over open ocean or blank areas, so this
-// is reported as a non-blocking suspicion ("basemap may be unavailable"), never as a failure.
+// distinct tile address it was asked for, AND returns that same image for a fixed land control tile.
+//
+// The control is essential: real sources repeat tiles over open ocean (Esri World_Light_Gray_Base ocean tiles at
+// z5/z6 are byte-identical: 12 of 13 tiles share one 2419-byte image), so sameness inside the viewport alone
+// cannot tell a placeholder from sea. A real placeholder is identical everywhere, land included.
+//
+// Bounded by design: counts per fingerprint over at most PLACEHOLDER_MAX_SAMPLE tiles, a small ring of recent
+// addresses for de-duplication, and hashing stops once a decision is reached (`wantsFingerprint`).
 
 /** Distinct tile addresses a source must have served before sameness is meaningful. */
 export const PLACEHOLDER_MIN_TILES = 12
 /** Share of those tiles that must be byte-identical. */
 export const PLACEHOLDER_IDENTICAL_RATIO = 0.95
+/** Tiles hashed per source at most; after this the tracker stops asking for fingerprints. */
+export const PLACEHOLDER_MAX_SAMPLE = 64
+/** Recent addresses remembered for de-duplication (a ring, never an ever-growing set). */
+export const PLACEHOLDER_ADDRESS_RING = 128
+/** Land control tile (z/x/y over India: land, with coastline and relief) fetched once per source. */
+export const CONTROL_TILE = { z: 3, x: 5, y: 3 } as const
 
-/** Cheap content fingerprint of tile bytes (length plus FNV-1a hash). */
+/** Fills a `{z}/{x}/{y}` tile URL template with the land control tile address. */
+export function controlTileUrl(template: string): string {
+	return template
+		.replace("{z}", String(CONTROL_TILE.z))
+		.replace("{x}", String(CONTROL_TILE.x))
+		.replace("{y}", String(CONTROL_TILE.y))
+}
+
+/** Cheap content fingerprint of tile bytes (length plus FNV-1a hash); fallback when SubtleCrypto is unavailable. */
 export function fingerprintBytes(bytes: Uint8Array): string {
 	let hash = 0x811c9dc5
 	for (let i = 0; i < bytes.length; i++) {
@@ -133,32 +153,82 @@ export function fingerprintBytes(bytes: Uint8Array): string {
 	return `${bytes.length}:${hash.toString(16)}`
 }
 
-export class TilePlaceholderTracker {
-	private bySource = new Map<string, Map<string, Set<string>>>() // source -> fingerprint -> tile addresses
-
-	record(source: string, tileAddress: string, fingerprint: string): void {
-		const prints = this.bySource.get(source) ?? new Map<string, Set<string>>()
-		const addresses = prints.get(fingerprint) ?? new Set<string>()
-		addresses.add(tileAddress)
-		prints.set(fingerprint, addresses)
-		this.bySource.set(source, prints)
-	}
-
-	/** True when `source` looks like it is serving one placeholder image. */
-	suspected(source: string): boolean {
-		const prints = this.bySource.get(source)
-		if (!prints) return false
-		let total = 0
-		let top = 0
-		for (const addresses of prints.values()) {
-			total += addresses.size
-			top = Math.max(top, addresses.size)
+/** Fingerprint of a tile blob: SHA-256 prefix via SubtleCrypto (off the main thread), FNV fallback. The blob is read once. */
+export async function fingerprintBlob(blob: Blob): Promise<string> {
+	const buffer = await blob.arrayBuffer()
+	const subtle = typeof crypto !== "undefined" ? crypto.subtle : undefined
+	if (subtle) {
+		try {
+			const digest = new Uint8Array(await subtle.digest("SHA-256", buffer))
+			const hex = Array.from(digest.slice(0, 8), (byte) => byte.toString(16).padStart(2, "0")).join("")
+			return `${buffer.byteLength}:${hex}`
+		} catch {
+			// fall through to the plain hash
 		}
-		return total >= PLACEHOLDER_MIN_TILES && top / total >= PLACEHOLDER_IDENTICAL_RATIO
+	}
+	return fingerprintBytes(new Uint8Array(buffer))
+}
+
+export class TilePlaceholderTracker {
+	private counts = new Map<string, number>() // fingerprint -> tiles
+	private total = 0
+	private ring: string[] = []
+	private recent = new Set<string>()
+	private control: string | undefined
+	private decided = false
+
+	/** True while hashing tiles is still useful. Callers skip the work (and the blob read) once this is false. */
+	wantsFingerprint(): boolean {
+		return !this.decided
 	}
 
-	clear(source?: string): void {
-		if (source === undefined) this.bySource.clear()
-		else this.bySource.delete(source)
+	record(tileAddress: string, fingerprint: string): void {
+		if (this.decided || this.recent.has(tileAddress)) return
+		this.recent.add(tileAddress)
+		this.ring.push(tileAddress)
+		if (this.ring.length > PLACEHOLDER_ADDRESS_RING) this.recent.delete(this.ring.shift() as string)
+		this.counts.set(fingerprint, (this.counts.get(fingerprint) ?? 0) + 1)
+		this.total += 1
+		if (this.total >= PLACEHOLDER_MAX_SAMPLE && this.dominant() === undefined) this.decided = true
+	}
+
+	/** The fingerprint shared by nearly every tile seen, once enough tiles were seen. */
+	dominant(): string | undefined {
+		if (this.total < PLACEHOLDER_MIN_TILES) return undefined
+		let top: string | undefined
+		let topCount = 0
+		for (const [fingerprint, count] of this.counts) {
+			if (count > topCount) {
+				top = fingerprint
+				topCount = count
+			}
+		}
+		return top !== undefined && topCount / this.total >= PLACEHOLDER_IDENTICAL_RATIO ? top : undefined
+	}
+
+	/** True when the viewport looks uniform and the land control tile has not been fetched yet. */
+	needsControl(): boolean {
+		return !this.decided && this.control === undefined && this.dominant() !== undefined
+	}
+
+	/** Records the control tile's fingerprint. A control that differs from the dominant image clears the suspicion for good. */
+	setControl(fingerprint: string): void {
+		this.control = fingerprint
+		if (this.dominant() !== fingerprint) this.decided = true
+	}
+
+	/** True when a source returns the same image for the viewport and for the land control tile. */
+	suspected(): boolean {
+		const dominant = this.dominant()
+		return dominant !== undefined && this.control !== undefined && this.control === dominant
+	}
+
+	clear(): void {
+		this.counts.clear()
+		this.total = 0
+		this.ring = []
+		this.recent.clear()
+		this.control = undefined
+		this.decided = false
 	}
 }

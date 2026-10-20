@@ -2,7 +2,7 @@ import type { MapLayer } from "@shared/proto/cline/map"
 import { useEffect, useState } from "react"
 import { applyColormap, dataUrlToImage, rasterCache } from "./formats/rasterCache"
 import { resolveFileUri } from "./resolveFileUri"
-import { fingerprintBytes } from "./tileHealth"
+import { fingerprintBlob } from "./tileHealth"
 
 export interface ResourceState {
 	status: "loading" | "error"
@@ -167,7 +167,7 @@ export async function loadMapTile(
 	if (!response.ok) throw new Error(`Tile request failed (HTTP ${response.status})`)
 	const blob = await response.blob()
 	// Basemaps pass a callback so a provider answering 200 with one placeholder image can be noticed.
-	if (onFingerprint) onFingerprint(fingerprintBytes(new Uint8Array(await blob.arrayBuffer())))
+	if (onFingerprint) void fingerprintBlob(blob).then(onFingerprint, () => undefined)
 	let image: ImageBitmap | HTMLImageElement
 	try {
 		image = await createImageBitmap(blob)

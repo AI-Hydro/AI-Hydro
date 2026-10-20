@@ -8,6 +8,10 @@
  *   - extent: lon/lat bounds of the source. Tiles outside it are not requested (USGS caches are US only).
  *   - attribution: what the licence requires, shown for what is actually drawn.
  *
+ * Known US-coverage gap: the USGS boxes below do not include the western Aleutians (west of the antimeridian,
+ * positive longitudes) or the Northwestern Hawaiian Islands (about 23-28N, 161-178W). A view of only those
+ * places reports "outside coverage" even though a few USGS tiles may exist there.
+ *
  * Tile hosts in use: basemap.nationalmap.gov (USGS), services.arcgisonline.com and server.arcgisonline.com
  * (Esri), a.tile.openstreetmap.fr (HOT). Removed because they need an API key a vscode-webview origin cannot
  * present or that we do not hold: Stadia, Mapbox, and (2026-10-20) CARTO. CARTO's keyless endpoints now answer
@@ -123,7 +127,9 @@ export const DEFAULT_BASEMAP_ID = "muted-hydro"
 
 const ESRI_CANVAS_ATTRIBUTION = "Sources: Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS User Community"
 const ESRI_TERMS =
-	"Esri ArcGIS Online tile service, no key required (verified 2026-10-20); licensed under the Esri Master License Agreement, attribution required. Light/Dark Gray Canvas is in mature support, retiring December 2029."
+	"Esri ArcGIS Online tile service. Tiles are served without a key (verified by request, 2026-10-20). Esri's item pages say the content is licensed under the Esri Master License Agreement; whether the agreement permits keyless use in this application was NOT verified (Product-Specific Terms E300 do not address keyless tile services). Attribution is shown. World Light/Dark Gray Base are in mature support, retiring December 2029."
+const HOT_TERMS =
+	"Run by OpenStreetMap France. The server sends x-usage-policy: https://www.openstreetmap.fr/usage/ . That page (read 2026-10-20; it does not name the HOT layer) allows free use only with visible attribution, public access, a non-profit site or free non-profit app (apps must send an identifying user-agent), and moderate traffic; the service may be suspended without notice. Never the default."
 const USGS_TERMS =
 	"USGS The National Map: public-domain data, no key; credit USGS. Detailed tiles exist for the United States only."
 
@@ -226,8 +232,8 @@ export const BASE_MAP_STYLES: BaseMapStyle[] = [
 		url: "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
 		attribution: "© OpenStreetMap contributors © HOT",
 		maxNativeZoom: 19,
-		terms: "Community server run by OpenStreetMap France; best-effort, no published app-use policy found (the OSM Foundation tile policy covers tile.openstreetmap.org only). Light use only.",
-		note: "Community-run server; best effort.",
+		terms: HOT_TERMS,
+		note: "Optional. Community-run server (OpenStreetMap France) for free, non-profit use at moderate traffic; best effort.",
 	},
 ]
 
@@ -286,7 +292,26 @@ export function basemapCoverageStatus(
 	if (resolved.coverage === "global") return "covered"
 	const boxes = resolved.extents ?? (resolved.extent ? [resolved.extent] : [])
 	if (boxes.length === 0) return "covered"
-	return boxes.some((box) => extentsIntersect(box, viewport)) ? "covered" : "outside"
+	const views = normalizeViewportLongitudes(viewport)
+	return boxes.some((box) => views.some((view) => extentsIntersect(box, view))) ? "covered" : "outside"
+}
+
+/**
+ * The viewport as boxes inside [-180, 180]. deck.gl reports unwrapped longitudes once the user pans past the
+ * antimeridian (for example 190 for 170W), and a view wider than the world covers every longitude. A view that
+ * crosses +-180 becomes two boxes.
+ */
+export function normalizeViewportLongitudes([west, south, east, north]: Extent): Extent[] {
+	if (east - west >= 360) return [[-180, south, 180, north]]
+	const wrap = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
+	const w = wrap(west)
+	const e = w + (east - west)
+	return e <= 180
+		? [[w, south, e, north]]
+		: [
+				[w, south, 180, north],
+				[-180, south, e - 360, north],
+			]
 }
 
 /** The message for an "outside" viewport. */

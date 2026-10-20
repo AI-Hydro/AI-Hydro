@@ -15,8 +15,8 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 - **Default basemap was a watermark.** CARTO now answers every keyless tile request (any style, any location) with one "API KEY REQUIRED" image, so the default and the Carto Light/Dark/Voyager entries were unusable. The default "Hydrology default (muted)" now uses Esri Light/Dark Gray Canvas (global, keyless, attribution shown); the Carto entries are removed (no CARTO key setting exists).
 - A saved choice that no longer exists (Carto, Stadia, Mapbox, unknown) moves to the default with a one-time notice that names the reason.
-- **No more silent blank map.** US-only basemaps (USGS Topo/Imagery/Shaded Relief) carry coverage metadata; when the view is outside coverage a non-blocking notice says so and offers "Use Hydrology default". A basemap that answers every tile with one identical image shows a "Basemap unavailable" notice (a general placeholder check, not per-provider).
-- The in-chat Leaflet preview bridge's `carto-dark` basemap is now an alias of `esri-dark-gray`.
+- **No more silent blank map.** US-only basemaps (USGS Topo/Imagery/Shaded Relief) carry coverage metadata; when the view is outside coverage a non-blocking notice says so and offers "Use Hydrology default". A basemap that answers every tile in view with one identical image and returns the same image for a fixed land control tile shows a "Basemap unavailable" notice (a general placeholder check, not per-provider; open ocean alone never triggers it).
+- The in-chat Leaflet preview bridge: `carto-dark` is now an alias of `esri-dark-gray` and `osm` an alias of `esri-topo`; CARTO is dropped from the artifact-preview CSP. HOT OSM is optional with its OSM France usage terms recorded.
 - Provider verification (keyless, coverage, max zoom, attribution, terms) is recorded in `webview-ui/src/components/map/basemaps.ts` and enforced by the catalogue tests.
 
 ### Fixed — native tool-call repair follow-up (vision-2040, branch `vision2040/native-repair-followup`)

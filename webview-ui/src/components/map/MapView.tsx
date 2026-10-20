@@ -94,6 +94,7 @@ import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
 import {
 	clearTally,
+	controlTileUrl,
 	loadedSources,
 	type TileOutcome,
 	TilePlaceholderTracker,
@@ -722,19 +723,34 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// Sources whose tiles are all byte-identical (a provider placeholder such as an API-key watermark).
 	const placeholderTracker = useRef(new TilePlaceholderTracker())
 	const [placeholderSuspected, setPlaceholderSuspected] = useState(false)
-	const reportTileFingerprint = useCallback((address: string, fingerprint: string) => {
+	const controlInFlight = useRef(false)
+	// `source` is the basemap URL template the tile came from: callbacks from a previous basemap are ignored.
+	const reportTileFingerprint = useCallback((source: string, address: string, fingerprint: string) => {
+		if (currentSourcesRef.current.basemap !== source) return
 		const tracker = placeholderTracker.current
-		tracker.record("basemap", address, fingerprint)
-		setPlaceholderSuspected((previous) => {
-			const next = tracker.suspected("basemap")
-			return previous === next ? previous : next
-		})
+		tracker.record(address, fingerprint)
+		if (tracker.needsControl() && !controlInFlight.current) {
+			// The viewport looks uniform. That alone is also what open ocean looks like, so fetch one fixed land
+			// tile from the same source: only a source that returns the same image there is a placeholder.
+			controlInFlight.current = true
+			void loadMapTile({ url: controlTileUrl(source) }, (controlFingerprint) => {
+				controlInFlight.current = false
+				if (currentSourcesRef.current.basemap !== source) return
+				tracker.setControl(controlFingerprint)
+				setPlaceholderSuspected(tracker.suspected())
+			})
+				.then((image) => ("close" in image ? image.close() : undefined))
+				.catch(() => {
+					controlInFlight.current = false
+				})
+		}
 	}, [])
 	const clearTileSource = useCallback((id: string) => {
 		talliesRef.current = clearTally(talliesRef.current, id)
 		setTileTallies(talliesRef.current)
 		if (id === "basemap") {
-			placeholderTracker.current.clear("basemap")
+			placeholderTracker.current.clear()
+			controlInFlight.current = false
 			setPlaceholderSuspected(false)
 		}
 	}, [])
@@ -744,6 +760,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		setTileTallies({})
 		setRendererError(null)
 		placeholderTracker.current.clear()
+		controlInFlight.current = false
 		setPlaceholderSuspected(false)
 		setResourceRetry((value) => value + 1)
 	}, [])
@@ -1471,7 +1488,12 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							const box: Extent = [bbox.west, bbox.south, bbox.east, bbox.north]
 							if (!source.extents.some((candidate) => extentsIntersect(candidate, box))) return null
 						}
-						return loadMapTile(tile, source.fingerprint ? (fp) => reportTileFingerprint(tile.url, fp) : undefined)
+						return loadMapTile(
+							tile,
+							source.fingerprint && placeholderTracker.current.wantsFingerprint()
+								? (fp) => reportTileFingerprint(source.url, tile.url, fp)
+								: undefined,
+						)
 					},
 					// A skipped tile (null content) is not a loaded tile: it must not earn attribution credit.
 					onTileLoad: (tile: any) => {
