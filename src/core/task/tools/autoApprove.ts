@@ -1,9 +1,21 @@
 import { resolveWorkspacePath } from "@core/workspace"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
 import { AiHydroDefaultTool } from "@shared/tools"
+import * as os from "os"
+import * as path from "path"
 import { StateManager } from "@/core/storage/StateManager"
+import { isProtectedPath } from "@/core/task/protectedPaths"
+import { getHostProtectedRoots } from "@/core/task/protectedRoots"
 import { HostProvider } from "@/hosts/host-provider"
 import { getCwd, getDesktopDir, isLocatedInPath, isLocatedInWorkspace } from "@/utils/path"
+
+/** Tools that write files. Protected paths (MCP settings, extension storage, approval state, ~/.ssh) always ask for these. */
+const FILE_WRITE_TOOLS: ReadonlySet<AiHydroDefaultTool> = new Set([
+	AiHydroDefaultTool.NEW_RULE,
+	AiHydroDefaultTool.FILE_NEW,
+	AiHydroDefaultTool.FILE_EDIT,
+	AiHydroDefaultTool.MULTI_FILE_EDIT,
+])
 
 export class AutoApprove {
 	private stateManager: StateManager
@@ -92,6 +104,27 @@ export class AutoApprove {
 		return false
 	}
 
+	/**
+	 * Whether a model-supplied write path resolves into protected state. A relative path is tried against the
+	 * task cwd and every workspace root, and `~` is expanded, so no base makes a protected target look safe.
+	 */
+	private async isProtectedWritePath(actionPath: string | undefined): Promise<boolean> {
+		if (!actionPath) {
+			return false
+		}
+		const { workspacePaths } = await this.getWorkspaceInfo()
+		const roots = getHostProtectedRoots()
+		const expanded =
+			actionPath === "~" || actionPath.startsWith("~/") || actionPath.startsWith("~\\")
+				? path.join(os.homedir(), actionPath.slice(1))
+				: actionPath
+		if (path.isAbsolute(expanded)) {
+			return isProtectedPath(expanded, roots)
+		}
+		const bases = new Set<string>([await getCwd(getDesktopDir()), ...workspacePaths.paths])
+		return [...bases].some((base) => isProtectedPath(path.resolve(base, expanded), roots))
+	}
+
 	// Check if the tool should be auto-approved based on the settings
 	// and the path of the action. Returns true if the tool should be auto-approved
 	// based on the user's settings and the path of the action.
@@ -99,6 +132,11 @@ export class AutoApprove {
 		blockname: AiHydroDefaultTool,
 		autoApproveActionpath: string | undefined,
 	): Promise<boolean> {
+		// Approval redesign AP1 (B3): writes to protected paths ask even with Edit auto-run, "Edit all files" or YOLO.
+		if (FILE_WRITE_TOOLS.has(blockname) && (await this.isProtectedWritePath(autoApproveActionpath))) {
+			return false
+		}
+
 		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
 			return true
 		}

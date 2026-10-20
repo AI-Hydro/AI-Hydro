@@ -1,6 +1,9 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
+import { commandMentionsProtectedPath, commandToExecute, decideCommand } from "@core/task/commandPolicy"
+import { getHostProtectedRoots } from "@core/task/protectedRoots"
 import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
+import { isSubagentCommand, SUBAGENT_NO_YOLO_NOTICE } from "@integrations/cli-subagents/subagent_command"
 import { showSystemNotification } from "@integrations/notifications"
 import { COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
 import { AiHydroAsk } from "@shared/ExtensionMessage"
@@ -126,12 +129,29 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 
 		let didAutoApprove = false
 
-		// If the model says this command is safe and auto approval for safe commands is true, execute the command
-		// If the model says the command is risky, but *BOTH* auto approve settings are true, execute the command
+		// Approval redesign AP1 (B1/B2/B3): the HOST decides. The model's requires_approval claim can only make a
+		// command stricter. See commandPolicy.ts for the ordered rules and for what the text matchers cannot catch.
 		const autoApproveResult = config.autoApprover?.shouldAutoApproveTool(block.name)
 		const [autoApproveSafe, autoApproveAll] = Array.isArray(autoApproveResult)
 			? autoApproveResult
 			: [autoApproveResult, false]
+
+		const isSubagentLaunch = isSubagentCommand(actualCommand)
+		const policy = decideCommand({
+			command: actualCommand,
+			rawCommand: block.params.command,
+			modelRequiresApproval: requiresApprovalPerLLM,
+			autoApproveSafe: !!autoApproveSafe,
+			autoApproveAll: !!autoApproveAll,
+			isSubagentLaunch,
+			subagentsEnabled: !!config.services.stateManager.getGlobalSettingsKey("subagentsEnabled"),
+			touchesProtectedPath: commandMentionsProtectedPath(block.params.command ?? actualCommand, getHostProtectedRoots()),
+		})
+		if (policy.action === "deny") {
+			await config.callbacks.say("error", policy.message)
+			telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, false, false)
+			return formatResponse.toolError(policy.message)
+		}
 
 		// Determine workspace context for telemetry
 		const resolvedToNonPrimary = !arePathsEqual(executionDir, config.cwd)
@@ -155,7 +175,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			)
 		}
 
-		if ((!requiresApprovalPerLLM && autoApproveSafe) || (requiresApprovalPerLLM && autoApproveSafe && autoApproveAll)) {
+		if (policy.action === "run") {
 			// Auto-approve flow
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "command")
 			await config.callbacks.say("command", actualCommand, undefined, undefined, false)
@@ -165,6 +185,9 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			didAutoApprove = true
 			telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, true, true, workspaceContext)
 		} else {
+			if (isSubagentLaunch) {
+				await config.callbacks.say("text", SUBAGENT_NO_YOLO_NOTICE)
+			}
 			// Manual approval flow
 			showNotificationForApprovalIfAutoApprovalEnabled(
 				`AI-Hydro wants to execute a command: ${actualCommand}`,
@@ -205,10 +228,10 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 
 		// Execute the command in the correct directory
 		// If executionDir is different from cwd, prepend cd command
-		let finalCommand: string = actualCommand
+		let finalCommand: string = commandToExecute(actualCommand, policy)
 		if (executionDir !== config.cwd) {
 			// Use && to chain commands so they run in sequence
-			finalCommand = `cd "${executionDir}" && ${actualCommand}`
+			finalCommand = `cd "${executionDir}" && ${finalCommand}`
 		}
 
 		const [userRejected, result] = await config.callbacks.executeCommandTool(finalCommand, timeoutSeconds)

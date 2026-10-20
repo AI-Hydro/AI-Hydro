@@ -7,6 +7,8 @@
  * explicit `approved` state is rendered as NOT approved (fail closed).
  */
 
+import { isServerTrusted, type ServerConnectionView } from "./firstPartyServers"
+
 /** Client-side approval/drift state meaning "claim changed; awaiting an authoritative snapshot". */
 export const PENDING_REFRESH = "pending_refresh"
 
@@ -221,14 +223,18 @@ export const APPROVAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 
 /**
  * Detect an APPROVAL_REQUIRED refusal. Only the TOP-LEVEL envelope of a result
- * from the ai-hydro server is considered (no nested search): tool results can
+ * from the trusted first-party server (isServerTrusted) is considered (no nested search): tool results can
  * echo agent- or document-supplied data, so a nested refusal is untrusted.
  * `approval_command` is never used; the command is rebuilt from `session_id`
  * and `claim_id` after charset validation. Returns undefined when the result
  * is not a refusal envelope.
  */
-export function parseApprovalRequired(resultText: string, serverName: string): ApprovalRequiredResult | undefined {
-	if (serverName !== "ai-hydro") {
+export function parseApprovalRequired(
+	resultText: string,
+	server: ServerConnectionView | undefined,
+): ApprovalRequiredResult | undefined {
+	// Trust comes from the RESOLVED connection (name + recorded launcher), never from a model-supplied name string.
+	if (!isServerTrusted(server)) {
 		return undefined
 	}
 	let value: unknown
