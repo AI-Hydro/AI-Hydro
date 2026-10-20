@@ -14,6 +14,12 @@ import { AiHydroEnv } from "@/config"
  * `modules.json`/`courses.json` index doesn't carry an integrity hash today,
  * and adding one requires a coordinated change to the index-generating repo
  * this extension doesn't own (tracked in audits/STATUS.md E-2 as a followup).
+ *
+ * The live index (ai-hydro.github.io/Modules/api/*.json) lists every
+ * `downloadUrl`/`manifestUrl` under https://raw.githubusercontent.com/, so that
+ * host is admitted too, but only under the AI-Hydro org path prefix
+ * (origin + path prefix, never the bare host). https is required throughout.
+ *
  * A host allowlist is the containment we can ship unilaterally: it stops a
  * compromised or malicious index entry from pointing the extension at
  * attacker-controlled infrastructure, even without hash pinning.
@@ -31,6 +37,11 @@ function trustedOrigins(): Set<string> {
 	return origins
 }
 
+/** Origin + path-prefix pairs for hosts that serve many orgs (raw GitHub content). */
+const TRUSTED_PATH_PREFIXES: ReadonlyArray<{ origin: string; pathPrefix: string }> = [
+	{ origin: "https://raw.githubusercontent.com", pathPrefix: "/AI-Hydro/" },
+]
+
 export function assertTrustedMarketplaceUrl(url: string, context: string): void {
 	let parsed: URL
 	try {
@@ -38,11 +49,24 @@ export function assertTrustedMarketplaceUrl(url: string, context: string): void 
 	} catch {
 		throw new Error(`${context}: not a valid URL: ${url}`)
 	}
-	if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-		throw new Error(`${context}: unsupported protocol: ${parsed.protocol}`)
+	if (parsed.protocol !== "https:") {
+		throw new Error(`${context}: unsupported protocol (https required): ${parsed.protocol}`)
 	}
-	const allowed = trustedOrigins()
-	if (!allowed.has(parsed.origin)) {
-		throw new Error(`${context}: origin not in the marketplace allowlist: ${parsed.origin}`)
+	if (parsed.username || parsed.password) {
+		throw new Error(`${context}: URL must not embed credentials`)
 	}
+	if (trustedOrigins().has(parsed.origin)) {
+		return
+	}
+	// URL parsing already collapses "/AI-Hydro/../evil/"; also refuse encoded dot-segments
+	// and separators that a downstream fetch could re-interpret.
+	const path = parsed.pathname
+	const hasEncodedTraversal = /%2e|%2f|%5c/i.test(path)
+	if (
+		!hasEncodedTraversal &&
+		TRUSTED_PATH_PREFIXES.some((e) => e.origin === parsed.origin && path.startsWith(e.pathPrefix))
+	) {
+		return
+	}
+	throw new Error(`${context}: origin not in the marketplace allowlist: ${parsed.origin}`)
 }
