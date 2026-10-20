@@ -63,7 +63,7 @@ export const ArtifactTrustBar: React.FC<ArtifactTrustBarProps> = ({ trust, busy,
 				{label}
 			</span>
 			<span style={{ flex: 1, minWidth: 0 }}>
-				{trust.source === "document" ? <strong>This is a static document. </strong> : null}
+				{trust.source === "document" && !trust.integrityFailure ? <strong>This is a static document. </strong> : null}
 				{detail}
 			</span>
 			{trust.trusted && !trust.allowed && (

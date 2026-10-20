@@ -11,8 +11,11 @@ import {
 	learningPackProgressKey,
 	resolveActiveLearningPackEntry,
 	resolveActiveLearningPackLaunch,
+	checkInstalledLearningPack,
+	isIgnoredOsJunk,
 	resolveInstalledLearningPackArtifact,
 	resolveInstalledLearningPackScope,
+	resolveInstalledLearningPackStatus,
 	verifyInstalledLearningPack,
 } from "../runtimeIntegration"
 import { createValidLearningPackFiles } from "./learningPackTestFixture"
@@ -76,7 +79,10 @@ describe("Learning Pack runtime integration", () => {
 			moduleId: "water-balance",
 		})
 		assert.equal(learningPackArtifactMetadata(scope!).artifactKind, "learning-pack-v1")
-		assert.equal(await resolveInstalledLearningPackScope(path.join(root, "outside.html"), root, { verifyIntegrity: false }), null)
+		assert.equal(
+			await resolveInstalledLearningPackScope(path.join(root, "outside.html"), root, { verifyIntegrity: false }),
+			null,
+		)
 	})
 
 	it("isolates progress and controls by pack, course, edition, and module", () => {
@@ -106,8 +112,16 @@ describe("Learning Pack runtime integration", () => {
 	})
 })
 
-describe("Learning Pack load-time integrity", () => {
-	async function installSigned(): Promise<{ root: string; installation: string; entry: string; recorded: Parameters<typeof verifyInstalledLearningPack>[1] }> {
+describe("Learning Pack load-time integrity", function () {
+	// Each check re-reads and re-verifies the whole pack (Ed25519), which is slow on a loaded machine.
+	this.timeout(20_000)
+
+	async function installSigned(): Promise<{
+		root: string
+		installation: string
+		entry: string
+		recorded: Parameters<typeof verifyInstalledLearningPack>[1]
+	}> {
 		const root = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-verify-"))
 		roots.push(root)
 		const { files, fingerprint } = createValidLearningPackFiles()
@@ -129,7 +143,10 @@ describe("Learning Pack load-time integrity", () => {
 			relativePath,
 			installedAt: 1,
 		}
-		await atomicWriteJson(learningPackStoragePaths(root).registry, { schemaVersion: 1, packs: { hmfp: { active: recorded } } })
+		await atomicWriteJson(learningPackStoragePaths(root).registry, {
+			schemaVersion: 1,
+			packs: { hmfp: { active: recorded } },
+		})
 		return { root, installation, entry: path.join(installation, "modules", "hmfp.orientation.00", "module.html"), recorded }
 	}
 
@@ -152,9 +169,45 @@ describe("Learning Pack load-time integrity", () => {
 		assert.equal(await resolveInstalledLearningPackArtifact(entry, root), null)
 	})
 
+	it("ignores OS junk files in the installation but still refuses any other undeclared file", async () => {
+		const { root, installation, entry, recorded } = await installSigned()
+		for (const junk of [".DS_Store", "Thumbs.db", "desktop.ini", "._module.html"]) {
+			await fs.writeFile(path.join(installation, "modules", junk), "junk")
+		}
+		await fs.writeFile(path.join(installation, ".DS_Store"), "junk")
+		assert.equal((await checkInstalledLearningPack(installation, recorded)).ok, true)
+		assert.equal((await resolveInstalledLearningPackArtifact(entry, root))?.scope.moduleId, "hmfp.orientation.00")
+		await fs.writeFile(path.join(installation, "modules", "helper.js"), "evil()")
+		const failed = await checkInstalledLearningPack(installation, recorded)
+		assert.equal(failed.ok, false)
+		assert.match(failed.ok ? "" : failed.reason, /undeclared file modules\/helper\.js/)
+	})
+
+	it("lists exactly the ignored junk names", () => {
+		for (const name of [".DS_Store", "a/b/Thumbs.db", "desktop.ini", "modules/._x", "._"])
+			assert.equal(isIgnoredOsJunk(name), true, name)
+		for (const name of ["modules/.DS_Store.js", "thumbs.db.exe", "module._html", "pack.json", "x/_dot"])
+			assert.equal(isIgnoredOsJunk(name), false, name)
+	})
+
+	it("reports why a tampered pack module was demoted", async () => {
+		const { root, entry } = await installSigned()
+		await fs.appendFile(entry, "<script>evil()</script>")
+		const status = await resolveInstalledLearningPackStatus(entry, root)
+		assert.equal(status.kind, "failed")
+		assert.match(
+			status.kind === "failed" ? status.reason : "",
+			/(SHA-256|Size) mismatch for modules\/hmfp\.orientation\.00\/module\.html/,
+		)
+		assert.equal((await resolveInstalledLearningPackStatus(path.join(root, "outside.html"), root)).kind, "none")
+	})
+
 	it("refuses when the signer differs from the one recorded at install", async () => {
 		const { installation, recorded } = await installSigned()
-		assert.equal(await verifyInstalledLearningPack(installation, { ...recorded, signerFingerprint: "sha256:someone-else" }), false)
+		assert.equal(
+			await verifyInstalledLearningPack(installation, { ...recorded, signerFingerprint: "sha256:someone-else" }),
+			false,
+		)
 	})
 
 	it("does not follow a symlink that points into the pack store from outside", async function () {

@@ -12,6 +12,13 @@ export const REQUIRED_LEARNING_PACK_COMMANDS = Object.freeze([
 	"aihydro.learningPacks.rollback",
 ])
 
+/**
+ * The test-only `e2e-fixture` trust source is compiled out of every build except the Playwright
+ * build (AIHYDRO_E2E_BUILD=true). A shipped bundle containing either string means the seam leaked.
+ */
+export const E2E_SEAM_NEEDLES = Object.freeze(["e2e-fixture", "AIHYDRO_E2E_TRUSTED_FIXTURES"])
+const E2E_SEAM_CHECKED_ENTRIES = Object.freeze(["extension/dist/extension.js", "extension/webview-ui/build/assets/index.js"])
+
 export const REQUIRED_RUNTIME_ENTRIES = Object.freeze([
 	"[Content_Types].xml",
 	"extension.vsixmanifest",
@@ -201,6 +208,15 @@ export async function verifyDevelopmentVsix(vsixPath, expected = {}) {
 		}
 		if (sizes.get(required) === 0) {
 			throw new Error(`Required VSIX runtime entry is empty: ${required}`)
+		}
+	}
+
+	for (const name of E2E_SEAM_CHECKED_ENTRIES) {
+		const text = selected.get(name)?.toString("utf8") ?? ""
+		for (const needle of E2E_SEAM_NEEDLES) {
+			if (text.includes(needle)) {
+				throw new Error(`VSIX bundle ${name} contains the test-only trust seam (${needle}); it must be compiled out`)
+			}
 		}
 	}
 

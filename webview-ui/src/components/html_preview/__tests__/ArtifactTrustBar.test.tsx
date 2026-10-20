@@ -40,6 +40,19 @@ describe("ArtifactTrustBar", () => {
 	})
 })
 
+describe("integrity failure", () => {
+	it("states the reason instead of a silent static document", () => {
+		const trust = readArtifactTrust({ trustIntegrityFailure: "SHA-256 mismatch for modules/m/module.html" })
+		render(<ArtifactTrustBar onAllow={() => {}} onRevoke={() => {}} trust={trust} />)
+		expect(screen.getByTestId("artifact-trust-badge")).toHaveTextContent("Failed integrity check")
+		expect(screen.getByTestId("artifact-trust-bar")).toHaveTextContent(
+			"Learning Pack failed integrity check: SHA-256 mismatch for modules/m/module.html",
+		)
+		expect(trust.canExecute).toBe(false)
+		expect(screen.queryByTestId("artifact-trust-allow")).not.toBeInTheDocument()
+	})
+})
+
 describe("readArtifactTrust", () => {
 	it("fails closed on missing, unknown or malformed metadata", () => {
 		expect(readArtifactTrust(undefined)).toEqual({ source: "document", trusted: false, allowed: false, canExecute: false })
@@ -52,7 +65,7 @@ describe("readArtifactTrust", () => {
 	})
 
 	it("requires both a trusted source and the allowance", () => {
-		expect(readArtifactTrust({ trustSource: "e2e-fixture" }).canExecute).toBe(false)
-		expect(readArtifactTrust({ trustSource: "e2e-fixture", executionAllowed: "true" }).canExecute).toBe(true)
+		expect(readArtifactTrust({ trustSource: "learning-pack" }).canExecute).toBe(false)
+		expect(readArtifactTrust({ trustSource: "learning-pack", executionAllowed: "true" }).canExecute).toBe(true)
 	})
 })

@@ -17,6 +17,7 @@
  */
 
 import { PLATFORM_CONFIG } from "../../config/platform.config"
+import { isFromHost } from "./hostMessage"
 
 export type PreviewEventKind =
 	| "cell.run.started"
@@ -104,6 +105,7 @@ export function startPreviewAgentTask(prompt: string, artifactId: string): Promi
 		}, 60_000)
 
 		const onMessage = (event: MessageEvent) => {
+			if (!isFromHost(event)) return
 			const data = event.data
 			if (!data || data.type !== "aihydro-preview-agent-result" || data.requestId !== requestId) {
 				return

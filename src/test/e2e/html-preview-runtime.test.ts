@@ -438,6 +438,8 @@ runtimeE2E("A document script cannot grant itself execution or reach the shell @
 	expect(reached.top).toBe("SecurityError")
 
 	// Nothing took effect: still not allowed, no bridge, no staged agent prompt, no progress.
+	// (The fixture also forges host-only replies and navigation; the shell's rejection of those
+	// is covered by webview-ui hostMessage.test.ts, where the sender window can be controlled.)
 	await expect(shell.getByTestId("artifact-trust-badge")).toHaveText("Trusted, execution off")
 	await expect(shell.getByTestId("artifact-trust-allow")).toBeVisible()
 	await expect(shell.getByTestId("artifact-trust-revoke")).toHaveCount(0)

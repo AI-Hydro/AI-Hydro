@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
+import { isFromHost } from "./hostMessage"
 
 export interface CourseAuthor {
 	name: string
@@ -86,6 +87,7 @@ function fetchCourseForFile(filePath: string): Promise<CacheEntry> {
 			finish({ course: null, courseRoot: null })
 		}, 4000)
 		const onMessage = (e: MessageEvent) => {
+			if (!isFromHost(e)) return
 			const d = e.data
 			if (!d || d.type !== "aihydro-course-loaded" || d.requestId !== requestId) {
 				return

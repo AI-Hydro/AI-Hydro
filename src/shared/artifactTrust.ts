@@ -15,6 +15,14 @@
  * webview so the badge and the enforcement read the same definition.
  */
 
+/**
+ * Build flag: true only in builds made for the Playwright suite (AIHYDRO_E2E_BUILD=true), false in
+ * every other esbuild/vite build, where the `e2e-fixture` source below is compiled out entirely.
+ * Undefined (ts-node unit tests) counts as compiled in; the host still gates it on
+ * isIsolatedLocalE2E() at run time.
+ */
+declare const __AIHYDRO_E2E__: boolean | undefined
+
 /** Where a document came from, as determined by the host (never by the document). */
 export type ArtifactTrustSource =
 	/** Installed, signature-verified Learning Pack module. */
@@ -33,10 +41,17 @@ export const ARTIFACT_TRUST_METADATA_KEYS = {
 	source: "trustSource",
 	/** "true" when the user has allowed execution for this document right now. */
 	allowed: "executionAllowed",
+	/** Host-set reason when an installed Learning Pack module failed its load-time integrity check. */
+	integrityFailure: "trustIntegrityFailure",
 } as const
 
 export function isTrustedArtifactSource(source: ArtifactTrustSource | undefined): boolean {
-	return source === "learning-pack" || source === "e2e-fixture"
+	if (typeof __AIHYDRO_E2E__ === "undefined" || __AIHYDRO_E2E__) {
+		if (source === "e2e-fixture") {
+			return true
+		}
+	}
+	return source === "learning-pack"
 }
 
 export interface ArtifactTrustState {
@@ -47,9 +62,14 @@ export interface ArtifactTrustState {
 	allowed: boolean
 	/** Kernel bridge and agent hand-off are enabled. Equals `trusted && allowed`. */
 	canExecute: boolean
+	/** Why a Learning Pack module was demoted to a static document (integrity check), if it was. */
+	integrityFailure?: string
 }
 
-const KNOWN_SOURCES: readonly ArtifactTrustSource[] = ["learning-pack", "e2e-fixture", "unsigned-module", "document"]
+const KNOWN_SOURCES: ArtifactTrustSource[] = ["learning-pack", "unsigned-module", "document"]
+if (typeof __AIHYDRO_E2E__ === "undefined" || __AIHYDRO_E2E__) {
+	KNOWN_SOURCES.push("e2e-fixture")
+}
 
 /** Fail closed: anything missing or malformed is an untrusted, static document. */
 export function readArtifactTrust(metadata: Readonly<Record<string, string>> | undefined): ArtifactTrustState {
@@ -57,14 +77,28 @@ export function readArtifactTrust(metadata: Readonly<Record<string, string>> | u
 	const source = KNOWN_SOURCES.find((s) => s === raw) ?? "document"
 	const trusted = isTrustedArtifactSource(source)
 	const allowed = trusted && metadata?.[ARTIFACT_TRUST_METADATA_KEYS.allowed] === "true"
-	return { source, trusted, allowed, canExecute: trusted && allowed }
+	const failure = metadata?.[ARTIFACT_TRUST_METADATA_KEYS.integrityFailure]
+	const integrityFailure = typeof failure === "string" && failure ? failure.slice(0, 300) : undefined
+	return { source, trusted, allowed, canExecute: trusted && allowed, ...(integrityFailure ? { integrityFailure } : {}) }
 }
 
 export function describeArtifactTrust(state: ArtifactTrustState): { label: string; detail: string } {
+	if (typeof __AIHYDRO_E2E__ === "undefined" || __AIHYDRO_E2E__) {
+		if (state.source === "e2e-fixture") {
+			return state.allowed
+				? { label: "Execution allowed", detail: "Test fixture. Python and agent hand-off are enabled for this document." }
+				: { label: "Trusted, execution off", detail: "Test fixture. Allow it to enable Python and agent hand-off." }
+		}
+	}
+	if (state.integrityFailure) {
+		return {
+			label: "Failed integrity check",
+			detail: `Learning Pack failed integrity check: ${state.integrityFailure}. Treated as a static document; reinstall the pack to restore it.`,
+		}
+	}
 	switch (state.source) {
-		case "learning-pack":
-		case "e2e-fixture": {
-			const origin = state.source === "learning-pack" ? "Signed Learning Pack module" : "Test fixture"
+		case "learning-pack": {
+			const origin = "Signed Learning Pack module"
 			return state.allowed
 				? { label: "Execution allowed", detail: `${origin}. Python and agent hand-off are enabled for this document.` }
 				: { label: "Trusted, execution off", detail: `${origin}. Allow it to enable Python and agent hand-off.` }

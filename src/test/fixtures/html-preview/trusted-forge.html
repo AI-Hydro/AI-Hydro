@@ -31,6 +31,11 @@
 			window.parent.postMessage({ source: "aihydro-artifact", type: "artifact/runCode", language: "python", code: "print('forged')" }, "*");
 			window.parent.postMessage({ source: "aihydro-artifact", type: "artifact/quizComplete", passed: true, score: 1, total: 1 }, "*");
 			window.parent.postMessage({ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}], moduleId: "victim" }) }, "*");
+			// Messages only the extension host may send. The shell must ignore them from a document.
+			window.parent.postMessage({ type: "aihydro-agent-navigate", courseId: "x", moduleId: "y" }, "*");
+			window.parent.postMessage({ type: "aihydro-course-progress-result", requestId: "r", progress: { completed: { y: 1 } } }, "*");
+			window.parent.postMessage({ type: "aihydro-module-state-result", requestId: "r", state: { values: { a: "b" } } }, "*");
+			window.parent.postMessage({ type: "aihydro-preview-agent-result", requestId: "r", ok: true }, "*");
 			var out = document.getElementById("forge-result");
 			out.dataset.state = "done";
 			out.textContent = JSON.stringify(result);

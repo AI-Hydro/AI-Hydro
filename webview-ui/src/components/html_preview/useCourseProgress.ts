@@ -20,6 +20,7 @@ import { useCallback, useEffect, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import type { LearningPackScope } from "./installedPackCsp"
 import type { CourseManifest, CourseModuleEntry } from "./useCourse"
+import { isFromHost } from "./hostMessage"
 
 export interface ModuleCompletion {
 	completedAt: number
@@ -71,6 +72,7 @@ function sendProgress(req: ProgressRequest): Promise<CourseProgress | null> {
 			resolve(null)
 		}, 4000)
 		const onMessage = (e: MessageEvent) => {
+			if (!isFromHost(e)) return
 			const d = e.data
 			if (!d || d.type !== "aihydro-course-progress-result" || d.requestId !== requestId) {
 				return

@@ -45,6 +45,7 @@ import { LEAFLET_NORMALIZER_SCRIPT, LEAFLET_NORMALIZER_STYLE } from "./leafletNo
 import { reportPreviewEvent, requestSaveDocument, startPreviewAgentTask } from "./previewBridge"
 import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
+import { isFromHost } from "./hostMessage"
 
 /**
  * HtmlPreviewView — single-iframe renderer for one HTML artifact.
@@ -262,6 +263,7 @@ function sendModuleState(
 			resolve(null)
 		}, 4000)
 		const onMessage = (e: MessageEvent) => {
+			if (!isFromHost(e)) return
 			const d = e.data
 			if (!d || d.type !== "aihydro-module-state-result" || d.requestId !== requestId) return
 			cleanup()
@@ -377,6 +379,8 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 	useEffect(() => {
 		if (!course) return
 		const onMessage = (e: MessageEvent) => {
+			// Only the extension host may navigate the course; a document must not drive it.
+			if (!isFromHost(e)) return
 			const d = e.data
 			if (!d || d.type !== "aihydro-agent-navigate") return
 			const target = resolveAgentCourseNavigation(

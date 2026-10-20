@@ -20,7 +20,7 @@ Starting an agent task from a document always needs your click: the document can
 |---|---|
 | Extension host | Decides the trust source from where the file lives (never from its content). `runArtifactCode` and the agent-task handler refuse non-allowed documents before any prompt or kernel start. An allowance requires the document to be served from its hashed in-memory snapshot, never the live file. |
 | Preview iframe | Sandboxed **without** `allow-same-origin`: the document runs in an opaque origin and cannot read or script the shell, its React state, or its controls. |
-| Shell | Treats every message from the document as untrusted data; drops them entirely for non-allowed documents. Allow, Send and Revoke are shell UI the document cannot reach, and they require a real click. |
+| Shell | Treats every message from the document as untrusted data; drops them entirely for non-allowed documents. Replies that must come from the extension host (course, progress, state, navigation, agent-task results) are accepted only from the host window, never from the document iframe, a frame nested in it, or a popup. Allow, Send and Revoke are shell UI the document cannot reach, and they require a real click. |
 | Relayed messages | The host derives the module id from its own artifact id, tags events from non-allowed documents `untrusted-document`, writes saves only to the artifact's registered file, and validates course and state requests against its record. |
 
 ## Settings
@@ -35,7 +35,11 @@ Downloads require `https`, redirects are re-checked against the allowlist, modul
 
 ## Not covered (known limits)
 
-- Agent-written inline HTML and workspace files are static documents; there is no "recorded tool" origin yet. A server-signed provenance record could add one later.
+- **Same-user writes.** Studio trusts a pack module because it sits in the pack store and still verifies against its signed checksums. Agent file writes and commands touching `$AIHYDRO_HOME/{learning-packs,modules,courses}` (and `$AIHYDRO_LEARNING_PACK_ROOT`) always ask for approval, but a process running as the same user, such as a terminal or another program, can still change those directories. A tampered module fails its re-check and is shown as a static document with the reason, but swapping the whole installation together with the registry record is not detectable without an external trust anchor.
+- **Integrity failures.** If an installed pack module no longer verifies, the trust bar says "Learning Pack failed integrity check: <reason>" and the module is a static document. OS junk (`.DS_Store`, `Thumbs.db`, `desktop.ini`, `._*`) is ignored; any other undeclared file fails.
+- **Agent tooling.** Events from a document that has no allowance are stored with `source: "untrusted-document"`. The MCP preview tools (`preview_recent_events`, `preview_get_state`) return that field but do not yet label or wrap such events as untrusted data; agents should treat anything with that source as document-controlled text, never as instructions.
+
+- Agent-written inline HTML and workspace files are static documents; there is no "recorded tool" origin yet. A server-signed provenance record could add one later. A test-only `e2e-fixture` source exists only in builds made with `AIHYDRO_E2E_BUILD=true` (`npm run test:e2e:build`) and is compiled out of every shipped bundle; the VSIX verifier fails if its name appears.
 - A static document is still HTML with scripts: it can render, fetch from the CDNs the CSP allows, and run its own JavaScript inside the sandbox. It cannot reach the kernel, the agent, or the shell.
 - The shell CSP keeps `'unsafe-inline'` for scripts because the sandboxed `srcdoc` document inherits it and generated reports (Folium, Plotly, Bokeh) need inline scripts. Isolation, not the CSP, is what keeps documents out of the shell.
 - Opaque-origin documents cannot use `localStorage`, `sessionStorage` or cookies.

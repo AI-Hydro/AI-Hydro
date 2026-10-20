@@ -6,6 +6,10 @@
  *  - the extension's global storage directory (settings, state, the MCP settings file with every server's
  *    `autoApprove`/trust, the first-party launcher record);
  *  - $AIHYDRO_HOME/{approvals,trust,registry} (approval records, the signing trust root, the claim registry);
+ *  - $AIHYDRO_HOME/{learning-packs,modules,courses} (installed Learning Packs and their registry, marketplace
+ *    installs): Studio trusts a pack module because it is in the pack store, so the agent must not write there
+ *    without approval. $AIHYDRO_LEARNING_PACK_ROOT, when set, is protected too. A process running as the same
+ *    user (a terminal, another program) can still write these directories; see docs/studio-trust-model.md;
  *  - ~/.ssh (signing keys and agent sockets).
  *
  * Pure: everything environmental is passed in, so tests need no VS Code host.
@@ -21,6 +25,8 @@ export interface ProtectedRootInputs {
 	homeDir?: string
 	/** $AIHYDRO_HOME as seen by the extension; the default ~/.aihydro is always included as well. */
 	aihydroHome?: string
+	/** $AIHYDRO_LEARNING_PACK_ROOT as seen by the extension, if it relocates the pack store. */
+	learningPackRoot?: string
 }
 
 export function computeProtectedRoots(inputs: ProtectedRootInputs = {}): string[] {
@@ -31,9 +37,12 @@ export function computeProtectedRoots(inputs: ProtectedRootInputs = {}): string[
 	}
 	const roots: string[] = [path.join(home, ".ssh")]
 	for (const base of aihydroHomes) {
-		for (const sub of ["approvals", "trust", "registry"]) {
+		for (const sub of ["approvals", "trust", "registry", "learning-packs", "modules", "courses"]) {
 			roots.push(path.join(base, sub))
 		}
+	}
+	if (inputs.learningPackRoot) {
+		roots.push(path.resolve(inputs.learningPackRoot))
 	}
 	if (inputs.globalStoragePath) {
 		roots.push(path.resolve(inputs.globalStoragePath))

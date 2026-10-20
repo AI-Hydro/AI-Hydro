@@ -50,6 +50,17 @@ export function containedBy(candidate: string, parent: string): boolean {
 	return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
 }
 
+/**
+ * OS-generated junk the file manager may drop into an installation directory. These carry no
+ * code the module can load, so they are ignored when checking for undeclared files:
+ * `.DS_Store` (macOS), `Thumbs.db` / `desktop.ini` (Windows) and `._*` AppleDouble files.
+ * Any other undeclared file still fails verification.
+ */
+export function isIgnoredOsJunk(relativePath: string): boolean {
+	const name = relativePath.split("/").pop() ?? ""
+	return name === ".DS_Store" || name === "Thumbs.db" || name === "desktop.ini" || name.startsWith("._")
+}
+
 async function listFiles(directory: string, base = directory): Promise<string[]> {
 	const out: string[] = []
 	for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
@@ -61,33 +72,45 @@ async function listFiles(directory: string, base = directory): Promise<string[]>
 	return out
 }
 
+export type PackIntegrity = { ok: true } | { ok: false; reason: string }
+
 /**
  * Re-verify an installed pack at load time, not only at install: every checksummed file
  * must still hash to its signed value, the Ed25519 signature must still verify, the
  * signer must be the one recorded at install, and no undeclared file may live in the
- * installation directory (an unlisted script would load unsigned code under a signed name).
+ * installation directory (an unlisted script would load unsigned code under a signed name;
+ * OS junk files are ignored, see isIgnoredOsJunk). A failure carries a human-readable reason.
  */
-export async function verifyInstalledLearningPack(installation: string, recorded: InstalledLearningPackVersion): Promise<boolean> {
+export async function checkInstalledLearningPack(installation: string, recorded: InstalledLearningPackVersion): Promise<PackIntegrity> {
 	try {
 		const present = await listFiles(installation)
 		const files = new Map<string, Uint8Array>()
 		for (const relative of present) {
-			if (relative.includes("\u0000")) return false
+			if (relative.includes("\u0000")) return { ok: false, reason: `unexpected non-regular entry ${relative.split("\u0000")[0]}` }
+			if (isIgnoredOsJunk(relative)) continue
 			files.set(relative, await fs.readFile(path.join(installation, ...relative.split("/"))))
 		}
 		const manifestBytes = files.get("pack.json")
-		if (!manifestBytes) return false
+		if (!manifestBytes) return { ok: false, reason: "pack.json is missing" }
 		const range = (JSON.parse(Buffer.from(manifestBytes).toString("utf8")) as { compatibility?: { aiHydro?: string } }).compatibility
 			?.aiHydro
 		const version = range ? minVersion(range)?.version : undefined
-		if (!version) return false
+		if (!version) return { ok: false, reason: "pack compatibility range is unreadable" }
 		const verified = validateLearningPackFiles(files, { aiHydroVersion: version })
-		if (verified.status !== "valid" || !verified.verified) return false
-		// validateLearningPackFiles also rejects any undeclared file in the directory.
-		return verified.verified.signerFingerprint === recorded.signerFingerprint
-	} catch {
-		return false
+		if (verified.status !== "valid" || !verified.verified) {
+			return { ok: false, reason: verified.diagnostics[0]?.message ?? "pack contents no longer match the signed checksums" }
+		}
+		if (verified.verified.signerFingerprint !== recorded.signerFingerprint) {
+			return { ok: false, reason: "the signer differs from the one recorded at install" }
+		}
+		return { ok: true }
+	} catch (error) {
+		return { ok: false, reason: error instanceof Error ? error.message : "installation could not be read" }
 	}
+}
+
+export async function verifyInstalledLearningPack(installation: string, recorded: InstalledLearningPackVersion): Promise<boolean> {
+	return (await checkInstalledLearningPack(installation, recorded)).ok
 }
 
 function activeRoot(root: string, active: InstalledLearningPackVersion): string {
@@ -102,11 +125,17 @@ async function realpathOr(candidate: string): Promise<string> {
 	}
 }
 
-export async function resolveInstalledLearningPackArtifact(
+export type InstalledPackStatus =
+	| { kind: "verified"; artifact: InstalledLearningPackArtifact }
+	/** The file lives in a pack installation but is not trustworthy; `reason` is for the user. */
+	| { kind: "failed"; packId: string; reason: string }
+	| { kind: "none" }
+
+export async function resolveInstalledLearningPackStatus(
 	filePath: string,
 	root = defaultLearningPackRoot(),
 	options: { verifyIntegrity?: boolean } = {},
-): Promise<InstalledLearningPackArtifact | null> {
+): Promise<InstalledPackStatus> {
 	// Symlink-safe: compare real paths so a link placed inside (or pointing into) the
 	// pack store cannot make a foreign file look like a pack module.
 	const resolvedFile = await realpathOr(filePath)
@@ -114,31 +143,46 @@ export async function resolveInstalledLearningPackArtifact(
 	try {
 		registry = await loadLearningPackRegistry(root)
 	} catch {
-		return null
+		return { kind: "none" }
 	}
 	for (const [packId, record] of Object.entries(registry.packs)) {
 		const installation = await realpathOr(activeRoot(root, record.active))
 		if (!containedBy(resolvedFile, installation)) continue
 		try {
 			// Trust decisions always verify; only unit fixtures with synthetic installs opt out.
-			if (options.verifyIntegrity !== false && !(await verifyInstalledLearningPack(installation, record.active))) return null
+			if (options.verifyIntegrity !== false) {
+				const integrity = await checkInstalledLearningPack(installation, record.active)
+				if (!integrity.ok) return { kind: "failed", packId, reason: integrity.reason }
+			}
 			const course = JSON.parse(await fs.readFile(path.join(installation, "course.json"), "utf8")) as LearningPackCourse
 			const module = course.modules.find((entry) => path.resolve(installation, ...entry.path.split("/")) === resolvedFile)
-			if (!module) return null
-			return Object.freeze({
-				installationRoot: installation,
-				scope: Object.freeze({
-					packId,
-					courseId: record.active.courseId,
-					edition: record.active.edition,
-					moduleId: module.id,
+			if (!module) return { kind: "none" }
+			return {
+				kind: "verified",
+				artifact: Object.freeze({
+					installationRoot: installation,
+					scope: Object.freeze({
+						packId,
+						courseId: record.active.courseId,
+						edition: record.active.edition,
+						moduleId: module.id,
+					}),
 				}),
-			})
+			}
 		} catch {
-			return null
+			return { kind: "none" }
 		}
 	}
-	return null
+	return { kind: "none" }
+}
+
+export async function resolveInstalledLearningPackArtifact(
+	filePath: string,
+	root = defaultLearningPackRoot(),
+	options: { verifyIntegrity?: boolean } = {},
+): Promise<InstalledLearningPackArtifact | null> {
+	const status = await resolveInstalledLearningPackStatus(filePath, root, options)
+	return status.kind === "verified" ? status.artifact : null
 }
 
 export async function resolveInstalledLearningPackScope(
