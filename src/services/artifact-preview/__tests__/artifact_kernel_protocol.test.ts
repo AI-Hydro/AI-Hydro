@@ -176,6 +176,30 @@ describe("artifact_kernel_runner.py protocol", function () {
 			expect(answered, "a cell that catches KeyboardInterrupt must not be reported as interrupted").to.equal(false)
 		})
 
+		it("exits when the host closes the protocol pipe while a cell is busy, rather than outliving it", async () => {
+			kernel = new Kernel()
+			await kernel.exec("warm", "1")
+			const exited = new Promise<number>((resolve) => {
+				const started = Date.now()
+				kernel!.child.once("exit", () => resolve(Date.now() - started))
+			})
+			kernel.send({ op: "exec", id: "spin", code: "while True:\n    pass" })
+			await sleep(300)
+			kernel.child.stdin.end()
+			const afterMs = await Promise.race([exited, sleep(5000).then(() => -1)])
+			console.log(`      [orphan exit] busy kernel exited ${afterMs} ms after stdin closed`)
+			expect(afterMs).to.be.greaterThan(0)
+			expect(afterMs).to.be.lessThan(2000)
+		})
+
+		it("still answers requests already queued when the host closes the pipe", async () => {
+			kernel = new Kernel()
+			kernel.send({ op: "exec", id: "a", code: "x = 40" })
+			kernel.send({ op: "exec", id: "b", code: "print(x + 2)" })
+			kernel.child.stdin.end()
+			expect((await kernel.response("b")).stdout).to.equal("42\n")
+		})
+
 		it("survives user code that calls exit()", async () => {
 			kernel = new Kernel()
 			const result = await kernel.exec("exit", "import sys\nsys.exit(3)")

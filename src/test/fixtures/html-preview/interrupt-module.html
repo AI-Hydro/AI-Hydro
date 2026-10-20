@@ -32,6 +32,9 @@ print("interrupt_kernel_ready")</pre>
 				<button class="aihydro-run" type="button">Run</button>
 			</div>
 			<pre class="aihydro-source">import time
+interrupt_sleep_var = 1
+import os, tempfile
+open(os.path.join(tempfile.gettempdir(), "aihydro-interrupt-started-sleep"), "w").write("1")
 print("interrupt_started", flush=True)
 time.sleep(30)
 print("interrupt_failed")</pre>
@@ -50,7 +53,10 @@ print("interrupt_failed")</pre>
 				<span class="aihydro-cell-lang">python</span>
 				<button class="aihydro-run" type="button">Run</button>
 			</div>
-			<pre class="aihydro-source">print("spin_started", flush=True)
+			<pre class="aihydro-source">interrupt_spin_var = 2
+import os, tempfile
+open(os.path.join(tempfile.gettempdir(), "aihydro-interrupt-started-spin"), "w").write("1")
+print("spin_started", flush=True)
 while True:
     pass</pre>
 			<div class="aihydro-output" aria-live="polite"></div>
@@ -100,6 +106,14 @@ print("queue=" + "".join(queue_order))</pre>
 			<pre class="aihydro-source">def inner():
     return 1 / 0
 inner()</pre>
+			<div class="aihydro-output" aria-live="polite"></div>
+		</div>
+		<div class="aihydro-cell" data-aihydro-cell-id="interrupt-vars" data-language="python" data-execution="kernel">
+			<div class="aihydro-cell-header">
+				<span class="aihydro-cell-lang">python</span>
+				<button class="aihydro-run" type="button">Run</button>
+			</div>
+			<pre class="aihydro-source">print("vars=%s,%s" % (globals().get("interrupt_sleep_var"), globals().get("interrupt_spin_var")))</pre>
 			<div class="aihydro-output" aria-live="polite"></div>
 		</div>
 	</main>

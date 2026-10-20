@@ -619,6 +619,8 @@ def _run_exec(namespace: dict[str, Any], exec_id: str, code: str) -> dict[str, A
     except KeyboardInterrupt as exc:
         # An interrupt raced the cell's own cleanup; report it as interrupted.
         _STATE.executing = False
+        _STATE.current_id = ""
+        _STATE.interrupt_target = ""
         sys.stdout, sys.stderr = _REAL_STDOUT, _REAL_STDERR
         _discard_matplotlib_figures()
         return _interrupted_result(exc)
@@ -661,6 +663,37 @@ def _reader_loop(requests: "queue.Queue[Any]") -> None:
             requests.put(msg)
     finally:
         requests.put(_EOF)
+        _exit_if_host_gone_while_busy()
+
+
+_ORPHAN_GRACE_SECONDS = 1.0
+
+
+def _exit_if_host_gone_while_busy() -> None:
+    """The host closed the protocol pipe (it exited or crashed): do not outlive it.
+
+    Cells already queued are still allowed to finish, so a host that writes its
+    requests and then closes stdin gets every answer.  But a cell that keeps
+    the main thread busy past the grace period would otherwise leave this
+    process running forever (it is detached from the host's process group), so
+    the reader, which is not blocked by user code, ends the process itself.
+    """
+    import time
+
+    busy_id = ""
+    busy_since = 0.0
+    while True:
+        time.sleep(0.1)
+        current = _STATE.current_id if _STATE.executing else ""
+        if current != busy_id:
+            busy_id, busy_since = current, time.monotonic()
+            continue
+        if busy_id and time.monotonic() - busy_since >= _ORPHAN_GRACE_SECONDS:
+            try:
+                _PROTO_OUT.flush()
+            except Exception:
+                pass
+            os._exit(0)
 
 
 def main() -> None:

@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Locator, type Page } from "@playwright/test"
@@ -294,20 +294,31 @@ runtimeE2E("Studio interrupt stops a busy loop, keeps variables, and never resum
 	await runCell(artifact, "interrupt-ready")
 	await expect(output("interrupt-ready")).toContainText("interrupt_kernel_ready", { timeout: 60_000 })
 
-	for (const cellId of ["interrupt-sleep", "interrupt-spin"]) {
+	// The cell itself writes a marker file once it is running, so Stop is provably pressed while the
+	// code is executing (a run cancelled before it started would never create the file).
+	const cases = [
+		{ cellId: "interrupt-sleep", marker: "aihydro-interrupt-started-sleep", vars: "vars=1,None" },
+		{ cellId: "interrupt-spin", marker: "aihydro-interrupt-started-spin", vars: "vars=1,2" },
+	]
+	for (const { cellId, marker, vars } of cases) {
+		const markerPath = path.join(os.tmpdir(), marker)
+		rmSync(markerPath, { force: true })
 		await runCell(artifact, cellId)
 		const runningShell = await waitForFrame(
 			page,
 			async (frame) => (await frame.getByTitle("Interrupt execution").count()) === 1,
 		)
-		// Output only appears when a cell ends (no streaming), so give the kernel a moment to be
-		// inside the cell before pressing Stop.
-		await page.waitForTimeout(1_500)
+		await expect.poll(() => existsSync(markerPath), { timeout: 60_000 }).toBe(true)
 		await runningShell.getByTitle("Interrupt execution").click()
 		await expect(output(cellId)).toContainText("KeyboardInterrupt", { timeout: 3_000 })
 		await expect(output(cellId)).not.toContainText("interrupt_failed")
+		await expect(output(cellId)).not.toContainText("Cancelled")
+		rmSync(markerPath, { force: true })
 		await runCell(artifact, "interrupt-after")
 		await expect(output("interrupt-after")).toContainText("interrupt_state_kept=42", { timeout: 3_000 })
+		// A variable assigned inside the interrupted cell, before it blocked, is still there.
+		await runCell(artifact, "interrupt-vars")
+		await expect(output("interrupt-vars")).toContainText(vars, { timeout: 3_000 })
 	}
 	await expect(output("interrupt-after")).toContainText("Practice run: not server-recorded")
 })
