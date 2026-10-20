@@ -10,7 +10,7 @@ interface MenuEntry {
 	when?: string
 }
 
-const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../package.json"), "utf8"))
+const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"))
 const menus: Record<string, MenuEntry[]> = pkg.contributes.menus
 const sidebar = menus["view/title"].filter((m) => (m.when ?? "").includes("aihydro.SidebarProvider"))
 
