@@ -44,7 +44,9 @@ describe("WorkspaceFilesSection", () => {
 	})
 
 	it("does not list files already on the map", async () => {
-		const onMap = [{ id: "workspace_a_one_geojson", name: "one.geojson", metadata: { path: "a/one.geojson" } }] as unknown as MapLayer[]
+		const onMap = [
+			{ id: "workspace_a_one_geojson", name: "one.geojson", metadata: { path: "a/one.geojson" } },
+		] as unknown as MapLayer[]
 		render(<WorkspaceFilesSection layers={onMap} {...styleProps} />)
 		await screen.findByText("Workspace files you can add (1)")
 		expect(screen.queryByRole("button", { name: "Add a/one.geojson to the map" })).toBeNull()
@@ -81,16 +83,23 @@ describe("WorkspaceFilesSection", () => {
 
 describe("restoredLayersNote", () => {
 	const restored = (n: number, of: number) =>
-		Array.from({ length: n }, (_, i) => ({ id: `l${i}`, metadata: { _hydrated: "1", _hydrated_of: String(of) } })) as unknown as MapLayer[]
+		Array.from({ length: n }, (_, i) => ({
+			id: `l${i}`,
+			metadata: { _hydrated: "1", _hydrated_of: String(of) },
+		})) as unknown as MapLayer[]
 
 	it("is null when nothing was restored", () => {
 		expect(restoredLayersNote([{ id: "x", metadata: {} } as unknown as MapLayer])).toBeNull()
 	})
 	it("reports the restored count honestly when the cap dropped older layers", () => {
-		expect(restoredLayersNote(restored(40, 118))).toBe("40 restored from earlier sessions. 78 older saved layers are kept but not loaded.")
+		expect(restoredLayersNote(restored(40, 118))).toBe(
+			"40 restored from earlier sessions. 78 older saved layers are kept but not loaded.",
+		)
 	})
 	it("uses the host's authoritative older count, and reports it even when nothing is restored", () => {
-		expect(restoredLayersNote(restored(40, 118), 1)).toBe("40 restored from earlier sessions. 1 older saved layer is kept but not loaded.")
+		expect(restoredLayersNote(restored(40, 118), 1)).toBe(
+			"40 restored from earlier sessions. 1 older saved layer is kept but not loaded.",
+		)
 		expect(restoredLayersNote([], 78)).toBe("78 older saved layers are kept but not loaded.")
 		expect(restoredLayersNote(restored(5, 5), 0)).toBe("5 restored from earlier sessions.")
 	})

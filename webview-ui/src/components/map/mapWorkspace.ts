@@ -155,7 +155,11 @@ export function migrateWorkspace(parsed: unknown): { workspace: MapWorkspace; mi
 	if (saved.version === MAP_WORKSPACE_VERSION) {
 		const explicit = saved.basemapExplicit === true && typeof saved.basemap === "string"
 		return {
-			workspace: { ...(saved as unknown as MapWorkspace), basemap: explicit ? saved.basemap : undefined, basemapExplicit: explicit },
+			workspace: {
+				...(saved as unknown as MapWorkspace),
+				basemap: explicit ? saved.basemap : undefined,
+				basemapExplicit: explicit,
+			},
 			migrated: false,
 		}
 	}
@@ -180,7 +184,8 @@ export function clearMapWorkspace(): void {
 	}
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value)
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	!!value && typeof value === "object" && !Array.isArray(value)
 
 function sanitizeBookmarks(value: unknown): MapBookmark[] | undefined {
 	if (!Array.isArray(value)) return undefined

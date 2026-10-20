@@ -93,7 +93,8 @@ export function clearTally(previous: TileTallies, id: string): TileTallies {
 export function tileErrorsFrom(tallies: TileTallies): Record<string, string> {
 	const errors: Record<string, string> = {}
 	for (const [id, tally] of Object.entries(tallies)) {
-		if (classifyTileHealth(tally, { sparse: isSparseSource(id) }) === "failed") errors[id] = tally.lastError ?? "Tile request failed"
+		if (classifyTileHealth(tally, { sparse: isSparseSource(id) }) === "failed")
+			errors[id] = tally.lastError ?? "Tile request failed"
 	}
 	return errors
 }

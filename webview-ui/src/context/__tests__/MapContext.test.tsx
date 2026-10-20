@@ -288,12 +288,20 @@ describe("Saved-layer restore state", () => {
 		expect(screen.getByTestId("restore")).toHaveTextContent("true/0")
 		act(() => {
 			layerHandlers.onResponse(marker("snapshot_start"))
-			layerHandlers.onResponse({ id: "__map_sync__", metadata: { __operation: "snapshot_complete", hydrating: "1", older_count: "0" } })
+			layerHandlers.onResponse({
+				id: "__map_sync__",
+				metadata: { __operation: "snapshot_complete", hydrating: "1", older_count: "0" },
+			})
 			sessionHandlers.onResponse({})
 		})
 		expect(screen.getByTestId("status")).toHaveTextContent("connected")
 		expect(screen.getByTestId("restore")).toHaveTextContent("true/0")
-		act(() => layerHandlers.onResponse({ id: "__map_restore__", metadata: { __operation: "restore_state", hydrating: "0", older_count: "78" } }))
+		act(() =>
+			layerHandlers.onResponse({
+				id: "__map_restore__",
+				metadata: { __operation: "restore_state", hydrating: "0", older_count: "78" },
+			}),
+		)
 		expect(screen.getByTestId("restore")).toHaveTextContent("false/78")
 		// The marker is not a layer.
 		expect(screen.getByTestId("layers")).toBeEmptyDOMElement()

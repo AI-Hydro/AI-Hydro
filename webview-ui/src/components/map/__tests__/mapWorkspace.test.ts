@@ -74,7 +74,10 @@ describe("mapWorkspace schema v2 (basemap migration)", () => {
 	afterEach(() => localStorage.removeItem(KEY))
 
 	it("migrates a v1 profile ONCE: the old basemap is dropped, explicit starts false, version becomes 2", () => {
-		localStorage.setItem(KEY, JSON.stringify({ version: 1, basemap: "usgs-imagery", viewState: { longitude: 1, latitude: 2, zoom: 3 } }))
+		localStorage.setItem(
+			KEY,
+			JSON.stringify({ version: 1, basemap: "usgs-imagery", viewState: { longitude: 1, latitude: 2, zoom: 3 } }),
+		)
 		const ws = loadMapWorkspace()
 		expect(ws.version).toBe(2)
 		expect(ws.basemap).toBeUndefined()
@@ -149,7 +152,13 @@ describe("loadMapWorkspace keeps bookmarks, aliases, ROI and ribbon size", () =>
 	it("ignores malformed values instead of passing them on", () => {
 		localStorage.setItem(
 			key,
-			JSON.stringify({ version: 2, bookmarks: [bookmark, { id: 1 }, "x"], layerAliases: { a: "ok", b: 3 }, activeRoi: "no", ribbonPanel: [] }),
+			JSON.stringify({
+				version: 2,
+				bookmarks: [bookmark, { id: 1 }, "x"],
+				layerAliases: { a: "ok", b: 3 },
+				activeRoi: "no",
+				ribbonPanel: [],
+			}),
 		)
 		const ws = loadMapWorkspace()
 		expect(ws.bookmarks).toEqual([bookmark])

@@ -69,8 +69,12 @@ describe("shouldShowEmptyState", () => {
 		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 0, panelOpen: true })).toBe(false)
 	})
 	it("never while the host is still restoring saved layers", () => {
-		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 0, panelOpen: false, hydrating: true })).toBe(false)
-		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 0, panelOpen: false, hydrating: false })).toBe(true)
+		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 0, panelOpen: false, hydrating: true })).toBe(
+			false,
+		)
+		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 0, panelOpen: false, hydrating: false })).toBe(
+			true,
+		)
 	})
 	it("never when there are layers", () => {
 		expect(shouldShowEmptyState({ connectionStatus: "connected", layerCount: 3, panelOpen: false })).toBe(false)

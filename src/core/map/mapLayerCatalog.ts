@@ -376,7 +376,10 @@ async function readCatalogFile(file: string): Promise<MapLayerCatalog | null> {
  * racing for it cannot both import it), then its contents are written to this workspace's scoped file. Other
  * workspaces then find no legacy file and start empty. With no workspace folder the legacy file is read in place.
  */
-export async function readMapLayerCatalog(workspaceRoot?: string, baseDir: string = defaultAihydroDir()): Promise<MapLayerCatalog | null> {
+export async function readMapLayerCatalog(
+	workspaceRoot?: string,
+	baseDir: string = defaultAihydroDir(),
+): Promise<MapLayerCatalog | null> {
 	const legacyFile = path.join(baseDir, "map_layer_catalog.json")
 	if (!workspaceRoot) {
 		return readCatalogFile(legacyFile)

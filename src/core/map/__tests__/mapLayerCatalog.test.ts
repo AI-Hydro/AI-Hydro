@@ -66,7 +66,8 @@ describe("mapLayerCatalog overflow and legacy migration", () => {
 	afterEach(async () => {
 		await fs.rm(dir, { recursive: true, force: true })
 	})
-	const geo = (id: string) => MapLayer.create({ id, name: id, geojson: "", layerType: "polygon", metadata: { path: `/abs/${id}.geojson` } })
+	const geo = (id: string) =>
+		MapLayer.create({ id, name: id, geojson: "", layerType: "polygon", metadata: { path: `/abs/${id}.geojson` } })
 
 	it("a rewrite from the live layers keeps entries beyond the restore cap on disk", async () => {
 		const ids = Array.from({ length: MAX_RESTORED_LAYERS + 10 }, (_, i) => `l${i}`)
@@ -76,7 +77,12 @@ describe("mapLayerCatalog overflow and legacy migration", () => {
 
 		// Only the capped layers are live; the controller passes the overflow through every rewrite.
 		const live = selection.entries.map((e) => geo(e.id))
-		const rewritten = await buildMapLayerCatalogAsync(live, live.map((l) => l.id), "/ws", selection.overflow)
+		const rewritten = await buildMapLayerCatalogAsync(
+			live,
+			live.map((l) => l.id),
+			"/ws",
+			selection.overflow,
+		)
 		await persistMapLayerCatalog(rewritten, dir)
 		const onDisk = await readMapLayerCatalog("/ws", dir)
 		expect(onDisk?.layers.map((l) => l.id)).to.deep.equal(ids)
@@ -84,7 +90,12 @@ describe("mapLayerCatalog overflow and legacy migration", () => {
 
 		// A later rewrite after the user removed a live layer still keeps all overflow entries.
 		const fewer = live.slice(1)
-		const again = await buildMapLayerCatalogAsync(fewer, fewer.map((l) => l.id), "/ws", selection.overflow)
+		const again = await buildMapLayerCatalogAsync(
+			fewer,
+			fewer.map((l) => l.id),
+			"/ws",
+			selection.overflow,
+		)
 		expect(again.layers.map((l) => l.id)).to.deep.equal([...selection.overflow.map((e) => e.id), ...fewer.map((l) => l.id)])
 	})
 
@@ -95,7 +106,11 @@ describe("mapLayerCatalog overflow and legacy migration", () => {
 	})
 
 	it("the legacy global catalog is migrated into the first workspace that loads it, then marked migrated", async () => {
-		const legacy: MapLayerCatalog = { updated_at_ms: 1, layer_order: ["x"], layers: (await buildMapLayerCatalogAsync([geo("x")], ["x"])).layers }
+		const legacy: MapLayerCatalog = {
+			updated_at_ms: 1,
+			layer_order: ["x"],
+			layers: (await buildMapLayerCatalogAsync([geo("x")], ["x"])).layers,
+		}
 		await fs.writeFile(path.join(dir, "map_layer_catalog.json"), JSON.stringify(legacy))
 
 		const first = await readMapLayerCatalog("/ws-a", dir)
@@ -115,7 +130,10 @@ describe("mapLayerCatalog overflow and legacy migration", () => {
 
 	it("a workspace with its own catalog never touches the legacy file", async () => {
 		await persistMapLayerCatalog(await buildMapLayerCatalogAsync([geo("own")], ["own"], "/ws-a"), dir)
-		await fs.writeFile(path.join(dir, "map_layer_catalog.json"), JSON.stringify({ updated_at_ms: 1, layer_order: [], layers: [] }))
+		await fs.writeFile(
+			path.join(dir, "map_layer_catalog.json"),
+			JSON.stringify({ updated_at_ms: 1, layer_order: [], layers: [] }),
+		)
 		expect((await readMapLayerCatalog("/ws-a", dir))?.layers.map((l) => l.id)).to.deep.equal(["own"])
 		expect(await fs.readdir(dir)).to.include("map_layer_catalog.json")
 	})

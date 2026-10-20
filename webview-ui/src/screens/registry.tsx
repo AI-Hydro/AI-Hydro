@@ -378,7 +378,10 @@ export const screens: ScreenDef[] = [
 		steps: [{ click: 'button[aria-label^="Layer manager"]' }, { wait: 500 }],
 	}),
 	mapScreen("map-layer-manager-older-kept", "Layer manager offering Restore older layers", {
-		layers: featureLayers().map((layer) => ({ ...layer, metadata: { ...layer.metadata, _hydrated: "1", _hydrated_of: "120" } })),
+		layers: featureLayers().map((layer) => ({
+			...layer,
+			metadata: { ...layer.metadata, _hydrated: "1", _hydrated_of: "120" },
+		})),
 		mapOlderCount: 78,
 		steps: [{ click: 'button[aria-label^="Layer manager"]' }, { wait: 500 }],
 	}),

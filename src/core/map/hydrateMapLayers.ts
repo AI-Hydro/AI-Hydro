@@ -147,7 +147,11 @@ export async function buildLayerFromEntry(entry: MapLayerCatalogEntry): Promise<
  * rather than hiding the rest. Entries that cannot be rebuilt (missing file) are skipped, never fatal.
  * Returns the ids of the layers added, in order.
  */
-export async function restoreCatalogEntries(controller: Controller, entries: MapLayerCatalogEntry[], total: number): Promise<string[]> {
+export async function restoreCatalogEntries(
+	controller: Controller,
+	entries: MapLayerCatalogEntry[],
+	total: number,
+): Promise<string[]> {
 	const added: string[] = []
 	for (const entry of entries) {
 		try {

@@ -102,7 +102,7 @@ const QUICK_DELINEATE_MAX_MERIT_UPAREA_KM2 = 50_000
 
 /** Names for non-layer tile sources in the resource notices. */
 const TILE_SOURCE_LABELS: Record<string, string> = {
-	"basemap": "Basemap",
+	basemap: "Basemap",
 	"basemap-usgs-hydro": "River overlay (USGS hydrography)",
 }
 
@@ -762,7 +762,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// Overlays with at least one loaded tile (attribution credits only what has actually drawn).
 	const loadedOverlayIds = useMemo(() => {
 		const loaded = loadedSources(tileTallies)
-		return new Set(resolvedBaseMap.overlays.filter((overlay) => loaded.has(`basemap-${overlay.id}`)).map((overlay) => overlay.id))
+		return new Set(
+			resolvedBaseMap.overlays.filter((overlay) => loaded.has(`basemap-${overlay.id}`)).map((overlay) => overlay.id),
+		)
 	}, [tileTallies, resolvedBaseMap])
 	const [viewState, setViewState] = useState<MapViewState>(sanitizeViewState(persisted.viewState))
 	const [visibleLayerIds, setVisibleLayerIds] = useState<Set<string>>(
@@ -777,7 +779,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// derived from it, so two ribbon items can never be active at once and the empty state can tell a panel is up.
 	const [activeTool, setActiveTool] = useState<RibbonTool>(null)
 	const setToolOpen = useCallback(
-		(tool: Exclude<RibbonTool, null>, open: boolean) => setActiveTool((current) => (open ? tool : current === tool ? null : current)),
+		(tool: Exclude<RibbonTool, null>, open: boolean) =>
+			setActiveTool((current) => (open ? tool : current === tool ? null : current)),
 		[],
 	)
 	const searchOpen = activeTool === "search"
@@ -3202,9 +3205,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				layerCount: layers.length,
 				panelOpen: activeTool !== null,
 				hydrating: restoreState.hydrating,
-			}) && (
-				<MapEmptyState onFilesPicked={(files) => void ingestFiles(files)} onFindGauge={() => setSearchOpen(true)} />
-			)}
+			}) && <MapEmptyState onFilesPicked={(files) => void ingestFiles(files)} onFindGauge={() => setSearchOpen(true)} />}
 
 			{/* Search pin clear button */}
 			{searchPin && (

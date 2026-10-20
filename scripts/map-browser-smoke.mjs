@@ -54,7 +54,7 @@ const server = await createServer({
 				if (id === "\0smoke-grpc")
 					return `const client = new Proxy({}, {get: (_, name) => name === "prepareMapExport" ? async () => ({accepted: true, basePath: "/synthetic-smoke-no-disk-write"}) : name === "saveMapExport" ? async request => {window.__savedMapExport = request; return {ok: true, outputs: []}} : name.startsWith("subscribe") ? () => () => {} : async () => ({})}); ${clients.map((name) => `export const ${name} = client;`).join("\n")}`
 				if (id === "\0smoke-context")
-					return `const state = {layers: ${JSON.stringify(fixture)}, connectionStatus: "connected", reconnect: () => {}}; export const useMapContext = () => state;`
+					return `const state = {layers: ${JSON.stringify(fixture)}, connectionStatus: "connected", restoreState: {hydrating: false, olderCount: 0}, restoreOlderLayers: async () => 0, reconnect: () => {}}; export const useMapContext = () => state;`
 				if (id === "\0smoke-entry")
 					return `import "/src/index.css"; import React from "react"; import {createRoot} from "react-dom/client"; import {MapView} from "/src/components/map/MapView.tsx"; import {BrushContextProvider} from "/src/context/BrushContext.tsx"; createRoot(document.getElementById("root")).render(React.createElement(React.StrictMode, null, React.createElement(BrushContextProvider, null, React.createElement(MapView))));`
 			},

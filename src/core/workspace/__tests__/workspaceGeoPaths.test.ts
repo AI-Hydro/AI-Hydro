@@ -36,7 +36,9 @@ describe("workspaceGeoPaths", () => {
 		await fs.symlink(path.join(outside, "secret.geojson"), path.join(folder, "link.geojson"))
 		await fs.symlink(path.join(folder, "ok.geojson"), path.join(folder, "inner-link.geojson"))
 
-		expect(await realPathInsideFolder(folder, path.join(folder, "ok.geojson"))).to.equal(await fs.realpath(path.join(folder, "ok.geojson")))
+		expect(await realPathInsideFolder(folder, path.join(folder, "ok.geojson"))).to.equal(
+			await fs.realpath(path.join(folder, "ok.geojson")),
+		)
 		expect(await realPathInsideFolder(folder, path.join(folder, "link.geojson"))).to.equal(null)
 		expect(await realPathInsideFolder(folder, path.join(folder, "inner-link.geojson"))).to.be.a("string")
 		expect(await realPathInsideFolder(folder, path.join(folder, "missing.geojson"))).to.equal(null)

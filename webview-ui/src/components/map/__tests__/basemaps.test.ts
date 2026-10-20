@@ -36,7 +36,11 @@ describe("basemap catalogue", () => {
 	})
 
 	it("only uses tile hosts that were already in the catalogue", () => {
-		const hosts = new Set(BASE_MAP_STYLES.flatMap((s) => [s.url, s.darkUrl, ...(s.overlays ?? []).map((o) => o.url)]).filter(Boolean).map((u) => new URL(u as string).host))
+		const hosts = new Set(
+			BASE_MAP_STYLES.flatMap((s) => [s.url, s.darkUrl, ...(s.overlays ?? []).map((o) => o.url)])
+				.filter(Boolean)
+				.map((u) => new URL(u as string).host),
+		)
 		expect([...hosts].sort()).toEqual([
 			"a.basemaps.cartocdn.com",
 			"a.tile.openstreetmap.fr",
@@ -63,22 +67,36 @@ describe("resolveBaseMap", () => {
 		expect(resolveBaseMap("esri-topo", "light").url).toBe(resolveBaseMap("esri-topo", "dark").url)
 	})
 
-	it.each(["stadia-terrain", "mapbox-dark", "", undefined, "nope"])("an unavailable id (%s) resolves to the default, never to another provider", (id) => {
-		expect(resolveBaseMap(id, "dark").id).toBe(DEFAULT_BASEMAP_ID)
-		expect(isKnownBaseMap(id)).toBe(false)
-	})
+	it.each(["stadia-terrain", "mapbox-dark", "", undefined, "nope"])(
+		"an unavailable id (%s) resolves to the default, never to another provider",
+		(id) => {
+			expect(resolveBaseMap(id, "dark").id).toBe(DEFAULT_BASEMAP_ID)
+			expect(isKnownBaseMap(id)).toBe(false)
+		},
+	)
 })
 
 describe("attribution reflects what is drawn", () => {
 	const resolved = resolveBaseMap(DEFAULT_BASEMAP_ID, "dark")
 	it("credits the hydrography overlay only where it covers the view", () => {
-		expect(attributionFor(resolved, { lon: -90, lat: 39 })).toBe("© OpenStreetMap contributors © CARTO · Hydrography: USGS The National Map")
+		expect(attributionFor(resolved, { lon: -90, lat: 39 })).toBe(
+			"© OpenStreetMap contributors © CARTO · Hydrography: USGS The National Map",
+		)
 		expect(attributionFor(resolved, { lon: 80, lat: 25 })).toBe("© OpenStreetMap contributors © CARTO")
 	})
 	it("does not credit the overlay over Canada, Mexico or ocean, but does over Alaska, Hawaii and Puerto Rico", () => {
 		const base = "© OpenStreetMap contributors © CARTO"
-		for (const [lon, lat] of [[-100, 56], [-102, 20], [-140, 35]]) expect(attributionFor(resolved, { lon, lat })).toBe(base)
-		for (const [lon, lat] of [[-150, 64], [-157.8, 21.3], [-66, 18.2]]) {
+		for (const [lon, lat] of [
+			[-100, 56],
+			[-102, 20],
+			[-140, 35],
+		])
+			expect(attributionFor(resolved, { lon, lat })).toBe(base)
+		for (const [lon, lat] of [
+			[-150, 64],
+			[-157.8, 21.3],
+			[-66, 18.2],
+		]) {
 			expect(attributionFor(resolved, { lon, lat })).toContain("USGS")
 		}
 	})

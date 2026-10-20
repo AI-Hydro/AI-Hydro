@@ -64,7 +64,7 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 			files.filter(
 				(file) =>
 					!onMap.keyed.has(workspaceFileKey(file.workspaceFolder, file.relativePath)) &&
-					!(onMap.pathOnly.has(file.relativePath) && !file.workspaceFolder),
+					!onMap.pathOnly.has(file.relativePath),
 			),
 		[files, onMap],
 	)
@@ -74,7 +74,9 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 		setBusyKey(workspaceFileKey(file.workspaceFolder, file.relativePath))
 		setStatus(null)
 		try {
-			await MapServiceClient.addWorkspaceGeoFile(AddWorkspaceGeoFileRequest.create({ relativePath: file.relativePath, workspaceFolder: file.workspaceFolder }))
+			await MapServiceClient.addWorkspaceGeoFile(
+				AddWorkspaceGeoFileRequest.create({ relativePath: file.relativePath, workspaceFolder: file.workspaceFolder }),
+			)
 			setStatus({ kind: "ok", msg: `Added ${file.name}.` })
 		} catch (error) {
 			setStatus({ kind: "err", msg: error instanceof Error ? error.message : `Could not add ${file.name}.` })
@@ -96,8 +98,12 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 			<div style={{ fontWeight: 600, marginBottom: 4 }}>Workspace files you can add ({addable.length})</div>
 			{addable.length === 0 && <div style={{ opacity: 0.75 }}>All workspace geo files found are already on the map.</div>}
 			{shown.map((file) => (
-				<div key={workspaceFileKey(file.workspaceFolder, file.relativePath)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
-					<span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={workspaceFileKey(file.workspaceFolder, file.relativePath).replace("\u0000", " / ")}>
+				<div
+					key={workspaceFileKey(file.workspaceFolder, file.relativePath)}
+					style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+					<span
+						style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+						title={workspaceFileKey(file.workspaceFolder, file.relativePath).replace("\u0000", " / ")}>
 						{multiRoot && file.folderName ? `${file.folderName} / ` : ""}
 						{file.relativePath}
 					</span>
@@ -122,12 +128,25 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 			{addable.length > COLLAPSED_ROWS && (
 				<button
 					onClick={() => setShowAll((value) => !value)}
-					style={{ marginTop: 4, padding: 0, background: "none", border: "none", color: "inherit", textDecoration: "underline", cursor: "pointer", fontSize: 11 }}
+					style={{
+						marginTop: 4,
+						padding: 0,
+						background: "none",
+						border: "none",
+						color: "inherit",
+						textDecoration: "underline",
+						cursor: "pointer",
+						fontSize: 11,
+					}}
 					type="button">
 					{showAll ? "Show fewer" : `Show all ${addable.length}`}
 				</button>
 			)}
-			{truncated && <div style={{ opacity: 0.75, marginTop: 4 }}>Showing the first {files.length} of {totalCount} files found.</div>}
+			{truncated && (
+				<div style={{ opacity: 0.75, marginTop: 4 }}>
+					Showing the first {files.length} of {totalCount} files found.
+				</div>
+			)}
 			{status && (
 				<div role="status" style={{ marginTop: 4, color: status.kind === "err" ? "#dc3545" : undefined }}>
 					{status.msg}
@@ -149,5 +168,7 @@ export function restoredLayersNote(layers: MapLayer[], olderCount?: number): str
 	const kept = olderCount ?? Math.max(0, savedTotal - restored.length)
 	const keptNote = `${kept} older saved layer${kept === 1 ? " is" : "s are"} kept but not loaded.`
 	if (restored.length === 0) return keptNote
-	return kept > 0 ? `${restored.length} restored from earlier sessions. ${keptNote}` : `${restored.length} restored from earlier sessions.`
+	return kept > 0
+		? `${restored.length} restored from earlier sessions. ${keptNote}`
+		: `${restored.length} restored from earlier sessions.`
 }

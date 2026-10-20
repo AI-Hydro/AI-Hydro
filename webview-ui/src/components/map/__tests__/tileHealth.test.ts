@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { classifyTileHealth, clearTally, loadedSources, MIN_OVERLAY_SAMPLE, TILE_FAILURE_RATIO, tallyTile, tileErrorsFrom, tileNotesFrom, type TileTallies } from "../tileHealth"
+import {
+	classifyTileHealth,
+	clearTally,
+	loadedSources,
+	MIN_OVERLAY_SAMPLE,
+	TILE_FAILURE_RATIO,
+	tallyTile,
+	tileErrorsFrom,
+	tileNotesFrom,
+	type TileTallies,
+} from "../tileHealth"
 
 const run = (loaded: number, failed: number, message = "Tile request failed (HTTP 404)"): TileTallies => {
 	let t: TileTallies = {}
@@ -54,10 +64,16 @@ describe("tile health classification", () => {
 })
 
 describe("sparse overlay sources", () => {
-	const overlayRun = (loaded: number, failed: number, notFound: number, message = "Tile request failed (HTTP 500)"): TileTallies => {
+	const overlayRun = (
+		loaded: number,
+		failed: number,
+		notFound: number,
+		message = "Tile request failed (HTTP 500)",
+	): TileTallies => {
 		let t: TileTallies = {}
 		for (let i = 0; i < loaded; i++) t = tallyTile(t, "basemap-usgs-hydro", { ok: true })
-		for (let i = 0; i < notFound; i++) t = tallyTile(t, "basemap-usgs-hydro", { ok: false, message: "Tile request failed (HTTP 404)" })
+		for (let i = 0; i < notFound; i++)
+			t = tallyTile(t, "basemap-usgs-hydro", { ok: false, message: "Tile request failed (HTTP 404)" })
 		for (let i = 0; i < failed - notFound; i++) t = tallyTile(t, "basemap-usgs-hydro", { ok: false, message })
 		return t
 	}
