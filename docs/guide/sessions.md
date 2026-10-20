@@ -95,7 +95,7 @@ As of v0.1.4, the response also includes the **Python environment context**:
   "pending": ["watershed", "streamflow", ...],
   "mcp_python": "/opt/miniconda3/bin/python",
   "mcp_pip": "/opt/miniconda3/bin/pip",
-  "available_packages": {
+  "available_packages": {   // only with start_session(include_packages=True)
     "numpy": "1.26.4",
     "pandas": "2.2.1",
     "pygeohydro": "0.16.2",
