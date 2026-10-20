@@ -10,6 +10,105 @@
 		}
 	},
 	"screens": {
+		"studio-catalogue-offline": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"studio-catalogue": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"studio-course-progress": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 15,
+				"contrast": 6,
+				"contrastIndeterminate": 11
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 600,
+				"smallText": 584,
+				"contrast": 280,
+				"contrastIndeterminate": 424
+			}
+		},
+		"studio-empty-state": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"studio-executable-module": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 7,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 440,
+				"smallText": 304,
+				"contrast": 170,
+				"contrastIndeterminate": 0
+			}
+		},
+		"studio-static-doc": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 7,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 440,
+				"smallText": 264,
+				"contrast": 180,
+				"contrastIndeterminate": 0
+			}
+		},
 		"chat-task-mcp": {
 			"ref": {
 				"noName": 0,
@@ -736,54 +835,6 @@
 				"contrast": 660,
 				"contrastIndeterminate": 0
 			}
-		},
-		"studio-course-progress": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 10,
-				"smallText": 15,
-				"contrast": 7,
-				"contrastIndeterminate": 11
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 600,
-				"smallText": 584,
-				"contrast": 280,
-				"contrastIndeterminate": 424
-			}
-		},
-		"studio-executable-module": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 5,
-				"smallText": 8,
-				"contrast": 4,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 440,
-				"smallText": 304,
-				"contrast": 170,
-				"contrastIndeterminate": 0
-			}
-		},
-		"studio-static-doc": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 6,
-				"smallText": 7,
-				"contrast": 5,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 440,
-				"smallText": 264,
-				"contrast": 180,
-				"contrastIndeterminate": 0
-			}
 		}
 	},
 	"subsets": {
@@ -1192,9 +1243,9 @@
 				"studio-course-progress": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 60,
+						"smallTarget": 48,
 						"smallText": 88,
-						"contrast": 48,
+						"contrast": 42,
 						"contrastIndeterminate": 64
 					},
 					"cells": 6
@@ -1202,9 +1253,9 @@
 				"studio-executable-module": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 30,
-						"smallText": 46,
-						"contrast": 30,
+						"smallTarget": 24,
+						"smallText": 40,
+						"contrast": 27,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1212,9 +1263,9 @@
 				"studio-static-doc": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 36,
+						"smallTarget": 24,
 						"smallText": 40,
-						"contrast": 33,
+						"contrast": 27,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -1260,6 +1311,36 @@
 					"cells": 6
 				},
 				"toolcard-unreported-class": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"studio-catalogue": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"studio-catalogue-offline": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"studio-empty-state": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,

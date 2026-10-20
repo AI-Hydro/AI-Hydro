@@ -227,7 +227,10 @@ const ModulesMarketplaceView = () => {
 					padding: "20px",
 					gap: "12px",
 				}}>
-				<div style={{ color: "var(--vscode-errorForeground)" }}>{error}</div>
+				<div role="alert" style={{ color: "var(--vscode-foreground)", display: "flex", gap: 6, alignItems: "center" }}>
+					<span aria-hidden="true" className="codicon codicon-error" style={{ color: "var(--vscode-errorForeground)" }} />
+					{error}
+				</div>
 				<VSCodeButton appearance="secondary" onClick={() => fetchMarketplace(true)}>
 					<span className="codicon codicon-refresh" style={{ marginRight: "6px" }} />
 					Retry
@@ -252,7 +255,7 @@ const ModulesMarketplaceView = () => {
 			}}
 			type="button">
 			{label}
-			{typeof count === "number" && count > 0 && <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.7 }}>{count}</span>}
+			{typeof count === "number" && count > 0 && <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.7 }}>{count}</span>}
 		</button>
 	)
 
@@ -273,7 +276,12 @@ const ModulesMarketplaceView = () => {
 				<TabButton count={myCourses.length} id="learning" label="My Learning" />
 			</div>
 
-			{error && <div style={{ padding: "8px 20px", color: "var(--vscode-errorForeground)", fontSize: 12 }}>{error}</div>}
+			{error && (
+				<div role="alert" style={{ padding: "8px 20px", color: "var(--vscode-foreground)", fontSize: 12 }}>
+					<span aria-hidden="true" className="codicon codicon-error" style={{ color: "var(--vscode-errorForeground)", marginRight: 6 }} />
+					{error}
+				</div>
+			)}
 
 			{/* ---------- COURSES TAB ---------- */}
 			{activeTab === "courses" && (
@@ -549,6 +557,7 @@ const ModulesMarketplaceView = () => {
 										onClick={() => handleContinueCourse(course.courseId, course.manifestUrl)}
 										style={{
 											alignSelf: "flex-start",
+											minHeight: 24,
 											padding: "5px 12px",
 											fontSize: 11,
 											fontWeight: 600,

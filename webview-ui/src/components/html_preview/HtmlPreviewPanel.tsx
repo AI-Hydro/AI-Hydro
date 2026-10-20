@@ -496,6 +496,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 							style={{
 								width: "100%",
 								padding: "5px 0",
+								minHeight: 24,
 								fontSize: 11,
 								fontWeight: 500,
 								background: "var(--vscode-button-background, #0e639c)",
