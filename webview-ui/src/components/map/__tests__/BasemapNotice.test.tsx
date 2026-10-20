@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, expect, it, vi } from "vitest"
-import { BasemapNotice } from "../BasemapNotice"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { BasemapNotice, REARM_DELAY_MS } from "../BasemapNotice"
 
 afterEach(cleanup)
 
@@ -45,12 +45,27 @@ it("a new message appears after an earlier one was dismissed", () => {
 	expect(screen.getByRole("status")).not.toHaveTextContent("first")
 })
 
-it("re-arms a dismissed notice when its condition clears and later returns", () => {
+describe("re-arming after dismissal", () => {
 	const message = { key: "coverage:usgs-topo", text: "USGS Topo covers the United States only, so no tiles are shown here." }
-	const { rerender } = render(<BasemapNotice messages={[message]} />)
-	fireEvent.click(screen.getByRole("button", { name: "Dismiss basemap notice" }))
-	expect(screen.queryByRole("status")).toBeNull()
-	rerender(<BasemapNotice messages={[]} />) // panned back into coverage
-	rerender(<BasemapNotice messages={[message]} />) // panned out again
-	expect(screen.getByRole("status")).toHaveTextContent("covers the United States only")
+	afterEach(() => vi.useRealTimers())
+
+	it("shows again once the condition has stayed clear for the hysteresis delay", () => {
+		vi.useFakeTimers()
+		const { rerender } = render(<BasemapNotice messages={[message]} />)
+		fireEvent.click(screen.getByRole("button", { name: "Dismiss basemap notice" }))
+		rerender(<BasemapNotice messages={[]} />) // panned back into coverage
+		act(() => void vi.advanceTimersByTime(REARM_DELAY_MS + 10))
+		rerender(<BasemapNotice messages={[message]} />) // panned out again, long after
+		expect(screen.getByRole("status")).toHaveTextContent("covers the United States only")
+	})
+
+	it("stays dismissed when the view only flickers across the coverage border", () => {
+		vi.useFakeTimers()
+		const { rerender } = render(<BasemapNotice messages={[message]} />)
+		fireEvent.click(screen.getByRole("button", { name: "Dismiss basemap notice" }))
+		rerender(<BasemapNotice messages={[]} />)
+		act(() => void vi.advanceTimersByTime(400))
+		rerender(<BasemapNotice messages={[message]} />)
+		expect(screen.queryByRole("status")).toBeNull()
+	})
 })

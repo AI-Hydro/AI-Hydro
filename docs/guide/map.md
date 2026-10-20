@@ -61,9 +61,9 @@ The USGS caches are requested only inside US coverage (CONUS, Alaska, Hawaii, Pu
 
 ### General purpose
 
-Esri World Topo · Esri World Imagery · Humanitarian (HOT), an optional, never-default basemap on OpenStreetMap France's community server. OSM France's usage page (https://www.openstreetmap.fr/usage/, read 2026-10-20; it does not name the HOT layer) allows free use only with visible attribution, public access, a non-profit site or free non-profit app, and moderate traffic, and says service may be suspended without notice. Use it lightly.
+Esri World Topo · Esri World Imagery. Humanitarian OSM (HOT) was removed: OpenStreetMap France's usage page (https://www.openstreetmap.fr/usage/, read 2026-10-20) limits free use to non-profit sites and to apps that send an identifying user-agent, which an embedded webview cannot do. A saved HOT choice moves to the default with a notice.
 
-If a basemap answers every tile in view with one identical image **and** returns that same image for a fixed land control tile (z3 over India), a "Basemap unavailable" notice appears with the same switch button. The control matters: real sources repeat tiles over open ocean (Esri Gray Canvas ocean tiles at zoom 5-6 are byte-identical), so sameness in the view alone never raises the notice. The check is general, not tied to one provider, and stops hashing tiles once it has decided.
+If a basemap answers every tile in view with one identical image **and** returns that same image for a fixed land control tile (z3, 45-90E and 0-41N: Arabian Sea, Pakistan and India), a "Basemap unavailable" notice appears with the same switch button. The control matters: real sources repeat tiles over open ocean (Esri Gray Canvas ocean tiles at zoom 5-6 are byte-identical), so sameness in the view alone never raises the notice. The check is general, not tied to one provider, and stops hashing tiles once it has decided. If the control tile cannot be fetched (10 s timeout, HTTP or hashing error) nothing is claimed and it is not retried for that basemap.
 
 A few missing tiles show a small status note; the "Map display incomplete" alert appears only when most tiles fail, can be dismissed, and offers **Retry imagery** (tile problems) or **Reload map renderer** (renderer problems).
 

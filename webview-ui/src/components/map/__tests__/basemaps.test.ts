@@ -81,12 +81,7 @@ describe("basemap catalogue", () => {
 				.filter(Boolean)
 				.map((u) => new URL(u as string).host),
 		)
-		expect([...hosts].sort()).toEqual([
-			"a.tile.openstreetmap.fr",
-			"basemap.nationalmap.gov",
-			"server.arcgisonline.com",
-			"services.arcgisonline.com",
-		])
+		expect([...hosts].sort()).toEqual(["basemap.nationalmap.gov", "server.arcgisonline.com", "services.arcgisonline.com"])
 	})
 
 	it("the default is global, so a user outside the US never starts on a US-only source", () => {
@@ -134,16 +129,18 @@ describe("coverage", () => {
 	})
 })
 
-describe("optional community basemap", () => {
-	it("HOT is not the default and its terms note cites the server's usage-policy page", () => {
-		const hot = BASE_MAP_STYLES.find((s) => s.id === "osm-hot")
-		expect(hot?.id).not.toBe(DEFAULT_BASEMAP_ID)
-		expect(hot?.terms).toContain("https://www.openstreetmap.fr/usage/")
-		expect(hot?.note).toMatch(/Optional/)
-	})
-})
-
 describe("removed providers", () => {
+	it("Humanitarian OSM (OSM France) is gone: its policy needs a user-agent and non-profit use", () => {
+		expect(isKnownBaseMap("osm-hot")).toBe(false)
+		expect(removedBaseMapReason("osm-hot")).toMatch(/user-agent/)
+		expect(resolveBaseMap("osm-hot", "dark").id).toBe(DEFAULT_BASEMAP_ID)
+		expect(BASE_MAP_STYLES.map((s) => s.name).join("|")).not.toMatch(/Humanitarian/)
+		const hosts = BASE_MAP_STYLES.flatMap((s) => [s.url, s.darkUrl])
+			.filter(Boolean)
+			.join(" ")
+		expect(hosts).not.toContain("openstreetmap")
+	})
+
 	it.each(["carto-light", "carto-dark", "carto-voyager"])("%s is gone, with the API-key reason", (id) => {
 		expect(isKnownBaseMap(id)).toBe(false)
 		expect(removedBaseMapReason(id)).toMatch(/API key/)

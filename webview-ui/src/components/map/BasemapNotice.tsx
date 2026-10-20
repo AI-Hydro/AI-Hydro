@@ -10,6 +10,9 @@ import { MAP_Z } from "./mapZ"
  * Each offers switching to the hydrology default and can be dismissed. The message is keyed so a dismissal
  * applies to that message only.
  */
+/** How long a dismissed condition must stay clear before the notice can show again. */
+export const REARM_DELAY_MS = 1500
+
 export interface BasemapNoticeProps {
 	messages: { key: string; text: string }[]
 	/** Switch to the default basemap (omitted when the default is already active). */
@@ -18,16 +21,22 @@ export interface BasemapNoticeProps {
 
 export const BasemapNotice: React.FC<BasemapNoticeProps> = ({ messages, onUseDefault }) => {
 	const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-	// A dismissal lasts only while its message stays on screen: when the condition clears (the view pans back
-	// into coverage) and later returns, the notice is shown again.
+	// A dismissal lasts while its message is on screen and for REARM_DELAY_MS after the condition clears: only a
+	// condition that has stayed clear that long re-arms it, so panning along a coverage border does not keep
+	// re-showing a notice the user just dismissed.
 	const activeKeys = messages.map((message) => message.key).join("\u0000")
 	useEffect(() => {
 		const active = new Set(activeKeys ? activeKeys.split("\u0000") : [])
-		setDismissed((previous) => {
-			const kept = new Set([...previous].filter((key) => active.has(key)))
-			return kept.size === previous.size ? previous : kept
-		})
-	}, [activeKeys])
+		const stale = [...dismissed].filter((key) => !active.has(key))
+		if (stale.length === 0) return
+		const timer = window.setTimeout(() => {
+			setDismissed((previous) => {
+				const kept = new Set([...previous].filter((key) => !stale.includes(key)))
+				return kept.size === previous.size ? previous : kept
+			})
+		}, REARM_DELAY_MS)
+		return () => window.clearTimeout(timer)
+	}, [activeKeys, dismissed])
 	const visible = messages.filter((message) => !dismissed.has(message.key))
 	if (visible.length === 0) return null
 	const button: React.CSSProperties = { minHeight: 24, minWidth: 24, padding: "2px 8px" }

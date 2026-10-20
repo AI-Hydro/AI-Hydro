@@ -180,3 +180,10 @@ export async function loadMapTile(
 	}
 	return image
 }
+
+/** Fetches one tile and returns its content fingerprint; rejects on HTTP errors, network errors, abort or hashing failure. */
+export async function fetchTileFingerprint(url: string, signal?: AbortSignal): Promise<string> {
+	const response = await fetch(url, { signal })
+	if (!response.ok) throw new Error(`Tile request failed (HTTP ${response.status})`)
+	return fingerprintBlob(await response.blob())
+}

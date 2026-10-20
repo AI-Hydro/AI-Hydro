@@ -132,7 +132,7 @@ export const PLACEHOLDER_IDENTICAL_RATIO = 0.95
 export const PLACEHOLDER_MAX_SAMPLE = 64
 /** Recent addresses remembered for de-duplication (a ring, never an ever-growing set). */
 export const PLACEHOLDER_ADDRESS_RING = 128
-/** Land control tile (z/x/y over India: land, with coastline and relief) fetched once per source. */
+/** Land control tile fetched once per source: z3 x5 y3 spans 45-90E, 0-41N (Arabian Sea, Pakistan, India: mostly land with coastline and relief). */
 export const CONTROL_TILE = { z: 3, x: 5, y: 3 } as const
 
 /** Fills a `{z}/{x}/{y}` tile URL template with the land control tile address. */
@@ -175,6 +175,7 @@ export class TilePlaceholderTracker {
 	private ring: string[] = []
 	private recent = new Set<string>()
 	private control: string | undefined
+	private controlFailedFlag = false
 	private decided = false
 
 	/** True while hashing tiles is still useful. Callers skip the work (and the blob read) once this is false. */
@@ -208,7 +209,17 @@ export class TilePlaceholderTracker {
 
 	/** True when the viewport looks uniform and the land control tile has not been fetched yet. */
 	needsControl(): boolean {
-		return !this.decided && this.control === undefined && this.dominant() !== undefined
+		return !this.decided && !this.controlFailedFlag && this.control === undefined && this.dominant() !== undefined
+	}
+
+	/** The control tile could not be fetched or hashed. Without it nothing is claimed: fail safe, stop sampling. */
+	markControlFailed(): void {
+		this.controlFailedFlag = true
+		this.decided = true
+	}
+
+	controlFailed(): boolean {
+		return this.controlFailedFlag
 	}
 
 	/** Records the control tile's fingerprint. A control that differs from the dominant image clears the suspicion for good. */
@@ -229,6 +240,41 @@ export class TilePlaceholderTracker {
 		this.ring = []
 		this.recent.clear()
 		this.control = undefined
+		this.controlFailedFlag = false
 		this.decided = false
+	}
+}
+
+/** Time allowed for the control tile request. */
+export const CONTROL_TIMEOUT_MS = 10_000
+
+export type ControlOutcome = "confirmed" | "cleared" | "failed"
+
+/**
+ * Runs the land-control check. `load(url, signal)` resolves to the tile's fingerprint and rejects on any failure
+ * (HTTP error, network, hashing). Any failure or the timeout marks the control failed on the tracker, so the
+ * check is never retried and no placeholder is claimed (fail safe).
+ */
+export async function runControlCheck(options: {
+	url: string
+	tracker: TilePlaceholderTracker
+	load: (url: string, signal: AbortSignal) => Promise<string>
+	timeoutMs?: number
+}): Promise<ControlOutcome> {
+	const { url, tracker, load, timeoutMs = CONTROL_TIMEOUT_MS } = options
+	const controller = new AbortController()
+	const timer = setTimeout(() => controller.abort(), timeoutMs)
+	try {
+		const fingerprint = await new Promise<string>((resolve, reject) => {
+			controller.signal.addEventListener("abort", () => reject(new Error("Control tile request timed out")), { once: true })
+			load(url, controller.signal).then(resolve, reject)
+		})
+		tracker.setControl(fingerprint)
+		return tracker.suspected() ? "confirmed" : "cleared"
+	} catch {
+		tracker.markControlFailed()
+		return "failed"
+	} finally {
+		clearTimeout(timer)
 	}
 }

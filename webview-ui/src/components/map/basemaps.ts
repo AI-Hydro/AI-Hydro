@@ -13,8 +13,10 @@
  * places reports "outside coverage" even though a few USGS tiles may exist there.
  *
  * Tile hosts in use: basemap.nationalmap.gov (USGS), services.arcgisonline.com and server.arcgisonline.com
- * (Esri), a.tile.openstreetmap.fr (HOT). Removed because they need an API key a vscode-webview origin cannot
- * present or that we do not hold: Stadia, Mapbox, and (2026-10-20) CARTO. CARTO's keyless endpoints now answer
+ * (Esri). Removed because they need an API key a vscode-webview origin cannot
+ * present or that we do not hold: Stadia, Mapbox, and (2026-10-20) CARTO. Humanitarian OSM (OpenStreetMap France) was also
+ * removed: its usage page (https://www.openstreetmap.fr/usage/) limits use to non-profit sites and apps that send an
+ * identifying user-agent, which a vscode-webview cannot do. CARTO's keyless endpoints now answer
  * every request, at every location and style, with one identical "API KEY REQUIRED" watermark tile (verified
  * 2026-10-20: same bytes for light/dark/voyager at India and US tiles), so a catalogue entry would silently
  * draw a watermark map. No CARTO key setting exists, so the entries are removed rather than gated.
@@ -110,6 +112,8 @@ export const REMOVED_BASEMAPS: Record<string, string> = {
 	"carto-voyager": "CARTO now requires an API key",
 	"stadia-terrain": "Stadia requires an API key",
 	"mapbox-dark": "Mapbox requires an access token",
+	"osm-hot":
+		"its OpenStreetMap France usage policy needs an identifying user-agent and non-profit use, which this app cannot guarantee",
 }
 
 /** USGS National Map hydrography (NHD) as transparent tiles: the emphasised river layer of the default. */
@@ -128,8 +132,6 @@ export const DEFAULT_BASEMAP_ID = "muted-hydro"
 const ESRI_CANVAS_ATTRIBUTION = "Sources: Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS User Community"
 const ESRI_TERMS =
 	"Esri ArcGIS Online tile service. Tiles are served without a key (verified by request, 2026-10-20). Esri's item pages say the content is licensed under the Esri Master License Agreement; whether the agreement permits keyless use in this application was NOT verified (Product-Specific Terms E300 do not address keyless tile services). Attribution is shown. World Light/Dark Gray Base are in mature support, retiring December 2029."
-const HOT_TERMS =
-	"Run by OpenStreetMap France. The server sends x-usage-policy: https://www.openstreetmap.fr/usage/ . That page (read 2026-10-20; it does not name the HOT layer) allows free use only with visible attribution, public access, a non-profit site or free non-profit app (apps must send an identifying user-agent), and moderate traffic; the service may be suspended without notice. Never the default."
 const USGS_TERMS =
 	"USGS The National Map: public-domain data, no key; credit USGS. Detailed tiles exist for the United States only."
 
@@ -222,18 +224,6 @@ export const BASE_MAP_STYLES: BaseMapStyle[] = [
 		attribution: "© Esri — Sources: GEBCO, NOAA, Garmin",
 		maxNativeZoom: 16,
 		terms: ESRI_TERMS,
-	},
-
-	// ── Alternate ──────────────────────────────────────────────────────────────────────────────────────────
-	{
-		id: "osm-hot",
-		name: "Humanitarian OSM",
-		coverage: "global",
-		url: "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
-		attribution: "© OpenStreetMap contributors © HOT",
-		maxNativeZoom: 19,
-		terms: HOT_TERMS,
-		note: "Optional. Community-run server (OpenStreetMap France) for free, non-profit use at moderate traffic; best effort.",
 	},
 ]
 

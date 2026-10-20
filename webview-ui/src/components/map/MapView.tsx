@@ -96,6 +96,7 @@ import {
 	clearTally,
 	controlTileUrl,
 	loadedSources,
+	runControlCheck,
 	type TileOutcome,
 	TilePlaceholderTracker,
 	type TileTallies,
@@ -105,7 +106,7 @@ import {
 } from "./tileHealth"
 import { loadTransects, type MapTransect, newTransect, saveTransects, type TransectCollection } from "./transectStorage"
 import { useMapTheme } from "./useMapTheme"
-import { loadMapTile, type ResourceState, useRasterResources } from "./useRasterResources"
+import { fetchTileFingerprint, loadMapTile, type ResourceState, useRasterResources } from "./useRasterResources"
 import VectorDrawTool, { type CompletedVectorDraw, type VectorDrawMode } from "./VectorDrawTool"
 import VectorSavePanel from "./VectorSavePanel"
 
@@ -724,23 +725,28 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const placeholderTracker = useRef(new TilePlaceholderTracker())
 	const [placeholderSuspected, setPlaceholderSuspected] = useState(false)
 	const controlInFlight = useRef(false)
+	// Basemap sources (theme-specific URLs) whose control tile failed once: never re-fetched, nothing claimed.
+	const failedControlSources = useRef(new Set<string>())
 	// `source` is the basemap URL template the tile came from: callbacks from a previous basemap are ignored.
 	const reportTileFingerprint = useCallback((source: string, address: string, fingerprint: string) => {
 		if (currentSourcesRef.current.basemap !== source) return
 		const tracker = placeholderTracker.current
 		tracker.record(address, fingerprint)
 		if (tracker.needsControl() && !controlInFlight.current) {
+			if (failedControlSources.current.has(source)) {
+				tracker.markControlFailed()
+				return
+			}
 			// The viewport looks uniform. That alone is also what open ocean looks like, so fetch one fixed land
 			// tile from the same source: only a source that returns the same image there is a placeholder.
 			controlInFlight.current = true
-			void loadMapTile({ url: controlTileUrl(source) }, (controlFingerprint) => {
-				controlInFlight.current = false
-				if (currentSourcesRef.current.basemap !== source) return
-				tracker.setControl(controlFingerprint)
-				setPlaceholderSuspected(tracker.suspected())
-			})
-				.then((image) => ("close" in image ? image.close() : undefined))
-				.catch(() => {
+			void runControlCheck({ url: controlTileUrl(source), tracker, load: fetchTileFingerprint })
+				.then((outcome) => {
+					if (outcome === "failed") failedControlSources.current.add(source)
+					if (currentSourcesRef.current.basemap !== source) return
+					setPlaceholderSuspected(outcome === "confirmed")
+				})
+				.finally(() => {
 					controlInFlight.current = false
 				})
 		}

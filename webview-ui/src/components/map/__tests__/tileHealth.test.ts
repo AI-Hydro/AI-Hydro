@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
 	classifyTileHealth,
 	clearTally,
@@ -10,6 +10,7 @@ import {
 	PLACEHOLDER_ADDRESS_RING,
 	PLACEHOLDER_MAX_SAMPLE,
 	PLACEHOLDER_MIN_TILES,
+	runControlCheck,
 	TILE_FAILURE_RATIO,
 	TilePlaceholderTracker,
 	type TileTallies,
@@ -17,6 +18,7 @@ import {
 	tileErrorsFrom,
 	tileNotesFrom,
 } from "../tileHealth"
+import { fetchTileFingerprint } from "../useRasterResources"
 
 const run = (loaded: number, failed: number, message = "Tile request failed (HTTP 404)"): TileTallies => {
 	let t: TileTallies = {}
@@ -213,5 +215,90 @@ describe("TilePlaceholderTracker", () => {
 		const a = await fingerprintBlob(blobOf([1, 2, 3]))
 		expect(a).toBe(await fingerprintBlob(blobOf([1, 2, 3])))
 		expect(a).not.toBe(await fingerprintBlob(blobOf([1, 2, 4])))
+	})
+})
+
+describe("runControlCheck fails safe", () => {
+	const uniform = () => {
+		const tracker = new TilePlaceholderTracker()
+		for (let i = 0; i < 20; i++) tracker.record(`z5/${i}/0`, "2049:502fc5f6")
+		return tracker
+	}
+	afterEach(() => vi.unstubAllGlobals())
+
+	it("a matching control confirms, a different one clears", async () => {
+		expect(await runControlCheck({ url: "u", tracker: uniform(), load: async () => "2049:502fc5f6" })).toBe("confirmed")
+		expect(await runControlCheck({ url: "u", tracker: uniform(), load: async () => "7584:169ced3d" })).toBe("cleared")
+	})
+
+	it("a failed request marks the control failed: nothing claimed, no re-fetch, sampling stops", async () => {
+		const tracker = uniform()
+		const outcome = await runControlCheck({
+			url: "u",
+			tracker,
+			load: async () => {
+				throw new Error("Tile request failed (HTTP 503)")
+			},
+		})
+		expect(outcome).toBe("failed")
+		expect(tracker.controlFailed()).toBe(true)
+		expect(tracker.suspected()).toBe(false)
+		expect(tracker.needsControl()).toBe(false)
+		expect(tracker.wantsFingerprint()).toBe(false)
+	})
+
+	it("a request that never answers times out (and is aborted) instead of hanging", async () => {
+		const tracker = uniform()
+		let aborted = false
+		const outcome = await runControlCheck({
+			url: "u",
+			tracker,
+			timeoutMs: 20,
+			load: (_url, signal) =>
+				new Promise<string>(() => {
+					signal.addEventListener("abort", () => {
+						aborted = true
+					})
+				}),
+		})
+		expect(outcome).toBe("failed")
+		expect(aborted).toBe(true)
+		expect(tracker.controlFailed()).toBe(true)
+		expect(tracker.suspected()).toBe(false)
+	})
+
+	it("a hashing failure (blob read rejects) is treated as a failed control", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => ({
+				ok: true,
+				status: 200,
+				blob: async () => ({
+					arrayBuffer: async () => {
+						throw new Error("read failed")
+					},
+				}),
+			})),
+		)
+		await expect(fetchTileFingerprint("https://h/tile/3/3/5")).rejects.toThrow("read failed")
+		const tracker = uniform()
+		expect(await runControlCheck({ url: "https://h/tile/3/3/5", tracker, load: fetchTileFingerprint })).toBe("failed")
+		expect(tracker.needsControl()).toBe(false)
+	})
+
+	it("an HTTP error is a failed control", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => ({ ok: false, status: 403 })),
+		)
+		await expect(fetchTileFingerprint("https://h/tile/3/3/5")).rejects.toThrow("HTTP 403")
+	})
+
+	it("clear (Retry imagery) resets a failed control so the check can run again", () => {
+		const tracker = uniform()
+		tracker.markControlFailed()
+		tracker.clear()
+		expect(tracker.controlFailed()).toBe(false)
+		expect(tracker.wantsFingerprint()).toBe(true)
 	})
 })
