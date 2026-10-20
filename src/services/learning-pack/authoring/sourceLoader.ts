@@ -62,24 +62,28 @@ export async function loadSources({ courseDir, rootDir, config }: LoadSourcesInp
 		throw new PackBuildError(error instanceof Error ? error.message : String(error))
 	}
 	const modules = new Map<string, Uint8Array>()
+	const sourcePaths = [path.resolve(courseDir, "course.json")]
 	const listed = (course as { modules?: unknown }).modules
 	if (Array.isArray(listed)) {
 		for (const entry of listed as { id?: unknown; path?: unknown }[]) {
 			if (typeof entry?.id !== "string" || typeof entry.path !== "string") continue
 			const absolute = path.resolve(courseDir, entry.path)
 			modules.set(entry.id, await readContainedFile(rootDir, path.relative(rootDir, absolute), `module ${entry.id}`))
+			sourcePaths.push(absolute)
 		}
 	}
 	const extraFiles = new Map<string, Uint8Array>()
 	for (const { source, dest } of config.files) {
 		extraFiles.set(dest, await readContainedFile(rootDir, source, `files[${dest}]`))
+		sourcePaths.push(path.resolve(rootDir, source))
 	}
-	return { course, modules, extraFiles }
+	return { course, modules, extraFiles, sourcePaths }
 }
 
 export interface SourceProvenance {
 	sourceCommit: string
-	sourceDirty: boolean
+	/** null = unknown: not in a git work tree, or the recorded commit is not HEAD. Never claims "clean" without checking. */
+	sourceDirty: boolean | null
 	generatedAt: string
 }
 
@@ -103,20 +107,27 @@ export function readSourceProvenance(
 	options: { buildKind: "release" | "development"; env: NodeJS.ProcessEnv; sourceCommitOverride?: string },
 ): SourceProvenance {
 	let commit = options.sourceCommitOverride
-	let dirty = false
+	let dirty: boolean | null = null
 	let commitTime: number | undefined
 	const head = git(rootDir, ["rev-parse", "HEAD"])
 	if (head.ok) {
 		const headCommit = head.stdout.trim()
+		if (options.buildKind === "release" && commit !== undefined && commit !== headCommit) {
+			throw new PackBuildError(`A release build records HEAD (${headCommit}); --source-commit ${commit} is not HEAD`)
+		}
 		commit ??= headCommit
-		const status = git(rootDir, ["status", "--porcelain", "--untracked-files=all"])
-		dirty = !status.ok || status.stdout.trim().length > 0
+		// The tree state describes HEAD only; for any other commit it is unknown.
+		if (commit === headCommit) {
+			// Ignored files are not listed here; a release build checks each included file with `ls-files` instead.
+			const status = git(rootDir, ["status", "--porcelain", "--untracked-files=all"])
+			dirty = !status.ok || status.stdout.trim().length > 0
+		}
 		const time = git(rootDir, ["show", "-s", "--format=%ct", commit])
 		if (time.ok && /^\d+$/.test(time.stdout.trim())) commitTime = Number(time.stdout.trim())
 	} else if (options.buildKind === "release") {
 		throw new PackBuildError(`A release build needs ${rootDir} to be inside a git work tree`)
 	}
-	if (options.buildKind === "release" && dirty) {
+	if (options.buildKind === "release" && dirty !== false) {
 		throw new PackBuildError("A release build needs a clean git work tree (commit your changes first)")
 	}
 	if (!commit) {
@@ -138,5 +149,28 @@ export function readSourceProvenance(
 		sourceCommit: commit,
 		sourceDirty: dirty,
 		generatedAt: new Date(epoch * 1000).toISOString().replace(/\.\d{3}Z$/, "Z"),
+	}
+}
+
+/**
+ * For a release build: every source file that goes into the pack must be tracked by git, so a gitignored or
+ * untracked file cannot be signed under a commit that does not contain it.
+ */
+export function assertSourcesTracked(rootDir: string, sourcePaths: readonly string[]): void {
+	const relative = sourcePaths.map((file) => path.relative(rootDir, file).split(path.sep).join("/"))
+	for (let index = 0; index < relative.length; index += 200) {
+		const batch = relative.slice(index, index + 200)
+		const result = git(rootDir, ["ls-files", "--error-unmatch", "--", ...batch])
+		if (!result.ok) {
+			const tracked = new Set(
+				git(rootDir, ["ls-files", "--", ...batch])
+					.stdout.split("\n")
+					.filter(Boolean),
+			)
+			const missing = batch.filter((file) => !tracked.has(file))
+			throw new PackBuildError(
+				`A release build may only include files tracked by git; not tracked (untracked or ignored): ${missing.join(", ") || batch.join(", ")}`,
+			)
+		}
 	}
 }

@@ -9,6 +9,7 @@
  * passphrase source is `readPassphrase`, which the entry point binds to the controlling terminal.
  */
 
+import { randomBytes } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { parseArgs } from "node:util"
@@ -27,7 +28,7 @@ import {
 } from "./keys"
 import { PackConfigError, parsePackConfig } from "./packConfig"
 import { SignError, signPack } from "./signPack"
-import { loadSources, readSourceProvenance } from "./sourceLoader"
+import { assertSourcesTracked, loadSources, readSourceProvenance } from "./sourceLoader"
 
 export interface CliContext {
 	argv: readonly string[]
@@ -62,15 +63,42 @@ function resolve(ctx: CliContext, p: string): string {
 	return path.resolve(ctx.cwd, p)
 }
 
+/**
+ * Write the output atomically: a temp file in the same directory, then a link (no overwrite) or rename (--force).
+ * A symlink at the target is refused either way, so a planted link can never redirect the write, and a failure
+ * never leaves a half-written pack at the target.
+ */
 async function writeOutput(target: string, bytes: Uint8Array, force: boolean): Promise<void> {
 	await fs.mkdir(path.dirname(target), { recursive: true })
+	const existing = await fs.lstat(target).catch(() => undefined)
+	if (existing?.isSymbolicLink()) throw new PackBuildError(`${target} is a symbolic link; refusing to write through it`)
+	if (existing && !force) throw new PackBuildError(`${target} already exists (pass --force to replace it)`)
+	if (existing && !existing.isFile()) throw new PackBuildError(`${target} exists and is not a regular file`)
+	const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${randomBytes(6).toString("hex")}.tmp`)
 	try {
-		await fs.writeFile(target, bytes, { flag: force ? "w" : "wx" })
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-			throw new PackBuildError(`${target} already exists (pass --force to replace it)`)
+		await fs.writeFile(temporary, bytes, { flag: "wx", mode: 0o644 })
+		if (force) {
+			await fs.rename(temporary, target)
+			return
 		}
-		throw error
+		try {
+			await fs.link(temporary, target) // fails with EEXIST if something appeared meanwhile
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code
+			if (code === "EEXIST") throw new PackBuildError(`${target} already exists (pass --force to replace it)`)
+			// A filesystem without hard links: fall back to rename after re-checking.
+			if (
+				await fs.lstat(target).then(
+					() => true,
+					() => false,
+				)
+			) {
+				throw new PackBuildError(`${target} already exists (pass --force to replace it)`)
+			}
+			await fs.rename(temporary, target)
+		}
+	} finally {
+		await fs.rm(temporary, { force: true })
 	}
 }
 
@@ -105,6 +133,12 @@ async function initKey(ctx: CliContext): Promise<number> {
 		passphrase = await ctx.readPassphrase("New key passphrase (min 12 characters, not echoed): ")
 		const again = await ctx.readPassphrase("Repeat passphrase: ")
 		if (passphrase !== again) throw new RefusalError("The passphrases do not match; no key was created")
+	}
+	if (passphrase === undefined) {
+		ctx.err(
+			"WARNING: --no-passphrase writes an UNENCRYPTED private key. Anyone or anything that can read the file can sign as you.\n" +
+				"Use it only on a machine you fully control, and prefer a passphrase.\n",
+		)
 	}
 	const created = await createKeyFiles(dir, passphrase)
 	ctx.out(`public key:  ${created.publicKeyPath}\nfingerprint: ${created.fingerprint}\n`)
@@ -169,6 +203,7 @@ async function buildCommand(ctx: CliContext): Promise<number> {
 		env: ctx.env,
 		sourceCommitOverride: values["source-commit"],
 	})
+	if (kind === "release") assertSourcesTracked(rootDir, sources.sourcePaths ?? [])
 	const built = await assembleUnsignedPack({
 		config,
 		sources,

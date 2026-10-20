@@ -297,41 +297,58 @@ export async function loadPublicKeyFile(publicKeyPath: string): Promise<LoadedPu
 
 export type PassphraseReader = (prompt: string) => Promise<string>
 
+/** The slice of a TTY stdin/stdout the passphrase reader uses (so the ordering can be tested with fakes). */
+export interface TtyLike {
+	stdin: {
+		isTTY?: boolean
+		setRawMode?: (mode: boolean) => unknown
+		resume(): unknown
+		pause(): unknown
+		on(event: "data", listener: (chunk: Buffer) => void): unknown
+		removeListener(event: "data", listener: (chunk: Buffer) => void): unknown
+	}
+	stdout: { write(text: string): unknown }
+}
+
 /**
- * Read a passphrase from the controlling terminal without echo. Characters are consumed in raw mode, so they
- * are never written to the screen, the shell history or any log. Ctrl-C aborts.
+ * Build a passphrase reader over a terminal. Echo is switched off (raw mode) BEFORE the prompt is written, so
+ * keystrokes typed as soon as the prompt appears are never echoed. Characters are consumed in raw mode, so they
+ * never reach the screen, the shell history or any log. Ctrl-C aborts.
  */
-export const readPassphraseFromTty: PassphraseReader = (prompt) =>
-	new Promise((resolve, reject) => {
-		const { stdin, stdout } = process
-		if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
-			reject(new RefusalError("A passphrase can only be read from an interactive terminal"))
-			return
-		}
-		stdout.write(prompt)
-		let value = ""
-		const finish = (action: () => void): void => {
-			stdin.setRawMode(false)
-			stdin.pause()
-			stdin.removeListener("data", onData)
-			stdout.write("\n")
-			action()
-		}
-		const onData = (chunk: Buffer): void => {
-			for (const char of chunk.toString("utf8")) {
-				if (char === "\r" || char === "\n" || char === "\u0004") {
-					finish(() => resolve(value))
-					return
-				}
-				if (char === "\u0003") {
-					finish(() => reject(new RefusalError("Cancelled")))
-					return
-				}
-				if (char === "\u007f" || char === "\b") value = value.slice(0, -1)
-				else if (char >= " ") value += char
+export function createTtyPassphraseReader({ stdin, stdout }: TtyLike): PassphraseReader {
+	return (prompt) =>
+		new Promise((resolve, reject) => {
+			if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
+				reject(new RefusalError("A passphrase can only be read from an interactive terminal"))
+				return
 			}
-		}
-		stdin.setRawMode(true)
-		stdin.resume()
-		stdin.on("data", onData)
-	})
+			let value = ""
+			const finish = (action: () => void): void => {
+				stdin.setRawMode?.(false)
+				stdin.pause()
+				stdin.removeListener("data", onData)
+				stdout.write("\n")
+				action()
+			}
+			const onData = (chunk: Buffer): void => {
+				for (const char of chunk.toString("utf8")) {
+					if (char === "\r" || char === "\n" || char === "\u0004") {
+						finish(() => resolve(value))
+						return
+					}
+					if (char === "\u0003") {
+						finish(() => reject(new RefusalError("Cancelled")))
+						return
+					}
+					if (char === "\u007f" || char === "\b") value = value.slice(0, -1)
+					else if (char >= " ") value += char
+				}
+			}
+			stdin.setRawMode(true)
+			stdin.resume()
+			stdin.on("data", onData)
+			stdout.write(prompt)
+		})
+}
+
+export const readPassphraseFromTty: PassphraseReader = (prompt) => createTtyPassphraseReader(process)(prompt)

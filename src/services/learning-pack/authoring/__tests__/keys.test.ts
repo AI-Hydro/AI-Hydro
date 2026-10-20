@@ -8,6 +8,7 @@ import {
 	AGENT_CONTEXT_ENV_VARS,
 	assertOwnerContext,
 	createKeyFiles,
+	createTtyPassphraseReader,
 	exportPrivateKeyPem,
 	findEnclosingGitWorktree,
 	loadPublicKeyFile,
@@ -259,5 +260,66 @@ describe("encrypted PKCS#8", () => {
 	it("uses a fresh salt and IV every time", () => {
 		const { privateKey } = generateKeyPairSync("ed25519")
 		expect(exportPrivateKeyPem(privateKey, PASSPHRASE)).to.not.equal(exportPrivateKeyPem(privateKey, PASSPHRASE))
+	})
+})
+
+describe("TTY passphrase reader", () => {
+	function fakeTty(options?: { isTTY?: boolean; keys?: string }) {
+		const events: string[] = []
+		let listener: ((chunk: Buffer) => void) | undefined
+		const tty = {
+			stdin: {
+				isTTY: options?.isTTY ?? true,
+				setRawMode: (mode: boolean) => events.push(`raw:${mode}`),
+				resume: () => events.push("resume"),
+				pause: () => events.push("pause"),
+				on: (_event: "data", fn: (chunk: Buffer) => void) => {
+					listener = fn
+					events.push("listen")
+					// Keystrokes typed the instant the prompt shows: delivered right after the prompt is written.
+				},
+				removeListener: () => events.push("unlisten"),
+			},
+			stdout: {
+				write: (text: string) => {
+					events.push(`write:${JSON.stringify(text)}`)
+					if (text === "Passphrase: " && options?.keys !== undefined)
+						queueMicrotask(() => listener?.(Buffer.from(options.keys as string)))
+				},
+			},
+		}
+		return { tty, events }
+	}
+
+	it("turns echo off (raw mode) and starts listening BEFORE the prompt is written", async () => {
+		const { tty, events } = fakeTty({ keys: "hunter2 is long\r" })
+		const value = await createTtyPassphraseReader(tty)("Passphrase: ")
+		expect(value).to.equal("hunter2 is long")
+		const prompt = events.indexOf('write:"Passphrase: "')
+		expect(events.indexOf("raw:true")).to.be.within(0, prompt - 1)
+		expect(events.indexOf("resume")).to.be.within(0, prompt - 1)
+		expect(events.indexOf("listen")).to.be.within(0, prompt - 1)
+		expect(events.slice(prompt + 1)).to.deep.equal(["raw:false", "pause", "unlisten", 'write:"\\n"'])
+	})
+
+	it("never writes the typed characters to the screen, and handles backspace and Ctrl-C", async () => {
+		const typed = fakeTty({ keys: "abcX\u007f\r" })
+		expect(await createTtyPassphraseReader(typed.tty)("Passphrase: ")).to.equal("abc")
+		expect(typed.events.filter((e) => e.startsWith("write")).join("")).to.not.contain("abc")
+		const cancelled = fakeTty({ keys: "ab\u0003" })
+		await createTtyPassphraseReader(cancelled.tty)("Passphrase: ").then(
+			() => expect.fail("should cancel"),
+			(error) => expect(error).to.be.instanceOf(RefusalError),
+		)
+		expect(cancelled.events).to.include("raw:false")
+	})
+
+	it("refuses without a TTY and writes no prompt", async () => {
+		const { tty, events } = fakeTty({ isTTY: false })
+		await createTtyPassphraseReader(tty)("Passphrase: ").then(
+			() => expect.fail("should refuse"),
+			(error) => expect(error).to.be.instanceOf(RefusalError),
+		)
+		expect(events).to.deep.equal([])
 	})
 })

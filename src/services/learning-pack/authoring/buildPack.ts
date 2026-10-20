@@ -47,6 +47,8 @@ export interface SourceBundle {
 	modules: ReadonlyMap<string, Uint8Array>
 	/** Extra file bytes keyed by their pack path (already confined to assets/datasets/citations/environments). */
 	extraFiles: ReadonlyMap<string, Uint8Array>
+	/** Absolute paths of every source file that was read (for the release "tracked in git" check). */
+	sourcePaths?: readonly string[]
 }
 
 export type BuildKind = "release" | "development"
@@ -57,7 +59,11 @@ export interface BuildPackInput {
 	buildKind: BuildKind
 	/** SPKI DER of the publisher's public key. Required for a release build. */
 	publisherSpkiDer?: Uint8Array
-	provenance: { sourceCommit: string; sourceDirty: boolean; generatedAt: string }
+	provenance: {
+		sourceCommit: string /** null = unknown (not in a git work tree, or a commit other than HEAD) */
+		sourceDirty: boolean | null
+		generatedAt: string
+	}
 }
 
 export type PackTransform =

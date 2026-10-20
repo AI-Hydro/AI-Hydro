@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect } from "chai"
+import { readLearningPackArchiveEntries } from "../../inspectLearningPackArchive"
 import { type CliContext, runCli } from "../cli"
 import { AGENT_CONTEXT_ENV_VARS } from "../keys"
 import { moduleHtml, sourceCourse } from "./authoringTestKit"
@@ -442,6 +443,215 @@ describe("aihydro-pack CLI", () => {
 			expect(result.code).to.equal(1)
 			expect(result.err).to.contain("symbolic link")
 			expect(await exists(out)).to.equal(false)
+		})
+
+		describe("release provenance cannot be false", () => {
+			const release = async (extra: string[], out: string, configPath = config()): Promise<Run> => {
+				await run(["init-key", "--out", keys], root).catch(() => undefined)
+				return run(
+					[
+						"build",
+						courseDir,
+						"--root",
+						repo,
+						"--config",
+						configPath,
+						"--kind",
+						"release",
+						"--publisher-pub",
+						path.join(keys, "ed25519.pub.pem"),
+						"--out",
+						out,
+						...extra,
+					],
+					root,
+				)
+			}
+			async function provenanceOf(archive: string): Promise<Record<string, unknown>> {
+				const read = await readLearningPackArchiveEntries(await fs.readFile(archive))
+				return JSON.parse(Buffer.from(read.files?.get("provenance/provenance.json") as Uint8Array).toString("utf8"))
+			}
+			async function configWithFile(): Promise<string> {
+				const withFile = path.join(root, "files.config.json")
+				await fs.writeFile(
+					withFile,
+					JSON.stringify({
+						...JSON.parse(await fs.readFile(config(), "utf8")),
+						files: [{ source: "data/x.csv", dest: "datasets/x.csv" }],
+					}),
+				)
+				return withFile
+			}
+
+			it("refuses a gitignored source file in a release build, and writes nothing", async () => {
+				await fs.mkdir(path.join(repo, "data"))
+				await fs.writeFile(path.join(repo, "data/x.csv"), "a,b\n1,2\n")
+				await fs.writeFile(path.join(repo, ".gitignore"), "data/\n")
+				git(repo, "add", "-A")
+				git(repo, "commit", "-q", "-m", "ignore data")
+				const out = path.join(root, "r.unsigned.aihydropack")
+				const result = await release([], out, await configWithFile())
+				expect(result.code, result.err).to.equal(1)
+				expect(result.err).to.contain("not tracked")
+				expect(result.err).to.contain("data/x.csv")
+				expect(await exists(out)).to.equal(false)
+				// The same ignored file is fine in a development build, which records that nothing was proven.
+				const dev = path.join(root, "dev.unsigned.aihydropack")
+				expect(
+					(await run(["build", courseDir, "--root", repo, "--config", await configWithFile(), "--out", dev], root))
+						.code,
+				).to.equal(0)
+			})
+
+			it("accepts the same file once it is tracked", async () => {
+				await fs.mkdir(path.join(repo, "data"))
+				await fs.writeFile(path.join(repo, "data/x.csv"), "a,b\n1,2\n")
+				git(repo, "add", "-A")
+				git(repo, "commit", "-q", "-m", "track data")
+				const out = path.join(root, "r.unsigned.aihydropack")
+				const result = await release([], out, await configWithFile())
+				expect(result.code, result.err).to.equal(0)
+				expect((await provenanceOf(out)).sourceDirty).to.equal(false)
+			})
+
+			it("requires --source-commit to equal HEAD for a release build", async () => {
+				const first = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8", env: cleanEnv() }).trim()
+				await fs.appendFile(path.join(repo, "modules/water-basics/module.html"), "<!-- v2 -->")
+				git(repo, "add", "-A")
+				git(repo, "commit", "-q", "-m", "second")
+				const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8", env: cleanEnv() }).trim()
+				const out = path.join(root, "r.unsigned.aihydropack")
+				const stale = await release(["--source-commit", first], out)
+				expect(stale.code).to.equal(1)
+				expect(stale.err).to.contain("is not HEAD")
+				expect(await exists(out)).to.equal(false)
+				const ok = await release(["--source-commit", head], out)
+				expect(ok.code, ok.err).to.equal(0)
+				expect((await provenanceOf(out)).sourceCommit).to.equal(head)
+			})
+
+			it("records sourceDirty honestly: true when dirty, false when clean, null outside git or for a non-HEAD commit", async () => {
+				await run(["init-key", "--out", keys], root)
+				const clean = path.join(root, "clean.aihydropack")
+				await run(["build", courseDir, "--root", repo, "--config", config(), "--out", clean], root)
+				expect((await provenanceOf(clean)).sourceDirty).to.equal(false)
+
+				await fs.writeFile(path.join(repo, "untracked.txt"), "x")
+				const dirty = path.join(root, "dirty.aihydropack")
+				await run(["build", courseDir, "--root", repo, "--config", config(), "--out", dirty], root)
+				expect((await provenanceOf(dirty)).sourceDirty).to.equal(true)
+				await fs.rm(path.join(repo, "untracked.txt"))
+
+				const other = path.join(root, "other.aihydropack")
+				const result = await run(
+					["build", courseDir, "--root", repo, "--config", config(), "--out", other, "--source-commit", "a".repeat(40)],
+					root,
+					{
+						env: cleanEnv({ SOURCE_DATE_EPOCH: "1760961600" }),
+					},
+				)
+				expect(result.code, result.err).to.equal(0)
+				expect((await provenanceOf(other)).sourceDirty).to.equal(null)
+
+				const loose = path.join(root, "loose")
+				await fs.cp(path.join(repo, "modules"), path.join(loose, "modules"), { recursive: true })
+				await fs.mkdir(path.join(loose, "courses/demo"), { recursive: true })
+				await fs.copyFile(path.join(courseDir, "course.json"), path.join(loose, "courses/demo/course.json"))
+				const outside = path.join(root, "outside.aihydropack")
+				const nogit = await run(
+					[
+						"build",
+						path.join(loose, "courses/demo"),
+						"--root",
+						loose,
+						"--config",
+						config(),
+						"--out",
+						outside,
+						"--source-commit",
+						"b".repeat(40),
+					],
+					root,
+					{ env: cleanEnv({ SOURCE_DATE_EPOCH: "1760961600", GIT_CEILING_DIRECTORIES: root }) },
+				)
+				expect(nogit.code, nogit.err).to.equal(0)
+				expect((await provenanceOf(outside)).sourceDirty).to.equal(null)
+				// ...and a release build outside git is refused.
+				const rel = await run(
+					[
+						"build",
+						path.join(loose, "courses/demo"),
+						"--root",
+						loose,
+						"--config",
+						config(),
+						"--kind",
+						"release",
+						"--publisher-pub",
+						path.join(keys, "ed25519.pub.pem"),
+						"--out",
+						path.join(root, "x.aihydropack"),
+						"--source-commit",
+						"b".repeat(40),
+					],
+					root,
+					{ env: cleanEnv({ SOURCE_DATE_EPOCH: "1760961600", GIT_CEILING_DIRECTORIES: root }) },
+				)
+				expect(rel.code).to.equal(1)
+				expect(rel.err).to.contain("inside a git work tree")
+			})
+		})
+
+		describe("output writes", () => {
+			it("--force replaces atomically, leaves no temp file, and never follows a symlink at the target", async function () {
+				const out = path.join(root, "o.aihydropack")
+				expect((await run(["build", courseDir, "--root", repo, "--config", config(), "--out", out], root)).code).to.equal(
+					0,
+				)
+				expect(
+					(await run(["build", courseDir, "--root", repo, "--config", config(), "--out", out, "--force"], root)).code,
+				).to.equal(0)
+				expect((await fs.readdir(root)).filter((name) => name.endsWith(".tmp"))).to.deep.equal([])
+				if (process.platform === "win32") this.skip()
+				const victim = path.join(root, "victim.txt")
+				await fs.writeFile(victim, "precious")
+				const link = path.join(root, "link.aihydropack")
+				await fs.symlink(victim, link)
+				for (const flags of [[], ["--force"]]) {
+					const result = await run(
+						["build", courseDir, "--root", repo, "--config", config(), "--out", link, ...flags],
+						root,
+					)
+					expect(result.code, flags.join(" ")).to.equal(1)
+					expect(result.err).to.contain("symbolic link")
+				}
+				expect(await fs.readFile(victim, "utf8")).to.equal("precious")
+				expect((await fs.lstat(link)).isSymbolicLink()).to.equal(true)
+			})
+
+			it("refuses a directory at the target and keeps an existing pack intact on refusal", async () => {
+				const out = path.join(root, "o2.aihydropack")
+				await run(["build", courseDir, "--root", repo, "--config", config(), "--out", out], root)
+				const before = await fs.readFile(out)
+				expect((await run(["build", courseDir, "--root", repo, "--config", config(), "--out", out], root)).code).to.equal(
+					1,
+				)
+				expect((await fs.readFile(out)).equals(before)).to.equal(true)
+				const dir = path.join(root, "adir")
+				await fs.mkdir(dir)
+				expect(
+					(await run(["build", courseDir, "--root", repo, "--config", config(), "--out", dir, "--force"], root)).code,
+				).to.equal(1)
+			})
+		})
+
+		it("init-key --no-passphrase warns loudly that the key is unencrypted", async () => {
+			const result = await run(["init-key", "--no-passphrase", "--out", keys], root)
+			expect(result.code).to.equal(0)
+			expect(result.prompts).to.deep.equal([])
+			expect(result.err).to.contain("UNENCRYPTED")
+			const withPass = await run(["init-key", "--out", path.join(root, "k2")], root)
+			expect(withPass.err).to.not.contain("UNENCRYPTED")
 		})
 
 		it("rejects a bad usage with exit 2", async () => {

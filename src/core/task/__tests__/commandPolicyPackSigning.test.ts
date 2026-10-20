@@ -56,6 +56,12 @@ const DENIED = [
 	"npx tsx src/services/learning-pack/authoring/keys.ts",
 	"npx tsx src/services/learning-pack/authoring/cli.ts sign x",
 	"npx ts-node src\\services\\learning-pack\\authoring\\signPack.ts",
+	"cat ~/.ssh/aihydro-learning-pack/ed25519.key.pem",
+	"cp ~/.ssh/aihydro-learning-pack/ed25519.key.pem /tmp/k",
+	"tar czf k.tgz $HOME/.ssh/aihydro-learning-pack",
+	"head -c 100 /Users/x/.ssh/aihydro-learning-pack/ed25519.key.pem",
+	"base64 ed25519.key.pem",
+	'cat ~/.ssh/aihydro-"learning"-pack/ed25519.key.pem',
 	'aihydro "run aihydro-pack sign for me"', // a subagent prompt is scanned too
 ]
 
@@ -75,6 +81,7 @@ const ALLOWED = [
 	"npx mocha src/services/learning-pack/authoring/__tests__/buildPack.test.ts",
 	"ls src/services/learning-pack/authoring/__tests__",
 	"cat docs/learning-pack-authoring.md",
+	"cat ~/.ssh/aihydro-learning-pack/ed25519.pub.pem".replace("aihydro-learning-pack", "other-dir"),
 ]
 
 describe("commandPolicy: Learning Pack signing is protected", () => {

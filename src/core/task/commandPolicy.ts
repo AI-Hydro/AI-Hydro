@@ -42,6 +42,10 @@ const PROTECTED_COMMAND_SUBSTRINGS = [
 	"authoring/sign",
 	"authoring/keys",
 	"authoring/cli",
+	// The default key directory and key file names: any command that names them (cat, cp, tar, ...) is denied.
+	// Agent FILE tools are already blocked from ~/.ssh by protectedPaths.ts; this is the command-level counterpart.
+	"aihydro-learning-pack",
+	"ed25519.key.pem",
 ] as const
 /**
  * `aihydro-pack.cjs sign`, `aihydro-pack.ts init-key`, `npm run aihydro-pack -- sign`: the program name, an optional
@@ -49,14 +53,15 @@ const PROTECTED_COMMAND_SUBSTRINGS = [
  */
 const PROTECTED_PACK_PATTERN = /aihydro-pack(?:\.[a-z]{2,4})?(?:\s*--?[a-z][a-z-]*)*\s*(?:--\s*)?(?:sign|init-key)/
 /** Substrings that belong to the Learning Pack signer rather than claim approval (they get their own message). */
-const PACK_SIGNING_MARKERS = ["aihydro-pack", "authoring/"] as const
+const PACK_SIGNING_MARKERS = ["aihydro-pack", "authoring/", "aihydro-learning-pack", "ed25519.key"] as const
 /** `from ai_hydro import approval` style imports: the dotted name never appears, so match the shape. */
 const PROTECTED_IMPORT_PATTERN = /ai_hydro\s+import\s[^\n;|&]*\bapproval\b/
 
 export const PROTECTED_PACK_SIGNING_DENY_MESSAGE =
 	"Blocked by AI-Hydro: this command creates or uses the Learning Pack signing key. Key creation and signing must " +
 	"be done by you, in your own terminal (outside the agent): run `aihydro-pack init-key` or `aihydro-pack sign` " +
-	"yourself. `aihydro-pack build`, `verify` and `inspect` are fine for the agent to run."
+	"yourself. The signing key directory is off limits to agent commands. `aihydro-pack build`, `verify` and `inspect` " +
+	"are fine for the agent to run."
 
 export const PROTECTED_COMMAND_DENY_MESSAGE =
 	"Blocked by AI-Hydro: this command touches claim approval. Claim approval must be given by you, in your own " +
