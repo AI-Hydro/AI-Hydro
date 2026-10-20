@@ -141,6 +141,8 @@ export interface AiHydroMessage {
 	commandCompleted?: boolean
 	/** Recorded by the host when the user answers a tool/command/MCP/browser ask. Absent = no evidence either way. */
 	askOutcome?: "approved" | "denied"
+	/** Recorded by the host when a call's result is returned (ToolExecutor). Absent = no completion evidence. */
+	execOutcome?: "completed" | "failed"
 	lastCheckpointHash?: string
 	isCheckpointCheckedOut?: boolean
 	isOperationOutsideWorkspace?: boolean

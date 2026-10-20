@@ -8,7 +8,7 @@ import {
 	AiHydroSayTool,
 	COMPLETION_RESULT_CHANGES_FLAG,
 } from "@shared/ExtensionMessage"
-import { type AskOutcome, deriveAskOutcome } from "@shared/aihydro/askOutcome"
+import { type CallState, deriveCallState } from "@shared/aihydro/askOutcome"
 import { getPairing, isScienceServer } from "@shared/aihydro/toolCallPresenter"
 import { BooleanRequest, Int64Request, StringRequest } from "@shared/proto/cline/common"
 import { VSCodeBadge, VSCodeButton, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
@@ -50,16 +50,22 @@ const errorColor = "var(--vscode-errorForeground)"
 const _cancelledColor = "var(--vscode-descriptionForeground)"
 
 /**
- * Header wording for a call that needed permission, by what the stream shows happened to it. Past tense only with
- * evidence; a denied call is said to be not run; with no evidence the row only says the agent asked.
- * `tail` ends the phrase ("" when more text follows in the same header).
+ * Header wording for a call, by what the stream shows happened to it (askOutcome.ts). Past tense only with
+ * execution evidence; "Approved" is not "ran"; a denied call is said to be not run; with no evidence the row only
+ * says the agent asked. `tail` ends the phrase (":" by default, "" when more text follows in the same header).
  */
-function askText(outcome: AskOutcome, noun: string, past: string, tail = ":"): string {
-	switch (outcome) {
+function askText(state: CallState, noun: string, past: string, tail = ":"): string {
+	switch (state) {
 		case "pending":
 			return `AI Hydro wants to ${noun}${tail}`
+		case "approved":
+			return `Approved: ${noun}${tail}`
+		case "running":
+			return `Running: ${noun}…${tail === ":" ? "" : tail}`
 		case "executed":
 			return `AI Hydro ${past}${tail}`
+		case "failed":
+			return `Failed: ${noun}${tail}`
 		case "denied":
 			return tail === ":" ? `Denied: ${noun} (not run)` : `Denied: ${noun}`
 		default:
@@ -402,7 +408,7 @@ export const ChatRowContent = memo(
 		// "wants to ..." is honest only while the call is awaiting permission. An ask that is no longer the last row
 		// has been answered (run or denied), and a `say` is by construction something that already happened.
 		// Tense comes from the outcome recorded in the stream (askOutcome.ts), never from row position.
-		const askOutcome = useMemo(() => deriveAskOutcome(message, aihydroMessages ?? []), [message, aihydroMessages])
+		const askOutcome = useMemo(() => deriveCallState(message, aihydroMessages ?? []), [message, aihydroMessages])
 		const isPendingAsk = askOutcome === "pending"
 
 		const handleToggle = useCallback(() => {
@@ -1342,9 +1348,11 @@ export const ChatRowContent = memo(
 							argsJson={useMcpServer.arguments}
 							resultText={sciencePair?.status === "paired" ? sciencePair.resultText : undefined}
 							unpaired={sciencePair?.status === "unpaired"}
-							running={isMcpServerResponding}
+							running={isMcpServerResponding || askOutcome === "running"}
 							awaitingPermission={isPendingAsk}
+							approved={askOutcome === "approved"}
 							denied={askOutcome === "denied"}
+							failed={askOutcome === "failed"}
 							serverName={useMcpServer.serverName}
 							toolMeta={{ description: scienceTool?.description, inputSchema: scienceTool?.inputSchema }}
 							toolName={useMcpServer.toolName || ""}

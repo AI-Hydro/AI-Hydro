@@ -40,6 +40,10 @@ export interface ScienceToolCardProps {
 	awaitingPermission?: boolean
 	/** True when the user denied this call: it did not run. */
 	denied?: boolean
+	/** True when the call was approved but there is no result yet. */
+	approved?: boolean
+	/** True when the call failed (an error row or a failure result). */
+	failed?: boolean
 }
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
@@ -76,6 +80,8 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 	unpaired,
 	awaitingPermission,
 	denied,
+	approved,
+	failed,
 }) => {
 	const model = useMemo(
 		() => presentToolCall(serverName, toolName, argsJson, resultText, annotations, toolMeta),
@@ -146,7 +152,11 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 								? "Not run yet: waiting for your permission."
 								: denied
 									? "Not run: you denied this call."
-									: "No result recorded yet."}
+									: failed
+										? "Failed: no result was recorded."
+										: approved
+											? "Approved. No result recorded yet."
+											: "No result recorded yet."}
 				</Text>
 			)}
 

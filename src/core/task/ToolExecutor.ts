@@ -1,3 +1,4 @@
+import { callRowIndexToRecord } from "@shared/aihydro/askOutcome"
 import * as path from "node:path"
 import { ApiHandler, ApiProviderInfo } from "@core/api"
 import { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
@@ -292,8 +293,21 @@ export class ToolExecutor {
 		}
 	}
 
+	/**
+	 * Record on the call's UI row that its result came back, so the transcript can say "ran" or "failed" from evidence
+	 * instead of inferring it from the approval. A denied call never ran, so it is not marked.
+	 */
+	private async recordExecution(content: ToolResponse): Promise<void> {
+		const failed = typeof content === "string" && ToolExecutor.TOOL_ERROR_MARKERS.some((marker) => content.includes(marker))
+		const index = callRowIndexToRecord(this.messageStateHandler.getAiHydroMessages())
+		if (index >= 0) {
+			await this.messageStateHandler.updateAiHydroMessage(index, { execOutcome: failed ? "failed" : "completed" })
+		}
+	}
+
 	private pushToolResult = (content: ToolResponse, block: ToolUse) => {
 		this.recordIfToolError(content, block)
+		void this.recordExecution(content).catch((error) => console.error("Failed to record tool execution outcome", error))
 		// Use the ToolResultUtils to properly format and push the tool result
 		ToolResultUtils.pushToolResult(
 			content,
