@@ -88,9 +88,9 @@ describe("repairNativeToolCalls (DeepSeek native tool-call envelope)", () => {
 	})
 
 	it("an unterminated envelope hides only the envelope, not the rest of the message", () => {
-		const text = 'A <tool_calls><invoke name="x"><parameter name="a">1</parameter></invoke>\nB is still prose.'
+		const text = 'A\n<tool_calls><invoke name="x"><parameter name="a">1</parameter></invoke>\nB is still prose.'
 		const done = repairNativeToolCalls(text, ctx, true)
-		expect(done.text).to.equal("A \nB is still prose.")
+		expect(done.text).to.equal("A\n\nB is still prose.")
 		expect(done.malformed[0]).to.equal('<tool_calls><invoke name="x"><parameter name="a">1</parameter></invoke>')
 	})
 
@@ -232,7 +232,7 @@ describe("repairNativeToolCalls (DeepSeek native tool-call envelope)", () => {
 
 		it("an unclosed envelope: the transcript shows the text after it, not only the stored text", () => {
 			const r = runMessage(
-				'Start. <tool_calls><invoke name="x"><parameter name="a">1</parameter></invoke>\nThen the answer.',
+				'Start.\n<tool_calls><invoke name="x"><parameter name="a">1</parameter></invoke>\nThen the answer.',
 			)
 			expect(r.executed).to.deep.equal([])
 			expect(r.shown.join("\n")).to.include("Then the answer.")
@@ -403,6 +403,40 @@ describe("repairNativeToolCalls (DeepSeek native tool-call envelope)", () => {
 			) as any
 			expect(JSON.parse(tool.params.arguments)).to.deep.equal({ task_progress: "x" })
 			expect(tool.params.task_progress).to.equal(undefined)
+		})
+
+		it("an envelope after inline prose on the same line is neutralised and never runs", () => {
+			for (const text of [
+				`The doc says "${SESSION_ROW}`, // message ends mid-quote, unclosed
+				`The doc says "${SESSION_ROW}\n</tool_calls>`, // closed, still inline
+				`Calling it: ${SESSION_ROW}`,
+			]) {
+				const out = repairNativeToolCalls(text, sctx, true)
+				expect(out.repaired, text).to.equal(0)
+				expect(out.malformed, text).to.deep.equal([])
+				expect(out.text, text).to.not.include("<")
+				expect(parseAssistantMessageV2(out.text).some((b) => b.type === "tool_use")).to.equal(false)
+			}
+		})
+
+		it("an envelope after prose on an earlier line, or after leading whitespace, still repairs", () => {
+			expect(repairNativeToolCalls(`Binding the session.\n${SESSION_ROW}`, sctx, true).repaired).to.equal(1)
+			expect(repairNativeToolCalls(`Binding.\n  ${SESSION_ROW}`, sctx, true).repaired).to.equal(1)
+			expect(repairNativeToolCalls(`Binding.\n    ${SESSION_ROW}`, sctx, true).repaired).to.equal(0) // 4+ spaces = code
+			expect(repairNativeToolCalls(`\n${SESSION_ROW}`, sctx, true).repaired).to.equal(1)
+		})
+
+		it("a malformed inputSchema (properties not an object) does not crash and keeps task_progress out of args", () => {
+			for (const schema of [{ properties: null }, { properties: "x" }, "junk", null]) {
+				const bad: NativeToolCallContext = {
+					servers: [{ name: "s", tools: [{ name: "start_session", inputSchema: schema }] }],
+				}
+				const out = repairNativeToolCalls(SESSION_ROW, bad, true)
+				expect(out.repaired).to.equal(1)
+				const tool = parseAssistantMessageV2(out.text).find((b) => b.type === "tool_use") as any
+				expect(JSON.parse(tool.params.arguments)).to.not.have.property("task_progress")
+				expect(tool.params.task_progress).to.include("Bind/resume")
+			}
 		})
 
 		it("task_progress on a closed envelope is carried the same way", () => {

@@ -18,7 +18,7 @@
  *  - text inside code fences / inline code is documentation, not a call, and is left untouched;
  *  - values are inert: a parameter value that could open/close a protocol element is refused (built-in tools) or
  *    JSON-escaped (MCP arguments), so one envelope can never smuggle in a second tool call;
- *  - only a TRAILING envelope is converted, and the host enables this only for model families that emit native
+ *  - only an envelope that starts its line (message start, or only whitespace before it) and is TRAILING is converted, and the host enables this only for model families that emit native
  *    tool calls; envelopes in prose, quotes, indented or fenced code are documentation;
  *  - routing: a repaired call can reach a lone UNTRUSTED owner of the tool name (it is still an ordinary
  *    use_mcp_tool call: approval is required and the approval card and the muted "Repaired ..." line name the
@@ -175,7 +175,8 @@ function toProtocolXml(
 			return undefined
 		}
 		const tool = owners[0].tools.find((t) => t.name === name)!
-		const props = (tool.inputSchema as any)?.properties ?? {}
+		const rawProps = (tool.inputSchema as any)?.properties
+		const props: Record<string, unknown> = rawProps && typeof rawProps === "object" ? rawProps : {}
 		const args: Record<string, unknown> = {}
 		// task_progress is a Cline-protocol meta parameter (the system prompt asks every tool call to be able to
 		// carry it), not an argument of the MCP tool: strip it from `arguments` and pass it on as the call's own
@@ -238,6 +239,16 @@ export function repairNativeToolCalls(text: string, ctx: NativeToolCallContext, 
 			// Documentation, not a call. Neutralise the envelope so the normal parser cannot read tags inside it.
 			const codeEnd = text.indexOf(CLOSE, start + OPEN.length)
 			const stop = codeEnd === -1 ? start + OPEN.length : codeEnd + CLOSE.length
+			out += text.slice(cursor, start) + neutralise(text.slice(start, stop))
+			cursor = stop
+			continue
+		}
+		const lineStart = text.lastIndexOf("\n", start - 1) + 1
+		if (text.slice(lineStart, start).trim() !== "") {
+			// Inline after prose on the same line (e.g. a message that ends mid-quote): a mention, never a call.
+			// Neutralise through the closing tag, or to the end of the message when unclosed.
+			const closeAt = text.indexOf(CLOSE, start + OPEN.length)
+			const stop = closeAt === -1 ? text.length : closeAt + CLOSE.length
 			out += text.slice(cursor, start) + neutralise(text.slice(start, stop))
 			cursor = stop
 			continue
