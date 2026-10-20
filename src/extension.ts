@@ -3,7 +3,6 @@
 
 import assert from "node:assert"
 import * as fs from "node:fs"
-import os from "node:os"
 import { DIFF_VIEW_URI_SCHEME } from "@hosts/vscode/VscodeDiffViewProvider"
 import * as vscode from "vscode"
 import { previewHtml } from "./core/controller/htmlPreview/previewHtml"
@@ -32,6 +31,7 @@ import { PreviewHtmlRequest } from "./shared/proto/cline/html_preview"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
 
 import path from "node:path"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { ExtensionContext } from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-grpc-client"
@@ -811,7 +811,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// The aihydro-tools `show_html_preview(file_path)` MCP tool drops a JSON
 	// marker file into ~/.aihydro/preview-requests/. We watch that directory
 	// and open any file referenced there in the HTML Preview panel.
-	const PREVIEW_REQUESTS_DIR = path.join(os.homedir(), ".aihydro", "preview-requests")
+	const PREVIEW_REQUESTS_DIR = aihydroPath("preview-requests")
 	void fs.promises.mkdir(PREVIEW_REQUESTS_DIR, { recursive: true }).catch(() => {})
 
 	const handlePreviewRequest = async (requestPath: string) => {

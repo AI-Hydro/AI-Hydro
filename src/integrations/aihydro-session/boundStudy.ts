@@ -1,14 +1,11 @@
-import fs from "fs"
-import os from "os"
-import path from "path"
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import type { BoundStudyInfo } from "@shared/ExtensionMessage"
+import fs from "fs"
+import path from "path"
 
 // Mirrors the Python session layer (ai_hydro.session.chat_binding /
 // ai_hydro.session.store): the binding map and per-study files live under
 // ~/.aihydro. We only ever READ these files here — the MCP server owns writes.
-const AIHYDRO_HOME = path.join(os.homedir(), ".aihydro")
-const CHAT_STUDIES_FILE = path.join(AIHYDRO_HOME, "chat_studies.json")
-const SESSIONS_DIR = path.join(AIHYDRO_HOME, "sessions")
 
 interface ChatStudiesFile {
 	chat_to_study?: Record<string, string>
@@ -24,14 +21,14 @@ interface ChatStudiesFile {
  * chip is absent rather than ever breaking the header.
  *
  * @param ulid the bound Task's `ulid` (NOT `taskId` — they differ)
- * @param aihydroHome override for the ~/.aihydro root (testing only)
+ * @param home override for the ~/.aihydro root (testing only)
  */
-export function getBoundStudy(ulid: string | undefined, aihydroHome: string = AIHYDRO_HOME): BoundStudyInfo | undefined {
+export function getBoundStudy(ulid: string | undefined, home: string = aihydroHome()): BoundStudyInfo | undefined {
 	if (!ulid) {
 		return undefined
 	}
-	const chatStudiesFile = aihydroHome === AIHYDRO_HOME ? CHAT_STUDIES_FILE : path.join(aihydroHome, "chat_studies.json")
-	const sessionsDir = aihydroHome === AIHYDRO_HOME ? SESSIONS_DIR : path.join(aihydroHome, "sessions")
+	const chatStudiesFile = path.join(home, "chat_studies.json")
+	const sessionsDir = path.join(home, "sessions")
 
 	let studyId: string | undefined
 	try {

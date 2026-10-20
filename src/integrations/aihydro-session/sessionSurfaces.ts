@@ -1,5 +1,5 @@
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs"
-import * as os from "os"
 import * as path from "path"
 import type { ResearchSnapshot, SnapshotReader } from "./researchSnapshot"
 
@@ -113,7 +113,7 @@ export interface ReplaySurface {
 }
 
 export function defaultAiHydroHome(): string {
-	return path.join(os.homedir(), ".aihydro")
+	return aihydroHome()
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -256,16 +256,8 @@ export async function loadClaimSurface(sessionIdOrPath: string, readSnapshot: Sn
 		.map(([claimId, claim]) => normalizeClaimRecord(claimId, claim, sessionId))
 		.filter((claim): claim is ClaimSurfaceRecord => !!claim)
 		.sort((a, b) => a.claimId.localeCompare(b.claimId))
-	const runEntries = snapshot.runs.map((run) => normalizeRunEntry(run, String(run.run_id), sessionId)!)
-	const linkedRunIds = new Set(
-		claims.flatMap((claim) => claim.evidenceSpans.filter((span) => span.sourceType === "run").map((span) => span.sourceId)),
-	)
-	const unlinkedRuns = runEntries.filter((entry) => !linkedRunIds.has(entry.run_id))
-	if (claims.length === 0) {
-		claims.push(...synthesizeEvidenceCandidates(runEntries, sessionId))
-	} else if (unlinkedRuns.length > 0) {
-		claims.push(...synthesizeEvidenceCandidates(unlinkedRuns, sessionId))
-	}
+	// Runs that no claim cites are NOT claims. They stay in Session Replay; the board never
+	// invents a claim (or a status) for them and never counts them in the claim total.
 	return { session_id: sessionId, claims, sessionPath }
 }
 
@@ -291,12 +283,10 @@ function normalizeClaimRecord(claimId: string, value: unknown, fallbackSessionId
 			: []
 	const normalizedSpans = spans.map(normalizeEvidenceSpan).filter((span) => span.sourceId)
 	const rawStatus = String(value.status ?? "proposed")
-	const hasEvidence = normalizedSpans.length > 0
-	const status = rawStatus === "supported" && !hasEvidence ? "weakly_supported" : rawStatus
+	// The server's status is shown as reported. A supported claim with no linked evidence is
+	// flagged by the panel from `evidenceSpans`; the client never rewrites the status.
+	const status = rawStatus
 	const limitations = Array.isArray(value.limitations) ? value.limitations.map(String) : []
-	if (rawStatus === "supported" && !hasEvidence) {
-		limitations.unshift("No evidence spans are linked; panel downgraded this claim for review until evidence is attached.")
-	}
 	return {
 		claimId: String(value.claim_id ?? value.claimId ?? claimId),
 		sessionId,
@@ -364,29 +354,6 @@ function normalizeRevisionFields(
 		approvalRecordedState: str(approval.recorded_state),
 		approvalLiveDigest: str(approval.live_digest),
 	}
-}
-
-function synthesizeEvidenceCandidates(entries: RunEntry[], sessionId: string): ClaimSurfaceRecord[] {
-	return entries.map((entry) => ({
-		claimId: `candidate:${entry.run_id}`,
-		sessionId,
-		statement: `Evidence candidate from ${entry.tool_name}: review outputs before turning this run into a formal scientific claim.`,
-		status: "tested",
-		claimType: "evidence_candidate",
-		confidence: "",
-		createdAt: entry.timestamp,
-		updatedAt: entry.timestamp,
-		evidenceSpans: [
-			{
-				sourceType: "run",
-				sourceId: entry.run_id,
-				metricRef: "",
-				description: `Tool run ${entry.tool_name}`,
-			},
-		],
-		limitations: ["Auto-generated evidence candidate; not a user-authored scientific claim."],
-		...normalizeRevisionFields({}),
-	}))
 }
 
 export async function loadReplaySurface(sessionIdOrPath: string, readSnapshot: SnapshotReader): Promise<ReplaySurface> {

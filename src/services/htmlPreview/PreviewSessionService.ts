@@ -19,8 +19,8 @@
  * Phase 4: comment store integration for `user.comment` events.
  */
 
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import {
 	addComment as commentStoreAdd,
@@ -31,8 +31,8 @@ import {
 const MAX_EVENTS = 500
 const MAX_DISK_EVENTS_PER_MODULE = 200
 
-const PREVIEW_SESSION_DIR = path.join(os.homedir(), ".aihydro", "preview_session")
-const PREVIEW_EVENTS_DIR = path.join(os.homedir(), ".aihydro", "preview_events")
+const PREVIEW_SESSION_DIR = aihydroPath("preview_session")
+const PREVIEW_EVENTS_DIR = aihydroPath("preview_events")
 
 export interface PreviewEvent {
 	eventId: string

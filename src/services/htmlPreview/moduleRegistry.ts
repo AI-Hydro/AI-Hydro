@@ -12,8 +12,9 @@
  * the stored version against the remote catalog version to compute
  * `updateAvailable`; the sha256 enables a future "content changed" check.
  */
+
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 
 export interface ModuleRegistryEntry {
@@ -37,8 +38,8 @@ export interface CourseRegistryEntry {
 	moduleVersions: Record<string, string>
 }
 
-export const moduleRegistryPath = (): string => path.join(os.homedir(), ".aihydro", "modules", "installed.json")
-export const courseRegistryPath = (): string => path.join(os.homedir(), ".aihydro", "courses", "installed.json")
+export const moduleRegistryPath = (): string => aihydroPath("modules", "installed.json")
+export const courseRegistryPath = (): string => aihydroPath("courses", "installed.json")
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
 	try {

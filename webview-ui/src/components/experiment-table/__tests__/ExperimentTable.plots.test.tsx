@@ -21,7 +21,7 @@ function loadPrimaryExperiment() {
 			new MessageEvent("message", {
 				data: {
 					type: "experiment_table_data",
-					session_id: "demo-reproducibility-cockpit",
+					session_id: "scratch-session",
 					experiment_id: "panel_smoke_exp",
 					defn: {
 						experiment_id: "panel_smoke_exp",
@@ -47,7 +47,7 @@ function loadPrimaryExperiment() {
 						completed_at: "2026-06-25T12:00:00Z",
 					},
 					available_experiment_ids: ["panel_smoke_exp", "panel_smoke_exp_validation"],
-					session_path: "demo-reproducibility-cockpit",
+					session_path: "scratch-session",
 				},
 			}),
 		)
@@ -61,7 +61,7 @@ function loadCompareExperiment() {
 				data: {
 					type: "experiment_table_data",
 					request_tag: "compare",
-					session_id: "demo-reproducibility-cockpit",
+					session_id: "scratch-session",
 					experiment_id: "panel_smoke_exp_validation",
 					defn: {
 						experiment_id: "panel_smoke_exp_validation",
@@ -83,7 +83,7 @@ function loadCompareExperiment() {
 						completed_at: "2026-06-25T12:14:00Z",
 					},
 					available_experiment_ids: ["panel_smoke_exp", "panel_smoke_exp_validation"],
-					session_path: "demo-reproducibility-cockpit",
+					session_path: "scratch-session",
 				},
 			}),
 		)
