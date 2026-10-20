@@ -349,6 +349,33 @@ export async function inspectLearningPackArchiveBytes(
 	}
 }
 
+export interface LearningPackArchiveEntries {
+	readonly files?: ReadonlyMap<string, Buffer>
+	readonly diagnostics: readonly LearningPackDiagnostic[]
+}
+
+/**
+ * Read an archive's entries after the same path, size and entry-type preflight as the verifier, without judging
+ * the contract. The authoring signer uses it on an unsigned archive (which cannot pass the full verifier yet).
+ */
+export async function readLearningPackArchiveEntries(archiveBytes: Uint8Array): Promise<LearningPackArchiveEntries> {
+	try {
+		if (archiveBytes.byteLength > LEARNING_PACK_ARCHIVE_LIMITS.compressedBytes) {
+			return {
+				diagnostics: [{ code: "ARCHIVE_COMPRESSED_LIMIT", message: "Archive exceeds the 256 MiB compressed limit" }],
+			}
+		}
+		const bytes = Buffer.from(archiveBytes)
+		const { paths } = await preflightArchive(bytes)
+		return { files: await readArchiveFiles(bytes, paths), diagnostics: [] }
+	} catch (error) {
+		if (error instanceof ArchiveInspectionError) {
+			return { diagnostics: [{ code: error.code, message: error.message, path: error.path }] }
+		}
+		return { diagnostics: [{ code: "ARCHIVE_INVALID", message: error instanceof Error ? error.message : String(error) }] }
+	}
+}
+
 export async function inspectLearningPackArchiveFile(
 	archivePath: string,
 	runtime: LearningPackRuntimeCompatibility,

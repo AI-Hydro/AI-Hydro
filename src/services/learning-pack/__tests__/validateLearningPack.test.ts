@@ -1,5 +1,5 @@
-import { expect } from "chai"
 import { createHash, createPublicKey, generateKeyPairSync, sign } from "node:crypto"
+import { expect } from "chai"
 import { canonicalJsonBytes } from "../canonicalJson"
 import { validateLearningPackFiles } from "../validateLearningPack"
 import { createValidLearningPackFiles, TEST_MODULE_IDS } from "./learningPackTestFixture"
@@ -28,7 +28,11 @@ describe("validateLearningPackFiles", () => {
 		files.set("pack.json", Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(files.get("pack.json")!)]))
 		const payload = [...files.entries()].filter(([name]) => name !== "checksums.json" && !name.startsWith("signatures/"))
 		const entries = payload
-			.map(([name, bytes]) => ({ path: name, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.byteLength }))
+			.map(([name, bytes]) => ({
+				path: name,
+				sha256: createHash("sha256").update(bytes).digest("hex"),
+				size: bytes.byteLength,
+			}))
 			.sort((a, b) => (a.path < b.path ? -1 : 1))
 		const checksums = canonicalJsonBytes({ algorithm: "sha256", files: entries })
 		files.set("checksums.json", checksums)

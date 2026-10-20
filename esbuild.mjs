@@ -10,6 +10,7 @@ const production = process.argv.includes("--production") || process.env["IS_DEBU
 const watch = process.argv.includes("--watch")
 const standalone = process.argv.includes("--standalone")
 const e2eBuild = process.argv.includes("--e2e-build")
+const packCli = process.argv.includes("--pack-cli")
 const destDir = standalone ? "dist-standalone" : "dist"
 const metafilePath = process.env.AIHYDRO_ESBUILD_METAFILE
 
@@ -251,8 +252,22 @@ const e2eBuildConfig = {
 	plugins: [jsoncParserEsmPlugin, aliasResolverPlugin, esbuildProblemMatcherPlugin],
 }
 
+// Learning Pack authoring CLI (build/sign/verify). A separate bundle from extension.js on purpose: the signer
+// must never ship inside the extension (scripts/verify-extension-bundle.mjs enforces it; .vscodeignore excludes it).
+const packCliConfig = {
+	...baseConfig,
+	entryPoints: ["scripts/aihydro-pack.ts"],
+	outfile: `${destDir}/aihydro-pack.cjs`,
+	external: [],
+	sourcemap: false,
+	plugins: [jsoncParserEsmPlugin, aliasResolverPlugin, esbuildProblemMatcherPlugin],
+	banner: {
+		js: "#!/usr/bin/env node\nconst _importMetaUrl=require('url').pathToFileURL(__filename)",
+	},
+}
+
 async function main() {
-	const config = standalone ? standaloneConfig : e2eBuild ? e2eBuildConfig : extensionConfig
+	const config = standalone ? standaloneConfig : e2eBuild ? e2eBuildConfig : packCli ? packCliConfig : extensionConfig
 	const extensionCtx = await esbuild.context(config)
 	if (watch) {
 		await extensionCtx.watch()

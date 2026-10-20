@@ -105,8 +105,8 @@ export function describeArtifactTrust(state: ArtifactTrustState): { label: strin
 		}
 		case "unsigned-module":
 			return {
-				label: "Unsigned module",
-				detail: "Downloaded from the marketplace without a signature. Treated as untrusted: no Python and no agent access.",
+				label: "Read-only course copy",
+				detail: "This copy was downloaded without a signature, so AI-Hydro will not run its Python. Install the signed Learning Pack to run cells.",
 			}
 		default:
 			return {

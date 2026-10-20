@@ -417,6 +417,11 @@ service HtmlPreviewService {
     // Star or unstar a module in AI-Hydro recognition.
     rpc starModule(MarketplaceStarRequest) returns (MarketplaceStarResponse);
 
+    // Open the "Install Learning Pack" flow (the aihydro.learningPacks.install command: file picker, then the
+    // whole-pack approval dialog). Called only from the shell's own "Install Learning Pack..." button, which
+    // requires a real user click; the command still asks the user to approve before anything is installed.
+    rpc openInstallLearningPack(EmptyRequest) returns (Empty);
+
     // Phase 3.5 — reactive parameters.
     // Re-executes a cell when a parameter widget value changes in the artifact preview.
     rpc notifyParamChanged(NotifyParamChangedRequest) returns (NotifyParamChangedResponse);

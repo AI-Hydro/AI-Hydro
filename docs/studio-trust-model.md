@@ -10,7 +10,7 @@ A document can ask the Python kernel to run code, or start an agent task, only i
 2. **You allowed it for that document.** The trust bar above the document shows **Allow execution**. The allowance is per document, held in memory for the session, and bound to the exact content that was allowed. If the file changes, or the document is opened again with different bytes, the allowance is gone.
 3. **The allowance is visible.** An allowed document shows an **Execution allowed** badge with a **Revoke** button. Revoking stops that document's kernel (and any shared kernel).
 
-Everything else is a **static document**: no kernel bridge is injected, the host refuses its run and agent requests, and it can still be read and printed. Marketplace modules are labelled **Unsigned module** and are treated the same way.
+Everything else is a **static document**: no kernel bridge is injected, the host refuses its run and agent requests, and it can still be read and printed. Marketplace modules are labelled **Read-only course copy** ("This copy was downloaded without a signature, so AI-Hydro will not run its Python. Install the signed Learning Pack to run cells.") and are treated the same way. Their trust bar carries an **Install Learning Pack…** button that opens the normal install flow (file picker, then the whole-pack approval dialog); it is shell UI that needs a real click, so a document cannot press it, and it installs nothing without your approval.
 
 Starting an agent task from a document always needs your click: the document can only stage a request, the exact prompt text is shown, and nothing is sent until you press **Send to agent**.
 
@@ -31,7 +31,7 @@ A repository can still *contain* a Python environment. `.venv`, `.aihydro/venv`,
 
 ## Marketplace
 
-Downloads require `https`, redirects are re-checked against the allowlist, module and course ids must be a single plain path segment, and bodies are size-capped. Installed content is unsigned and therefore static.
+Downloads require `https`, redirects are re-checked against the allowlist, module and course ids must be a single plain path segment, and bodies are size-capped. Installed content is unsigned and therefore static: a read-only course copy.
 
 ## Not covered (known limits)
 
@@ -43,7 +43,7 @@ Downloads require `https`, redirects are re-checked against the allowlist, modul
 - A static document is still HTML with scripts: it can render, fetch from the CDNs the CSP allows, and run its own JavaScript inside the sandbox. It cannot reach the kernel, the agent, or the shell.
 - The shell CSP keeps `'unsafe-inline'` for scripts because the sandboxed `srcdoc` document inherits it and generated reports (Folium, Plotly, Bokeh) need inline scripts. Isolation, not the CSP, is what keeps documents out of the shell.
 - Opaque-origin documents cannot use `localStorage`, `sessionStorage` or cookies.
-- Learning Pack signatures prove who built a pack, not that its code is harmless; **Allow execution** is still your decision.
+- A Learning Pack is **signed by the key with this fingerprint**. That does not identify the publisher (a name in the pack is only a label; compare the fingerprint with one the author published elsewhere), it does not say the code is harmless, and v1 has no revocation. **Allow execution** is still your decision. Authors: see [Authoring and signing a Learning Pack](learning-pack-authoring.md).
 
 ## State directory
 

@@ -1,4 +1,6 @@
 # Default
+# Learning Pack authoring CLI (build/sign): a separate bundle that must never ship in the extension
+dist/aihydro-pack.cjs
 .vscode/**
 .vscode-test/**
 out/

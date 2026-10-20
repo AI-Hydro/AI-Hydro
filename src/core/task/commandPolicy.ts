@@ -22,16 +22,46 @@
  * plans/approval-redesign-ap1-2026-10-19.md.
  */
 
-import { classifyCommand, commandRunsGit, type ShellEnvironment } from "./readOnlyClassifier"
 import { hardenGitEnvironment } from "./gitHardening"
+import { classifyCommand, commandRunsGit, type ShellEnvironment } from "./readOnlyClassifier"
 
 // ---------------------------------------------------------------------------------------------------------------
 // 1. Protected commands (hard deny)
 // ---------------------------------------------------------------------------------------------------------------
 
-const PROTECTED_COMMAND_SUBSTRINGS = ["aihydro-approve", "ai_hydro.approval", "ai_hydro/approval"] as const
+const PROTECTED_COMMAND_SUBSTRINGS = [
+	"aihydro-approve",
+	"ai_hydro.approval",
+	"ai_hydro/approval",
+	// Learning Pack signing (docs/learning-pack-authoring.md): creating or using the publisher key is an owner action.
+	// `verify`, `inspect`, `build` and `fingerprint` of a public key or pack are not protected.
+	"aihydro-pack sign",
+	"aihydro-pack init-key",
+	"aihydro-packsign",
+	"aihydro-packinit-key",
+	"authoring/sign",
+	"authoring/keys",
+	"authoring/cli",
+	// The default key directory and key file names: any command that names them (cat, cp, tar, ...) is denied.
+	// Agent FILE tools are already blocked from ~/.ssh by protectedPaths.ts; this is the command-level counterpart.
+	"aihydro-learning-pack",
+	"ed25519.key.pem",
+] as const
+/**
+ * `aihydro-pack.cjs sign`, `aihydro-pack.ts init-key`, `npm run aihydro-pack -- sign`: the program name, an optional
+ * extension, optional npm-style flags, an optional `--` separator, then the protected subcommand (whitespace already normalised or removed).
+ */
+const PROTECTED_PACK_PATTERN = /aihydro-pack(?:\.[a-z]{2,4})?(?:\s*--?[a-z][a-z-]*)*\s*(?:--\s*)?(?:sign|init-key)/
+/** Substrings that belong to the Learning Pack signer rather than claim approval (they get their own message). */
+const PACK_SIGNING_MARKERS = ["aihydro-pack", "authoring/", "aihydro-learning-pack", "ed25519.key"] as const
 /** `from ai_hydro import approval` style imports: the dotted name never appears, so match the shape. */
 const PROTECTED_IMPORT_PATTERN = /ai_hydro\s+import\s[^\n;|&]*\bapproval\b/
+
+export const PROTECTED_PACK_SIGNING_DENY_MESSAGE =
+	"Blocked by AI-Hydro: this command creates or uses the Learning Pack signing key. Key creation and signing must " +
+	"be done by you, in your own terminal (outside the agent): run `aihydro-pack init-key` or `aihydro-pack sign` " +
+	"yourself. The signing key directory is off limits to agent commands. `aihydro-pack build`, `verify` and `inspect` " +
+	"are fine for the agent to run."
 
 export const PROTECTED_COMMAND_DENY_MESSAGE =
 	"Blocked by AI-Hydro: this command touches claim approval. Claim approval must be given by you, in your own " +
@@ -97,6 +127,13 @@ function matchProtectedGlob(variant: string): string | undefined {
 	return undefined
 }
 
+/** The refusal text for a `matchProtectedCommand` result: the signer gets its own wording, approval keeps its text. */
+export function protectedCommandDenyMessage(match: string): string {
+	return PACK_SIGNING_MARKERS.some((marker) => match.startsWith(marker))
+		? PROTECTED_PACK_SIGNING_DENY_MESSAGE
+		: PROTECTED_COMMAND_DENY_MESSAGE
+}
+
 /**
  * The protected pattern found in `raw`, or undefined. Substring match anywhere in the raw text after stripping
  * quotes and backslashes, so path prefixes, `sh -c '...'`, `env ...`, `python -m ai_hydro.approval.cli`,
@@ -109,6 +146,9 @@ export function matchProtectedCommand(raw: string): string | undefined {
 			if (variant.includes(pattern)) {
 				return pattern
 			}
+		}
+		if (PROTECTED_PACK_PATTERN.test(variant)) {
+			return "aihydro-pack sign/init-key"
 		}
 		if (PROTECTED_IMPORT_PATTERN.test(variant)) {
 			return "ai_hydro import approval"
@@ -287,7 +327,11 @@ export function decideCommand(input: CommandPolicyInput): CommandPolicyResult {
 	const texts = [input.command, input.rawCommand ?? ""]
 	const protectedMatch = texts.map(matchProtectedCommand).find((m) => m !== undefined)
 	if (protectedMatch) {
-		return { action: "deny", reason: `protected command (${protectedMatch})`, message: PROTECTED_COMMAND_DENY_MESSAGE }
+		return {
+			action: "deny",
+			reason: `protected command (${protectedMatch})`,
+			message: protectedCommandDenyMessage(protectedMatch),
+		}
 	}
 	if (input.isSubagentLaunch || texts.some(mentionsAihydroProgram)) {
 		if (!input.subagentsEnabled) {
