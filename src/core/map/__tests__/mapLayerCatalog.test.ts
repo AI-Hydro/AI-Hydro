@@ -105,7 +105,7 @@ describe("mapLayerCatalog overflow and legacy migration", () => {
 		expect(again.layers.map((l) => l.id).filter((id) => id === "a")).to.have.length(1)
 	})
 
-	it("the legacy global catalog is migrated into the first workspace that loads it, then marked migrated", async () => {
+	it("the legacy global catalog is migrated once, into the first workspace that loads it", async () => {
 		const legacy: MapLayerCatalog = {
 			updated_at_ms: 1,
 			layer_order: ["x"],
@@ -116,16 +116,33 @@ describe("mapLayerCatalog overflow and legacy migration", () => {
 		const first = await readMapLayerCatalog("/ws-a", dir)
 		expect(first?.layers.map((l) => l.id)).to.deep.equal(["x"])
 		expect(first?.workspace_root).to.equal("/ws-a")
-		// Legacy file renamed; scoped file written for workspace A.
-		const names = await fs.readdir(dir)
-		expect(names).to.include("map_layer_catalog.migrated.json")
-		expect(names).to.not.include("map_layer_catalog.json")
+		expect(await fs.readdir(dir)).to.include("map_layer_catalog.migrated")
 		expect(await fs.readFile(scopedMapLayerCatalogFile("/ws-a", dir), "utf8")).to.contain('"x"')
 
 		// A second workspace does not re-import it.
 		expect(await readMapLayerCatalog("/ws-b", dir)).to.equal(null)
 		// The first workspace keeps reading its own scoped file.
 		expect((await readMapLayerCatalog("/ws-a", dir))?.layers.map((l) => l.id)).to.deep.equal(["x"])
+	})
+
+	it("the unscoped file mirrors the active workspace catalog after every write", async () => {
+		await persistMapLayerCatalog(await buildMapLayerCatalogAsync([geo("a1")], ["a1"], "/ws-a"), dir)
+		const mirror = () =>
+			fs.readFile(path.join(dir, "map_layer_catalog.json"), "utf8").then((t) => JSON.parse(t) as MapLayerCatalog)
+		expect((await mirror()).layers.map((l) => l.id)).to.deep.equal(["a1"])
+		expect((await mirror()).workspace_root).to.equal("/ws-a")
+		await persistMapLayerCatalog(await buildMapLayerCatalogAsync([geo("b1"), geo("b2")], ["b1", "b2"], "/ws-b"), dir)
+		expect((await mirror()).layers.map((l) => l.id)).to.deep.equal(["b1", "b2"])
+		// No temp files left behind.
+		expect((await fs.readdir(dir)).filter((n) => n.endsWith(".tmp"))).to.have.length(0)
+	})
+
+	it("once the marker exists a new workspace does not import the mirror as legacy", async () => {
+		await persistMapLayerCatalog(await buildMapLayerCatalogAsync([geo("a1")], ["a1"], "/ws-a"), dir)
+		expect(await fs.readdir(dir)).to.include("map_layer_catalog.migrated")
+		expect(await readMapLayerCatalog("/ws-b", dir)).to.equal(null)
+		// ws-a's data is untouched.
+		expect((await readMapLayerCatalog("/ws-a", dir))?.layers.map((l) => l.id)).to.deep.equal(["a1"])
 	})
 
 	it("a workspace with its own catalog never touches the legacy file", async () => {
@@ -135,6 +152,6 @@ describe("mapLayerCatalog overflow and legacy migration", () => {
 			JSON.stringify({ updated_at_ms: 1, layer_order: [], layers: [] }),
 		)
 		expect((await readMapLayerCatalog("/ws-a", dir))?.layers.map((l) => l.id)).to.deep.equal(["own"])
-		expect(await fs.readdir(dir)).to.include("map_layer_catalog.json")
+		expect(JSON.parse(await fs.readFile(path.join(dir, "map_layer_catalog.json"), "utf8")).layers).to.have.length(0)
 	})
 })

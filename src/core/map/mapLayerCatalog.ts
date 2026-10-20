@@ -9,8 +9,12 @@ import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 export function defaultAihydroDir(): string {
 	return aihydroHome()
 }
-/** Where the unscoped legacy catalog is renamed once one workspace has taken it over. */
-const LEGACY_MIGRATED_NAME = "map_layer_catalog.migrated.json"
+/**
+ * Marker recording that the unscoped `map_layer_catalog.json` is no longer a legacy catalog to import. It is
+ * created (exclusively) when one workspace takes the legacy contents, or when the first mirror write happens.
+ */
+const MIGRATED_MARKER_NAME = "map_layer_catalog.migrated"
+const UNSCOPED_NAME = "map_layer_catalog.json"
 /**
  * Per-workspace catalog file. The legacy global file is migrated into the first workspace that loads it (see
  * `readMapLayerCatalog`), so layers from other investigations no longer pile up in every window.
@@ -348,13 +352,39 @@ export function buildMapLayerCatalog(layers: MapLayer[], layerOrder: string[]): 
 	}
 }
 
+async function writeFileAtomic(file: string, text: string): Promise<void> {
+	const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+	await fs.writeFile(tmp, text, "utf8")
+	await fs.rename(tmp, file)
+}
+
+/** Creates the migrated marker; false when it already existed. */
+async function claimMigratedMarker(baseDir: string): Promise<boolean> {
+	try {
+		await fs.mkdir(baseDir, { recursive: true })
+		await fs.writeFile(path.join(baseDir, MIGRATED_MARKER_NAME), `${new Date().toISOString()}\n`, { flag: "wx" })
+		return true
+	} catch {
+		return false
+	}
+}
+
+/**
+ * Writes the workspace's scoped catalog and mirrors it to the unscoped `map_layer_catalog.json`.
+ *
+ * The mirror holds the ACTIVE workspace's catalog and exists only because aihydro-tools (the MCP map layer
+ * tools) still reads the unscoped file. It can be removed once aihydro-tools reads scoped catalogs. Because the
+ * unscoped file is then a mirror, the migrated marker is written first so no workspace imports it as legacy.
+ */
 export async function persistMapLayerCatalog(catalog: MapLayerCatalog, baseDir: string = defaultAihydroDir()): Promise<void> {
 	try {
-		const file = catalog.workspace_root
-			? scopedMapLayerCatalogFile(catalog.workspace_root, baseDir)
-			: path.join(baseDir, "map_layer_catalog.json")
-		await fs.mkdir(path.dirname(file), { recursive: true })
-		await fs.writeFile(file, JSON.stringify(catalog, null, 2), "utf8")
+		await fs.mkdir(baseDir, { recursive: true })
+		const text = JSON.stringify(catalog, null, 2)
+		if (catalog.workspace_root) {
+			await writeFileAtomic(scopedMapLayerCatalogFile(catalog.workspace_root, baseDir), text)
+			await claimMigratedMarker(baseDir)
+		}
+		await writeFileAtomic(path.join(baseDir, UNSCOPED_NAME), text)
 	} catch (err) {
 		console.warn("[mapLayerCatalog] persist failed:", err)
 	}
@@ -370,31 +400,26 @@ async function readCatalogFile(file: string): Promise<MapLayerCatalog | null> {
 
 /**
  * Reads the catalog for a workspace. A workspace with no catalog of its own takes over the legacy unscoped file
- * exactly once: the file is first renamed to `map_layer_catalog.migrated.json` (an atomic claim, so two windows
- * racing for it cannot both import it), then its contents are written to this workspace's scoped file. Other
- * workspaces then find no legacy file and start empty. With no workspace folder the legacy file is read in place.
+ * exactly once: the `map_layer_catalog.migrated` marker is created exclusively (an atomic claim, so two windows
+ * racing for it cannot both import), then the legacy contents are written to this workspace's scoped file. Once
+ * the marker exists the unscoped file is the active-workspace mirror (see `persistMapLayerCatalog`), so other
+ * workspaces start empty instead of importing it. With no workspace folder the unscoped file is read in place.
  */
 export async function readMapLayerCatalog(
 	workspaceRoot?: string,
 	baseDir: string = defaultAihydroDir(),
 ): Promise<MapLayerCatalog | null> {
-	const legacyFile = path.join(baseDir, "map_layer_catalog.json")
+	const unscopedFile = path.join(baseDir, UNSCOPED_NAME)
 	if (!workspaceRoot) {
-		return readCatalogFile(legacyFile)
+		return readCatalogFile(unscopedFile)
 	}
 	const scoped = await readCatalogFile(scopedMapLayerCatalogFile(workspaceRoot, baseDir))
 	if (scoped) {
 		return scoped
 	}
-	const migratedFile = path.join(baseDir, LEGACY_MIGRATED_NAME)
-	try {
-		await fs.rename(legacyFile, migratedFile)
-	} catch {
-		return null // no legacy file, or another workspace claimed it first
-	}
-	const legacy = await readCatalogFile(migratedFile)
-	if (!legacy) {
-		return null
+	const legacy = await readCatalogFile(unscopedFile)
+	if (!legacy || !(await claimMigratedMarker(baseDir))) {
+		return null // nothing to migrate, or migration already happened (the unscoped file is now a mirror)
 	}
 	const migrated: MapLayerCatalog = { ...legacy, workspace_root: workspaceRoot }
 	await persistMapLayerCatalog(migrated, baseDir)
