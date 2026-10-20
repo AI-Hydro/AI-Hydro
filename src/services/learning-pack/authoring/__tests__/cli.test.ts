@@ -13,7 +13,6 @@ function cleanEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env }
 	for (const name of AGENT_CONTEXT_ENV_VARS) delete env[name]
 	delete env.SOURCE_DATE_EPOCH
-	env.GIT_CONFIG_GLOBAL = os.devNull
 	env.GIT_CONFIG_NOSYSTEM = "1"
 	return { ...env, ...extra }
 }
