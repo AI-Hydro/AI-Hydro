@@ -2,6 +2,7 @@
 	"entry": [
 		"src/extension.ts",
 		"src/standalone/cline-core.ts",
+		"scripts/aihydro-pack.ts",
 		"src/generated/hosts/standalone/protobus-server-setup.ts",
 		"src/generated/hosts/standalone/host-bridge-clients.ts",
 		"src/generated/hosts/vscode/protobus-services.ts",

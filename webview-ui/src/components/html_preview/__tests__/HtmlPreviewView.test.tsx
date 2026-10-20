@@ -31,6 +31,7 @@ const listPythonEnvironmentsMock = vi.fn().mockResolvedValue({
 	activeProfileId: "profile_1",
 })
 const setExecutionAllowanceMock = vi.fn().mockResolvedValue({ allowed: true })
+const openInstallLearningPackMock = vi.fn().mockResolvedValue({})
 const startPreviewAgentTaskMock = vi.fn().mockResolvedValue({ ok: true })
 const setArtifactKernelProfileMock = vi.fn().mockResolvedValue({})
 const probePythonEnvironmentMock = vi.fn().mockResolvedValue({ stdout: '{"ok":true}', status: "ok", stderr: "", error: "" })
@@ -50,6 +51,7 @@ vi.mock("@/services/grpc-client", () => ({
 	},
 	HtmlPreviewServiceClient: {
 		setArtifactExecutionAllowance: (...args: unknown[]) => setExecutionAllowanceMock(...args),
+		openInstallLearningPack: (...args: unknown[]) => openInstallLearningPackMock(...args),
 		runArtifactCode: (...args: unknown[]) => runArtifactCodeMock(...args),
 		getArtifactKernelInfo: (...args: unknown[]) => getArtifactKernelInfoMock(...args),
 		restartArtifactKernel: (...args: unknown[]) => restartArtifactKernelMock(...args),
@@ -412,15 +414,68 @@ describe("HtmlPreviewView", () => {
 			expect(runArtifactCodeMock).not.toHaveBeenCalled()
 		})
 
-		it("never forwards runCode from an unsigned module, labels it unsigned, and ignores a spoofed allowance", async () => {
+		it("never forwards runCode from an unsigned module, labels it a read-only copy, and ignores a spoofed allowance", async () => {
 			runArtifactCodeMock.mockClear()
 			const { container } = render(<HtmlPreviewView item={unsignedItem} />)
-			expect(screen.getByTestId("artifact-trust-badge")).toHaveTextContent("Unsigned module")
+			expect(screen.getByTestId("artifact-trust-badge")).toHaveTextContent("Read-only course copy")
+			expect(screen.getByTestId("artifact-trust-bar")).toHaveTextContent(
+				"This copy was downloaded without a signature, so AI-Hydro will not run its Python. Install the signed Learning Pack to run cells.",
+			)
 			expect(screen.queryByTestId("artifact-trust-allow")).not.toBeInTheDocument()
 			expect(screen.queryByTestId("artifact-trust-revoke")).not.toBeInTheDocument()
 			postFromIframe(container.querySelector("iframe") as HTMLIFrameElement, runCodeMessage)
 			await Promise.resolve()
 			expect(runArtifactCodeMock).not.toHaveBeenCalled()
+		})
+
+		describe("Install Learning Pack button (host chrome)", () => {
+			it("is offered on a read-only course copy and opens the install flow from a real click", async () => {
+				openInstallLearningPackMock.mockClear()
+				render(<HtmlPreviewView item={unsignedItem} />)
+				fireEvent.click(screen.getByTestId("artifact-trust-install-pack"))
+				await vi.waitFor(() => expect(openInstallLearningPackMock).toHaveBeenCalledTimes(1))
+			})
+
+			it("is not offered on a static document, a trusted pack module or a failed-integrity module", () => {
+				for (const item of [inlineItem, trustedNotAllowedItem, trustedAllowedItem]) {
+					const { unmount } = render(<HtmlPreviewView item={item} />)
+					expect(screen.queryByTestId("artifact-trust-install-pack")).not.toBeInTheDocument()
+					unmount()
+				}
+			})
+
+			it("cannot be triggered by messages from the document, whatever they claim", async () => {
+				openInstallLearningPackMock.mockClear()
+				const { container } = render(<HtmlPreviewView item={unsignedItem} />)
+				const iframe = container.querySelector("iframe") as HTMLIFrameElement
+				for (const type of [
+					"artifact/installLearningPack",
+					"artifact/openInstallLearningPack",
+					"aihydro.learningPacks.install",
+					"installLearningPack",
+					"executeCommand",
+				]) {
+					postFromIframe(iframe, { source: "aihydro-artifact", type, command: "aihydro.learningPacks.install" })
+				}
+				await Promise.resolve()
+				expect(openInstallLearningPackMock).not.toHaveBeenCalled()
+			})
+
+			it("ignores a scripted (untrusted) click on the button, which is what document script could produce", async () => {
+				openInstallLearningPackMock.mockClear()
+				vi.stubEnv("MODE", "production")
+				try {
+					render(<HtmlPreviewView item={unsignedItem} />)
+					const button = screen.getByTestId("artifact-trust-install-pack")
+					button.click()
+					button.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+					fireEvent.click(button)
+					await Promise.resolve()
+					expect(openInstallLearningPackMock).not.toHaveBeenCalled()
+				} finally {
+					vi.unstubAllEnvs()
+				}
+			})
 		})
 
 		it("does not forward runCode from a trusted document the user has not allowed", async () => {

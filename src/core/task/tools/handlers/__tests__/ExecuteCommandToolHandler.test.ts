@@ -170,6 +170,9 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 		"cd x && aihydro-approve s c",
 		'"aihydro-approve" s c',
 		"python -m ai_hydro.approval.cli s c",
+		"node dist/aihydro-pack.cjs sign pack.unsigned --key k --out p",
+		"npm run aihydro-pack -- init-key",
+		"aihydro-pack sign x",
 	]) {
 		it(`T13 refuses ${JSON.stringify(form)} with requires_approval=false in YOLO and with execute-all`, async () => {
 			for (const opts of [{ yolo: true }, { safe: true, all: true }]) {

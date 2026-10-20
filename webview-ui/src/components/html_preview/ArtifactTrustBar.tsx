@@ -17,6 +17,12 @@ interface ArtifactTrustBarProps {
 	busy?: boolean
 	onAllow: () => void
 	onRevoke: () => void
+	/**
+	 * Opens the "Install Learning Pack" flow. Offered only on a read-only course copy (an unsigned catalogue
+	 * module), as host chrome: it needs a real, trusted click, so document script can never trigger it, and the
+	 * flow it opens still asks the user to approve before anything is installed.
+	 */
+	onInstallPack?: () => void
 }
 
 /**
@@ -24,7 +30,7 @@ interface ArtifactTrustBarProps {
  * enforced (the host refuses Python and agent requests from any document that is
  * not trusted and allowed) and carries the allow / revoke action.
  */
-export const ArtifactTrustBar: React.FC<ArtifactTrustBarProps> = ({ trust, busy, onAllow, onRevoke }) => {
+export const ArtifactTrustBar: React.FC<ArtifactTrustBarProps> = ({ trust, busy, onAllow, onRevoke, onInstallPack }) => {
 	const { label, detail } = describeArtifactTrust(trust)
 	const tone = trust.allowed ? "allowed" : trust.trusted ? "trusted" : "untrusted"
 	const accent =
@@ -66,6 +72,18 @@ export const ArtifactTrustBar: React.FC<ArtifactTrustBarProps> = ({ trust, busy,
 				{trust.source === "document" && !trust.integrityFailure ? <strong>This is a static document. </strong> : null}
 				{detail}
 			</span>
+			{trust.source === "unsigned-module" && onInstallPack && (
+				<button
+					data-testid="artifact-trust-install-pack"
+					onClick={(event) => {
+						if (isRealUserGesture(event)) onInstallPack()
+					}}
+					style={buttonStyle}
+					title="Choose a signed .aihydropack file and review it before installing"
+					type="button">
+					Install Learning Pack…
+				</button>
+			)}
 			{trust.trusted && !trust.allowed && (
 				<button
 					data-testid="artifact-trust-allow"

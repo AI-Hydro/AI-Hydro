@@ -111,7 +111,7 @@ import { StateManager } from "../storage/StateManager"
 import {
 	matchProtectedCommand,
 	mentionsAihydroProgram,
-	PROTECTED_COMMAND_DENY_MESSAGE,
+	protectedCommandDenyMessage,
 	SUBAGENTS_DISABLED_MESSAGE,
 	subagentLaunchRefusal,
 } from "./commandPolicy"
@@ -1270,8 +1270,9 @@ export class Task {
 	async executeCommandTool(command: string, timeoutSeconds: number | undefined): Promise<[boolean, ToolResponse]> {
 		// Defence in depth behind ExecuteCommandToolHandler (approval redesign AP1): whatever reaches the terminal,
 		// the claim-approval CLI is never run by the agent and a subagent is never launched while disabled.
-		if (matchProtectedCommand(command)) {
-			return [false, formatResponse.toolError(PROTECTED_COMMAND_DENY_MESSAGE)]
+		const protectedMatch = matchProtectedCommand(command)
+		if (protectedMatch) {
+			return [false, formatResponse.toolError(protectedCommandDenyMessage(protectedMatch))]
 		}
 		if (mentionsAihydroProgram(command)) {
 			if (!this.stateManager.getGlobalSettingsKey("subagentsEnabled")) {

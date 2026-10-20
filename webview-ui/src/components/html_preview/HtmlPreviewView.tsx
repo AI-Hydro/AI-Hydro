@@ -1190,6 +1190,14 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		[item?.id],
 	)
 
+	const handleInstallLearningPack = useCallback(async () => {
+		try {
+			await HtmlPreviewServiceClient.openInstallLearningPack(EmptyRequest.create())
+		} catch (err) {
+			console.error("[HtmlPreviewView] Failed to open the Learning Pack install flow:", err)
+		}
+	}, [])
+
 	const handleSendAgentPrompt = useCallback(async () => {
 		if (!item?.id || !pendingAgentPrompt || !canExecute) return
 		const prompt = pendingAgentPrompt
@@ -1500,6 +1508,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				<ArtifactTrustBar
 					busy={trustBusy}
 					onAllow={() => void handleSetExecutionAllowed(true)}
+					onInstallPack={() => void handleInstallLearningPack()}
 					onRevoke={() => void handleSetExecutionAllowed(false)}
 					trust={trust}
 				/>

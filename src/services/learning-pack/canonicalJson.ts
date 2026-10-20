@@ -31,17 +31,11 @@ export function canonicalJsonBytes(value: unknown): Buffer {
 	return Buffer.from(canonicalJsonText(value), "utf8")
 }
 
-export function parseCanonicalJson(bytes: Uint8Array, label: string): unknown {
-	let text: string
-	try {
-		// ignoreBOM keeps a leading BOM in the text (the decoder strips it by default) so the check below can see it.
-		text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes)
-	} catch {
-		throw new StrictJsonError(`${label} is not valid UTF-8`, "INVALID_UTF8")
-	}
-	if (text.startsWith("\uFEFF")) throw new StrictJsonError(`${label} must not contain a UTF-8 BOM`, "BOM")
-	if (text.includes("\r")) throw new StrictJsonError(`${label} must use LF line endings`, "CRLF")
-
+/**
+ * Parse JSON text strictly: no comments, no trailing commas, no duplicate object keys. Does not require the
+ * text to be canonical (used for author-written source files that are re-serialised canonically afterwards).
+ */
+function parseStrictJsonText(text: string, label: string): unknown {
 	const objectKeys: Set<string>[] = []
 	let parseError: string | undefined
 	let duplicateKey: string | undefined
@@ -78,6 +72,34 @@ export function parseCanonicalJson(bytes: Uint8Array, label: string): unknown {
 			"INVALID_JSON",
 		)
 	}
+	return parsed
+}
+
+/** Strict parse of author-written JSON source bytes: UTF-8, no BOM, no duplicate keys; CRLF is tolerated. */
+export function parseStrictJsonSource(bytes: Uint8Array, label: string): unknown {
+	let text: string
+	try {
+		// ignoreBOM keeps a leading BOM in the text (the decoder strips it by default), so the check below can see it.
+		text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes)
+	} catch {
+		throw new StrictJsonError(`${label} is not valid UTF-8`, "INVALID_UTF8")
+	}
+	if (text.startsWith("\uFEFF")) throw new StrictJsonError(`${label} must not contain a UTF-8 BOM`, "BOM")
+	return parseStrictJsonText(text, label)
+}
+
+export function parseCanonicalJson(bytes: Uint8Array, label: string): unknown {
+	let text: string
+	try {
+		// ignoreBOM keeps a leading BOM in the text (the decoder strips it by default) so the check below can see it.
+		text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes)
+	} catch {
+		throw new StrictJsonError(`${label} is not valid UTF-8`, "INVALID_UTF8")
+	}
+	if (text.startsWith("\uFEFF")) throw new StrictJsonError(`${label} must not contain a UTF-8 BOM`, "BOM")
+	if (text.includes("\r")) throw new StrictJsonError(`${label} must use LF line endings`, "CRLF")
+
+	const parsed = parseStrictJsonText(text, label)
 	if (canonicalJsonText(parsed) !== text) {
 		throw new StrictJsonError(`${label} is not canonical JSON`, "NON_CANONICAL")
 	}
