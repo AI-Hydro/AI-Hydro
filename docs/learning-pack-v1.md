@@ -15,6 +15,9 @@ platform-ambiguous paths, and Unicode normalization or full case-folding
 collisions. After preflight, it streams file bytes into the same canonical
 contract validator and returns a defensive, immutable inspection result.
 
+Authors build and sign packs with `aihydro-pack`; see
+[Authoring and signing a Learning Pack](learning-pack-authoring.md).
+
 It does not add remote or marketplace transport, install dependencies, authorize
 instructor roles, sandbox Python, or make client-side quizzes secure.
 

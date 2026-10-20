@@ -44,7 +44,9 @@ async function writeVsix(
 			name: "extension.vsixmanifest",
 		})
 		archive.append(JSON.stringify(manifest), { name: "extension/package.json" })
-		archive.append(entryContent["extension/dist/extension.js"] ?? "module.exports = {}", { name: "extension/dist/extension.js" })
+		archive.append(entryContent["extension/dist/extension.js"] ?? "module.exports = {}", {
+			name: "extension/dist/extension.js",
+		})
 		for (const entry of REQUIRED_RUNTIME_ENTRIES) {
 			if (
 				[
@@ -145,6 +147,12 @@ test("rejects undeclared source, private workspace, or asset content", async (co
 		extraEntries: [{ content: "opaque private bytes", name: "extension/assets/leaked.pem" }],
 	})
 	await assert.rejects(() => verifyDevelopmentVsix(opaqueAsset), /undeclared archive entry/)
+})
+
+test("rejects the Learning Pack authoring CLI inside the VSIX (the signer never ships)", async (context) => {
+	const vsix = temporaryVsix(context, "signer.vsix")
+	await writeVsix(vsix, { extraEntries: [{ content: "#!/usr/bin/env node", name: "extension/dist/aihydro-pack.cjs" }] })
+	await assert.rejects(() => verifyDevelopmentVsix(vsix), /undeclared archive entry/)
 })
 
 test("rejects a missing runtime asset or Explorer install contribution", async (context) => {

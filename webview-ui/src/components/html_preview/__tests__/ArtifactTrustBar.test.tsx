@@ -13,17 +13,65 @@ describe("ArtifactTrustBar", () => {
 		expect(screen.queryByTestId("artifact-trust-revoke")).not.toBeInTheDocument()
 	})
 
-	it("labels an unsigned module clearly and offers no allow control", () => {
+	it("labels an unsigned module as a read-only copy, says why, and offers no allow control", () => {
 		render(<ArtifactTrustBar onAllow={noop} onRevoke={noop} trust={readArtifactTrust({ trustSource: "unsigned-module" })} />)
-		expect(screen.getByTestId("artifact-trust-badge")).toHaveTextContent("Unsigned module")
+		expect(screen.getByTestId("artifact-trust-badge")).toHaveTextContent("Read-only course copy")
+		expect(screen.getByTestId("artifact-trust-bar")).toHaveTextContent(
+			"This copy was downloaded without a signature, so AI-Hydro will not run its Python. Install the signed Learning Pack to run cells.",
+		)
+		expect(screen.getByTestId("artifact-trust-bar")).not.toHaveTextContent("Unsigned module")
 		expect(screen.queryByTestId("artifact-trust-allow")).not.toBeInTheDocument()
+	})
+
+	describe("Install Learning Pack button", () => {
+		const unsigned = readArtifactTrust({ trustSource: "unsigned-module" })
+
+		it("shows only on a read-only copy and only when the host supplies the action", () => {
+			const { rerender } = render(<ArtifactTrustBar onAllow={noop} onRevoke={noop} trust={unsigned} />)
+			expect(screen.queryByTestId("artifact-trust-install-pack")).not.toBeInTheDocument()
+			rerender(<ArtifactTrustBar onAllow={noop} onInstallPack={noop} onRevoke={noop} trust={unsigned} />)
+			expect(screen.getByTestId("artifact-trust-install-pack")).toHaveTextContent("Install Learning Pack…")
+			for (const trustSource of ["document", "learning-pack"]) {
+				rerender(
+					<ArtifactTrustBar
+						onAllow={noop}
+						onInstallPack={noop}
+						onRevoke={noop}
+						trust={readArtifactTrust({ trustSource })}
+					/>,
+				)
+				expect(screen.queryByTestId("artifact-trust-install-pack")).not.toBeInTheDocument()
+			}
+		})
+
+		it("runs the action on a click in tests, but not on a scripted click in a real build", () => {
+			const onInstallPack = vi.fn()
+			render(<ArtifactTrustBar onAllow={noop} onInstallPack={onInstallPack} onRevoke={noop} trust={unsigned} />)
+			fireEvent.click(screen.getByTestId("artifact-trust-install-pack"))
+			expect(onInstallPack).toHaveBeenCalledTimes(1)
+
+			vi.stubEnv("MODE", "production")
+			try {
+				const button = screen.getByTestId("artifact-trust-install-pack")
+				button.click()
+				button.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+				fireEvent.click(button)
+				expect(onInstallPack).toHaveBeenCalledTimes(1)
+			} finally {
+				vi.unstubAllEnvs()
+			}
+		})
 	})
 
 	it("offers Allow for a trusted source and Revoke once allowed", () => {
 		const onAllow = vi.fn()
 		const onRevoke = vi.fn()
 		const { rerender } = render(
-			<ArtifactTrustBar onAllow={onAllow} onRevoke={onRevoke} trust={readArtifactTrust({ trustSource: "learning-pack" })} />,
+			<ArtifactTrustBar
+				onAllow={onAllow}
+				onRevoke={onRevoke}
+				trust={readArtifactTrust({ trustSource: "learning-pack" })}
+			/>,
 		)
 		fireEvent.click(screen.getByTestId("artifact-trust-allow"))
 		expect(onAllow).toHaveBeenCalledTimes(1)
