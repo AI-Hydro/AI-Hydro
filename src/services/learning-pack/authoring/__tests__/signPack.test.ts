@@ -2,9 +2,11 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect } from "chai"
+import { classifyArtifactFile } from "../../../artifact-preview/artifactTrust"
 import { canonicalJsonBytes } from "../../canonicalJson"
 import { inspectLearningPackArchiveBytes, readLearningPackArchiveEntries } from "../../inspectLearningPackArchive"
 import { installLearningPack } from "../../learningPackLifecycle"
+import { resolveInstalledLearningPackStatus } from "../../runtimeIntegration"
 import { derivePackTrustState, trustPublisher } from "../../trustStore"
 import { assembleUnsignedPack } from "../buildPack"
 import { writeStoredZip } from "../contractPrimitives"
@@ -68,6 +70,38 @@ describe("signPack", () => {
 				expect(await derivePackTrustState(store, inspection)).to.equal("signed-untrusted")
 				await trustPublisher(store, signed.fingerprint)
 				expect(await derivePackTrustState(store, inspection)).to.equal("trusted-publisher")
+			} finally {
+				await fs.rm(root, { recursive: true, force: true })
+			}
+		})
+
+		it("an installed built pack is resolved by the runtime as a verified pack module with trust source learning-pack, and a tampered module is not", async () => {
+			const built = await assembleUnsignedPack(buildInput())
+			const signed = await signPack({ unsigned: built.archive, signer: { kind: "ephemeral" } })
+			const result = await inspectLearningPackArchiveBytes(signed.archive, RUNTIME)
+			const inspection = result.inspection as NonNullable<typeof result.inspection>
+			const root = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-runtime-"))
+			try {
+				const store = path.join(root, "packs")
+				const installed = await installLearningPack(store, inspection, "install-once")
+				expect(installed.status).to.equal("installed")
+				const entry = inspection.contract.manifest.entryModuleId
+				const modulePath = path.join(store, installed.active?.relativePath as string, "modules", entry, "module.html")
+				const status = await resolveInstalledLearningPackStatus(modulePath, store)
+				expect(status.kind).to.equal("verified")
+				if (status.kind === "verified") {
+					expect(status.artifact.scope).to.deep.equal({
+						packId: "aihydro.intro-demo",
+						courseId: "aihydro.intro-demo.course",
+						edition: "student",
+						moduleId: entry,
+					})
+				}
+				expect(
+					await classifyArtifactFile(modulePath, { installedPack: status.kind === "verified", aihydroDir: root }),
+				).to.equal("learning-pack")
+				await fs.appendFile(modulePath, "<!-- edited after install -->")
+				expect((await resolveInstalledLearningPackStatus(modulePath, store)).kind).to.equal("failed")
 			} finally {
 				await fs.rm(root, { recursive: true, force: true })
 			}

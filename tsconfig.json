@@ -57,7 +57,8 @@
 		}
 	},
 	"include": [
-		"src/**/*"
+		"src/**/*",
+		"scripts/aihydro-pack.ts"
 	],
 	"exclude": [
 		"node_modules",
