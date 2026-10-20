@@ -208,8 +208,25 @@ const remarkPreventBoldFilenames = () => {
 	}
 }
 
-// Regex matching [run:<id>#<path>], [claim:<id>], [lit:<tag>]
-const _AIHYDRO_MARKER_RE = /\[(?:run:([A-Za-z0-9._-]+)#([A-Za-z0-9._-]+)|claim:([A-Za-z0-9._-]+)|lit:([A-Za-z0-9._-]+))\]/g
+// Regex matching [run:<id>#<path>], [claim:<id>], [lit:<tag>]. Every id/tag/path must start alphanumeric, so
+// grammar placeholders such as `[lit:...]` or `[lit:<tag>]` are never mistaken for a real reference.
+export const AIHYDRO_MARKER_SOURCE =
+	"\\[(?:run:([A-Za-z0-9][A-Za-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)|claim:([A-Za-z0-9][A-Za-z0-9._-]*)|lit:([A-Za-z0-9][A-Za-z0-9._-]*))\\]"
+const _AIHYDRO_MARKER_RE = new RegExp(AIHYDRO_MARKER_SOURCE, "g")
+
+/** Chip hProperties for a marker match, or undefined when the match carries no usable reference. */
+const markerChipProperties = (match: RegExpExecArray): Record<string, string> | undefined => {
+	if (match[1] && match[2]) {
+		return { "data-chip-type": "run", "data-run-id": match[1], "data-json-path": match[2] }
+	}
+	if (match[3]) {
+		return { "data-chip-type": "claim", "data-claim-id": match[3] }
+	}
+	if (match[4]) {
+		return { "data-chip-type": "lit", "data-lit-tag": match[4] }
+	}
+	return undefined
+}
 
 /**
  * Remark plugin that strips AI-Hydro citation markers from prose and
@@ -217,9 +234,20 @@ const _AIHYDRO_MARKER_RE = /\[(?:run:([A-Za-z0-9._-]+)#([A-Za-z0-9._-]+)|claim:(
  * rehype→React pipeline can render ClaimChip / RunChip / LitChip.
  *
  * Markers are NEVER shown as raw text: [run:...] → RunChip, [claim:...] → ClaimChip, [lit:...] → LitChip.
+ * An inline-code node whose ENTIRE value is one marker (models often backtick their citations) is chipped
+ * too; a marker embedded in longer inline code or a code block stays code (grammar examples, fix hints).
  */
 const remarkAiHydroMarkers = () => {
 	return (tree: Node) => {
+		visit(tree, "inlineCode", (node: any, index: number | undefined, parent: any) => {
+			if (typeof index === "undefined" || !parent || typeof node.value !== "string") return
+			const re = new RegExp(AIHYDRO_MARKER_SOURCE)
+			const match = re.exec(node.value)
+			if (!match || match[0] !== node.value) return
+			const hProperties = markerChipProperties(match)
+			if (!hProperties) return
+			parent.children.splice(index, 1, { type: "strong", data: { hProperties }, children: [] })
+		})
 		visit(tree, "text", (node: any, index: number | undefined, parent: any) => {
 			if (typeof index === "undefined" || !parent) return
 
@@ -230,49 +258,14 @@ const remarkAiHydroMarkers = () => {
 
 			_AIHYDRO_MARKER_RE.lastIndex = 0
 			while ((match = _AIHYDRO_MARKER_RE.exec(text)) !== null) {
+				const hProperties = markerChipProperties(match)
+				if (!hProperties) {
+					continue
+				}
 				if (match.index > lastIndex) {
 					children.push({ type: "text", value: text.slice(lastIndex, match.index) })
 				}
-
-				if (match[1] && match[2]) {
-					// [run:<id>#<path>]
-					children.push({
-						type: "strong",
-						data: {
-							hProperties: {
-								"data-chip-type": "run",
-								"data-run-id": match[1],
-								"data-json-path": match[2],
-							},
-						},
-						children: [],
-					})
-				} else if (match[3]) {
-					// [claim:<id>]
-					children.push({
-						type: "strong",
-						data: {
-							hProperties: {
-								"data-chip-type": "claim",
-								"data-claim-id": match[3],
-							},
-						},
-						children: [],
-					})
-				} else if (match[4]) {
-					// [lit:<tag>]
-					children.push({
-						type: "strong",
-						data: {
-							hProperties: {
-								"data-chip-type": "lit",
-								"data-lit-tag": match[4],
-							},
-						},
-						children: [],
-					})
-				}
-
+				children.push({ type: "strong", data: { hProperties }, children: [] })
 				lastIndex = match.index + match[0].length
 			}
 
@@ -286,6 +279,8 @@ const remarkAiHydroMarkers = () => {
 		})
 	}
 }
+
+export { remarkAiHydroMarkers }
 
 const StyledMarkdown = styled.div<{ compact?: boolean }>`
 	pre {

@@ -31,6 +31,10 @@ The chat panel is where you interact with the agent:
 - **File diff viewer** — when the agent writes or modifies files, a diff appears for review
 - **Terminal integration** — standalone Python scripts the agent writes appear in an integrated terminal
 - **Plan mode** — the agent proposes a plan before executing when the task involves multiple steps
+- **Scroll to bottom** — when you scroll up, a small round button appears at the bottom right of the transcript. It never replaces the action buttons: a pending Run / Deny or Start New Task stays visible while you read.
+- **Agent to-do (self-reported)** — the task header shows the agent's own checklist as `n/m` items checked. It is the model's bookkeeping, not a verified result; when every item is ticked it reads "All items checked". A repeated, unchanged list does not add a new row.
+- **New task** — the labelled **New task** button in the task header closes the current task view so you can start another (the title-bar **+** does the same).
+- **Study chip** — when the chat is bound to a study, the header shows the study / gauge id first and in full, then the site name.
 
 ---
 
@@ -157,6 +161,8 @@ private_data/
 ---
 
 ## MCP Server Status
+
+In **Hydro Tools & Data Sources**, each server row shows **Trusted** or **Not trusted** with the reason. "Trusted" means the server's launch (command, arguments, environment variables and working directory) matches the first-party launcher AI-Hydro recorded; only then are its instructions sent to the model and claim-approval prompts and read-only subagent tools enabled. "Not trusted" explains why: a different server name, a changed launch line, different environment or working directory, a remote server, or a third-party server. If the recorded server is disabled and exactly one other enabled server has the first-party launch shape, AI-Hydro asks once at startup whether to trust it (it re-points silently only when the launch is identical to the one it already verified). Restart AI-Hydro to re-evaluate after editing the MCP settings.
 
 If the server is not responding, check:
 

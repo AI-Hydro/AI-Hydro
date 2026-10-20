@@ -1,3 +1,5 @@
+import { type CallState, deriveCallState } from "@shared/aihydro/askOutcome"
+import { getPairing, isScienceServer } from "@shared/aihydro/toolCallPresenter"
 import { COMMAND_OUTPUT_STRING, COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
 import {
 	AiHydroApiReqInfo,
@@ -8,8 +10,6 @@ import {
 	AiHydroSayTool,
 	COMPLETION_RESULT_CHANGES_FLAG,
 } from "@shared/ExtensionMessage"
-import { type CallState, deriveCallState } from "@shared/aihydro/askOutcome"
-import { getPairing, isScienceServer } from "@shared/aihydro/toolCallPresenter"
 import { BooleanRequest, Int64Request, StringRequest } from "@shared/proto/cline/common"
 import { VSCodeBadge, VSCodeButton, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
@@ -38,6 +38,7 @@ import { CheckpointControls } from "../common/CheckpointControls"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { ErrorBlockTitle } from "./ErrorBlockTitle"
 import ErrorRow from "./ErrorRow"
+import { MutedNotice } from "./MutedNotice"
 import NewTaskPreview from "./NewTaskPreview"
 import QuoteButton from "./QuoteButton"
 import ReportBugPreview from "./ReportBugPreview"
@@ -1345,17 +1346,17 @@ export const ChatRowContent = memo(
 					{scienceCall ? (
 						<ScienceToolCard
 							annotations={scienceTool?.annotations}
-							argsJson={useMcpServer.arguments}
-							resultText={sciencePair?.status === "paired" ? sciencePair.resultText : undefined}
-							unpaired={sciencePair?.status === "unpaired"}
-							running={isMcpServerResponding || askOutcome === "running"}
-							awaitingPermission={isPendingAsk}
 							approved={askOutcome === "approved"}
+							argsJson={useMcpServer.arguments}
+							awaitingPermission={isPendingAsk}
 							denied={askOutcome === "denied"}
 							failed={askOutcome === "failed"}
+							resultText={sciencePair?.status === "paired" ? sciencePair.resultText : undefined}
+							running={isMcpServerResponding || askOutcome === "running"}
 							serverName={useMcpServer.serverName}
 							toolMeta={{ description: scienceTool?.description, inputSchema: scienceTool?.inputSchema }}
 							toolName={useMcpServer.toolName || ""}
+							unpaired={sciencePair?.status === "unpaired"}
 						/>
 					) : (
 						<div
@@ -1483,6 +1484,8 @@ export const ChatRowContent = memo(
 						return null // we should never see this message type
 					case "mcp_server_response":
 						return <McpResponseDisplay responseText={message.text || ""} />
+					case "info":
+						return <MutedNotice text={message.text} />
 					case "mcp_notification":
 						return (
 							<div className="chat-row-mcp-notification">

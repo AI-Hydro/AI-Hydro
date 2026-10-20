@@ -22,8 +22,10 @@ interface FocusChainProps {
 }
 
 // Static strings to avoid recreating them
-const COMPLETED_MESSAGE = "All tasks have been completed!"
+// The checklist is the model's own bookkeeping, never a verified result: say so and do not celebrate completion.
+const COMPLETED_MESSAGE = "All items checked"
 const TODO_LIST_LABEL = "To-Do list"
+const AGENT_TODO_LABEL = "Agent to-do (self-reported)"
 const NEW_STEPS_MESSAGE = "New steps will be generated if you continue the task"
 const CLICK_TO_EDIT_TITLE = "Click to edit to-do list in file"
 
@@ -32,7 +34,7 @@ const ToDoListHeader = memo<{
 	todoInfo: TodoInfo
 	isExpanded: boolean
 }>(({ todoInfo, isExpanded }) => {
-	const { currentTodo, currentIndex, totalCount, completedCount, progressPercentage } = todoInfo
+	const { currentTodo, totalCount, completedCount, progressPercentage } = todoInfo
 	const isCompleted = completedCount === totalCount
 
 	// Pre-compute display text
@@ -57,9 +59,9 @@ const ToDoListHeader = memo<{
 						className={cn(
 							"rounded-lg px-2 py-0.25 text-xs inline-block shrink-0 bg-badge-foreground/20 text-foreground",
 						)}>
-						{currentIndex}/{totalCount}
+						{AGENT_TODO_LABEL} {completedCount}/{totalCount}
 					</span>
-					<div className="header-text text-xs font-medium break-words overflow-hidden text-ellipsis whitespace-nowrap max-w-[calc(100%-60px)]">
+					<div className="header-text text-xs font-medium break-words overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
 						<LightMarkdown compact text={displayText} />
 					</div>
 				</div>

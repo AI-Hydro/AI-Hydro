@@ -3,6 +3,11 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { ApiHandler, ApiProviderInfo, buildApiHandler } from "@core/api"
 import { ApiStream } from "@core/api/transform/stream"
 import { parseAssistantMessageV2 } from "@core/assistant-message"
+import {
+	type NativeToolCallContext,
+	type NativeToolCallRepairResult,
+	repairNativeToolCallsForModel,
+} from "@core/assistant-message/nativeToolCallRepair"
 import { ContextManager } from "@core/context/context-management/ContextManager"
 import { checkContextWindowExceededError } from "@core/context/context-management/context-error-handling"
 import { getContextWindowInfo } from "@core/context/context-management/context-window-utils"
@@ -51,9 +56,10 @@ import { featureFlagsService } from "@services/feature-flags"
 import { listFiles } from "@services/glob/list-files"
 import { Logger } from "@services/logging/Logger"
 import { McpHub } from "@services/mcp/McpHub"
+import { recordedOutcomeFor } from "@shared/aihydro/askOutcome"
+import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import { ApiConfiguration } from "@shared/api"
 import { findLast, findLastIndex } from "@shared/array"
-import { recordedOutcomeFor } from "@shared/aihydro/askOutcome"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import {
@@ -2053,6 +2059,26 @@ export class Task {
 		yield* iterator
 	}
 
+	/** Connected MCP servers and their tools, for resolving tool names in native tool-call envelopes. */
+	private nativeToolCallContext(): NativeToolCallContext {
+		const servers = (this.mcpHub.connections ?? [])
+			.filter((c) => c.server.status === "connected" && Array.isArray(c.server.tools))
+			.map((c) => ({
+				name: c.server.name,
+				trusted: isServerTrusted(c.server),
+				tools: c.server.tools ?? [],
+			}))
+		return { servers }
+	}
+
+	/**
+	 * Native `<tool_calls>` repair, enabled only for model families that emit that envelope (DeepSeek). For every
+	 * other provider the text is returned untouched, so an envelope there is ordinary prose and never executed.
+	 */
+	private repairNativeToolCallText(text: string, final: boolean): NativeToolCallRepairResult {
+		return repairNativeToolCallsForModel(this.getCurrentProviderInfo().model.id, text, this.nativeToolCallContext(), final)
+	}
+
 	async presentAssistantMessage() {
 		if (this.taskState.abort) {
 			throw new Error("AI-Hydro instance aborted")
@@ -2710,7 +2736,10 @@ export class Task {
 							// parse raw assistant message into content blocks
 							const prevLength = this.taskState.assistantMessageContent.length
 
-							this.taskState.assistantMessageContent = parseAssistantMessageV2(assistantMessage)
+							// DeepSeek-style native `<tool_calls>` envelopes are rewritten into the XML protocol (or hidden while streaming)
+							this.taskState.assistantMessageContent = parseAssistantMessageV2(
+								this.repairNativeToolCallText(assistantMessage, false).text,
+							)
 
 							if (this.taskState.assistantMessageContent.length > prevLength) {
 								this.taskState.userMessageContentReady = false // new content we need to present, reset to false in case previous content set this to true
@@ -2832,6 +2861,24 @@ export class Task {
 
 			this.taskState.didCompleteReadingStream = true
 
+			// Final pass over native-envelope repair (DeepSeek-style `<tool_calls>`; see nativeToolCallRepair.ts). The
+			// stream pass only hid the envelope; now the complete, trailing envelope becomes a real tool call that goes
+			// through the normal approval flow. A malformed one gets exactly one muted line, raw text behind a disclosure.
+			const nativeRepair = this.repairNativeToolCallText(assistantMessage, true)
+			if (nativeRepair.malformed.length > 0) {
+				await this.say("info", `malformed tool call; retried\n\n${nativeRepair.malformed.join("\n\n")}`)
+			}
+			if (nativeRepair.repaired > 0) {
+				const routed = nativeRepair.routes.map((r) => (r.server ? `${r.tool} on '${r.server}'` : r.tool)).join(", ")
+				await this.say("info", `Repaired a native tool call: ${routed}.`)
+				const prevLength = this.taskState.assistantMessageContent.length
+				this.taskState.assistantMessageContent = parseAssistantMessageV2(nativeRepair.text)
+				if (this.taskState.assistantMessageContent.length > prevLength) {
+					this.taskState.userMessageContentReady = false
+				}
+				this.presentAssistantMessage()
+			}
+
 			// set any blocks to be complete to allow presentAssistantMessage to finish and set userMessageContentReady to true
 			// (could be a text block that had no subsequent tool uses, or a text block at the very end, or an invalid tool use, etc. whatever the case, presentAssistantMessage relies on these blocks either to be completed or the user to reject a block in order to proceed and eventually set userMessageContentReady to true)
 			const partialBlocks = this.taskState.assistantMessageContent.filter((block) => block.partial)
@@ -2877,7 +2924,11 @@ export class Task {
 						...antThinkingContent,
 						{
 							type: "text",
-							text: assistantMessage,
+							// A repaired native envelope is stored in protocol form so the model sees one consistent format.
+							text:
+								nativeRepair.repaired > 0 && nativeRepair.malformed.length === 0
+									? nativeRepair.text
+									: assistantMessage,
 							// reasoning_details only exists for cline/openrouter providers
 							// @ts-ignore-next-line
 							reasoning_details: reasoningDetails.length > 0 ? reasoningDetails : undefined,

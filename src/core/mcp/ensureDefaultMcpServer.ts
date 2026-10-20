@@ -1,7 +1,7 @@
 import { ensureSettingsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { execa } from "@packages/execa"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
-import { looksLikeFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
+import { launchContextHash, looksLikeFirstPartyLauncher, recordedLaunchHash } from "@shared/aihydro/firstPartyServers"
 import { ShowMessageType } from "@shared/proto/host/window"
 import { ExecuteCommandInTerminalRequest } from "@shared/proto/host/workspace"
 import { fileExistsAtPath } from "@utils/fs"
@@ -10,7 +10,7 @@ import os from "os"
 import * as path from "path"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
-import { loadFirstPartyLauncher, recordFirstPartyLauncher } from "./firstPartyLauncher"
+import { loadFirstPartyLauncher, migrateFirstPartyAnchor, recordFirstPartyLauncher } from "./firstPartyLauncher"
 
 const SERVER_NAME = "ai-hydro"
 const CACHE_DIR = aihydroPath("cache")
@@ -95,8 +95,9 @@ function getPipScriptCandidates(): string[] {
  */
 async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown): Promise<void> {
 	try {
-		const { command, args } = (entry ?? {}) as { command?: unknown; args?: unknown }
+		const { command, args, env, cwd } = (entry ?? {}) as { command?: unknown; args?: unknown; env?: unknown; cwd?: unknown }
 		const current = {
+			launchHash: launchContextHash({ env, cwd }),
 			name: SERVER_NAME,
 			command: typeof command === "string" ? command : "",
 			args: Array.isArray(args) ? (args as unknown[]).filter((a): a is string => typeof a === "string") : [],
@@ -105,7 +106,8 @@ async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown):
 		const sameLaunch =
 			recorded?.command === current.command &&
 			recorded.args.length === current.args.length &&
-			recorded.args.every((a, i) => a === current.args[i])
+			recorded.args.every((a, i) => a === current.args[i]) &&
+			recordedLaunchHash(recorded) === current.launchHash
 		if (sameLaunch) {
 			return
 		}
@@ -131,7 +133,7 @@ async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown):
 			type: ShowMessageType.WARNING,
 			message:
 				`The "${SERVER_NAME}" MCP server now launches \`${[current.command, ...current.args].join(" ")}\`, which differs from the ` +
-				"launcher AI-Hydro registered. Until you confirm, it is not treated as the first-party server " +
+				"launcher (command, arguments, environment variables or working directory) AI-Hydro registered. Until you confirm, it is not treated as the first-party server " +
 				"(claim-approval prompts and read-only subagent tools are off).",
 			options: { items: [trust, "Dismiss"], modal: true },
 		})
@@ -140,6 +142,32 @@ async function reconcileFirstPartyLauncher(settingsDir: string, entry: unknown):
 		}
 	} catch (error) {
 		console.error("[AI-Hydro] Failed to reconcile the first-party launcher record:", error)
+	}
+}
+
+/** S6 migration wired to the human-facing confirmation dialog. */
+async function migrateAnchor(settingsDir: string, servers: Record<string, unknown>): Promise<void> {
+	try {
+		const outcome = await migrateFirstPartyAnchor(settingsDir, servers, async (candidate, recorded) => {
+			const trust = "Trust this server"
+			const action = await HostProvider.window.showMessage({
+				type: ShowMessageType.WARNING,
+				message:
+					`The "${candidate.name}" MCP server launches \`${[candidate.command, ...candidate.args].join(" ")}\`, which looks like the ` +
+					`AI-Hydro launcher, but the recorded first-party server${recorded ? ` ("${recorded.name}")` : ""} is not enabled. ` +
+					"Until you confirm, this server is not treated as first-party: its instructions are not sent to the model, " +
+					"and claim-approval prompts and read-only subagent tools are off.",
+				options: { items: [trust, "Dismiss"], modal: true },
+			})
+			return action.selectedOption === trust
+		})
+		if (outcome === "renamed" || outcome === "confirmed") {
+			console.log(`[AI-Hydro] Re-pointed the first-party trust anchor (${outcome})`)
+		} else if (outcome === "ambiguous") {
+			console.warn("[AI-Hydro] More than one enabled first-party-shaped MCP server; the trust anchor was not changed")
+		}
+	} catch (error) {
+		console.error("[AI-Hydro] Failed to migrate the first-party launcher record:", error)
 	}
 }
 
@@ -176,7 +204,13 @@ export async function ensureDefaultMcpServer(context: vscode.ExtensionContext): 
 
 		// 2. Skip if already registered (but make sure the trust anchor exists for it, see below)
 		if (config.mcpServers[SERVER_NAME]) {
-			await reconcileFirstPartyLauncher(settingsDir, config.mcpServers[SERVER_NAME])
+			// The recorded server may be disabled while a legacy first-party-named entry is the one in use (S6):
+			// re-point the trust anchor first (never by name alone, see planFirstPartyAnchor). A disabled
+			// SERVER_NAME entry cannot be launched, so its own reconcile (and its dialogs) is skipped.
+			await migrateAnchor(settingsDir, config.mcpServers)
+			if ((config.mcpServers[SERVER_NAME] as { disabled?: unknown }).disabled !== true) {
+				await reconcileFirstPartyLauncher(settingsDir, config.mcpServers[SERVER_NAME])
+			}
 			return
 		}
 
@@ -267,6 +301,7 @@ export async function ensureDefaultMcpServer(context: vscode.ExtensionContext): 
 			name: SERVER_NAME,
 			command: serverConfig.command,
 			args: serverConfig.args,
+			launchHash: launchContextHash(serverConfig),
 		})
 		console.log("[AI-Hydro] Auto-registered aihydro-tools MCP server")
 	} catch (error) {
