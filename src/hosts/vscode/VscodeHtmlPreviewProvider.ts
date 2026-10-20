@@ -3,13 +3,6 @@ import type { Controller } from "@core/controller"
 import { handlePreviewAgentTaskMessage } from "@core/htmlPreview/handlePreviewAgentTask"
 import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import * as vscode from "vscode"
-import {
-	type ArtifactLookup,
-	decideActiveCourse,
-	decideModuleState,
-	decidePreviewEvent,
-	decideSaveDocument,
-} from "./previewMessageGuards"
 import type { ArtifactRef } from "@/services/artifact-preview/ArtifactPreviewService"
 import { buildPreviewCsp } from "@/services/artifact-preview/buildPreviewCsp"
 import { loadCourseManifest } from "@/services/htmlPreview/courseLoader"
@@ -27,6 +20,14 @@ import {
 	learningPackProgressKey,
 	parseInstalledLearningPackScope,
 } from "@/services/learning-pack/runtimeIntegration"
+import {
+	type ArtifactLookup,
+	decideActiveCourse,
+	decideModuleState,
+	decidePreviewEvent,
+	decideSaveDocument,
+	decideShellReady,
+} from "./previewMessageGuards"
 
 /**
  * Owns the single AI-Hydro HTML Preview webview panel.
@@ -232,6 +233,15 @@ export class VscodeHtmlPreviewProvider {
 							await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
 						}
 						break
+					case "aihydro-shell-ready": {
+						if (decideShellReady(message, VscodeHtmlPreviewProvider.panelToken) === "repush") {
+							console.log("[VscodeHtmlPreviewProvider] Shell ready: re-pushing state and previews")
+							mainWebview.controller?.republishHtmlPreviews()
+						} else {
+							console.log("[VscodeHtmlPreviewProvider] Ignored shell-ready from a stale document")
+						}
+						break
+					}
 					case "aihydro-preview-event":
 						// Phase 0: relay webview-side preview events into the
 						// host's PreviewSessionService ring buffer. Phase 1 will
@@ -483,7 +493,14 @@ export class VscodeHtmlPreviewProvider {
 						break
 					}
 					default:
-						console.warn("[VscodeHtmlPreviewProvider] Unhandled message:", JSON.stringify(message))
+						// Type only: message bodies can carry document text, paths or tokens, and this log is
+						// captured as CI failure evidence.
+						console.warn(
+							"[VscodeHtmlPreviewProvider] Unhandled message type:",
+							typeof (message as { type?: unknown })?.type === "string"
+								? (message as { type: string }).type.slice(0, 80)
+								: typeof message,
+						)
 				}
 			},
 			null,

@@ -1,6 +1,6 @@
+import * as path from "node:path"
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import * as path from "node:path"
 import {
 	assertTrustedMarketplaceRedirect,
 	assertTrustedMarketplaceUrl,

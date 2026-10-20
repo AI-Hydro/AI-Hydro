@@ -1,7 +1,7 @@
-import { expect } from "chai"
-import { describe, it } from "mocha"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { expect } from "chai"
+import { describe, it } from "mocha"
 
 /**
  * ADR-004 / Studio P1: the single user-facing name is "AI-Hydro Studio".

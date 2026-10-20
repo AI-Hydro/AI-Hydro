@@ -173,3 +173,20 @@ export function decideModuleState(
 	}
 	return { ok: true, values }
 }
+
+/**
+ * The Studio shell asks the host to (re)send its state once its own message listeners exist
+ * (`aihydro-shell-ready`). Replies the host posts while the webview document is being swapped
+ * are lost, and the document it eventually settles on never learns of them; this message is
+ * the live document's explicit request to catch up.
+ *
+ * It carries the per-document token the host embedded in the shell HTML. A stale document (an
+ * older load that is being replaced) holds an older token and is ignored, so only the newest
+ * mount is served; a sandboxed artifact cannot read the token, so it cannot trigger a re-push.
+ */
+export function decideShellReady(message: { token?: unknown }, currentToken: string): "repush" | "ignore" {
+	if (!currentToken || typeof message.token !== "string" || message.token !== currentToken) {
+		return "ignore"
+	}
+	return "repush"
+}

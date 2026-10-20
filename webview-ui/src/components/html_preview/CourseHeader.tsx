@@ -15,7 +15,7 @@
  *   └────────────────────────────────────────────────────────────────────────┘
  */
 
-import React, { useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import type { CourseManifest } from "./useCourse"
 import { type CourseProgressHook, canAccessCourseModule } from "./useCourseProgress"
 
@@ -51,6 +51,9 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 	const [menuOpen, setMenuOpen] = useState(false)
 	const [confirmReset, setConfirmReset] = useState(false)
 	const [isMarkingComplete, setIsMarkingComplete] = useState(false)
+	// Auto-advance is delayed; cancel it if the header unmounts so it neither navigates nor sets state late.
+	const advanceTimerRef = useRef<number | undefined>(undefined)
+	useEffect(() => () => window.clearTimeout(advanceTimerRef.current), [])
 
 	const handleMarkComplete = async () => {
 		if (!currentModule || isMarkingComplete) {
@@ -70,7 +73,8 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 			// Auto-advance after a tick so the user sees the ✓ before navigating.
 			// Keep the spinner up across the delay so the click has visible feedback.
 			if (next && fresh && canAccessCourseModule(next, fresh)) {
-				window.setTimeout(() => {
+				window.clearTimeout(advanceTimerRef.current)
+				advanceTimerRef.current = window.setTimeout(() => {
 					onNavigate(next.id)
 					setIsMarkingComplete(false)
 				}, 350)

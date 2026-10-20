@@ -1,5 +1,5 @@
-import { ArtifactCodeLanguage, type RunArtifactCodeRequest, RunArtifactCodeResponse } from "@shared/proto/cline/html_preview"
 import { isTrustedArtifactSource } from "@shared/artifactTrust"
+import { ArtifactCodeLanguage, type RunArtifactCodeRequest, RunArtifactCodeResponse } from "@shared/proto/cline/html_preview"
 import { executionDenialMessage } from "@/services/artifact-preview/artifactTrust"
 import { mapRunResultToOutputs } from "@/services/artifact-preview/mapRunResultToOutputs"
 import { executeWorkspacePython } from "@/services/artifact-preview/workspacePythonExecution"

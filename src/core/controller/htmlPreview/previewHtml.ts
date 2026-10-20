@@ -5,8 +5,8 @@ import { HtmlPreviewMode, type PreviewHtmlRequest } from "@shared/proto/cline/ht
 import { ShowMessageType } from "@shared/proto/host/window"
 import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
-import { learningPackArtifactMetadata, resolveInstalledLearningPackStatus } from "@/services/learning-pack/runtimeIntegration"
 import { classifyArtifactFile } from "@/services/artifact-preview/artifactTrust"
+import { learningPackArtifactMetadata, resolveInstalledLearningPackStatus } from "@/services/learning-pack/runtimeIntegration"
 import type { Controller } from ".."
 
 /**

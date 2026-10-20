@@ -1,5 +1,5 @@
 /** Synthetic Studio / HTML-preview items. Content is invented placeholder text. */
-import { HtmlPreviewMode, type HtmlPreviewItem } from "@shared/proto/cline/html_preview"
+import { type HtmlPreviewItem, HtmlPreviewMode } from "@shared/proto/cline/html_preview"
 
 const page = (title: string, body: string) =>
 	`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title><style>body{font:14px system-ui;margin:24px;line-height:1.5;color:#222;background:#fff}h1{font-size:1.4em}</style></head><body>${body}</body></html>`

@@ -1,10 +1,10 @@
-import { licenseLabel, provenanceLine } from "./provenanceLabels"
-import { httpUrlOrEmpty } from "./safeUrl"
 import { MarketplaceStarRequest } from "@shared/proto/cline/common"
 import type { CourseCatalogItem } from "@shared/proto/cline/html_preview"
 import { InstallCourseRequest } from "@shared/proto/cline/html_preview"
 import { useState } from "react"
 import { HtmlPreviewServiceClient } from "@/services/grpc-client"
+import { licenseLabel, provenanceLine } from "./provenanceLabels"
+import { httpUrlOrEmpty } from "./safeUrl"
 
 interface CourseCardProps {
 	course: CourseCatalogItem

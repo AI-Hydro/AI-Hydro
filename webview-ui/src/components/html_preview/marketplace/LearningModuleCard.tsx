@@ -2,9 +2,9 @@ import { MarketplaceStarRequest } from "@shared/proto/cline/common"
 import type { LearningModuleItem } from "@shared/proto/cline/html_preview"
 import { InstallModuleRequest } from "@shared/proto/cline/html_preview"
 import { useState } from "react"
+import { HtmlPreviewServiceClient } from "@/services/grpc-client"
 import { provenanceLine } from "./provenanceLabels"
 import { httpUrlOrEmpty } from "./safeUrl"
-import { HtmlPreviewServiceClient } from "@/services/grpc-client"
 
 interface LearningModuleCardProps {
 	item: LearningModuleItem
