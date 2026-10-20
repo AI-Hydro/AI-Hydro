@@ -3,7 +3,7 @@
  * message-stream pattern the transcript presenter must handle: the owner's "turn machinery" screenshot, lifted
  * failures, long tool runs, pending approvals, and the lifecycle rows (truncation, condense, cancel, resume, rewind,
  * checked-out checkpoint). Message shapes follow what the host writes today; the `info` rows use the legacy
- * plain-string form (the structured `{class, severity}` form lands with W2-0h).
+ * plain-string form (the truncation row uses the structured `{class, severity}` form from W2-0h).
  */
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import { apiReq, completion, mcpCall, mcpResult, step, t0, task, text } from "./chat"
@@ -174,6 +174,29 @@ export const protectedPathApprovalTask: AiHydroMessage[] = (() => {
 	]
 })()
 
+/** The same approval after the user answered Run and the edit completed: security-marked, so it stays lifted. */
+export const protectedPathApprovedTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	return [
+		task("Update the shared hosts file. Layout fixture."),
+		apiReq(c()),
+		text(c(), "This needs a file outside the workspace."),
+		ask(
+			c(),
+			"tool",
+			toolJson({
+				tool: "editedExistingFile",
+				path: "/etc/hosts",
+				operationIsLocatedInWorkspace: false,
+				diff: "+++++++ REPLACE\n127.0.0.1 fixture.test",
+			}),
+			{ isOperationOutsideWorkspace: true, askOutcome: "approved", execOutcome: "completed" },
+		),
+		apiReq(c()),
+		text(c(), "The hosts entry is in place. Fixture prose only."),
+	]
+})()
+
 /** Completed answer with claim and run chips (claims come from the screen's ledger). */
 export const finishedClaimsTask: AiHydroMessage[] = (() => {
 	const c = clock()
@@ -210,7 +233,7 @@ export const answerAuditViolationsLegacyTask: AiHydroMessage[] = (() => {
 	]
 })()
 
-/** Context truncated to fit the window: the range is on the request row; the host says nothing today (W2-0h adds a notice). */
+/** Context truncated to fit the window: the host now says so (structured warning notice) and the range is on the request row. */
 export const contextTruncationTask: AiHydroMessage[] = (() => {
 	const c = clock()
 	return [
@@ -218,7 +241,18 @@ export const contextTruncationTask: AiHydroMessage[] = (() => {
 		apiReq(c()),
 		text(c(), "Continuing with the next item."),
 		apiReq(c()),
-		say(c(), "info", "Context window nearly full; earlier messages were truncated for this request."),
+		say(
+			c(),
+			"info",
+			"Context window exceeded: dropped 8 earlier messages from the model's context (4 of 12 kept) and retried.",
+			{
+				infoNotice: {
+					class: "context_truncated",
+					severity: "warning",
+					detail: { deletedRange: [2, 9], newlyDropped: 8, totalDropped: 8, historyLength: 12 },
+				},
+			},
+		),
 		{ ...apiReqInfo(c(), { cost: 0.031 }), conversationHistoryDeletedRange: [2, 9], conversationHistoryIndex: 12 },
 		text(c(), "I have the context I need. Fixture prose only."),
 	]
@@ -253,7 +287,8 @@ export const commandNonZeroExitTask: AiHydroMessage[] = (() => {
 		say(c(), "command", "make build\nOutput:\nmake: *** [build] Error 2\nexit code: 2", {
 			commandCompleted: true,
 			askOutcome: "approved",
-			execOutcome: "completed",
+			exitCode: 2,
+			execOutcome: "failed",
 		}),
 		apiReq(c()),
 		text(c(), "The build failed with exit code 2. Fixture prose only."),

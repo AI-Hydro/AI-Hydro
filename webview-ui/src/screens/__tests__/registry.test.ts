@@ -58,6 +58,7 @@ describe("screen harness registry", () => {
 			"chat-approval-protected-path",
 			"chat-finished-claims",
 			"chat-answer-audit-violations",
+			"chat-approval-protected-path-answered",
 			"chat-context-truncation",
 			"chat-condense",
 			"chat-command-nonzero-exit",
@@ -89,6 +90,11 @@ describe("screen harness registry", () => {
 		}
 		expect(tx.checkpointCheckedOutTask.some((m) => m.isCheckpointCheckedOut)).toBe(true)
 		expect(tx.protectedPathApprovalTask.some((m) => m.isOperationOutsideWorkspace)).toBe(true)
+		const answered = tx.protectedPathApprovedTask.find((m) => m.isOperationOutsideWorkspace)
+		expect(answered?.askOutcome).toBe("approved")
+		const exit = tx.commandNonZeroExitTask.find((m) => m.say === "command")
+		expect([exit?.exitCode, exit?.execOutcome]).toEqual([2, "failed"])
+		expect(tx.contextTruncationTask.some((m) => m.infoNotice?.class === "context_truncated")).toBe(true)
 		expect(tx.rewindTask.some((m) => m.say === "deleted_api_reqs")).toBe(true)
 	})
 })
