@@ -1,13 +1,5 @@
 import { execFileSync } from "node:child_process"
-import {
-	existsSync,
-	mkdirSync,
-	mkdtempSync,
-	type PathLike,
-	type RmOptions,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, type PathLike, type RmOptions, rmSync, writeFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ElectronApplication, expect, type Frame, type Page, test } from "@playwright/test"

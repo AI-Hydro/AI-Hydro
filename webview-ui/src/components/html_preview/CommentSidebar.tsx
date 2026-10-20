@@ -104,27 +104,27 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 		<div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 8px" }}>
 			{/* Send/Clear act on the document iframe; without a live window they would be dead, so they are not shown. */}
 			{iframeWindow ? (
-						<button
-				onClick={handleSend}
-				style={{
-					display: "inline-flex",
-					alignItems: "center",
-					justifyContent: "center",
-					gap: 6,
-					padding: "7px 10px",
-					borderRadius: 8,
-					border: "none",
-					background: "linear-gradient(135deg, #00A3FF, #00DDFF)",
-					color: "#0a0a15",
-					fontFamily: "Poppins, system-ui, sans-serif",
-					fontSize: 11,
-					fontWeight: 700,
-					cursor: "pointer",
-				}}
-				type="button">
-				<span className="codicon codicon-send" style={{ fontSize: 12 }} />
-				Send {pending.length} change{pending.length === 1 ? "" : "s"} to agent
-			</button>
+				<button
+					onClick={handleSend}
+					style={{
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						gap: 6,
+						padding: "7px 10px",
+						borderRadius: 8,
+						border: "none",
+						background: "linear-gradient(135deg, #00A3FF, #00DDFF)",
+						color: "#0a0a15",
+						fontFamily: "Poppins, system-ui, sans-serif",
+						fontSize: 11,
+						fontWeight: 700,
+						cursor: "pointer",
+					}}
+					type="button">
+					<span className="codicon codicon-send" style={{ fontSize: 12 }} />
+					Send {pending.length} change{pending.length === 1 ? "" : "s"} to agent
+				</button>
 			) : (
 				<div style={{ fontSize: 11, color: "var(--vscode-descriptionForeground, #888)", lineHeight: 1.5 }}>
 					Send these requests from the Edit Mode bar above the document.
@@ -176,22 +176,22 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 			))}
 
 			{iframeWindow && (
-						<button
-				onClick={handleClear}
-				style={{
-					padding: "4px 8px",
-					background: "transparent",
-					border: "1px solid rgba(125,211,252,0.18)",
-					borderRadius: 6,
-					color: "#94a3b8",
-					fontFamily: "Poppins, system-ui, sans-serif",
-					fontSize: 10,
-					cursor: "pointer",
-					marginTop: 4,
-				}}
-				type="button">
-				Clear all
-			</button>
+				<button
+					onClick={handleClear}
+					style={{
+						padding: "4px 8px",
+						background: "transparent",
+						border: "1px solid rgba(125,211,252,0.18)",
+						borderRadius: 6,
+						color: "#94a3b8",
+						fontFamily: "Poppins, system-ui, sans-serif",
+						fontSize: 10,
+						cursor: "pointer",
+						marginTop: 4,
+					}}
+					type="button">
+					Clear all
+				</button>
 			)}
 		</div>
 	)

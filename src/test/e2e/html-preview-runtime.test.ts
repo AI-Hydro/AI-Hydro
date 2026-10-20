@@ -405,9 +405,14 @@ runtimeE2E("Studio stages a document's agent request for a user click and revoke
 	// The document asks the agent to start a task. Nothing is sent until the user
 	// reads the prompt and clicks; here we only assert it is staged and visible.
 	await artifact.evaluate(() => {
-		parent.postMessage({ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}] }) }, "*")
+		parent.postMessage(
+			{ type: "aihydro-preview-event", kind: "user.batch_changes", payloadJson: JSON.stringify({ changes: [{}] }) },
+			"*",
+		)
 	})
-	await expect(shell.getByTestId("agent-handoff-prompt-text")).toContainText("The user has submitted 1 change", { timeout: 15_000 })
+	await expect(shell.getByTestId("agent-handoff-prompt-text")).toContainText("The user has submitted 1 change", {
+		timeout: 15_000,
+	})
 	await shell.getByTestId("agent-handoff-dismiss").click()
 	await expect(shell.getByTestId("agent-handoff-prompt")).toHaveCount(0)
 

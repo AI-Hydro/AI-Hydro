@@ -267,7 +267,9 @@ const CourseCard = ({ course, setError, onInstalled, onRecognitionChange }: Cour
 							{course.authorAffiliation && <span> · {course.authorAffiliation}</span>}
 							{course.estimatedHours > 0 && <span> · ~{course.estimatedHours}h</span>}
 						</div>
-						<div data-testid="course-provenance" style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)" }}>
+						<div
+							data-testid="course-provenance"
+							style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)" }}>
 							{provenanceLine(course.license)}
 						</div>
 					</div>

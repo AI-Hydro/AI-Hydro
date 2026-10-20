@@ -455,7 +455,8 @@ export const HtmlPreviewPanel: React.FC = () => {
 										color: "var(--vscode-descriptionForeground, #888)",
 										lineHeight: 1.4,
 									}}>
-									Browse the AI-Hydro catalogue. Catalogue modules are unsigned; each entry shows its declared licence.
+									Browse the AI-Hydro catalogue. Catalogue modules are unsigned; each entry shows its declared
+									licence.
 								</div>
 							</div>
 						</AccordionSection>
@@ -464,7 +465,9 @@ export const HtmlPreviewPanel: React.FC = () => {
 						<AccordionSection icon="comment-discussion" persistKey="comments" title="Edit requests to the agent">
 							{activeItem ? (
 								<CommentSidebar
-									iframeWindow={null /* Send/Clear live in the Edit Mode bar; the sidebar only lists the queue */}
+									iframeWindow={
+										null /* Send/Clear live in the Edit Mode bar; the sidebar only lists the queue */
+									}
 									moduleId={activeItem.id}
 								/>
 							) : (
@@ -773,12 +776,12 @@ const EmptyState: React.FC<{
 						color: fg,
 					}}>
 					<li>
-						<strong>Open a Learning Pack:</strong> run <em>AI-Hydro: Install Learning Pack</em> from the Command Palette,
-						or right-click a <code>.aihydropack</code> file in the Explorer.
+						<strong>Open a Learning Pack:</strong> run <em>AI-Hydro: Install Learning Pack</em> from the Command
+						Palette, or right-click a <code>.aihydropack</code> file in the Explorer.
 					</li>
 					<li>
-						<strong>Make a report:</strong> ask the AI-Hydro agent in the chat for a report or dashboard. It opens here
-						when it is ready.
+						<strong>Make a report:</strong> ask the AI-Hydro agent in the chat for a report or dashboard. It opens
+						here when it is ready.
 					</li>
 				</ul>
 			</div>

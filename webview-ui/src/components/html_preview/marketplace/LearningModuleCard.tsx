@@ -179,7 +179,9 @@ const LearningModuleCard = ({ item, setError, onRecognitionChange, courseTitle }
 							<span style={{ marginLeft: item.author ? 8 : 0 }}>· {item.estimatedMinutes} min</span>
 						)}
 					</div>
-					<div data-testid="module-provenance" style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)", marginTop: 2 }}>
+					<div
+						data-testid="module-provenance"
+						style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)", marginTop: 2 }}>
 						{provenanceLine(item.license)}
 					</div>
 					{httpUrlOrEmpty(item.authorUrl) && (

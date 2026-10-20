@@ -131,8 +131,7 @@ async function waitForFrame(page: Page, predicate: (frame: Frame) => Promise<boo
 async function waitForCourseShell(page: Page): Promise<Frame> {
 	return waitForFrame(
 		page,
-		async (frame) =>
-			(await frame.title()) === "AI-Hydro Studio" && (await frame.getByTitle("Course options").count()) === 1,
+		async (frame) => (await frame.title()) === "AI-Hydro Studio" && (await frame.getByTitle("Course options").count()) === 1,
 	)
 }
 

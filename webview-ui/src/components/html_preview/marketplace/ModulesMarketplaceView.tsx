@@ -228,7 +228,11 @@ const ModulesMarketplaceView = () => {
 					gap: "12px",
 				}}>
 				<div role="alert" style={{ color: "var(--vscode-foreground)", display: "flex", gap: 6, alignItems: "center" }}>
-					<span aria-hidden="true" className="codicon codicon-error" style={{ color: "var(--vscode-errorForeground)" }} />
+					<span
+						aria-hidden="true"
+						className="codicon codicon-error"
+						style={{ color: "var(--vscode-errorForeground)" }}
+					/>
 					{error}
 				</div>
 				<VSCodeButton appearance="secondary" onClick={() => fetchMarketplace(true)}>
@@ -278,7 +282,11 @@ const ModulesMarketplaceView = () => {
 
 			{error && (
 				<div role="alert" style={{ padding: "8px 20px", color: "var(--vscode-foreground)", fontSize: 12 }}>
-					<span aria-hidden="true" className="codicon codicon-error" style={{ color: "var(--vscode-errorForeground)", marginRight: 6 }} />
+					<span
+						aria-hidden="true"
+						className="codicon codicon-error"
+						style={{ color: "var(--vscode-errorForeground)", marginRight: 6 }}
+					/>
 					{error}
 				</div>
 			)}

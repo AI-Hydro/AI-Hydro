@@ -338,7 +338,10 @@ describe("HtmlPreviewView", () => {
 			const { container } = render(<HtmlPreviewView item={inlineItem} />)
 			const reply = postFromIframe(container.querySelector("iframe") as HTMLIFrameElement, runCodeMessage)
 			await vi.waitFor(() =>
-				expect(reply).toHaveBeenCalledWith(expect.objectContaining({ type: "artifact/runCodeResult", status: "denied" }), "*"),
+				expect(reply).toHaveBeenCalledWith(
+					expect.objectContaining({ type: "artifact/runCodeResult", status: "denied" }),
+					"*",
+				),
 			)
 			expect(runArtifactCodeMock).not.toHaveBeenCalled()
 		})

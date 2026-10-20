@@ -414,7 +414,12 @@ export const screens: ScreenDef[] = [
 		htmlPreviews: [],
 		marketplace: { modules: catalogueModules, courses: [] },
 		onMessage: studioHost,
-		steps: [{ click: 'button:has-text("Browse courses")' }, { wait: 600 }, { click: 'button:has-text("Modules"):has-text("2")' }, { wait: 600 }],
+		steps: [
+			{ click: 'button:has-text("Browse courses")' },
+			{ wait: 600 },
+			{ click: 'button:has-text("Modules"):has-text("2")' },
+			{ wait: 600 },
+		],
 		render: app,
 	},
 	{

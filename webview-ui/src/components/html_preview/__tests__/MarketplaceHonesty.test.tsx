@@ -3,7 +3,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import LearningModuleCard from "../marketplace/LearningModuleCard"
 import ModulesMarketplaceView from "../marketplace/ModulesMarketplaceView"
-import { LICENSE_NOT_DECLARED_LABEL, licenseLabel, provenanceLine, UNSIGNED_CATALOGUE_LABEL } from "../marketplace/provenanceLabels"
+import {
+	LICENSE_NOT_DECLARED_LABEL,
+	licenseLabel,
+	provenanceLine,
+	UNSIGNED_CATALOGUE_LABEL,
+} from "../marketplace/provenanceLabels"
 
 const rpc = vi.hoisted(() => ({ modules: vi.fn(), courses: vi.fn() }))
 vi.mock("@/services/grpc-client", () => ({

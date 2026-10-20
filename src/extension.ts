@@ -556,9 +556,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 			if (addedCount > 0) {
 				await VscodeHtmlPreviewProvider.createOrShow()
-				vscode.window.showInformationMessage(
-					`Added ${addedCount} file${addedCount === 1 ? "" : "s"} to AI-Hydro Studio.`,
-				)
+				vscode.window.showInformationMessage(`Added ${addedCount} file${addedCount === 1 ? "" : "s"} to AI-Hydro Studio.`)
 			}
 		}),
 	)
