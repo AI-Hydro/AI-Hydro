@@ -22,7 +22,8 @@
 				<span class="aihydro-cell-lang">python</span>
 				<button class="aihydro-run" type="button">Run</button>
 			</div>
-			<pre class="aihydro-source">print("interrupt_kernel_ready")</pre>
+			<pre class="aihydro-source">interrupt_marker = 41
+print("interrupt_kernel_ready")</pre>
 			<div class="aihydro-output" aria-live="polite"></div>
 		</div>
 		<div class="aihydro-cell" data-aihydro-cell-id="interrupt-sleep" data-language="python" data-execution="kernel">
@@ -34,6 +35,71 @@
 print("interrupt_started", flush=True)
 time.sleep(30)
 print("interrupt_failed")</pre>
+			<div class="aihydro-output" aria-live="polite"></div>
+		</div>
+		<div class="aihydro-cell" data-aihydro-cell-id="interrupt-after" data-language="python" data-execution="kernel">
+			<div class="aihydro-cell-header">
+				<span class="aihydro-cell-lang">python</span>
+				<button class="aihydro-run" type="button">Run</button>
+			</div>
+			<pre class="aihydro-source">print("interrupt_state_kept=" + str(interrupt_marker + 1))</pre>
+			<div class="aihydro-output" aria-live="polite"></div>
+		</div>
+		<div class="aihydro-cell" data-aihydro-cell-id="interrupt-spin" data-language="python" data-execution="kernel">
+			<div class="aihydro-cell-header">
+				<span class="aihydro-cell-lang">python</span>
+				<button class="aihydro-run" type="button">Run</button>
+			</div>
+			<pre class="aihydro-source">print("spin_started", flush=True)
+while True:
+    pass</pre>
+			<div class="aihydro-output" aria-live="polite"></div>
+		</div>
+		<div class="aihydro-cell" data-aihydro-cell-id="input-cell" data-language="python" data-execution="kernel">
+			<div class="aihydro-cell-header">
+				<span class="aihydro-cell-lang">python</span>
+				<button class="aihydro-run" type="button">Run</button>
+			</div>
+			<pre class="aihydro-source">name = input("name? ")</pre>
+			<div class="aihydro-output" aria-live="polite"></div>
+		</div>
+		<div class="aihydro-cell" data-aihydro-cell-id="queue-a" data-language="python" data-execution="kernel">
+			<div class="aihydro-cell-header">
+				<span class="aihydro-cell-lang">python</span>
+				<button class="aihydro-run" type="button">Run</button>
+			</div>
+			<pre class="aihydro-source">import time
+time.sleep(1.5)
+queue_order = ["A"]
+print("queue=" + "".join(queue_order))</pre>
+			<div class="aihydro-output" aria-live="polite"></div>
+		</div>
+		<div class="aihydro-cell" data-aihydro-cell-id="queue-b" data-language="python" data-execution="kernel">
+			<div class="aihydro-cell-header">
+				<span class="aihydro-cell-lang">python</span>
+				<button class="aihydro-run" type="button">Run</button>
+			</div>
+			<pre class="aihydro-source">queue_order.append("B")
+print("queue=" + "".join(queue_order))</pre>
+			<div class="aihydro-output" aria-live="polite"></div>
+		</div>
+		<div class="aihydro-cell" data-aihydro-cell-id="queue-c" data-language="python" data-execution="kernel">
+			<div class="aihydro-cell-header">
+				<span class="aihydro-cell-lang">python</span>
+				<button class="aihydro-run" type="button">Run</button>
+			</div>
+			<pre class="aihydro-source">queue_order.append("C")
+print("queue=" + "".join(queue_order))</pre>
+			<div class="aihydro-output" aria-live="polite"></div>
+		</div>
+		<div class="aihydro-cell" data-aihydro-cell-id="trace-cell" data-language="python" data-execution="kernel">
+			<div class="aihydro-cell-header">
+				<span class="aihydro-cell-lang">python</span>
+				<button class="aihydro-run" type="button">Run</button>
+			</div>
+			<pre class="aihydro-source">def inner():
+    return 1 / 0
+inner()</pre>
 			<div class="aihydro-output" aria-live="polite"></div>
 		</div>
 	</main>

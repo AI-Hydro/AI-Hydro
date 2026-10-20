@@ -242,8 +242,16 @@ runtimeE2E("HTML Preview executes the golden runtime matrix @phase0-full", async
 	await expect(stop).toBeEnabled({ timeout: 30_000 })
 	await stop.click()
 	await expect(artifact.locator('[data-aihydro-cell-id="interrupt-sleep"] .aihydro-output')).toContainText(
-		"Interrupted by user",
+		"KeyboardInterrupt",
 		{ timeout: 30_000 },
+	)
+	// The host used to invent "Interrupted by user" whether or not the kernel stopped; the
+	// kernel's own KeyboardInterrupt is the evidence now, and the cell body must not have resumed.
+	await expect(artifact.locator('[data-aihydro-cell-id="interrupt-sleep"] .aihydro-output')).not.toContainText("interrupt_failed")
+	await runCell(artifact, "interrupt-after")
+	await expect(artifact.locator('[data-aihydro-cell-id="interrupt-after"] .aihydro-output')).toContainText(
+		"interrupt_state_kept=42",
+		{ timeout: 3_000 },
 	)
 
 	await openWorkspaceFile(page, "index.html", true)
@@ -272,6 +280,56 @@ runtimeE2E("HTML Preview executes the golden runtime matrix @phase0-full", async
 	const standaloneOutput = artifact.locator('[data-aihydro-cell-id="standalone-python"] .aihydro-output')
 	await expect(standaloneOutput).toContainText("standalone_execution=ok", { timeout: 30_000 })
 	await expect(standaloneOutput).toContainText("42")
+})
+
+runtimeE2E("Studio interrupt stops a busy loop, keeps variables, and never resumes the cell @phase0-smoke", async ({ page }) => {
+	await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, (route) => route.abort())
+	await openWorkspaceFile(page, "phase0/interrupt-module.html")
+	await waitForShell(page)
+	const artifact = await waitForCellFrame(page, "interrupt-ready")
+	const output = (id: string) => artifact.locator(`[data-aihydro-cell-id="${id}"] .aihydro-output`)
+
+	await runCell(artifact, "interrupt-ready")
+	await expect(output("interrupt-ready")).toContainText("interrupt_kernel_ready", { timeout: 60_000 })
+
+	for (const cellId of ["interrupt-sleep", "interrupt-spin"]) {
+		await runCell(artifact, cellId)
+		const runningShell = await waitForFrame(page, async (frame) => (await frame.getByTitle("Interrupt execution").count()) === 1)
+		await expect(output(cellId)).toContainText(/interrupt_started|spin_started/, { timeout: 30_000 })
+		await runningShell.getByTitle("Interrupt execution").click()
+		await expect(output(cellId)).toContainText("KeyboardInterrupt", { timeout: 3_000 })
+		await expect(output(cellId)).not.toContainText("interrupt_failed")
+		await runCell(artifact, "interrupt-after")
+		await expect(output("interrupt-after")).toContainText("interrupt_state_kept=42", { timeout: 3_000 })
+	}
+	await expect(output("interrupt-after")).toContainText("Practice run: not server-recorded")
+})
+
+runtimeE2E("Studio cells survive input(), trim tracebacks, and queue runs in order @phase0-smoke", async ({ page }) => {
+	await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, (route) => route.abort())
+	await openWorkspaceFile(page, "phase0/interrupt-module.html")
+	await waitForShell(page)
+	const artifact = await waitForCellFrame(page, "queue-a")
+	const output = (id: string) => artifact.locator(`[data-aihydro-cell-id="${id}"] .aihydro-output`)
+
+	await runCell(artifact, "input-cell")
+	await expect(output("input-cell")).toContainText("EOFError", { timeout: 60_000 })
+	await expect(output("input-cell")).toContainText("input() is not supported")
+
+	await runCell(artifact, "trace-cell")
+	await expect(output("trace-cell")).toContainText("ZeroDivisionError", { timeout: 30_000 })
+	await expect(output("trace-cell")).not.toContainText("artifact_kernel_runner")
+
+	// Click A, B, C while A is still running: all three answer, in order, none stuck on "Running…".
+	await runCell(artifact, "queue-a")
+	await runCell(artifact, "queue-b")
+	await runCell(artifact, "queue-c")
+	await expect(output("queue-c")).toContainText("queue=ABC", { timeout: 60_000 })
+	await expect(output("queue-a")).toContainText("queue=A")
+	await expect(output("queue-b")).toContainText("queue=AB")
+	for (const id of ["queue-a", "queue-b", "queue-c"]) {
+		await expect(artifact.locator(`[data-aihydro-cell-id="${id}"] .aihydro-run`)).toBeEnabled()
+	}
 })
 
 runtimeE2E("HTML Preview starts and executes a standalone module @phase0-smoke", async ({ page }) => {

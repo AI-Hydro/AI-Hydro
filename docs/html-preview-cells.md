@@ -162,3 +162,11 @@ will display after the base-href fix.
 ## Python environment
 
 Create `.aihydro/venv` with the agent, then refresh environments in the toolbar. Each artifact gets its own persistent kernel session (variables do not leak across artifacts unless `aihydro.htmlPreview.shareKernelAcrossArtifacts` is enabled).
+
+### Cell behaviour and the run record
+
+- **Stop** sends an in-band interrupt that raises `KeyboardInterrupt` in the running cell (same on Windows, macOS and Linux); variables are kept. The panel says "Interrupted" only after the kernel confirms it. If the code does not stop within 5 s the kernel is restarted and the cell says "Kernel restarted: variables were cleared." A timeout follows the same path.
+- **Run order**: Run clicks made while the kernel is busy queue in arrival order; Stop cancels the cells still waiting. A rerun of a cell that is itself still waiting (a slider) replaces its code and keeps its place.
+- **`input()`** raises `EOFError` ("input() is not supported"); there is no keyboard. **Magics** (`%matplotlib inline`) and shell escapes (`!pip`) give a clear "not supported" message. `display(obj)` (also `from IPython.display import display, HTML, Markdown, Image`) shows PNG reprs and text; rich HTML is not rendered. Tracebacks hide the runner's internal frames, and figures from a failed cell are discarded.
+- **Run record**: every run writes `.aihydro/runs/<id>.json` with the code text and its sha256, output digests, interpreter version and installed-package digest, labelled `practice-not-server-recorded`. The UI shows "Practice run: not server-recorded" under each output until server-recorded kernel sessions exist (ADR-008 invariant 4).
+- **Removing a preview** archives its event history to `~/.aihydro/preview_archive/<moduleId>/` (newest 20 kept) instead of deleting it.

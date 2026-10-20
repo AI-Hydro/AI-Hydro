@@ -770,7 +770,7 @@ async function interruptInstalledModule(page: Page, contract: BookModuleRuntimeC
 		const stop = runningShell.getByTitle("Interrupt execution")
 		await expect(stop).toBeEnabled({ timeout: 30_000 })
 		await stop.evaluate((element: HTMLElement) => element.click())
-		await expect(output).toContainText("Interrupted by user", { timeout: 30_000 })
+		await expect(output).toContainText("KeyboardInterrupt", { timeout: 30_000 })
 		await expect(output).not.toContainText("installed_pack_interrupt_finished")
 		await expect.poll(() => runningShell.getByTitle("Interrupt execution").count(), { timeout: 20_000 }).toBe(0)
 	} finally {
