@@ -8,13 +8,42 @@
  */
 
 /**
- * True for a message from the extension host. In a VS Code webview the host's messages are
- * delivered by the enclosing frame, so the sender is this window or its parent. A message from
- * the document's iframe, a frame nested in it, or a popup it opened has a different sender and
- * is rejected. A null source (synthetic events in unit tests) is accepted.
+ * Whether `candidate` is this window. Same-window references can be different objects (the
+ * `window` global is a wrapper under jsdom), so also compare documents, which a cross-origin
+ * window cannot expose (reading it throws, which means "not us").
+ */
+function isThisWindow(candidate: Window): boolean {
+	if (candidate === window) return true
+	try {
+		return candidate.document === document
+	} catch {
+		return false
+	}
+}
+
+/**
+ * True unless the message was sent by a window that descends from this shell: the document
+ * iframe, a frame nested in it, or a popup it (or such a frame) opened. A message from the
+ * extension host comes from outside this window (VS Code delivers it through the enclosing
+ * frames), so walking the sender's `parent`/`opener` chain never reaches this window.
+ *
+ * This is deliberately "reject document-derived senders" rather than "accept only a known host
+ * window": VS Code does not promise which window object delivers host messages, but a document
+ * can only ever be below this window. `parent`, `opener` and equality are the cross-origin-safe
+ * operations on a WindowProxy. A null source (synthetic events in unit tests) is accepted.
  */
 export function isFromHost(event: MessageEvent): boolean {
-	return event.source === null || event.source === window || event.source === window.parent
+	let sender = event.source as Window | null
+	if (!sender || isThisWindow(sender)) return true
+	for (let hops = 0; hops < 16; hops++) {
+		if (isThisWindow(sender)) return false
+		const parent: Window | null = sender.parent
+		const next: Window | null = parent && parent !== sender ? parent : sender.opener
+		if (!next) return true
+		sender = next
+	}
+	// An implausibly deep chain: refuse rather than guess.
+	return false
 }
 
 /** True for a message from a direct child frame of the shell (the document iframe), never a popup or a grandchild. */

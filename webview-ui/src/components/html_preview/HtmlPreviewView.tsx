@@ -1299,6 +1299,16 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 	 * captured runtime errors, console output. This is the diagnostic that
 	 * pinpoints WHY a Folium/Plotly map renders blank.
 	 */
+	// Pending re-captures must not outlive the view (a late setState would touch a torn-down window).
+	const diagTimersRef = useRef<number[]>([])
+	useEffect(
+		() => () => {
+			for (const id of diagTimersRef.current) window.clearTimeout(id)
+			diagTimersRef.current = []
+		},
+		[],
+	)
+
 	const captureFrameDiag = useCallback(() => {
 		const iframe = iframeRef.current
 		if (!iframe) {
@@ -1480,8 +1490,8 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 								// because external Leaflet/Plotly scripts load async
 								// and any error from them shows up a tick after onload.
 								captureFrameDiag()
-								window.setTimeout(captureFrameDiag, 500)
-								window.setTimeout(captureFrameDiag, 2000)
+								for (const id of diagTimersRef.current) window.clearTimeout(id)
+								diagTimersRef.current = [window.setTimeout(captureFrameDiag, 500), window.setTimeout(captureFrameDiag, 2000)]
 							}}
 							style={{
 								position: "absolute",
