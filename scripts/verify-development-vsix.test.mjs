@@ -44,7 +44,7 @@ async function writeVsix(
 			name: "extension.vsixmanifest",
 		})
 		archive.append(JSON.stringify(manifest), { name: "extension/package.json" })
-		archive.append("module.exports = {}", { name: "extension/dist/extension.js" })
+		archive.append(entryContent["extension/dist/extension.js"] ?? "module.exports = {}", { name: "extension/dist/extension.js" })
 		for (const entry of REQUIRED_RUNTIME_ENTRIES) {
 			if (
 				[
@@ -193,6 +193,18 @@ test("rejects a known secret pattern in otherwise allowed content", async (conte
 	})
 
 	await assert.rejects(() => verifyDevelopmentVsix(vsix), /possible GitHub token/)
+})
+
+test("rejects a bundle that still contains the test-only e2e trust seam", async (context) => {
+	for (const [entry, needle] of [
+		["extension/dist/extension.js", 'source==="e2e-fixture"'],
+		["extension/dist/extension.js", "process.env.AIHYDRO_E2E_TRUSTED_FIXTURES"],
+		["extension/webview-ui/build/assets/index.js", '"e2e-fixture"'],
+	]) {
+		const vsix = temporaryVsix(context, "e2e-seam.vsix")
+		await writeVsix(vsix, { entryContent: { [entry]: `module.exports = ${JSON.stringify(needle)}` } })
+		await assert.rejects(() => verifyDevelopmentVsix(vsix), /test-only trust seam/)
+	}
 })
 
 test("rejects duplicate archive entries", async (context) => {

@@ -46,7 +46,7 @@ export class RequestyHandler implements ApiHandler {
 					baseURL: toRequestyServiceStringUrl(this.options.requestyBaseUrl),
 					apiKey: this.options.requestyApiKey,
 					defaultHeaders: {
-						"HTTP-Referer": "https://cline.bot",
+						"HTTP-Referer": "https://github.com/AI-Hydro/AI-Hydro",
 						"X-Title": "AI-Hydro",
 					},
 				})

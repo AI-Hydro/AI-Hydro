@@ -19,6 +19,9 @@ function makeItem(overrides: Partial<HtmlPreviewItem> = {}): HtmlPreviewItem {
 	}
 }
 
+// Host-assigned trust metadata. Capability follows the host's decision, not the document's claims.
+const TRUSTED = { trustSource: "learning-pack" }
+
 const EXECUTABLE_MANIFEST: AiHydroModuleManifest = { requires: { executable: true, python: ["matplotlib"] } }
 
 describe("profileFromBuildPath", () => {
@@ -54,7 +57,7 @@ describe("shortSourceLabel", () => {
 
 describe("deriveArtifactIdentity", () => {
 	it("distinguishes the same basename across build profiles", () => {
-		const aihydro = deriveArtifactIdentity(makeItem(), EXECUTABLE_MANIFEST)
+		const aihydro = deriveArtifactIdentity(makeItem({ metadata: { source: "file", ...TRUSTED } }), EXECUTABLE_MANIFEST)
 		const web = deriveArtifactIdentity(
 			makeItem({ filePath: "/repo/_build/web/labs/03-unit-hydrograph-convolution.html" }),
 			undefined,
@@ -64,14 +67,34 @@ describe("deriveArtifactIdentity", () => {
 		expect(aihydro.sourceLabel).to.not.equal(web.sourceLabel)
 	})
 
-	it("marks an executable manifest as executable", () => {
-		const id = deriveArtifactIdentity(makeItem(), EXECUTABLE_MANIFEST)
+	it("marks an executable manifest as executable when the host trusts the document", () => {
+		const id = deriveArtifactIdentity(makeItem({ metadata: { source: "file", ...TRUSTED } }), EXECUTABLE_MANIFEST)
 		expect(id.capability).to.equal("executable")
 		expect(id.capabilityLabel).to.equal("Executable")
 	})
 
+	it("marks an untrusted document static even if it embeds an executable manifest", () => {
+		const id = deriveArtifactIdentity(makeItem(), EXECUTABLE_MANIFEST)
+		expect(id.capability).to.equal("static")
+		expect(id.capabilityLabel).to.equal("Static")
+	})
+
+	it("labels an unsigned marketplace module as unsigned and static", () => {
+		const id = deriveArtifactIdentity(makeItem({ metadata: { source: "file", trustSource: "unsigned-module" } }), EXECUTABLE_MANIFEST)
+		expect(id.capability).to.equal("static")
+		expect(id.capabilityLabel).to.equal("Unsigned")
+	})
+
+	it("does not treat pack-looking metadata as a pack unless the host trusts the source", () => {
+		const id = deriveArtifactIdentity(
+			makeItem({ metadata: { source: "file", artifactKind: "learning-pack-v1", learningPackEdition: "student" } }),
+			undefined,
+		)
+		expect(id.capability).to.equal("static")
+	})
+
 	it("marks a manifest without executable cells as a module", () => {
-		const id = deriveArtifactIdentity(makeItem(), { requires: { executable: false } })
+		const id = deriveArtifactIdentity(makeItem({ metadata: { source: "file", ...TRUSTED } }), { requires: { executable: false } })
 		expect(id.capability).to.equal("module")
 	})
 
@@ -85,6 +108,7 @@ describe("deriveArtifactIdentity", () => {
 		// No parsed manifest yet, but the inline HTML carries the marker — this
 		// is the load-time window; must NOT flash as static.
 		const item = makeItem({
+			metadata: { source: "file", ...TRUSTED },
 			htmlContent: '<html><head><script type="application/vnd.aihydro.module+json">{"id":"m"}</script></head></html>',
 		})
 		const id = deriveArtifactIdentity(item, undefined)
@@ -93,7 +117,7 @@ describe("deriveArtifactIdentity", () => {
 
 	it("uses the pack edition as profile and marks capability as installed-pack", () => {
 		const item = makeItem({
-			metadata: { source: "file", artifactKind: "learning-pack-v1", learningPackEdition: "student" },
+			metadata: { source: "file", trustSource: "learning-pack", artifactKind: "learning-pack-v1", learningPackEdition: "student" },
 		})
 		const id = deriveArtifactIdentity(item, EXECUTABLE_MANIFEST)
 		expect(id.capability).to.equal("installed-pack")
@@ -104,7 +128,12 @@ describe("deriveArtifactIdentity", () => {
 	it("prefers the pack edition over a build-dir profile when both are present", () => {
 		const item = makeItem({
 			filePath: "/repo/_build/aihydro/labs/x.html",
-			metadata: { source: "file", artifactKind: "learning-pack-v1", learningPackEdition: "instructor" },
+			metadata: {
+				source: "file",
+				trustSource: "learning-pack",
+				artifactKind: "learning-pack-v1",
+				learningPackEdition: "instructor",
+			},
 		})
 		const id = deriveArtifactIdentity(item, undefined)
 		expect(id.profile).to.equal("instructor")
@@ -117,11 +146,22 @@ describe("isStaticDocument", () => {
 		expect(isStaticDocument(makeItem({ filePath: "/repo/report.html" }), undefined)).to.equal(true)
 	})
 
-	it("is false for an executable module and for an installed pack", () => {
-		expect(isStaticDocument(makeItem(), EXECUTABLE_MANIFEST)).to.equal(false)
+	it("is true for an untrusted document that merely claims to be an executable module", () => {
+		expect(isStaticDocument(makeItem(), EXECUTABLE_MANIFEST)).to.equal(true)
+	})
+
+	it("is false for a trusted executable module and for an installed pack", () => {
+		expect(isStaticDocument(makeItem({ metadata: { source: "file", ...TRUSTED } }), EXECUTABLE_MANIFEST)).to.equal(false)
 		expect(
 			isStaticDocument(
-				makeItem({ metadata: { source: "file", artifactKind: "learning-pack-v1", learningPackEdition: "student" } }),
+				makeItem({
+					metadata: {
+						source: "file",
+						trustSource: "learning-pack",
+						artifactKind: "learning-pack-v1",
+						learningPackEdition: "student",
+					},
+				}),
 				undefined,
 			),
 		).to.equal(false)

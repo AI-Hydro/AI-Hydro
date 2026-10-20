@@ -1,30 +1,41 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { InstallModuleRequest, InstallModuleResponse } from "@shared/proto/cline/html_preview"
 import { InstallModuleResponse as InstallModuleResponseProto } from "@shared/proto/cline/html_preview"
 import axios from "axios"
 import { createHash } from "crypto"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import type { ModuleRegistryEntry } from "@/services/htmlPreview/moduleRegistry"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
 import type { Controller } from "../index"
-import { assertTrustedMarketplaceUrl } from "./marketplaceUrlAllowlist"
+import {
+	assertTrustedMarketplaceRedirect,
+	assertTrustedMarketplaceUrl,
+	MAX_MODULE_BYTES,
+	resolveContainedInstallDir,
+} from "./marketplaceUrlAllowlist"
 
 export async function installModule(controller: Controller, request: InstallModuleRequest): Promise<InstallModuleResponse> {
 	const { moduleId, downloadUrl, title, version } = request
 	try {
 		assertTrustedMarketplaceUrl(downloadUrl, "installModule downloadUrl")
-		const modulesDir = path.join(os.homedir(), ".aihydro", "modules", moduleId)
+		const modulesDir = resolveContainedInstallDir(aihydroPath("modules"), moduleId, "installModule moduleId")
 		await fs.mkdir(modulesDir, { recursive: true })
 		const localPath = path.join(modulesDir, "module.html")
 
-		const response = await axios.get(downloadUrl, { responseType: "text", timeout: 30000 })
+		const response = await axios.get(downloadUrl, {
+			responseType: "text",
+			timeout: 30000,
+			maxContentLength: MAX_MODULE_BYTES,
+			maxBodyLength: MAX_MODULE_BYTES,
+			beforeRedirect: (options) => assertTrustedMarketplaceRedirect(options, "installModule downloadUrl"),
+		})
 		const html = String(response.data)
 		await fs.writeFile(localPath, html, "utf-8")
 		const sha256 = createHash("sha256").update(html).digest("hex")
 
 		// Register in installed.json
-		const registryPath = path.join(os.homedir(), ".aihydro", "modules", "installed.json")
+		const registryPath = aihydroPath("modules", "installed.json")
 		let registry: Record<string, ModuleRegistryEntry> = {}
 		try {
 			registry = JSON.parse(await fs.readFile(registryPath, "utf-8"))

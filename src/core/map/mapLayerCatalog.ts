@@ -1,11 +1,11 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { MapLayer } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 
-export const MAP_LAYER_CATALOG_FILE = path.join(os.homedir(), ".aihydro", "map_layer_catalog.json")
-const MAP_LAYER_GEOJSON_CACHE_DIR = path.join(os.homedir(), ".aihydro", "map_layer_geojson_cache")
+export const MAP_LAYER_CATALOG_FILE = aihydroPath("map_layer_catalog.json")
+const MAP_LAYER_GEOJSON_CACHE_DIR = aihydroPath("map_layer_geojson_cache")
 // Tool-pushed layers may be arbitrarily large (>512 KB). We always cache them
 // so they can be restored on extension reload. User-loaded layers keep the old cap.
 const MAX_GEOJSON_CACHE_BYTES_USER = 512_000

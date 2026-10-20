@@ -327,7 +327,7 @@ fetch_camels_us(session_id='01646500', gauge_id='01646500')
 
 #### `index_literature`
 
-Scan a folder of papers (.txt, .md, .pdf via pypdf) and build a text-only searchable index (literature_index.md with first ~800 chars per doc). Re-run when papers are added. folder_path defaults to ~/.aihydro/projects/<name>/literature/.
+Scan a folder of papers (.txt, .md, .pdf via pypdf) and build a text-only searchable index (literature_index.md with first ~800 chars per doc). Re-run when papers are added. folder_path defaults to ~/.aihydro/projects/&lt;name&gt;/literature/.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -660,7 +660,7 @@ map_apply_symbology(layer_id='...', attribute='...')
 
 #### `map_save_roi`
 
-Save the host map session active ROI to workspace roi/<slug>.geojson and update roi/active.json. Requires an active ROI on the map session file.
+Save the host map session active ROI to workspace roi/&lt;slug&gt;.geojson and update roi/active.json. Requires an active ROI on the map session file.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -758,7 +758,7 @@ preview_address_comment(module_id='...', comment_id='...')
 
 #### `preview_revise_section`
 
-Propose a revised HTML section (well-formed snippet, no <html>/<body>). User sees a diff to accept/reject. Used in the edit-mode comment flow.
+Propose a revised HTML section (well-formed snippet, no &lt;html&gt;/&lt;body&gt;). User sees a diff to accept/reject. Used in the edit-mode comment flow.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -1388,7 +1388,7 @@ preview_focus_cell(module_id='...', cell_id='...')
 
 #### `preview_get_pending_changes`
 
-Return the batched queue of pending user comments + text edits for a module (from ~/.aihydro/comments/<id>.json). Process them in one turn, then preview_address_comment each. status: open (default) | awaiting_review | addressed | all.
+Return the batched queue of pending user comments + text edits for a module (from ~/.aihydro/comments/&lt;id&gt;.json). Process them in one turn, then preview_address_comment each. status: open (default) | awaiting_review | addressed | all.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

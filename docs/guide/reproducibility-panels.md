@@ -13,21 +13,14 @@ Open them from the Command Palette or the sidebar toolbar:
 
 | Panel | Command | Primary source |
 |---|---|---|
-| Experiment Table | `AI-Hydro: Experiment Table` | `~/.aihydro/sessions/<session_id>.json` or capsule `session.json` |
-| Session Replay | `AI-Hydro: Session Replay` | `~/.aihydro/sessions/<session_id>.json` or capsule `session.json` |
+| Experiment Table | `AI-Hydro: Experiment Table` | `$AIHYDRO_HOME/sessions/<session_id>.json` (default `~/.aihydro/sessions`) or capsule `session.json` |
+| Session Replay | `AI-Hydro: Session Replay` | `$AIHYDRO_HOME/sessions/<session_id>.json` (default `~/.aihydro/sessions`) or capsule `session.json` |
 
-Use the bundled demo fixture for a populated end-to-end smoke test:
-
-```bash
-mkdir -p ~/.aihydro/sessions
-cp examples/reproducibility-panels/demo-reproducibility-cockpit.json \
-  ~/.aihydro/sessions/demo-reproducibility-cockpit.json
-```
-
-Then load session `demo-reproducibility-cockpit` in either panel (Experiment
-Table also needs experiment id `panel_smoke_exp`). The fixture is
-intentionally illustrative for UI/UX validation; it is not publication
-evidence.
+The panels only show sessions and capsules that exist. There is no demo session: a populated
+view needs a real session (run tools in chat) or an exported capsule path. Do not copy files
+into `~/.aihydro/sessions` to fake one. To work against a scratch state directory, start VS Code
+with `AIHYDRO_HOME` set; the extension and the AI-Hydro server both resolve every state path
+(sessions, ledger events, approvals, registry, exports) from it, defaulting to `~/.aihydro`.
 
 ## Experiment Table
 

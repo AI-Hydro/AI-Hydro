@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto"
 import * as path from "node:path"
+import type { ArtifactTrustSource } from "@shared/artifactTrust"
 import * as vscode from "vscode"
+import { ArtifactTrustStore } from "./artifactTrust"
 import { type DetectedMode, detectMode } from "./detectMode"
-import { getHtmlUtf8ByteLength } from "./inlineHtmlPolicy"
+import { getHtmlUtf8ByteLength, shouldInlineHtml } from "./inlineHtmlPolicy"
 import { inlineRelativeAssets } from "./inlineRelativeAssets"
 import { findQuartoSiteRoot } from "./quartoSiteRoot"
 
@@ -37,8 +39,32 @@ export interface ArtifactRef {
 	byteLength: number
 	/** Optional verified package root exposed to the webview resource server. */
 	localResourceRoot?: string
+	/**
+	 * Host-determined provenance used by the execution-trust gate. Never derived
+	 * from document content; defaults to the untrusted "document".
+	 */
+	trustSource: ArtifactTrustSource
 	/** Free-form, persisted across the gRPC boundary. */
 	metadata: Record<string, string>
+}
+
+/**
+ * What the trust store needs to know about a document. `servedFromSnapshot` is true
+ * only when the shell renders the hashed `ref.html` (srcdoc); larger artifacts fall back
+ * to loading the live file by URL, which can change after the user allowed it.
+ */
+function trustSubject(ref: ArtifactRef): {
+	id: string
+	contentHash: string
+	trustSource: ArtifactTrustSource
+	servedFromSnapshot: boolean
+} {
+	return {
+		id: ref.id,
+		contentHash: ref.contentHash,
+		trustSource: ref.trustSource,
+		servedFromSnapshot: shouldInlineHtml(ref.byteLength),
+	}
 }
 
 /** Maximum on-disk artifact size we are willing to register. */
@@ -71,6 +97,8 @@ export class ArtifactPreviewService {
 	private readonly artifacts = new Map<string, ArtifactRef>()
 	private readonly listeners = new Set<(c: ArtifactChange) => void>()
 	private readonly inlineDir: vscode.Uri
+	/** Per-document execution allowances (see artifactTrust.ts). */
+	private readonly trust = new ArtifactTrustStore()
 
 	constructor(private readonly context: vscode.ExtensionContext) {
 		this.inlineDir = vscode.Uri.joinPath(context.globalStorageUri, "html-artifacts")
@@ -83,6 +111,7 @@ export class ArtifactPreviewService {
 		preferredMode?: DetectedMode
 		metadata?: Readonly<Record<string, string>>
 		localResourceRoot?: string
+		trustSource?: ArtifactTrustSource
 	}): Promise<ArtifactRef> {
 		const fileUri = vscode.Uri.file(path.resolve(opts.fsPath))
 		const bytes = await vscode.workspace.fs.readFile(fileUri)
@@ -118,6 +147,7 @@ export class ArtifactPreviewService {
 			preferredMode: opts.preferredMode,
 			metadata: isMultiFileSite ? { ...opts.metadata, multiFileSite: "true" } : opts.metadata,
 			localResourceRoot,
+			trustSource: opts.trustSource,
 		})
 		this.upsert(ref)
 		return ref
@@ -128,7 +158,12 @@ export class ArtifactPreviewService {
 	 * inside `globalStorageUri/html-artifacts/`. Reusing the same title
 	 * overwrites the same file rather than producing duplicate artifacts.
 	 */
-	async registerInline(opts: { html: string; title?: string; preferredMode?: DetectedMode }): Promise<ArtifactRef> {
+	async registerInline(opts: {
+		html: string
+		title?: string
+		preferredMode?: DetectedMode
+		trustSource?: ArtifactTrustSource
+	}): Promise<ArtifactRef> {
 		const bytes = new TextEncoder().encode(opts.html)
 		this.assertSize(bytes.byteLength, opts.title ?? "inline")
 		await vscode.workspace.fs.createDirectory(this.inlineDir)
@@ -143,6 +178,7 @@ export class ArtifactPreviewService {
 			source: "inline",
 			html: opts.html,
 			preferredMode: opts.preferredMode,
+			trustSource: opts.trustSource,
 		})
 		this.upsert(ref)
 		return ref
@@ -152,6 +188,32 @@ export class ArtifactPreviewService {
 		return this.artifacts.get(id)
 	}
 
+	/** Whether the document may use the Python kernel and hand work to the agent. */
+	canExecute(id: string): boolean {
+		const ref = this.artifacts.get(id)
+		return Boolean(ref) && this.trust.isAllowed(trustSubject(ref as ArtifactRef))
+	}
+
+	/**
+	 * Allow or revoke execution for one document. Returns the resulting state;
+	 * an untrusted document can never be allowed.
+	 */
+	setExecutionAllowed(id: string, allowed: boolean): boolean {
+		const ref = this.artifacts.get(id)
+		if (!ref) {
+			return false
+		}
+		if (allowed) {
+			this.trust.allow(trustSubject(ref))
+		} else {
+			this.trust.revoke(id)
+		}
+		// Deliberately no `emit`: service changes rebuild the whole preview panel
+		// (VscodeHtmlPreviewProvider.refreshPanel). An allowance change only needs the
+		// updated item pushed to the webview, which the controller does.
+		return this.trust.isAllowed(trustSubject(ref))
+	}
+
 	list(): ArtifactRef[] {
 		return Array.from(this.artifacts.values())
 	}
@@ -159,6 +221,7 @@ export class ArtifactPreviewService {
 	remove(id: string): boolean {
 		const existing = this.artifacts.get(id)
 		const removed = this.artifacts.delete(id)
+		this.trust.revoke(id)
 		if (removed && existing) {
 			this.emit({ kind: "removed", ref: existing })
 		}
@@ -167,6 +230,9 @@ export class ArtifactPreviewService {
 
 	clear(): void {
 		if (this.artifacts.size === 0) return
+		for (const id of this.artifacts.keys()) {
+			this.trust.revoke(id)
+		}
 		this.artifacts.clear()
 		this.emit({ kind: "cleared" })
 	}
@@ -204,6 +270,7 @@ export class ArtifactPreviewService {
 		preferredMode?: DetectedMode
 		metadata?: Readonly<Record<string, string>>
 		localResourceRoot?: string
+		trustSource?: ArtifactTrustSource
 	}): ArtifactRef {
 		const byteLength = getHtmlUtf8ByteLength(args.html)
 		const contentHash = createHash("sha256").update(args.html).digest("hex")
@@ -221,6 +288,7 @@ export class ArtifactPreviewService {
 			html: args.html,
 			byteLength,
 			localResourceRoot: args.localResourceRoot,
+			trustSource: args.trustSource ?? "document",
 			metadata: {
 				timestamp: new Date().toISOString(),
 				source: args.source,
@@ -234,6 +302,11 @@ export class ArtifactPreviewService {
 
 	private upsert(ref: ArtifactRef): void {
 		const existing = this.artifacts.get(ref.id)
+		if (existing && (existing.contentHash !== ref.contentHash || existing.trustSource !== ref.trustSource)) {
+			// A re-registration with different bytes or provenance never inherits the
+			// previous document's allowance.
+			this.trust.revoke(ref.id)
+		}
 		this.artifacts.set(ref.id, ref)
 		this.emit({ kind: existing ? "updated" : "added", ref })
 	}

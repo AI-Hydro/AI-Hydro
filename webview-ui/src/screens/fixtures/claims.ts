@@ -111,7 +111,7 @@ export const approvalClaims: Record<string, ClaimRecord> = {
 	approved: base("fx-appr-approved", {
 		approvalState: "approved",
 		approvalForRevisionDigest: D("b"),
-		approvalChannel: "ssh_sig",
+		approvalChannel: "ssh_sig_sk_system_trust",
 		approvalTrustRoot: "system",
 		approvalPolicy: "signed_required",
 		approvalPrincipal: "fixture-reviewer",
@@ -120,14 +120,20 @@ export const approvalClaims: Record<string, ClaimRecord> = {
 	"integrity-only": base("fx-appr-integrity", {
 		approvalState: "approved",
 		approvalForRevisionDigest: D("b"),
-		approvalChannel: "cli_same_user",
+		approvalChannel: "ssh_sig_user_trust",
 		approvalTrustRoot: "user_writable",
-		approvalPolicy: "unsigned_opt_out",
+		approvalPolicy: "signed_required",
 		driftState: "no_history",
 	}),
+	// Approved and promoted: a registry row cites the approval. Same verified stamp as `approved`.
 	consumed: base("fx-appr-consumed", {
 		approvalState: "consumed",
-		approvalReason: "Approval was used by a prior promotion.",
+		approvalForRevisionDigest: D("b"),
+		approvalChannel: "ssh_sig_sk_system_trust",
+		approvalTrustRoot: "system",
+		approvalPolicy: "signed_required",
+		approvalPrincipal: "fixture-reviewer",
+		approvalReason: "Cited by a registry row.",
 		driftState: "in_sync",
 	}),
 	unverifiable: base("fx-appr-unverifiable", {
@@ -149,8 +155,9 @@ export const approvalClaims: Record<string, ClaimRecord> = {
 	"revision-mismatch": base("fx-appr-mismatch", {
 		approvalState: "approved",
 		approvalForRevisionDigest: D("c"),
-		approvalChannel: "ssh_sig",
+		approvalChannel: "ssh_sig_sk_system_trust",
 		approvalTrustRoot: "system",
+		approvalPolicy: "signed_required",
 		driftState: "drifted",
 	}),
 	unreported: base("fx-appr-unreported", { approvalState: "", driftState: "" }),

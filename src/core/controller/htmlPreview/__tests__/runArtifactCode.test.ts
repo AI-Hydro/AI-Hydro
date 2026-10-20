@@ -9,8 +9,12 @@ describe("runArtifactCode", () => {
 	let mockController: Partial<Controller>
 	let executeStub: sinon.SinonStub
 	let allowStub: sinon.SinonStub
+	let trustSource: "learning-pack" | "e2e-fixture" | "unsigned-module" | "document"
+	let executionAllowed: boolean
 
 	beforeEach(() => {
+		trustSource = "learning-pack"
+		executionAllowed = true
 		executeStub = sinon.stub().resolves({
 			stdout: "hi\n",
 			stderr: "",
@@ -29,7 +33,9 @@ describe("runArtifactCode", () => {
 				get: () => ({
 					id: "artifact_1",
 					dirFsPath: "/tmp",
+					trustSource,
 				}),
+				canExecute: () => executionAllowed && (trustSource === "learning-pack" || trustSource === "e2e-fixture"),
 			})) as unknown as Controller["getArtifactPreviewService"],
 			getArtifactKernelService: (() => ({
 				execute: executeStub,
@@ -87,6 +93,56 @@ describe("runArtifactCode", () => {
 			expect(call.args[0].moduleId).to.equal("water-balance")
 			expect(JSON.parse(call.args[0].payloadJson).moduleId).to.equal("water-balance")
 		}
+	})
+
+	describe("trust gate", () => {
+		const request = () =>
+			RunArtifactCodeRequest.create({
+				artifactId: "artifact_1",
+				language: ArtifactCodeLanguage.ARTIFACT_CODE_LANGUAGE_PYTHON,
+				code: "print(1)",
+			})
+
+		it("denies a static document without prompting or starting a kernel", async () => {
+			trustSource = "document"
+			const result = await runArtifactCode(mockController as Controller, request())
+			expect(result.status).to.equal("denied")
+			expect(result.error).to.equal("denied: document is not an executable module")
+			expect(allowStub.called, "must not even prompt").to.be.false
+			expect(executeStub.called, "must not run").to.be.false
+		})
+
+		it("denies an unsigned marketplace module, even if an allowance somehow exists", async () => {
+			trustSource = "unsigned-module"
+			executionAllowed = true
+			const result = await runArtifactCode(mockController as Controller, request())
+			expect(result.status).to.equal("denied")
+			expect(result.error).to.match(/unsigned marketplace module/)
+			expect(executeStub.called).to.be.false
+		})
+
+		it("denies a trusted document the user has not allowed", async () => {
+			executionAllowed = false
+			const result = await runArtifactCode(mockController as Controller, request())
+			expect(result.status).to.equal("denied")
+			expect(result.error).to.match(/Allow execution/)
+			expect(allowStub.called).to.be.false
+			expect(executeStub.called).to.be.false
+		})
+
+		it("still honours the machine-level Python execution setting for an allowed trusted document", async () => {
+			allowStub.resolves(false)
+			const result = await runArtifactCode(mockController as Controller, request())
+			expect(result.status).to.equal("denied")
+			expect(executeStub.called).to.be.false
+		})
+
+		it("runs a trusted artifact once allowed", async () => {
+			trustSource = "e2e-fixture"
+			const result = await runArtifactCode(mockController as Controller, request())
+			expect(result.status).to.equal("success")
+			expect(executeStub.calledOnce).to.be.true
+		})
 	})
 
 	it("requires artifact_id", async () => {

@@ -1,6 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { DeepSeekModelId, deepSeekDefaultModelId, deepSeekModels, ModelInfo } from "@shared/api"
 import { calculateApiCostOpenAI } from "@utils/cost"
+import { normalizeOpenAiStyleUsage } from "../transform/usage"
 import OpenAI from "openai"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
@@ -40,33 +41,17 @@ export class DeepSeekHandler implements ApiHandler {
 	}
 
 	private async *yieldUsage(info: ModelInfo, usage: OpenAI.Completions.CompletionUsage | undefined): ApiStream {
-		// Deepseek reports total input AND cache reads/writes,
-		// see context caching: https://api-docs.deepseek.com/guides/kv_cache)
-		// where the input tokens is the sum of the cache hits/misses, just like OpenAI.
-		// This affects:
-		// 1) context management truncation algorithm, and
-		// 2) cost calculation
-
-		// Deepseek usage includes extra fields.
-		// Safely cast the prompt token details section to the appropriate structure.
-		interface DeepSeekUsage extends OpenAI.CompletionUsage {
-			prompt_cache_hit_tokens?: number
-			prompt_cache_miss_tokens?: number
-		}
-		const deepUsage = usage as DeepSeekUsage
-
-		const inputTokens = deepUsage?.prompt_tokens || 0 // sum of cache hits and misses
-		const outputTokens = deepUsage?.completion_tokens || 0
-		const cacheReadTokens = deepUsage?.prompt_cache_hit_tokens || 0
-		const cacheWriteTokens = deepUsage?.prompt_cache_miss_tokens || 0
-		const totalCost = calculateApiCostOpenAI(info, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens)
-		const nonCachedInputTokens = Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens) // this will always be 0
+		// DeepSeek's prompt_tokens is the sum of cache hits and misses (context caching:
+		// https://api-docs.deepseek.com/guides/kv_cache). A miss is plain uncached input, not a cache write,
+		// so it is reported as input tokens; only hits are reported as cache reads.
+		const u = normalizeOpenAiStyleUsage(usage)
+		const totalCost = calculateApiCostOpenAI(info, u.promptTokens, u.outputTokens, 0, u.cacheReadTokens)
 		yield {
 			type: "usage",
-			inputTokens: nonCachedInputTokens,
-			outputTokens: outputTokens,
-			cacheWriteTokens: cacheWriteTokens,
-			cacheReadTokens: cacheReadTokens,
+			inputTokens: u.uncachedInputTokens,
+			outputTokens: u.outputTokens,
+			cacheWriteTokens: 0,
+			cacheReadTokens: u.cacheReadTokens,
 			totalCost: totalCost,
 		}
 	}

@@ -15,6 +15,7 @@ import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"
 import { ApiStream } from "../transform/stream"
+import { normalizeOpenAiStyleUsage, OpenAiStyleUsageInput } from "../transform/usage"
 
 interface QwenHandlerOptions extends CommonApiHandlerOptions {
 	qwenApiKey?: string
@@ -131,14 +132,14 @@ export class QwenHandler implements ApiHandler {
 			}
 
 			if (chunk.usage) {
+				// prompt_tokens is the whole prompt; report it in the meter convention (uncached input / cache hits).
+				const u = normalizeOpenAiStyleUsage(chunk.usage as OpenAiStyleUsageInput)
 				yield {
 					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0,
-					outputTokens: chunk.usage.completion_tokens || 0,
-					// @ts-ignore-next-line
-					cacheReadTokens: chunk.usage.prompt_cache_hit_tokens || 0,
-					// @ts-ignore-next-line
-					cacheWriteTokens: chunk.usage.prompt_cache_miss_tokens || 0,
+					inputTokens: u.uncachedInputTokens,
+					outputTokens: u.outputTokens,
+					cacheReadTokens: u.cacheReadTokens,
+					cacheWriteTokens: u.cacheWriteTokens,
 				}
 			}
 		}

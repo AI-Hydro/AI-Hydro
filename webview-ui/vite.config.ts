@@ -113,6 +113,8 @@ export default defineConfig({
 	},
 	define: {
 		__PLATFORM__: JSON.stringify(platform),
+		// Test-only trust source; compiled out unless built for the Playwright suite (see esbuild.mjs).
+		__AIHYDRO_E2E__: JSON.stringify(process.env.AIHYDRO_E2E_BUILD === "true"),
 		process: JSON.stringify({
 			env: {
 				NODE_ENV: JSON.stringify(process?.env?.IS_DEV ? "development" : "production"),

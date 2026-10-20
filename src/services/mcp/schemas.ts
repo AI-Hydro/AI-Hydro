@@ -6,6 +6,12 @@ export const AutoApproveSchema = z.array(z.string()).default([])
 
 export const BaseConfigSchema = z.object({
 	autoApprove: AutoApproveSchema.optional(),
+	// Reserved approval-policy fields (approval redesign). AP1 only needs them recognised so that a file edit
+	// that turns trust on or removes a deny/alwaysAsk entry is detected as a policy loosening (policyGate.ts)
+	// and survives validation. Nothing enforces them yet; the effect-class policy (AP2) will.
+	trustAnnotations: z.boolean().optional(),
+	alwaysAsk: z.array(z.string()).optional(),
+	deny: z.array(z.string()).optional(),
 	disabled: z.boolean().optional(),
 	timeout: z.number().min(MIN_MCP_TIMEOUT_SECONDS).optional().default(DEFAULT_MCP_TIMEOUT_SECONDS),
 })

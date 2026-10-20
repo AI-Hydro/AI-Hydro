@@ -36,6 +36,11 @@ The extension records only minimal anonymous events:
 }
 ```
 
+These requests are telemetry (the hash is a stable pseudonym). They are sent only
+when both VS Code's telemetry setting and AI-Hydro's own telemetry setting allow
+it; otherwise the extension makes no request to the recognition host. See
+`PRIVACY.md`.
+
 It does not send prompts, file paths, map content, raw data, user names, or
 workspace names.
 

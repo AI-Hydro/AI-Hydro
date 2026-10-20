@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react"
+import { collectHydroSearchProblems } from "./hydroSearchProblems"
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
 import { loadMapWorkspace, type MapBookmark, saveMapWorkspace } from "./mapWorkspace"
+import { placeGeocoder } from "./placeGeocoder"
 
 export interface SearchResult {
 	label: string
@@ -19,18 +21,6 @@ interface SearchBarProps {
 	onResultSelect?: (result: SearchResult) => void
 	/** Current view state — needed to save bookmarks. */
 	currentView?: { longitude: number; latitude: number; zoom: number; pitch?: number; bearing?: number }
-}
-
-const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-
-const USGS_GAUGE_SITES: Record<string, { name: string; lat: number; lon: number }> = {
-	"01031500": { name: "Mattawamkeag River at Mattawamkeag, ME", lat: 45.5146, lon: -68.33 },
-	"01052500": { name: "Piscataquis River at Dover-Foxcroft, ME", lat: 45.1834, lon: -69.2278 },
-	"02361000": { name: "Sepulga River at Brooklyn, AL", lat: 31.4836, lon: -86.8686 },
-	"03335000": { name: "Wabash River at Huntington, IN", lat: 40.8834, lon: -85.5 },
-	"06431500": { name: "Rapid Creek at Rapid City, SD", lat: 44.0697, lon: -103.231 },
-	"09380000": { name: "Colorado River at Lees Ferry, AZ", lat: 36.8642, lon: -111.5877 },
-	"11532500": { name: "Trinity River near Douglas City, CA", lat: 40.5843, lon: -123.6469 },
 }
 
 function parseCoordinateInput(raw: string): SearchResult | null {
@@ -74,26 +64,6 @@ function parseCoordinateInput(raw: string): SearchResult | null {
 		}
 	}
 	return null
-}
-
-function localGaugeSearch(query: string): SearchResult[] {
-	const q = query.trim().toLowerCase()
-	if (!q) {
-		return []
-	}
-	const out: SearchResult[] = []
-	for (const [id, info] of Object.entries(USGS_GAUGE_SITES)) {
-		if (id.includes(q) || info.name.toLowerCase().includes(q)) {
-			out.push({
-				label: `${id} — ${info.name}`,
-				lat: info.lat,
-				lon: info.lon,
-				source: "gauge",
-				meta: { gauge_id: id },
-			})
-		}
-	}
-	return out
 }
 
 function hydroHitsToResults(
@@ -300,19 +270,33 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 	const [selectedIdx, setSelectedIdx] = useState(-1)
 	const [coordInput, setCoordInput] = useState("")
 	const [coordError, setCoordError] = useState("")
+	const [notice, setNotice] = useState<{ kind: "problem" | "empty" | "geocode"; text: string } | null>(null)
 	const abortRef = useRef<AbortController | null>(null)
+	const hydroSeqRef = useRef(0)
+	const hydroResultsRef = useRef<SearchResult[]>([])
+	const [searchedPlaces, setSearchedPlaces] = useState(false)
+	// Place-name results for the query they were fetched for, so a later (or debounced) hydro response for the
+	// same text merges with them instead of overwriting them.
+	const placeResultsRef = useRef<{ query: string; results: SearchResult[] } | null>(null)
 
-	const doSearch = useCallback(
+	/**
+	 * Coordinate + USGS gauge / NID dam lookup (local Python CLI, not a public web service).
+	 * Runs on a debounce while typing. Stale responses are discarded.
+	 */
+	const doHydroSearch = useCallback(
 		async (q: string) => {
+			const seq = ++hydroSeqRef.current
 			if (!q.trim()) {
+				hydroResultsRef.current = []
 				setResults([])
+				setNotice(null)
+				setLoading(false)
 				return
 			}
 			setLoading(true)
 			const coord = parseCoordinateInput(q)
-			const localGauges = localGaugeSearch(q)
-
 			let hydro: SearchResult[] = []
+			let problems: string[] = []
 			if (q.trim().length >= 2) {
 				try {
 					const r = await sendHydroMapCommand("searchHydrology", {
@@ -320,6 +304,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 						...(viewBbox ?? {}),
 						limit: 15,
 					})
+					problems = collectHydroSearchProblems(r)
 					const hits =
 						(r.result?.hits as Array<{
 							label: string
@@ -328,62 +313,81 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 							source: string
 							meta?: Record<string, string>
 						}>) ?? []
-					hydro = hydroHitsToResults(hits).filter(
-						(h) => !localGauges.some((g) => g.meta?.gauge_id === h.meta?.gauge_id),
-					)
-				} catch {
-					/* hydro CLI unavailable */
+					hydro = hydroHitsToResults(hits)
+				} catch (e) {
+					problems = [e instanceof Error ? e.message : "hydrology search failed"]
 				}
 			}
-
-			let nominatim: SearchResult[] = []
-			if (abortRef.current) {
-				abortRef.current.abort()
+			if (seq !== hydroSeqRef.current) {
+				return
 			}
-			abortRef.current = new AbortController()
-			try {
-				const resp = await fetch(`${NOMINATIM_URL}?q=${encodeURIComponent(q)}&format=json&limit=5&polygon_geojson=0`, {
-					signal: abortRef.current.signal,
-					headers: {
-						"Accept-Language": "en",
-						"User-Agent": "AI-Hydro/1.0 (hydrology-research-tool)",
-					},
-				})
-				if (resp.ok) {
-					const data = await resp.json()
-					nominatim = (data || [])
-						.filter((item: { lat?: string; lon?: string }) => item.lat && item.lon)
-						.map((item: { display_name: string; lat: string; lon: string; boundingbox?: string[] }) => ({
-							label: item.display_name,
-							lat: parseFloat(item.lat),
-							lon: parseFloat(item.lon),
-							source: "nominatim" as const,
-							bbox: item.boundingbox
-								? [
-										parseFloat(item.boundingbox[2]),
-										parseFloat(item.boundingbox[0]),
-										parseFloat(item.boundingbox[3]),
-										parseFloat(item.boundingbox[1]),
-									]
-								: undefined,
-						}))
-				}
-			} catch {
-				/* ignore */
+			const base = [...(coord ? [coord] : []), ...hydro]
+			hydroResultsRef.current = base
+			const placeSearched = placeResultsRef.current?.query === q.trim()
+			const places = placeSearched ? (placeResultsRef.current?.results ?? []) : []
+			if (!placeSearched) {
+				placeResultsRef.current = null
 			}
-
-			const all = [...(coord ? [coord] : []), ...localGauges, ...hydro, ...nominatim]
+			const all = [...base, ...places]
 			setResults(all)
-			setSelectedIdx(all.length > 0 ? 0 : -1)
+			setSearchedPlaces(places.length > 0)
+			setSelectedIdx(-1)
+			if (problems.length > 0) {
+				setNotice({ kind: "problem", text: `USGS lookup incomplete: ${problems.join("; ")}` })
+			} else if (placeSearched && places.length === 0 && all.length === 0) {
+				setNotice({ kind: "empty", text: "No place found for that name." })
+			} else if (all.length === 0 && q.trim().length >= 2) {
+				setNotice({ kind: "empty", text: "No gauge, dam or coordinate match. Press Enter to search place names." })
+			} else {
+				setNotice(null)
+			}
 			setLoading(false)
 		},
 		[viewBbox],
 	)
 
+	/**
+	 * Place-name geocoding (public Nominatim). Explicit only: Enter or the Search button.
+	 * Cached and rate-limited in placeGeocoder; never called from the typing debounce.
+	 */
+	const doPlaceSearch = useCallback(async (q: string) => {
+		if (q.trim().length < 2) {
+			return
+		}
+		abortRef.current?.abort()
+		const controller = new AbortController()
+		abortRef.current = controller
+		setLoading(true)
+		try {
+			const hits = await placeGeocoder.search(q, controller.signal)
+			if (controller.signal.aborted) {
+				return
+			}
+			const places: SearchResult[] = hits.map((h) => ({ ...h, source: "nominatim" as const }))
+			placeResultsRef.current = { query: q.trim(), results: places }
+			const all = [...hydroResultsRef.current.filter((r) => r.source !== "nominatim"), ...places]
+			setResults(all)
+			setSearchedPlaces(true)
+			setSelectedIdx(-1)
+			setNotice(places.length === 0 ? { kind: "empty", text: "No place found for that name." } : null)
+		} catch (e) {
+			if (!controller.signal.aborted) {
+				setNotice({
+					kind: "geocode",
+					text: `Place search unavailable: ${e instanceof Error ? e.message : "request failed"}`,
+				})
+			}
+		} finally {
+			if (abortRef.current === controller) {
+				setLoading(false)
+			}
+		}
+	}, [])
+
 	useEffect(() => {
-		const id = window.setTimeout(() => doSearch(query), 400)
+		const id = window.setTimeout(() => doHydroSearch(query), 400)
 		return () => window.clearTimeout(id)
-	}, [query, doSearch])
+	}, [query, doHydroSearch])
 
 	useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -395,6 +399,20 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 	}
 
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+		if (e.key === "Enter") {
+			e.preventDefault()
+			if (selectedIdx >= 0 && results[selectedIdx]) {
+				handleSelect(results[selectedIdx])
+				return
+			}
+			const coord = parseCoordinateInput(query)
+			if (coord) {
+				handleSelect(coord)
+				return
+			}
+			void doPlaceSearch(query)
+			return
+		}
 		if (results.length === 0) {
 			return
 		}
@@ -404,9 +422,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 		} else if (e.key === "ArrowUp") {
 			e.preventDefault()
 			setSelectedIdx((i) => Math.max(i - 1, 0))
-		} else if (e.key === "Enter" && selectedIdx >= 0) {
-			e.preventDefault()
-			handleSelect(results[selectedIdx])
 		} else if (e.key === "Escape") {
 			setResults([])
 			setSelectedIdx(-1)
@@ -442,16 +457,42 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 					className="map-search-input"
 					onChange={(e) => setQuery(e.target.value)}
 					onKeyDown={handleKeyDown}
-					placeholder="Place, gauge ID, dam, or lat,lon"
+					placeholder="Gauge ID, dam, lat,lon — Enter to search places"
 					type="text"
 					value={query}
 				/>
+				<button
+					aria-label="Search place names"
+					className="map-search-go"
+					disabled={query.trim().length < 2}
+					onClick={() => void doPlaceSearch(query)}
+					style={smallBtn(query.trim().length >= 2)}
+					title="Search place names (OpenStreetMap Nominatim)"
+					type="button">
+					Search
+				</button>
 				{loading && (
 					<span aria-hidden="true" className="map-search-field-spinner">
 						⏳
 					</span>
 				)}
 			</div>
+
+			{notice && (
+				<div
+					data-testid="map-search-notice"
+					role={notice.kind === "empty" ? "status" : "alert"}
+					style={{
+						fontSize: 11,
+						marginTop: 4,
+						color:
+							notice.kind === "empty"
+								? "var(--vscode-descriptionForeground)"
+								: "var(--vscode-editorWarning-foreground, #cca700)",
+					}}>
+					{notice.text}
+				</div>
+			)}
 
 			{results.length > 0 && (
 				<div
@@ -473,6 +514,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 							<span className="map-search-result-label">{r.label}</span>
 						</button>
 					))}
+					{searchedPlaces && results.some((r) => r.source === "nominatim") && (
+						<div style={{ fontSize: 11, opacity: 0.7, padding: "3px 8px" }}>
+							Place names © OpenStreetMap contributors (Nominatim)
+						</div>
+					)}
 				</div>
 			)}
 

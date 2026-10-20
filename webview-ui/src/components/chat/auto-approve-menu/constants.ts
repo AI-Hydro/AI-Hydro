@@ -47,16 +47,17 @@ export const ACTION_METADATA: ActionMetadata[] = [
 	},
 	{
 		id: "executeSafeCommands",
-		label: "Execute safe commands",
-		shortName: "Safe Commands",
+		label: "Run read-only commands",
+		shortName: "Read-only Commands",
 		description:
-			"Allows AI-Hydro to execute safe terminal commands. If the model determines a command is potentially destructive, it will still require approval.",
+			"Lets AI-Hydro run a command without asking only when AI-Hydro itself recognises it as read-only, from a short allowlist (ls, cat, grep, git status and similar, optionally piped to other read-only commands). The model's own opinion that a command is safe is not used. Anything else asks: unknown programs, ; && redirection, $(...), scripts (python -c, sh -c), curl and installs. This is a conservative filter, not a sandbox.",
 		icon: "codicon-terminal",
 		subAction: {
 			id: "executeAllCommands",
 			label: "Execute all commands",
 			shortName: "All Commands",
-			description: "Allows AI-Hydro to execute all terminal commands. Use at your own risk.",
+			description:
+				"Allows AI-Hydro to run any terminal command without asking, including ones the model marks as risky. Use at your own risk. Claim approval (aihydro-approve) and subagent launches are still blocked or asked.",
 			icon: "codicon-terminal-bash",
 			parentActionId: "executeSafeCommands",
 		},

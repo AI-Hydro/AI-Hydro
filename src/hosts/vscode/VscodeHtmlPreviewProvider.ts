@@ -1,6 +1,15 @@
+import { randomBytes } from "node:crypto"
 import type { Controller } from "@core/controller"
 import { handlePreviewAgentTaskMessage } from "@core/htmlPreview/handlePreviewAgentTask"
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import * as vscode from "vscode"
+import {
+	type ArtifactLookup,
+	decideActiveCourse,
+	decideModuleState,
+	decidePreviewEvent,
+	decideSaveDocument,
+} from "./previewMessageGuards"
 import type { ArtifactRef } from "@/services/artifact-preview/ArtifactPreviewService"
 import { buildPreviewCsp } from "@/services/artifact-preview/buildPreviewCsp"
 import { loadCourseManifest } from "@/services/htmlPreview/courseLoader"
@@ -41,12 +50,30 @@ import {
  * The provider does NOT keep its own copy of the artifact list — that lives
  * in `ArtifactPreviewService`, accessed via the controller.
  */
+/** Host-side view of the artifacts, used to validate everything the shell relays. */
+function artifactLookup(controller: Controller): ArtifactLookup {
+	const svc = controller.getArtifactPreviewService()
+	return {
+		fsPath: (id) => svc.get(id)?.fsPath,
+		metadata: (id) => svc.get(id)?.metadata,
+		canExecute: (id) => svc.canExecute(id),
+	}
+}
+
 export class VscodeHtmlPreviewProvider {
 	private static currentPanel: vscode.WebviewPanel | undefined
 	private static context: vscode.ExtensionContext
 	private static controller: Controller | undefined
 	private static disposables: vscode.Disposable[] = []
 	private static currentNonce = ""
+	/**
+	 * Per-panel secret, embedded in the shell HTML and attached to every host reply the shell acts on
+	 * (course, progress, module state, agent-task result, agent navigation). A sandboxed document can
+	 * neither read the shell HTML nor learn the token, so it cannot forge a host reply no matter which
+	 * window it posts from (a nested frame, a popup, a popup whose opener it severed, or a discarded
+	 * window that arrives with a null source).
+	 */
+	private static panelToken = ""
 	/**
 	 * Maps VS Code internal file/artifact IDs (e.g. "file_0155f6f2094bdd2f") to
 	 * the canonical module ID from the HTML manifest (e.g. "dem-to-twi").
@@ -164,6 +191,7 @@ export class VscodeHtmlPreviewProvider {
 		// Build the React shell HTML. We need a fresh nonce on every (re)load
 		// so the parent CSP can pin script execution.
 		VscodeHtmlPreviewProvider.currentNonce = generateNonce()
+		VscodeHtmlPreviewProvider.panelToken = randomBytes(24).toString("hex")
 		panel.webview.html = VscodeHtmlPreviewProvider.buildShellHtml(panel.webview, VscodeHtmlPreviewProvider.currentNonce)
 		// Push fresh state so the webview's React app gets the new webviewUris.
 		void VscodeHtmlPreviewProvider.controller?.postStateToWebview()
@@ -212,47 +240,21 @@ export class VscodeHtmlPreviewProvider {
 						// MCP tools (preview_get_state, preview_recent_events).
 						try {
 							const svc = mainWebview.controller.previewSessionService
-							const payload = (message.payloadJson ?? "{}") as string
-							const parsed = (() => {
-								try {
-									return JSON.parse(payload) as Record<string, unknown>
-								} catch {
-									return {}
-								}
-							})()
-							// The webview sends item.id (a VS Code file ID like
-							// "file_0155f6f2094bdd2f") as moduleId.  On the first
-							// manifest.loaded event the payload also carries the
-							// manifest's canonical id (e.g. "dem-to-twi").  Record
-							// that mapping so every subsequent event for this file
-							// is stored under the human-readable module ID — which
-							// is what `preview_list_modules` surfaces to the agent.
-							const rawId = String(parsed.moduleId ?? parsed.module_id ?? "unknown")
-							const kind = String(message.kind ?? "user.interaction")
-							if (kind === "manifest.loaded" && typeof parsed.id === "string" && parsed.id) {
-								const wasUnmapped =
-									!VscodeHtmlPreviewProvider.fileIdToModuleId.has(rawId) ||
-									VscodeHtmlPreviewProvider.fileIdToModuleId.get(rawId) !== parsed.id
-								VscodeHtmlPreviewProvider.fileIdToModuleId.set(rawId, parsed.id)
-								if (wasUnmapped && rawId !== parsed.id) {
-									// Some events arrived before this mapping was known and were
-									// written to disk under the raw VS Code file ID.  Retroactively
-									// delete those stale entries — the canonical module-ID file is
-									// the authoritative source from this point on.
-									svc.resolveModuleIdentity(rawId, parsed.id)
-								}
+							// Identity, source and size come from the host's artifact record, not the
+							// message: the payload originates in the (possibly hostile) document.
+							const decision = decidePreviewEvent(
+								message,
+								artifactLookup(mainWebview.controller),
+								VscodeHtmlPreviewProvider.fileIdToModuleId,
+							)
+							if (!decision) break
+							if (decision.identityMove) {
+								const { rawId, canonicalId } = decision.identityMove
+								VscodeHtmlPreviewProvider.fileIdToModuleId.set(rawId, canonicalId)
+								// Events that arrived before the mapping was known were filed under the raw id.
+								svc.resolveModuleIdentity(rawId, canonicalId)
 							}
-							const resolvedModuleId = VscodeHtmlPreviewProvider.fileIdToModuleId.get(rawId) ?? rawId
-							if (parsed.moduleId === rawId) parsed.moduleId = resolvedModuleId
-							if (parsed.module_id === rawId) parsed.module_id = resolvedModuleId
-							svc.appendEvent({
-								moduleId: resolvedModuleId,
-								cellId: typeof parsed.cellId === "string" ? parsed.cellId : undefined,
-								kind,
-								payloadJson: JSON.stringify(parsed),
-								timestampMs: Number(message.timestampMs) || Date.now(),
-								source: String(message.source ?? "user"),
-							})
+							svc.appendEvent(decision.event)
 						} catch (err) {
 							console.warn("[VscodeHtmlPreviewProvider] preview-event relay failed:", err)
 						}
@@ -265,15 +267,19 @@ export class VscodeHtmlPreviewProvider {
 							try {
 								await handlePreviewAgentTaskMessage(
 									mainWebview.controller,
-									message as { requestId?: string; prompt?: string },
+									message as { requestId?: string; prompt?: string; artifactId?: string },
 									async (response) => {
-										await panel.webview.postMessage(response)
+										await panel.webview.postMessage({
+											...response,
+											token: VscodeHtmlPreviewProvider.panelToken,
+										})
 									},
 								)
 							} catch (err) {
 								console.warn("[VscodeHtmlPreviewProvider] preview-agent-task failed:", err)
 								panel.webview.postMessage({
 									type: "aihydro-preview-agent-result",
+									token: VscodeHtmlPreviewProvider.panelToken,
 									requestId: message.requestId,
 									ok: false,
 									error: err instanceof Error ? err.message : String(err),
@@ -282,6 +288,7 @@ export class VscodeHtmlPreviewProvider {
 						} else {
 							panel.webview.postMessage({
 								type: "aihydro-preview-agent-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId: message.requestId,
 								ok: false,
 								error: "No main webview controller available",
@@ -293,18 +300,15 @@ export class VscodeHtmlPreviewProvider {
 						// document.documentElement.outerHTML on `aihydro-request-save`
 						// and the webview relays it here with `filePath` + `html`.
 						try {
-							const filePath = typeof message.filePath === "string" ? message.filePath : ""
-							const html = typeof message.html === "string" ? message.html : ""
-							if (filePath && html) {
-								const uri = vscode.Uri.file(filePath)
-								await vscode.workspace.fs.writeFile(uri, Buffer.from(html, "utf8"))
-								panel.webview.postMessage({ type: "aihydro-save-complete", filePath, ok: true })
+							const decision = decideSaveDocument(message, artifactLookup(mainWebview.controller))
+							if (decision.ok) {
+								await vscode.workspace.fs.writeFile(
+									vscode.Uri.file(decision.fsPath),
+									Buffer.from(decision.html, "utf8"),
+								)
+								panel.webview.postMessage({ type: "aihydro-save-complete", filePath: decision.fsPath, ok: true })
 							} else {
-								panel.webview.postMessage({
-									type: "aihydro-save-complete",
-									ok: false,
-									error: "Missing filePath or html",
-								})
+								panel.webview.postMessage({ type: "aihydro-save-complete", ok: false, error: decision.error })
 							}
 						} catch (err) {
 							console.warn("[VscodeHtmlPreviewProvider] save-document failed:", err)
@@ -355,6 +359,7 @@ export class VscodeHtmlPreviewProvider {
 							if (packScope) progress = { ...progress, courseId }
 							panel.webview.postMessage({
 								type: "aihydro-course-progress-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								courseId,
 								progress,
@@ -362,6 +367,7 @@ export class VscodeHtmlPreviewProvider {
 						} catch (err) {
 							panel.webview.postMessage({
 								type: "aihydro-course-progress-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								courseId,
 								progress: null,
@@ -381,6 +387,7 @@ export class VscodeHtmlPreviewProvider {
 							const result = await loadCourseManifest(filePath)
 							panel.webview.postMessage({
 								type: "aihydro-course-loaded",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								filePath,
 								course: result.course,
@@ -389,6 +396,7 @@ export class VscodeHtmlPreviewProvider {
 						} catch (err) {
 							panel.webview.postMessage({
 								type: "aihydro-course-loaded",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								filePath,
 								course: null,
@@ -404,15 +412,17 @@ export class VscodeHtmlPreviewProvider {
 						// know which course the user is currently viewing. The webview
 						// sends this whenever useCourse resolves a course.
 						try {
+							// Only a course.json whose folder contains the open artifact may become "active".
+							const course = decideActiveCourse(message, artifactLookup(mainWebview.controller))
+							if (!course.ok) break
 							const fs = await import("fs/promises")
-							const os = await import("os")
 							const path = await import("path")
-							const dir = path.join(os.homedir(), ".aihydro")
+							const dir = aihydroHome()
 							await fs.mkdir(dir, { recursive: true })
 							const payload = {
-								courseId: String(message.courseId ?? ""),
-								coursePath: String(message.coursePath ?? ""),
-								courseRoot: String(message.courseRoot ?? ""),
+								courseId: course.courseId,
+								coursePath: course.coursePath,
+								courseRoot: course.courseRoot,
 								currentModuleId: message.currentModuleId ?? null,
 								lastSeenAt: Date.now(),
 							}
@@ -436,14 +446,14 @@ export class VscodeHtmlPreviewProvider {
 						const storageKey = packScope ? learningPackControlsKey(packScope) : moduleKey
 						const action = String(message.action ?? "get")
 						try {
+							// The key must match the host's record of the artifact, and only an allowed
+							// document may write values (they come from the document).
+							const stateDecision = decideModuleState(message, artifactLookup(mainWebview.controller))
+							if (!stateDecision.ok) throw new Error(stateDecision.error)
 							let state
 							switch (action) {
 								case "set": {
-									const values =
-										message.values && typeof message.values === "object"
-											? (message.values as Record<string, string>)
-											: {}
-									state = await saveModuleState(storageKey, values)
+									state = await saveModuleState(storageKey, stateDecision.values)
 									break
 								}
 								case "reset":
@@ -455,6 +465,7 @@ export class VscodeHtmlPreviewProvider {
 							}
 							panel.webview.postMessage({
 								type: "aihydro-module-state-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								moduleKey,
 								state,
@@ -462,6 +473,7 @@ export class VscodeHtmlPreviewProvider {
 						} catch (err) {
 							panel.webview.postMessage({
 								type: "aihydro-module-state-result",
+								token: VscodeHtmlPreviewProvider.panelToken,
 								requestId,
 								moduleKey,
 								state: null,
@@ -495,11 +507,9 @@ export class VscodeHtmlPreviewProvider {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const fs = require("fs") as typeof import("fs")
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		const os = require("os") as typeof import("os")
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const pathMod = require("path") as typeof import("path")
 
-		const dir = pathMod.join(os.homedir(), ".aihydro")
+		const dir = aihydroHome()
 		const intentFile = pathMod.join(dir, "course_nav_intent.json")
 		let lastTimestamp = 0
 		// Seed lastTimestamp from any existing file so stale intents from
@@ -531,6 +541,7 @@ export class VscodeHtmlPreviewProvider {
 						if (!decision.intent) return
 						panel.webview.postMessage({
 							type: "aihydro-agent-navigate",
+							token: VscodeHtmlPreviewProvider.panelToken,
 							...decision.intent,
 						})
 					} catch (err) {
@@ -589,6 +600,7 @@ export class VscodeHtmlPreviewProvider {
 			window.CSSStyleSheet = function CSSStyleSheet() {};
 		}
 		window.AIHYDRO_HTML_PREVIEW_STANDALONE = true;
+		window.__aihydroPanelToken = ${JSON.stringify(VscodeHtmlPreviewProvider.panelToken)};
 		// See WebviewProvider.ts for why: guards against a documented blank-webview
 		// crash in some runtimes when @vscode/webview-ui-toolkit's fast-element
 		// lazily calls new CSSStyleSheet().
