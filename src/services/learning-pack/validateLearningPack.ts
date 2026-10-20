@@ -1,8 +1,9 @@
 import { createHash, createPublicKey, verify } from "node:crypto"
 import Ajv from "ajv"
-import { satisfies, valid as validSemver, validRange } from "semver"
+import { satisfies, validRange, valid as validSemver } from "semver"
 import packSchema from "../../../schemas/learning-pack/v1/pack.schema.json"
 import { parseCanonicalJson, StrictJsonError } from "./canonicalJson"
+import { compareContractPaths } from "./contractPaths"
 import type {
 	LearningPackChecksums,
 	LearningPackCourse,
@@ -112,7 +113,10 @@ export function validateLearningPackFiles(
 		const courseIds = course.modules.map((module) => module.id)
 		if (new Set(courseIds).size !== courseIds.length)
 			return invalid("DUPLICATE_MODULE_ID", "course.json contains duplicate module IDs")
-		if (JSON.stringify([...courseIds].sort()) !== JSON.stringify([...manifest.ownership.moduleIds].sort())) {
+		if (
+			JSON.stringify([...courseIds].sort(compareContractPaths)) !==
+			JSON.stringify([...manifest.ownership.moduleIds].sort(compareContractPaths))
+		) {
 			return invalid("MODULE_OWNERSHIP", "pack.json and course.json module ownership disagree")
 		}
 		if (!courseIds.includes(manifest.entryModuleId))
@@ -160,7 +164,7 @@ export function validateLearningPackFiles(
 		const listedPaths = checksums.files.map((entry) => entry.path)
 		if (new Set(listedPaths).size !== listedPaths.length)
 			return invalid("DUPLICATE_CHECKSUM_PATH", "Checksum paths must be unique")
-		if (JSON.stringify(listedPaths) !== JSON.stringify([...listedPaths].sort())) {
+		if (JSON.stringify(listedPaths) !== JSON.stringify([...listedPaths].sort(compareContractPaths))) {
 			return invalid("CHECKSUM_ORDER", "Checksum entries must be sorted by path", CHECKSUMS_PATH)
 		}
 		for (const entry of checksums.files) {

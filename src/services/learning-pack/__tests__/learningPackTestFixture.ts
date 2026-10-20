@@ -1,4 +1,5 @@
-import { createHash, createPublicKey, generateKeyPairSync, sign, type KeyObject } from "node:crypto"
+import { createPublicKey, generateKeyPairSync, type KeyObject, sign } from "node:crypto"
+import { buildChecksums, signatureDocument, spkiFingerprint, writeStoredZip } from "../authoring/contractPrimitives"
 import { canonicalJsonBytes } from "../canonicalJson"
 import type { LearningPackManifest } from "../types"
 
@@ -37,7 +38,7 @@ export function createValidLearningPackFiles(options?: {
 	const privateKey = options?.privateKey ?? generated!.privateKey
 	const publicKey = options?.privateKey ? createPublicKey(options.privateKey) : generated!.publicKey
 	const publicKeyDer = publicKey.export({ format: "der", type: "spki" })
-	const fingerprint = `sha256:${createHash("sha256").update(publicKeyDer).digest("hex")}`
+	const fingerprint = spkiFingerprint(publicKeyDer)
 	const manifest: LearningPackManifest = {
 		schemaVersion: 1,
 		packId: options?.packId ?? "hmfp",
@@ -69,72 +70,15 @@ export function createValidLearningPackFiles(options?: {
 			options?.provenanceBytes ?? canonicalJsonBytes({ buildKind: "development", sourceCommit: "a".repeat(40) }),
 		],
 	])
-	const entries = [...payload.entries()]
-		.map(([path, value]) => ({ path, sha256: createHash("sha256").update(value).digest("hex"), size: value.byteLength }))
-		.sort((a, b) => a.path.localeCompare(b.path))
-	const checksumBytes = canonicalJsonBytes({ algorithm: "sha256", files: entries })
-	const signatureBytes = sign(null, checksumBytes, privateKey)
+	const checksums = buildChecksums(payload)
+	const signatureBytes = sign(null, checksums.bytes, privateKey)
 	const files = new Map(payload)
-	files.set("checksums.json", checksumBytes)
-	files.set(
-		"signatures/ed25519.json",
-		canonicalJsonBytes({
-			algorithm: "Ed25519",
-			publicKeySpki: publicKeyDer.toString("base64"),
-			signature: signatureBytes.toString("base64"),
-		}),
-	)
+	files.set("checksums.json", checksums.bytes)
+	files.set("signatures/ed25519.json", signatureDocument(publicKeyDer, signatureBytes))
 	return { files, fingerprint }
 }
 
-function crc32(bytes: Uint8Array): number {
-	let crc = 0xffffffff
-	for (const byte of bytes) {
-		crc ^= byte
-		for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
-	}
-	return (crc ^ 0xffffffff) >>> 0
-}
-
-/** Deterministic stored ZIP used only by synthetic public test fixtures. */
+/** Deterministic stored ZIP used only by synthetic public test fixtures (the shared authoring writer). */
 export function createLearningPackTestArchive(files: ReadonlyMap<string, Uint8Array>): Buffer {
-	const localParts: Buffer[] = []
-	const centralParts: Buffer[] = []
-	let localOffset = 0
-	for (const [filePath, value] of [...files].sort(([left], [right]) => left.localeCompare(right))) {
-		const name = Buffer.from(filePath, "utf8")
-		const data = Buffer.from(value)
-		const checksum = crc32(data)
-		const local = Buffer.alloc(30)
-		local.writeUInt32LE(0x04034b50, 0)
-		local.writeUInt16LE(20, 4)
-		local.writeUInt16LE(0x800, 6)
-		local.writeUInt32LE(checksum, 14)
-		local.writeUInt32LE(data.byteLength, 18)
-		local.writeUInt32LE(data.byteLength, 22)
-		local.writeUInt16LE(name.byteLength, 26)
-		localParts.push(local, name, data)
-
-		const central = Buffer.alloc(46)
-		central.writeUInt32LE(0x02014b50, 0)
-		central.writeUInt16LE((3 << 8) | 20, 4)
-		central.writeUInt16LE(20, 6)
-		central.writeUInt16LE(0x800, 8)
-		central.writeUInt32LE(checksum, 16)
-		central.writeUInt32LE(data.byteLength, 20)
-		central.writeUInt32LE(data.byteLength, 24)
-		central.writeUInt16LE(name.byteLength, 28)
-		central.writeUInt32LE((0o100644 << 16) >>> 0, 38)
-		central.writeUInt32LE(localOffset, 42)
-		centralParts.push(central, name)
-		localOffset += local.byteLength + name.byteLength + data.byteLength
-	}
-	const directory = Buffer.concat(centralParts)
-	const end = Buffer.alloc(22)
-	end.writeUInt32LE(0x06054b50, 0)
-	end.writeUInt16LE(files.size, 8)
-	end.writeUInt16LE(files.size, 10)
-	end.writeUInt32LE(directory.byteLength, 12)
-	end.writeUInt32LE(localOffset, 16)
-	return Buffer.concat([...localParts, directory, end])
+	return writeStoredZip(files)
 }
