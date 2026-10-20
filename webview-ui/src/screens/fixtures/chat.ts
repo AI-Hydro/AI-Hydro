@@ -3,30 +3,35 @@ import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import { refusalCall, successCall } from "./aihydro"
 import { FIXTURE_NOW, fixtureHistory } from "./state"
 
-const t0 = FIXTURE_NOW - 600_000
-const step = 4_000
+export const t0 = FIXTURE_NOW - 600_000
+export const step = 4_000
 
-const apiReq = (ts: number, cost = 0.0123): AiHydroMessage => ({
+export const apiReq = (ts: number, cost = 0.0123): AiHydroMessage => ({
 	ts,
 	type: "say",
 	say: "api_req_started",
 	text: JSON.stringify({ request: "fixture request", tokensIn: 12_400, tokensOut: 640, cacheReads: 8_000, cost }),
 })
-const task = (text: string): AiHydroMessage => ({ ts: t0, type: "say", say: "task", text })
-const text = (ts: number, body: string): AiHydroMessage => ({ ts, type: "say", say: "text", text: body })
-const mcpCall = (ts: number, toolName: string, args: Record<string, unknown>): AiHydroMessage => ({
+export const task = (text: string): AiHydroMessage => ({ ts: t0, type: "say", say: "task", text })
+export const text = (ts: number, body: string): AiHydroMessage => ({ ts, type: "say", say: "text", text: body })
+export const mcpCall = (ts: number, toolName: string, args: Record<string, unknown>): AiHydroMessage => ({
 	ts,
 	type: "say",
 	say: "use_mcp_server",
 	text: JSON.stringify({ serverName: "ai-hydro", type: "use_mcp_tool", toolName, arguments: JSON.stringify(args, null, 2) }),
 })
-const mcpResult = (ts: number, body: unknown): AiHydroMessage => ({
+export const mcpResult = (ts: number, body: unknown): AiHydroMessage => ({
 	ts,
 	type: "say",
 	say: "mcp_server_response",
 	text: typeof body === "string" ? body : JSON.stringify(body, null, 2),
 })
-const completion = (ts: number, body: string): AiHydroMessage => ({ ts, type: "say", say: "completion_result", text: body })
+export const completion = (ts: number, body: string): AiHydroMessage => ({
+	ts,
+	type: "say",
+	say: "completion_result",
+	text: body,
+})
 
 export const taskItem = fixtureHistory[0]
 

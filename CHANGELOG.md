@@ -24,6 +24,12 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - The in-chat Leaflet preview bridge: `carto-dark` is now an alias of `esri-dark-gray` and `osm` an alias of `esri-topo`; CARTO is dropped from the artifact-preview CSP. Humanitarian OSM (OSM France) is removed: its usage page limits use to non-profit sites and apps sending an identifying user-agent, which a webview cannot do; a saved choice migrates with a notice.
 - Provider verification (keyless, coverage, max zoom, attribution, terms) is recorded in `webview-ui/src/components/map/basemaps.ts` and enforced by the catalogue tests.
 
+### Changed — Wave 2 chat redesign groundwork, W2-0 (vision-2040, branch `vision2040/w2-0`; no user-visible change)
+
+- **Proto round trip.** `convertAiHydroMessageToProto`/`convertProtoToAiHydroMessage` now preserve every say and ask kind and the `askOutcome`, `execOutcome` and `commandCompleted` fields (the partial-update path used to drop them, and `html_preview`, `shell_integration_warning_with_suggestion`, `install_dependencies` and `workspace_env_setup` were mapped to other kinds). AI-Hydro-only kinds use enum numbers of 1000 or more and the new fields use numbers 1001 to 1003, so upstream Cline additions cannot collide; `ANSWER_AUDIT = 1001` is reserved and not emitted yet. Tested over every enum value.
+- **Frozen contracts** in `src/shared/aihydro/transcriptContracts.ts`: `AnswerAuditPayload` v1 (with `AnswerRevisionEvent` and the draft-storage decision), the `InfoNotice {class, severity}` shape and a legacy prefix registry for existing plain-string info notices (unmatched text is lifted).
+- **Screen harness.** `expectAbsent` assertion (with a self-test), plus synthetic transcript screens for the turn machinery, lifted failures, long tool runs, approvals, claims, the legacy audit text, truncation, condense, non-zero exit, cancel, resume, rewind, checked-out checkpoint and an old task without outcome fields. Their budgets record today's counts (new entries only).
+
 ### Fixed — DeepSeek unclosed envelope and task_progress (vision-2040, branch `vision2040/deepseek-unclosed-envelope`)
 
 - A DeepSeek native envelope that ends without `</tool_calls>` is now repaired when every `<invoke>` is closed and only whitespace follows the last `</invoke>` (an unclosed invoke or trailing text stays malformed).

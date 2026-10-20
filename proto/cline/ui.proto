@@ -31,6 +31,9 @@ enum ClineAsk {
   CONDENSE = 14;
   REPORT_BUG = 15;
   SUMMARIZE_TASK = 16;
+  // AI-Hydro-only kinds use high numbers so upstream Cline additions never collide.
+  INSTALL_DEPENDENCIES = 1000;
+  WORKSPACE_ENV_SETUP = 1001;
 }
 
 // Enum for ClineSay types
@@ -64,6 +67,10 @@ enum ClineSay {
   INFO = 26;
   TASK_PROGRESS = 27;
   ERROR_RETRY = 28;
+  // AI-Hydro-only kinds use high numbers so upstream Cline additions never collide.
+  HTML_PREVIEW = 1000;
+  ANSWER_AUDIT = 1001; // reserved for the structured answer-audit row (W2-B); not emitted yet
+  SHELL_INTEGRATION_WARNING_WITH_SUGGESTION = 1002;
 }
 
 // Enum for ClineSayTool tool types
@@ -208,6 +215,14 @@ message ClineMessage {
   ClineAskQuestion ask_question = 20;
   ClineAskNewTask ask_new_task = 21;
   ClineApiReqInfo api_req_info = 22;
+
+  // AI-Hydro-only fields (high numbers: upstream Cline additions never collide).
+  // Empty string = absent. Values: "approved" | "denied".
+  string ask_outcome = 1001;
+  // Empty string = absent. Values: "completed" | "failed".
+  string exec_outcome = 1002;
+  // Only `true` is meaningful; false = absent.
+  bool command_completed = 1003;
 }
 
 // UiService provides methods for managing UI interactions

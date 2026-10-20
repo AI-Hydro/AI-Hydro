@@ -17,6 +17,7 @@ import { createRequire } from "node:module"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { chromium } from "playwright"
+import { assertAbsent } from "./assertions.mjs"
 import { pageChecker } from "./checker.mjs"
 import { startServer, THEMES } from "./server.mjs"
 import { basemapIdForUrl, isPlaceholderScreen, tileFaultStatus, tilePng } from "./tiles.mjs"
@@ -292,6 +293,8 @@ async function worker() {
 					if (!box || box.y + box.height <= 0 || box.y >= vp.height || box.x + box.width <= 0 || box.x >= vp.width)
 						throw new Error(`ASSERT not visible in viewport: ${sel}`)
 				}
+				// Things that must not be on screen at all (e.g. rows the redesign removed).
+				await assertAbsent(page, screen.expectAbsent)
 				if (screen.scrollPinned) {
 					const pinned = await page
 						.locator(screen.scrollPinned)

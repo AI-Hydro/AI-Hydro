@@ -203,6 +203,7 @@ export type AiHydroSay =
 	| "html_preview"
 	| "info" // Added for general informational messages like retry status
 	| "task_progress"
+	| "answer_audit" // structured audit of a final answer (W2-B emits it; the proto enum is reserved at 1001)
 
 export interface AiHydroSayTool {
 	tool:
