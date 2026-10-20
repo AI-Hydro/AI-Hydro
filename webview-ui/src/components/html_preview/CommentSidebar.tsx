@@ -1,7 +1,7 @@
 /**
- * CommentSidebar — pending comments + draft batch for the active module.
+ * CommentSidebar — queue of pending edit requests to the agent for the active module.
  *
- * Lives in the Files/Modules/Skills/Comments accordion stack.  Listens to
+ * Lives in the Files/Modules/Edit requests accordion stack.  Listens to
  * `aihydro-preview-event` messages of kind `user.comment.draft`,
  * `user.batch_changes`, and `user.batch.cleared` to maintain a running
  * list of pending changes.
@@ -91,10 +91,10 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 					color: "var(--vscode-descriptionForeground, #888)",
 					lineHeight: 1.5,
 				}}>
-				No pending comments.
+				No pending edit requests.
 				<br />
 				<span style={{ opacity: 0.7 }}>
-					Enter <b>Edit Mode</b>, then select text or click any cell/map/figure to add a comment.
+					Turn on <b>Edit Mode</b>, then select text or click a cell, map or figure to ask the agent for a change.
 				</span>
 			</div>
 		)
@@ -102,8 +102,9 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 
 	return (
 		<div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 8px" }}>
-			{/* Send batch primary button */}
-			<button
+			{/* Send/Clear act on the document iframe; without a live window they would be dead, so they are not shown. */}
+			{iframeWindow ? (
+						<button
 				onClick={handleSend}
 				style={{
 					display: "inline-flex",
@@ -124,6 +125,11 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 				<span className="codicon codicon-send" style={{ fontSize: 12 }} />
 				Send {pending.length} change{pending.length === 1 ? "" : "s"} to agent
 			</button>
+			) : (
+				<div style={{ fontSize: 11, color: "var(--vscode-descriptionForeground, #888)", lineHeight: 1.5 }}>
+					Send these requests from the Edit Mode bar above the document.
+				</div>
+			)}
 
 			{/* Pending list */}
 			{pending.map((p) => (
@@ -147,7 +153,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 						}}>
 						{p.target === "component"
 							? `${p.component?.kind ?? "Component"}${p.component?.id ? `: ${p.component.id}` : ""}`
-							: "Text comment"}
+							: "Text edit request"}
 					</div>
 					{p.target === "text" && p.anchor?.quote && (
 						<div
@@ -169,8 +175,8 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 				</div>
 			))}
 
-			{/* Clear all */}
-			<button
+			{iframeWindow && (
+						<button
 				onClick={handleClear}
 				style={{
 					padding: "4px 8px",
@@ -186,6 +192,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 				type="button">
 				Clear all
 			</button>
+			)}
 		</div>
 	)
 }
