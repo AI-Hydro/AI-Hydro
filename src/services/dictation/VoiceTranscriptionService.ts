@@ -82,7 +82,7 @@ export class VoiceTranscriptionService {
 
 			// Default case for unhandled status codes
 			return {
-				error: "Transcription failed. Please try again later or raise an issue on https://github.com/cline/cline/issues",
+				error: "Transcription failed. Please try again later or raise an issue on https://github.com/AI-Hydro/AI-Hydro/issues",
 			}
 		}
 

@@ -48,7 +48,7 @@ export class AiHydroHandler implements ApiHandler {
 		if (!this.client) {
 			try {
 				const defaultHeaders: Record<string, string> = {
-					"HTTP-Referer": "https://cline.bot",
+					"HTTP-Referer": "https://github.com/AI-Hydro/AI-Hydro",
 					"X-Title": "AI-Hydro",
 					"X-Task-ID": this.options.ulid || "",
 				}
