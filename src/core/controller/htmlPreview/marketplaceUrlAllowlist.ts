@@ -18,8 +18,9 @@ import { AiHydroEnv } from "@/config"
  *
  * The live index (ai-hydro.github.io/Modules/api/*.json) lists every
  * `downloadUrl`/`manifestUrl` under https://raw.githubusercontent.com/, so that
- * host is admitted too, but only under the AI-Hydro org path prefix
- * (origin + path prefix, never the bare host). https is required throughout.
+ * host is admitted too, but only under the repo + branch prefix in
+ * TRUSTED_RAW_MARKETPLACE_PREFIXES (never the bare host or the whole org).
+ * https is required throughout.
  *
  * A host allowlist is the containment we can ship unilaterally: it stops a
  * compromised or malicious index entry from pointing the extension at
@@ -38,10 +39,31 @@ function trustedOrigins(): Set<string> {
 	return origins
 }
 
-/** Origin + path-prefix pairs for hosts that serve many orgs (raw GitHub content). */
-const TRUSTED_PATH_PREFIXES: ReadonlyArray<{ origin: string; pathPrefix: string }> = [
-	{ origin: "https://raw.githubusercontent.com", pathPrefix: "/AI-Hydro/" },
-]
+/**
+ * raw.githubusercontent.com is shared by every GitHub account, and GitHub serves
+ * commits from forks (including unmerged PRs) under the upstream repo path by
+ * SHA, so an org-level rule would accept unreviewed content. Raw URLs are
+ * accepted only under an explicit repo + named-branch prefix, derived from the
+ * URLs the live index (Modules/api/{modules,courses}.json) actually uses.
+ * Same policy shape as skills/skillUrlPolicy.ts.
+ */
+export const TRUSTED_RAW_MARKETPLACE_PREFIXES: readonly string[] = ["https://raw.githubusercontent.com/AI-Hydro/Modules/main/"]
+
+function isTrustedRawMarketplaceUrl(parsed: URL, rawUrl: string): boolean {
+	if (parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash) {
+		return false
+	}
+	// No percent-encoding: it could hide separators or dot segments.
+	if (parsed.pathname.includes("%") || rawUrl.includes("%")) {
+		return false
+	}
+	// `new URL` has already collapsed dot segments; anything left is hostile.
+	if (parsed.pathname.split("/").some((seg) => seg === ".." || seg === ".")) {
+		return false
+	}
+	const normalized = `${parsed.origin}${parsed.pathname}`
+	return TRUSTED_RAW_MARKETPLACE_PREFIXES.some((prefix) => normalized.startsWith(prefix) && normalized.length > prefix.length)
+}
 
 /** Body caps for marketplace downloads (a module is a single self-contained HTML file). */
 export const MAX_MODULE_BYTES = 8 * 1024 * 1024
@@ -60,19 +82,12 @@ export function assertTrustedMarketplaceUrl(url: string, context: string): void 
 		throw new Error(`${context}: unsupported protocol ${parsed.protocol} (https is required)`)
 	}
 	if (parsed.username || parsed.password) {
-		throw new Error(`${context}: URL must not embed credentials`)
+		throw new Error(`${context}: URL not in the marketplace allowlist: embedded credentials are not permitted`)
 	}
 	if (trustedOrigins().has(parsed.origin)) {
 		return
 	}
-	// URL parsing already collapses "/AI-Hydro/../evil/"; also refuse encoded dot-segments
-	// and separators that a downstream fetch could re-interpret.
-	const pathname = parsed.pathname
-	const hasEncodedTraversal = /%2e|%2f|%5c/i.test(pathname)
-	if (
-		!hasEncodedTraversal &&
-		TRUSTED_PATH_PREFIXES.some((e) => e.origin === parsed.origin && pathname.startsWith(e.pathPrefix))
-	) {
+	if (isTrustedRawMarketplaceUrl(parsed, url)) {
 		return
 	}
 	throw new Error(`${context}: origin not in the marketplace allowlist: ${parsed.origin}`)

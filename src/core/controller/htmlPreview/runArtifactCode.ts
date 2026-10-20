@@ -49,7 +49,7 @@ export async function runArtifactCode(controller: Controller, request: RunArtifa
 	if (!artifactId) {
 		return RunArtifactCodeResponse.create({
 			status: "error",
-			error: "artifact_id is required. Refresh the HTML Preview panel.",
+			error: "artifact_id is required. Refresh AI-Hydro Studio.",
 		})
 	}
 
@@ -64,7 +64,7 @@ export async function runArtifactCode(controller: Controller, request: RunArtifa
 	if (!ref) {
 		return RunArtifactCodeResponse.create({
 			status: "error",
-			error: `Unknown artifact: ${artifactId}. Refresh the HTML Preview panel.`,
+			error: `Unknown artifact: ${artifactId}. Refresh AI-Hydro Studio.`,
 		})
 	}
 

@@ -72,7 +72,7 @@ export async function ensurePythonExecutionAllowed(): Promise<boolean> {
 				// offer trust management asynchronously.
 				void vscode.window
 					.showWarningMessage(
-						"This workspace is not trusted. Trust the workspace to run Python in HTML Preview.",
+						"This workspace is not trusted. Trust the workspace to run Python in AI-Hydro Studio.",
 						"Manage Workspace Trust",
 					)
 					.then((choice) => {
@@ -84,7 +84,7 @@ export async function ensurePythonExecutionAllowed(): Promise<boolean> {
 			}
 
 			const choice = await vscode.window.showWarningMessage(
-				"AI-Hydro HTML Preview wants to run Python code on your machine (same trust level as terminal commands). Allow for this workspace?",
+				"AI-Hydro Studio wants to run Python code on your machine (same trust level as terminal commands). Allow for this workspace?",
 				{ modal: true },
 				"Allow",
 				"Deny",
