@@ -10,6 +10,8 @@ interface InputSectionProps {
 	placeholderText: string
 	shouldDisableFilesAndImages: boolean
 	selectFilesAndImages: () => Promise<void>
+	/** Escape in the prompt stops the task only while this is true. */
+	isTaskRunning: boolean
 }
 
 /**
@@ -22,6 +24,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	placeholderText,
 	shouldDisableFilesAndImages,
 	selectFilesAndImages,
+	isTaskRunning,
 }) => {
 	const {
 		activeQuote,
@@ -55,6 +58,11 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			<ChatTextArea
 				activeQuote={activeQuote}
 				inputValue={inputValue}
+				onEscape={() => {
+					if (isTaskRunning) {
+						messageHandlers.executeButtonAction("cancel")
+					}
+				}}
 				onFocusChange={handleFocusChange}
 				onHeightChange={() => {
 					if (isAtBottom) {

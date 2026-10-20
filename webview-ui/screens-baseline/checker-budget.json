@@ -10,102 +10,35 @@
 		}
 	},
 	"screens": {
-		"studio-catalogue-offline": {
+		"experiment-with-ci": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
+				"smallTarget": 13,
+				"smallText": 100,
+				"contrast": 24,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"studio-catalogue": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"studio-course-progress": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 8,
-				"smallText": 15,
-				"contrast": 6,
-				"contrastIndeterminate": 11
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 600,
-				"smallText": 584,
-				"contrast": 280,
-				"contrastIndeterminate": 424
-			}
-		},
-		"studio-empty-state": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"studio-executable-module": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 7,
-				"contrast": 4,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 440,
-				"smallText": 304,
-				"contrast": 170,
+				"smallTarget": 2352,
+				"smallText": 3980,
+				"contrast": 835,
 				"contrastIndeterminate": 0
 			}
 		},
-		"studio-static-doc": {
+		"chat-task-answer": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 7,
-				"contrast": 4,
+				"smallTarget": 6,
+				"smallText": 2,
+				"contrast": 2,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 440,
-				"smallText": 264,
-				"contrast": 180,
+				"noName": 40,
+				"smallTarget": 2752,
+				"smallText": 440,
+				"contrast": 455,
 				"contrastIndeterminate": 0
 			}
 		},
@@ -273,22 +206,6 @@
 				"smallTarget": 2360,
 				"smallText": 80,
 				"contrast": 220,
-				"contrastIndeterminate": 0
-			}
-		},
-		"chat-task-answer": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 6,
-				"smallText": 4,
-				"contrast": 4,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 40,
-				"smallTarget": 2752,
-				"smallText": 440,
-				"contrast": 455,
 				"contrastIndeterminate": 0
 			}
 		},
@@ -580,22 +497,6 @@
 				"contrastIndeterminate": 0
 			}
 		},
-		"experiment-with-ci": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 13,
-				"smallText": 100,
-				"contrast": 24,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 2352,
-				"smallText": 3980,
-				"contrast": 835,
-				"contrastIndeterminate": 0
-			}
-		},
 		"map-empty-default": {
 			"ref": {
 				"noName": 0,
@@ -835,6 +736,105 @@
 				"contrast": 660,
 				"contrastIndeterminate": 0
 			}
+		},
+		"studio-course-progress": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 15,
+				"contrast": 6,
+				"contrastIndeterminate": 11
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 600,
+				"smallText": 584,
+				"contrast": 280,
+				"contrastIndeterminate": 424
+			}
+		},
+		"studio-executable-module": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 7,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 440,
+				"smallText": 304,
+				"contrast": 170,
+				"contrastIndeterminate": 0
+			}
+		},
+		"studio-static-doc": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 7,
+				"contrast": 4,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 440,
+				"smallText": 264,
+				"contrast": 180,
+				"contrastIndeterminate": 0
+			}
+		},
+		"studio-catalogue-offline": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"studio-catalogue": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"studio-empty-state": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
 		}
 	},
 	"subsets": {
@@ -874,8 +874,8 @@
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 36,
-						"smallText": 24,
-						"contrast": 27,
+						"smallText": 12,
+						"contrast": 15,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
