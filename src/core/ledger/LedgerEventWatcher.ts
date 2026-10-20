@@ -7,12 +7,12 @@
  */
 
 import type { Controller } from "@core/controller"
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import type { ClaimRecord, ClaimUpdate } from "@shared/proto/cline/ledger"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 
-const LEDGER_EVENTS_DIR = path.join(os.homedir(), ".aihydro", "ledger_events")
+const ledgerEventsDir = () => aihydroPath("ledger_events")
 const POLL_INTERVAL_MS = 250
 
 interface LedgerEventPayload {
@@ -46,9 +46,9 @@ export class LedgerEventWatcher {
 		if (this.intervalId) {
 			return
 		}
-		void fs.mkdir(LEDGER_EVENTS_DIR, { recursive: true })
+		void fs.mkdir(ledgerEventsDir(), { recursive: true })
 		this.intervalId = setInterval(() => void this.poll(), POLL_INTERVAL_MS)
-		console.log("[LedgerEventWatcher] Started polling", LEDGER_EVENTS_DIR)
+		console.log("[LedgerEventWatcher] Started polling", ledgerEventsDir())
 	}
 
 	stop(): void {
@@ -64,10 +64,10 @@ export class LedgerEventWatcher {
 		}
 		this.processing = true
 		try {
-			const entries = await fs.readdir(LEDGER_EVENTS_DIR)
+			const entries = await fs.readdir(ledgerEventsDir())
 			const jsonFiles = entries.filter((e) => e.endsWith(".json")).sort()
 			for (const file of jsonFiles) {
-				const filePath = path.join(LEDGER_EVENTS_DIR, file)
+				const filePath = path.join(ledgerEventsDir(), file)
 				try {
 					const raw = await fs.readFile(filePath, "utf8")
 					await fs.unlink(filePath)

@@ -27,11 +27,16 @@ export interface ApprovalInput {
 }
 
 export interface ApprovalDisplay {
-	/** True only for an explicit `approved` state. Never inferred. */
+	/**
+	 * True only for an explicit `approved` (or `consumed`, i.e. approved and promoted) state whose
+	 * verifier stamp passes the human-verified allowlist. Never inferred.
+	 */
 	approved: boolean
 	tone: ApprovalTone
 	label: string
 	detail?: string
+	/** True when a registry row already cites this approval. */
+	promoted?: boolean
 }
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -43,8 +48,75 @@ function channelLabel(channel: string): string {
 	if (CHANNEL_LABELS[channel]) {
 		return CHANNEL_LABELS[channel]
 	}
-	// ssh_sig variants (ssh_sig_hw, ssh_sig_v1, ...) are all signature-verified channels.
+	// ssh_sig variants (ssh_sig_sk_system_trust, ssh_sig_user_trust, ...) are signature-verified channels.
 	return channel.startsWith("ssh_sig") ? "signed" : channel
+}
+
+/**
+ * Human-verified allowlist (ADR-002: only a signed approval under a trust root the agent
+ * cannot edit is human-verified). It mirrors the verifier's closed set in
+ * `ai_hydro.approval.trust` (channels are derived there, never read from a record):
+ *   system root   -> ssh_sig_system_trust | ssh_sig_sk_system_trust
+ *   supplied root -> ssh_sig_supplied     | ssh_sig_sk_supplied
+ * `ssh_sig_*_user_trust` and `cli_same_user` are integrity-only. Anything not listed here,
+ * including a missing or empty value, is NOT verified (fail closed).
+ */
+const VERIFIED_CHANNELS_BY_ROOT: Record<string, readonly string[]> = {
+	system: ["ssh_sig_system_trust", "ssh_sig_sk_system_trust"],
+	supplied: ["ssh_sig_supplied", "ssh_sig_sk_supplied"],
+}
+const SIGNED_POLICIES: readonly string[] = ["signed_required"]
+
+interface StampCheck {
+	/** True only when every allowlist condition holds. */
+	verified: boolean
+	/** Why it is not verified (empty when verified); shown to the reader. */
+	gaps: string[]
+}
+
+/** Allowlist test over the verifier stamp plus the revision digests. Never infers a missing field. */
+function checkStamp(input: ApprovalInput): StampCheck {
+	const channel = (input.channel ?? "").trim()
+	const trustRoot = (input.trustRoot ?? "").trim()
+	const policy = (input.policy ?? "").trim()
+	const forDigest = (input.forRevisionDigest ?? "").trim()
+	const currentDigest = (input.currentRevisionDigest ?? "").trim()
+	const gaps: string[] = []
+	const allowedChannels = VERIFIED_CHANNELS_BY_ROOT[trustRoot]
+	if (!allowedChannels) {
+		gaps.push(trustRoot ? `trust root "${trustRoot}" is not a system or supplied root` : "trust root not reported")
+	}
+	if (!channel) {
+		gaps.push("channel not reported")
+	} else if (allowedChannels && !allowedChannels.includes(channel)) {
+		gaps.push(`channel "${channel}" is not a signed channel for this trust root`)
+	}
+	if (!policy) {
+		gaps.push("policy not reported")
+	} else if (!SIGNED_POLICIES.includes(policy)) {
+		gaps.push(`policy "${policy}" does not require a signature`)
+	}
+	if (!forDigest || !currentDigest) {
+		gaps.push("revision digest not reported")
+	} else if (forDigest !== currentDigest) {
+		gaps.push("approval digest differs from the claim revision")
+	}
+	return { verified: gaps.length === 0, gaps }
+}
+
+function describeHow(input: ApprovalInput): string {
+	const channel = (input.channel ?? "").trim()
+	const trustRoot = (input.trustRoot ?? "").trim()
+	return [channel ? channelLabel(channel) : "channel not reported", trustRoot ? `${trustRoot} trust` : ""]
+		.filter(Boolean)
+		.join(" \u00b7 ")
+}
+
+function describeStampDetail(input: ApprovalInput, extra: string[] = []): string {
+	const policy = (input.policy ?? "").trim()
+	return [...extra, policy ? `policy: ${policy}` : "", input.principal ? `principal: ${input.principal}` : ""]
+		.filter(Boolean)
+		.join(" \u00b7 ")
 }
 
 export function describeApproval(input: ApprovalInput): ApprovalDisplay {
@@ -62,44 +134,57 @@ export function describeApproval(input: ApprovalInput): ApprovalDisplay {
 					detail: "The claim changed after it was approved; re-approve the current revision.",
 				}
 			}
-			const channel = (input.channel ?? "").trim()
-			const trustRoot = (input.trustRoot ?? "").trim()
-			const policy = (input.policy ?? "").trim()
-			const parts = [channel ? channelLabel(channel) : "channel not reported", trustRoot ? `${trustRoot} trust` : ""]
-			const how = parts.filter(Boolean).join(" · ")
-			// Human-verified styling only for a system or supplied trust root, never an opt-out
-			// policy or same-user channel (ADR-002: user_writable trust is integrity-only).
-			const verified =
-				(trustRoot === "system" || trustRoot === "supplied") &&
-				policy !== "unsigned_opt_out" &&
-				channel !== "cli_same_user"
-			if (!verified) {
+			const how = describeHow(input)
+			const stamp = checkStamp(input)
+			if (!stamp.verified) {
 				return {
 					approved: false,
 					tone: "integrity",
 					label: "Accepted (integrity only)",
-					detail: [how, policy ? `policy: ${policy}` : "", input.principal ? `principal: ${input.principal}` : ""]
-						.filter(Boolean)
-						.join(" · "),
+					detail: describeStampDetail(input, [how, ...stamp.gaps.map((gap) => `not verified: ${gap}`)]),
 				}
 			}
 			return {
 				approved: true,
 				tone: "approved",
 				label: `Approved (${how})`,
-				detail:
-					[policy ? `policy: ${policy}` : "", input.principal ? `principal: ${input.principal}` : ""]
-						.filter(Boolean)
-						.join(" · ") || undefined,
+				detail: describeStampDetail(input) || undefined,
 			}
 		}
-		case "consumed":
-			return {
-				approved: false,
-				tone: "pending",
-				label: "Approval already used",
-				detail: input.reason || "A new approval is required for further promotion.",
+		case "consumed": {
+			// An approval cited by a registry row: the claim was approved AND promoted. Single use is a
+			// property of the approval record, not a demotion of the claim. It is shown in the approved
+			// tone only when the same allowlist that would make `approved` green holds for its stamp.
+			const forDigest = (input.forRevisionDigest ?? "").trim()
+			const currentDigest = (input.currentRevisionDigest ?? "").trim()
+			if (forDigest && currentDigest && forDigest !== currentDigest) {
+				return {
+					approved: false,
+					tone: "untrusted",
+					label: "Approval is for a different revision",
+					detail: "The claim changed after it was approved; re-approve the current revision.",
+				}
 			}
+			const how = describeHow(input)
+			const stamp = checkStamp(input)
+			const note = input.reason || "Cited by a registry row; a further promotion needs a new approval."
+			if (!stamp.verified) {
+				return {
+					approved: false,
+					tone: "integrity",
+					label: "Accepted (integrity only) \u00b7 promoted",
+					detail: describeStampDetail(input, [how, ...stamp.gaps.map((gap) => `not verified: ${gap}`), note]),
+					promoted: true,
+				}
+			}
+			return {
+				approved: true,
+				tone: "approved",
+				label: "Approved \u00b7 promoted",
+				detail: describeStampDetail(input, [how, note]),
+				promoted: true,
+			}
+		}
 		case "unverifiable":
 			return {
 				approved: false,

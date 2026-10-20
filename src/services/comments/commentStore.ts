@@ -17,11 +17,11 @@
  * observe them via `preview_recent_events`.
  */
 
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
-import * as os from "os"
 import * as path from "path"
 
-const COMMENTS_DIR = path.join(os.homedir(), ".aihydro", "comments")
+const COMMENTS_DIR = aihydroPath("comments")
 
 export type CommentStatus = "open" | "awaiting_review" | "addressed" | "orphaned"
 

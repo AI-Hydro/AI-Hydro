@@ -1,6 +1,6 @@
+import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { randomBytes } from "crypto"
 import * as fs from "fs"
-import * as os from "os"
 import * as path from "path"
 
 /**
@@ -89,7 +89,7 @@ export function prepareSubagentCommand(command: string): SubagentJob | null {
 	}
 
 	const jobId = randomBytes(6).toString("hex") // 12 hex chars, e.g. "a3f7c9d1b2e4"
-	const resultDir = path.join(os.homedir(), ".aihydro", "subagents", jobId)
+	const resultDir = aihydroPath("subagents", jobId)
 	fs.mkdirSync(resultDir, { recursive: true })
 
 	// Write initial status — readable by Python's jobs.get_job_status(jobId)
