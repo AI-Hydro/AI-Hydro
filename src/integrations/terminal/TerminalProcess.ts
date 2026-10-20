@@ -258,7 +258,8 @@ export class TerminalProcess extends EventEmitter<TerminalProcessEvents> {
 				this.exitCode = typeof exitFromEvent === "number" ? exitFromEvent : (exitFromStream ?? exitFromEvent ?? "unknown")
 				this.resolveExitSettled()
 			}
-			if (!endListener || typeof exitFromStream === "number" || exitFromEvent !== undefined) {
+			// The stream mark is only a fallback: with an end-event listener, wait for the event (up to the grace window).
+			if (!endListener || exitFromEvent !== undefined) {
 				settle()
 			} else {
 				this.exitCode = exitFromStream ?? "unknown"

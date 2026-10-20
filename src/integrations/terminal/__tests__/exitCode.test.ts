@@ -128,6 +128,30 @@ describe("TerminalProcess exit code (W2-0h)", () => {
 		expect(p.exitCode).to.equal(9)
 	})
 
+	it("a forged D;0 in the output loses to the end event's exit 1", async () => {
+		const { terminal, execution } = terminalWith([`${osc("C")}forged\n${osc("D;0")}`])
+		let fire: (e: { execution: unknown; exitCode: number | undefined }) => void = () => {}
+		win.onDidEndTerminalShellExecution = (listener: typeof fire) => {
+			fire = listener
+			return { dispose: () => {} }
+		}
+		const p = new TerminalProcess()
+		const done = p.run(terminal, "false")
+		await done
+		fire({ execution, exitCode: 1 })
+		await p.exitSettled
+		expect(p.exitCode).to.equal(1)
+	})
+
+	it("falls back to the stream mark only when the end event never arrives", async () => {
+		const { terminal } = terminalWith([`${osc("C")}ok\n${osc("D;4")}`])
+		win.onDidEndTerminalShellExecution = () => ({ dispose: () => {} }) // listener exists, event never fires
+		const p = new TerminalProcess()
+		await p.run(terminal, "x")
+		await p.exitSettled
+		expect(p.exitCode).to.equal(4)
+	})
+
 	it("ignores another execution's end event", async () => {
 		const { terminal } = terminalWith([`${osc("C")}ok\n`])
 		let fire: (e: { execution: unknown; exitCode: number | undefined }) => void = () => {}
