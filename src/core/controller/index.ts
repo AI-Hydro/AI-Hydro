@@ -30,6 +30,7 @@ import { MAX_REMOTE_CATALOG_BYTES, MAX_REMOTE_CONNECTORS } from "@shared/connect
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { McpMarketplaceCatalog } from "@shared/mcp"
+import { ARTIFACT_TRUST_METADATA_KEYS } from "@shared/artifactTrust"
 import { HtmlPreviewItem, HtmlPreviewMode, LearningModuleCatalog } from "@shared/proto/cline/html_preview"
 import type { ClaimUpdate } from "@shared/proto/cline/ledger"
 import { MapLayer } from "@shared/proto/cline/map"
@@ -1618,12 +1619,39 @@ export class Controller {
 			htmlContent: inlineHtml,
 			filePath: ref.fsPath,
 			interactive: ref.mode === "interactive",
-			metadata: { ...ref.metadata, byteLength: String(ref.byteLength) },
+			// Trust keys are written last so nothing carried in `ref.metadata` can
+			// spoof them. The webview only displays them; the host enforces.
+			metadata: {
+				...ref.metadata,
+				byteLength: String(ref.byteLength),
+				[ARTIFACT_TRUST_METADATA_KEYS.source]: ref.trustSource,
+				[ARTIFACT_TRUST_METADATA_KEYS.allowed]: this.htmlPreviewService.canExecute(ref.id) ? "true" : "false",
+			},
 			webviewUri: src,
 			dirUri: dir,
 			contentHash: ref.contentHash,
 			resolvedMode: ref.mode === "interactive" ? HtmlPreviewMode.INTERACTIVE : HtmlPreviewMode.SAFE,
 		})
+	}
+
+	/**
+	 * Allow or revoke execution for one document, push the updated item to the
+	 * webview (so the badge and the injected bridge follow the real state), and
+	 * stop the document's kernel on revoke. Returns whether execution is allowed.
+	 */
+	setArtifactExecutionAllowed(id: string, allowed: boolean): boolean {
+		const resulting = this.htmlPreviewService.setExecutionAllowed(id, allowed)
+		const ref = this.htmlPreviewService.get(id)
+		if (!resulting) {
+			this.artifactKernelService.stopSessionsForArtifact(id)
+			this.artifactKernelService.stopSharedSessions()
+		}
+		if (ref) {
+			this.htmlPreviewVersion++
+			this.notifyHtmlPreviewSubscribers(this.toHtmlPreviewItem(ref))
+			void this.postStateToWebview()
+		}
+		return resulting
 	}
 
 	/**

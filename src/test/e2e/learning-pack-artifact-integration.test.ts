@@ -1,9 +1,9 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Locator, type Page } from "@playwright/test"
 import type { ElectronApplication } from "playwright"
-import { E2ETestHelper, e2e } from "./utils/helpers"
+import { allowArtifactExecution, E2ETestHelper, e2e, writeUserSettings } from "./utils/helpers"
 
 const sourceArchive = process.env.AIHYDRO_PHASE1_PACK_PATH
 const expectedBookModuleId = process.env.AIHYDRO_EXPECTED_BOOK_MODULE_ID ?? "hmfp.water-balance.01"
@@ -25,7 +25,7 @@ function processIsRunning(pid: number): boolean {
 
 const artifactIntegrationE2E = e2e
 	.extend<{ workspaceDir: string }>({
-		workspaceDir: async ({}, use) => {
+		workspaceDir: async ({ userDataDir }, use) => {
 			if (!sourceArchive) throw new Error("AIHYDRO_PHASE1_PACK_PATH is required")
 			const root = mkdtempSync(path.join(os.tmpdir(), "aihydro-phase1-artifact-workspace-"))
 			const workspace = path.join(root, "workspace")
@@ -33,15 +33,12 @@ const artifactIntegrationE2E = e2e
 			cpSync(sourceArchive, path.join(workspace, "book-student.aihydropack"))
 			const pythonInterpreter = process.env.AIHYDRO_E2E_PYTHON
 			if (!pythonInterpreter) throw new Error("AIHYDRO_E2E_PYTHON is required")
-			mkdirSync(path.join(workspace, ".vscode"), { recursive: true })
-			writeFileSync(
-				path.join(workspace, ".vscode", "settings.json"),
-				JSON.stringify({
-					"aihydro.htmlPreview.pythonExecution": "always",
-					"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
-					"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
-				}),
-			)
+			// Machine-scope settings cannot come from the workspace; write the user profile.
+			writeUserSettings(userDataDir, {
+				"aihydro.htmlPreview.pythonExecution": "always",
+				"aihydro.htmlPreview.pythonInterpreter": pythonInterpreter,
+				"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
+			})
 			try {
 				await use(workspace)
 			} finally {
@@ -140,6 +137,9 @@ async function waitForCourseShell(page: Page): Promise<Frame> {
 }
 
 async function waitForCellFrame(page: Page, cellId: string): Promise<Frame> {
+	// Installed signed-pack modules are trusted but still need the user's per-document
+	// allowance (trust bar) before the kernel bridge exists.
+	await allowArtifactExecution(page, cellId)
 	const selector = `[data-aihydro-cell-id="${cellId}"]`
 	const deadline = Date.now() + 60_000
 	while (Date.now() < deadline) {

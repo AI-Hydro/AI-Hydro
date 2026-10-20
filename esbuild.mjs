@@ -151,6 +151,10 @@ const copyWasmFiles = {
 }
 
 const buildEnvVars = { "import.meta.url": "_importMetaUrl" }
+// The test-only `e2e-fixture` trust source exists only in builds made for the Playwright suite
+// (npm run test:e2e:build sets AIHYDRO_E2E_BUILD=true). Everywhere else it is dead code and is
+// removed from the bundle; scripts/verify-development-vsix.mjs asserts it is absent.
+buildEnvVars["__AIHYDRO_E2E__"] = process.env.AIHYDRO_E2E_BUILD === "true" ? "true" : "false"
 if (production) {
 	// IS_DEV is always disable in production builds.
 	buildEnvVars["process.env.IS_DEV"] = "false"

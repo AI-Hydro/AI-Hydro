@@ -39,13 +39,10 @@ const ToDoListHeader = memo<{
 	const displayText = isCompleted ? COMPLETED_MESSAGE : currentTodo?.text || TODO_LIST_LABEL
 
 	return (
-		<div
-			className={cn("relative w-full h-full", {
-				"text-success": isCompleted,
-			})}>
+		<div className="relative w-full h-full">
 			<div
 				className={cn(
-					"absolute bottom-0 left-0 transition-[width] duration-300 ease-in-out pointer-events-none z-1 h-1 bg-success",
+					"absolute bottom-0 left-0 transition-[width] duration-300 ease-in-out pointer-events-none z-1 h-1 bg-foreground/40",
 					{
 						"opacity-0": progressPercentage === 0 || progressPercentage === 100,
 					},
@@ -59,9 +56,6 @@ const ToDoListHeader = memo<{
 					<span
 						className={cn(
 							"rounded-lg px-2 py-0.25 text-xs inline-block shrink-0 bg-badge-foreground/20 text-foreground",
-							{
-								"bg-success text-black": isCompleted,
-							},
 						)}>
 						{currentIndex}/{totalCount}
 					</span>

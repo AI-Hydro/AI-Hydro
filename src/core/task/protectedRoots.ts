@@ -9,5 +9,9 @@ export function getHostProtectedRoots(): string[] {
 	} catch {
 		// Host not initialised (unit tests): the environment-derived roots still apply.
 	}
-	return computeProtectedRoots({ globalStoragePath, aihydroHome: process.env.AIHYDRO_HOME })
+	return computeProtectedRoots({
+		globalStoragePath,
+		aihydroHome: process.env.AIHYDRO_HOME,
+		learningPackRoot: process.env.AIHYDRO_LEARNING_PACK_ROOT,
+	})
 }

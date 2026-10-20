@@ -1,5 +1,13 @@
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, type PathLike, type RmOptions, rmSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	type PathLike,
+	type RmOptions,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ElectronApplication, expect, type Frame, type Page, test } from "@playwright/test"
@@ -29,7 +37,71 @@ function getVSCodeExecutablePath(channel: "stable" | "insiders"): Promise<string
 	return executablePath
 }
 
+/**
+ * Studio kernel settings are machine scope, so a workspace `.vscode/settings.json`
+ * cannot set them (that is the point). Tests write them to the user settings of
+ * the VS Code profile instead.
+ */
+export function writeUserSettings(userDataDir: string, settings: Record<string, unknown>): void {
+	const dir = path.join(userDataDir, "User")
+	mkdirSync(dir, { recursive: true })
+	writeFileSync(path.join(dir, "settings.json"), JSON.stringify(settings, null, 2))
+}
+
+/**
+ * Click the trust bar's "Allow execution" for the open document if it is
+ * offered, and wait until the allowance is in effect.
+ *
+ * Pass `cellId` of a cell in the document you are about to run: "allowed" is
+ * then only declared once that cell's Run button has been wired by the kernel
+ * bridge in the current document. This keeps a stale shell frame from the
+ * previously open document (still showing Revoke) from satisfying the wait.
+ * Throws if the open document is never eligible (no Allow button ever appears).
+ */
+export async function allowArtifactExecution(page: Page, cellId?: string, timeoutMs = 60_000): Promise<void> {
+	await expect
+		.poll(
+			async () => {
+				let sawRevoke = false
+				for (const frame of page.frames()) {
+					if (frame.isDetached()) continue
+					try {
+						if ((await frame.title()) !== "AI-Hydro HTML Preview") continue
+						const allow = frame.getByTestId("artifact-trust-allow")
+						if ((await allow.count()) === 1) {
+							await allow.click()
+							return "clicked"
+						}
+						if ((await frame.getByTestId("artifact-trust-revoke").count()) === 1) sawRevoke = true
+					} catch {
+						// The preview shell is replaced while switching documents.
+					}
+				}
+				if (!sawRevoke) return "waiting"
+				if (!cellId) return "allowed"
+				for (const frame of page.frames()) {
+					if (frame.isDetached()) continue
+					try {
+						const run = frame.locator(`[data-aihydro-cell-id="${cellId}"] .aihydro-run[data-aihydro-wired="1"]`)
+						if ((await run.count()) === 1) return "allowed"
+					} catch {
+						// frame replaced
+					}
+				}
+				return "waiting"
+			},
+			{ timeout: timeoutMs, message: "Studio trust bar never offered or confirmed execution" },
+		)
+		.toBe("allowed")
+}
+
 export interface E2ETestConfigs {
+	/**
+	 * Fixture files/directories the isolated extension host should treat as trusted
+	 * (AIHYDRO_E2E_TRUSTED_FIXTURES, honoured only when E2E_TEST=true and
+	 * AIHYDRO_ENVIRONMENT=local). Everything else stays a static document.
+	 */
+	e2eTrustedPaths: string[]
 	workspaceType: "single" | "multi"
 	channel: "stable" | "insiders"
 	workspaceTrust: "disabled" | "enabled"
@@ -414,12 +486,13 @@ export const e2e = test
 		},
 	})
 	.extend<E2ETestConfigs>({
+		e2eTrustedPaths: [],
 		workspaceType: "single",
 		channel: "stable",
 		workspaceTrust: "disabled",
 	})
 	.extend<{ openVSCode: (workspacePath: string) => Promise<ElectronApplication> }>({
-		openVSCode: async ({ userDataDir, extensionsDir, homeDir, channel, workspaceTrust }, use, testInfo) => {
+		openVSCode: async ({ userDataDir, extensionsDir, homeDir, channel, workspaceTrust, e2eTrustedPaths }, use, testInfo) => {
 			const executablePath = await getVSCodeExecutablePath(channel)
 			const matplotlibConfigDir = path.join(homeDir, ".cache", "matplotlib")
 			mkdirSync(matplotlibConfigDir, { recursive: true })
@@ -443,6 +516,7 @@ export const e2e = test
 						TEMP_PROFILE: "true",
 						E2E_TEST: "true",
 						AIHYDRO_ENVIRONMENT: "local",
+						AIHYDRO_E2E_TRUSTED_FIXTURES: e2eTrustedPaths.join(path.delimiter),
 						GRPC_RECORDER_FILE_NAME: E2ETestHelper.generateTestFileName(testInfo.title, testInfo.project.name),
 						// GRPC_RECORDER_ENABLED: "true",
 						// GRPC_RECORDER_TESTS_FILTERS_ENABLED: "true"

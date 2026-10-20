@@ -126,7 +126,17 @@ installedPackE2E("installs a local signed pack and enforces CSP through the real
 	let artifact: Frame | undefined
 	await expect
 		.poll(async () => {
-			artifact = page.frames().find((frame) => frame !== shell && frame.url() === "about:srcdoc")
+			// The document is sandboxed into an opaque origin, so its frame URL is not a reliable
+			// handle; find it by its own content instead.
+			artifact = undefined
+			for (const frame of page.frames()) {
+				if (frame === shell || frame.isDetached()) continue
+				try {
+					if ((await frame.locator('body[data-phase1-installed-pack="true"]').count()) === 1) artifact = frame
+				} catch {
+					// frame replaced while the panel settles
+				}
+			}
 			return Boolean(artifact)
 		}, { timeout: 30_000 })
 		.toBe(true)

@@ -1,5 +1,5 @@
 import { AiHydroMessage } from "@shared/ExtensionMessage"
-import { COLOR_BEIGE, COLOR_BLUE, COLOR_DARK_GRAY, COLOR_GRAY, COLOR_GREEN, COLOR_PURPLE, COLOR_WHITE } from "../colors"
+import { COLOR_BEIGE, COLOR_BLUE, COLOR_DARK_GRAY, COLOR_GRAY, COLOR_PURPLE, COLOR_WHITE } from "../colors"
 
 /**
  *
@@ -46,7 +46,7 @@ export const getColor = (message: AiHydroMessage): string => {
 			case "browser_action_result":
 				return COLOR_PURPLE // Purple for browser actions
 			case "completion_result":
-				return COLOR_GREEN // Green for task success
+				return COLOR_WHITE // Neutral: a finished task is not evidence
 			default:
 				return COLOR_DARK_GRAY // Dark gray for unknown
 		}

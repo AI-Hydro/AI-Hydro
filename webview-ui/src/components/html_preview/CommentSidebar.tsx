@@ -16,6 +16,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from "react"
+import { isFromChildFrame } from "./hostMessage"
 
 interface PendingComment {
 	id: string
@@ -37,6 +38,8 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 
 	useEffect(() => {
 		const onMessage = (event: MessageEvent) => {
+			// Drafts come from the document iframe's bridge; a popup the document opened is not it.
+			if (!isFromChildFrame(event)) return
 			const data = event.data as { type?: string; kind?: string; payloadJson?: string; moduleId?: string }
 			if (!data || data.type !== "aihydro-preview-event") {
 				return

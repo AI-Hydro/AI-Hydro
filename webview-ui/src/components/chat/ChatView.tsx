@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo } from "react"
 import { useMount } from "react-use"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { isTaskRunning } from "./chat-view/shared/buttonConfig"
 import { useShowNavbar } from "@/context/PlatformContext"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
@@ -48,6 +49,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		mode,
 		userInfo,
 		currentFocusChainChecklist,
+		backgroundCommandRunning,
 	} = useExtensionState()
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
@@ -359,6 +361,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					task={task}
 				/>
 				<InputSection
+					isTaskRunning={isTaskRunning(messages.at(-1), backgroundCommandRunning)}
 					chatState={chatState}
 					messageHandlers={messageHandlers}
 					placeholderText={placeholderText}

@@ -17,8 +17,8 @@ export function useChatState(messages: AiHydroMessage[]): ChatState {
 	// UI state
 	const [sendingDisabled, setSendingDisabled] = useState(false)
 	const [enableButtons, setEnableButtons] = useState<boolean>(false)
-	const [primaryButtonText, setPrimaryButtonText] = useState<string | undefined>("Approve")
-	const [secondaryButtonText, setSecondaryButtonText] = useState<string | undefined>("Reject")
+	const [primaryButtonText, setPrimaryButtonText] = useState<string | undefined>("Run")
+	const [secondaryButtonText, setSecondaryButtonText] = useState<string | undefined>("Deny")
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 
 	// Refs
