@@ -13,9 +13,8 @@
  *       kept, and "Reset to hydrology default" clears it.
  */
 
-import { DEFAULT_BASEMAP_ID, isKnownBaseMap } from "./basemaps"
-
 import type { MapViewState } from "@deck.gl/core"
+import { DEFAULT_BASEMAP_ID, isKnownBaseMap, removedBaseMapReason } from "./basemaps"
 
 const STORAGE_KEY = "aihydro.map.workspace.v1"
 
@@ -167,9 +166,21 @@ export function migrateWorkspace(parsed: unknown): { workspace: MapWorkspace; mi
 }
 
 /** The basemap id to open with: the user's explicit, still-available choice, otherwise the hydrology default. */
-export function initialBasemap(workspace: Pick<MapWorkspace, "basemap" | "basemapExplicit">): { id: string; explicit: boolean } {
+export function initialBasemap(workspace: Pick<MapWorkspace, "basemap" | "basemapExplicit">): {
+	id: string
+	explicit: boolean
+	/** Set when a saved explicit choice was a removed or keyed provider and was moved to the default. */
+	migrated?: { from: string; reason: string }
+} {
 	if (workspace.basemapExplicit && workspace.basemap && isKnownBaseMap(workspace.basemap)) {
 		return { id: workspace.basemap, explicit: true }
+	}
+	if (workspace.basemapExplicit && workspace.basemap) {
+		return {
+			id: DEFAULT_BASEMAP_ID,
+			explicit: false,
+			migrated: { from: workspace.basemap, reason: removedBaseMapReason(workspace.basemap) ?? "it is no longer available" },
+		}
 	}
 	return { id: DEFAULT_BASEMAP_ID, explicit: false }
 }

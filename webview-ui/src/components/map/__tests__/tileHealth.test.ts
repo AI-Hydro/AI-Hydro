@@ -1,15 +1,24 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
 	classifyTileHealth,
 	clearTally,
+	controlTileUrl,
+	fingerprintBlob,
+	fingerprintBytes,
 	loadedSources,
 	MIN_OVERLAY_SAMPLE,
+	PLACEHOLDER_ADDRESS_RING,
+	PLACEHOLDER_MAX_SAMPLE,
+	PLACEHOLDER_MIN_TILES,
+	runControlCheck,
 	TILE_FAILURE_RATIO,
+	TilePlaceholderTracker,
+	type TileTallies,
 	tallyTile,
 	tileErrorsFrom,
 	tileNotesFrom,
-	type TileTallies,
 } from "../tileHealth"
+import { fetchTileFingerprint } from "../useRasterResources"
 
 const run = (loaded: number, failed: number, message = "Tile request failed (HTTP 404)"): TileTallies => {
 	let t: TileTallies = {}
@@ -106,5 +115,190 @@ describe("sparse overlay sources", () => {
 	it("loadedSources lists only sources that drew a tile", () => {
 		expect([...loadedSources(overlayRun(2, 0, 0))]).toEqual(["basemap-usgs-hydro"])
 		expect(loadedSources(overlayRun(0, 5, 5)).size).toBe(0)
+	})
+})
+
+describe("TilePlaceholderTracker", () => {
+	// Real Esri World_Light_Gray_Base open-ocean tiles at z5/z6 (measured 2026-10-20): 12 of 13 share one image
+	// (2419 bytes, md5 364b7bd4...). Land control tile (z3 India) is a different image.
+	const OCEAN = "2419:364b7bd4"
+	const LAND = "7584:169ced3d"
+	const PLACEHOLDER = "2049:502fc5f6"
+	const fill = (tracker: TilePlaceholderTracker, n: number, print: (i: number) => string, from = 0) => {
+		for (let i = from; i < from + n; i++) tracker.record(`z5/${i}/0`, print(i))
+	}
+
+	it("open ocean is not a placeholder: 12 of 13 identical tiles stay below the identical share", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, 13, (i) => (i === 0 ? "1800:aaaaaaaa" : OCEAN))
+		expect(tracker.dominant()).toBeUndefined()
+		expect(tracker.needsControl()).toBe(false)
+		expect(tracker.suspected()).toBe(false)
+	})
+
+	it("a fully uniform ocean viewport needs a control, and a different land control clears it for good", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, 20, () => OCEAN)
+		expect(tracker.dominant()).toBe(OCEAN)
+		expect(tracker.needsControl()).toBe(true)
+		expect(tracker.suspected()).toBe(false) // no control yet: never claim a broken provider on sameness alone
+		tracker.setControl(LAND)
+		expect(tracker.suspected()).toBe(false)
+		expect(tracker.needsControl()).toBe(false)
+		expect(tracker.wantsFingerprint()).toBe(false) // decided: hashing stops
+	})
+
+	it("a placeholder is flagged when the land control returns the same image", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, PLACEHOLDER_MIN_TILES, () => PLACEHOLDER)
+		expect(tracker.needsControl()).toBe(true)
+		tracker.setControl(PLACEHOLDER)
+		expect(tracker.suspected()).toBe(true)
+		expect(tracker.needsControl()).toBe(false)
+	})
+
+	it("does not ask for a control before enough distinct tiles, and the same address repeated counts once", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, PLACEHOLDER_MIN_TILES - 1, () => PLACEHOLDER)
+		expect(tracker.needsControl()).toBe(false)
+		for (let i = 0; i < 50; i++) tracker.record("z5/0/0", PLACEHOLDER)
+		expect(tracker.needsControl()).toBe(false)
+	})
+
+	it("tiles that differ never need a control, and hashing stops after the sample cap", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, PLACEHOLDER_MAX_SAMPLE, (i) => `100:${i}`)
+		expect(tracker.dominant()).toBeUndefined()
+		expect(tracker.needsControl()).toBe(false)
+		expect(tracker.suspected()).toBe(false)
+		expect(tracker.wantsFingerprint()).toBe(false)
+	})
+
+	it("tolerates a few legitimately different tiles among identical ones, but not many", () => {
+		const few = new TilePlaceholderTracker()
+		fill(few, 60, (i) => (i < 2 ? `9:${i}` : PLACEHOLDER))
+		expect(few.dominant()).toBe(PLACEHOLDER)
+		const many = new TilePlaceholderTracker()
+		fill(many, 60, (i) => (i < 20 ? `9:${i}` : PLACEHOLDER))
+		expect(many.dominant()).toBeUndefined()
+	})
+
+	it("memory is bounded: the address ring never exceeds its size", () => {
+		const tracker = new TilePlaceholderTracker()
+		for (let i = 0; i < 10_000; i++) tracker.record(`z9/${i}/0`, `1:${i}`)
+		expect((tracker as unknown as { ring: string[] }).ring.length).toBeLessThanOrEqual(PLACEHOLDER_ADDRESS_RING)
+		expect((tracker as unknown as { counts: Map<string, number> }).counts.size).toBeLessThanOrEqual(PLACEHOLDER_MAX_SAMPLE)
+	})
+
+	it("clear forgets everything and resumes sampling", () => {
+		const tracker = new TilePlaceholderTracker()
+		fill(tracker, 20, () => PLACEHOLDER)
+		tracker.setControl(LAND)
+		tracker.clear()
+		expect(tracker.wantsFingerprint()).toBe(true)
+		expect(tracker.dominant()).toBeUndefined()
+	})
+
+	it("controlTileUrl fills the template with the land control address", () => {
+		expect(controlTileUrl("https://h/tile/{z}/{y}/{x}")).toBe("https://h/tile/3/3/5")
+		expect(controlTileUrl("https://h/{z}/{x}/{y}.png")).toBe("https://h/3/5/3.png")
+	})
+
+	it("fingerprintBytes separates different content and equals itself", () => {
+		expect(fingerprintBytes(new Uint8Array([1, 2, 3]))).toBe(fingerprintBytes(new Uint8Array([1, 2, 3])))
+		expect(fingerprintBytes(new Uint8Array([1, 2, 3]))).not.toBe(fingerprintBytes(new Uint8Array([1, 2, 4])))
+		expect(fingerprintBytes(new Uint8Array([1, 2]))).not.toBe(fingerprintBytes(new Uint8Array([1, 2, 0])))
+	})
+
+	it("fingerprintBlob is stable and distinguishes content", async () => {
+		const blobOf = (bytes: number[]) => ({ arrayBuffer: async () => new Uint8Array(bytes).buffer }) as unknown as Blob
+		const a = await fingerprintBlob(blobOf([1, 2, 3]))
+		expect(a).toBe(await fingerprintBlob(blobOf([1, 2, 3])))
+		expect(a).not.toBe(await fingerprintBlob(blobOf([1, 2, 4])))
+	})
+})
+
+describe("runControlCheck fails safe", () => {
+	const uniform = () => {
+		const tracker = new TilePlaceholderTracker()
+		for (let i = 0; i < 20; i++) tracker.record(`z5/${i}/0`, "2049:502fc5f6")
+		return tracker
+	}
+	afterEach(() => vi.unstubAllGlobals())
+
+	it("a matching control confirms, a different one clears", async () => {
+		expect(await runControlCheck({ url: "u", tracker: uniform(), load: async () => "2049:502fc5f6" })).toBe("confirmed")
+		expect(await runControlCheck({ url: "u", tracker: uniform(), load: async () => "7584:169ced3d" })).toBe("cleared")
+	})
+
+	it("a failed request marks the control failed: nothing claimed, no re-fetch, sampling stops", async () => {
+		const tracker = uniform()
+		const outcome = await runControlCheck({
+			url: "u",
+			tracker,
+			load: async () => {
+				throw new Error("Tile request failed (HTTP 503)")
+			},
+		})
+		expect(outcome).toBe("failed")
+		expect(tracker.controlFailed()).toBe(true)
+		expect(tracker.suspected()).toBe(false)
+		expect(tracker.needsControl()).toBe(false)
+		expect(tracker.wantsFingerprint()).toBe(false)
+	})
+
+	it("a request that never answers times out (and is aborted) instead of hanging", async () => {
+		const tracker = uniform()
+		let aborted = false
+		const outcome = await runControlCheck({
+			url: "u",
+			tracker,
+			timeoutMs: 20,
+			load: (_url, signal) =>
+				new Promise<string>(() => {
+					signal.addEventListener("abort", () => {
+						aborted = true
+					})
+				}),
+		})
+		expect(outcome).toBe("failed")
+		expect(aborted).toBe(true)
+		expect(tracker.controlFailed()).toBe(true)
+		expect(tracker.suspected()).toBe(false)
+	})
+
+	it("a hashing failure (blob read rejects) is treated as a failed control", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => ({
+				ok: true,
+				status: 200,
+				blob: async () => ({
+					arrayBuffer: async () => {
+						throw new Error("read failed")
+					},
+				}),
+			})),
+		)
+		await expect(fetchTileFingerprint("https://h/tile/3/3/5")).rejects.toThrow("read failed")
+		const tracker = uniform()
+		expect(await runControlCheck({ url: "https://h/tile/3/3/5", tracker, load: fetchTileFingerprint })).toBe("failed")
+		expect(tracker.needsControl()).toBe(false)
+	})
+
+	it("an HTTP error is a failed control", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => ({ ok: false, status: 403 })),
+		)
+		await expect(fetchTileFingerprint("https://h/tile/3/3/5")).rejects.toThrow("HTTP 403")
+	})
+
+	it("clear (Retry imagery) resets a failed control so the check can run again", () => {
+		const tracker = uniform()
+		tracker.markControlFailed()
+		tracker.clear()
+		expect(tracker.controlFailed()).toBe(false)
+		expect(tracker.wantsFingerprint()).toBe(true)
 	})
 })
