@@ -11,8 +11,8 @@ import {
 	type PythonEnvironment,
 	RestartArtifactKernelRequest,
 	RunArtifactCodeRequest,
-	SetArtifactKernelProfileRequest,
 	SetArtifactExecutionAllowanceRequest,
+	SetArtifactKernelProfileRequest,
 } from "@shared/proto/cline/html_preview"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PLATFORM_CONFIG } from "@/config/platform.config"
@@ -22,6 +22,8 @@ import { AIHYDRO_BRIDGE_CORE_SCRIPT } from "@/integrations/aihydro-bridge/core"
 import { AIHYDRO_BRIDGE_EDITOR_SCRIPT } from "@/integrations/aihydro-bridge/editor-adapter"
 import { AIHYDRO_BRIDGE_LEAFLET_SCRIPT } from "@/integrations/aihydro-bridge/leaflet-adapter"
 import { FileServiceClient, HtmlPreviewServiceClient, UiServiceClient } from "@/services/grpc-client"
+import { AgentHandoffPrompt } from "./AgentHandoffPrompt"
+import { ArtifactTrustBar } from "./ArtifactTrustBar"
 import {
 	AIHYDRO_DESIGN_SYSTEM_FONTS,
 	AIHYDRO_PREVIEW_STYLE,
@@ -29,12 +31,11 @@ import {
 	usesAihydroDesignSystem,
 } from "./aihydroCellBridge"
 import { applyArtifactBaseHref, FRAGMENT_NAV_GUARD_SCRIPT } from "./artifactBaseHref"
-import { AgentHandoffPrompt } from "./AgentHandoffPrompt"
-import { ArtifactTrustBar } from "./ArtifactTrustBar"
 import { CourseHeader } from "./CourseHeader"
 import { courseNavigationKey, persistThenLoadCourseModule, resolveAgentCourseNavigation } from "./courseAgentNavigation"
 import { EditContextRibbon } from "./EditContextRibbon"
 import { HtmlPreviewToolbar } from "./HtmlPreviewToolbar"
+import { isFromHost } from "./hostMessage"
 import {
 	applyInstalledPackCsp,
 	isInstalledLearningPack,
@@ -45,7 +46,6 @@ import { LEAFLET_NORMALIZER_SCRIPT, LEAFLET_NORMALIZER_STYLE } from "./leafletNo
 import { reportPreviewEvent, requestSaveDocument, startPreviewAgentTask } from "./previewBridge"
 import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
-import { isFromHost } from "./hostMessage"
 
 /**
  * HtmlPreviewView — single-iframe renderer for one HTML artifact.
@@ -306,9 +306,15 @@ function emptyFrameDiag(error: string): FrameDiag {
 	}
 }
 
-const num = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(value, 1e9)) : 0)
+const num = (value: unknown): number =>
+	typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(value, 1e9)) : 0
 const strs = (value: unknown, max: number): string[] =>
-	Array.isArray(value) ? value.filter((v): v is string => typeof v === "string").slice(0, max).map((v) => v.slice(0, 400)) : []
+	Array.isArray(value)
+		? value
+				.filter((v): v is string => typeof v === "string")
+				.slice(0, max)
+				.map((v) => v.slice(0, 400))
+		: []
 
 /** Coerce an untrusted diagnostics payload from the document into the FrameDiag shape. */
 export function sanitizeFrameDiag(raw: unknown): FrameDiag {
@@ -456,6 +462,17 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 
 	const [frameDiag, setFrameDiag] = useState<FrameDiag | null>(null)
 	const [pathCopied, setPathCopied] = useState(false)
+	// The "copied" flag resets on a timer; keep the id so an unmount (or a second click) cancels it
+	// instead of updating state on a torn-down panel.
+	const pathCopiedTimerRef = useRef<number | undefined>(undefined)
+	// Debug trail for CI traces (see HtmlPreviewPanel): which item this view received and its trust state.
+	const viewInstanceId = useRef(Math.random().toString(36).slice(2, 7)).current
+	useEffect(() => {
+		console.debug(
+			`[HtmlPreviewView:${viewInstanceId}] item=${item?.id ?? "none"} trust=${item?.metadata?.trustSource ?? "-"} allowed=${item?.metadata?.executionAllowed ?? "-"} bytes=${item?.htmlContent?.length ?? 0}`,
+		)
+	}, [viewInstanceId, item?.id, item?.metadata?.trustSource, item?.metadata?.executionAllowed, item?.htmlContent?.length])
+	useEffect(() => () => window.clearTimeout(pathCopiedTimerRef.current), [])
 	const [kernelInfo, setKernelInfo] = useState<ArtifactKernelInfoResponse | null>(null)
 	const [pythonEnvironments, setPythonEnvironments] = useState<PythonEnvironment[]>([])
 	const [activeProfileId, setActiveProfileId] = useState("")
@@ -664,7 +681,8 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		try {
 			await FileServiceClient.copyToClipboard(StringRequest.create({ value: item.filePath }))
 			setPathCopied(true)
-			window.setTimeout(() => setPathCopied(false), 1500)
+			window.clearTimeout(pathCopiedTimerRef.current)
+			pathCopiedTimerRef.current = window.setTimeout(() => setPathCopied(false), 1500)
 		} catch (err) {
 			console.error("[HtmlPreviewView] Failed to copy file path:", err)
 		}
@@ -947,11 +965,21 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 			} else if (data.type === "artifact/manifest" && data.manifest) {
 				reportPreviewEvent("manifest.loaded", { ...data.manifest, moduleId }, "system", item?.id)
 			} else if (data.type === "artifact/runAllProgress") {
-				reportPreviewEvent("cell.run.started", { ...eventBase, current: data.current, total: data.total }, "user", item?.id)
+				reportPreviewEvent(
+					"cell.run.started",
+					{ ...eventBase, current: data.current, total: data.total },
+					"user",
+					item?.id,
+				)
 			} else if (data.type === "artifact/runAllComplete") {
 				reportPreviewEvent("cell.run.completed", eventBase, "user", item?.id)
 			} else if (data.type === "artifact/runCode") {
-				reportPreviewEvent("cell.run.started", { ...eventBase, code: data.code, language: data.language }, "user", item?.id)
+				reportPreviewEvent(
+					"cell.run.started",
+					{ ...eventBase, code: data.code, language: data.language },
+					"user",
+					item?.id,
+				)
 			}
 
 			if (data.type === "artifact/cellRegistry") {
@@ -1077,7 +1105,9 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 					// sees the final prompt before it is sent.
 					const reportedId = payload.moduleId
 					const moduleId =
-						typeof reportedId === "string" && /^[\w.-]{1,128}$/.test(reportedId) ? reportedId : (item?.id ?? "unknown")
+						typeof reportedId === "string" && /^[\w.-]{1,128}$/.test(reportedId)
+							? reportedId
+							: (item?.id ?? "unknown")
 					const changeCount = Array.isArray(payload.changes) ? payload.changes.length : 1
 					const moduleTitle = item?.title || moduleId
 					const agentPrompt = [
@@ -1455,7 +1485,10 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				/>
 			)}
 			{agentHandoffNotice && (
-				<div data-testid="agent-handoff-notice" role="status" style={{ padding: "4px 10px", fontSize: 11, opacity: 0.85 }}>
+				<div
+					data-testid="agent-handoff-notice"
+					role="status"
+					style={{ padding: "4px 10px", fontSize: 11, opacity: 0.85 }}>
 					{agentHandoffNotice}
 				</div>
 			)}
@@ -1491,7 +1524,10 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 								// and any error from them shows up a tick after onload.
 								captureFrameDiag()
 								for (const id of diagTimersRef.current) window.clearTimeout(id)
-								diagTimersRef.current = [window.setTimeout(captureFrameDiag, 500), window.setTimeout(captureFrameDiag, 2000)]
+								diagTimersRef.current = [
+									window.setTimeout(captureFrameDiag, 500),
+									window.setTimeout(captureFrameDiag, 2000),
+								]
 							}}
 							style={{
 								position: "absolute",

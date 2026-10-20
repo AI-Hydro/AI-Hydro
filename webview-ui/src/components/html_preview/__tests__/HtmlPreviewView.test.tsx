@@ -1,6 +1,6 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { type HtmlPreviewItem, HtmlPreviewMode } from "@shared/proto/cline/html_preview"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import HtmlPreviewView, { sanitizeFrameDiag } from "../HtmlPreviewView"
 
@@ -218,6 +218,31 @@ describe("HtmlPreviewView", () => {
 		expect(await screen.findByText("Path copied!")).toBeInTheDocument()
 	})
 
+	it("cancels the copied-flag timer when unmounted right after a copy", async () => {
+		vi.useFakeTimers()
+		const clearSpy = vi.spyOn(window, "clearTimeout")
+		const errors: unknown[] = []
+		const onError = (event: ErrorEvent) => errors.push(event.error)
+		window.addEventListener("error", onError)
+		try {
+			const { unmount } = render(<HtmlPreviewView item={baseItem} />)
+			openKebabMenu()
+			await act(async () => {
+				fireEvent.click(screen.getByText("Copy file path"))
+			})
+			const clearsBeforeUnmount = clearSpy.mock.calls.length
+			unmount()
+			// Unmount must clear the pending 1.5s reset (otherwise it fires after teardown).
+			expect(clearSpy.mock.calls.length).toBeGreaterThan(clearsBeforeUnmount)
+			expect(() => vi.advanceTimersByTime(5000)).not.toThrow()
+			expect(errors).toEqual([])
+		} finally {
+			window.removeEventListener("error", onError)
+			clearSpy.mockRestore()
+			vi.useRealTimers()
+		}
+	})
+
 	it("opens the source file in the default browser via the extension", () => {
 		openUrlMock.mockClear()
 		render(<HtmlPreviewView item={baseItem} />)
@@ -338,7 +363,10 @@ describe("HtmlPreviewView", () => {
 			const { container } = render(<HtmlPreviewView item={inlineItem} />)
 			const reply = postFromIframe(container.querySelector("iframe") as HTMLIFrameElement, runCodeMessage)
 			await vi.waitFor(() =>
-				expect(reply).toHaveBeenCalledWith(expect.objectContaining({ type: "artifact/runCodeResult", status: "denied" }), "*"),
+				expect(reply).toHaveBeenCalledWith(
+					expect.objectContaining({ type: "artifact/runCodeResult", status: "denied" }),
+					"*",
+				),
 			)
 			expect(runArtifactCodeMock).not.toHaveBeenCalled()
 		})

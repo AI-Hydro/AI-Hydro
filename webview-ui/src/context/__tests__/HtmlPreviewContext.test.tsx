@@ -1,5 +1,5 @@
 import { type HtmlPreviewItem, HtmlPreviewMode } from "@shared/proto/cline/html_preview"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import React from "react"
 import { describe, expect, it, vi } from "vitest"
 import { HtmlPreviewContextProvider, useHtmlPreviewContext } from "../HtmlPreviewContext"
@@ -219,6 +219,78 @@ describe("HtmlPreviewContext", () => {
 			expect(screen.getByTestId("item-count").textContent).to.equal("1")
 			expect(screen.queryByTestId("item-html_1")).not.toBeInTheDocument()
 			expect(screen.getByTestId("item-html_2")).toBeInTheDocument()
+		})
+	})
+
+	it("keeps a streamed preview when an older empty snapshot arrives after it", async () => {
+		let onResponseHandler: ((item: HtmlPreviewItem) => void) | undefined
+		let resolveSnapshot: ((value: { items: HtmlPreviewItem[] }) => void) | undefined
+		// The host answered the state request before the preview existed, but the reply is
+		// delivered only after the host has already streamed the preview.
+		mockGetHtmlPreviewState.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveSnapshot = resolve
+				}),
+		)
+		mockSubscribeToHtmlPreviews.mockImplementation((_req, handlers) => {
+			onResponseHandler = handlers.onResponse
+			return () => {}
+		})
+
+		render(
+			<HtmlPreviewContextProvider>
+				<TestConsumer />
+			</HtmlPreviewContextProvider>,
+		)
+		await waitFor(() => expect(onResponseHandler).toBeDefined())
+		await waitFor(() => expect(resolveSnapshot).toBeDefined())
+
+		await act(async () => {
+			onResponseHandler?.(mk("html_1", "Streamed"))
+		})
+		await waitFor(() => expect(screen.getByTestId("item-count").textContent).to.equal("1"))
+
+		await act(async () => {
+			resolveSnapshot?.({ items: [] })
+		})
+
+		await waitFor(() => {
+			expect(screen.getByTestId("item-count").textContent).to.equal("1")
+			expect(screen.getByTestId("item-html_1")).toBeInTheDocument()
+		})
+	})
+
+	it("does not resurrect a preview removed while a snapshot was in flight", async () => {
+		let onResponseHandler: ((item: HtmlPreviewItem) => void) | undefined
+		let resolveSnapshot: ((value: { items: HtmlPreviewItem[] }) => void) | undefined
+		mockGetHtmlPreviewState.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveSnapshot = resolve
+				}),
+		)
+		mockSubscribeToHtmlPreviews.mockImplementation((_req, handlers) => {
+			onResponseHandler = handlers.onResponse
+			return () => {}
+		})
+
+		render(
+			<HtmlPreviewContextProvider>
+				<TestConsumer />
+			</HtmlPreviewContextProvider>,
+		)
+		await waitFor(() => expect(resolveSnapshot).toBeDefined())
+		await act(async () => {
+			onResponseHandler?.(mkOp("html_1", "remove"))
+		})
+		await act(async () => {
+			resolveSnapshot?.({ items: [mk("html_1", "Stale"), mk("html_2", "Kept")] })
+		})
+
+		await waitFor(() => {
+			expect(screen.getByTestId("item-count").textContent).to.equal("1")
+			expect(screen.queryByTestId("item-html_1")).not.toBeInTheDocument()
 		})
 	})
 })

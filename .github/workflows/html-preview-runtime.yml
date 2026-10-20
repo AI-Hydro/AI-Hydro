@@ -110,11 +110,15 @@ jobs:
       - name: Collect failure traces and screenshots
         if: failure()
         shell: bash
-        # Traces/screenshots cannot be redacted. They come from an isolated runner driving a
-        # mock API server with test-only credentials, and are kept for failed tests only.
+        # ARTIFACT POLICY: traces, screenshots and host logs cannot be redacted, so they are
+        # uploaded only when ALL of these hold: (1) the job failed, (2) retention is 3 days, and
+        # (3) this job has no repository secrets in its environment. Condition 3 is checked by
+        # grepping this file for the secrets context: there must be no such reference. The job drives a mock API
+        # server with test-only credentials and runs with `permissions: contents: read`. If a
+        # secret is ever added to this job, remove this step and the diagnostics path below.
         run: |
           mkdir -p failure-evidence/diagnostics
-          find test-results -type f \( -name 'trace.zip' -o -name 'failure.png' \) | while read -r f; do
+          find test-results -type f \( -name 'trace.zip' -o -name 'failure.png' -o -name '*.log' -path '*host-logs*' \) | while read -r f; do
             dest="failure-evidence/diagnostics/$(dirname "${f#test-results/}")"
             mkdir -p "$dest"
             cp "$f" "$dest/"
@@ -125,5 +129,5 @@ jobs:
         with:
           name: html-preview-runtime-${{ matrix.runner }}
           path: failure-evidence/
-          retention-days: 7
+          retention-days: 3
           if-no-files-found: ignore

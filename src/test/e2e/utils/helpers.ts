@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, type PathLike, type RmOptions, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, mkdtempSync, type PathLike, type RmOptions, rmSync, writeFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ElectronApplication, expect, type Frame, type Page, test } from "@playwright/test"
@@ -564,7 +564,7 @@ export const e2e = test
 		},
 	})
 	.extend({
-		page: async ({ app }, use, testInfo) => {
+		page: async ({ app, userDataDir }, use, testInfo) => {
 			const page = await app.firstWindow()
 			// Playwright's `trace` option only covers contexts it creates itself; this window comes
 			// from _electron.launch, so tracing is started here. Traces and a screenshot are kept for
@@ -583,6 +583,18 @@ export const e2e = test
 				const failed = testInfo.status !== testInfo.expectedStatus
 				if (failed && !page.isClosed()) {
 					await page.screenshot({ path: testInfo.outputPath("failure.png") }).catch(() => undefined)
+				}
+				if (failed) {
+					// Extension-host and window logs live under the profile, which is deleted right
+					// after the test; keep a copy of the text logs (failures only) for diagnosis.
+					try {
+						cpSync(path.join(userDataDir, "logs"), testInfo.outputPath("host-logs"), {
+							recursive: true,
+							filter: (source) => !path.extname(source) || path.extname(source) === ".log",
+						})
+					} catch {
+						// Diagnostics must never fail a test.
+					}
 				}
 				if (tracingStarted) {
 					await tracing.stop(failed ? { path: testInfo.outputPath("trace.zip") } : undefined).catch(() => undefined)

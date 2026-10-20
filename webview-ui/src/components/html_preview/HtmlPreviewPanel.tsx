@@ -42,6 +42,18 @@ export const HtmlPreviewPanel: React.FC = () => {
 		manifestsById,
 	} = useHtmlPreviewContext()
 	const { workspaceHtmlFiles } = useExtensionState()
+	// Debug trail for CI traces: which panel instance renders what, and when. Several webview
+	// instances can exist across reloads, so every line carries an instance id.
+	const panelInstanceId = useRef(Math.random().toString(36).slice(2, 7)).current
+	useEffect(() => {
+		console.debug(`[HtmlPreviewPanel:${panelInstanceId}] mounted`)
+		return () => console.debug(`[HtmlPreviewPanel:${panelInstanceId}] unmounted`)
+	}, [panelInstanceId])
+	useEffect(() => {
+		console.debug(
+			`[HtmlPreviewPanel:${panelInstanceId}] render state items=${items.length} active=${activeItemId ?? "none"} workspaceFiles=${workspaceHtmlFiles.length}`,
+		)
+	}, [panelInstanceId, items.length, activeItemId, workspaceHtmlFiles.length])
 	const activeItem = items.find((i) => i.id === activeItemId) || items[items.length - 1]
 	const learningPackScope = useMemo(() => learningPackScopeFromItem(activeItem), [activeItem?.id, activeItem?.metadata])
 	// Phase A: load course manifest for the active item's file (if any)
@@ -90,6 +102,14 @@ export const HtmlPreviewPanel: React.FC = () => {
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const [isDragOver, setIsDragOver] = useState(false)
 	const [loadStatus, setLoadStatus] = useState<{ kind: "idle" | "ok" | "err"; msg: string }>({ kind: "idle", msg: "" })
+	// The status line clears itself after a few seconds; a pending clear is cancelled on unmount
+	// and replaced by the next one so a stale timer cannot wipe a newer message.
+	const loadStatusTimerRef = useRef<number | undefined>(undefined)
+	useEffect(() => () => window.clearTimeout(loadStatusTimerRef.current), [])
+	const clearLoadStatusSoon = useCallback(() => {
+		window.clearTimeout(loadStatusTimerRef.current)
+		loadStatusTimerRef.current = window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
+	}, [])
 	const [confirmingClear, setConfirmingClear] = useState(false)
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 	const [activeSection, setActiveSection] = useState<"preview" | "modules">("preview")
@@ -135,7 +155,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 		if (fileInputRef.current) {
 			fileInputRef.current.value = ""
 		}
-		window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
+		clearLoadStatusSoon()
 	}
 
 	// ── Drag-and-drop ───────────────────────────────────────────────────────
@@ -176,9 +196,9 @@ export const HtmlPreviewPanel: React.FC = () => {
 			} else {
 				setLoadStatus({ kind: "err", msg: errors[0] ?? "No files loaded." })
 			}
-			window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
+			clearLoadStatusSoon()
 		},
-		[addItemFromContent],
+		[addItemFromContent, clearLoadStatusSoon],
 	)
 
 	// ── Clear all ───────────────────────────────────────────────────────────
@@ -209,9 +229,9 @@ export const HtmlPreviewPanel: React.FC = () => {
 				const msg = err instanceof Error ? err.message : String(err)
 				setLoadStatus({ kind: "err", msg: `Failed to load ${name}: ${msg}` })
 			}
-			window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
+			clearLoadStatusSoon()
 		},
-		[items, setActiveItemId, loadWorkspaceFile],
+		[items, setActiveItemId, loadWorkspaceFile, clearLoadStatusSoon],
 	)
 
 	const fg = "var(--vscode-foreground, #ddd)"
