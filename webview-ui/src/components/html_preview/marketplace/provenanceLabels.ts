@@ -4,6 +4,7 @@
  * and a licence is shown only when the entry declared one.
  */
 export const UNSIGNED_CATALOGUE_LABEL = "Unsigned catalogue module"
+export const UNSIGNED_CATALOGUE_COURSE_LABEL = "Unsigned catalogue course"
 export const LICENSE_NOT_DECLARED_LABEL = "License not declared"
 
 export function licenseLabel(license?: string | null): string {
@@ -12,6 +13,6 @@ export function licenseLabel(license?: string | null): string {
 }
 
 /** One combined provenance line: license plus integrity/signing state. */
-export function provenanceLine(license?: string | null): string {
-	return `${licenseLabel(license)} · ${UNSIGNED_CATALOGUE_LABEL}`
+export function provenanceLine(license?: string | null, kind: "module" | "course" = "module"): string {
+	return `${licenseLabel(license)} · ${kind === "course" ? UNSIGNED_CATALOGUE_COURSE_LABEL : UNSIGNED_CATALOGUE_LABEL}`
 }

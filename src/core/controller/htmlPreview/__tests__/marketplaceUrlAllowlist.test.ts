@@ -4,6 +4,7 @@ import * as path from "node:path"
 import {
 	assertTrustedMarketplaceRedirect,
 	assertTrustedMarketplaceUrl,
+	assertTrustedModuleContentUrl,
 	resolveContainedInstallDir,
 	sanitizeMarketplaceId,
 } from "../marketplaceUrlAllowlist"
@@ -148,12 +149,20 @@ describe("live-index origins (raw.githubusercontent.com, repo + branch prefix)",
 	]
 	for (const url of ALLOWED) {
 		it(`allows ${url}`, () => {
-			expect(() => assertTrustedMarketplaceUrl(url, "t")).to.not.throw()
+			expect(() => assertTrustedModuleContentUrl(url, "t")).to.not.throw()
 		})
 	}
 	for (const [url, re] of DENIED) {
 		it(`denies ${url}`, () => {
-			expect(() => assertTrustedMarketplaceUrl(url, "t")).to.throw(re)
+			expect(() => assertTrustedModuleContentUrl(url, "t")).to.throw(re)
 		})
 	}
+})
+
+describe("raw Modules prefix is not part of the base (skills) policy", () => {
+	it("the base marketplace policy refuses the Modules raw prefix", () => {
+		expect(() =>
+			assertTrustedMarketplaceUrl("https://raw.githubusercontent.com/AI-Hydro/Modules/main/modules/x/module.html", "t"),
+		).to.throw(/allowlist/)
+	})
 })

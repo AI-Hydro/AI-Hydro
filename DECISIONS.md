@@ -4,6 +4,37 @@ Append-only. Newest first. One entry per non-obvious choice, with the **why**.
 
 ---
 
+## 2026-10-20 — Studio catalogue: raw-origin policy, unsigned entries, installed is not trusted
+
+Branch `vision2040/studio-p1p2` (Studio P1/P2; implements ADR-004 step 1 for user-facing names).
+
+- **Modules raw-origin policy is an exact repo + branch prefix, not org-wide.** The live
+  index lists every `downloadUrl`/`manifestUrl` on `raw.githubusercontent.com`. The
+  allowlist admits only `https://raw.githubusercontent.com/AI-Hydro/Modules/main/` (https;
+  no userinfo, port, query, fragment, percent-encoding or dot segments). An
+  `AI-Hydro/`-wide rule is rejected because GitHub serves commits from forks and unmerged
+  PRs under the upstream repo path by SHA, so it would accept unreviewed content. The prefix
+  applies to module and course installs only (`assertTrustedModuleContentUrl`); skills keep
+  their own repo-by-repo table (`skillUrlPolicy.ts`) and a test refuses a skill URL under
+  `AI-Hydro/Modules/main/`. Adding a repo or branch is a code change with a test.
+- **Catalogue entries are unsigned and carry no default licence.** The index has no
+  signature or content hash, so every card says "Unsigned catalogue module/course". A licence
+  is shown only if the entry declares one ("License not declared" otherwise); the mapper no
+  longer fills in CC-BY-4.0. Install/star counts that are zero or unknown are hidden rather
+  than shown as a fake zero. A failed catalogue fetch is an error with Retry, never an empty
+  list.
+- **Installed does not mean trusted to execute.** A catalogue module on disk is still
+  subject to the Studio trust model (`docs/studio-trust-model.md`): execution and agent
+  hand-off are gated by workspace trust and the artifact's identity, not by having been
+  installed from the catalogue. Only signed Learning Packs carry a publisher signature.
+- **One user-facing name: "AI-Hydro Studio".** Command ids, `preview_html`,
+  `show_html_preview`, `aihydro.htmlPreview.*` and proto names are unchanged (ADR-004
+  policy 3). A case-insensitive guard test covers package.json contributes, webview
+  strings, extension/agent-facing text, README and `docs/guide/**`, with those ids
+  allow-listed.
+
+---
+
 ## 2026-10-17 — Harness quick wins: honest models, display-only answer audit, explorer allowlist
 
 Branch `vision2040/harness-quickwins` (from the SOTA harness/model audit, items C/D/F).

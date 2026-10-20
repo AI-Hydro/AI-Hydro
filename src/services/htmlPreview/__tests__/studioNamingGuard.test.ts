@@ -9,7 +9,27 @@ import * as path from "node:path"
  * proto names) stay for compatibility; only strings a user or the agent reads
  * must not carry the old names.
  */
-const OLD_NAMES = /HTML [Pp]review|AI-Hydro Preview|Preview panel|HTML previews/
+const OLD_NAMES = /html[ -]?preview|aihydro[ -]?preview|preview panel/i
+
+/**
+ * Compatibility identifiers that legitimately keep the old spelling (ADR-004
+ * policy 3): identifiers and file names, tool names, command and message ids,
+ * settings ids. They are removed before the old-name regex runs, so only
+ * human-readable text can trip the guard.
+ */
+const COMPATIBILITY_IDS = new RegExp(
+	[
+		"\\bshow_html_preview\\b",
+		"\\bpreview_html\\b",
+		"\\bhtml_preview\\w*",
+		"\\bhtml-preview[\\w.-]*", // doc/file names such as html-preview.md
+		"[A-Za-z_]*HtmlPreview[A-Za-z_]*", // identifiers and command ids (addFileToHtmlPreview, VscodeHtmlPreviewProvider)
+		"[\\w.]*htmlPreview[\\w.]*", // settings and telemetry ids (aihydro.htmlPreview.*, aihydro_htmlPreviewButton)
+		"aihydro-preview-[\\w-]*", // webview message types, temp file prefixes
+	].join("|"),
+	"g",
+)
+const hasOldName = (text: string): boolean => OLD_NAMES.test(text.replace(COMPATIBILITY_IDS, ""))
 
 const ROOT = path.resolve(__dirname, "../../../..")
 
@@ -43,10 +63,23 @@ function offenders(files: string[]): string[] {
 		userVisibleSource(f)
 			.split("\n")
 			.forEach((line) => {
-				if (OLD_NAMES.test(line)) found.push(`${path.relative(ROOT, f)}: ${line.trim()}`)
+				if (hasOldName(line)) found.push(`${path.relative(ROOT, f)}: ${line.trim()}`)
 			})
 	}
 	return found
+}
+
+function markdownFiles(): string[] {
+	const out = [path.join(ROOT, "README.md")]
+	const walkMd = (dir: string) => {
+		for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+			const full = path.join(dir, entry.name)
+			if (entry.isDirectory()) walkMd(full)
+			else if (entry.name.endsWith(".md")) out.push(full)
+		}
+	}
+	walkMd(path.join(ROOT, "docs/guide"))
+	return out
 }
 
 function collectStrings(node: unknown, key: string, out: Array<{ key: string; value: string }>) {
@@ -66,7 +99,7 @@ describe("Studio naming guard (one name everywhere)", () => {
 		const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"))
 		const strings: Array<{ key: string; value: string }> = []
 		collectStrings(pkg.contributes, "", strings)
-		const bad = strings.filter((s) => OLD_NAMES.test(s.value)).map((s) => `${s.key}: ${s.value}`)
+		const bad = strings.filter((s) => hasOldName(s.value)).map((s) => `${s.key}: ${s.value}`)
 		expect(bad, bad.join("\n")).to.deep.equal([])
 	})
 
@@ -93,6 +126,42 @@ describe("Studio naming guard (one name everywhere)", () => {
 		]
 		const bad = offenders(files)
 		expect(bad, bad.join("\n")).to.deep.equal([])
+	})
+
+	it("README and the user guide have no old product name", () => {
+		const bad: string[] = []
+		for (const f of markdownFiles()) {
+			fs.readFileSync(f, "utf8")
+				.split("\n")
+				.forEach((line, i) => {
+					if (hasOldName(line)) bad.push(`${path.relative(ROOT, f)}:${i + 1}: ${line.trim()}`)
+				})
+		}
+		expect(bad, bad.join("\n")).to.deep.equal([])
+	})
+
+	it("the guard regex is case-insensitive and still catches real old names", () => {
+		for (const text of [
+			"HTML Preview",
+			"html preview",
+			"Html-Preview panel",
+			"AI-Hydro Preview panel",
+			"AIHYDRO PREVIEW",
+			"the Preview panel",
+		]) {
+			expect(hasOldName(text), text).to.equal(true)
+		}
+		for (const text of [
+			"aihydro.htmlPreview.pythonExecution",
+			"show_html_preview",
+			"preview_html",
+			"docs/guide/html-preview.md",
+			"VscodeHtmlPreviewProvider",
+			"aihydro-preview-event",
+			"AI-Hydro Studio",
+		]) {
+			expect(hasOldName(text), text).to.equal(false)
+		}
 	})
 
 	it("keeps the compatibility ids unchanged", () => {

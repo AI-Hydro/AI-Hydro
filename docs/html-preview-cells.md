@@ -1,4 +1,4 @@
-# HTML Preview executable cells (`.aihydro-cell`)
+# AI-Hydro Studio executable cells (`.aihydro-cell`)
 
 Official contract for runnable Python/JavaScript cells inside HTML artifacts.
 
@@ -36,7 +36,7 @@ print(math.sqrt(2))</pre>
 
 ## Panel toolbar
 
-Users run cells from the HTML Preview panel: **Run Cell**, **Run All**, **Restart & Run All**, **Stop**, **Clear**.
+Users run cells from AI-Hydro Studio: **Run Cell**, **Run All**, **Restart & Run All**, **Stop**, **Clear**.
 
 ## Quiz checkpoints (`.aihydro-quiz`)
 
@@ -135,7 +135,7 @@ same configuration instead of the authored defaults. State is keyed by
 `~/.aihydro/module_state/<moduleKey>.json` (keyed by the module's file path).
 
 The bridge requests saved state on load and pushes debounced changes back to the
-host; no author action is required. The HTML Preview kebab menu exposes
+host; no author action is required. The AI-Hydro Studio kebab menu exposes
 **Reset controls to defaults** (clears persisted values and restores authored
 defaults) and **Copy control state** (copies the current values as JSON to the
 clipboard for sharing).

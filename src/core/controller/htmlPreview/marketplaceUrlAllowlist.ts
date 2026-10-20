@@ -45,7 +45,8 @@ function trustedOrigins(): Set<string> {
  * SHA, so an org-level rule would accept unreviewed content. Raw URLs are
  * accepted only under an explicit repo + named-branch prefix, derived from the
  * URLs the live index (Modules/api/{modules,courses}.json) actually uses.
- * Same policy shape as skills/skillUrlPolicy.ts.
+ * Same policy shape as skills/skillUrlPolicy.ts. Applies to module and course
+ * installs only (assertTrustedModuleContentUrl), never to skills.
  */
 export const TRUSTED_RAW_MARKETPLACE_PREFIXES: readonly string[] = ["https://raw.githubusercontent.com/AI-Hydro/Modules/main/"]
 
@@ -69,7 +70,21 @@ function isTrustedRawMarketplaceUrl(parsed: URL, rawUrl: string): boolean {
 export const MAX_MODULE_BYTES = 8 * 1024 * 1024
 export const MAX_MANIFEST_BYTES = 1024 * 1024
 
+/**
+ * Base policy: configured marketplace origins only. Shared with skills, which
+ * keep their own repo-by-repo raw table (skills/skillUrlPolicy.ts) and must NOT
+ * inherit the Modules raw prefix.
+ */
 export function assertTrustedMarketplaceUrl(url: string, context: string): void {
+	assertUrl(url, context, false)
+}
+
+/** Module and course content: base policy plus the Modules raw prefix (live-index shape). */
+export function assertTrustedModuleContentUrl(url: string, context: string): void {
+	assertUrl(url, context, true)
+}
+
+function assertUrl(url: string, context: string, allowModulesRaw: boolean): void {
 	let parsed: URL
 	try {
 		parsed = new URL(url)
@@ -87,7 +102,7 @@ export function assertTrustedMarketplaceUrl(url: string, context: string): void 
 	if (trustedOrigins().has(parsed.origin)) {
 		return
 	}
-	if (isTrustedRawMarketplaceUrl(parsed, url)) {
+	if (allowModulesRaw && isTrustedRawMarketplaceUrl(parsed, url)) {
 		return
 	}
 	throw new Error(`${context}: origin not in the marketplace allowlist: ${parsed.origin}`)
@@ -102,7 +117,7 @@ export function assertTrustedMarketplaceRedirect(options: Record<string, unknown
 		typeof options.href === "string"
 			? options.href
 			: `${options.protocol ?? ""}//${options.hostname ?? options.host ?? ""}${options.path ?? ""}`
-	assertTrustedMarketplaceUrl(href, `${context} redirect`)
+	assertTrustedModuleContentUrl(href, `${context} redirect`)
 }
 
 /**

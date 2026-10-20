@@ -10,7 +10,7 @@ import { MarketplaceRecognitionService } from "@/services/recognition/Marketplac
 import type { Controller } from "../index"
 import {
 	assertTrustedMarketplaceRedirect,
-	assertTrustedMarketplaceUrl,
+	assertTrustedModuleContentUrl,
 	MAX_MODULE_BYTES,
 	resolveContainedInstallDir,
 } from "./marketplaceUrlAllowlist"
@@ -18,7 +18,7 @@ import {
 export async function installModule(controller: Controller, request: InstallModuleRequest): Promise<InstallModuleResponse> {
 	const { moduleId, downloadUrl, title, version } = request
 	try {
-		assertTrustedMarketplaceUrl(downloadUrl, "installModule downloadUrl")
+		assertTrustedModuleContentUrl(downloadUrl, "installModule downloadUrl")
 		const modulesDir = resolveContainedInstallDir(aihydroPath("modules"), moduleId, "installModule moduleId")
 		await fs.mkdir(modulesDir, { recursive: true })
 		const localPath = path.join(modulesDir, "module.html")

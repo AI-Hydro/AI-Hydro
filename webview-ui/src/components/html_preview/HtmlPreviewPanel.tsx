@@ -417,7 +417,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 										fontSize: 11,
 										color: "var(--vscode-descriptionForeground, #888)",
 									}}>
-									No HTML files in this workspace.
+									No documents yet.
 								</div>
 							)}
 						</AccordionSection>
@@ -462,7 +462,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 						</AccordionSection>
 
 						{/* ─── Edit requests accordion (queue of pending edit instructions to the agent) ─ */}
-						<AccordionSection icon="comment-discussion" persistKey="comments" title="Edit requests to the agent">
+						<AccordionSection icon="comment-discussion" persistKey="comments" title="Requests to agent">
 							{activeItem ? (
 								<CommentSidebar
 									iframeWindow={
@@ -484,7 +484,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 					</div>
 				)}
 
-				{/* Sidebar footer — Add File + Clear All */}
+				{/* Sidebar footer — Add document + Clear All */}
 				{!sidebarCollapsed && (
 					<div
 						style={{
@@ -514,7 +514,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 							}}
 							type="button">
 							<span className="codicon codicon-add" style={{ fontSize: 11 }} />
-							Add File
+							Add document
 						</button>
 						{items.length > 0 &&
 							(confirmingClear ? (
@@ -562,9 +562,9 @@ export const HtmlPreviewPanel: React.FC = () => {
 										cursor: "pointer",
 										opacity: 0.7,
 									}}
-									title="Remove all loaded previews"
+									title="Remove all loaded documents"
 									type="button">
-									Clear all previews
+									Clear all documents
 								</button>
 							))}
 					</div>

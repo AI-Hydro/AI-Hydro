@@ -43,6 +43,6 @@ describe("Studio empty state and sidebar honesty", () => {
 		render(<HtmlPreviewPanel />)
 		expect(screen.queryByText("Skills")).not.toBeInTheDocument()
 		expect(screen.queryByText("Comments")).not.toBeInTheDocument()
-		expect(screen.getByText("Edit requests to the agent")).toBeInTheDocument()
+		expect(screen.getByText("Requests to agent")).toBeInTheDocument()
 	})
 })

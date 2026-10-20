@@ -270,7 +270,7 @@ const CourseCard = ({ course, setError, onInstalled, onRecognitionChange }: Cour
 						<div
 							data-testid="course-provenance"
 							style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)" }}>
-							{provenanceLine(course.license)}
+							{provenanceLine(course.license, "course")}
 						</div>
 					</div>
 
@@ -364,30 +364,34 @@ const CourseCard = ({ course, setError, onInstalled, onRecognitionChange }: Cour
 
 				{/* Stats row: AI-Hydro recognition */}
 				<div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-					<span
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 4,
-							fontSize: 11,
-							color: "var(--vscode-descriptionForeground)",
-						}}
-						title="AI-Hydro installs">
-						<span className="codicon codicon-cloud-download" style={{ fontSize: 12 }} />
-						<span>{formatCount(aiHydroInstalls)} AI-Hydro installs</span>
-					</span>
-					<span
-						style={{
-							display: "flex",
-							alignItems: "center",
-							gap: 4,
-							fontSize: 11,
-							color: starred ? "#facc15" : "var(--vscode-descriptionForeground)",
-						}}
-						title="AI-Hydro user stars">
-						<span style={{ fontSize: 12, lineHeight: 1 }}>{starred ? "★" : "☆"}</span>
-						<span>{formatCount(aiHydroStars)} AI-Hydro stars</span>
-					</span>
+					{Number(aiHydroInstalls) > 0 && (
+						<span
+							style={{
+								display: "flex",
+								alignItems: "center",
+								gap: 4,
+								fontSize: 11,
+								color: "var(--vscode-descriptionForeground)",
+							}}
+							title="AI-Hydro installs">
+							<span className="codicon codicon-cloud-download" style={{ fontSize: 12 }} />
+							<span>{formatCount(aiHydroInstalls)} AI-Hydro installs</span>
+						</span>
+					)}
+					{Number(aiHydroStars) > 0 && (
+						<span
+							style={{
+								display: "flex",
+								alignItems: "center",
+								gap: 4,
+								fontSize: 11,
+								color: starred ? "#facc15" : "var(--vscode-descriptionForeground)",
+							}}
+							title="AI-Hydro user stars">
+							<span style={{ fontSize: 12, lineHeight: 1 }}>{starred ? "★" : "☆"}</span>
+							<span>{formatCount(aiHydroStars)} AI-Hydro stars</span>
+						</span>
+					)}
 				</div>
 
 				<div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
