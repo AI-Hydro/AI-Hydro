@@ -88,7 +88,6 @@ export default {
 				},
 				error: "var(--vscode-errorForeground)",
 				description: "var(--vscode-descriptionForeground)",
-				success: "var(--vscode-charts-green)",
 				warning: "var(--vscode-charts-yellow)",
 				// Hydrological Theme Colors
 				aihydro: {

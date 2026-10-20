@@ -174,6 +174,12 @@ describe("ScienceToolCard: missing fields", () => {
 		expect(container.textContent).toContain("Purpose: not reported")
 	})
 
+	it("says nothing has run while the call is awaiting permission", () => {
+		const { container } = render(<ScienceToolCard argsJson="{}" awaitingPermission serverName="ai-hydro" toolName="t" />)
+		expect(container.textContent).toContain("Not run yet: waiting for your permission.")
+		expect(container.textContent).not.toContain("No result recorded yet.")
+	})
+
 	it("says the result is not paired when the response could not be attributed", () => {
 		const { container } = render(<ScienceToolCard argsJson="{}" serverName="ai-hydro" toolName="t" unpaired />)
 		expect(container.textContent).toContain("Result not paired (concurrent calls)")

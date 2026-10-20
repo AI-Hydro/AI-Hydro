@@ -73,22 +73,8 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 		[messageHandlers, isProcessing],
 	)
 
-	// Keyboard event handler
-	const handleKeyDown = useCallback(
-		(event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.preventDefault()
-				event.stopPropagation()
-				messageHandlers.executeButtonAction("cancel")
-			}
-		},
-		[messageHandlers],
-	)
-
-	useEffect(() => {
-		window.addEventListener("keydown", handleKeyDown)
-		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [handleKeyDown])
+	// Esc-to-stop is bound on the prompt (ChatTextArea `onEscape`), never on `window`: a window-wide listener
+	// cancelled a running task from any focus, including while the user was in a dialog or another control.
 
 	if (!task) {
 		return null

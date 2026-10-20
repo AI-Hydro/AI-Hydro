@@ -49,6 +49,8 @@ export interface ScreenDef {
 	/** Artifacts the fixture host reports from saveMapExport (0 exercises the zero-output state). */
 	exportOutputs?: number
 	htmlPreviews?: HtmlPreviewItem[]
+	/** Catalogue the fixture host serves; `error` makes both refresh RPCs reject (offline state). */
+	marketplace?: { modules?: Record<string, unknown>[]; courses?: Record<string, unknown>[]; error?: string }
 	/** Window flags App.tsx reads to choose a standalone panel. */
 	flags?: string[]
 	/** localStorage entries installed before the app boots (e.g. persisted map workspace). */

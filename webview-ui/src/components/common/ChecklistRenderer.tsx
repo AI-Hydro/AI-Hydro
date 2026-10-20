@@ -107,7 +107,7 @@ const ChecklistRenderer: React.FC<ChecklistRendererProps> = ({ text }) => {
 			{items.map((item, index) => (
 				// biome-ignore lint/suspicious/noArrayIndexKey: Using index as key for checklist items
 				<div className="flex items-start gap-1.5 p-0.5" key={`checklist-item-${index}`}>
-					<span className={cn("text-xs shrink-0 mt-0.5", item.checked ? "text-success" : "text-foreground")}>
+					<span className={cn("text-xs shrink-0 mt-0.5", "text-foreground")}>
 						{item.checked ? <CheckIcon size={10} /> : <CircleIcon size={10} />}
 					</span>
 					<div

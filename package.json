@@ -142,7 +142,7 @@
 			},
 			{
 				"command": "aihydro.htmlPreviewButtonClicked",
-				"title": "HTML Preview",
+				"title": "AI-Hydro Studio",
 				"icon": "$(preview)"
 			},
 			{
@@ -330,7 +330,7 @@
 			},
 			{
 				"command": "aihydro.addFileToHtmlPreview",
-				"title": "Add to AI-Hydro HTML Preview",
+				"title": "Add to AI-Hydro Studio",
 				"category": "AI-Hydro"
 			},
 			{
@@ -387,53 +387,38 @@
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
-					"command": "aihydro.mcpButtonClicked",
-					"group": "navigation@9",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
 					"command": "aihydro.mapButtonClicked",
 					"group": "navigation@2",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
-					"command": "aihydro.htmlPreviewButtonClicked",
+					"command": "aihydro.historyButtonClicked",
 					"group": "navigation@3",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
-					"command": "aihydro.historyButtonClicked",
-					"group": "navigation@7",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.connectorsButtonClicked",
-					"group": "navigation@10",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.skillsButtonClicked",
-					"group": "navigation@8",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.experimentTableButtonClicked",
-					"group": "navigation@5",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.sessionReplayButtonClicked",
-					"group": "navigation@6",
-					"when": "view == aihydro.SidebarProvider"
-				},
-				{
-					"command": "aihydro.evidenceBoardButtonClicked",
+					"submenu": "aihydro.scienceViews",
 					"group": "navigation@4",
 					"when": "view == aihydro.SidebarProvider"
 				},
 				{
+					"command": "aihydro.mcpButtonClicked",
+					"group": "overflow@1",
+					"when": "view == aihydro.SidebarProvider"
+				},
+				{
+					"command": "aihydro.connectorsButtonClicked",
+					"group": "overflow@2",
+					"when": "view == aihydro.SidebarProvider"
+				},
+				{
+					"command": "aihydro.skillsButtonClicked",
+					"group": "overflow@3",
+					"when": "view == aihydro.SidebarProvider"
+				},
+				{
 					"command": "aihydro.settingsButtonClicked",
-					"group": "navigation@11",
+					"group": "overflow@4",
 					"when": "view == aihydro.SidebarProvider"
 				}
 			],
@@ -513,6 +498,24 @@
 				{
 					"command": "aihydro.abortGitCommitMessage",
 					"when": "config.git.enabled && scmProvider == git && aihydro.isGeneratingCommit"
+				}
+			],
+			"aihydro.scienceViews": [
+				{
+					"command": "aihydro.evidenceBoardButtonClicked",
+					"group": "science@1"
+				},
+				{
+					"command": "aihydro.experimentTableButtonClicked",
+					"group": "science@2"
+				},
+				{
+					"command": "aihydro.sessionReplayButtonClicked",
+					"group": "science@3"
+				},
+				{
+					"command": "aihydro.htmlPreviewButtonClicked",
+					"group": "science@4"
 				}
 			]
 		},
@@ -595,13 +598,13 @@
 					],
 					"default": "prompt",
 					"scope": "machine",
-					"description": "Whether HTML Preview may run Python code cells via a persistent kernel (equivalent trust to terminal commands). Machine scope: a repository's workspace settings cannot change it."
+					"description": "Whether AI-Hydro Studio may run Python code cells via a persistent kernel (equivalent trust to terminal commands). Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.htmlPreview.pythonInterpreter": {
 					"type": "string",
 					"default": "",
 					"scope": "machine",
-					"description": "Absolute path to a Python interpreter for HTML Preview kernels. When empty, AI-Hydro discovers VS Code's interpreter, .venv, and .aihydro/venv. Machine scope: a repository's workspace settings cannot change it."
+					"description": "Absolute path to a Python interpreter for AI-Hydro Studio kernels. When empty, AI-Hydro discovers VS Code's interpreter, .venv, and .aihydro/venv. Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.htmlPreview.pythonTimeoutSeconds": {
 					"type": "number",
@@ -609,13 +612,13 @@
 					"minimum": 30,
 					"maximum": 600,
 					"scope": "machine",
-					"description": "Maximum seconds for a single Python cell execution in HTML Preview."
+					"description": "Maximum seconds for a single Python cell execution in AI-Hydro Studio."
 				},
 				"aihydro.htmlPreview.shareKernelAcrossArtifacts": {
 					"type": "boolean",
 					"default": false,
 					"scope": "machine",
-					"description": "When true, all HTML previews in a workspace share one Python kernel namespace per profile. Default is false (one kernel per artifact). Machine scope: a repository's workspace settings cannot change it."
+					"description": "When true, all Studio documents in a workspace share one Python kernel namespace per profile. Default is false (one kernel per artifact). Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.gee.projectId": {
 					"type": "string",
@@ -635,7 +638,14 @@
 					"description": "Python executable (with aihydro-tools installed) used by the map's hydrology CLI. Leave empty to use the interpreter of the registered ai-hydro MCP server, then python3/python on PATH."
 				}
 			}
-		}
+		},
+		"submenus": [
+			{
+				"id": "aihydro.scienceViews",
+				"label": "Science views",
+				"icon": "$(beaker)"
+			}
+		]
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run package",

@@ -501,7 +501,7 @@ export const ToolApproval: Story = {
 	parameters: {
 		docs: {
 			description: {
-				story: "Shows tool approval request with Approve/Reject buttons for file operations.",
+				story: "Shows tool approval request with Run/Deny buttons for file operations.",
 			},
 		},
 	},
@@ -520,7 +520,7 @@ export const ToolSave: Story = {
 	parameters: {
 		docs: {
 			description: {
-				story: "Shows file save request with Save/Reject buttons for file editing operations.",
+				story: "Shows file save request with Save/Deny buttons for file editing operations.",
 			},
 		},
 	},
@@ -551,7 +551,7 @@ export const CommandExecution: Story = quickStory(
 	"Command Execution",
 	"command",
 	"npm install",
-	"Shows command execution request with Run Command/Reject buttons.",
+	"Shows command execution request with Run Command/Deny buttons.",
 )
 
 export const CommandOutput: Story = {
@@ -595,13 +595,13 @@ export const BrowserActionLaunch = quickStory(
 	"Browser Launch",
 	"browser_action_launch",
 	"Launch browser to test the website at http://localhost:3000",
-	"Shows browser action approval with Approve/Reject buttons for browser launch.",
+	"Shows browser action approval with Run/Deny buttons for browser launch.",
 )
 export const McpServerUsage = quickStory(
 	"MCP Server",
 	"use_mcp_server",
 	JSON.stringify({ tool: "get_weather", location: "New York" }),
-	"Shows MCP server usage approval with Approve/Reject buttons for external tool usage.",
+	"Shows MCP server usage approval with Run/Deny buttons for external tool usage.",
 )
 export const Followup = quickStory(
 	"Follow-up",

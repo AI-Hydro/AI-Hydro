@@ -18,7 +18,7 @@ description: AI-Hydro project roadmap — current status, shipped features, and 
 ### What's stable
 
 - All 28 built-in MCP tools (analysis, modelling, session, project, literature, persona)
-- HTML Preview panel with full interactive-module execution environment
+- AI-Hydro Studio with full interactive-module execution environment
 - Course mode: guided learning paths with prerequisites and progress tracking
 - `window.aihydro` interactivity primitives (timeline, compare, sim, plot, scene3d, bindParam)
 - Manim video cells (3Blue1Brown-style animations rendered to inline MP4)

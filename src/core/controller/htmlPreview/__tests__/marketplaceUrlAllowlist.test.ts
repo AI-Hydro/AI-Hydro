@@ -4,6 +4,7 @@ import * as path from "node:path"
 import {
 	assertTrustedMarketplaceRedirect,
 	assertTrustedMarketplaceUrl,
+	assertTrustedModuleContentUrl,
 	resolveContainedInstallDir,
 	sanitizeMarketplaceId,
 } from "../marketplaceUrlAllowlist"
@@ -108,5 +109,60 @@ describe("marketplace id sanitisation", () => {
 		expect(resolveContainedInstallDir(root, "m1", "t")).to.equal(path.join(root, "m1"))
 		expect(() => resolveContainedInstallDir(root, "../escape", "t")).to.throw(/invalid id/)
 		expect(() => resolveContainedInstallDir(root, path.resolve("/abs"), "t")).to.throw(/invalid id/)
+	})
+})
+
+describe("live-index origins (raw.githubusercontent.com, repo + branch prefix)", () => {
+	const SHA = "0123456789abcdef0123456789abcdef01234567"
+	const ALLOWED = [
+		"https://raw.githubusercontent.com/AI-Hydro/Modules/main/modules/reading-a-hydrograph/module.html",
+		"https://raw.githubusercontent.com/AI-Hydro/Modules/main/courses/intro-hydro-2026/course.json",
+		"https://ai-hydro.github.io/Modules/api/modules.json",
+	]
+	const DENIED: Array<[string, RegExp]> = [
+		["https://raw.githubusercontent.com/evil/Modules/main/module.html", /allowlist/],
+		["https://raw.githubusercontent.com/evil/AI-Hydro/main/module.html", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro-evil/Modules/main/m.html", /allowlist/],
+		["https://raw.githubusercontent.com/ai-hydro/Modules/main/m.html", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/modules/main/m.html", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Other/main/m.html", /allowlist/],
+		// fork commit served under the upstream path by SHA, or another branch
+		[`https://raw.githubusercontent.com/AI-Hydro/Modules/${SHA}/m.html`, /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Modules/dev/m.html", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Modules/refs/heads/main/m.html", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Modules/main", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Modules/main/", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro", /allowlist/],
+		["https://raw.githubusercontent.com/", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Modules/main/../../evil/x/main/m.html", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Modules/main/%2e%2e/%2e%2e/evil/m.html", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Modules/main/a%2Fb.html", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Modules/main/m.html?ref=evil", /allowlist/],
+		["https://raw.githubusercontent.com/AI-Hydro/Modules/main/m.html#x", /allowlist/],
+		["https://raw.githubusercontent.com:8443/AI-Hydro/Modules/main/m.html", /allowlist/],
+		["https://raw.githubusercontent.com.evil.com/AI-Hydro/Modules/main/m.html", /allowlist/],
+		["https://user:pw@raw.githubusercontent.com/AI-Hydro/Modules/main/m.html", /embedded credentials/],
+		["https://evil.com/raw.githubusercontent.com/AI-Hydro/Modules/main/m.html", /allowlist/],
+		["https://gist.githubusercontent.com/AI-Hydro/Modules/main/m.html", /allowlist/],
+		["http://raw.githubusercontent.com/AI-Hydro/Modules/main/m.html", /https is required/],
+		["ftp://raw.githubusercontent.com/AI-Hydro/Modules/main/m.html", /https is required/],
+	]
+	for (const url of ALLOWED) {
+		it(`allows ${url}`, () => {
+			expect(() => assertTrustedModuleContentUrl(url, "t")).to.not.throw()
+		})
+	}
+	for (const [url, re] of DENIED) {
+		it(`denies ${url}`, () => {
+			expect(() => assertTrustedModuleContentUrl(url, "t")).to.throw(re)
+		})
+	}
+})
+
+describe("raw Modules prefix is not part of the base (skills) policy", () => {
+	it("the base marketplace policy refuses the Modules raw prefix", () => {
+		expect(() =>
+			assertTrustedMarketplaceUrl("https://raw.githubusercontent.com/AI-Hydro/Modules/main/modules/x/module.html", "t"),
+		).to.throw(/allowlist/)
 	})
 })

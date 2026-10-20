@@ -53,7 +53,7 @@ async function waitForPreviewShell(page: Page): Promise<Frame> {
 		.poll(async () => {
 			for (const frame of page.frames()) {
 				try {
-					if ((await frame.title()) === "AI-Hydro HTML Preview") {
+					if ((await frame.title()) === "AI-Hydro Studio") {
 						result = frame
 						return true
 					}

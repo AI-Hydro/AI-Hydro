@@ -165,7 +165,7 @@ export class ArtifactKernelService {
 	private readonly tickets = new Map<string, Set<RunTicket>>()
 	/** Overridable so tests can exercise the give-up path without waiting seconds. */
 	interruptGraceMs = INTERRUPT_GRACE_MS
-	private readonly outputChannel = vscode.window.createOutputChannel("AI-Hydro HTML Preview")
+	private readonly outputChannel = vscode.window.createOutputChannel("AI-Hydro Studio")
 
 	constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -243,7 +243,7 @@ export class ArtifactKernelService {
 		}
 		const profile = profileId?.trim() || this.getActiveProfileId()
 		if (!profile) {
-			throw new Error("No active Python profile. Select a kernel in the HTML Preview toolbar.")
+			throw new Error("No active Python profile. Select a kernel in the AI-Hydro Studio toolbar.")
 		}
 		return buildSessionKeyForArtifact(aid, profile)
 	}

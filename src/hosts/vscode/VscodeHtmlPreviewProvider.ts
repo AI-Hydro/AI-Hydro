@@ -587,7 +587,7 @@ export class VscodeHtmlPreviewProvider {
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta http-equiv="Content-Security-Policy" content="${csp}">
 	<link href="${styleUri}" rel="stylesheet">
-	<title>AI-Hydro HTML Preview</title>
+	<title>AI-Hydro Studio</title>
 	<style>
 		html, body, #root { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; }
 		.html-preview-standalone { width: 100%; height: 100%; }

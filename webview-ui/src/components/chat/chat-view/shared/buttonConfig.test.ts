@@ -145,3 +145,29 @@ describe("getButtonConfig", () => {
 		expect(configAct).toEqual(configPlan)
 	})
 })
+
+describe("tool-call ask vocabulary", () => {
+	const ask = (name: string, text = ""): AiHydroMessage => ({ type: "ask", ask: name as any, text, ts: Date.now() })
+
+	it("uses Run/Deny for tool, MCP and browser asks; 'Approve' is reserved for claims", () => {
+		for (const name of ["tool", "use_mcp_server", "browser_action_launch"]) {
+			const config = getButtonConfig(ask(name))
+			expect(config.primaryText).toBe("Run")
+			expect(config.secondaryText).toBe("Deny")
+		}
+	})
+
+	it("uses Save/Deny for edits and Run Command/Deny for commands", () => {
+		const edit = getButtonConfig(ask("tool", JSON.stringify({ tool: "editedExistingFile" })))
+		expect([edit.primaryText, edit.secondaryText]).toEqual(["Save", "Deny"])
+		const cmd = getButtonConfig(ask("command"))
+		expect([cmd.primaryText, cmd.secondaryText]).toEqual(["Run Command", "Deny"])
+	})
+
+	it("never labels a button Approve or Reject", () => {
+		for (const config of Object.values(BUTTON_CONFIGS)) {
+			expect(config.primaryText).not.toBe("Approve")
+			expect(config.secondaryText).not.toBe("Reject")
+		}
+	})
+})

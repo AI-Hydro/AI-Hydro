@@ -61,8 +61,8 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	tool_approve: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Approve",
-		secondaryText: "Reject",
+		primaryText: "Run",
+		secondaryText: "Deny",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -70,7 +70,7 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		sendingDisabled: false,
 		enableButtons: true,
 		primaryText: "Save",
-		secondaryText: "Reject",
+		secondaryText: "Deny",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -80,7 +80,7 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		sendingDisabled: false,
 		enableButtons: true,
 		primaryText: "Run Command",
-		secondaryText: "Reject",
+		secondaryText: "Deny",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -97,16 +97,16 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	browser_action_launch: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Approve",
-		secondaryText: "Reject",
+		primaryText: "Run",
+		secondaryText: "Deny",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
 	use_mcp_server: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Approve",
-		secondaryText: "Reject",
+		primaryText: "Run",
+		secondaryText: "Deny",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -316,4 +316,22 @@ export function getButtonConfig(message: AiHydroMessage | undefined, _mode: Mode
 	}
 
 	return BUTTON_CONFIGS.partial
+}
+
+/**
+ * True while there is something for Escape to stop: a streaming reply or in-flight API request (the states that
+ * show a Cancel button), a foreground command producing output, or a background command. Idle, awaiting-answer and
+ * finished states are not running, so Escape does nothing there.
+ */
+export function isTaskRunning(lastMessage: AiHydroMessage | undefined, backgroundCommandRunning = false): boolean {
+	if (backgroundCommandRunning) {
+		return true
+	}
+	if (!lastMessage) {
+		return false
+	}
+	if (lastMessage.type === "ask" && lastMessage.ask === "command_output") {
+		return true
+	}
+	return getButtonConfig(lastMessage).secondaryAction === "cancel"
 }

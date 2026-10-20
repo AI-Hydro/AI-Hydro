@@ -1,6 +1,6 @@
 # Studio trust model
 
-Studio (HTML Preview) opens HTML from many places: installed course packs, files in a cloned repository, marketplace downloads, dashboards an agent or a colleague produced. Only some of that content may run Python on your machine or hand work to the AI-Hydro agent. This page states the rules, what enforces them, and what is not covered.
+AI-Hydro Studio opens HTML from many places: installed course packs, files in a cloned repository, marketplace downloads, dashboards an agent or a colleague produced. Only some of that content may run Python on your machine or hand work to the AI-Hydro agent. This page states the rules, what enforces them, and what is not covered.
 
 ## The rule
 

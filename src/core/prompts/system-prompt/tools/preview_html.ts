@@ -8,7 +8,7 @@ const generic: AiHydroToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "preview_html",
-	description: `Request to render HTML in the AI-Hydro Preview panel. One preview experience handles static reports, Folium/Leaflet maps, Plotly dashboards, and other research artifacts — the extension picks the best render path and security profile automatically.
+	description: `Request to render HTML in AI-Hydro Studio. One Studio experience handles static reports, Folium/Leaflet maps, Plotly dashboards, and other research artifacts — the extension picks the best render path and security profile automatically.
 - Provide raw HTML and/or a file_path. If both are given, the on-disk file is preferred so relative assets resolve correctly.
 - Optional mode override:
   * (default) omit mode — auto-detect (maps/charts run with scripts; plain HTML stays static-safe when appropriate).
@@ -20,8 +20,8 @@ const generic: AiHydroToolSpec = {
     <div class="aihydro-output"></div>
   </div>
   Optional: <script type="application/vnd.aihydro.cell+json">{"id":"cell-001","language":"python"}</script>
-  Users run cells from the HTML Preview panel toolbar (Run Cell, Run All, Restart & Run All). Each artifact has its own kernel session.
-- Python environment: user picks a kernel in the HTML Preview toolbar (VS Code interpreter, .venv, or .aihydro/venv). To add a hydro stack, create a venv with execute_command:
+  Users run cells from the AI-Hydro Studio toolbar (Run Cell, Run All, Restart & Run All). Each artifact has its own kernel session.
+- Python environment: user picks a kernel in the AI-Hydro Studio toolbar (VS Code interpreter, .venv, or .aihydro/venv). To add a hydro stack, create a venv with execute_command:
   python3 -m venv .aihydro/venv && .aihydro/venv/bin/pip install numpy pandas rasterio matplotlib
   Then click "↻ env" in the preview toolbar to refresh environments.`,
 	contextRequirements: () => true,
