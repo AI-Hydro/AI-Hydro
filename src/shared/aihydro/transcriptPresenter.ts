@@ -123,8 +123,10 @@ export type DetailLevel = "focus" | "normal" | "verbose"
 export interface PresentOptions {
 	detail: DetailLevel
 	/**
-	 * Facts a message does not carry. Both are optional; without them the corresponding approvals are not
-	 * security-marked (the presenter cannot know), and the caller (A2) supplies them from MCP annotations/settings.
+	 * Facts a message does not carry. Both are optional and FAIL SAFE: absent (or, for `effectClassFor`, returning
+	 * undefined) means "unknown", and unknown lifts. Without `effectClassFor` every MCP call is lifted as effect-class
+	 * unknown; without `isProtectedPath` every write-type native call that names a path is lifted. A2 supplies both
+	 * from MCP annotations/trust and the protected-root list to narrow the lifting to what is actually risky.
 	 */
 	effectClassFor?: (message: AiHydroMessage) => "READ" | "WRITE" | "NETWORK" | "DESTRUCTIVE" | "UNKNOWN" | undefined
 	isProtectedPath?: (path: string) => boolean
@@ -158,6 +160,8 @@ export type LiftReason =
 	| "rewind"
 	| "limit_reached"
 	| "approved_security"
+	| "no_decision"
+	| "result_uninspected"
 	| "policy_command"
 
 export interface LiftedLine {
@@ -176,6 +180,7 @@ export type CostLabel =
 	| { status: "exact"; usd: number; label: string }
 	| { status: "lower-bound"; usd: number; label: string }
 	| { status: "unavailable"; usd: null; label: string }
+	| { status: "unrecorded"; usd: null; label: "no cost recorded" }
 
 export interface HeaderFacts {
 	/** Span of the group minus time spent waiting on the user (ms, from message timestamps). */
@@ -184,6 +189,8 @@ export interface HeaderFacts {
 	waitingMs: number
 	/** Calls only (command, file/native tool, MCP tool). Requests, reasoning and checkpoints are not counted. */
 	toolCount: number
+	/** Calls that did not run: denied, or asked with no decision recorded. Not part of `toolCount`. */
+	notRunCount: number
 	cost: CostLabel
 	requestCount: number
 	retryCount: number
@@ -326,31 +333,59 @@ function describeCall(m: AiHydroMessage): string {
 
 // ── Result inspection (generic shapes, no tool names) ───────────────────────────────────────────────────────────
 
-const MAX_DEPTH = 4
+/** Containers deeper than this, or more nodes than NODE_BUDGET, are not inspected: the result is then lifted as such. */
+const MAX_DEPTH = 8
+const NODE_BUDGET = 20_000
+const FAILURE_STATUSES = new Set(["failed", "error", "cancelled", "canceled", "corrupt", "timeout", "timed_out", "unavailable"])
+const FAILURE_TEXT = /^(?:(?:error|failed|mcp error)\b|\[error\]|traceback \(most recent call last\))/i
+
 const truthyError = (v: unknown) => v !== undefined && v !== null && v !== false && v !== "" && v !== 0
+const lc = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase() : undefined)
 
 interface ResultFindings {
 	reasons: Array<{ reason: LiftReason; tone: LiftedLine["tone"]; text: string }>
 	reused: boolean
 }
 
-function walk(v: unknown, depth: number, visit: (key: string, value: unknown, depth: number) => void): void {
-	if (depth > MAX_DEPTH) {
-		return
-	}
-	if (Array.isArray(v)) {
-		for (const x of v.slice(0, 50)) {
-			walk(x, depth + 1, visit)
+/** Visits every key at every depth, arrays included. Returns false when the depth or node bound stopped the walk. */
+function walk(root: unknown, visit: (key: string, value: unknown) => void): boolean {
+	let nodes = 0
+	let complete = true
+	const go = (v: unknown, depth: number) => {
+		if (!Array.isArray(v) && !isRecord(v)) {
+			return
 		}
-	} else if (isRecord(v)) {
+		if (depth > MAX_DEPTH || ++nodes > NODE_BUDGET) {
+			complete = false
+			return
+		}
+		if (Array.isArray(v)) {
+			for (const x of v) {
+				go(x, depth + 1)
+			}
+			return
+		}
 		for (const [k, x] of Object.entries(v)) {
-			visit(k, x, depth)
-			walk(x, depth + 1, visit)
+			visit(k, x)
+			go(x, depth + 1)
 		}
 	}
+	go(root, 0)
+	return complete
 }
 
-/** What an MCP result says about itself. Error shapes count at the top level (and one level under it); blocking, area check and reuse at bounded depth. */
+/**
+ * What an MCP result says about itself. Generic shapes only, checked at every depth (arrays included):
+ *   error: `isError: true`, a truthy `error`, `ok: false`, `success: false`, `status` (case-insensitive) in
+ *   failed/error/cancelled/canceled/corrupt/timeout/timed_out/unavailable; a body starting (case-insensitively) with
+ *   "Error", "Failed", "[ERROR]", "MCP error" or a Python traceback. Also: `blocking` true/"true", `area_check`
+ *   fail/failed, refusal and provisional data from the tool-call presenter.
+ * Intentionally NOT recognised: failure words that are not at the start of a plain-text body, bare HTTP status
+ * numbers or `code` fields, `warnings` lists, `partial: true`, JSON encoded inside a string value, and `status`
+ * values outside the list above. A result the walk could not finish (too deep or too large) is lifted as
+ * "result_uninspected" rather than assumed fine. Reuse is only `_cached === true` or `reused === true` at the top
+ * level or directly under `data`, so a column named `reused` in user data is not counted.
+ */
 export function inspectResult(text: string | undefined): ResultFindings {
 	const out: ResultFindings = { reasons: [], reused: false }
 	const add = (reason: LiftReason, tone: LiftedLine["tone"], t: string) => {
@@ -358,52 +393,76 @@ export function inspectResult(text: string | undefined): ResultFindings {
 			out.reasons.push({ reason, tone, text: t })
 		}
 	}
-	const trimmed = (text ?? "").trimStart()
-	if (trimmed.startsWith("Error:")) {
-		add("mcp_error", "error", oneLine(trimmed.replace(/^Error:\s*/, ""), 160) || "Tool returned an error")
+	const trimmed = (text ?? "").replace(/^[\s\uFEFF]+/, "")
+	if (FAILURE_TEXT.test(trimmed)) {
+		add(
+			"mcp_error",
+			"error",
+			oneLine(trimmed.replace(/^(?:error|failed|mcp error)\W*/i, ""), 160) || "Tool returned an error",
+		)
 	}
-	const body = parseObject(text)
-	if (!body) {
+	let body: unknown
+	try {
+		body = JSON.parse(trimmed)
+	} catch {
 		return out
 	}
-	const errorShape = (o: Json, depth: number) => {
-		if (o.isError === true) {
-			add("mcp_error", "error", "Tool reported an error")
-		}
-		if (truthyError(o.error) && o.error !== true) {
-			add(
-				"mcp_error",
-				"error",
-				`Tool error: ${oneLine(typeof o.error === "string" ? o.error : JSON.stringify(o.error), 160)}`,
-			)
-		} else if (o.error === true) {
-			add("mcp_error", "error", oneLine(typeof o.message === "string" ? o.message : "Tool returned an error", 160))
-		}
-		if (o.ok === false) {
-			add("mcp_error", "error", "Tool reported ok: false")
-		}
-		if (o.status === "error") {
-			add("mcp_error", "error", "Tool reported status: error")
-		}
-		const nested = o.data ?? o.result
-		if (depth === 0 && isRecord(nested)) {
-			errorShape(nested, 1)
-		}
+	if (!isRecord(body) && !Array.isArray(body)) {
+		return out
 	}
-	errorShape(body, 0)
-	walk(body, 0, (k, v) => {
-		if (k === "blocking" && v === true) {
-			add("blocking", "warning", "A result is marked blocking")
-		}
-		if (k === "area_check" && v === "fail") {
-			add("area_check_failed", "warning", "Basin area check failed")
-		}
-		if ((k === "_cached" && truthyError(v)) || (k === "reused" && v === true)) {
-			out.reused = true
+	const complete = walk(body, (k, v) => {
+		switch (k) {
+			case "isError":
+				if (v === true) {
+					add("mcp_error", "error", "Tool reported an error")
+				}
+				break
+			case "error":
+				if (truthyError(v)) {
+					add(
+						"mcp_error",
+						"error",
+						`Tool error: ${v === true ? "reported" : oneLine(typeof v === "string" ? v : JSON.stringify(v), 160)}`,
+					)
+				}
+				break
+			case "ok":
+			case "success":
+				if (v === false) {
+					add("mcp_error", "error", `Tool reported ${k}: false`)
+				}
+				break
+			case "status": {
+				const st = lc(v)
+				if (st && FAILURE_STATUSES.has(st)) {
+					add("mcp_error", "error", `Tool reported status: ${st}`)
+				}
+				break
+			}
+			case "blocking":
+				if (v === true || lc(v) === "true") {
+					add("blocking", "warning", "A result is marked blocking")
+				}
+				break
+			case "area_check": {
+				const st = lc(v)
+				if (st === "fail" || st === "failed") {
+					add("area_check_failed", "warning", "Basin area check failed")
+				}
+				break
+			}
 		}
 	})
+	if (!complete) {
+		add("result_uninspected", "warning", "Result too large or deep to check for failures")
+	}
+	const top = isRecord(body) ? body : {}
+	const data = isRecord(top.data) ? top.data : {}
+	out.reused = [top, data].some((o) => o._cached === true || o.reused === true)
 	const model = presentToolCall("", "", undefined, text)
 	if (model.refusal) {
+		// A refusal is the specific form of an error: one failure, one line.
+		out.reasons = out.reasons.filter((r) => r.reason !== "mcp_error")
 		add(
 			"refusal",
 			"error",
@@ -427,26 +486,32 @@ function costLabel(rows: Array<{ cost?: number; status?: string }>): CostLabel {
 	}
 	let usd = 0
 	let known = 0
-	let unknown = 0
+	let unpriced = 0
+	let unavailable = 0
 	let lower = false
 	for (const r of rows) {
-		if (r.status === "unavailable" || typeof r.cost !== "number" || !(r.cost > 0)) {
-			unknown++
-			continue
+		if (r.status === "unavailable") {
+			unavailable++
+			unpriced++
+		} else if (typeof r.cost !== "number" || !(r.cost > 0)) {
+			unpriced++ // missing or zero: the host recorded no cost for this request
+		} else {
+			known++
+			usd += r.cost
+			lower = lower || r.status === "lower-bound"
 		}
-		known++
-		usd += r.cost
-		lower = lower || r.status === "lower-bound"
 	}
 	if (known === 0) {
-		return { status: "unavailable", usd: null, label: "cost unavailable (pricing not verified)" }
+		return unavailable > 0
+			? { status: "unavailable", usd: null, label: "cost unavailable (pricing not verified)" }
+			: { status: "unrecorded", usd: null, label: "no cost recorded" }
 	}
 	const fixed = `$${usd.toFixed(4)}`
-	if (unknown > 0 || lower) {
+	if (unpriced > 0 || lower) {
 		return {
 			status: "lower-bound",
 			usd,
-			label: `≥${fixed} (${unknown > 0 ? `${unknown} request${unknown === 1 ? "" : "s"} unpriced` : "cache tokens unpriced"})`,
+			label: `\u2265${fixed} (${unpriced > 0 ? `${unpriced} request${unpriced === 1 ? "" : "s"} unpriced` : "cache tokens unpriced"})`,
 		}
 	}
 	return { status: "exact", usd, label: fixed }
@@ -459,6 +524,7 @@ interface GroupBuilder {
 	lifted: LiftedLine[]
 	waitingMs: number
 	toolCount: number
+	notRunCount: number
 	costRows: Array<{ cost?: number; status?: string }>
 	requestCount: number
 	retryCount: number
@@ -472,6 +538,7 @@ const newGroup = (): GroupBuilder => ({
 	lifted: [],
 	waitingMs: 0,
 	toolCount: 0,
+	notRunCount: 0,
 	costRows: [],
 	requestCount: 0,
 	retryCount: 0,
@@ -529,7 +596,15 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 		}
 		// A result-level line for a call replaces that call's own failure line (one fact, one line).
 		const resultCalls = new Set(
-			g.lifted.filter((l) => l.reason !== "call_failed" && l.callTs !== undefined).map((l) => l.callTs),
+			g.lifted
+				.filter(
+					(l) =>
+						l.callTs !== undefined &&
+						(l.reason === "mcp_error" ||
+							l.reason === "refusal" ||
+							(l.reason !== "call_failed" && l.tone === "error")),
+				)
+				.map((l) => l.callTs),
 		)
 		const lifted = g.lifted.filter((l) => !(l.reason === "call_failed" && resultCalls.has(l.callTs)))
 		const startTs = g.members[0]?.ts ?? lifted[0].sourceTs
@@ -549,6 +624,7 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 				agentMs: span - waitingMs,
 				waitingMs,
 				toolCount: g.toolCount,
+				notRunCount: g.notRunCount,
 				cost: costLabel(g.costRows),
 				requestCount: g.requestCount,
 				retryCount: g.retryCount,
@@ -576,11 +652,17 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 		text: string,
 		callTs?: number,
 	) => {
-		const key = `${reason}:${m.ts}`
+		const key = `${reason}:${m.ts}:${curIndex}`
 		if (!grp.lifted.some((l) => l.key === key)) {
 			grp.lifted.push({ key, reason, tone, text, sourceTs: m.ts, ...(callTs !== undefined ? { callTs } : {}) })
 		}
 	}
+
+	let curIndex = 0
+	const isWriteTool = (info: Json) =>
+		info.diff !== undefined ||
+		info.content !== undefined ||
+		/(edit|creat|writ|delet|remov|renam|mov|patch|replac)/i.test(String(info.tool ?? ""))
 
 	const securityMarked = (m: AiHydroMessage): boolean => {
 		if (m.policyClass || m.isOperationOutsideWorkspace) {
@@ -591,16 +673,24 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 			if (info.operationIsLocatedInWorkspace === false) {
 				return true
 			}
-			if (typeof info.path === "string" && options.isProtectedPath?.(info.path)) {
-				return true
+			if (typeof info.path === "string") {
+				// Fail safe: with no path resolver a write-type call that names a path cannot be called harmless.
+				if (options.isProtectedPath ? options.isProtectedPath(info.path) : isWriteTool(info)) {
+					return true
+				}
 			}
 		}
 		const effect = options.effectClassFor?.(m)
-		return effect === "DESTRUCTIVE" || effect === "UNKNOWN"
+		if (effect === "DESTRUCTIVE" || effect === "UNKNOWN") {
+			return true
+		}
+		// No annotations to read means the effect class is UNKNOWN, which lifts.
+		return effect === undefined && kindOf(m) === "use_mcp_server"
 	}
 
 	const lastIndex = messages.length - 1
 	messages.forEach((m, index) => {
+		curIndex = index
 		const cls = classOf(m)
 		const kind = kindOf(m)
 		const isTail = index === lastIndex
@@ -737,22 +827,29 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 		const grp = group()
 		grp.members.push(m)
 
-		// An answered approval ask: the wait is the user's time; it folds unless security-marked or denied.
-		if (isApprovalAsk(m)) {
-			const next = messages[index + 1]
-			if (next && next.ts >= m.ts) {
-				grp.waitingMs += next.ts - m.ts
-			}
-		}
-
 		if (isCallKind(kind) && !isCondenseTool(m)) {
-			grp.toolCount++
 			const state = deriveCallState(m, messages)
 			const what = describeCall(m)
 			if (kind === "use_mcp_server") {
 				outstandingCalls.push(m.ts)
 			}
-			if (m.askOutcome === "denied" || state === "denied") {
+			// An approval ask nobody answered: it may never have run, so it is neither counted as a call nor as waiting.
+			const undecided = m.type === "ask" && !m.askOutcome && state === "unknown"
+			const denied = m.askOutcome === "denied" || state === "denied"
+			if (isApprovalAsk(m) && !undecided) {
+				const next = messages[index + 1]
+				if (next && next.ts >= m.ts) {
+					grp.waitingMs += next.ts - m.ts
+				}
+			}
+			if (undecided || denied) {
+				grp.notRunCount++
+			} else {
+				grp.toolCount++
+			}
+			if (undecided) {
+				lift(grp, m, "no_decision", "notice", `Asked to ${what}; no decision recorded`, m.ts)
+			} else if (denied) {
 				lift(grp, m, "call_denied", "warning", `You denied: ${what}`, m.ts)
 			} else if (kind === "command" && typeof m.exitCode === "number" && m.exitCode !== 0) {
 				lift(grp, m, "exit_nonzero", "error", `Exited with code ${m.exitCode}: ${what}`, m.ts)
@@ -800,6 +897,9 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 						"error",
 						`${reason === "retries_exhausted" ? "Request failed after retries" : "Request failed while streaming"}${detail}`,
 					)
+				} else if (reason !== undefined && reason !== null) {
+					// A reason this version does not know: show it rather than assume it was benign.
+					lift(grp, m, "request_failed", "warning", `Request ended: ${oneLine(String(reason), 80)}`)
 				} else if (typeof info.streamingFailedMessage === "string") {
 					grp.failedRequestCount++
 					lift(grp, m, "request_failed", "error", `Request failed: ${oneLine(info.streamingFailedMessage, 160)}`)

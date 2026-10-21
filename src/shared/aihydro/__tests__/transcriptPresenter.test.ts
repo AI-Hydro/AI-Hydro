@@ -31,7 +31,9 @@ const mcpResp = (body: unknown) => say("mcp_server_response", typeof body === "s
 
 const groups = (items: TranscriptItem[]) => items.filter((i): i is WorkGroup => i.kind === "group")
 const lines = (g: WorkGroup) => g.lifted.map((l) => l.reason)
-const present = (m: AiHydroMessage[], detail: DetailLevel = "normal") => presentTranscript(m, { detail })
+// Resolvers that say "nothing risky" so tests of other behaviour are not drowned by the fail-safe lifting.
+const SAFE = { effectClassFor: () => "READ" as const, isProtectedPath: () => false }
+const present = (m: AiHydroMessage[], detail: DetailLevel = "normal") => presentTranscript(m, { detail, ...SAFE })
 
 describe("transcript presenter: classify", () => {
 	it("is defined for every say and ask kind and falls back to passthrough", () => {
@@ -271,9 +273,9 @@ describe("transcript presenter: lifting", () => {
 			mcpResp({}),
 			req(),
 		]
-		const plain = groups(presentTranscript(m, { detail: "normal" }))[0]
+		const plain = groups(presentTranscript(m, { detail: "normal", ...SAFE }))[0]
 		expect(plain.lifted).to.have.length(0)
-		const withResolver = groups(presentTranscript(m, { detail: "normal", effectClassFor: () => "UNKNOWN" }))[0]
+		const withResolver = groups(presentTranscript(m, { detail: "normal", ...SAFE, effectClassFor: () => "UNKNOWN" }))[0]
 		expect(lines(withResolver)).to.include("approved_security")
 	})
 	it("lifts truncation, condense, ignore/diff errors, shell warnings, checked-out checkpoint, rewind", () => {
@@ -324,7 +326,7 @@ describe("transcript presenter: header facts", () => {
 			groups(present([say("task", "x"), ...rows.map((r) => req(r)), say("completion_result", "a")]))[0].facts.cost
 		expect(f([{ costStatus: "unavailable" }])).to.include({ status: "unavailable", usd: null })
 		expect(f([{}]).label).to.not.contain("0.0000")
-		expect(f([{ cost: 0 }]).status).to.equal("unavailable")
+		expect(f([{ cost: 0 }]).status).to.equal("unrecorded")
 		expect(f([{ cost: 0.02 }, { costStatus: "unavailable" }])).to.include({ status: "lower-bound" })
 		expect(f([{ cost: 0.02, costStatus: "lower-bound" }]).label).to.contain("≥")
 		expect(f([{ cost: 0.02 }, { cost: 0.03 }])).to.include({ status: "exact" })
@@ -359,7 +361,7 @@ describe("transcript presenter: header facts", () => {
 })
 
 describe("transcript presenter: old tasks, streaming, verbose", () => {
-	it("presents a task without outcome or notice fields and shows unknown calls neutrally", () => {
+	it("presents a task without outcome or notice fields; undecided calls get a neutral notice", () => {
 		reset()
 		const m = [
 			say("task", "old"),
@@ -375,8 +377,10 @@ describe("transcript presenter: old tasks, streaming, verbose", () => {
 			say("text", "done"),
 		]
 		const g = groups(present(m))[0]
-		expect(g.lifted).to.have.length(0)
-		expect(g.facts.toolCount).to.equal(3)
+		// The superseded ask has no recorded decision: shown as a neutral notice, not counted as a call that ran.
+		expect(g.lifted.map((l) => [l.reason, l.tone])).to.deep.equal([["no_decision", "notice"]])
+		expect(g.facts.toolCount).to.equal(2)
+		expect(g.facts.notRunCount).to.equal(1)
 	})
 	it("keeps group keys stable while chunks are appended and text streams in", () => {
 		reset()
@@ -492,4 +496,197 @@ describe("transcript presenter: source guards", () => {
 			expect(l, l).to.not.match(forbidden)
 		}
 	})
+})
+
+// ── Review round: fail-safe security lifting, real failure shapes, honest header ──
+
+const lifted = (rows: AiHydroMessage[], opts: Partial<Parameters<typeof presentTranscript>[1]> = {}) => {
+	const g = groups(presentTranscript([say("task", "x"), req(), ...rows], { detail: "normal", ...opts }))
+	return g.flatMap((x) => x.lifted)
+}
+
+describe("transcript presenter: security approvals fail safe (B1)", () => {
+	const approvedMcp = () =>
+		ask("use_mcp_server", JSON.stringify({ serverName: "s", toolName: "delete_all" }), { askOutcome: "approved" })
+	const approvedEdit = (p: string) =>
+		ask("tool", JSON.stringify({ tool: "editedExistingFile", path: p, diff: "x" }), { askOutcome: "approved" })
+	it("lifts an approved MCP call when no effect resolver is given, or it returns undefined", () => {
+		reset()
+		expect(lifted([approvedMcp(), mcpResp({ ok: true })]).map((l) => l.reason)).to.deep.equal(["approved_security"])
+		reset()
+		expect(
+			lifted([approvedMcp(), mcpResp({ ok: true })], { effectClassFor: () => undefined }).map((l) => l.reason),
+		).to.deep.equal(["approved_security"])
+		reset()
+		expect(lifted([approvedMcp(), mcpResp({ ok: true })], { effectClassFor: () => "READ" })).to.have.length(0)
+	})
+	it("lifts an approved or auto-run write that names a path when no path resolver is given", () => {
+		reset()
+		expect(lifted([approvedEdit(".env"), req()]).map((l) => l.reason)).to.deep.equal(["approved_security"])
+		reset()
+		const auto = say("tool", JSON.stringify({ tool: "editedExistingFile", path: ".aihydroignore", diff: "x" }))
+		expect(lifted([auto]).map((l) => l.reason)).to.deep.equal(["approved_security"])
+		reset()
+		expect(lifted([approvedEdit("src/a.ts"), req()], { isProtectedPath: () => false })).to.have.length(0)
+		reset()
+		expect(lifted([approvedEdit(".env"), req()], { isProtectedPath: (x) => x === ".env" })).to.have.length(1)
+	})
+	it("does not lift a read-type native call that names a path", () => {
+		reset()
+		const read = ask("tool", JSON.stringify({ tool: "readFile", path: "a.txt" }), { askOutcome: "approved" })
+		expect(lifted([read, req()])).to.have.length(0)
+	})
+})
+
+describe("transcript presenter: real failure shapes (B2, N1, N2, N6, N7)", () => {
+	const shapes: Array<[string, unknown]> = [
+		["status failed", { status: "failed" }],
+		["status FAILED", { status: "FAILED" }],
+		["status cancelled", { status: "cancelled" }],
+		["status canceled", { status: "canceled" }],
+		["status corrupt", { status: "corrupt" }],
+		["status timeout", { status: "timeout" }],
+		["status timed_out", { status: "timed_out" }],
+		["status unavailable", { status: "Unavailable" }],
+		["status error", { status: "Error" }],
+		["nested status failed", { data: { status: "failed" } }],
+		["status inside array", { jobs: [{ status: "ok" }, { status: "failed" }] }],
+		["success false", { success: false }],
+		["ok false deep", { result: { data: { ok: false } } }],
+		["isError deep", { content: [{ type: "text" }], result: { inner: { isError: true } } }],
+		["error object", { error: { code: -32603 } }],
+		["top-level array", [{ isError: true }]],
+		["blocking beyond old depth", { a: { b: { c: { d: { blocking: true } } } } }],
+		["blocking string", { blocking: "true" }],
+		["blocking after 60 array items", { a: [...Array(60).fill({}), { blocking: true }] }],
+		["area_check FAIL", { area_check: "FAIL" }],
+		["area_check failed", { area_check: "failed" }],
+		["text Error", "Error: boom"],
+		["text lowercase", "error: boom"],
+		["text Error code", "Error -32603: boom"],
+		["text MCP error", "MCP error -32603: boom"],
+		["text Failed", "Failed: boom"],
+		["text [ERROR]", "[ERROR] boom"],
+		["text BOM", "\uFEFFError: x"],
+		["text traceback", "Traceback (most recent call last):\n ValueError"],
+	]
+	for (const [name, body] of shapes) {
+		it(`lifts: ${name}`, () => {
+			reset()
+			expect(lifted([mcpCall(), mcpResp(body)]).length, name).to.be.at.least(1)
+		})
+	}
+	const benign: Array<[string, unknown]> = [
+		["error false", { error: false, ok: true, success: true }],
+		["status ok", { status: "ok" }],
+		["blocking false", { blocking: false }],
+		["text mentioning error later", "Result: no error found"],
+	]
+	for (const [name, body] of benign) {
+		it(`does not lift: ${name}`, () => {
+			reset()
+			expect(lifted([mcpCall(), mcpResp(body)], SAFE), name).to.have.length(0)
+		})
+	}
+	it("lifts a result too deep to inspect rather than assuming it is fine", () => {
+		reset()
+		let deep: unknown = { leaf: 1 }
+		for (let i = 0; i < 20; i++) {
+			deep = { n: deep }
+		}
+		expect(lifted([mcpCall(), mcpResp(deep)], SAFE).map((l) => l.reason)).to.deep.equal(["result_uninspected"])
+	})
+	it("a warning-tone result line does not swallow a failed call", () => {
+		reset()
+		const failed = { ...mcpCall(), execOutcome: "failed" as const }
+		const out = lifted([failed, mcpResp({ blocking: true })], SAFE).map((l) => l.reason)
+		expect(out).to.include.members(["call_failed", "blocking"])
+		reset()
+		const out2 = lifted([{ ...mcpCall(), execOutcome: "failed" as const }, mcpResp("Error: x")], SAFE).map((l) => l.reason)
+		expect(out2).to.deep.equal(["mcp_error"])
+	})
+	it("lifts one line, not two, for an error that is also a refusal", () => {
+		reset()
+		const out = lifted([mcpCall(), mcpResp({ error: true, code: "X", message: "m" })], SAFE).map((l) => l.reason)
+		expect(out).to.deep.equal(["refusal"])
+	})
+	it("counts reuse only at the top level or under data", () => {
+		reset()
+		const f = (b: unknown) =>
+			groups(presentTranscript([say("task", "x"), req(), mcpCall(), mcpResp(b)], { detail: "normal", ...SAFE }))[0].facts
+				.reuseCount
+		expect(f({ _cached: true })).to.equal(1)
+		expect(f({ data: { reused: true } })).to.equal(1)
+		expect(f({ rows: [{ reused: true }, { reused: true }] })).to.equal(0)
+		expect(f({ _cached: "no" })).to.equal(0)
+	})
+})
+
+describe("transcript presenter: honest lifting and header (N3 to N9)", () => {
+	it("keeps lifted-line keys distinct when two messages share a ts", () => {
+		const a = { ts: 5, type: "say", say: "api_req_retried", text: "a" } as AiHydroMessage
+		const b = { ts: 5, type: "say", say: "api_req_retried", text: "b" } as AiHydroMessage
+		const g = groups(presentTranscript([a, b], { detail: "normal" }))[0]
+		expect(g.lifted).to.have.length(2)
+		expect(new Set(g.lifted.map((l) => l.key)).size).to.equal(2)
+	})
+	it("lifts an undecided approval ask and excludes it from toolCount and waitingMs", () => {
+		reset()
+		const g = groups(present([say("task", "x"), req(), ask("command", "rm -rf x"), req(), say("text", "moving on")]))[0]
+		expect(g.lifted.map((l) => l.reason)).to.deep.equal(["no_decision"])
+		expect(g.facts.toolCount).to.equal(0)
+		expect(g.facts.notRunCount).to.equal(1)
+		expect(g.facts.waitingMs).to.equal(0)
+	})
+	it("does not count a denied call as a tool run", () => {
+		reset()
+		const g = groups(
+			present([say("task", "x"), req(), ask("command", "a", { askOutcome: "denied" }), say("user_feedback", "no")]),
+		)[0]
+		expect(g.facts.toolCount).to.equal(0)
+		expect(g.facts.notRunCount).to.equal(1)
+	})
+	it("lifts an unknown cancelReason", () => {
+		reset()
+		expect(lifted([req({ cancelReason: "aborted" })], SAFE).map((l) => l.reason)).to.deep.equal(["request_failed"])
+	})
+	it("labels a zero cost 'no cost recorded', not unavailable", () => {
+		reset()
+		const f = (rows: Array<Record<string, unknown>>) =>
+			groups(present([say("task", "x"), ...rows.map((r) => req(r))]))[0].facts.cost
+		expect(f([{ cost: 0 }])).to.include({ status: "unrecorded", label: "no cost recorded" })
+		expect(f([{ costStatus: "unavailable" }]).status).to.equal("unavailable")
+	})
+})
+
+describe("transcript presenter: every failure-shaped or security-marked member is lifted (N11 property)", () => {
+	const members: Array<[string, () => AiHydroMessage[], Partial<Parameters<typeof presentTranscript>[1]>?]> = [
+		["nonzero exit", () => [say("command", "x", { exitCode: 1 })]],
+		["unknown exit", () => [say("command", "x", { exitCode: "unknown" })]],
+		["failed tool outcome", () => [say("tool", JSON.stringify({ tool: "readFile", path: "a" }), { execOutcome: "failed" })]],
+		["denied ask", () => [ask("tool", JSON.stringify({ tool: "readFile" }), { askOutcome: "denied" }), req()]],
+		["undecided ask", () => [ask("command", "x"), req()]],
+		["policy command", () => [say("command", "x", { policyClass: "auto_run_all", exitCode: 0 })]],
+		["outside workspace", () => [ask("tool", "{}", { isOperationOutsideWorkspace: true, askOutcome: "approved" }), req()]],
+		["approved mcp, no resolver", () => [ask("use_mcp_server", "{}", { askOutcome: "approved" }), mcpResp({})]],
+		["auto-run write, no resolver", () => [say("tool", JSON.stringify({ tool: "newFileCreated", path: "a", content: "x" }))]],
+		["failed mcp result", () => [mcpCall(), mcpResp({ status: "failed" })], SAFE],
+		["cancelled request", () => [req({ cancelReason: "user_cancelled" })]],
+		["elevated notification", () => [say("mcp_notification", "x", { mcpLevel: "error" })]],
+	]
+	for (const [name, build, opts] of members) {
+		it(name, () => {
+			reset()
+			const rows = build()
+			const items = presentTranscript([say("task", "x"), req(), ...rows], { detail: "normal", ...(opts ?? {}) })
+			const ls = groups(items).flatMap((g) => g.lifted)
+			// the member that carries the evidence: the last non-request row of the built list
+			const evidence = rows.filter((r) => r.say !== "api_req_started" || name === "cancelled request")
+			const sources = new Set(ls.map((l) => l.sourceTs))
+			expect(
+				evidence.some((r) => sources.has(r.ts)),
+				name,
+			).to.equal(true)
+		})
+	}
 })
