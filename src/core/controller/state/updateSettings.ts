@@ -329,6 +329,10 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("finalAnswerAuditEnabled", !!request.finalAnswerAuditEnabled)
 		}
 
+		if (request.finalAnswerAuditGate !== undefined) {
+			controller.stateManager.setGlobalState("finalAnswerAuditGate", !!request.finalAnswerAuditGate)
+		}
+
 		if (request.hooksEnabled !== undefined) {
 			controller.stateManager.setGlobalState("hooksEnabled", !!request.hooksEnabled)
 		}

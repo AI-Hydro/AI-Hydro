@@ -1,6 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import * as diff from "diff"
 import * as path from "path"
+import type { AnswerAuditViolation } from "@/shared/aihydro/transcriptContracts"
 import { Mode } from "@/shared/storage/types"
 import { AiHydroIgnoreController, LOCK_TEXT_SYMBOL } from "../ignore/AiHydroIgnoreController"
 
@@ -28,6 +29,37 @@ export const formatResponse = {
 		`The user has accepted the condensed conversation summary you generated. This summary covers important details of the historical conversation with the user which has been truncated.\n<explicit_instructions type="condense_response">It's crucial that you respond by ONLY asking the user what you should work on next. You should NOT take any initiative or make any assumptions about continuing with work. For example you should NOT suggest file changes or attempt to read any files.\nWhen asking the user what you should work on next, you can reference information in the summary which was just generated. However, you should NOT reference information outside of what's contained in the summary for this response. Keep this response CONCISE.</explicit_instructions>`,
 
 	toolDenied: () => `The user denied this operation.`,
+
+	/**
+	 * Gate feedback for a held-back draft (W2-C). Deliberately NOT an error result: it must not match the tool-error
+	 * markers (so it never feeds recentToolErrors, the decompose nudge or a "failed" execOutcome) and it never echoes
+	 * the tools server's teaching_error. Lists hard findings only. The sanctioned `[unverified]` marker is not offered:
+	 * aihydro-tools has no such marker in its citation grammar.
+	 */
+	answerAuditRevisionRequest: (args: { hard: readonly AnswerAuditViolation[]; attempt: number; maxRevisions: number }) => {
+		const one = (v: AnswerAuditViolation, i: number) =>
+			[
+				`${i + 1}. ${v.kind}`,
+				v.excerpt ? `"${v.excerpt.replace(/\s+/g, " ").slice(0, 160)}"` : undefined,
+				v.message?.replace(/\s+/g, " "),
+				v.fixHint ? `Fix: ${v.fixHint.replace(/\s+/g, " ")}` : undefined,
+				v.suggestedMarker ? `Suggested marker: ${v.suggestedMarker}` : undefined,
+			]
+				.filter(Boolean)
+				.join(" - ")
+		return [
+			`The answer has not been shown to the user yet. Revision ${args.attempt} of ${args.maxRevisions}: the evidence audit found ${args.hard.length} ${args.hard.length === 1 ? "finding" : "findings"} that must be resolved first.`,
+			"",
+			...args.hard.map(one),
+			"",
+			"Revise the answer and call attempt_completion again. Rules:",
+			"- Cite each quantity with [run:<run_id>#key_outputs.<field>] in the same sentence, bullet or table cell. Use [claim:<claim_id>] for a claim already in the ledger and [lit:<tag>] for literature.",
+			"- Take run ids and field names from get_session_summary (_run_log). Never invent a run id, path or marker: a marker that does not resolve is a finding too.",
+			"- If a value has no recorded source, state that it is not available from the recorded runs, or run the analysis that produces it. Do not drop a requested value silently; values removed in a revision are disclosed to the user.",
+			"- Only findings that must be fixed are listed here.",
+			"This is a normal revision step, not a tool error.",
+		].join("\n")
+	},
 
 	toolError: (error?: string) => `The tool execution failed with the following error:\n<error>\n${error}\n</error>`,
 

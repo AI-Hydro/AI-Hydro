@@ -151,6 +151,11 @@ export interface AnswerAuditPayload extends AnswerDraftRecord {
 	disclosure?: AnswerAuditDisclosure
 	droppedQuantities?: string[]
 	droppedClaimMarkers?: string[]
+	/**
+	 * Additive (W2-C): quantities the extension detected in the answer as shown (approximate token match). 0 on a
+	 * revised answer whose draft had hard findings means the requested values are no longer reported.
+	 */
+	quantitiesRemaining?: number
 	/** Graded schema: count of findings the auditor exempted, by reason (e.g. year-like numbers). */
 	exemptByReason?: Record<string, number>
 	/** Earlier attempts, oldest first. */
@@ -265,6 +270,7 @@ export function parseAnswerAuditPayload(text: string | undefined): AnswerAuditPa
 			: {}),
 		...(Array.isArray(raw.droppedQuantities) ? { droppedQuantities: raw.droppedQuantities.filter(isStr) } : {}),
 		...(Array.isArray(raw.droppedClaimMarkers) ? { droppedClaimMarkers: raw.droppedClaimMarkers.filter(isStr) } : {}),
+		...(isNum(raw.quantitiesRemaining) ? { quantitiesRemaining: raw.quantitiesRemaining } : {}),
 		...(parseExempt(raw.exemptByReason) ? { exemptByReason: parseExempt(raw.exemptByReason) } : {}),
 		...(Array.isArray(raw.history) ? { history: raw.history as AnswerRevisionEvent[] } : {}),
 	}

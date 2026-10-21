@@ -1487,7 +1487,7 @@ export const ChatRowContent = memo(
 					case "mcp_server_response":
 						return <McpResponseDisplay responseText={message.text || ""} />
 					case "answer_audit":
-						return <AnswerAuditSummary text={message.text} />
+						return <AnswerAuditSummary partial={message.partial} text={message.text} />
 					case "info":
 						return <MutedNotice severity={message.infoNotice?.severity} text={message.text} />
 					case "mcp_notification":

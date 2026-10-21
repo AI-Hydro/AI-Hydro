@@ -109,6 +109,13 @@ import { refreshWorkflowToggles } from "../context/instructions/user-instruction
 import { Controller } from "../controller"
 import { StateManager } from "../storage/StateManager"
 import {
+	findUnrevealedRevision,
+	interruptedFromRevision,
+	interruptedPayload,
+	resetGateCycle,
+	sweepAuditProgress,
+} from "./answerAuditGate"
+import {
 	matchProtectedCommand,
 	mentionsAihydroProgram,
 	protectedCommandDenyMessage,
@@ -683,6 +690,10 @@ export class Task {
 		if (this.taskState.abort) {
 			throw new Error("AI-Hydro instance aborted")
 		}
+		if (type === "user_feedback") {
+			// Real user feedback starts a new completion cycle: the audit revision counter does not carry over.
+			resetGateCycle(this.taskState.answerAuditGate)
+		}
 
 		if (partial !== undefined) {
 			const lastMessage = this.messageStateHandler.getAiHydroMessages().at(-1)
@@ -775,6 +786,25 @@ export class Task {
 			} without value for required parameter '${paramName}'. Retrying...`,
 		)
 		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName))
+	}
+
+	/**
+	 * Reveal a draft the answer-audit gate was holding back because the run is leaving the gate early (stop, API
+	 * failure, mistake or approval limit, mode switch). A held draft must never silently disappear: it is shown as
+	 * "Unchecked draft (audit interrupted: <reason>)" via an `interrupted` answer_audit row. No-op when no draft is held.
+	 */
+	async revealHiddenAnswerDraft(reason: string): Promise<void> {
+		const gate = this.taskState.answerAuditGate
+		const payload = interruptedPayload(gate, reason)
+		resetGateCycle(gate)
+		try {
+			await sweepAuditProgress(this.messageStateHandler)
+			if (payload) {
+				await this.say("answer_audit", JSON.stringify(payload))
+			}
+		} catch (error) {
+			console.error("Failed to reveal the held answer draft", error)
+		}
 	}
 
 	async removeLastPartialMessageIfExistsWithType(type: "ask" | "say", askOrSay: AiHydroAsk | AiHydroSay) {
@@ -966,6 +996,17 @@ export class Task {
 		await this.messageStateHandler.overwriteAiHydroMessages(savedAiHydroMessages)
 		this.messageStateHandler.setAiHydroMessages(await getSavedAiHydroMessages(this.taskId))
 
+		// A reload can leave a rejected draft that was held back and never shown: reveal it, and drop any stale
+		// "Checking answer…" line (W2-C).
+		await sweepAuditProgress(this.messageStateHandler)
+		const heldRevision = findUnrevealedRevision(this.messageStateHandler.getAiHydroMessages())
+		if (heldRevision) {
+			await this.say(
+				"answer_audit",
+				JSON.stringify(interruptedFromRevision(heldRevision, "VS Code reloaded or the task was resumed")),
+			)
+		}
+
 		// Now present the cline messages to the user and ask if they want to resume (NOTE: we ran into a bug before where the apiconversationhistory wouldn't be initialized when opening a old task, and it was because we were waiting for resume)
 		// This is important in case the user deletes messages without resuming the task first
 		const savedApiConversationHistory = await getSavedApiConversationHistory(this.taskId)
@@ -1145,6 +1186,9 @@ export class Task {
 			if (this.FocusChainManager) {
 				this.FocusChainManager.checkIncompleteProgressOnCompletion()
 			}
+
+			// Before `abort` is set (say() refuses afterwards): show the draft the gate was holding, if any.
+			await this.revealHiddenAnswerDraft(this.taskState.answerAuditGate.interruptReason ?? "stopped by user")
 
 			this.taskState.abort = true // will stop any autonomously running promises
 			this.terminalManager.disposeAll()
@@ -2056,6 +2100,7 @@ export class Task {
 							}),
 						)
 					}
+					await this.revealHiddenAnswerDraft("the model request failed after retries")
 					const askResult = await this.ask("api_req_failed", streamingFailedMessage)
 					response = askResult.response
 					if (response === "yesButtonClicked") {
@@ -2297,6 +2342,7 @@ export class Task {
 						message: "AI-Hydro is having trouble. Would you like to continue the task?",
 					})
 				}
+				await this.revealHiddenAnswerDraft("mistake limit reached")
 				const { response, text, images, files } = await this.ask(
 					"mistake_limit_reached",
 					`This may indicate a failure in the thought process or an inability to use a tool properly, which can be mitigated with some user guidance (e.g. "Try breaking down the task into smaller steps").`,
@@ -2356,6 +2402,7 @@ export class Task {
 					message: `AI-Hydro has auto-approved ${autoApprovalSettings.maxRequests.toString()} API requests.`,
 				})
 			}
+			await this.revealHiddenAnswerDraft("auto-approval request limit reached")
 			const { response, text, images, files } = await this.ask(
 				"auto_approval_max_req_reached",
 				`AI-Hydro has auto-approved ${autoApprovalSettings.maxRequests.toString()} API requests. Would you like to reset the count and proceed with the task?`,
@@ -2705,6 +2752,7 @@ export class Task {
 			this.taskState.userMessageContentReady = false
 			this.taskState.didRejectTool = false
 			this.taskState.didAlreadyUseTool = false
+			this.taskState.answerAuditGate.eligibleForBlock = undefined
 			this.taskState.presentAssistantMessageLocked = false
 			this.taskState.presentAssistantMessageHasPendingUpdates = false
 			this.taskState.didAutomaticallyRetryFailedApiRequest = false
@@ -3081,6 +3129,7 @@ export class Task {
 							failed: true, // Special flag to indicate retries exhausted
 						}),
 					)
+					await this.revealHiddenAnswerDraft("the model request failed after retries")
 					const askResult = await this.ask(
 						"api_req_failed",
 						"No assistant message was received. Would you like to retry the request?",

@@ -5,6 +5,7 @@ import { describe, it } from "mocha"
 import sinon from "sinon"
 import { parseAnswerAuditPayload } from "@/shared/aihydro/transcriptContracts"
 import type { McpServer } from "@/shared/mcp"
+import { createGateState } from "../answerAuditGate"
 import {
 	type AuditHub,
 	formatFinalAnswerAudit,
@@ -355,13 +356,16 @@ describe("final-answer audit", () => {
 			const config: any = {
 				ulid: "chat-1",
 				cwd: "/ws",
-				taskState: { consecutiveMistakeCount: 0, lastResponseModelId: "m-returned" },
+				taskState: { consecutiveMistakeCount: 0, lastResponseModelId: "m-returned", answerAuditGate: createGateState() },
 				autoApprovalSettings: { enabled: false },
 				focusChainSettings: { enabled: false },
 				messageState: { getAiHydroMessages: () => [], updateAiHydroMessage: async () => {} },
 				services: {
 					mcpHub: opts.hub,
-					stateManager: { getGlobalSettingsKey: () => opts.enabled },
+					// Only the display-only audit toggle is set here; the pre-completion gate (W2-C) is off.
+					stateManager: {
+						getGlobalSettingsKey: (k: string) => (k === "finalAnswerAuditEnabled" ? opts.enabled : undefined),
+					},
 				},
 				callbacks: {
 					say,

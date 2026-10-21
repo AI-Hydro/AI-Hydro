@@ -109,6 +109,7 @@ export interface Settings {
 	hooksEnabled: boolean
 	subagentsEnabled: boolean
 	finalAnswerAuditEnabled: boolean
+	finalAnswerAuditGate: boolean
 
 	// Plan mode configurations
 	planModeApiProvider: ApiProvider

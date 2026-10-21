@@ -9,9 +9,9 @@ import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
 import { FileScanner, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
-import { realPathInsideFolder } from "@core/workspace/workspaceGeoPaths"
 import { setupWorkspaceManager } from "@core/workspace/setup"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
+import { realPathInsideFolder } from "@core/workspace/workspaceGeoPaths"
 import { getBoundStudy } from "@integrations/aihydro-session/boundStudy"
 import { cleanupLegacyCheckpoints } from "@integrations/checkpoints/CheckpointMigration"
 import { downloadTask } from "@integrations/misc/export-markdown"
@@ -533,6 +533,10 @@ export class Controller {
 
 				return true
 			} else {
+				if (modeToSwitchTo === "plan") {
+					// A held answer draft is revealed by abortTask with this reason (W2-C).
+					this.task.taskState.answerAuditGate.interruptReason = "switched to Plan mode"
+				}
 				this.cancelTask()
 				return false
 			}
@@ -1214,6 +1218,7 @@ export class Controller {
 		const lastDismissedModelBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedModelBannerVersion") || 0
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
 		const finalAnswerAuditEnabled = this.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled")
+		const finalAnswerAuditGate = this.stateManager.getGlobalSettingsKey("finalAnswerAuditGate")
 
 		const localAiHydroRulesToggles = this.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
 		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
@@ -1314,6 +1319,7 @@ export class Controller {
 			remoteConfigSettings: this.stateManager.getRemoteConfigSettings(),
 			subagentsEnabled,
 			finalAnswerAuditEnabled,
+			finalAnswerAuditGate,
 			workspaceHtmlFiles: this.workspaceHtmlFiles.map((f) => ({
 				path: f.relativePath,
 				name: f.name,

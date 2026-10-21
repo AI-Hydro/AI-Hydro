@@ -21,7 +21,8 @@ import { isAiHydroServerName } from "./tools/handlers/aiHydroServer"
  * researcher actually reads.
  *
  * Contract:
- *  - DISPLAY ONLY (until the W2-C gate lands). The audit never blocks completion and never alters the answer.
+ *  - DISPLAY ONLY unless the pre-completion gate is on (`finalAnswerAuditGate`, default off; see answerAuditGate.ts).
+ *    Without it the audit never blocks completion and never alters the answer.
  *  - Failures are reported as "audit unavailable", never swallowed and never treated as a pass.
  *  - Silent only when there is nothing to audit (no AI-Hydro server connected, or no numbers/markers).
  */
@@ -116,6 +117,11 @@ export async function runFinalAnswerAudit(args: {
 	answer: string
 	modelIdReturned?: string
 	timeoutMs?: number
+	/**
+	 * Study already verified as bound to this chat by an earlier status call in this task (the W2-C gate's cache, so
+	 * revision rounds do not repeat the status round trip). The audited session must still equal it.
+	 */
+	boundStudy?: string
 }): Promise<FinalAnswerAuditOutcome> {
 	const { hub, ulid, workspaceRoot, answer } = args
 	const server = findAuditServer(hub)
@@ -133,26 +139,32 @@ export async function runFinalAnswerAudit(args: {
 	// That must never decide which evidence ledger audits this answer, so first confirm a study is
 	// actually bound to THIS chat, and later require the audited session to be that study.
 	let boundStudy: string
-	try {
-		if (server.tools && server.tools.length > 0 && !server.tools.some((t) => t.name === CHAT_STATUS_TOOL_NAME)) {
-			return unavailable(`cannot confirm a research session is bound to this chat (${CHAT_STATUS_TOOL_NAME} not exposed)`)
+	if (args.boundStudy) {
+		boundStudy = args.boundStudy
+	} else {
+		try {
+			if (server.tools && server.tools.length > 0 && !server.tools.some((t) => t.name === CHAT_STATUS_TOOL_NAME)) {
+				return unavailable(
+					`cannot confirm a research session is bound to this chat (${CHAT_STATUS_TOOL_NAME} not exposed)`,
+				)
+			}
+			const statusCtx = buildAiHydroCallContext({ chat_id: ulid }, ulid, workspaceRoot, args.modelIdReturned)
+			const status = responseJson(
+				await withTimeout(
+					hub.callTool(server.name, CHAT_STATUS_TOOL_NAME, statusCtx.args, ulid, statusCtx.meta),
+					args.timeoutMs ?? DEFAULT_AUDIT_TIMEOUT_MS,
+				),
+			)
+			if (status.isError || !status.json || typeof status.json.bound !== "boolean") {
+				return unavailable("could not determine whether a research session is bound to this chat")
+			}
+			if (!status.json.bound || typeof status.json.study_id !== "string") {
+				return { status: "skipped", reason: "no-research-session" }
+			}
+			boundStudy = status.json.study_id
+		} catch (error) {
+			return unavailable(error instanceof Error ? error.message : String(error))
 		}
-		const statusCtx = buildAiHydroCallContext({ chat_id: ulid }, ulid, workspaceRoot, args.modelIdReturned)
-		const status = responseJson(
-			await withTimeout(
-				hub.callTool(server.name, CHAT_STATUS_TOOL_NAME, statusCtx.args, ulid, statusCtx.meta),
-				args.timeoutMs ?? DEFAULT_AUDIT_TIMEOUT_MS,
-			),
-		)
-		if (status.isError || !status.json || typeof status.json.bound !== "boolean") {
-			return unavailable("could not determine whether a research session is bound to this chat")
-		}
-		if (!status.json.bound || typeof status.json.study_id !== "string") {
-			return { status: "skipped", reason: "no-research-session" }
-		}
-		boundStudy = status.json.study_id
-	} catch (error) {
-		return unavailable(error instanceof Error ? error.message : String(error))
 	}
 
 	let response: McpToolCallResponse

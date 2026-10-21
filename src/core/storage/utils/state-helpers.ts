@@ -300,6 +300,8 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 		const subagentsEnabled = context.globalState.get<GlobalStateAndSettings["subagentsEnabled"]>("subagentsEnabled")
 		const finalAnswerAuditEnabled =
 			context.globalState.get<GlobalStateAndSettings["finalAnswerAuditEnabled"]>("finalAnswerAuditEnabled")
+		const finalAnswerAuditGate =
+			context.globalState.get<GlobalStateAndSettings["finalAnswerAuditGate"]>("finalAnswerAuditGate")
 		const skillToggles = context.globalState.get<GlobalStateAndSettings["skillToggles"]>("skillToggles")
 
 		// Get mode-related configurations
@@ -628,6 +630,8 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			subagentsEnabled: subagentsEnabled ?? false,
 			// Final-answer audit is default-on; it never blocks or alters the answer
 			finalAnswerAuditEnabled: finalAnswerAuditEnabled ?? true,
+			// The pre-completion gate (W2-C) ships default-off; it is flipped on later with the A2/B-web UI.
+			finalAnswerAuditGate: finalAnswerAuditGate ?? false,
 			lastDismissedInfoBannerVersion: lastDismissedInfoBannerVersion ?? 0,
 			lastDismissedModelBannerVersion: lastDismissedModelBannerVersion ?? 0,
 			// Multi-root workspace support
