@@ -1,4 +1,5 @@
 import { describeApproval } from "@shared/aihydro/claimApproval"
+import type { ClaimRecord } from "@shared/proto/cline/ledger"
 import React, { useState } from "react"
 import { useLedgerContext } from "../../context/LedgerContext"
 import { type EvidenceStateId, evidenceState } from "../../design"
@@ -40,11 +41,8 @@ function chipState(statusKey: string, approved: boolean, tone: string | undefine
 	return "unverified"
 }
 
-export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
-	const { getClaim } = useLedgerContext()
-	const [open, setOpen] = useState(false)
-	const claim = getClaim(claimId)
-
+/** The approval display of a ledger claim and whether it earns the approved styling (explicit, verified, not stale/contradicted). */
+export function claimApprovalState(claim: ClaimRecord | undefined) {
 	const statusKey = claim?.status ?? "proposed"
 	const approval = claim
 		? describeApproval({
@@ -62,6 +60,15 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 	// A contradicted claim never shows green: the contradiction must stay visible even if it was once approved.
 	const approved =
 		approval?.approved === true && statusKey !== "stale" && statusKey !== "retracted" && statusKey !== "contradicted"
+	return { statusKey, approval, approved }
+}
+
+export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
+	const { getClaim } = useLedgerContext()
+	const [open, setOpen] = useState(false)
+	const claim = getClaim(claimId)
+
+	const { statusKey, approval, approved } = claimApprovalState(claim)
 	const def = evidenceState(chipState(statusKey, approved, approval?.tone))
 	const label = approved ? "approved" : (STATUS_LABELS[statusKey] ?? "?")
 
@@ -74,8 +81,8 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 				`}
 				data-approved={approved ? "true" : "false"}
 				data-evidence-state={def.id}
-				style={{ "--aih-badge-color": def.token } as React.CSSProperties}
 				onClick={() => setOpen((o) => !o)}
+				style={{ "--aih-badge-color": def.token, minHeight: 24 } as React.CSSProperties}
 				title={claim?.statement || `Claim ${claimId}`}
 				type="button">
 				<span aria-hidden="true" className={`codicon ${def.icon}`} />
@@ -105,6 +112,9 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 							{approval.label}
 						</p>
 					)}
+					<p className="mb-0.5 opacity-70" data-testid="chip-approval-note">
+						Does not approve claims. Claim approval is a signed step you perform in a terminal (aihydro-approve).
+					</p>
 					{claim.confidence && (
 						<p className="mb-0.5">
 							<span className="opacity-60">Confidence: </span>

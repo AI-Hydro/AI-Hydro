@@ -22,7 +22,7 @@ import { isAiHydroServerName } from "./tools/handlers/aiHydroServer"
  * researcher actually reads.
  *
  * Contract:
- *  - DISPLAY ONLY unless the pre-completion gate is on (`finalAnswerAuditGate`, default off; see answerAuditGate.ts).
+ *  - DISPLAY ONLY unless the pre-completion gate is on (`finalAnswerAuditGate`, default on since A2/B-web; see answerAuditGate.ts).
  *    Without it the audit never blocks completion and never alters the answer.
  *  - Failures are reported as "audit unavailable", never swallowed and never treated as a pass.
  *  - Silent only when there is nothing to audit (no AI-Hydro server connected, or no numbers/markers).

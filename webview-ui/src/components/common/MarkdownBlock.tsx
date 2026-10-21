@@ -1,3 +1,4 @@
+import { AIHYDRO_MARKER_SOURCE, markerChipProperties, markerFromMatch } from "@shared/aihydro/evidenceMarkers"
 import { StringRequest } from "@shared/proto/cline/common"
 import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/cline/state"
 import type { ComponentProps } from "react"
@@ -46,6 +47,8 @@ const ActModeHighlight: React.FC = () => {
 interface MarkdownBlockProps {
 	markdown?: string
 	compact?: boolean
+	/** `strip` removes evidence markers from the prose (the caller renders them as an evidence strip). Default: chips. */
+	evidence?: "chips" | "strip"
 }
 
 /**
@@ -208,24 +211,13 @@ const remarkPreventBoldFilenames = () => {
 	}
 }
 
-// Regex matching [run:<id>#<path>], [claim:<id>], [lit:<tag>]. Every id/tag/path must start alphanumeric, so
-// grammar placeholders such as `[lit:...]` or `[lit:<tag>]` are never mistaken for a real reference.
-export const AIHYDRO_MARKER_SOURCE =
-	"\\[(?:run:([A-Za-z0-9][A-Za-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)|claim:([A-Za-z0-9][A-Za-z0-9._-]*)|lit:([A-Za-z0-9][A-Za-z0-9._-]*))\\]"
+export { AIHYDRO_MARKER_SOURCE }
 const _AIHYDRO_MARKER_RE = new RegExp(AIHYDRO_MARKER_SOURCE, "g")
 
 /** Chip hProperties for a marker match, or undefined when the match carries no usable reference. */
-const markerChipProperties = (match: RegExpExecArray): Record<string, string> | undefined => {
-	if (match[1] && match[2]) {
-		return { "data-chip-type": "run", "data-run-id": match[1], "data-json-path": match[2] }
-	}
-	if (match[3]) {
-		return { "data-chip-type": "claim", "data-claim-id": match[3] }
-	}
-	if (match[4]) {
-		return { "data-chip-type": "lit", "data-lit-tag": match[4] }
-	}
-	return undefined
+const chipPropertiesFor = (match: RegExpExecArray): Record<string, string> | undefined => {
+	const marker = markerFromMatch(match)
+	return marker ? markerChipProperties(marker) : undefined
 }
 
 /**
@@ -237,28 +229,42 @@ const markerChipProperties = (match: RegExpExecArray): Record<string, string> | 
  * An inline-code node whose ENTIRE value is one marker (models often backtick their citations) is chipped
  * too; a marker embedded in longer inline code or a code block stays code (grammar examples, fix hints).
  */
-const remarkAiHydroMarkers = () => {
+const remarkAiHydroMarkers = (options?: { mode?: "chips" | "strip" }) => {
+	// "strip": the caller shows the evidence elsewhere (the answer card's evidence strip), so the prose carries no chip.
+	const strip = options?.mode === "strip"
 	return (tree: Node) => {
 		visit(tree, "inlineCode", (node: any, index: number | undefined, parent: any) => {
 			if (typeof index === "undefined" || !parent || typeof node.value !== "string") return
 			const re = new RegExp(AIHYDRO_MARKER_SOURCE)
 			const match = re.exec(node.value)
 			if (!match || match[0] !== node.value) return
-			const hProperties = markerChipProperties(match)
+			const hProperties = chipPropertiesFor(match)
 			if (!hProperties) return
-			parent.children.splice(index, 1, { type: "strong", data: { hProperties }, children: [] })
+			parent.children.splice(
+				index,
+				1,
+				strip ? { type: "text", value: "" } : { type: "strong", data: { hProperties }, children: [] },
+			)
 		})
 		visit(tree, "text", (node: any, index: number | undefined, parent: any) => {
 			if (typeof index === "undefined" || !parent) return
 
 			const text: string = node.value
+			if (strip) {
+				// Drop each marker and the single space before it, so "index [run:..];" reads "index;".
+				const stripped = text.replace(new RegExp(`\\s?${AIHYDRO_MARKER_SOURCE}`, "g"), "")
+				if (stripped !== text) {
+					node.value = stripped
+				}
+				return
+			}
 			const children: any[] = []
 			let lastIndex = 0
 			let match: RegExpExecArray | null
 
 			_AIHYDRO_MARKER_RE.lastIndex = 0
 			while ((match = _AIHYDRO_MARKER_RE.exec(text)) !== null) {
-				const hProperties = markerChipProperties(match)
+				const hProperties = chipPropertiesFor(match)
 				if (!hProperties) {
 					continue
 				}
@@ -433,10 +439,10 @@ const remarkFilePathDetection = () => {
 	}
 }
 
-const MarkdownBlock = memo(({ markdown, compact }: MarkdownBlockProps) => {
+const MarkdownBlock = memo(({ markdown, compact, evidence }: MarkdownBlockProps) => {
 	const [reactContent, setMarkdown] = useRemark({
 		remarkPlugins: [
-			remarkAiHydroMarkers,
+			[remarkAiHydroMarkers, { mode: evidence === "strip" ? "strip" : "chips" }],
 			remarkPreventBoldFilenames,
 			remarkUrlToLink,
 			remarkHighlightActMode,

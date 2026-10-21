@@ -1,6 +1,8 @@
 import type { TranscriptItem } from "@shared/aihydro/transcriptPresenter"
+import { summarizeTurn } from "@shared/aihydro/turnSummary"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import React from "react"
+import type { AnswerExtras } from "@/components/chat/answer/AnswerBlock"
 import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
 import ChatRow from "@/components/chat/ChatRow"
 import { MessageHandlers } from "../chat-view/types/chatTypes"
@@ -51,8 +53,9 @@ export const TranscriptItemRenderer: React.FC<TranscriptItemRendererProps> = ({
 	ctx,
 }) => {
 	const isLast = index === count - 1
-	const row = (message: AiHydroMessage, last = isLast) => (
+	const row = (message: AiHydroMessage, last = isLast, answer?: AnswerExtras) => (
 		<ChatRow
+			answer={answer}
 			inputValue={ctx.inputValue}
 			isExpanded={ctx.expandedRows[message.ts] || false}
 			isLast={last}
@@ -90,13 +93,22 @@ export const TranscriptItemRenderer: React.FC<TranscriptItemRendererProps> = ({
 					{rewindTs !== undefined && <RewindMenu checkpointTs={rewindTs} subject="to this message" />}
 				</div>
 			)
-		case "answer":
+		case "answer": {
+			// The audit rides in the answer card's footer. A final audit row that did not parse (or is not final) still
+			// renders on its own, so nothing the gate recorded is dropped.
+			const audit = item.audit
 			return (
 				<>
-					{row(item.message)}
-					{auditMessage && row(auditMessage)}
+					{row(item.message, isLast, {
+						audit,
+						turn: summarizeTurn(ctx.allMessages, item.ts),
+						// The existing reply path: the same call the input box makes for a completion ask.
+						onSendFeedback: (text) => ctx.messageHandlers.handleSendMessage(text, [], []),
+					})}
+					{auditMessage && !audit && row(auditMessage)}
 				</>
 			)
+		}
 		case "divider":
 			// An interrupted audit reveals the held draft as unchecked (with the reason): that is the existing audit row, so
 			// the draft text is never lost to a one-line divider.

@@ -73,7 +73,8 @@ evidence ledger. For the default local stdio server this stays on your machine;
 if you registered a *remote* AI-Hydro server, the answer text is sent to it
 (egress). Not telemetry; on by default; turn it off in Settings > Features >
 "Audit final answers" (`finalAnswerAuditEnabled`). With the experimental
-"Check answers before showing them" setting (`finalAnswerAuditGate`, default off)
+"Check answers before showing them" setting (`finalAnswerAuditGate`, default on, active only
+when the answer audit is on and a trusted first-party AI-Hydro server with the graded audit is connected)
 the same audit runs before the answer is shown, and each revision the gate asks
 for sends one more request to your model provider; a held-back draft and its
 findings are stored in the task's local `ui_messages.json` like any transcript

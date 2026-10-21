@@ -24,6 +24,9 @@ e2e("Chat transcript - three reads fold into one work group at Normal detail", a
 
 	// The answer is prose at the top level.
 	await expect(sidebar.getByText("This is a mock answer, not a result.").first()).toBeVisible({ timeout: 60_000 })
+	// ...in one neutral answer card (W2-B-web); no audit footer: the mock server is not an AI-Hydro audit server.
+	await expect(sidebar.getByTestId("answer-block")).toHaveCount(1)
+	await expect(sidebar.getByTestId("answer-audit-footer")).toHaveCount(0)
 
 	// One group line for the three reads, by its accessible name and visible text.
 	const header = sidebar.getByRole("button", { name: /Ran 3 tools/ })

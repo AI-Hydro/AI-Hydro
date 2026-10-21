@@ -257,14 +257,15 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									const checked = e.target.checked === true
 									updateSetting("finalAnswerAuditGate", checked)
 								}}>
-								Check answers before showing them (experimental)
+								Check answers before showing them
 							</VSCodeCheckbox>
 							<p className="toggle-description">
-								Requires answer auditing. When the audit finds uncited quantities (hard findings), the answer is
-								held back and the agent is asked to revise it, up to 2 times, before you see it. Each revision
-								costs one extra model request and delays the answer. If findings remain, the answer is shown with
-								that stated. It checks that numbers are traced to recorded runs; it does not check that the
-								science is correct.
+								On by default. Requires answer auditing and a connected AI-Hydro server with the graded audit;
+								with any other server nothing changes. When the audit finds uncited quantities (hard findings),
+								the answer is held back and the agent is asked to revise it, up to 2 times, before you see it.
+								Each revision costs one extra model request and delays the answer. If findings remain, the answer
+								is shown with that stated. It checks that numbers are traced to recorded runs; it does not check
+								that the science is correct.
 							</p>
 						</div>
 						<div className="mt-2">

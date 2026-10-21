@@ -12,18 +12,19 @@ export const RunChip: React.FC<RunChipProps> = ({ runId, jsonPath }) => {
 		<span className="relative inline-flex items-center align-middle mx-0.5">
 			<button
 				className="
-					inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-medium
+					inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[11px] font-medium
 					leading-5 cursor-pointer border-0
 					border border-[var(--vscode-panel-border)] bg-transparent
-					text-[var(--vscode-disabledForeground)]
+					text-[var(--vscode-descriptionForeground)]
 					hover:opacity-90 transition-opacity select-none
 				"
 				onClick={() => setOpen((o) => !o)}
+				style={{ minHeight: 24 }}
 				title={`run:${runId}#${jsonPath}`}
 				type="button">
 				<span className="codicon codicon-link text-[9px]" />
 				<span className="font-mono">{runId.split(".")[0]}</span>
-				<span className="opacity-75">· run reference</span>
+				<span>· run reference</span>
 			</button>
 
 			{open && (
