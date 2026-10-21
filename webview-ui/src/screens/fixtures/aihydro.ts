@@ -117,3 +117,31 @@ export const fixtureUnannotatedServers: McpServer[] = [
 		].map((name) => ({ name, description: "Synthetic fixture tool, no annotations." })),
 	},
 ]
+
+/**
+ * The first-party server with 2.6.0-style annotations (every tool carries explicit readOnlyHint and destructiveHint):
+ * a mix of read-only, session-writing and destructive tools. Tool NAMES are the synthetic transcript's; the
+ * annotation mix is illustrative, not the real tools' declarations.
+ */
+export const fixtureAnnotatedServers: McpServer[] = [
+	{
+		name: "ai-hydro",
+		config: "{}",
+		status: "connected",
+		trust: { trusted: true, reason: "fixture: first-party launcher matches the recorded launch" },
+		tools: [
+			["data_fetch", { readOnlyHint: false, destructiveHint: false, openWorldHint: false }],
+			["delineate_basin", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["compute_signatures", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["extract_hydrologic_signatures", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["get_forcing", { readOnlyHint: false, destructiveHint: false, openWorldHint: false }],
+			["baseflow_separation", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["flow_duration_curve", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["trend_analysis", { readOnlyHint: false, destructiveHint: true, openWorldHint: false }],
+		].map(([name, annotations]) => ({
+			name: name as string,
+			description: "Synthetic fixture tool.",
+			annotations: annotations as { readOnlyHint: boolean; destructiveHint: boolean; openWorldHint: boolean },
+		})),
+	},
+]

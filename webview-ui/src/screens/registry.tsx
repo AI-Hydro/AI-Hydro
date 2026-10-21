@@ -10,6 +10,7 @@ import HistoryView from "../components/history/HistoryView"
 import { Providers } from "../Providers"
 import {
 	areaFailCall,
+	fixtureAnnotatedServers,
 	fixtureMcpServers,
 	fixtureUnannotatedServers,
 	provisionalCall,
@@ -276,10 +277,26 @@ export const screens: ScreenDef[] = [
 		expectAbsent: ["text=API Request"],
 	}),
 	chatTx("chat-run-8-tools", "Eight science calls in one turn", tx.run8ToolsTask, "Eight recorded runs are listed above."),
-	// A real install today: first-party tools publish no annotations, so each call is listed (neutral tone), not folded.
+	// Current tools (2.6.0-style): every tool annotated, so reads and session writes fold and only the destructive call is listed.
+	chatTx(
+		"chat-annotated-first-party",
+		"Eight first-party calls, annotated tools (read / write / destructive mix)",
+		tx.run8ToolsTask,
+		"Eight recorded runs are listed above.",
+		{
+			mcpServers: fixtureAnnotatedServers,
+			expectVisible: [
+				"text=Eight recorded runs are listed above.",
+				"[data-testid=work-group] button[aria-expanded=false]",
+				"text=trend_analysis",
+			],
+			expectAbsent: ["text=API Request", "text=effect not declared by the server"],
+		},
+	),
+	// An old server (for example aihydro-tools 2.3.7) publishes no annotations: each call is listed with a neutral tone.
 	chatTx(
 		"chat-unannotated-first-party",
-		"Eight first-party calls, tools publish no annotations",
+		"Eight first-party calls, old server without annotations",
 		tx.run8ToolsTask,
 		"Eight recorded runs are listed above.",
 		{
