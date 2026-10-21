@@ -11,6 +11,16 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Changed — the final-answer audit is a structured `answer_audit` row (vision-2040 Wave 2, PR W2-B-host, branch `vision2040/w2-b-host`)
+
+Host side only; the AnswerBlock footer (W2-B-web) comes later.
+
+- **Structured row.** `attempt_completion` now emits `say: "answer_audit"` (proto `ClineSay.ANSWER_AUDIT = 1001`) whose `text` is the frozen v1 `AnswerAuditPayload` JSON. No path emits the audit as `say: "text"` any more. A failed or timed-out audit emits `status: "unavailable"` with the reason. A skipped audit (no AI-Hydro server, nothing to audit, no research session bound) still emits no row.
+- **No 10-item cap in the data.** Every violation is kept in the outcome and the payload; `formatFinalAnswerAudit` is now only a plain-text fallback and keeps its own display cap.
+- **Graded schema.** With aihydro-tools >= 2.6.0 each violation has `severity` (`hard` | `advisory`), plus `category`, `suggested_marker` and `resolved_path`; the response has `hard_count`, `advisory_count`, `exempt_by_reason`. Responses without `hard_count` are `schema: "legacy"` and every violation is severity `unknown`: hard is never inferred. A response with findings is never `status: "passed"`, even when it has no hard finding.
+- **Interim rendering.** `AnswerAuditSummary` shows one line ("Audit: n/m quantities cited · h hard · a advisory", "Audit (ungraded server): n findings", or "Audit not run: reason") with an expandable list and fix hints as code. It is never green and says "passed" only for `status: "passed"`. W2-B-web replaces it.
+- **Old tasks (downgrade).** Saved tasks keep their legacy `**Answer audit ...**` `say: "text"` rows and render as prose; they are not parsed or rewritten. A task written by this version and opened in an older extension shows an unknown say kind (the old build maps unknown kinds to plain text, so the raw payload JSON may appear as prose there).
+
 ### Added — host evidence for the chat transcript (vision-2040 Wave 2, PR W2-0h, branch `vision2040/w2-0h`)
 
 Events that were silent or indistinguishable now leave honest data on their rows, so the transcript presenter can lift them. No redesign: each shows as one muted line or a colour change.

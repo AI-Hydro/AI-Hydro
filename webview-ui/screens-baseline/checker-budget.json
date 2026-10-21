@@ -10,6 +10,40 @@
 		}
 	},
 	"screens": {
+		"chat-answer-audit-graded": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-answer-audit-unavailable": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-answer-audit-violations": {
 			"ref": {
 				"noName": 0,
@@ -2154,6 +2188,26 @@
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-answer-audit-graded": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-answer-audit-unavailable": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0

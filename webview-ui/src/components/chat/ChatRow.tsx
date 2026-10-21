@@ -37,6 +37,7 @@ import { FileServiceClient, TaskServiceClient, UiServiceClient } from "@/service
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
 import { CheckpointControls } from "../common/CheckpointControls"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
+import { AnswerAuditSummary } from "./AnswerAuditSummary"
 import { ErrorBlockTitle } from "./ErrorBlockTitle"
 import ErrorRow from "./ErrorRow"
 import { MutedNotice } from "./MutedNotice"
@@ -1485,6 +1486,8 @@ export const ChatRowContent = memo(
 						return null // we should never see this message type
 					case "mcp_server_response":
 						return <McpResponseDisplay responseText={message.text || ""} />
+					case "answer_audit":
+						return <AnswerAuditSummary text={message.text} />
 					case "info":
 						return <MutedNotice severity={message.infoNotice?.severity} text={message.text} />
 					case "mcp_notification":

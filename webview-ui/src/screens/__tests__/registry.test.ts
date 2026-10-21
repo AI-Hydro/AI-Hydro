@@ -58,6 +58,8 @@ describe("screen harness registry", () => {
 			"chat-approval-protected-path",
 			"chat-finished-claims",
 			"chat-answer-audit-violations",
+			"chat-answer-audit-graded",
+			"chat-answer-audit-unavailable",
 			"chat-approval-protected-path-answered",
 			"chat-context-truncation",
 			"chat-condense",
