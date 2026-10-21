@@ -76,6 +76,23 @@ describe("transcript fixtures render their lifted lines and hide pending drafts"
 							expect(li!.closest("[hidden]")).toBeNull()
 							expect(container.textContent).toContain(l.text.slice(0, 40))
 						}
+				// raw failure texts are in the DOM (the reviewer's check): errors, edit failures and notices
+				const misses: string[] = []
+				for (const m of msgs) {
+					const k = m.say
+					if (
+						(k === "error" ||
+							k === "diff_error" ||
+							k === "error_retry" ||
+							k === "info" ||
+							k === "mcp_notification") &&
+						m.text &&
+						!container.textContent?.includes(m.text.slice(0, 25))
+					) {
+						misses.push(`${k}: ${m.text.slice(0, 60)}`)
+					}
+				}
+				expect(misses, `${name}/${detail} raw texts missing from the DOM`).toEqual([])
 				// a pending audit row's draft never reaches the DOM
 				expect(container.textContent, `${name}/${detail} leaks a pending draft`).not.toMatch(/UNCHECKED DRAFT/)
 			})

@@ -66,11 +66,11 @@ export class MessageStateHandler {
 	 * transcript can lift them. Its own guard: a failure here must not stop the save, and the webview matcher still
 	 * over-lifts as a display fallback.
 	 */
-	private async stampProtectedRows(): Promise<void> {
+	private async stampProtectedRows(window = 6): Promise<void> {
 		try {
 			const cwd = await getCwd(getDesktopDir())
 			const workspace = await HostProvider.workspace.getWorkspacePaths({})
-			stampProtectedPaths(this.aihydroMessages, getHostProtectedRoots(), [cwd, ...workspace.paths])
+			stampProtectedPaths(this.aihydroMessages, getHostProtectedRoots(), [cwd, ...workspace.paths], window)
 		} catch (error) {
 			console.error("Failed to stamp protected-path rows:", error)
 		}
@@ -152,6 +152,8 @@ export class MessageStateHandler {
 
 	async overwriteAiHydroMessages(newMessages: AiHydroMessage[]) {
 		this.aihydroMessages = newMessages
+		// A task being loaded or resumed: stamp the whole list once, so protected writes in old tasks are marked too.
+		await this.stampProtectedRows(Number.POSITIVE_INFINITY)
 		await this.saveAiHydroMessagesAndUpdateHistory()
 	}
 

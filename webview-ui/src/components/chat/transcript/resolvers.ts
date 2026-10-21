@@ -8,7 +8,7 @@ import type { McpServer } from "@shared/mcp"
  * The two facts a message does not carry (see PresentOptions): the effect class of an MCP call, and whether a path
  * is protected. Both feed the presenter's lifting rule, so both fail toward "lift":
  *  - effect class is read from tool annotations ONLY for a server the host reports as trusted (`server.trust`, the
- *    verdict of isServerTrusted). An untrusted, unknown or disabled server answers UNKNOWN, so its self-declared
+ *    verdict of isServerTrusted). An untrusted server answers UNVERIFIED (or UNKNOWN with no hints), so its self-declared
  *    readOnlyHint can never fold a call into a group;
  *  - protected paths come from the host-computed root list in the extension state; see protectedPathMatch.ts.
  */
@@ -29,10 +29,14 @@ export function makeTranscriptResolvers(
 				return "UNKNOWN"
 			}
 			const server = mcpServers.find((s) => s.name === call.serverName)
-			if (!server || server.disabled || server.trust?.trusted !== true) {
+			if (!server || server.disabled) {
 				return "UNKNOWN"
 			}
 			const tool = server.tools?.find((t) => t.name === call.toolName)
+			if (server.trust?.trusted !== true) {
+				// Hints from an untrusted server are never believed: UNVERIFIED (still lifted) when it declared some.
+				return tool?.annotations ? "UNVERIFIED" : "UNKNOWN"
+			}
 			return tool ? effectClass(tool.annotations) : "UNKNOWN"
 		},
 		isProtectedPath: (path: string) => isUnderProtectedRoots(path, protectedRoots),

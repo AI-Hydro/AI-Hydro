@@ -134,7 +134,9 @@ export interface PresentOptions {
 	 * unverified server would hide it. A resolver that throws is treated as UNKNOWN (the call lifts); it never
 	 * crashes the render.
 	 */
-	effectClassFor?: (message: AiHydroMessage) => "READ" | "WRITE" | "NETWORK" | "DESTRUCTIVE" | "UNKNOWN" | undefined
+	effectClassFor?: (
+		message: AiHydroMessage,
+	) => "READ" | "WRITE" | "NETWORK" | "DESTRUCTIVE" | "UNKNOWN" | "UNVERIFIED" | undefined
 	isProtectedPath?: (path: string) => boolean
 }
 
@@ -713,7 +715,7 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 	 * (an MCP call with no usable annotations): still lifted (never hidden), but it is a missing fact, not a finding,
 	 * so it gets a neutral tone.
 	 */
-	const securityReason = (m: AiHydroMessage): "security" | "unknown_effect" | undefined => {
+	const securityReason = (m: AiHydroMessage): "security" | "unknown_effect" | "unverified_effect" | undefined => {
 		if (m.policyClass || m.isOperationOutsideWorkspace) {
 			return "security"
 		}
@@ -733,6 +735,10 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 		const effect = effectOf(m)
 		if (effect === "DESTRUCTIVE") {
 			return "security"
+		}
+		if (effect === "UNVERIFIED") {
+			// The server declared annotations but is not trusted: they are not believed (and never fold a call).
+			return "unverified_effect"
 		}
 		if (effect === "UNKNOWN") {
 			return "unknown_effect"
@@ -928,6 +934,15 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 					"policy_command",
 					"warning",
 					`${m.type === "ask" ? "You approved" : "Ran"} (${m.policyClass.replace(/_/g, " ")}): ${what}`,
+					m.ts,
+				)
+			} else if (securityReason(m) === "unverified_effect") {
+				lift(
+					grp,
+					m,
+					"approved_security",
+					"notice",
+					`${m.type === "ask" ? "You approved" : "Ran"} (effect unverified: server not trusted): ${what}`,
 					m.ts,
 				)
 			} else if (securityReason(m) === "unknown_effect") {

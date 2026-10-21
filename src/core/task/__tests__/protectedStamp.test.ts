@@ -59,4 +59,43 @@ describe("host stamp for tool rows that touch protected paths (W2-A2)", () => {
 		expect(stampProtectedPaths([row, other], roots, [])).to.equal(0)
 		expect(row.policyClass).to.equal("auto_run_all")
 	})
+
+	it("matches camelCase and other path-like keys, file:// URIs, absolute values under any key, and nested file objects", () => {
+		const prot = path.join(home, ".ssh", "id")
+		for (const key of [
+			"outputPath",
+			"targetPath",
+			"destPath",
+			"savePath",
+			"outputFile",
+			"outDir",
+			"target",
+			"to",
+			"location",
+			"uri",
+		]) {
+			expect(touchesProtectedPath(mcp({ [key]: prot }), roots, []), key).to.equal(true)
+		}
+		expect(touchesProtectedPath(mcp({ uri: `file://${prot}` }), roots, [])).to.equal(true)
+		expect(touchesProtectedPath(mcp({ files: [{ name: prot }] }), roots, [])).to.equal(true)
+		// whatever the key, an absolute or ~ value is checked
+		expect(touchesProtectedPath(mcp({ whatever: prot }), roots, [])).to.equal(true)
+		expect(touchesProtectedPath(mcp({ note: `file://${prot}` }), roots, [])).to.equal(true)
+		expect(touchesProtectedPath(mcp({ note: "~/.ssh/id" }), roots, [])).to.equal(os.homedir() === home)
+		// ordinary arguments stay unstamped
+		expect(touchesProtectedPath(mcp({ outputPath: path.join(base, "proj", "out.csv"), note: "hello" }), roots, [])).to.equal(
+			false,
+		)
+	})
+
+	it("a call too large to walk is stamped (uninspected over-lift), not skipped", () => {
+		const big = Array.from({ length: 6000 }, (_, i) => ({ i }))
+		expect(touchesProtectedPath(mcp({ rows: big }), roots, [])).to.equal(true)
+		// deep nesting does not overflow the stack
+		let deep: unknown = { x: 1 }
+		for (let i = 0; i < 400; i++) {
+			deep = { a: deep }
+		}
+		expect(() => touchesProtectedPath(mcp({ deep }), roots, [])).to.not.throw()
+	})
 })

@@ -423,4 +423,26 @@ describe("W2-A2 review notes", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Verbose" }))
 		expect(seen).toEqual(["verbose"])
 	})
+
+	it("an untrusted server that declared annotations is listed as 'effect unverified'; no annotations stays 'not declared'", () => {
+		const msgs = processed(turnMachineryTask)
+		const textFor = (server: McpServer) =>
+			groups(presentTranscript(msgs, { detail: "normal", ...makeTranscriptResolvers([server], []) }))[0]
+				.lifted.map((l) => l.text)
+				.join("\n")
+		const base = { name: "ai-hydro", config: "{}", status: "connected" as const, trust: { trusted: false, reason: "x" } }
+		const readOnly = { readOnlyHint: true, openWorldHint: false }
+		const unverified = textFor({
+			...base,
+			tools: [
+				{ name: "delineate_basin", annotations: readOnly },
+				{ name: "compute_signatures", annotations: readOnly },
+			],
+		})
+		expect(unverified).toContain("effect unverified")
+		expect(unverified).not.toContain("not declared")
+		expect(textFor({ ...base, tools: [{ name: "delineate_basin" }, { name: "compute_signatures" }] })).toContain(
+			"not declared",
+		)
+	})
 })

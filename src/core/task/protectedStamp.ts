@@ -15,30 +15,62 @@ import * as path from "path"
 import type { AiHydroMessage } from "@/shared/ExtensionMessage"
 import { isProtectedPath } from "./protectedPaths"
 
-/** Argument names that carry a file or directory. Generic shapes only: no tool names. */
-const PATH_KEY = /(^|[_-])(path|file|filepath|filename|dir|directory|dest|destination|output|out|src|source|folder)s?$/i
+/**
+ * Argument names that carry a file or directory, matched as a case-insensitive SUFFIX so camelCase and snake_case both
+ * hit (outputPath, target_path, outDir, destFile, uri). Generic shapes only: no tool names. Detection of MCP paths is
+ * heuristic by nature and can only over-lift.
+ */
+const PATH_KEY = /(path|file|filename|dir|directory|dest|destination|output|out|src|source|folder|target|location|uri|to)s?$/i
+/** Values that look like a path whatever their key: absolute, `~`, or a `file://` URI. */
+const LOOKS_LIKE_PATH = /^(~(?:[\\/]|$)|\/|[A-Za-z]:[\\/]|\\\\|file:\/\/)/i
+/** Visiting budget: past it the call counts as uninspected and is stamped (over-lift), never skipped. */
+const NODE_BUDGET = 5000
 
-function collectPaths(value: unknown, key: string | undefined, out: string[], depth = 0): void {
-	if (depth > 6 || value === null || value === undefined) {
-		return
-	}
-	if (typeof value === "string") {
-		if (key !== undefined && PATH_KEY.test(key) && value.trim() !== "") {
-			out.push(value)
+function asFsPath(value: string): string {
+	if (/^file:\/\//i.test(value)) {
+		let p = value.replace(/^file:\/\//i, "")
+		try {
+			p = decodeURIComponent(p)
+		} catch {
+			// keep the raw text
 		}
-		return
+		// file:///C:/x -> C:/x ; file:///home/u -> /home/u ; file://host/share is left as-is
+		return /^\/[A-Za-z]:[\\/]/.test(p) ? p.slice(1) : p
 	}
-	if (Array.isArray(value)) {
-		for (const v of value) {
-			collectPaths(v, key, out, depth + 1)
+	return value
+}
+
+interface Collected {
+	paths: string[]
+	uninspected: boolean
+}
+
+function collectPaths(root: unknown): Collected {
+	const out: Collected = { paths: [], uninspected: false }
+	let nodes = 0
+	// Iterative so a deeply nested argument tree cannot overflow the stack; `ctx` is true under a path-like key.
+	const stack: Array<{ value: unknown; ctx: boolean }> = [{ value: root, ctx: false }]
+	while (stack.length) {
+		const { value, ctx } = stack.pop() as { value: unknown; ctx: boolean }
+		if (++nodes > NODE_BUDGET) {
+			out.uninspected = true
+			break
 		}
-		return
-	}
-	if (typeof value === "object") {
-		for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-			collectPaths(v, k, out, depth + 1)
+		if (typeof value === "string") {
+			if (value.trim() !== "" && (ctx || LOOKS_LIKE_PATH.test(value))) {
+				out.paths.push(asFsPath(value))
+			}
+		} else if (Array.isArray(value)) {
+			for (const v of value) {
+				stack.push({ value: v, ctx })
+			}
+		} else if (value && typeof value === "object") {
+			for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+				stack.push({ value: v, ctx: ctx || PATH_KEY.test(k) })
+			}
 		}
 	}
+	return out
 }
 
 function parse(text: string | undefined): unknown {
@@ -49,32 +81,33 @@ function parse(text: string | undefined): unknown {
 	}
 }
 
-/** Every path a tool row (native file tool or MCP call) names. */
-export function pathsNamedBy(message: AiHydroMessage): string[] {
+/** Every path a tool row (native file tool or MCP call) names; `uninspected` when the argument tree was too big to walk. */
+export function pathsNamedBy(message: AiHydroMessage): Collected {
+	const none: Collected = { paths: [], uninspected: false }
 	const kind = message.type === "ask" ? message.ask : message.say
 	if (kind !== "tool" && kind !== "use_mcp_server") {
-		return []
+		return none
 	}
 	const body = parse(message.text) as Record<string, unknown> | undefined
 	if (!body || typeof body !== "object") {
-		return []
+		return none
 	}
-	const out: string[] = []
 	if (kind === "tool") {
-		for (const k of ["path", "filePath"]) {
-			if (typeof body[k] === "string" && (body[k] as string).trim() !== "") {
-				out.push(body[k] as string)
-			}
-		}
-		return out
+		const paths = ["path", "filePath"].flatMap((k) =>
+			typeof body[k] === "string" && (body[k] as string).trim() !== "" ? [body[k] as string] : [],
+		)
+		return { paths, uninspected: false }
 	}
 	const args = typeof body.arguments === "string" ? parse(body.arguments) : body.arguments
-	collectPaths(args, undefined, out)
-	return out
+	return collectPaths(args)
 }
 
 export function touchesProtectedPath(message: AiHydroMessage, roots: readonly string[], bases: readonly string[]): boolean {
-	return pathsNamedBy(message).some((raw) => {
+	const named = pathsNamedBy(message)
+	if (named.uninspected) {
+		return true
+	}
+	return named.paths.some((raw) => {
 		const expanded =
 			raw === "~" || raw.startsWith("~/") || raw.startsWith("~\\") ? path.join(os.homedir(), raw.slice(1)) : raw
 		if (path.isAbsolute(expanded)) {
