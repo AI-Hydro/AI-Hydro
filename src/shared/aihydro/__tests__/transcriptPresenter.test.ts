@@ -361,7 +361,7 @@ describe("transcript presenter: header facts", () => {
 })
 
 describe("transcript presenter: old tasks, streaming, verbose", () => {
-	it("presents a task without outcome or notice fields; undecided calls get a neutral notice", () => {
+	it("presents a task without outcome or notice fields; undecided calls are neutral", () => {
 		reset()
 		const m = [
 			say("task", "old"),
@@ -377,10 +377,10 @@ describe("transcript presenter: old tasks, streaming, verbose", () => {
 			say("text", "done"),
 		]
 		const g = groups(present(m))[0]
-		// The superseded ask has no recorded decision: shown as a neutral notice, not counted as a call that ran.
-		expect(g.lifted.map((l) => [l.reason, l.tone])).to.deep.equal([["no_decision", "notice"]])
-		expect(g.facts.toolCount).to.equal(2)
-		expect(g.facts.notRunCount).to.equal(1)
+		// A task from before outcomes were recorded: an ask without an outcome is old data, shown neutrally.
+		expect(g.lifted).to.have.length(0)
+		expect(g.facts.toolCount).to.equal(3)
+		expect(g.facts.notRunCount).to.equal(0)
 	})
 	it("keeps group keys stable while chunks are appended and text streams in", () => {
 		reset()
@@ -632,9 +632,18 @@ describe("transcript presenter: honest lifting and header (N3 to N9)", () => {
 	})
 	it("lifts an undecided approval ask and excludes it from toolCount and waitingMs", () => {
 		reset()
-		const g = groups(present([say("task", "x"), req(), ask("command", "rm -rf x"), req(), say("text", "moving on")]))[0]
+		const g = groups(
+			present([
+				say("task", "x"),
+				say("command", "ok", { execOutcome: "completed", exitCode: 0 }),
+				req(),
+				ask("command", "rm -rf x"),
+				req(),
+				say("text", "moving on"),
+			]),
+		)[0]
 		expect(g.lifted.map((l) => l.reason)).to.deep.equal(["no_decision"])
-		expect(g.facts.toolCount).to.equal(0)
+		expect(g.facts.toolCount).to.equal(1)
 		expect(g.facts.notRunCount).to.equal(1)
 		expect(g.facts.waitingMs).to.equal(0)
 	})
@@ -665,7 +674,10 @@ describe("transcript presenter: every failure-shaped or security-marked member i
 		["unknown exit", () => [say("command", "x", { exitCode: "unknown" })]],
 		["failed tool outcome", () => [say("tool", JSON.stringify({ tool: "readFile", path: "a" }), { execOutcome: "failed" })]],
 		["denied ask", () => [ask("tool", JSON.stringify({ tool: "readFile" }), { askOutcome: "denied" }), req()]],
-		["undecided ask", () => [ask("command", "x"), req()]],
+		[
+			"undecided ask (recorded era)",
+			() => [say("command", "ok", { execOutcome: "completed", exitCode: 0 }), ask("command", "x"), req()],
+		],
 		["policy command", () => [say("command", "x", { policyClass: "auto_run_all", exitCode: 0 })]],
 		["outside workspace", () => [ask("tool", "{}", { isOperationOutsideWorkspace: true, askOutcome: "approved" }), req()]],
 		["approved mcp, no resolver", () => [ask("use_mcp_server", "{}", { askOutcome: "approved" }), mcpResp({})]],
@@ -689,4 +701,92 @@ describe("transcript presenter: every failure-shaped or security-marked member i
 			).to.equal(true)
 		})
 	}
+})
+
+describe("transcript presenter: final round (resolver throw, write detection, legacy, large results)", () => {
+	it("treats a throwing resolver as UNKNOWN: the call lifts and nothing crashes", () => {
+		reset()
+		const boom = () => {
+			throw new Error("resolver failed")
+		}
+		const mcp = ask("use_mcp_server", JSON.stringify({ serverName: "s", toolName: "t" }), { askOutcome: "approved" })
+		expect(lifted([mcp, mcpResp({})], { effectClassFor: boom, isProtectedPath: boom }).map((l) => l.reason)).to.deep.equal([
+			"approved_security",
+		])
+		reset()
+		const edit = ask("tool", JSON.stringify({ tool: "readFile", path: "a.txt" }), { askOutcome: "approved" })
+		expect(lifted([edit, req()], { isProtectedPath: boom }).map((l) => l.reason)).to.deep.equal(["approved_security"])
+	})
+	const approvedPath = (o: Record<string, unknown>) => ask("tool", JSON.stringify(o), { askOutcome: "approved" })
+	for (const o of [
+		{ tool: "appendToFile", path: "a.txt" },
+		{ tool: "insertLines", path: "a.txt" },
+		{ tool: "saveFile", path: "a.txt" },
+		{ tool: "truncateFile", path: "a.txt" },
+		{ tool: "copyFile", path: "a.txt" },
+		{ tool: "touch", path: "a.txt" },
+		{ tool: "somethingNew", filePath: "a.txt" },
+		{ tool: "editedExistingFile", filePath: ".env" },
+	]) {
+		it(`lifts ${JSON.stringify(o)} when no path resolver is given`, () => {
+			reset()
+			expect(lifted([approvedPath(o), req()]).map((l) => l.reason)).to.deep.equal(["approved_security"])
+		})
+	}
+	for (const tool of [
+		"readFile",
+		"listFilesTopLevel",
+		"listFilesRecursive",
+		"listCodeDefinitionNames",
+		"searchFiles",
+		"webFetch",
+	]) {
+		it(`does not lift read-only ${tool}`, () => {
+			reset()
+			expect(lifted([approvedPath({ tool, path: "a" }), req()])).to.have.length(0)
+		})
+	}
+	it("reads filePath through a path resolver too", () => {
+		reset()
+		const out = lifted([approvedPath({ tool: "readFile", filePath: ".env" }), req()], {
+			isProtectedPath: (p) => p === ".env",
+		})
+		expect(out).to.have.length(1)
+	})
+	it("keeps legacy tasks (no recorded outcomes) neutral: undecided asks count as calls, nothing lifted", () => {
+		reset()
+		const g = groups(
+			presentTranscript([say("task", "x"), req(), ask("command", "ls"), req(), ask("command", "pwd"), req()], {
+				detail: "normal",
+				...SAFE,
+			}),
+		)[0]
+		expect(g.lifted).to.have.length(0)
+		expect(g.facts.toolCount).to.equal(2)
+		expect(g.facts.notRunCount).to.equal(0)
+	})
+	it("does not lift large benign results, but still finds a failure after many object nodes", () => {
+		reset()
+		const polygon = { type: "Polygon", coordinates: [Array.from({ length: 25_000 }, (_, i) => [i, i / 2])] }
+		expect(lifted([mcpCall(), mcpResp(polygon)], SAFE)).to.have.length(0)
+		reset()
+		const table = { columns: ["a", "b", "c"], rows: Array.from({ length: 25_000 }, (_, i) => [i, i + 1, i + 2]) }
+		expect(lifted([mcpCall(), mcpResp(table)], SAFE)).to.have.length(0)
+		reset()
+		const objs = Array.from({ length: 30_000 }, (_, i) => ({ i }))
+		expect(lifted([mcpCall(), mcpResp({ items: [...objs, { status: "failed" }] })], SAFE).map((l) => l.reason)).to.deep.equal(
+			["mcp_error"],
+		)
+		reset()
+		const huge = Array.from({ length: 120_000 }, (_, i) => ({ i }))
+		expect(lifted([mcpCall(), mcpResp({ items: [...huge, { status: "failed" }] })], SAFE).map((l) => l.reason)).to.deep.equal(
+			["result_uninspected"],
+		)
+	})
+	it("still finds blocking inside an array of objects mixed with numbers", () => {
+		reset()
+		expect(lifted([mcpCall(), mcpResp({ a: [1, 2, { blocking: true }] })], SAFE).map((l) => l.reason)).to.deep.equal([
+			"blocking",
+		])
+	})
 })

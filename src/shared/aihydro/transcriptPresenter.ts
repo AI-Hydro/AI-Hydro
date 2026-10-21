@@ -15,7 +15,7 @@
  *    messages do not support is absent or labelled, never invented (cost in particular never reads `$0.0000`).
  *  - No tool-name literals: tools are recognised by message kind and by the generic shape of their results.
  */
-import type { AiHydroAsk, AiHydroMessage, AiHydroSay } from "../ExtensionMessage"
+import type { AiHydroAsk, AiHydroMessage, AiHydroSay, AiHydroSayTool } from "../ExtensionMessage"
 import { deriveCallState } from "./askOutcome"
 import { isElevatedMcpLevel } from "./infoNotice"
 import { presentToolCall } from "./toolCallPresenter"
@@ -127,6 +127,12 @@ export interface PresentOptions {
 	 * undefined) means "unknown", and unknown lifts. Without `effectClassFor` every MCP call is lifted as effect-class
 	 * unknown; without `isProtectedPath` every write-type native call that names a path is lifted. A2 supplies both
 	 * from MCP annotations/trust and the protected-root list to narrow the lifting to what is actually risky.
+	 *
+	 * Resolver contract: `effectClassFor` must return the REAL effect class derived from the server's own annotations,
+	 * and only for a trusted server (return undefined when the server is untrusted or has no annotations). Only
+	 * DESTRUCTIVE and UNKNOWN lift: a resolver that answers WRITE or NETWORK folds the call, so returning those for an
+	 * unverified server would hide it. A resolver that throws is treated as UNKNOWN (the call lifts); it never
+	 * crashes the render.
 	 */
 	effectClassFor?: (message: AiHydroMessage) => "READ" | "WRITE" | "NETWORK" | "DESTRUCTIVE" | "UNKNOWN" | undefined
 	isProtectedPath?: (path: string) => boolean
@@ -335,7 +341,7 @@ function describeCall(m: AiHydroMessage): string {
 
 /** Containers deeper than this, or more nodes than NODE_BUDGET, are not inspected: the result is then lifted as such. */
 const MAX_DEPTH = 8
-const NODE_BUDGET = 20_000
+const NODE_BUDGET = 100_000
 const FAILURE_STATUSES = new Set(["failed", "error", "cancelled", "canceled", "corrupt", "timeout", "timed_out", "unavailable"])
 const FAILURE_TEXT = /^(?:(?:error|failed|mcp error)\b|\[error\]|traceback \(most recent call last\))/i
 
@@ -345,6 +351,17 @@ const lc = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase() : und
 interface ResultFindings {
 	reasons: Array<{ reason: LiftReason; tone: LiftedLine["tone"]; text: string }>
 	reused: boolean
+}
+
+/** True for an array of numbers, or an array whose elements are all arrays of numbers. */
+function isNumericBlock(a: unknown[]): boolean {
+	if (a.length === 0) {
+		return false
+	}
+	if (a.every((x) => typeof x === "number")) {
+		return true
+	}
+	return a.every((x) => Array.isArray(x) && x.every((y) => typeof y === "number"))
 }
 
 /** Visits every key at every depth, arrays included. Returns false when the depth or node bound stopped the walk. */
@@ -360,6 +377,9 @@ function walk(root: unknown, visit: (key: string, value: unknown) => void): bool
 			return
 		}
 		if (Array.isArray(v)) {
+			if (isNumericBlock(v)) {
+				return // coordinates and scalar table rows hold no keys to check; they do not use the node budget
+			}
 			for (const x of v) {
 				go(x, depth + 1)
 			}
@@ -546,6 +566,16 @@ const newGroup = (): GroupBuilder => ({
 	reuseCount: 0,
 })
 
+const READ_ONLY_NATIVE_TOOLS: ReadonlySet<string> = new Set([
+	"readFile",
+	"listFilesTopLevel",
+	"listFilesRecursive",
+	"listCodeDefinitionNames",
+	"searchFiles",
+	"webFetch",
+	"summarizeTask",
+] satisfies AiHydroSayTool["tool"][])
+
 export function presentTranscript(messages: readonly AiHydroMessage[], options: PresentOptions): TranscriptItem[] {
 	if (options.detail === "verbose") {
 		return messages.map((m) => ({ kind: "passthrough" as const, key: `msg:${m.ts}`, ts: m.ts, messages: [m] }))
@@ -659,10 +689,23 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 	}
 
 	let curIndex = 0
-	const isWriteTool = (info: Json) =>
-		info.diff !== undefined ||
-		info.content !== undefined ||
-		/(edit|creat|writ|delet|remov|renam|mov|patch|replac)/i.test(String(info.tool ?? ""))
+	// Native tools known to only read. Anything else that names a path is treated as a possible write.
+	const isReadOnlyTool = (info: Json) => READ_ONLY_NATIVE_TOOLS.has(String(info.tool ?? ""))
+	/** A resolver that throws is "unknown": the call lifts and the render survives. */
+	const protectedPath = (p: string): boolean => {
+		try {
+			return options.isProtectedPath ? options.isProtectedPath(p) : false
+		} catch {
+			return true
+		}
+	}
+	const effectOf = (m: AiHydroMessage): string | undefined => {
+		try {
+			return options.effectClassFor?.(m)
+		} catch {
+			return "UNKNOWN"
+		}
+	}
 
 	const securityMarked = (m: AiHydroMessage): boolean => {
 		if (m.policyClass || m.isOperationOutsideWorkspace) {
@@ -673,20 +716,25 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 			if (info.operationIsLocatedInWorkspace === false) {
 				return true
 			}
-			if (typeof info.path === "string") {
-				// Fail safe: with no path resolver a write-type call that names a path cannot be called harmless.
-				if (options.isProtectedPath ? options.isProtectedPath(info.path) : isWriteTool(info)) {
+			const path = typeof info.path === "string" ? info.path : typeof info.filePath === "string" ? info.filePath : undefined
+			if (path !== undefined) {
+				// Fail safe: with no path resolver anything not known to be read-only that names a path lifts.
+				if (options.isProtectedPath ? protectedPath(path) : !isReadOnlyTool(info)) {
 					return true
 				}
 			}
 		}
-		const effect = options.effectClassFor?.(m)
+		const effect = effectOf(m)
 		if (effect === "DESTRUCTIVE" || effect === "UNKNOWN") {
 			return true
 		}
 		// No annotations to read means the effect class is UNKNOWN, which lifts.
 		return effect === undefined && kindOf(m) === "use_mcp_server"
 	}
+
+	// Tasks from before the host recorded outcomes cannot say "no decision recorded": an ask without an outcome is
+	// just old data there, shown neutrally and counted as a call.
+	const recordedEra = messages.some((x) => x.askOutcome !== undefined || x.execOutcome !== undefined)
 
 	const lastIndex = messages.length - 1
 	messages.forEach((m, index) => {
@@ -834,7 +882,7 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 				outstandingCalls.push(m.ts)
 			}
 			// An approval ask nobody answered: it may never have run, so it is neither counted as a call nor as waiting.
-			const undecided = m.type === "ask" && !m.askOutcome && state === "unknown"
+			const undecided = recordedEra && m.type === "ask" && !m.askOutcome && state === "unknown"
 			const denied = m.askOutcome === "denied" || state === "denied"
 			if (isApprovalAsk(m) && !undecided) {
 				const next = messages[index + 1]
