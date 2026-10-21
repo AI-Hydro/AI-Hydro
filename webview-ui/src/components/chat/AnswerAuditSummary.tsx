@@ -101,6 +101,17 @@ const Icon: React.FC<{ attention: boolean }> = ({ attention }) => (
 	/>
 )
 
+/** Findings in narration from earlier turns: a revision cannot change that text, so they are disclosed, not revised. */
+const Unrevisable: React.FC<{ findings?: AnswerAuditViolation[] }> = ({ findings }) =>
+	findings && findings.length > 0 ? (
+		<details className="mt-1" data-testid="answer-audit-unrevisable">
+			<summary className="cursor-pointer select-none py-1.5">
+				{findings.length} earlier-narration {findings.length === 1 ? "finding" : "findings"} not revisable
+			</summary>
+			<FindingsList label="Earlier-narration findings" violations={findings} />
+		</details>
+	) : null
+
 export const AnswerAuditSummary: React.FC<{ text?: string; partial?: boolean }> = ({ text, partial }) => {
 	// The transient activity line shown while the gate holds the draft back.
 	if (isAuditProgressText(text)) {
@@ -125,7 +136,10 @@ export const AnswerAuditSummary: React.FC<{ text?: string; partial?: boolean }> 
 	}
 
 	if (payload.stage === "revision") {
-		const hard = payload.violations.filter((v) => v.severity === "hard")
+		const unrevisable = payload.unrevisableFindings ?? []
+		const hard = payload.violations.filter(
+			(v) => v.severity === "hard" && !unrevisable.some((u) => u.excerpt === v.excerpt && u.kind === v.kind),
+		)
 		const droppedLines = droppedEvidenceLines({
 			attempt: payload.attempt,
 			droppedQuantities: payload.droppedQuantities,
@@ -144,6 +158,7 @@ export const AnswerAuditSummary: React.FC<{ text?: string; partial?: boolean }> 
 						{l}
 					</div>
 				))}
+				<Unrevisable findings={payload.unrevisableFindings} />
 				{payload.violations.length > 0 && (
 					<details className="mt-1">
 						<summary className="cursor-pointer select-none py-1.5">
@@ -221,6 +236,7 @@ export const AnswerAuditSummary: React.FC<{ text?: string; partial?: boolean }> 
 					{l}
 				</div>
 			))}
+			<Unrevisable findings={payload.unrevisableFindings} />
 			{payload.violations.length > 0 && (
 				<details className="mt-1">
 					<summary className="cursor-pointer select-none py-1.5">Show findings ({payload.violations.length})</summary>

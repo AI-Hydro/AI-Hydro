@@ -67,10 +67,12 @@ Branch `vision2040/harness-quickwins` (from the SOTA harness/model audit, items 
   count), and every non-success exit reveals the hidden draft as "Unchecked draft (audit interrupted: ...)".
   aihydro-tools 2.6.0 has no `previous_prose` input and no `[unverified]` marker, so removed values are found by
   an approximate extension-side token diff (signed values, ²/³ normalised, `.7`, scientific notation) and the
-  revision message offers no unverified path. The gate audits THIS turn's narration (since the latest API
-  request) plus the result, not all narration since the user message: earlier narration cannot be revised, so
-  auditing it would force useless revisions; it was audited, and its findings recorded, when it was new, and
-  narration added in a revision turn is audited with that draft. The removed-value footer is cumulative over the
+  revision message offers no unverified path. The gate audits ALL non-empty narration
+  since the last user message plus the result (plan M4). Narration from earlier turns of the cycle cannot be
+  revised, so findings whose excerpt sits only there are NOT counted toward the hard gate and are NOT sent to the
+  model as revision instructions; they are disclosed in the footer ("N earlier-narration findings not revisable",
+  listed) via `AnswerAuditPayload.unrevisableFindings`. An excerpt that cannot be located counts as revisable.
+  The removed-value footer is cumulative over the
   cycle. The gate audits only on the server it judged eligible, and requires it to be trusted.
 - **Explorer subagent is an allowlist**, with `use_mcp_tool` gated on `readOnlyHint === true`
   (unannotated = not read-only). New tools are closed by default.

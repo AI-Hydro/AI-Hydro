@@ -145,7 +145,11 @@ export async function runFinalAnswerAudit(args: {
 	const { hub, ulid, workspaceRoot, answer } = args
 	const server = findAuditServer(hub, { serverName: args.serverName, requireTrusted: args.requireTrusted })
 	if (!server) {
-		return { status: "skipped", reason: "no-ai-hydro-server" }
+		// Under the gate (requireTrusted) the server was eligible moments ago: losing it mid-gate is an audit that did
+		// not run, shown as such, never a silent skip.
+		return args.requireTrusted
+			? unavailable("trusted audit server no longer connected")
+			: { status: "skipped", reason: "no-ai-hydro-server" }
 	}
 	if (!hasAuditableContent(answer)) {
 		return { status: "skipped", reason: "nothing-to-audit" }

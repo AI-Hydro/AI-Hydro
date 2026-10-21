@@ -2,12 +2,13 @@ import { createHash } from "node:crypto"
 import {
 	AUDIT_PROGRESS_CHECKING,
 	capDraft,
-	collectAuditProse,
 	cumulativeDropped,
 	type DroppedEvidence,
 	diffDroppedEvidence,
 	extractQuantities,
 	isAuditProgressText,
+	isOlderNarrationOnly,
+	splitAuditProse,
 } from "@shared/aihydro/answerAuditGate"
 import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import {
@@ -209,6 +210,8 @@ export type GateDecision =
 			attempt: number
 			history: AnswerRevisionEvent[]
 			dropped?: DroppedEvidence
+			/** Findings only in earlier-turn narration: disclosed, never revisable (B1). */
+			unrevisable: AnswerAuditViolation[]
 			disclosure?: AnswerAuditDisclosure
 			/** The audited text (narration + result): the draft the payload describes. */
 			prose: string
@@ -262,7 +265,8 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 	const deadlineMs = ctx.deadlineMs ?? GATE_DEADLINE_MS
 	const runAudit = ctx.runAudit ?? runFinalAnswerAudit
 
-	const prose = collectAuditProse(ctx.rows(), ctx.result)
+	const split = splitAuditProse(ctx.rows(), ctx.result)
+	const prose = split.full
 	const hash = sha256(prose)
 	const attemptIndex = state.revisions
 	state.hidden = { text: prose, hash, attempt: attemptIndex, ts: started }
@@ -326,7 +330,17 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 	}
 
 	const dropped = state.previousProse !== undefined ? diffDroppedEvidence(state.previousProse, prose) : undefined
-	const gated = outcome.status === "violations" && outcome.schema === "graded" && outcome.hardCount > 0
+	// Findings that sit only in narration from earlier turns cannot be fixed by a revision: they are disclosed in the
+	// footer but neither sent to the model as instructions nor counted toward the hard gate.
+	const unrevisable: AnswerAuditViolation[] =
+		outcome.status === "violations" && outcome.schema === "graded"
+			? outcome.violations.filter((v) => isOlderNarrationOnly(v.excerpt, split.older, split.current))
+			: []
+	const revisableHard =
+		outcome.status === "violations" && outcome.schema === "graded"
+			? hardOf(outcome.violations).filter((v) => !unrevisable.includes(v))
+			: []
+	const gated = revisableHard.length > 0
 
 	if (gated && state.revisions < MAX_AUDIT_REVISIONS) {
 		const ts = now()
@@ -339,6 +353,7 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 		const payload: AnswerAuditPayload = {
 			...toAnswerAuditPayload(outcome, { stage: "revision", attempt: attemptIndex, answerTs: ts, answer: prose }),
 			...capDraft(prose),
+			...(unrevisable.length ? { unrevisableFindings: unrevisable } : {}),
 			history: state.history.slice(0, -1),
 			...(dropped?.droppedQuantities.length ? { droppedQuantities: dropped.droppedQuantities } : {}),
 			...(dropped?.droppedClaimMarkers.length ? { droppedClaimMarkers: dropped.droppedClaimMarkers } : {}),
@@ -348,7 +363,7 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 			kind: "revise",
 			attempt: state.revisions,
 			feedback: formatResponse.answerAuditRevisionRequest({
-				hard: hardOf(payload.violations),
+				hard: revisableHard,
 				attempt: state.revisions,
 				maxRevisions: MAX_AUDIT_REVISIONS,
 			}),
@@ -359,7 +374,7 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 	if (gated) {
 		disclosure = {
 			kind: "findings_remain",
-			reason: `Shown with ${outcome.hardCount} unresolved hard audit findings after ${state.revisions} revisions.`,
+			reason: `Shown with ${revisableHard.length} unresolved hard audit findings after ${state.revisions} revisions.`,
 		}
 	}
 	return {
@@ -367,6 +382,7 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 		outcome,
 		attempt: state.revisions,
 		history: state.history.slice(),
+		unrevisable,
 		dropped:
 			state.revisions > 0 && state.firstProse !== undefined
 				? cumulativeDropped(state.firstProse, prose, {
@@ -404,6 +420,7 @@ export function finalPayload(
 		...base,
 		...(decision.history.length ? { history: decision.history } : {}),
 		...(decision.disclosure ? { disclosure: decision.disclosure } : {}),
+		...(decision.unrevisable.length ? { unrevisableFindings: decision.unrevisable } : {}),
 		...(d?.droppedQuantities.length ? { droppedQuantities: d.droppedQuantities } : {}),
 		...(d?.droppedClaimMarkers.length ? { droppedClaimMarkers: d.droppedClaimMarkers } : {}),
 		...(decision.attempt > 0 && hadHardBefore ? { quantitiesRemaining: extractQuantities(decision.prose).length } : {}),
@@ -490,6 +507,7 @@ interface MessageStore {
 	getAiHydroMessages(): any[]
 	setAiHydroMessages(messages: any[]): void
 	saveAiHydroMessagesAndUpdateHistory(): Promise<void>
+	updateAiHydroMessage?(index: number, updates: Record<string, unknown>): Promise<void>
 }
 
 /** Remove the transient "Drafting answer… / Checking…" row (a partial `answer_audit` say with a progress body). */
@@ -502,4 +520,35 @@ export async function sweepAuditProgress(store: MessageStore): Promise<boolean> 
 	store.setAiHydroMessages(kept)
 	await store.saveAiHydroMessagesAndUpdateHistory()
 	return true
+}
+
+/**
+ * Once a cycle's final (or interrupted) row exists, its `pending` rows no longer need the draft text: the answer is
+ * stored once (as the completion row, or inside the final/interrupted payload). Keeps `draftHash` and the rest.
+ * Returns how many rows were compacted. Never throws.
+ */
+export async function compactPendingRows(store: MessageStore): Promise<number> {
+	if (!store.updateAiHydroMessage) {
+		return 0
+	}
+	let compacted = 0
+	try {
+		const rows = store.getAiHydroMessages()
+		for (let i = 0; i < rows.length; i++) {
+			const r = rows[i]
+			if (r.type !== "say" || r.say !== "answer_audit" || r.partial) {
+				continue
+			}
+			const p = parseJson(r.text)
+			if (!p || p.v !== ANSWER_AUDIT_PAYLOAD_VERSION || p.stage !== "pending" || p.draftText === undefined) {
+				continue
+			}
+			const { draftText: _text, draftTruncated: _cut, ...rest } = p
+			await store.updateAiHydroMessage(i, { text: JSON.stringify(rest) })
+			compacted++
+		}
+	} catch (error) {
+		console.error("Failed to compact pending answer-audit rows", error)
+	}
+	return compacted
 }

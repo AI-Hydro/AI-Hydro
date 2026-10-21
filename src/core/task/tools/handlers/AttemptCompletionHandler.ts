@@ -11,6 +11,7 @@ import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
 import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import {
+	compactPendingRows,
 	computeGateEligibility,
 	cycleHadHard,
 	evaluateDraft,
@@ -100,6 +101,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// Nothing to audit / no research session stays silent unless the answer was revised: a revised answer
 		// always carries its record.
 		if (decision.outcome.status === "skipped" && decision.attempt === 0) {
+			await compactPendingRows(config.messageState)
 			return
 		}
 		const answerRow = config.messageState
@@ -109,6 +111,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			.find((m) => m.say === "completion_result")
 		const payload: AnswerAuditPayload = finalPayload(decision, answerRow?.ts ?? Date.now(), cycleHadHard(decision.history))
 		await config.callbacks.say("answer_audit", JSON.stringify(payload))
+		await compactPendingRows(config.messageState)
 	}
 
 	private async showFinalAnswerAudit(config: TaskConfig, answer: string): Promise<void> {
@@ -163,6 +166,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		await sweepAuditProgress(config.messageState)
 		if (payload) {
 			await config.callbacks.say("answer_audit", JSON.stringify(payload))
+			await compactPendingRows(config.messageState)
 		}
 	}
 

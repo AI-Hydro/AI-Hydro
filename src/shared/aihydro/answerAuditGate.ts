@@ -38,28 +38,55 @@ interface RowLike {
 }
 
 /**
- * The prose the gate audits: every non-empty `say("text")` row of THIS turn (since the latest API request, user
- * message or task start), then the result.
+ * The prose the gate audits (plan M4): every non-empty `say("text")` row since the last user message, then the
+ * result. Auditing only `result` would let numbers be moved into narration the user also reads.
  *
- * Why this turn only (F6): narration from earlier turns of the same cycle cannot be revised, so including it would
- * force useless revisions for findings the model cannot fix, and it was already audited (and its findings recorded in
- * a revision row) when it was new. Numbers moved into narration THIS turn are still audited, so the anti-gaming
- * intent (M4) holds: every revision is a new turn, and its narration is part of its draft.
+ * `older` is the part the model cannot revise this turn: narration from earlier turns of the cycle (before the
+ * latest API request). `current` is this turn's narration plus the result. Findings that sit only in `older` are
+ * disclosed but never sent to the model as revision instructions or counted toward the hard gate (B1).
  */
-export function collectAuditProse(rows: readonly RowLike[], result: string): string {
+export function splitAuditProse(rows: readonly RowLike[], result: string): { full: string; older: string; current: string } {
 	let start = 0
 	for (let i = rows.length - 1; i >= 0; i--) {
 		const r = rows[i]
-		if (r.type === "say" && (r.say === "task" || r.say === "user_feedback" || r.say === "api_req_started")) {
+		if (r.type === "say" && (r.say === "task" || r.say === "user_feedback")) {
 			start = i + 1
 			break
 		}
 	}
-	const narration = rows
-		.slice(start)
-		.filter((r) => r.type === "say" && r.say === "text" && !r.partial && (r.text ?? "").trim().length > 0)
-		.map((r) => r.text as string)
-	return [...narration, result].join("\n\n")
+	let turnStart = start
+	for (let i = rows.length - 1; i >= start; i--) {
+		if (rows[i].type === "say" && rows[i].say === "api_req_started") {
+			turnStart = i + 1
+			break
+		}
+	}
+	const narration = (from: number, to: number) =>
+		rows
+			.slice(from, to)
+			.filter((r) => r.type === "say" && r.say === "text" && !r.partial && (r.text ?? "").trim().length > 0)
+			.map((r) => r.text as string)
+	const older = narration(start, turnStart)
+	const current = [...narration(turnStart, rows.length), result]
+	return { full: [...older, ...current].join("\n\n"), older: older.join("\n\n"), current: current.join("\n\n") }
+}
+
+export function collectAuditProse(rows: readonly RowLike[], result: string): string {
+	return splitAuditProse(rows, result).full
+}
+
+const flat = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase()
+
+/**
+ * True when a finding's excerpt appears in earlier-turn narration and nowhere in this turn's text: it cannot be fixed
+ * by a revision. An excerpt that is missing or cannot be located counts as revisable (the safe default).
+ */
+export function isOlderNarrationOnly(excerpt: string | undefined, older: string, current: string): boolean {
+	const ex = flat((excerpt ?? "").replace(/^(?:…|\.\.\.)+|(?:…|\.\.\.)+$/g, ""))
+	if (ex.length < 3) {
+		return false
+	}
+	return flat(older).includes(ex) && !flat(current).includes(ex)
 }
 
 // ── Removed-value detection (approximate) ─────────────────────────────────────────────────────────────────────────

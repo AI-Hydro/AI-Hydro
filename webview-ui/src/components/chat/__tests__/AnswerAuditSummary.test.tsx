@@ -175,6 +175,15 @@ describe("AnswerAuditSummary (interim)", () => {
 			expect(c.textContent).not.toMatch(/passed/i)
 		})
 
+		it("B1: earlier-narration findings are listed separately as not revisable", () => {
+			const f = { kind: "uncited_number", severity: "hard" as const, excerpt: "Peak flow was 123 m3/s." }
+			const c = render_({ hardCount: 1, violations: [f], unrevisableFindings: [f] })
+			expect(c.querySelector('[data-testid="answer-audit-unrevisable"]')?.textContent).toContain(
+				"1 earlier-narration finding not revisable",
+			)
+			expect(c.querySelector('[aria-label="Earlier-narration findings"]')?.textContent).toContain("Peak flow was 123 m3/s.")
+		})
+
 		it("pending (draft persisted before its audit) renders nothing", () => {
 			const c = render_({ stage: "pending", status: "unavailable", draftText: "secret draft 0.42" })
 			expect(c.textContent).toBe("")

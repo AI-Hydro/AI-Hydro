@@ -109,6 +109,7 @@ import { refreshWorkflowToggles } from "../context/instructions/user-instruction
 import { Controller } from "../controller"
 import { StateManager } from "../storage/StateManager"
 import {
+	compactPendingRows,
 	findUnrevealedRevision,
 	interruptedFromRevision,
 	interruptedPayload,
@@ -801,6 +802,7 @@ export class Task {
 			await sweepAuditProgress(this.messageStateHandler)
 			if (payload) {
 				await this.say("answer_audit", JSON.stringify(payload))
+				await compactPendingRows(this.messageStateHandler)
 			}
 		} catch (error) {
 			console.error("Failed to reveal the held answer draft", error)
@@ -1005,6 +1007,7 @@ export class Task {
 				"answer_audit",
 				JSON.stringify(interruptedFromRevision(heldRevision, "VS Code reloaded or the task was resumed")),
 			)
+			await compactPendingRows(this.messageStateHandler)
 		}
 
 		// Now present the cline messages to the user and ask if they want to resume (NOTE: we ran into a bug before where the apiconversationhistory wouldn't be initialized when opening a old task, and it was because we were waiting for resume)

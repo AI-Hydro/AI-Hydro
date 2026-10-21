@@ -160,6 +160,12 @@ export interface AnswerAuditPayload extends AnswerDraftRecord {
 	 * revised answer whose draft had hard findings means the requested values are no longer reported.
 	 */
 	quantitiesRemaining?: number
+	/**
+	 * Additive (W2-C): findings (a subset of `violations`) whose text sits only in narration from earlier turns of the
+	 * cycle. A revision cannot change that text, so they were never sent to the model as revision instructions and do
+	 * not count toward the hard gate; the footer discloses them separately.
+	 */
+	unrevisableFindings?: AnswerAuditViolation[]
 	/** Graded schema: count of findings the auditor exempted, by reason (e.g. year-like numbers). */
 	exemptByReason?: Record<string, number>
 	/** Earlier attempts, oldest first. */
@@ -274,6 +280,13 @@ export function parseAnswerAuditPayload(text: string | undefined): AnswerAuditPa
 			: {}),
 		...(Array.isArray(raw.droppedQuantities) ? { droppedQuantities: raw.droppedQuantities.filter(isStr) } : {}),
 		...(Array.isArray(raw.droppedClaimMarkers) ? { droppedClaimMarkers: raw.droppedClaimMarkers.filter(isStr) } : {}),
+		...(Array.isArray(raw.unrevisableFindings)
+			? {
+					unrevisableFindings: raw.unrevisableFindings
+						.map(parseViolation)
+						.filter((v: AnswerAuditViolation | undefined): v is AnswerAuditViolation => !!v),
+				}
+			: {}),
 		...(isNum(raw.quantitiesRemaining) ? { quantitiesRemaining: raw.quantitiesRemaining } : {}),
 		...(parseExempt(raw.exemptByReason) ? { exemptByReason: parseExempt(raw.exemptByReason) } : {}),
 		...(Array.isArray(raw.history) ? { history: raw.history as AnswerRevisionEvent[] } : {}),

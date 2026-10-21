@@ -12,15 +12,19 @@ import {
 	droppedEvidenceLines,
 	extractQuantities,
 	isAuditProgressText,
+	isOlderNarrationOnly,
+	splitAuditProse,
 } from "@/shared/aihydro/answerAuditGate"
 import { setRecordedFirstPartyLauncher } from "@/shared/aihydro/firstPartyServers"
 import { MAX_AUDIT_REVISIONS, MAX_DRAFT_TEXT_CHARS, parseAnswerAuditPayload } from "@/shared/aihydro/transcriptContracts"
 import type { McpServer } from "@/shared/mcp"
 import {
 	type AnswerAuditGateState,
+	compactPendingRows,
 	computeGateEligibility,
 	createGateState,
 	evaluateDraft,
+	finalPayload,
 	findUnrevealedRevision,
 	type GateContext,
 	interruptedFromRevision,
@@ -314,6 +318,47 @@ describe("answer-audit gate (W2-C)", () => {
 			expect((await evaluateDraft(after.c)).kind).to.equal("user_feedback")
 		})
 
+		const priorTurnRows = [
+			{ type: "say", say: "user_feedback", text: "go" },
+			{ type: "say", say: "api_req_started", text: "{}" },
+			{ type: "say", say: "text", text: "Peak flow was 123 m3/s." },
+			{ type: "say", say: "api_req_started", text: "{}" },
+		]
+		const onlyIn = (excerpt: string) =>
+			({ ...violated(1), violations: [hard("uncited_number", excerpt)] }) as FinalAnswerAuditOutcome
+
+		it("B1: a number narrated in a prior tool turn IS audited, is disclosed, and does not trigger a revision", async () => {
+			const { c, runAudit, emitted } = ctx({ outcomes: [onlyIn("Peak flow was 123 m3/s.")], result: "Done." })
+			c.rows = () => priorTurnRows
+			const d = await evaluateDraft(c)
+			expect(runAudit.firstCall.args[0].answer).to.include("Peak flow was 123 m3/s.")
+			expect(d.kind).to.equal("accept")
+			expect(emitted).to.have.length(0)
+			expect(c.state.revisions).to.equal(0)
+			if (d.kind === "accept") {
+				expect(d.unrevisable).to.have.length(1)
+				const p = finalPayload(d, 1, false)
+				expect(p.unrevisableFindings?.[0].excerpt).to.equal("Peak flow was 123 m3/s.")
+				expect(p.hardCount).to.equal(1) // still counted honestly in the payload
+				expect(parseAnswerAuditPayload(JSON.stringify(p))?.unrevisableFindings).to.have.length(1)
+			}
+		})
+
+		it("B1: with a revisable finding too, only that one is sent to the model", async () => {
+			const out = {
+				...violated(2),
+				violations: [hard("uncited_number", "Peak flow was 123 m3/s."), hard("uncited_number", "The ratio is 0.42.")],
+			} as FinalAnswerAuditOutcome
+			const { c, emitted } = ctx({ outcomes: [out], result: "The ratio is 0.42." })
+			c.rows = () => priorTurnRows
+			const d = await evaluateDraft(c)
+			expect(d.kind).to.equal("revise")
+			if (d.kind === "revise") {
+				expect(d.feedback).to.include("The ratio is 0.42.").and.not.include("123 m3/s")
+			}
+			expect(emitted[0].unrevisableFindings).to.have.length(1)
+		})
+
 		it("F3: the draft is persisted as a hidden pending row BEFORE the audit runs", async () => {
 			const order: string[] = []
 			const { c } = ctx({ outcomes: [passed] })
@@ -389,7 +434,9 @@ describe("answer-audit gate (W2-C)", () => {
 			const a = mk([evil])
 			expect((await runFinalAnswerAudit({ ...args, hub: a.hub })).status).to.equal("passed")
 			const b = mk([evil])
-			expect((await runFinalAnswerAudit({ ...args, hub: b.hub, requireTrusted: true })).status).to.equal("skipped")
+			const lost = await runFinalAnswerAudit({ ...args, hub: b.hub, requireTrusted: true })
+			// N1: under the gate a missing trusted server is an audit that did not run, never a silent skip
+			expect(lost).to.deep.equal({ status: "unavailable", reason: "trusted audit server no longer connected" })
 			expect(b.seen).to.deep.equal([])
 		})
 
@@ -423,15 +470,22 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(cumulativeDropped("a", "a 7 m", { quantities: ["7 m"], markers: [] }).droppedQuantities).to.deep.equal([])
 		})
 
-		it("F6: only narration of THIS turn (since the last API request) is audited, plus the result", () => {
+		it("B1: narration since the last user message is audited; older-turn text is split from this turn's", () => {
 			const rows = [
+				{ type: "say", say: "text", text: "before the user message 8.8 m3/s" },
 				{ type: "say", say: "user_feedback", text: "go" },
 				{ type: "say", say: "api_req_started", text: "{}" },
 				{ type: "say", say: "text", text: "turn 1 narration 9.9 m3/s" },
 				{ type: "say", say: "api_req_started", text: "{}" },
 				{ type: "say", say: "text", text: "this turn 4.2 m3/s" },
 			]
-			expect(collectAuditProse(rows, "result 1 m")).to.equal("this turn 4.2 m3/s\n\nresult 1 m")
+			const sp = splitAuditProse(rows, "result 1 m")
+			expect(sp.full).to.equal("turn 1 narration 9.9 m3/s\n\nthis turn 4.2 m3/s\n\nresult 1 m")
+			expect(sp.older).to.equal("turn 1 narration 9.9 m3/s")
+			expect(sp.current).to.equal("this turn 4.2 m3/s\n\nresult 1 m")
+			expect(isOlderNarrationOnly("turn 1 narration 9.9 m3/s", sp.older, sp.current)).to.equal(true)
+			expect(isOlderNarrationOnly("…this turn 4.2…", sp.older, sp.current)).to.equal(false)
+			expect(isOlderNarrationOnly(undefined, sp.older, sp.current)).to.equal(false) // unlocatable: revisable
 		})
 
 		it("finds numbers with units and markers removed by a revision", () => {
@@ -587,6 +641,28 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(findUnrevealedRevision([row, { type: "say", say: "user_feedback", text: "hm" }])).to.equal(undefined)
 		})
 
+		it("N2: compacting drops draft text from pending rows only, keeping the hash", async () => {
+			const { c, pendings, emitted } = ctx({ outcomes: [violated(1)] })
+			await evaluateDraft(c)
+			let rows: any[] = [
+				{ type: "say", say: "answer_audit", text: JSON.stringify(pendings[0]) },
+				{ type: "say", say: "answer_audit", text: JSON.stringify(emitted[0]) },
+			]
+			const store: any = {
+				getAiHydroMessages: () => rows,
+				updateAiHydroMessage: async (i: number, u: any) => {
+					rows[i] = { ...rows[i], ...u }
+				},
+			}
+			expect(await compactPendingRows(store)).to.equal(1)
+			const pending = JSON.parse(rows[0].text)
+			expect(pending.draftText).to.equal(undefined)
+			expect(pending.draftHash).to.equal(pendings[0].draftHash)
+			expect(JSON.parse(rows[1].text).draftText).to.equal(emitted[0].draftText) // the revision row keeps its draft
+			expect(await compactPendingRows(store)).to.equal(0)
+			rows = []
+		})
+
 		it("progress rows are swept and nothing else", async () => {
 			let rows: any[] = [
 				{ type: "say", say: "answer_audit", text: "Drafting answer…", partial: true },
@@ -691,7 +767,9 @@ describe("answer-audit gate (W2-C)", () => {
 						rows.splice(0, rows.length, ...m)
 					},
 					saveAiHydroMessagesAndUpdateHistory: async () => {},
-					updateAiHydroMessage: async () => {},
+					updateAiHydroMessage: async (i: number, u: any) => {
+						rows[i] = { ...rows[i], ...u }
+					},
 				},
 				services: {
 					mcpHub: hub,
@@ -797,6 +875,13 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(final.history).to.have.length(1)
 			expect(final.history![0].draftText).to.equal("The ratio is 0.42 and NSE is 0.71")
 			expect(final.droppedQuantities).to.deep.equal(["0.71"])
+			// N2: once the final row exists no pending row still carries a draft (stored once, in the final payload)
+			const pendingRows = t.rows
+				.filter((r) => r.say === "answer_audit")
+				.map((r) => JSON.parse(r.text))
+				.filter((p) => p.stage === "pending")
+			expect(pendingRows.length).to.be.greaterThan(0)
+			expect(pendingRows.every((p) => p.draftText === undefined && /^[0-9a-f]{64}$/.test(p.draftHash))).to.equal(true)
 			expect(t.config.taskState.answerAuditGate.revisions).to.equal(0) // cycle ended
 			expect(t.config.taskState.answerAuditGate.hidden).to.equal(undefined)
 			expect(t.notify.calledOnce).to.equal(true)
