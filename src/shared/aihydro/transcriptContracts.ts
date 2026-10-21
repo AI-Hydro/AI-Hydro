@@ -69,8 +69,12 @@ export const MAX_AUDIT_REVISIONS = 2
 /** Longest draft text kept per attempt in a payload; longer drafts keep `draftHash` and set `draftTruncated`. */
 export const MAX_DRAFT_TEXT_CHARS = 20_000
 
-/** `final`: the answer shown. `revision`: a rejected draft that was revised. `interrupted`: the gate exited early. */
-export type AnswerAuditStage = "final" | "revision" | "interrupted"
+/**
+ * `final`: the answer shown. `revision`: a rejected draft that was revised. `interrupted`: the gate exited early.
+ * `pending` (additive, W2-C): a draft persisted, hidden, before its audit starts so a reload can reveal it; renders
+ * as nothing.
+ */
+export type AnswerAuditStage = "final" | "revision" | "interrupted" | "pending"
 
 /** `passed` is the only status a footer may present as clean. `skipped` and `unavailable` never are. */
 export type AnswerAuditStatus = "passed" | "violations" | "unavailable" | "skipped"
@@ -239,7 +243,7 @@ export function parseAnswerAuditPayload(text: string | undefined): AnswerAuditPa
 	if (!raw || typeof raw !== "object" || raw.v !== ANSWER_AUDIT_PAYLOAD_VERSION) {
 		return undefined
 	}
-	const stage: AnswerAuditStage[] = ["final", "revision", "interrupted"]
+	const stage: AnswerAuditStage[] = ["final", "revision", "interrupted", "pending"]
 	const status: AnswerAuditStatus[] = ["passed", "violations", "unavailable", "skipped"]
 	if (!stage.includes(raw.stage) || !status.includes(raw.status) || !isNum(raw.answerTs) || !isStr(raw.draftHash)) {
 		return undefined

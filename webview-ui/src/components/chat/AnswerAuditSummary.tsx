@@ -120,6 +120,10 @@ export const AnswerAuditSummary: React.FC<{ text?: string; partial?: boolean }> 
 		)
 	}
 
+	if (payload.stage === "pending") {
+		return null // a draft persisted before its audit (so a reload can reveal it): nothing to show
+	}
+
 	if (payload.stage === "revision") {
 		const hard = payload.violations.filter((v) => v.severity === "hard")
 		const droppedLines = droppedEvidenceLines({

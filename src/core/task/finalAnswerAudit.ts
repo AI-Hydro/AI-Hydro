@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import {
 	ANSWER_AUDIT_PAYLOAD_VERSION,
 	type AnswerAuditPayload,
@@ -82,8 +83,23 @@ export function hasAuditableContent(answer: string): boolean {
 	return /\d/.test(answer) || /\[(?:run|claim|lit):/i.test(answer)
 }
 
-function findAuditServer(hub: AuditHub): McpServer | undefined {
-	return hub.getServers().find((s) => isAiHydroServerName(s.name) && s.status === "connected" && !s.disabled)
+/**
+ * The server that audits. Alias-named servers are candidates; a trusted one (isServerTrusted) is preferred over an
+ * untrusted one even when listed later. The W2-C gate passes the exact server it judged eligible and requires trust,
+ * because its fix hints reach the model as revision instructions.
+ */
+function findAuditServer(hub: AuditHub, opts: { serverName?: string; requireTrusted?: boolean } = {}): McpServer | undefined {
+	const candidates = hub
+		.getServers()
+		.filter(
+			(s) =>
+				isAiHydroServerName(s.name) &&
+				s.status === "connected" &&
+				!s.disabled &&
+				(!opts.serverName || s.name === opts.serverName),
+		)
+	const trusted = candidates.find((s) => isServerTrusted(s as any))
+	return trusted ?? (opts.requireTrusted ? undefined : candidates[0])
 }
 
 function unavailable(reason: string): FinalAnswerAuditOutcome {
@@ -122,9 +138,12 @@ export async function runFinalAnswerAudit(args: {
 	 * revision rounds do not repeat the status round trip). The audited session must still equal it.
 	 */
 	boundStudy?: string
+	/** The exact server to audit on (the gate's eligible server) and whether it must be trusted. */
+	serverName?: string
+	requireTrusted?: boolean
 }): Promise<FinalAnswerAuditOutcome> {
 	const { hub, ulid, workspaceRoot, answer } = args
-	const server = findAuditServer(hub)
+	const server = findAuditServer(hub, { serverName: args.serverName, requireTrusted: args.requireTrusted })
 	if (!server) {
 		return { status: "skipped", reason: "no-ai-hydro-server" }
 	}

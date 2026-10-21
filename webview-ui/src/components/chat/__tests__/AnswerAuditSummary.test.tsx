@@ -175,6 +175,11 @@ describe("AnswerAuditSummary (interim)", () => {
 			expect(c.textContent).not.toMatch(/passed/i)
 		})
 
+		it("pending (draft persisted before its audit) renders nothing", () => {
+			const c = render_({ stage: "pending", status: "unavailable", draftText: "secret draft 0.42" })
+			expect(c.textContent).toBe("")
+		})
+
 		it("interrupted without recorded text still says so", () => {
 			const c = render_({
 				stage: "interrupted",

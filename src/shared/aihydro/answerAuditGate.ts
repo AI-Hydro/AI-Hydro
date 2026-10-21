@@ -38,14 +38,19 @@ interface RowLike {
 }
 
 /**
- * The prose the gate audits: every non-empty `say("text")` row since the last user message, then the result.
- * Auditing only `result` would let numbers be moved into narration the user also reads (anti-gaming, M4).
+ * The prose the gate audits: every non-empty `say("text")` row of THIS turn (since the latest API request, user
+ * message or task start), then the result.
+ *
+ * Why this turn only (F6): narration from earlier turns of the same cycle cannot be revised, so including it would
+ * force useless revisions for findings the model cannot fix, and it was already audited (and its findings recorded in
+ * a revision row) when it was new. Numbers moved into narration THIS turn are still audited, so the anti-gaming
+ * intent (M4) holds: every revision is a new turn, and its narration is part of its draft.
  */
 export function collectAuditProse(rows: readonly RowLike[], result: string): string {
 	let start = 0
 	for (let i = rows.length - 1; i >= 0; i--) {
 		const r = rows[i]
-		if (r.type === "say" && (r.say === "task" || r.say === "user_feedback")) {
+		if (r.type === "say" && (r.say === "task" || r.say === "user_feedback" || r.say === "api_req_started")) {
 			start = i + 1
 			break
 		}
@@ -60,16 +65,17 @@ export function collectAuditProse(rows: readonly RowLike[], result: string): str
 // ── Removed-value detection (approximate) ─────────────────────────────────────────────────────────────────────────
 
 const MARKER_RE = /\[(?:run|claim|lit):[^\]\s][^\]]*\]/gi
+const NUM = "[-−]?(?:\\d[\\d,]*(?:\\.\\d+)?|\\.\\d+)(?:[eE][-+]?\\d+)?"
 const UNIT =
 	"%|mm\\/(?:day|d|h|yr)|m³\\/s|m3\\/s|cms|cfs|km²|km2|ha|mm|cm|km|m²|m2|m³|m3|°C|K|years?|yrs?|days?|hours?|months?|observations?|samples?|gauges?|basins?|stations?|m|L|h"
-const QUANTITY_RE = new RegExp(`(?<![\\w.])(\\d[\\d,]*(?:\\.\\d+)?)(?:\\s?(${UNIT})(?![A-Za-z]))?`, "gi")
+const QUANTITY_RE = new RegExp(`(?<![\\w.])(${NUM})(?:\\s?(${UNIT})(?![A-Za-z]))?`, "gi")
 
 /** Quantities in prose: numbers with an optional attached unit. Marker contents are removed first; bare years are skipped. */
 export function extractQuantities(prose: string): string[] {
 	const text = prose.replace(MARKER_RE, " ")
 	const out: string[] = []
 	for (const m of text.matchAll(QUANTITY_RE)) {
-		const raw = m[1].replace(/,/g, "")
+		const raw = m[1].replace(/,/g, "").replace("−", "-")
 		const unit = (m[2] ?? "").toLowerCase()
 		const value = Number(raw)
 		if (!Number.isFinite(value)) {
@@ -84,12 +90,14 @@ export function extractQuantities(prose: string): string[] {
 	return out
 }
 
-function quantityKey(q: string): string {
-	const m = q.match(/^([\d,]*\.?\d+)\s?(.*)$/)
+/** Key for matching a quantity across drafts: signed numeric value plus a unit with ²/³ normalised. */
+export function quantityKey(q: string): string {
+	const m = q.match(new RegExp(`^(${NUM})\\s?(.*)$`))
 	if (!m) {
 		return q.toLowerCase()
 	}
-	return `${Number(m[1].replace(/,/g, ""))}|${m[2].toLowerCase()}`
+	const unit = m[2].toLowerCase().replace(/²/g, "2").replace(/³/g, "3")
+	return `${Number(m[1].replace(/,/g, "").replace("−", "-"))}|${unit}`
 }
 
 export function extractMarkers(prose: string): string[] {
@@ -129,6 +137,40 @@ export function diffDroppedEvidence(previous: string, next: string): DroppedEvid
 		droppedClaimMarkers: multisetMissing(extractMarkers(previous), extractMarkers(next), (s) => s.toLowerCase()),
 		quantitiesRemaining: nextQuantities.length,
 	}
+}
+
+/**
+ * Everything the cycle removed, for the shown answer's footer (F5): the diff of the first draft against the shown
+ * answer, plus anything an intermediate revision dropped that is still absent from the shown answer (a value
+ * introduced in revision 1 and removed in revision 2 never appears in the first draft).
+ */
+export function cumulativeDropped(
+	firstDraft: string,
+	shown: string,
+	stepDrops: { quantities: string[]; markers: string[] },
+): DroppedEvidence {
+	const base = diffDroppedEvidence(firstDraft, shown)
+	const shownQ = new Set(extractQuantities(shown).map(quantityKey))
+	const haveQ = new Set(base.droppedQuantities.map(quantityKey))
+	const shownM = new Set(extractMarkers(shown).map((m) => m.toLowerCase()))
+	const haveM = new Set(base.droppedClaimMarkers.map((m) => m.toLowerCase()))
+	const droppedQuantities = [...base.droppedQuantities]
+	for (const q of stepDrops.quantities) {
+		const k = quantityKey(q)
+		if (!shownQ.has(k) && !haveQ.has(k)) {
+			haveQ.add(k)
+			droppedQuantities.push(q)
+		}
+	}
+	const droppedClaimMarkers = [...base.droppedClaimMarkers]
+	for (const m of stepDrops.markers) {
+		const k = m.toLowerCase()
+		if (!shownM.has(k) && !haveM.has(k)) {
+			haveM.add(k)
+			droppedClaimMarkers.push(m)
+		}
+	}
+	return { droppedQuantities, droppedClaimMarkers, quantitiesRemaining: base.quantitiesRemaining }
 }
 
 const MAX_LISTED = 8

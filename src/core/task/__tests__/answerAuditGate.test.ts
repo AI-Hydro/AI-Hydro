@@ -7,6 +7,7 @@ import { formatResponse } from "@/core/prompts/responses"
 import * as notifications from "@/integrations/notifications"
 import {
 	collectAuditProse,
+	cumulativeDropped,
 	diffDroppedEvidence,
 	droppedEvidenceLines,
 	extractQuantities,
@@ -28,7 +29,7 @@ import {
 	resetGateCycle,
 	sweepAuditProgress,
 } from "../answerAuditGate"
-import type { FinalAnswerAuditOutcome } from "../finalAnswerAudit"
+import { type FinalAnswerAuditOutcome, runFinalAnswerAudit } from "../finalAnswerAudit"
 import { ToolExecutor } from "../ToolExecutor"
 import { AttemptCompletionHandler } from "../tools/handlers/AttemptCompletionHandler"
 
@@ -150,6 +151,7 @@ describe("answer-audit gate (W2-C)", () => {
 
 	function ctx(over: Partial<GateContext> & { outcomes?: FinalAnswerAuditOutcome[] } = {}) {
 		const emitted: any[] = []
+		const pendings: any[] = []
 		const progress: Array<string | undefined> = []
 		const outcomes = over.outcomes ?? [passed]
 		const runAudit = sinon.stub().callsFake(async () => outcomes.shift() ?? passed)
@@ -161,7 +163,8 @@ describe("answer-audit gate (W2-C)", () => {
 			result: "The runoff ratio is 0.42.",
 			rows: () => [],
 			emit: async (p) => {
-				emitted.push(p)
+				// a `pending` row (the draft persisted before its audit) is checked separately
+				;(p.stage === "pending" ? pendings : emitted).push(p)
 			},
 			setProgress: async (t) => {
 				progress.push(t)
@@ -171,7 +174,7 @@ describe("answer-audit gate (W2-C)", () => {
 			runAudit: runAudit as any,
 			...over,
 		}
-		return { c, emitted, progress, runAudit }
+		return { c, emitted, pendings, progress, runAudit }
 	}
 
 	describe("evaluateDraft", () => {
@@ -311,6 +314,43 @@ describe("answer-audit gate (W2-C)", () => {
 			expect((await evaluateDraft(after.c)).kind).to.equal("user_feedback")
 		})
 
+		it("F3: the draft is persisted as a hidden pending row BEFORE the audit runs", async () => {
+			const order: string[] = []
+			const { c } = ctx({ outcomes: [passed] })
+			const origEmit = c.emit
+			c.emit = async (p) => {
+				order.push(`emit:${p.stage}`)
+				await origEmit(p)
+			}
+			c.runAudit = (async () => {
+				order.push("audit")
+				return passed
+			}) as any
+			await evaluateDraft(c)
+			expect(order).to.deep.equal(["emit:pending", "audit"])
+		})
+
+		it("F2: the audit runs on the eligible server and requires trust", async () => {
+			const { c, runAudit } = ctx()
+			c.serverName = "ai-hydro"
+			await evaluateDraft(c)
+			expect(runAudit.firstCall.args[0]).to.include({ serverName: "ai-hydro", requireTrusted: true })
+		})
+
+		it("F5: the shown answer's removed values are cumulative across revisions", async () => {
+			const { c } = ctx({ outcomes: [violated(1), violated(1), passed] })
+			c.result = "Flow 5 m3/s and NSE 0.71 and bias 3 %."
+			await evaluateDraft(c) // draft 0
+			c.result = "Flow 5 m3/s and NSE 0.71 and runoff 0.4." // drops bias 3 %, adds 0.4
+			await evaluateDraft(c) // draft 1
+			c.result = "Flow 5 m3/s."
+			const last = await evaluateDraft(c)
+			expect(last.kind).to.equal("accept")
+			if (last.kind === "accept") {
+				expect(last.dropped?.droppedQuantities).to.have.members(["0.71", "3 %", "0.4"])
+			}
+		})
+
 		it("an abort while auditing returns aborted and emits nothing", async () => {
 			const { c, emitted } = ctx({ outcomes: [violated(1)] })
 			c.isAborted = () => true
@@ -319,9 +359,81 @@ describe("answer-audit gate (W2-C)", () => {
 		})
 	})
 
+	describe("F2 server selection (runFinalAnswerAudit)", () => {
+		const evil = server({ name: "aihydro", config: JSON.stringify({ type: "stdio", command: "/tmp/evil", args: [] }) })
+		const good = server({ name: "ai-hydro" })
+		const mk = (servers: McpServer[]) => {
+			const seen: string[] = []
+			const hub: any = {
+				getServers: () => servers,
+				callTool: async (s: string, tool: string) => {
+					seen.push(s)
+					const body =
+						tool === "aihydro_chat_status"
+							? { bound: true, study_id: "study-1" }
+							: { session_id: "study-1", passed: true, violations: [], hard_count: 0, advisory_count: 0 }
+					return { content: [{ type: "text", text: JSON.stringify(body) }] }
+				},
+			}
+			return { hub, seen }
+		}
+		const args = { ulid: "u", workspaceRoot: "/ws", answer: "NSE 0.71" }
+
+		it("display-only audit prefers the trusted server even when an untrusted alias is listed first", async () => {
+			const { hub, seen } = mk([evil, good])
+			await runFinalAnswerAudit({ ...args, hub })
+			expect(new Set(seen)).to.deep.equal(new Set(["ai-hydro"]))
+		})
+
+		it("with only an untrusted alias: display-only still audits (unchanged), the gate (requireTrusted) does not", async () => {
+			const a = mk([evil])
+			expect((await runFinalAnswerAudit({ ...args, hub: a.hub })).status).to.equal("passed")
+			const b = mk([evil])
+			expect((await runFinalAnswerAudit({ ...args, hub: b.hub, requireTrusted: true })).status).to.equal("skipped")
+			expect(b.seen).to.deep.equal([])
+		})
+
+		it("an explicit serverName pins the audit to that server", async () => {
+			const other = server({ name: "ai-hydro" })
+			const { hub, seen } = mk([evil, other])
+			await runFinalAnswerAudit({ ...args, hub, serverName: "aihydro" })
+			expect(new Set(seen)).to.deep.equal(new Set(["aihydro"]))
+		})
+	})
+
 	// ── dropped-value disclosure (M4) ──────────────────────────────────────────────────────────────────────────
 
 	describe("dropped evidence (approximate, extension-side)", () => {
+		it("F4: a sign flip is a drop; superscripts normalise; .7 and scientific notation are quantities", () => {
+			expect(diffDroppedEvidence("bias -0.3 m", "bias 0.3 m").droppedQuantities).to.deep.equal(["-0.3 m"])
+			expect(diffDroppedEvidence("bias −0.3 m", "bias 0.3 m").droppedQuantities).to.deep.equal(["−0.3 m"])
+			expect(diffDroppedEvidence("area 12 km²", "area 12 km2").droppedQuantities).to.deep.equal([])
+			expect(diffDroppedEvidence("flow 9 m³/s", "flow 9 m3/s").droppedQuantities).to.deep.equal([])
+			expect(extractQuantities("share .7 of flow")).to.deep.equal([".7"])
+			expect(diffDroppedEvidence("share .7", "share 0.7").droppedQuantities).to.deep.equal([])
+			expect(extractQuantities("k = 1.5e-3 m")).to.deep.equal(["1.5e-3 m"])
+			expect(extractQuantities("range 0.35-0.50")).to.deep.equal(["0.35", "0.50"])
+		})
+
+		it("F5: cumulativeDropped keeps a value an intermediate revision removed", () => {
+			const d = cumulativeDropped("a 1 m", "a 1 m", { quantities: ["7 m"], markers: ["[claim:C1]"] })
+			expect(d.droppedQuantities).to.deep.equal(["7 m"])
+			expect(d.droppedClaimMarkers).to.deep.equal(["[claim:C1]"])
+			// ... but not one that is back in the shown answer
+			expect(cumulativeDropped("a", "a 7 m", { quantities: ["7 m"], markers: [] }).droppedQuantities).to.deep.equal([])
+		})
+
+		it("F6: only narration of THIS turn (since the last API request) is audited, plus the result", () => {
+			const rows = [
+				{ type: "say", say: "user_feedback", text: "go" },
+				{ type: "say", say: "api_req_started", text: "{}" },
+				{ type: "say", say: "text", text: "turn 1 narration 9.9 m3/s" },
+				{ type: "say", say: "api_req_started", text: "{}" },
+				{ type: "say", say: "text", text: "this turn 4.2 m3/s" },
+			]
+			expect(collectAuditProse(rows, "result 1 m")).to.equal("this turn 4.2 m3/s\n\nresult 1 m")
+		})
+
 		it("finds numbers with units and markers removed by a revision", () => {
 			const d = diffDroppedEvidence(
 				"Mean flow 12.5 m3/s [run:a#key_outputs.q], NSE 0.71 [claim:C-1], 7,305 daily observations.",
@@ -448,6 +560,31 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(state.revisions).to.equal(0)
 			await Task.prototype.revealHiddenAnswerDraft.call(fake, "stopped by user")
 			expect(say.calledOnce).to.equal(true)
+		})
+
+		it("F3: reload during the first audit reveals the pending draft as an unchecked draft", async () => {
+			const { c, pendings } = ctx()
+			c.runAudit = (() => new Promise(() => {})) as any
+			c.deadlineMs = 10
+			await evaluateDraft(c) // times out, but the pending row was already persisted
+			const pending = pendings[0]
+			expect(pending.stage).to.equal("pending")
+			expect(pending.draftText).to.equal("The runoff ratio is 0.42.")
+			const row = { type: "say", say: "answer_audit", text: JSON.stringify(pending) }
+			const found = findUnrevealedRevision([row])
+			expect(found?.draftText).to.equal(pending.draftText)
+			const revealed = interruptedFromRevision(found!, "VS Code reloaded or the task was resumed")
+			expect(revealed).to.deep.include({ stage: "interrupted", status: "unavailable" })
+			expect(revealed.disclosure).to.deep.equal({ kind: "interrupted", reason: "VS Code reloaded or the task was resumed" })
+			expect(findUnrevealedRevision([row, { type: "say", say: "completion_result", text: "x" }])).to.equal(undefined)
+		})
+
+		it("F9: a later user message means the draft was already dealt with (no duplicate reveal)", async () => {
+			const { c, emitted } = ctx({ outcomes: [violated(1)] })
+			await evaluateDraft(c)
+			const row = { type: "say", say: "answer_audit", text: JSON.stringify(emitted[0]) }
+			expect(findUnrevealedRevision([row])).to.not.equal(undefined)
+			expect(findUnrevealedRevision([row, { type: "say", say: "user_feedback", text: "hm" }])).to.equal(undefined)
 		})
 
 		it("progress rows are swept and nothing else", async () => {
@@ -591,6 +728,8 @@ describe("answer-audit gate (W2-C)", () => {
 				fix_hint: "cite the run",
 			})),
 		})
+		const vis = (t: { rows: any[] }): any[] =>
+			t.rows.filter((r) => !(r.say === "answer_audit" && parseAnswerAuditPayload(r.text)?.stage === "pending"))
 		const sayTypes = (rows: any[]) => rows.map((r) => r.say)
 
 		it("not eligible: streams completion_result as today and runs the old display-only path (zero change)", async () => {
@@ -624,8 +763,8 @@ describe("answer-audit gate (W2-C)", () => {
 			}
 			await h.handlePartialBlock(block("The ratio", true), ui)
 			await h.handlePartialBlock(block("The ratio is 0.4", true), ui)
-			expect(sayTypes(t.rows)).to.deep.equal(["answer_audit"])
-			expect(t.rows[0]).to.include({ text: "Drafting answer…", partial: true })
+			expect(sayTypes(vis(t))).to.deep.equal(["answer_audit"])
+			expect(vis(t)[0]).to.include({ text: "Drafting answer…", partial: true })
 			expect(t.order.every((o) => o === "say:answer_audit:partial")).to.equal(true)
 		})
 
@@ -637,8 +776,8 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(t.notify.called).to.equal(false)
 			expect(t.order).to.not.include("checkpoint")
 			expect(t.order).to.not.include("ask:completion_result")
-			expect(sayTypes(t.rows)).to.deep.equal(["answer_audit"]) // progress swept; one revision row
-			const p = parseAnswerAuditPayload(t.rows[0].text)!
+			expect(sayTypes(vis(t))).to.deep.equal(["answer_audit"]) // progress swept; one revision row
+			const p = parseAnswerAuditPayload(vis(t)[0].text)!
 			expect(p).to.include({ stage: "revision", attempt: 0 })
 			expect(t.config.taskState.consecutiveMistakeCount).to.equal(2) // not reset, not incremented
 			expect(t.config.taskState.recentToolErrors).to.deep.equal([])
@@ -651,9 +790,9 @@ describe("answer-audit gate (W2-C)", () => {
 			const h = new AttemptCompletionHandler()
 			await h.execute(t.config, block("The ratio is 0.42 and NSE is 0.71"))
 			await h.execute(t.config, block("The ratio is 0.42 [run:r1#key_outputs.rr]"))
-			expect(sayTypes(t.rows)).to.deep.equal(["answer_audit", "completion_result", "answer_audit", "user_feedback"])
+			expect(sayTypes(vis(t))).to.deep.equal(["answer_audit", "completion_result", "answer_audit", "user_feedback"])
 			expect(t.config.taskState.consecutiveMistakeCount).to.equal(0)
-			const final = parseAnswerAuditPayload(t.rows[2].text)!
+			const final = parseAnswerAuditPayload(vis(t)[2].text)!
 			expect(final).to.include({ stage: "final", attempt: 1, status: "passed" })
 			expect(final.history).to.have.length(1)
 			expect(final.history![0].draftText).to.equal("The ratio is 0.42 and NSE is 0.71")
@@ -683,8 +822,12 @@ describe("answer-audit gate (W2-C)", () => {
 			await h.execute(t.config, block("a 0.42"))
 			await h.execute(t.config, block("b 0.42"))
 			await h.execute(t.config, block("c 0.42"))
-			expect(sayTypes(t.rows)).to.include("completion_result")
-			const final = parseAnswerAuditPayload(t.rows.filter((r) => r.say === "answer_audit").at(-1)!.text)!
+			expect(sayTypes(vis(t))).to.include("completion_result")
+			const final = parseAnswerAuditPayload(
+				vis(t)
+					.filter((r) => r.say === "answer_audit")
+					.at(-1)!.text,
+			)!
 			expect(final.stage).to.equal("final")
 			expect(final.disclosure).to.deep.equal({
 				kind: "findings_remain",
@@ -700,7 +843,7 @@ describe("answer-audit gate (W2-C)", () => {
 			t.config.taskState.askResponseText = "actually use 2015"
 			const out = (await new AttemptCompletionHandler().execute(t.config, block("The ratio is 0.42"))) as any[]
 			expect(JSON.stringify(out)).to.include("actually use 2015")
-			const kinds = t.rows.map((r) => (r.say === "answer_audit" ? parseAnswerAuditPayload(r.text)?.stage : r.say))
+			const kinds = vis(t).map((r) => (r.say === "answer_audit" ? parseAnswerAuditPayload(r.text)?.stage : r.say))
 			expect(kinds).to.deep.equal(["interrupted", "user_feedback"])
 			expect(t.config.taskState.askResponse).to.equal(undefined)
 			expect(t.config.taskState.answerAuditGate.revisions).to.equal(0)
@@ -713,8 +856,54 @@ describe("answer-audit gate (W2-C)", () => {
 				throw new Error("server crashed")
 			})
 			await new AttemptCompletionHandler().execute(t.config, block("The ratio is 0.42"))
-			expect(sayTypes(t.rows)).to.deep.equal(["completion_result", "answer_audit", "user_feedback"])
-			expect(parseAnswerAuditPayload(t.rows[1].text)).to.deep.include({ status: "unavailable", stage: "final" })
+			expect(sayTypes(vis(t))).to.deep.equal(["completion_result", "answer_audit", "user_feedback"])
+			expect(parseAnswerAuditPayload(vis(t)[1].text)).to.deep.include({ status: "unavailable", stage: "final" })
+		})
+
+		it("F1: a denied completion command still emits the revised answer's final record and ends the cycle", async () => {
+			const t = build({ gate: true, audit: [hardAudit()] })
+			t.config.callbacks.ask.callsFake(async (type: string) => {
+				t.order.push(`ask:${type}`)
+				return { response: "noButtonClicked" }
+			})
+			const h = new AttemptCompletionHandler()
+			await h.execute(t.config, block("The ratio is 0.42 and NSE is 0.71"))
+			const cmd: any = block("The ratio is 0.42 [run:r1#key_outputs.rr]")
+			cmd.params.command = "echo hi"
+			const out = await h.execute(t.config, cmd)
+			expect(String(out)).to.match(/denied|rejected/i)
+			const finals = vis(t)
+				.filter((r) => r.say === "answer_audit")
+				.map((r) => parseAnswerAuditPayload(r.text)!)
+				.filter((p) => p.stage === "final")
+			expect(finals).to.have.length(1)
+			expect(finals[0].attempt).to.equal(1)
+			expect(finals[0].droppedQuantities).to.deep.equal(["0.71"])
+			// before the command ask, so the ask's buttons are not hidden
+			const order = vis(t).map((r) => r.say)
+			expect(order.indexOf("answer_audit", order.indexOf("completion_result"))).to.be.greaterThan(
+				order.indexOf("completion_result"),
+			)
+			expect(t.order.indexOf("ask:command")).to.be.greaterThan(t.order.lastIndexOf("say:answer_audit"))
+			expect(t.config.taskState.answerAuditGate.revisions).to.equal(0)
+		})
+
+		it("F2: two alias servers, the untrusted one listed first: the gate audits on the trusted one", async () => {
+			const evil = server({
+				name: "ai-hydro-2",
+				config: JSON.stringify({ type: "stdio", command: "/tmp/evil", args: [] }),
+			})
+			const good = server({ name: "ai-hydro" })
+			const t = build({ gate: true, audit: [hardAudit()], servers: [evil, good] })
+			const calls: string[] = []
+			const orig = t.hub.callTool
+			t.hub.callTool = sinon.stub().callsFake(async (s: string, ...rest: any[]) => {
+				calls.push(s)
+				return orig(s, ...rest)
+			}) as any
+			await new AttemptCompletionHandler().execute(t.config, block("The ratio is 0.42"))
+			expect(calls.length).to.be.greaterThan(0)
+			expect(new Set(calls)).to.deep.equal(new Set(["ai-hydro"]))
 		})
 
 		it("plan_mode_respond is not gated (source guard) and the gate does not run for a non-eligible task", () => {

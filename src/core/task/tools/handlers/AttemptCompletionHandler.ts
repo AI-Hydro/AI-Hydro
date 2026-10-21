@@ -67,14 +67,16 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 	/** Cheap, I/O-free eligibility for the pre-completion gate (cached hub state and task caches only). */
 	private gateEligibility(config: TaskConfig): boolean {
 		const settings = config.services.stateManager
-		return computeGateEligibility({
+		const result = computeGateEligibility({
 			toolName: this.name,
 			mode: settings.getGlobalSettingsKey("mode"),
 			gateSetting: settings.getGlobalSettingsKey("finalAnswerAuditGate"),
 			auditEnabled: settings.getGlobalSettingsKey("finalAnswerAuditEnabled"),
 			servers: config.services.mcpHub.getServers(),
 			state: config.taskState.answerAuditGate,
-		}).eligible
+		})
+		config.taskState.answerAuditGate.eligibleServer = result.eligible ? result.serverName : undefined
+		return result.eligible
 	}
 
 	/** Emit one structured `answer_audit` row (never prose): the webview renders it, copy/notification text is derived. */
@@ -177,11 +179,22 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// The pre-completion gate runs FIRST: before the notification, the completion say, the checkpoint,
 		// telemetry and the command ask. Not eligible: nothing below changes.
 		let gateDecision: Extract<GateDecision, { kind: "accept" }> | undefined
+		// Emit the gate's final record once, as soon as the answer is shown (before any command ask, so a denied or
+		// rejected command cannot drop the revision / removed-value / unresolved-findings disclosure).
+		const finalizeGate = async () => {
+			const decision = gateDecision
+			gateDecision = undefined
+			if (decision) {
+				await this.emitGateFinal(config, decision).catch(() => {})
+				resetGateCycle(config.taskState.answerAuditGate)
+			}
+		}
 		if (gateEligible) {
 			const state = config.taskState.answerAuditGate
 			const decision = await evaluateDraft({
 				state,
 				hub: config.services.mcpHub,
+				serverName: state.eligibleServer,
 				ulid: config.ulid,
 				workspaceRoot: await resolveWorkspaceRoot(config.cwd),
 				modelId: config.taskState.lastResponseModelId,
@@ -269,6 +282,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				await config.callbacks.saveCheckpoint(true, completionMessageTs)
 				await addNewChangesFlagToLastCompletionResultMessage()
 				telemetryService.captureTaskCompleted(config.ulid)
+				await finalizeGate()
 			} else {
 				config.taskState.answerAuditGate.hidden = undefined
 				// we already sent a command message, meaning the complete completion message has also been sent
@@ -317,8 +331,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// is time-bounded; it can never block or change the answer.
 		if (gateDecision) {
 			// The audit already ran inside the gate; emit its record (with revisions, removed values, disclosure).
-			await this.emitGateFinal(config, gateDecision).catch(() => {})
-			resetGateCycle(config.taskState.answerAuditGate)
+			await finalizeGate()
 		} else {
 			await this.showFinalAnswerAudit(config, result)
 		}

@@ -3,6 +3,7 @@ import {
 	AUDIT_PROGRESS_CHECKING,
 	capDraft,
 	collectAuditProse,
+	cumulativeDropped,
 	type DroppedEvidence,
 	diffDroppedEvidence,
 	extractQuantities,
@@ -64,6 +65,8 @@ export interface AnswerAuditGateState {
 	revisions: number
 	history: AnswerRevisionEvent[]
 	previousProse?: string
+	/** The first draft of this cycle (for the cumulative removed-value disclosure). */
+	firstProse?: string
 	hidden?: HiddenDraft
 	/** Study id verified as bound to this chat by an earlier status call (refreshed on start_session). */
 	boundStudyId?: string
@@ -73,6 +76,8 @@ export interface AnswerAuditGateState {
 	gradedObserved: boolean
 	/** Eligibility decided before streaming the current attempt_completion block; reused by execute(). */
 	eligibleForBlock?: boolean
+	/** The server the eligibility check chose: the gate audits on exactly this one and requires it to be trusted. */
+	eligibleServer?: string
 	/** Why the task was interrupted (set by the caller of abortTask: "stopped by user" is the default). */
 	interruptReason?: string
 }
@@ -86,6 +91,7 @@ export function resetGateCycle(state: AnswerAuditGateState): void {
 	state.revisions = 0
 	state.history = []
 	state.previousProse = undefined
+	state.firstProse = undefined
 	state.hidden = undefined
 	state.eligibleForBlock = undefined
 }
@@ -184,6 +190,8 @@ export interface GateContext {
 	/** A message the user typed while the gate was running (consumed), if any. */
 	takeUserMessage(): { text?: string; images?: string[]; files?: string[] } | undefined
 	isAborted(): boolean
+	/** The server judged eligible; the audit runs on it, and it must be trusted. */
+	serverName?: string
 	/** Test seams. */
 	now?: () => number
 	deadlineMs?: number
@@ -258,6 +266,7 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 	const hash = sha256(prose)
 	const attemptIndex = state.revisions
 	state.hidden = { text: prose, hash, attempt: attemptIndex, ts: started }
+	state.firstProse ??= prose
 
 	const userMessage = () => ctx.takeUserMessage()
 	let typed = userMessage()
@@ -265,6 +274,14 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 		return { kind: "user_feedback", ...typed }
 	}
 
+	// Persist the draft, hidden, BEFORE auditing it: a reload during the audit can then reveal it (F3).
+	await ctx.emit({
+		...toAnswerAuditPayload(
+			{ status: "unavailable", reason: "audit pending" },
+			{ stage: "pending", attempt: attemptIndex, answerTs: started, answer: prose },
+		),
+		...capDraft(prose),
+	})
 	await ctx.setProgress(AUDIT_PROGRESS_CHECKING)
 	const timeoutNote = `timed out after ${Math.round(deadlineMs / 1000)}s`
 	const outcome = await withDeadline(
@@ -276,6 +293,8 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 			modelIdReturned: ctx.modelId,
 			timeoutMs: Math.max(1, deadlineMs - (now() - started)),
 			boundStudy: state.boundStudyId,
+			serverName: ctx.serverName,
+			requireTrusted: true,
 		}).catch(
 			(error): FinalAnswerAuditOutcome => ({
 				status: "unavailable",
@@ -348,7 +367,19 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 		outcome,
 		attempt: state.revisions,
 		history: state.history.slice(),
-		dropped: state.revisions > 0 ? dropped : undefined,
+		dropped:
+			state.revisions > 0 && state.firstProse !== undefined
+				? cumulativeDropped(state.firstProse, prose, {
+						quantities: [
+							...state.history.flatMap((e) => e.droppedQuantities ?? []),
+							...(dropped?.droppedQuantities ?? []),
+						],
+						markers: [
+							...state.history.flatMap((e) => e.droppedClaimMarkers ?? []),
+							...(dropped?.droppedClaimMarkers ?? []),
+						],
+					})
+				: undefined,
 		disclosure,
 		prose,
 	}
@@ -413,13 +444,15 @@ export function interruptedPayload(
 }
 
 /**
- * Resume check: if the last answer_audit row of a saved transcript is a `revision` row with no `final` or
- * `interrupted` row and no completion_result after it, the draft behind it was hidden and never shown.
+ * Resume check: if the last answer_audit row of a saved transcript is a `revision` or `pending` row (a draft held
+ * back, or one persisted before its audit) with no `final` or `interrupted` row, no completion_result and no user
+ * message after it, the draft behind it was hidden and never shown.
  */
 export function findUnrevealedRevision(rows: readonly GateRow[]): AnswerAuditPayload | undefined {
 	for (let i = rows.length - 1; i >= 0; i--) {
 		const r = rows[i]
-		if (r.type === "say" && r.say === "completion_result") {
+		// A shown answer or a later user message ends the question (the draft was shown, or already dealt with).
+		if (r.type === "say" && (r.say === "completion_result" || r.say === "user_feedback")) {
 			return undefined
 		}
 		if (r.type === "say" && r.say === "answer_audit" && !r.partial) {
@@ -427,7 +460,7 @@ export function findUnrevealedRevision(rows: readonly GateRow[]): AnswerAuditPay
 			if (!p || p.v !== ANSWER_AUDIT_PAYLOAD_VERSION) {
 				continue
 			}
-			return p.stage === "revision" ? (p as AnswerAuditPayload) : undefined
+			return p.stage === "revision" || p.stage === "pending" ? (p as AnswerAuditPayload) : undefined
 		}
 	}
 	return undefined
