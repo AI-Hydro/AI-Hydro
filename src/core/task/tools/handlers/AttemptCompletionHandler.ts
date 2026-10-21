@@ -3,11 +3,24 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
+import { AUDIT_PROGRESS_DRAFTING } from "@shared/aihydro/answerAuditGate"
+import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import { findLastIndex } from "@shared/array"
 import { COMPLETION_RESULT_CHANGES_FLAG } from "@shared/ExtensionMessage"
 import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
 import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
+import {
+	compactPendingRows,
+	computeGateEligibility,
+	cycleHadHard,
+	evaluateDraft,
+	finalPayload,
+	type GateDecision,
+	interruptedPayload,
+	resetGateCycle,
+	sweepAuditProgress,
+} from "../../answerAuditGate"
 import { type FinalAnswerAuditOutcome, runFinalAnswerAudit, toAnswerAuditPayload } from "../../finalAnswerAudit"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
@@ -30,6 +43,16 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		const result = block.params.result
 		const command = block.params.command
 
+		// Gate-eligible tasks do not stream the draft: it may be rejected and revised before the user should read it.
+		// The decision is made once per block from cached state (no I/O) and reused by execute().
+		const config = uiHelpers.getConfig()
+		const gate = config.taskState.answerAuditGate
+		gate.eligibleForBlock ??= this.gateEligibility(config)
+		if (gate.eligibleForBlock) {
+			await uiHelpers.say("answer_audit", AUDIT_PROGRESS_DRAFTING, undefined, undefined, true)
+			return
+		}
+
 		if (!command) {
 			// no command, still outputting partial result
 			await uiHelpers.say(
@@ -40,6 +63,21 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				block.partial,
 			)
 		}
+	}
+
+	/** Cheap, I/O-free eligibility for the pre-completion gate (cached hub state and task caches only). */
+	private gateEligibility(config: TaskConfig): boolean {
+		const settings = config.services.stateManager
+		const result = computeGateEligibility({
+			toolName: this.name,
+			mode: settings.getGlobalSettingsKey("mode"),
+			gateSetting: settings.getGlobalSettingsKey("finalAnswerAuditGate"),
+			auditEnabled: settings.getGlobalSettingsKey("finalAnswerAuditEnabled"),
+			servers: config.services.mcpHub.getServers(),
+			state: config.taskState.answerAuditGate,
+		})
+		config.taskState.answerAuditGate.eligibleServer = result.eligible ? result.serverName : undefined
+		return result.eligible
 	}
 
 	/** Emit one structured `answer_audit` row (never prose): the webview renders it, copy/notification text is derived. */
@@ -56,6 +94,24 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			answer,
 		})
 		await config.callbacks.say("answer_audit", JSON.stringify(payload))
+	}
+
+	/** Emit the final-stage row for a gate-accepted answer (the audit already ran inside the gate). */
+	private async emitGateFinal(config: TaskConfig, decision: Extract<GateDecision, { kind: "accept" }>): Promise<void> {
+		// Nothing to audit / no research session stays silent unless the answer was revised: a revised answer
+		// always carries its record.
+		if (decision.outcome.status === "skipped" && decision.attempt === 0) {
+			await compactPendingRows(config.messageState)
+			return
+		}
+		const answerRow = config.messageState
+			.getAiHydroMessages()
+			.slice()
+			.reverse()
+			.find((m) => m.say === "completion_result")
+		const payload: AnswerAuditPayload = finalPayload(decision, answerRow?.ts ?? Date.now(), cycleHadHard(decision.history))
+		await config.callbacks.say("answer_audit", JSON.stringify(payload))
+		await compactPendingRows(config.messageState)
 	}
 
 	private async showFinalAnswerAudit(config: TaskConfig, answer: string): Promise<void> {
@@ -90,6 +146,31 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		// The eligibility decided before streaming wins, so a draft that streamed is never gated afterwards.
+		const gate = config.taskState.answerAuditGate
+		const gateEligible = gate.eligibleForBlock ?? this.gateEligibility(config)
+		gate.eligibleForBlock = undefined
+		try {
+			return await this.executeBlock(config, block, gateEligible)
+		} finally {
+			if (gateEligible) {
+				await sweepAuditProgress(config.messageState).catch(() => {}) // never leave the activity line behind
+			}
+		}
+	}
+
+	/** Reveal a hidden draft because the gate was left early, then end the cycle. */
+	private async revealDraft(config: TaskConfig, reason: string): Promise<void> {
+		const payload = interruptedPayload(config.taskState.answerAuditGate, reason)
+		resetGateCycle(config.taskState.answerAuditGate)
+		await sweepAuditProgress(config.messageState)
+		if (payload) {
+			await config.callbacks.say("answer_audit", JSON.stringify(payload))
+			await compactPendingRows(config.messageState)
+		}
+	}
+
+	private async executeBlock(config: TaskConfig, block: ToolUse, gateEligible: boolean): Promise<ToolResponse> {
 		const result: string | undefined = block.params.result
 		const command: string | undefined = block.params.command
 
@@ -97,6 +178,71 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		if (!result) {
 			config.taskState.consecutiveMistakeCount++
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "result")
+		}
+
+		// The pre-completion gate runs FIRST: before the notification, the completion say, the checkpoint,
+		// telemetry and the command ask. Not eligible: nothing below changes.
+		let gateDecision: Extract<GateDecision, { kind: "accept" }> | undefined
+		// Emit the gate's final record once, as soon as the answer is shown (before any command ask, so a denied or
+		// rejected command cannot drop the revision / removed-value / unresolved-findings disclosure).
+		const finalizeGate = async () => {
+			const decision = gateDecision
+			gateDecision = undefined
+			if (decision) {
+				await this.emitGateFinal(config, decision).catch(() => {})
+				resetGateCycle(config.taskState.answerAuditGate)
+			}
+		}
+		if (gateEligible) {
+			const state = config.taskState.answerAuditGate
+			const decision = await evaluateDraft({
+				state,
+				hub: config.services.mcpHub,
+				serverName: state.eligibleServer,
+				ulid: config.ulid,
+				workspaceRoot: await resolveWorkspaceRoot(config.cwd),
+				modelId: config.taskState.lastResponseModelId,
+				result,
+				rows: () => config.messageState.getAiHydroMessages(),
+				emit: async (payload) => {
+					await sweepAuditProgress(config.messageState)
+					await config.callbacks.say("answer_audit", JSON.stringify(payload))
+				},
+				setProgress: async (text) => {
+					if (text) {
+						await config.callbacks.say("answer_audit", text, undefined, undefined, true)
+					} else {
+						await sweepAuditProgress(config.messageState)
+					}
+				},
+				takeUserMessage: () => {
+					const ts = config.taskState
+					if (ts.askResponse !== "messageResponse") {
+						return undefined
+					}
+					const typed = { text: ts.askResponseText, images: ts.askResponseImages, files: ts.askResponseFiles }
+					ts.askResponse = undefined
+					ts.askResponseText = undefined
+					ts.askResponseImages = undefined
+					ts.askResponseFiles = undefined
+					return typed
+				},
+				isAborted: () => config.taskState.abort,
+			})
+			await sweepAuditProgress(config.messageState)
+			if (decision.kind === "aborted") {
+				return ""
+			}
+			if (decision.kind === "revise") {
+				// Not an accepted attempt: consecutiveMistakeCount is neither incremented nor reset here.
+				return decision.feedback
+			}
+			if (decision.kind === "user_feedback") {
+				await this.revealDraft(config, "you sent a message while the answer was being checked")
+				await config.callbacks.say("user_feedback", decision.text ?? "", decision.images, decision.files)
+				return await this.feedbackResult(undefined, decision.text, decision.images, decision.files)
+			}
+			gateDecision = decision
 		}
 
 		config.taskState.consecutiveMistakeCount = 0
@@ -136,10 +282,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			if (lastMessage && lastMessage.ask !== "command") {
 				// haven't sent a command message yet so first send completion_result then command
 				const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+				config.taskState.answerAuditGate.hidden = undefined // shown: no longer a hidden draft
 				await config.callbacks.saveCheckpoint(true, completionMessageTs)
 				await addNewChangesFlagToLastCompletionResultMessage()
 				telemetryService.captureTaskCompleted(config.ulid)
+				await finalizeGate()
 			} else {
+				config.taskState.answerAuditGate.hidden = undefined
 				// we already sent a command message, meaning the complete completion message has also been sent
 				await config.callbacks.saveCheckpoint(true)
 			}
@@ -165,6 +314,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			commandResult = execCommandResult
 		} else {
 			const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+			config.taskState.answerAuditGate.hidden = undefined // shown: no longer a hidden draft
 			await config.callbacks.saveCheckpoint(true, completionMessageTs)
 			await addNewChangesFlagToLastCompletionResultMessage()
 			telemetryService.captureTaskCompleted(config.ulid)
@@ -183,7 +333,12 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// Final-answer audit: display-only evidence check of the answer the user is about to read.
 		// Runs before the completion ask (a say after a pending ask would hide the ask's buttons) and
 		// is time-bounded; it can never block or change the answer.
-		await this.showFinalAnswerAudit(config, result)
+		if (gateDecision) {
+			// The audit already ran inside the gate; emit its record (with revisions, removed values, disclosure).
+			await finalizeGate()
+		} else {
+			await this.showFinalAnswerAudit(config, result)
+		}
 
 		const { response, text, images, files: completionFiles } = await config.callbacks.ask("completion_result", "", false)
 		if (response === "yesButtonClicked") {
@@ -191,7 +346,16 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 
 		await config.callbacks.say("user_feedback", text ?? "", images, completionFiles)
+		return await this.feedbackResult(commandResult, text, images, completionFiles)
+	}
 
+	/** Tool result carrying the user's feedback on a shown (or gate-interrupted) answer. */
+	private async feedbackResult(
+		commandResult: any,
+		text: string | undefined,
+		images: string[] | undefined,
+		completionFiles: string[] | undefined,
+	): Promise<ToolResponse> {
 		const toolResults: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
 		if (commandResult) {
 			if (typeof commandResult === "string") {

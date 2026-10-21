@@ -122,6 +122,7 @@ export interface ExtensionState {
 	remoteConfigSettings?: Partial<GlobalStateAndSettings>
 	subagentsEnabled?: boolean
 	finalAnswerAuditEnabled?: boolean
+	finalAnswerAuditGate?: boolean
 	/** Discovered workspace HTML files (path + name) for the HTML Preview file browser */
 	workspaceHtmlFiles: Array<{ path: string; name: string }>
 	/** Incremented whenever HTML preview items change — used as a reliable signal for the webview to refresh */

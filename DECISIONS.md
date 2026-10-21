@@ -57,6 +57,23 @@ Branch `vision2040/harness-quickwins` (from the SOTA harness/model audit, items 
   unavailable"; it audits only the study bound to the current chat (it will not fall back to
   the most recent study on disk). The server-side `recent_fallback` in `_resolve_session`
   remains and should be disabled for `audit_interpretation` in aihydro-tools.
+- **Answer-audit gate (W2-C) is default-OFF and scoped to graded hard findings** (`finalAnswerAuditGate`;
+  turning the audit off turns the gate off). It fires only on a graded audit outcome with `hardCount > 0`,
+  at most 2 silent revisions per completion cycle, never on legacy/unavailable/skipped, never on
+  `plan_mode_respond`. Eligibility is computed from cached state before streaming (setting, trusted
+  first-party server, audit tool description that speaks of advisories or a graded outcome seen earlier in the
+  task, study known to be bound); when not eligible the answer streams exactly as before. The gate runs first in
+  `AttemptCompletionHandler`, feedback is a non-error result (never `recentToolErrors`/`execOutcome`/the mistake
+  count), and every non-success exit reveals the hidden draft as "Unchecked draft (audit interrupted: ...)".
+  aihydro-tools 2.6.0 has no `previous_prose` input and no `[unverified]` marker, so removed values are found by
+  an approximate extension-side token diff (signed values, ²/³ normalised, `.7`, scientific notation) and the
+  revision message offers no unverified path. The gate audits ALL non-empty narration
+  since the last user message plus the result (plan M4). Narration from earlier turns of the cycle cannot be
+  revised, so findings whose excerpt sits only there are NOT counted toward the hard gate and are NOT sent to the
+  model as revision instructions; they are disclosed in the footer ("N earlier-narration findings not revisable",
+  listed) via `AnswerAuditPayload.unrevisableFindings`. An excerpt that cannot be located counts as revisable.
+  The removed-value footer is cumulative over the
+  cycle. The gate audits only on the server it judged eligible, and requires it to be trusted.
 - **Explorer subagent is an allowlist**, with `use_mcp_tool` gated on `readOnlyHint === true`
   (unannotated = not read-only). New tools are closed by default.
 

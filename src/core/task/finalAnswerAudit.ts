@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import {
 	ANSWER_AUDIT_PAYLOAD_VERSION,
 	type AnswerAuditPayload,
@@ -21,7 +22,8 @@ import { isAiHydroServerName } from "./tools/handlers/aiHydroServer"
  * researcher actually reads.
  *
  * Contract:
- *  - DISPLAY ONLY (until the W2-C gate lands). The audit never blocks completion and never alters the answer.
+ *  - DISPLAY ONLY unless the pre-completion gate is on (`finalAnswerAuditGate`, default off; see answerAuditGate.ts).
+ *    Without it the audit never blocks completion and never alters the answer.
  *  - Failures are reported as "audit unavailable", never swallowed and never treated as a pass.
  *  - Silent only when there is nothing to audit (no AI-Hydro server connected, or no numbers/markers).
  */
@@ -81,8 +83,23 @@ export function hasAuditableContent(answer: string): boolean {
 	return /\d/.test(answer) || /\[(?:run|claim|lit):/i.test(answer)
 }
 
-function findAuditServer(hub: AuditHub): McpServer | undefined {
-	return hub.getServers().find((s) => isAiHydroServerName(s.name) && s.status === "connected" && !s.disabled)
+/**
+ * The server that audits. Alias-named servers are candidates; a trusted one (isServerTrusted) is preferred over an
+ * untrusted one even when listed later. The W2-C gate passes the exact server it judged eligible and requires trust,
+ * because its fix hints reach the model as revision instructions.
+ */
+function findAuditServer(hub: AuditHub, opts: { serverName?: string; requireTrusted?: boolean } = {}): McpServer | undefined {
+	const candidates = hub
+		.getServers()
+		.filter(
+			(s) =>
+				isAiHydroServerName(s.name) &&
+				s.status === "connected" &&
+				!s.disabled &&
+				(!opts.serverName || s.name === opts.serverName),
+		)
+	const trusted = candidates.find((s) => isServerTrusted(s as any))
+	return trusted ?? (opts.requireTrusted ? undefined : candidates[0])
 }
 
 function unavailable(reason: string): FinalAnswerAuditOutcome {
@@ -116,11 +133,23 @@ export async function runFinalAnswerAudit(args: {
 	answer: string
 	modelIdReturned?: string
 	timeoutMs?: number
+	/**
+	 * Study already verified as bound to this chat by an earlier status call in this task (the W2-C gate's cache, so
+	 * revision rounds do not repeat the status round trip). The audited session must still equal it.
+	 */
+	boundStudy?: string
+	/** The exact server to audit on (the gate's eligible server) and whether it must be trusted. */
+	serverName?: string
+	requireTrusted?: boolean
 }): Promise<FinalAnswerAuditOutcome> {
 	const { hub, ulid, workspaceRoot, answer } = args
-	const server = findAuditServer(hub)
+	const server = findAuditServer(hub, { serverName: args.serverName, requireTrusted: args.requireTrusted })
 	if (!server) {
-		return { status: "skipped", reason: "no-ai-hydro-server" }
+		// Under the gate (requireTrusted) the server was eligible moments ago: losing it mid-gate is an audit that did
+		// not run, shown as such, never a silent skip.
+		return args.requireTrusted
+			? unavailable("trusted audit server no longer connected")
+			: { status: "skipped", reason: "no-ai-hydro-server" }
 	}
 	if (!hasAuditableContent(answer)) {
 		return { status: "skipped", reason: "nothing-to-audit" }
@@ -133,26 +162,32 @@ export async function runFinalAnswerAudit(args: {
 	// That must never decide which evidence ledger audits this answer, so first confirm a study is
 	// actually bound to THIS chat, and later require the audited session to be that study.
 	let boundStudy: string
-	try {
-		if (server.tools && server.tools.length > 0 && !server.tools.some((t) => t.name === CHAT_STATUS_TOOL_NAME)) {
-			return unavailable(`cannot confirm a research session is bound to this chat (${CHAT_STATUS_TOOL_NAME} not exposed)`)
+	if (args.boundStudy) {
+		boundStudy = args.boundStudy
+	} else {
+		try {
+			if (server.tools && server.tools.length > 0 && !server.tools.some((t) => t.name === CHAT_STATUS_TOOL_NAME)) {
+				return unavailable(
+					`cannot confirm a research session is bound to this chat (${CHAT_STATUS_TOOL_NAME} not exposed)`,
+				)
+			}
+			const statusCtx = buildAiHydroCallContext({ chat_id: ulid }, ulid, workspaceRoot, args.modelIdReturned)
+			const status = responseJson(
+				await withTimeout(
+					hub.callTool(server.name, CHAT_STATUS_TOOL_NAME, statusCtx.args, ulid, statusCtx.meta),
+					args.timeoutMs ?? DEFAULT_AUDIT_TIMEOUT_MS,
+				),
+			)
+			if (status.isError || !status.json || typeof status.json.bound !== "boolean") {
+				return unavailable("could not determine whether a research session is bound to this chat")
+			}
+			if (!status.json.bound || typeof status.json.study_id !== "string") {
+				return { status: "skipped", reason: "no-research-session" }
+			}
+			boundStudy = status.json.study_id
+		} catch (error) {
+			return unavailable(error instanceof Error ? error.message : String(error))
 		}
-		const statusCtx = buildAiHydroCallContext({ chat_id: ulid }, ulid, workspaceRoot, args.modelIdReturned)
-		const status = responseJson(
-			await withTimeout(
-				hub.callTool(server.name, CHAT_STATUS_TOOL_NAME, statusCtx.args, ulid, statusCtx.meta),
-				args.timeoutMs ?? DEFAULT_AUDIT_TIMEOUT_MS,
-			),
-		)
-		if (status.isError || !status.json || typeof status.json.bound !== "boolean") {
-			return unavailable("could not determine whether a research session is bound to this chat")
-		}
-		if (!status.json.bound || typeof status.json.study_id !== "string") {
-			return { status: "skipped", reason: "no-research-session" }
-		}
-		boundStudy = status.json.study_id
-	} catch (error) {
-		return unavailable(error instanceof Error ? error.message : String(error))
 	}
 
 	let response: McpToolCallResponse

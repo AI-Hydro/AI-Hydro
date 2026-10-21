@@ -25,6 +25,7 @@ import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
+import { noteSessionStarted, START_SESSION_TOOL_NAME } from "./answerAuditGate"
 import { explorerBlockReason } from "./explorerPolicy"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
@@ -33,6 +34,7 @@ import { AutoApprove } from "./tools/autoApprove"
 import { AccessMcpResourceHandler } from "./tools/handlers/AccessMcpResourceHandler"
 import { AskFollowupQuestionToolHandler } from "./tools/handlers/AskFollowupQuestionToolHandler"
 import { AttemptCompletionHandler } from "./tools/handlers/AttemptCompletionHandler"
+import { isAiHydroServerName } from "./tools/handlers/aiHydroServer"
 import { BrowserToolHandler } from "./tools/handlers/BrowserToolHandler"
 import { CondenseHandler } from "./tools/handlers/CondenseHandler"
 import { ExecuteCommandToolHandler } from "./tools/handlers/ExecuteCommandToolHandler"
@@ -318,8 +320,21 @@ export class ToolExecutor {
 		}
 	}
 
+	/** A first-party start_session may change which study is bound to this chat: refresh the gate's cached binding. */
+	private noteStartSession(content: ToolResponse, block: ToolUse) {
+		if (
+			block.params.tool_name === START_SESSION_TOOL_NAME &&
+			isAiHydroServerName(block.params.server_name) &&
+			typeof content === "string" &&
+			!ToolExecutor.isToolErrorResult(content)
+		) {
+			noteSessionStarted(this.taskState.answerAuditGate)
+		}
+	}
+
 	private pushToolResult = (content: ToolResponse, block: ToolUse) => {
 		this.recordIfToolError(content, block)
+		this.noteStartSession(content, block)
 		void this.recordExecution(content).catch((error) => console.error("Failed to record tool execution outcome", error))
 		// Use the ToolResultUtils to properly format and push the tool result
 		ToolResultUtils.pushToolResult(

@@ -25,6 +25,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		openaiReasoningEffort,
 		strictPlanModeEnabled,
 		finalAnswerAuditEnabled,
+		finalAnswerAuditGate,
 		yoloModeToggled,
 		dictationSettings,
 		useAutoCondense,
@@ -246,6 +247,24 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 								When the AI-Hydro MCP server is connected, checks each final answer for uncited numbers and
 								unsupported claims and shows the result below the answer. Display only: it never blocks or changes
 								the answer.
+							</p>
+						</div>
+						<div className="mt-2">
+							<VSCodeCheckbox
+								checked={finalAnswerAuditGate === true}
+								disabled={finalAnswerAuditEnabled === false}
+								onChange={(e: any) => {
+									const checked = e.target.checked === true
+									updateSetting("finalAnswerAuditGate", checked)
+								}}>
+								Check answers before showing them (experimental)
+							</VSCodeCheckbox>
+							<p className="toggle-description">
+								Requires answer auditing. When the audit finds uncited quantities (hard findings), the answer is
+								held back and the agent is asked to revise it, up to 2 times, before you see it. Each revision
+								costs one extra model request and delays the answer. If findings remain, the answer is shown with
+								that stated. It checks that numbers are traced to recorded runs; it does not check that the
+								science is correct.
 							</p>
 						</div>
 						<div className="mt-2">
