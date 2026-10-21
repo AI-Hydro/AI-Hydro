@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo } from "react"
 import { useMount } from "react-use"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { isTaskRunning } from "./chat-view/shared/buttonConfig"
 import { useShowNavbar } from "@/context/PlatformContext"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
@@ -27,6 +26,9 @@ import {
 	useScrollBehavior,
 	WelcomeSection,
 } from "./chat-view"
+import { isTaskRunning } from "./chat-view/shared/buttonConfig"
+import { buildTranscriptView } from "./chat-view/utils/messageUtils"
+import { makeTranscriptResolvers } from "./transcript/resolvers"
 
 interface ChatViewProps {
 	isHidden: boolean
@@ -50,6 +52,9 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		userInfo,
 		currentFocusChainChecklist,
 		backgroundCommandRunning,
+		mcpServers,
+		protectedRoots,
+		transcriptDetail,
 	} = useExtensionState()
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
@@ -299,8 +304,22 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		return groupMessages(visibleMessages)
 	}, [visibleMessages])
 
+	// The list the transcript renders: today's rows in verbose, presenter items otherwise (unfiltered input).
+	const detail = transcriptDetail ?? "normal"
+	const resolvers = useMemo(() => makeTranscriptResolvers(mcpServers ?? [], protectedRoots ?? []), [mcpServers, protectedRoots])
+	const transcriptView = useMemo(
+		() => buildTranscriptView(modifiedMessages, groupedMessages, { detail, ...resolvers }),
+		[modifiedMessages, groupedMessages, detail, resolvers],
+	)
+
 	// Use scroll behavior hook
-	const scrollBehavior = useScrollBehavior(messages, visibleMessages, groupedMessages, expandedRows, setExpandedRows)
+	const scrollBehavior = useScrollBehavior(
+		messages,
+		detail === "verbose" ? visibleMessages : modifiedMessages,
+		transcriptView.scrollEntries,
+		expandedRows,
+		setExpandedRows,
+	)
 
 	const placeholderText = useMemo(() => {
 		const text = task ? "Type a message..." : "Type your task here..."
@@ -337,11 +356,14 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				{task && (
 					<MessagesArea
 						chatState={chatState}
+						detail={detail}
 						groupedMessages={groupedMessages}
+						isRunning={isTaskRunning(messages.at(-1), backgroundCommandRunning)}
 						messageHandlers={messageHandlers}
 						modifiedMessages={modifiedMessages}
 						scrollBehavior={scrollBehavior}
 						task={task}
+						view={transcriptView}
 					/>
 				)}
 			</div>
@@ -361,8 +383,8 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					task={task}
 				/>
 				<InputSection
-					isTaskRunning={isTaskRunning(messages.at(-1), backgroundCommandRunning)}
 					chatState={chatState}
+					isTaskRunning={isTaskRunning(messages.at(-1), backgroundCommandRunning)}
 					messageHandlers={messageHandlers}
 					placeholderText={placeholderText}
 					scrollBehavior={scrollBehavior}

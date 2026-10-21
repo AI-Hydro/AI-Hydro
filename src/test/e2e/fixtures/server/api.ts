@@ -72,6 +72,26 @@ export const name = "cline"
 </diff>
 </replace_in_file>`
 
+// W2-A2: one user turn that reads three workspace files and then answers. The server picks the next step from the tool
+// results already in the request body, so the sequence is deterministic across the four provider requests.
+// No prose before the call: a non-empty text row breaks a work group, and this fixture is about one group of three.
+const read_file_step = (path: string) => `<read_file>
+<path>${path}</path>
+</read_file>`
+
+const read_three_done = `<attempt_completion>
+<result>
+I read test.ts, README.md and index.html. This is a mock answer, not a result.
+</result>
+</attempt_completion>`
+
+export const E2E_READ_THREE_FILES = [
+	{ after: "[read_file for 'index.html'] Result:", text: read_three_done },
+	{ after: "[read_file for 'README.md'] Result:", text: read_file_step("index.html") },
+	{ after: "[read_file for 'test.ts'] Result:", text: read_file_step("README.md") },
+	{ after: "read_three_files", text: read_file_step("test.ts") },
+]
+
 export const E2E_MOCK_API_RESPONSES = {
 	DEFAULT: "Hello! I'm a mock AI-Hydro API response.",
 	REPLACE_REQUEST: replace_in_file,

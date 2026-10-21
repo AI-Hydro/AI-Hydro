@@ -58,6 +58,11 @@ function convertTool(tool: McpTool): ProtoMcpTool {
 		description: tool.description,
 		inputSchema: inputSchemaString,
 		autoApprove: tool.autoApprove,
+		// Hints only; a non-boolean value is dropped so "absent" keeps its conservative meaning downstream.
+		readOnlyHint: typeof tool.annotations?.readOnlyHint === "boolean" ? tool.annotations.readOnlyHint : undefined,
+		destructiveHint: typeof tool.annotations?.destructiveHint === "boolean" ? tool.annotations.destructiveHint : undefined,
+		idempotentHint: typeof tool.annotations?.idempotentHint === "boolean" ? tool.annotations.idempotentHint : undefined,
+		openWorldHint: typeof tool.annotations?.openWorldHint === "boolean" ? tool.annotations.openWorldHint : undefined,
 	}
 }
 
@@ -135,6 +140,18 @@ function convertProtoTool(protoTool: ProtoMcpTool): McpTool {
 				: protoTool.inputSchema
 			: undefined,
 		autoApprove: protoTool.autoApprove,
+		annotations:
+			protoTool.readOnlyHint !== undefined ||
+			protoTool.destructiveHint !== undefined ||
+			protoTool.idempotentHint !== undefined ||
+			protoTool.openWorldHint !== undefined
+				? {
+						readOnlyHint: protoTool.readOnlyHint,
+						destructiveHint: protoTool.destructiveHint,
+						idempotentHint: protoTool.idempotentHint,
+						openWorldHint: protoTool.openWorldHint,
+					}
+				: undefined,
 	}
 }
 

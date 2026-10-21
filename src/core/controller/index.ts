@@ -72,6 +72,7 @@ import {
 import { fetchRemoteConfig } from "../storage/remote-config/fetch"
 import { PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
+import { getHostProtectedRoots } from "../task/protectedRoots"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { appendAiHydroStealthModels } from "./models/refreshOpenRouterModels"
 import { sendStateUpdate } from "./state/subscribeToState"
@@ -1218,6 +1219,7 @@ export class Controller {
 		const lastDismissedModelBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedModelBannerVersion") || 0
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
 		const finalAnswerAuditEnabled = this.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled")
+		const transcriptDetail = this.stateManager.getGlobalSettingsKey("transcriptDetail")
 		const finalAnswerAuditGate = this.stateManager.getGlobalSettingsKey("finalAnswerAuditGate")
 
 		const localAiHydroRulesToggles = this.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
@@ -1319,6 +1321,8 @@ export class Controller {
 			remoteConfigSettings: this.stateManager.getRemoteConfigSettings(),
 			subagentsEnabled,
 			finalAnswerAuditEnabled,
+			transcriptDetail,
+			protectedRoots: getHostProtectedRoots(),
 			finalAnswerAuditGate,
 			workspaceHtmlFiles: this.workspaceHtmlFiles.map((f) => ({
 				path: f.relativePath,

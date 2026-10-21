@@ -4,6 +4,7 @@
  * the fixture badge text to prove it.
  */
 import type { ExtensionState } from "@shared/ExtensionMessage"
+import type { McpServer } from "@shared/mcp"
 import type { HtmlPreviewItem } from "@shared/proto/cline/html_preview"
 import type { ClaimRecord } from "@shared/proto/cline/ledger"
 import type { MapLayer } from "@shared/proto/cline/map"
@@ -79,5 +80,11 @@ export interface ScreenDef {
 	expectAbsent?: string[]
 	/** Scroller that must be pinned to its end (structural assertion). */
 	scrollPinned?: string
+	/**
+	 * MCP servers served through the MCP-servers subscription, the way the extension host does (the webview reads
+	 * server trust and tool annotations only from that stream; `state` carries no servers). Unset by default so existing
+	 * card screens keep their measured rendering.
+	 */
+	mcpServers?: McpServer[]
 	render: () => ReactNode
 }

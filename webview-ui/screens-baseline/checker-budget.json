@@ -10,6 +10,108 @@
 		}
 	},
 	"screens": {
+		"chat-annotated-first-party": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-unannotated-first-party": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-answer-interrupted": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-answer-pending-hidden": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-detail-focus": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-detail-verbose": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 36,
+				"smallText": 0,
+				"contrast": 9,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-answer-audit-graded": {
 			"ref": {
 				"noName": 0,
@@ -72,23 +174,6 @@
 			"matrixTotal": {
 				"noName": 0,
 				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-answer-interrupted": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 3,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 18,
 				"smallText": 0,
 				"contrast": 3,
 				"contrastIndeterminate": 0
@@ -2286,6 +2371,56 @@
 					"cells": 6
 				},
 				"chat-answer-revised": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-answer-pending-hidden": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-detail-focus": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-detail-verbose": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 36,
+						"smallText": 0,
+						"contrast": 9,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-unannotated-first-party": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-annotated-first-party": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 24,

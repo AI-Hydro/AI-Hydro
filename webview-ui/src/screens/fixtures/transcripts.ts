@@ -337,6 +337,41 @@ export const answerRevisedTask: AiHydroMessage[] = (() => {
 	return [...rows, shown, say(c(), "answer_audit", JSON.stringify(final))]
 })()
 
+/**
+ * W2-C: a hidden `pending` row holds the unchecked draft in the middle of a run of calls. It must render as nothing,
+ * not count as a revision and not split the group; the `final` audit attaches to the answer.
+ */
+export const answerPendingHiddenTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const pending: AnswerAuditPayload = {
+		v: 1,
+		stage: "pending",
+		status: "unavailable",
+		sessionId: "fx-session-0001",
+		cited: 0,
+		total: 0,
+		hardCount: 0,
+		advisoryCount: 0,
+		schema: "graded",
+		attempt: 0,
+		answerTs: 0,
+		draftHash: FIXTURE_DRAFT_HASH,
+		draftText: "UNCHECKED DRAFT MUST NOT SHOW",
+		violations: [],
+	} as AnswerAuditPayload
+	return [
+		task("Fetch and summarise. Layout fixture."),
+		apiReq(c()),
+		mcpCall(c(), "delineate_basin", { gauge_id: "SYN-00000001" }),
+		mcpResult(c(), { _run_id: "fx-run-0301", note: "synthetic" }),
+		say(c(), "answer_audit", JSON.stringify(pending)),
+		apiReq(c()),
+		mcpCall(c(), "compute_signatures", { gauge_id: "SYN-00000001" }),
+		mcpResult(c(), { _run_id: "fx-run-0302", note: "synthetic" }),
+		completion(c(), "Two recorded runs, nothing hidden. Fixture answer, not a result."),
+	]
+})()
+
 /** W2-C: findings remain after 2 revisions; the answer is shown with that stated. */
 export const answerDisclosureTask: AiHydroMessage[] = (() => {
 	const c = clock()

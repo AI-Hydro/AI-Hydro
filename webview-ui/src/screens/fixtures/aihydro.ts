@@ -54,17 +54,94 @@ export const outletSnapResolution = outletSnap
 export const toolsList2_5_0 = toolsList
 export { success as successFixture, provisional as provisionalFixture, areaFail as areaFailFixture }
 
+/**
+ * Tool names the synthetic transcripts call that the recorded 2.5.0 listing does not contain. They are SYNTHETIC
+ * fixture entries (read-only, closed-world annotations) so the transcript presenter can fold their calls the way it
+ * would for an annotated trusted server; they say nothing about what the real tools declare.
+ */
+const SYNTHETIC_READ_TOOLS = [
+	"delineate_basin",
+	"compute_signatures",
+	"extract_hydrologic_signatures",
+	"get_forcing",
+	"baseflow_separation",
+	"flow_duration_curve",
+	"trend_analysis",
+]
+
 /** The ai-hydro server entry as the webview state would carry it, with the recorded tools/list metadata. */
 export const fixtureMcpServers: McpServer[] = [
 	{
 		name: "ai-hydro",
 		config: "{}",
 		status: "connected",
-		tools: Object.entries(listing).map(([name, t]) => ({
-			name,
-			description: t.description ?? undefined,
-			inputSchema: (t.inputSchema ?? undefined) as object | undefined,
-			annotations: t.annotations ?? undefined,
+		// The host reports first-party trust (isServerTrusted); the transcript only reads annotations for a trusted server.
+		trust: { trusted: true, reason: "fixture: first-party launcher matches the recorded launch" },
+		tools: Object.entries(listing)
+			.map(([name, t]) => ({
+				name,
+				description: t.description ?? undefined,
+				inputSchema: (t.inputSchema ?? undefined) as object | undefined,
+				annotations: t.annotations ?? undefined,
+			}))
+			.concat(
+				SYNTHETIC_READ_TOOLS.filter((name) => !(name in listing)).map((name) => ({
+					name,
+					description: "Synthetic fixture tool (not a recorded listing entry).",
+					inputSchema: undefined,
+					annotations: { readOnlyHint: true, openWorldHint: false },
+				})),
+			),
+	},
+]
+
+/**
+ * The first-party server as a real install presents it today: trusted, but its tools publish no annotations, so every
+ * call has an undeclared effect. Synthetic tool list (names only); used by the "realistic look" screen.
+ */
+export const fixtureUnannotatedServers: McpServer[] = [
+	{
+		name: "ai-hydro",
+		config: "{}",
+		status: "connected",
+		trust: { trusted: true, reason: "fixture: first-party launcher matches the recorded launch" },
+		tools: [
+			"data_fetch",
+			"delineate_basin",
+			"compute_signatures",
+			"extract_hydrologic_signatures",
+			"get_forcing",
+			"baseflow_separation",
+			"flow_duration_curve",
+			"trend_analysis",
+		].map((name) => ({ name, description: "Synthetic fixture tool, no annotations." })),
+	},
+]
+
+/**
+ * The first-party server with 2.6.0-style annotations (every tool carries explicit readOnlyHint and destructiveHint):
+ * a mix of read-only, session-writing and destructive tools. Tool NAMES are the synthetic transcript's; the
+ * annotation mix is illustrative, not the real tools' declarations.
+ */
+export const fixtureAnnotatedServers: McpServer[] = [
+	{
+		name: "ai-hydro",
+		config: "{}",
+		status: "connected",
+		trust: { trusted: true, reason: "fixture: first-party launcher matches the recorded launch" },
+		tools: [
+			["data_fetch", { readOnlyHint: false, destructiveHint: false, openWorldHint: false }],
+			["delineate_basin", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["compute_signatures", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["extract_hydrologic_signatures", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["get_forcing", { readOnlyHint: false, destructiveHint: false, openWorldHint: false }],
+			["baseflow_separation", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["flow_duration_curve", { readOnlyHint: true, destructiveHint: false, openWorldHint: false }],
+			["trend_analysis", { readOnlyHint: false, destructiveHint: true, openWorldHint: false }],
+		].map(([name, annotations]) => ({
+			name: name as string,
+			description: "Synthetic fixture tool.",
+			annotations: annotations as { readOnlyHint: boolean; destructiveHint: boolean; openWorldHint: boolean },
 		})),
 	},
 ]

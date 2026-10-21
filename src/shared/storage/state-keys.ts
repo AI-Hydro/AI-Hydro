@@ -109,6 +109,8 @@ export interface Settings {
 	hooksEnabled: boolean
 	subagentsEnabled: boolean
 	finalAnswerAuditEnabled: boolean
+	/** Chat transcript detail level (Wave 2): "focus" | "normal" | "verbose". */
+	transcriptDetail: "focus" | "normal" | "verbose"
 	finalAnswerAuditGate: boolean
 
 	// Plan mode configurations

@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import CheckpointTracker from "@integrations/checkpoints/CheckpointTracker"
 import getFolderSize from "get-folder-size"
+import { HostProvider } from "@/hosts/host-provider"
 import { findLastIndex } from "@/shared/array"
 import { combineApiRequests } from "@/shared/combineApiRequests"
 import { combineCommandSequences } from "@/shared/combineCommandSequences"
@@ -9,6 +10,8 @@ import { getApiMetrics } from "@/shared/getApiMetrics"
 import { HistoryItem } from "@/shared/HistoryItem"
 import { getCwd, getDesktopDir } from "@/utils/path"
 import { ensureTaskDirectoryExists, saveAiHydroMessages, saveApiConversationHistory } from "../storage/disk"
+import { getHostProtectedRoots } from "./protectedRoots"
+import { stampProtectedPaths } from "./protectedStamp"
 import { TaskState } from "./TaskState"
 
 interface MessageStateHandlerParams {
@@ -58,7 +61,23 @@ export class MessageStateHandler {
 		this.aihydroMessages = newMessages
 	}
 
+	/**
+	 * Stamps tool rows that name a protected path (`policyClass: "protected_path"`) with the host's real check, so the
+	 * transcript can lift them. Its own guard: a failure here must not stop the save, and the webview matcher still
+	 * over-lifts as a display fallback.
+	 */
+	private async stampProtectedRows(window = 6): Promise<void> {
+		try {
+			const cwd = await getCwd(getDesktopDir())
+			const workspace = await HostProvider.workspace.getWorkspacePaths({})
+			stampProtectedPaths(this.aihydroMessages, getHostProtectedRoots(), [cwd, ...workspace.paths], window)
+		} catch (error) {
+			console.error("Failed to stamp protected-path rows:", error)
+		}
+	}
+
 	async saveAiHydroMessagesAndUpdateHistory(): Promise<void> {
+		await this.stampProtectedRows()
 		try {
 			await saveAiHydroMessages(this.taskId, this.aihydroMessages)
 
@@ -133,6 +152,8 @@ export class MessageStateHandler {
 
 	async overwriteAiHydroMessages(newMessages: AiHydroMessage[]) {
 		this.aihydroMessages = newMessages
+		// A task being loaded or resumed: stamp the whole list once, so protected writes in old tasks are marked too.
+		await this.stampProtectedRows(Number.POSITIVE_INFINITY)
 		await this.saveAiHydroMessagesAndUpdateHistory()
 	}
 

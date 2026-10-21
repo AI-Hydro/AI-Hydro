@@ -273,6 +273,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		backgroundCommandTaskId: undefined,
 		subagentsEnabled: false,
 		finalAnswerAuditEnabled: true,
+		transcriptDetail: "normal",
+		protectedRoots: [],
 		finalAnswerAuditGate: false,
 
 		// NEW: Add workspace information with defaults

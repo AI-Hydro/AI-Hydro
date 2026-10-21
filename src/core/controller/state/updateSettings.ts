@@ -325,6 +325,14 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("multiRootEnabled", !!request.multiRootEnabled)
 		}
 
+		if (request.transcriptDetail !== undefined) {
+			const detail = request.transcriptDetail
+			if (detail !== "focus" && detail !== "normal" && detail !== "verbose") {
+				throw new Error(`Invalid transcript detail value: ${detail}`)
+			}
+			controller.stateManager.setGlobalState("transcriptDetail", detail)
+		}
+
 		if (request.finalAnswerAuditEnabled !== undefined) {
 			controller.stateManager.setGlobalState("finalAnswerAuditEnabled", !!request.finalAnswerAuditEnabled)
 		}
