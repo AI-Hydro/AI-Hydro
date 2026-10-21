@@ -149,14 +149,14 @@
 		"chat-approval-mcp": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 0,
+				"smallTarget": 4,
 				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 20,
+				"smallTarget": 24,
 				"smallText": 0,
 				"contrast": 3,
 				"contrastIndeterminate": 0
@@ -2098,7 +2098,7 @@
 				"chat-approval-mcp": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 20,
+						"smallTarget": 24,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
