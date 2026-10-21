@@ -276,6 +276,150 @@ export const answerAuditGradedTask: AiHydroMessage[] = (() => {
 	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
 })()
 
+const gateHardFinding = {
+	kind: "untraced_number",
+	severity: "hard" as const,
+	excerpt: "runoff ratio is 0.42",
+	message: "no run supports this value",
+	fixHint: "cite the run, e.g. " + marker("run", "ID#path"),
+}
+
+/** W2-C: a draft was held back and revised once; the shown answer reports fewer values and says so. */
+export const answerRevisedTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const base = [task("Summarise the synthetic basin. Layout fixture."), apiReq(c())]
+	const revision: AnswerAuditPayload = {
+		v: 1,
+		stage: "revision",
+		status: "violations",
+		sessionId: "fx-session-0001",
+		cited: 0,
+		total: 2,
+		hardCount: 1,
+		advisoryCount: 0,
+		schema: "graded",
+		attempt: 0,
+		answerTs: 3,
+		draftHash: FIXTURE_DRAFT_HASH,
+		draftText: "The synthetic runoff ratio is 0.42 and the baseflow index is 0.61.",
+		violations: [gateHardFinding],
+	}
+	const rows = [...base, say(c(), "answer_audit", JSON.stringify(revision)), apiReq(c())]
+	const shown = completion(c(), "The synthetic baseflow index is 0.61 (recorded run). Fixture answer, not a result.")
+	const final: AnswerAuditPayload = {
+		v: 1,
+		stage: "final",
+		status: "passed",
+		sessionId: "fx-session-0001",
+		cited: 1,
+		total: 1,
+		hardCount: 0,
+		advisoryCount: 0,
+		schema: "graded",
+		attempt: 1,
+		answerTs: shown.ts,
+		draftHash: FIXTURE_DRAFT_HASH,
+		droppedQuantities: ["0.42"],
+		quantitiesRemaining: 1,
+		violations: [],
+		history: [
+			{
+				attempt: 0,
+				ts: 3,
+				hardCount: 1,
+				advisoryCount: 0,
+				violations: [gateHardFinding],
+				draftHash: FIXTURE_DRAFT_HASH,
+				draftText: revision.draftText,
+			},
+		],
+	}
+	return [...rows, shown, say(c(), "answer_audit", JSON.stringify(final))]
+})()
+
+/**
+ * W2-C: a hidden `pending` row holds the unchecked draft in the middle of a run of calls. It must render as nothing,
+ * not count as a revision and not split the group; the `final` audit attaches to the answer.
+ */
+export const answerPendingHiddenTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const pending: AnswerAuditPayload = {
+		v: 1,
+		stage: "pending",
+		status: "unavailable",
+		sessionId: "fx-session-0001",
+		cited: 0,
+		total: 0,
+		hardCount: 0,
+		advisoryCount: 0,
+		schema: "graded",
+		attempt: 0,
+		answerTs: 0,
+		draftHash: FIXTURE_DRAFT_HASH,
+		draftText: "UNCHECKED DRAFT MUST NOT SHOW",
+		violations: [],
+	} as AnswerAuditPayload
+	return [
+		task("Fetch and summarise. Layout fixture."),
+		apiReq(c()),
+		mcpCall(c(), "delineate_basin", { gauge_id: "SYN-00000001" }),
+		mcpResult(c(), { _run_id: "fx-run-0301", note: "synthetic" }),
+		say(c(), "answer_audit", JSON.stringify(pending)),
+		apiReq(c()),
+		mcpCall(c(), "compute_signatures", { gauge_id: "SYN-00000001" }),
+		mcpResult(c(), { _run_id: "fx-run-0302", note: "synthetic" }),
+		completion(c(), "Two recorded runs, nothing hidden. Fixture answer, not a result."),
+	]
+})()
+
+/** W2-C: findings remain after 2 revisions; the answer is shown with that stated. */
+export const answerDisclosureTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const messages = [
+		task("Summarise the synthetic basin. Layout fixture."),
+		apiReq(c()),
+		completion(c(), "The synthetic runoff ratio is 0.42. Fixture answer, not a result."),
+	]
+	const payload: AnswerAuditPayload = {
+		v: 1,
+		stage: "final",
+		status: "violations",
+		sessionId: "fx-session-0001",
+		cited: 0,
+		total: 1,
+		hardCount: 1,
+		advisoryCount: 0,
+		schema: "graded",
+		attempt: 2,
+		answerTs: messages[2].ts,
+		draftHash: FIXTURE_DRAFT_HASH,
+		violations: [gateHardFinding],
+		disclosure: { kind: "findings_remain", reason: "Shown with 1 unresolved hard audit findings after 2 revisions." },
+	}
+	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
+})()
+
+/** W2-C: the run stopped while a draft was held back; the draft is revealed as unchecked. */
+export const answerInterruptedTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const messages = [task("Summarise the synthetic basin. Layout fixture."), apiReq(c())]
+	const payload: AnswerAuditPayload = {
+		v: 1,
+		stage: "interrupted",
+		status: "unavailable",
+		hardCount: 0,
+		advisoryCount: 0,
+		schema: "legacy",
+		attempt: 0,
+		answerTs: 3,
+		draftHash: FIXTURE_DRAFT_HASH,
+		draftText: "The synthetic runoff ratio is 0.42. Fixture draft, not a result.",
+		violations: [],
+		disclosure: { kind: "interrupted", reason: "stopped by user" },
+	}
+	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
+})()
+
 /** Audit that could not run: structured status and reason, never presented as a pass. */
 export const answerAuditUnavailableTask: AiHydroMessage[] = (() => {
 	const c = clock()

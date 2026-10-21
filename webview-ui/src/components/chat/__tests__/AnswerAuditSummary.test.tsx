@@ -79,4 +79,123 @@ describe("AnswerAuditSummary (interim)", () => {
 		const { container } = render(<AnswerAuditSummary text='{"v":99}' />)
 		expect(container.textContent).toBe("Audit result in an unreadable format")
 	})
+	describe("gate stages (W2-C)", () => {
+		const hardFinding = {
+			kind: "untraced_number",
+			severity: "hard" as const,
+			excerpt: "0.42",
+			message: "no run supports this",
+		}
+
+		it("progress: an updating activity line, no result claim; a stale one renders nothing", () => {
+			const live = render(<AnswerAuditSummary partial text="Drafting answer…" />).container
+			expect(live.querySelector('[data-testid="answer-audit-progress"]')?.textContent).toBe("Drafting answer…")
+			const stale = render(<AnswerAuditSummary text="Checking answer against evidence…" />).container
+			expect(stale.textContent).toBe("")
+		})
+
+		it("revision: a counted line with the held-back draft behind 'Show draft (n)', warning not green", () => {
+			const c = render_({
+				stage: "revision",
+				attempt: 0,
+				hardCount: 1,
+				violations: [hardFinding],
+				draftText: "Runoff ratio is 0.42.",
+			})
+			expect(c.textContent).toContain("Answer revised after audit (attempt 1/2)")
+			expect(c.textContent).toContain("Show draft (1)")
+			expect(c.textContent).toContain("Runoff ratio is 0.42.")
+			expect(c.querySelector(".codicon-warning")).not.toBeNull()
+			expect(c.textContent).not.toMatch(/passed/i)
+		})
+
+		it("revision: removed quantities are listed on the line that revised them", () => {
+			const c = render_({ stage: "revision", attempt: 1, violations: [hardFinding], droppedQuantities: ["0.42", "0.71"] })
+			expect(c.textContent).toContain("Revision removed 2 quantities from the draft: 0.42, 0.71")
+		})
+
+		it("final after revisions: request cost, removed values, and 'no longer reported' when none remain", () => {
+			const c = render_({
+				status: "passed",
+				attempt: 1,
+				droppedQuantities: ["0.42"],
+				quantitiesRemaining: 0,
+				history: [
+					{
+						attempt: 0,
+						ts: 1,
+						hardCount: 1,
+						advisoryCount: 0,
+						violations: [hardFinding],
+						draftHash: "h",
+						draftText: "first draft 0.42",
+					},
+				],
+			})
+			expect(c.textContent).toContain("audit revisions: 1 request")
+			expect(c.textContent).toContain("Revision removed 1 quantity from the draft: 0.42")
+			expect(c.textContent).toContain("The requested values are no longer reported in this answer")
+			expect(c.textContent).toContain("Show draft (1)")
+			expect(c.querySelector(".codicon-warning")).not.toBeNull() // removed values are never presented as a clean pass
+		})
+
+		it("disclosure: unresolved findings after 2 revisions are stated in words", () => {
+			const c = render_({
+				attempt: 2,
+				hardCount: 1,
+				violations: [hardFinding],
+				disclosure: { kind: "findings_remain", reason: "Shown with 1 unresolved hard audit findings after 2 revisions." },
+			})
+			expect(c.textContent).toContain("Shown with 1 unresolved hard audit findings after 2 revisions.")
+			expect(c.textContent).toContain("audit revisions: 2 requests")
+			expect(c.querySelector(".codicon-warning")).not.toBeNull()
+			expect(c.textContent).not.toMatch(/passed/i)
+		})
+
+		it("deadline: the answer shows as audit not run, with the reason", () => {
+			const c = render_({
+				status: "unavailable",
+				schema: "legacy",
+				disclosure: { kind: "audit_unavailable", reason: "timed out after 45s" },
+			})
+			expect(c.textContent).toContain("Audit not run: timed out after 45s")
+		})
+
+		it("interrupted: the unchecked draft is shown in full with the reason, as unverified", () => {
+			const c = render_({
+				stage: "interrupted",
+				status: "unavailable",
+				disclosure: { kind: "interrupted", reason: "stopped by user" },
+				draftText: "The runoff ratio is 0.42.",
+				violations: [hardFinding],
+			})
+			expect(c.textContent).toContain("Unchecked draft (audit interrupted: stopped by user)")
+			expect(c.querySelector('[aria-label="Unchecked draft"]')?.textContent).toBe("The runoff ratio is 0.42.")
+			expect(c.textContent).toContain("unverified")
+			expect(c.textContent).not.toMatch(/passed/i)
+		})
+
+		it("B1: earlier-narration findings are listed separately as not revisable", () => {
+			const f = { kind: "uncited_number", severity: "hard" as const, excerpt: "Peak flow was 123 m3/s." }
+			const c = render_({ hardCount: 1, violations: [f], unrevisableFindings: [f] })
+			expect(c.querySelector('[data-testid="answer-audit-unrevisable"]')?.textContent).toContain(
+				"1 earlier-narration finding not revisable",
+			)
+			expect(c.querySelector('[aria-label="Earlier-narration findings"]')?.textContent).toContain("Peak flow was 123 m3/s.")
+		})
+
+		it("pending (draft persisted before its audit) renders nothing", () => {
+			const c = render_({ stage: "pending", status: "unavailable", draftText: "secret draft 0.42" })
+			expect(c.textContent).toBe("")
+		})
+
+		it("interrupted without recorded text still says so", () => {
+			const c = render_({
+				stage: "interrupted",
+				status: "unavailable",
+				disclosure: { kind: "interrupted", reason: "reload" },
+			})
+			expect(c.textContent).toContain("The draft text was not recorded.")
+		})
+	})
 })

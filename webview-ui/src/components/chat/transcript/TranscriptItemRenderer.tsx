@@ -98,6 +98,11 @@ export const TranscriptItemRenderer: React.FC<TranscriptItemRendererProps> = ({
 				</>
 			)
 		case "divider":
+			// An interrupted audit reveals the held draft as unchecked (with the reason): that is the existing audit row, so
+			// the draft text is never lost to a one-line divider.
+			if (item.dividerKind === "answer_interrupted") {
+				return row(item.message)
+			}
 			return (
 				<div className="transcript-line transcript-divider" data-kind={item.dividerKind}>
 					<i aria-hidden className="codicon codicon-info" />

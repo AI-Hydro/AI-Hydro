@@ -534,6 +534,10 @@ export class Controller {
 
 				return true
 			} else {
+				if (modeToSwitchTo === "plan") {
+					// A held answer draft is revealed by abortTask with this reason (W2-C).
+					this.task.taskState.answerAuditGate.interruptReason = "switched to Plan mode"
+				}
 				this.cancelTask()
 				return false
 			}
@@ -1216,6 +1220,7 @@ export class Controller {
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
 		const finalAnswerAuditEnabled = this.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled")
 		const transcriptDetail = this.stateManager.getGlobalSettingsKey("transcriptDetail")
+		const finalAnswerAuditGate = this.stateManager.getGlobalSettingsKey("finalAnswerAuditGate")
 
 		const localAiHydroRulesToggles = this.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
 		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
@@ -1318,6 +1323,7 @@ export class Controller {
 			finalAnswerAuditEnabled,
 			transcriptDetail,
 			protectedRoots: getHostProtectedRoots(),
+			finalAnswerAuditGate,
 			workspaceHtmlFiles: this.workspaceHtmlFiles.map((f) => ({
 				path: f.relativePath,
 				name: f.name,

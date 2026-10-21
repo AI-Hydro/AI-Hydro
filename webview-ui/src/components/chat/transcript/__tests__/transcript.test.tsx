@@ -6,7 +6,15 @@ import { useState } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { CheckmarkControl } from "@/components/common/CheckmarkControl"
 import { fixtureMcpServers } from "@/screens/fixtures/aihydro"
-import { checkpointCheckedOutTask, failureLiftedTask, run8ToolsTask, turnMachineryTask } from "@/screens/fixtures/transcripts"
+import {
+	answerInterruptedTask,
+	answerPendingHiddenTask,
+	answerRevisedTask,
+	checkpointCheckedOutTask,
+	failureLiftedTask,
+	run8ToolsTask,
+	turnMachineryTask,
+} from "@/screens/fixtures/transcripts"
 import { buildTranscriptView, filterVisibleMessages, groupMessages, processMessages } from "../../chat-view/utils/messageUtils"
 import { makeTranscriptResolvers } from "../resolvers"
 import { formatDuration, summarizeGroup } from "../summary"
@@ -325,5 +333,31 @@ describe("TranscriptStatus", () => {
 		})
 		expect(region.textContent).toBe("Answer ready")
 		vi.useRealTimers()
+	})
+})
+
+describe("answer-audit rows in the transcript (W2-C)", () => {
+	const view = (task: AiHydroMessage[]) => {
+		const msgs = processed(task)
+		return buildTranscriptView(msgs, groupMessages(filterVisibleMessages(msgs)), { detail: "normal", ...trusted })
+	}
+	it("a pending row is invisible: one group, no revision, no draft text anywhere", () => {
+		const v = view(answerPendingHiddenTask)
+		const kinds = v.entries.map((e) => (e.mode === "presented" ? e.item.kind : "legacy"))
+		expect(kinds).toEqual(["group", "answer"])
+		const g = (v.entries[0] as { item: WorkGroup }).item
+		expect(g.facts.toolCount).toBe(2)
+		expect(g.facts.revisionCount).toBe(0)
+		expect(JSON.stringify(v.entries.map((e) => (e.mode === "presented" ? e.item : null)))).not.toContain("UNCHECKED DRAFT")
+	})
+	it("a revision shows as a divider and the final audit attaches to its answer", () => {
+		const kinds = view(answerRevisedTask).entries.map((e) => (e.mode === "presented" ? e.item.kind : "legacy"))
+		expect(kinds).toContain("divider")
+		const answer = view(answerRevisedTask).entries.find((e) => e.mode === "presented" && e.item.kind === "answer")
+		expect(answer && answer.mode === "presented" && answer.auditMessage).toBeTruthy()
+	})
+	it("an interrupted row is shown as a divider, not dropped", () => {
+		const kinds = view(answerInterruptedTask).entries.map((e) => (e.mode === "presented" ? e.item.kind : "legacy"))
+		expect(kinds).toContain("divider")
 	})
 })

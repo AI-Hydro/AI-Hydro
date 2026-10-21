@@ -29,6 +29,10 @@ Active product hardening — last updated 2026-09-08.
   fixture. The running VSIX/backend has not been restarted or smoke-tested.
 - Requires the matching tools backend resource from
   `MCP/aihydro-tools/docs/research-snapshots.md` in the ecosystem workspace.
+- Chat redesign Wave 2 (extension): W2-C pre-completion answer-audit gate is on
+  branch `vision2040/w2-c` (PR #80, draft). Default OFF (`finalAnswerAuditGate`);
+  it is flipped on later with A2/B-web. Plan: `docs/vision-2040/plans/wave2-chat-redesign.md`
+  in the ecosystem workspace.
 - Next: automatic refresh/pagination and event revision ordering; a study-level
   comprehension workspace remains broader work. Scientific scope/lineage gates
   remain in the canonical packages.

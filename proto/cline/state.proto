@@ -352,7 +352,8 @@ message UpdateSettingsRequest {
   optional int32 subagent_terminal_output_line_limit = 30;
   optional string cline_env = 31;
   optional bool final_answer_audit_enabled = 32;
-  optional string transcript_detail = 33;
+  optional string transcript_detail = 34;
+  optional bool final_answer_audit_gate = 33;
 }
 
 // Complete API Configuration message

@@ -1,6 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { AssistantMessageContent } from "@core/assistant-message"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
+import { type AnswerAuditGateState, createGateState } from "./answerAuditGate"
 
 export class TaskState {
 	// Streaming flags
@@ -70,6 +71,9 @@ export class TaskState {
 	fileReadCache: Map<string, { readCount: number; mtime: number; imageBlock?: Anthropic.ImageBlockParam }> = new Map()
 	didAutomaticallyRetryFailedApiRequest = false
 	checkpointManagerErrorMessage?: string
+
+	// Pre-completion answer-audit gate (W2-C): revision counters, hidden draft, cached eligibility inputs
+	answerAuditGate: AnswerAuditGateState = createGateState()
 
 	// Retry tracking for auto-retry feature
 	autoRetryAttempts: number = 0

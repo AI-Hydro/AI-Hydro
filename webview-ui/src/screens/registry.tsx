@@ -312,6 +312,34 @@ export const screens: ScreenDef[] = [
 		tx.answerAuditUnavailableTask,
 		"Audit not run: timed out after 15s",
 	),
+	chatTx(
+		"chat-answer-pending-hidden",
+		"Hidden pending audit row inside a group",
+		tx.answerPendingHiddenTask,
+		"Two recorded runs, nothing hidden.",
+		{
+			expectVisible: ["text=Two recorded runs, nothing hidden.", "[data-testid=work-group] button[aria-expanded]"],
+			expectAbsent: ["text=UNCHECKED DRAFT MUST NOT SHOW", "text=API Request"],
+		},
+	),
+	chatTx(
+		"chat-answer-revised",
+		"Answer revised after audit (gate, one revision)",
+		tx.answerRevisedTask,
+		"Revision removed 1 quantity from the draft: 0.42",
+	),
+	chatTx(
+		"chat-answer-disclosure",
+		"Answer shown with unresolved findings (gate)",
+		tx.answerDisclosureTask,
+		"Shown with 1 unresolved hard audit findings after 2 revisions.",
+	),
+	chatTx(
+		"chat-answer-interrupted",
+		"Held draft revealed as unchecked (audit interrupted)",
+		tx.answerInterruptedTask,
+		"Unchecked draft (audit interrupted: stopped by user)",
+	),
 	chatTx("chat-context-truncation", "Context truncated for a request", tx.contextTruncationTask, "I have the context I need."),
 	chatTx("chat-condense", "Conversation condensed (summarizeTask)", tx.condenseTask, "Continuing from the summary."),
 	chatTx(
