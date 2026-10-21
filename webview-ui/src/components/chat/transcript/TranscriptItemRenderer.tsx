@@ -1,7 +1,7 @@
 import type { TranscriptItem } from "@shared/aihydro/transcriptPresenter"
 import { summarizeTurn } from "@shared/aihydro/turnSummary"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
-import React from "react"
+import React, { useMemo } from "react"
 import type { AnswerExtras } from "@/components/chat/answer/AnswerBlock"
 import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
 import ChatRow from "@/components/chat/ChatRow"
@@ -53,6 +53,14 @@ export const TranscriptItemRenderer: React.FC<TranscriptItemRendererProps> = ({
 	ctx,
 }) => {
 	const isLast = index === count - 1
+	// The turn facts are computed once per finished answer, not on every render of the transcript.
+	const answerTs = item.kind === "answer" && !item.partial ? item.ts : undefined
+	const turn = useMemo(
+		() => (answerTs === undefined ? undefined : summarizeTurn(ctx.allMessages, answerTs)),
+		// Messages before a finished answer do not change, so the list identity is not a dependency.
+		// biome-ignore lint/correctness/useExhaustiveDependencies: see above
+		[answerTs],
+	)
 	const row = (message: AiHydroMessage, last = isLast, answer?: AnswerExtras) => (
 		<ChatRow
 			answer={answer}
@@ -101,9 +109,9 @@ export const TranscriptItemRenderer: React.FC<TranscriptItemRendererProps> = ({
 				<>
 					{row(item.message, isLast, {
 						audit,
-						turn: summarizeTurn(ctx.allMessages, item.ts),
-						// The existing reply path: the same call the input box makes for a completion ask.
-						onSendFeedback: (text) => ctx.messageHandlers.handleSendMessage(text, [], []),
+						turn,
+						// Dedicated reply path: never touches the draft input or quote.
+						onSendFeedback: ctx.messageHandlers.sendAnswerFeedback,
 					})}
 					{auditMessage && !audit && row(auditMessage)}
 				</>

@@ -491,10 +491,16 @@ const MarkdownBlock = memo(({ markdown, compact }: MarkdownBlockProps) => {
 					// AI-Hydro chip types (from remarkAiHydroMarkers plugin via data.hProperties)
 					const chipType = props["data-chip-type"]
 					if (chipType === "run") {
-						return <RunChip jsonPath={props["data-json-path"] ?? ""} runId={props["data-run-id"] ?? ""} />
+						return (
+							<RunChip
+								jsonPath={props["data-json-path"] ?? ""}
+								runId={props["data-run-id"] ?? ""}
+								variant="inline"
+							/>
+						)
 					}
 					if (chipType === "claim") {
-						return <ClaimChip claimId={props["data-claim-id"] ?? ""} />
+						return <ClaimChip claimId={props["data-claim-id"] ?? ""} variant="inline" />
 					}
 					if (chipType === "lit") {
 						return <LitChip tag={props["data-lit-tag"] ?? ""} />

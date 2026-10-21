@@ -6,6 +6,12 @@ import { type EvidenceStateId, evidenceState } from "../../design"
 
 interface ClaimChipProps {
 	claimId: string
+	/**
+	 * `strip` (default): the 24px chip. `inline`: a compact chip for use inside prose. The visible chip is small so
+	 * the line rhythm holds; the button around it is 24px tall with negative vertical margins, so the hit area still
+	 * meets the target size without growing the line.
+	 */
+	variant?: "strip" | "inline"
 }
 
 // Status is the evidence-grading label, NOT an approval. The chip's colour, icon and border come from the shared
@@ -63,7 +69,24 @@ export function claimApprovalState(claim: ClaimRecord | undefined) {
 	return { statusKey, approval, approved }
 }
 
-export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
+/** Hit area of an inline chip: 24px square minimum, pulled back into the line with negative vertical margins. */
+export const INLINE_HIT_STYLE: React.CSSProperties = {
+	display: "inline-flex",
+	alignItems: "center",
+	minHeight: 24,
+	minWidth: 24,
+	margin: "-5px 1px",
+	padding: "0 1px",
+	background: "transparent",
+	border: 0,
+	color: "inherit",
+	cursor: "pointer",
+	verticalAlign: "middle",
+}
+/** The visible compact chip inside an inline hit area. */
+export const INLINE_CHIP_STYLE: React.CSSProperties = { minHeight: 16, lineHeight: "14px", padding: "0 4px" }
+
+export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId, variant = "strip" }) => {
 	const { getClaim } = useLedgerContext()
 	const [open, setOpen] = useState(false)
 	const claim = getClaim(claimId)
@@ -74,21 +97,43 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 
 	return (
 		<span className="relative inline-flex items-center align-middle mx-0.5">
-			<button
-				className={`
+			{variant === "inline" ? (
+				<button
+					data-approved={approved ? "true" : "false"}
+					data-evidence-state={def.id}
+					data-variant="inline"
+					onClick={() => setOpen((o) => !o)}
+					style={
+						{
+							"--aih-badge-color": def.token,
+							...INLINE_HIT_STYLE,
+						} as React.CSSProperties
+					}
+					title={claim?.statement || `Claim ${claimId}`}
+					type="button">
+					<span className={`aih-badge aih-badge--${def.shape}`} style={INLINE_CHIP_STYLE}>
+						<span aria-hidden="true" className={`codicon ${def.icon}`} />
+						<span>{claimId}</span>
+						<span className="opacity-75">· {label}</span>
+					</span>
+				</button>
+			) : (
+				<button
+					className={`
 					aih-badge aih-badge--${def.shape} min-h-6 cursor-pointer
 					hover:opacity-90 transition-opacity select-none
 				`}
-				data-approved={approved ? "true" : "false"}
-				data-evidence-state={def.id}
-				onClick={() => setOpen((o) => !o)}
-				style={{ "--aih-badge-color": def.token, minHeight: 24 } as React.CSSProperties}
-				title={claim?.statement || `Claim ${claimId}`}
-				type="button">
-				<span aria-hidden="true" className={`codicon ${def.icon}`} />
-				<span>{claimId}</span>
-				<span className="opacity-75">· {label}</span>
-			</button>
+					data-approved={approved ? "true" : "false"}
+					data-evidence-state={def.id}
+					onClick={() => setOpen((o) => !o)}
+					style={{ "--aih-badge-color": def.token, minHeight: 24 } as React.CSSProperties}
+					title={claim?.statement || `Claim ${claimId}`}
+					type="button">
+					<span aria-hidden="true" className={`codicon ${def.icon}`} />
+					<span>{claimId}</span>
+					<span className="opacity-75">· {label}</span>
+				</button>
+			)}
 
 			{open && claim && (
 				<span

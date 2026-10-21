@@ -1,7 +1,7 @@
 import { extractEvidence } from "@shared/aihydro/evidenceMarkers"
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import type { TurnSummary } from "@shared/aihydro/turnSummary"
-import React, { useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { useLedgerContext } from "../../../context/LedgerContext"
 import { ClaimChip, claimApprovalState } from "../ClaimChip"
 import { LitChip, RunChip } from "../RunChip"
@@ -17,7 +17,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export interface AnswerExtras {
 	audit?: AnswerAuditPayload
 	turn?: TurnSummary
-	onSendFeedback?: (text: string) => void
+	onSendFeedback?: (text: string) => Promise<boolean> | boolean | void
 }
 
 interface AnswerBlockProps {
@@ -31,8 +31,11 @@ interface AnswerBlockProps {
 	hasChanges?: boolean
 	seeChangesDisabled?: boolean
 	onSeeChanges?: () => void
-	/** Sends text as the user's reply to the answer. Absent when the answer cannot be replied to (not the last row). */
-	onSendFeedback?: (text: string) => void
+	/**
+	 * Replies to the pending answer with fixed text. Resolves true when it was sent, false when nothing was (no ask
+	 * pending); absent when the answer cannot be replied to (not the last row).
+	 */
+	onSendFeedback?: (text: string) => Promise<boolean> | boolean | void
 	/** Rating buttons (completion ask only); they live in the overflow menu. */
 	feedback?: React.ReactNode
 	/** The rendered answer prose: markdown, with evidence markers as inline chips at the citation. */
@@ -75,7 +78,7 @@ const EvidenceStrip: React.FC<{ text: string }> = ({ text }) => {
 	)
 }
 
-/** "This turn": counts only. Claims are listed with their approval state so the line can never imply approval. */
+/** "Referenced this turn": counts only, of ids the turn's results and the answer name (not proof anything was created). Claims are listed with their approval state so the line can never imply approval. */
 const TurnLine: React.FC<{
 	turn: TurnSummary
 	hasChanges?: boolean
@@ -100,7 +103,7 @@ const TurnLine: React.FC<{
 	}
 	return (
 		<div className="text-xs opacity-80 mt-2" data-testid="answer-turn-summary">
-			<span>This turn: {parts.length > 0 ? parts.join(" · ") : "no recorded runs or claims"}</span>
+			<span>Referenced this turn: {parts.length > 0 ? parts.join(" · ") : "no runs or claims"}</span>
 			{hasChanges && (
 				<>
 					{" · "}
@@ -152,6 +155,47 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 }) => {
 	const [menuOpen, setMenuOpen] = useState(false)
 	const [copied, setCopied] = useState(false)
+	const [sent, setSent] = useState(false)
+	const sendingRef = useRef(false)
+	const menuRef = useRef<HTMLSpanElement>(null)
+	const triggerRef = useRef<HTMLButtonElement>(null)
+
+	// Disclosure-menu behaviour: focus moves in on open and back to the trigger on close; Escape and a click outside close.
+	useEffect(() => {
+		if (!menuOpen) {
+			return
+		}
+		menuRef.current?.querySelector<HTMLElement>("vscode-button, button")?.focus()
+		const onDown = (e: MouseEvent) => {
+			if (!menuRef.current?.contains(e.target as Node) && !triggerRef.current?.contains(e.target as Node)) {
+				setMenuOpen(false)
+			}
+		}
+		document.addEventListener("mousedown", onDown)
+		return () => document.removeEventListener("mousedown", onDown)
+	}, [menuOpen])
+
+	const closeMenu = () => {
+		setMenuOpen(false)
+		triggerRef.current?.focus()
+	}
+
+	const askToCite = () => {
+		if (sendingRef.current || sent || !onSendFeedback) {
+			return
+		}
+		sendingRef.current = true
+		void Promise.resolve(onSendFeedback(ASK_TO_CITE_TEXT))
+			.then((ok) => {
+				if (ok !== false) {
+					setSent(true)
+				}
+			})
+			.catch((err) => console.error("Failed to send the cite request:", err))
+			.finally(() => {
+				sendingRef.current = false
+			})
+	}
 	const showAudit = !!audit && audit.stage === "final"
 	const canCite = !partial && !!onSendFeedback && showAudit && auditHasViolations(audit)
 
@@ -183,29 +227,43 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 						label={copied ? "Copied" : "Copy"}
 						onClick={copy}
 					/>
+					<span aria-live="polite" className="sr-only" role="status">
+						{copied ? "Copied" : ""}
+					</span>
 					{canCite && (
 						<ActionButton
+							disabled={sent}
 							icon="codicon-quote"
-							label="Ask agent to cite"
-							onClick={() => onSendFeedback?.(ASK_TO_CITE_TEXT)}
+							label={sent ? "Asked agent to cite" : "Ask agent to cite"}
+							onClick={askToCite}
 							title="Ask the agent to cite or remove the values the audit could not trace"
 						/>
 					)}
 					{feedback && (
 						<span className="relative inline-flex">
 							<button
+								aria-controls="answer-more-actions"
 								aria-expanded={menuOpen}
-								aria-haspopup="true"
 								aria-label="More answer actions"
 								className="inline-flex items-center justify-center min-h-6 min-w-6 cursor-pointer bg-transparent border-0"
-								onClick={() => setMenuOpen((o) => !o)}
+								onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
+								ref={triggerRef}
 								style={{ color: "var(--vscode-descriptionForeground)", minHeight: 24, minWidth: 24 }}
 								type="button">
 								<i aria-hidden="true" className="codicon codicon-ellipsis" />
 							</button>
 							{menuOpen && (
 								<span
+									aria-label="Rate this answer"
 									className="absolute z-50 bottom-full left-0 mb-1 p-1 rounded-md shadow-lg flex items-center"
+									id="answer-more-actions"
+									onKeyDown={(e) => {
+										if (e.key === "Escape") {
+											e.stopPropagation()
+											closeMenu()
+										}
+									}}
+									ref={menuRef}
 									role="group"
 									style={{
 										background: "var(--vscode-editorWidget-background)",

@@ -44,7 +44,27 @@ export interface EvidenceStrip {
 	lits: string[]
 }
 
-/** Distinct markers in `text`, in first-seen order. Pure; the same scan the markdown plugin uses for prose. */
+const FENCED_CODE = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:\n {0,3}\1[`~]*[^\S\n]*(?=\n|$)|$)/gm
+const INLINE_CODE = /(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g
+
+/**
+ * The prose the markdown renderer would chip: fenced code blocks are dropped, and so are inline code spans, except a
+ * span whose ENTIRE value is one marker (models often backtick their citations; the renderer chips those, #68).
+ * A marker inside longer code is a grammar example or fix hint, never a citation. Indented code blocks are not
+ * detected (list continuation is indistinguishable from them without a parser).
+ */
+export function proseForEvidence(text: string): string {
+	const whole = new RegExp(`^${AIHYDRO_MARKER_SOURCE}$`)
+	return text.replace(FENCED_CODE, "").replace(INLINE_CODE, (_m, _ticks, inner: string) => {
+		const value = /^ .* $/s.test(inner) && inner.trim() !== "" ? inner.slice(1, -1) : inner
+		return whole.test(value) ? value : ""
+	})
+}
+
+/**
+ * Distinct markers in `text`, in first-seen order. Pure. Scans the same prose the markdown plugin chips (see
+ * `proseForEvidence`), so the evidence row and the inline chips agree on what counts as a citation.
+ */
 export function extractEvidence(text: string | undefined): EvidenceStrip {
 	const out: EvidenceStrip = { runs: [], claims: [], lits: [] }
 	if (!text) {
@@ -53,7 +73,8 @@ export function extractEvidence(text: string | undefined): EvidenceStrip {
 	const re = new RegExp(AIHYDRO_MARKER_SOURCE, "g")
 	const seen = new Set<string>()
 	let m: RegExpExecArray | null
-	while ((m = re.exec(text)) !== null) {
+	const prose = proseForEvidence(text)
+	while ((m = re.exec(prose)) !== null) {
 		const marker = markerFromMatch(m)
 		if (!marker || seen.has(m[0])) {
 			continue

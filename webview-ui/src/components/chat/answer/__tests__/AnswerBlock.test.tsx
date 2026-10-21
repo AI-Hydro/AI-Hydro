@@ -1,5 +1,5 @@
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
-import { fireEvent, render, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import MarkdownBlock from "@/components/common/MarkdownBlock"
 import { APPROVED_TOKEN } from "../../../../design/evidenceStates"
@@ -126,6 +126,7 @@ describe("AnswerBlock", () => {
 			</AnswerBlock>,
 		)
 		const line = container.querySelector('[data-testid="answer-turn-summary"]')!.textContent!
+		expect(line).toContain("Referenced this turn:")
 		expect(line).toContain("2 runs")
 		expect(line).toContain("3 claims (1 approved, 2 not approved)")
 		expect(line).toContain("1 file changed")
@@ -210,6 +211,98 @@ describe("AnswerBlock", () => {
 		)
 		expect(container.querySelector('[data-testid="answer-audit-footer"]')).toBeNull()
 		expect(container.querySelectorAll("button")).toHaveLength(0)
+	})
+})
+
+describe("AnswerBlock actions", () => {
+	const hard = audit({ hardCount: 1, violations: [{ kind: "k", severity: "hard" }] })
+	const citeButton = (c: HTMLElement) =>
+		[...c.querySelectorAll("button")].find((b) => /agent to cite/.test(b.textContent ?? ""))!
+
+	it("a double click sends the cite request once and the button reads as sent", async () => {
+		const send = vi.fn().mockResolvedValue(true)
+		const { container } = render(
+			<AnswerBlock audit={hard} onSendFeedback={send} text="t">
+				<p>x</p>
+			</AnswerBlock>,
+		)
+		const btn = citeButton(container)
+		fireEvent.click(btn)
+		fireEvent.click(btn)
+		await waitFor(() => expect(citeButton(container).textContent).toContain("Asked agent to cite"))
+		fireEvent.click(citeButton(container))
+		expect(send).toHaveBeenCalledTimes(1)
+		expect(citeButton(container).hasAttribute("disabled")).toBe(true)
+	})
+
+	it("when nothing was sent (no ask pending) the button stays available", async () => {
+		const send = vi.fn().mockResolvedValue(false)
+		const { container } = render(
+			<AnswerBlock audit={hard} onSendFeedback={send} text="t">
+				<p>x</p>
+			</AnswerBlock>,
+		)
+		fireEvent.click(citeButton(container))
+		await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+		await act(async () => {})
+		expect(citeButton(container).textContent).toBe("Ask agent to cite")
+		fireEvent.click(citeButton(container))
+		expect(send).toHaveBeenCalledTimes(2)
+	})
+
+	it("Copied is announced through a polite status region", () => {
+		Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
+		const { container } = render(
+			<AnswerBlock text="t">
+				<p>x</p>
+			</AnswerBlock>,
+		)
+		const status = container.querySelector('[role="status"][aria-live="polite"]')!
+		expect(status.textContent).toBe("")
+		fireEvent.click([...container.querySelectorAll("button")].find((b) => b.textContent === "Copy")!)
+		expect(status.textContent).toBe("Copied")
+	})
+
+	describe("more-actions menu", () => {
+		const open = () => {
+			const r = render(
+				<div>
+					<button data-testid="outside" type="button">
+						outside
+					</button>
+					<AnswerBlock feedback={<button type="button">Thumb</button>} text="t">
+						<p>x</p>
+					</AnswerBlock>
+				</div>,
+			)
+			const trigger = r.container.querySelector('[aria-label="More answer actions"]') as HTMLButtonElement
+			fireEvent.click(trigger)
+			return { ...r, trigger }
+		}
+
+		it("opens a labelled group, moves focus into it, and Escape closes it and restores focus to the trigger", () => {
+			const { container, trigger } = open()
+			const group = container.querySelector('[aria-label="Rate this answer"]') as HTMLElement
+			expect(group.getAttribute("role")).toBe("group")
+			expect(trigger.getAttribute("aria-expanded")).toBe("true")
+			expect(document.activeElement?.textContent).toBe("Thumb")
+			fireEvent.keyDown(document.activeElement as Element, { key: "Escape" })
+			expect(container.querySelector('[aria-label="Rate this answer"]')).toBeNull()
+			expect(trigger.getAttribute("aria-expanded")).toBe("false")
+			expect(document.activeElement).toBe(trigger)
+		})
+
+		it("a click outside closes it", () => {
+			const { container, getByTestId } = open()
+			fireEvent.mouseDown(getByTestId("outside"))
+			expect(container.querySelector('[aria-label="Rate this answer"]')).toBeNull()
+		})
+
+		it("a click inside does not close it", () => {
+			const { container } = open()
+			fireEvent.mouseDown(container.querySelector('[aria-label="Rate this answer"]') as Element)
+			expect(container.querySelector('[aria-label="Rate this answer"]')).not.toBeNull()
+		})
 	})
 })
 

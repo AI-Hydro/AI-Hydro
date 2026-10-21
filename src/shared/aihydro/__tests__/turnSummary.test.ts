@@ -30,4 +30,10 @@ describe("summarizeTurn", () => {
 			filesChanged: [],
 		})
 	})
+	it("ignores markers in the answer's code, like the inline chips do", () => {
+		const answer = "ok [claim:c1] and `see [run:rx#p]`\n```\n[claim:c9]\n```\n`[run:r2#q]`"
+		const r = summarizeTurn([say(1, "task", "q"), say(2, "completion_result", answer)], 2)
+		expect(r.claimIds).to.deep.equal(["c1"])
+		expect(r.runIds).to.deep.equal(["r2"])
+	})
 })
