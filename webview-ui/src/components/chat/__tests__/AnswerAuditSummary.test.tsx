@@ -1,5 +1,5 @@
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
-import { render } from "@testing-library/react"
+import { fireEvent, render } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import { AnswerAuditSummary, auditSummaryLine } from "../AnswerAuditSummary"
 
@@ -56,6 +56,23 @@ describe("AnswerAuditSummary (interim)", () => {
 		const html = render_({ status: "passed" }).innerHTML
 		expect(html).not.toContain("APPROVED")
 		expect(html).not.toMatch(/green|success/i)
+	})
+
+	it("findings list is focusable and labelled; long text is capped with Show more", () => {
+		const long = "word ".repeat(100)
+		const c = render_({
+			hardCount: 1,
+			violations: [{ kind: "k", severity: "hard", message: long, fixHint: long, suggestedMarker: "[run:ID#p]" }],
+		})
+		const ol = c.querySelector("ol")!
+		expect(ol.getAttribute("tabindex")).toBe("0")
+		expect(ol.getAttribute("aria-label")).toBe("Audit findings")
+		expect(c.textContent).not.toContain(long.trim())
+		const buttons = c.querySelectorAll("button")
+		expect(buttons).toHaveLength(2)
+		fireEvent.click(buttons[0])
+		expect(c.textContent).toContain(long.trim())
+		expect(c.textContent).toContain("Marker: [run:ID#p]")
 	})
 
 	it("unreadable payloads render a neutral line, not raw JSON", () => {

@@ -190,8 +190,9 @@ export async function runFinalAnswerAudit(args: {
 	const schema: AnswerAuditSchema = typeof parsed.hard_count === "number" ? "graded" : "legacy"
 	const raw: any[] = Array.isArray(parsed.violations) ? parsed.violations : []
 	const violations: AuditViolationView[] = raw.map((v) => parseViolationView(v, schema))
-	if (violations.length === 0 && parsed.passed) {
-		return { status: "passed", sessionId, cited, total, schema }
+	if (violations.length === 0) {
+		// "Not passed" with nothing to show is a contradiction: never a pass, never "violations" with 0 findings.
+		return parsed.passed ? { status: "passed", sessionId, cited, total, schema } : unavailable("inconsistent audit response")
 	}
 	const counts = countFindings(violations)
 	return {
@@ -245,7 +246,10 @@ export function toAnswerAuditPayload(
 				advisoryCount: 0,
 				violations: [],
 				schema: "legacy",
-				disclosure: { kind: "audit_unavailable", reason: outcome.reason },
+				disclosure: {
+					kind: outcome.status === "skipped" ? "audit_skipped" : "audit_unavailable",
+					reason: outcome.reason,
+				},
 			}
 		case "passed":
 			return {
@@ -265,7 +269,10 @@ export function toAnswerAuditPayload(
 				severity: v.severity,
 				...(v.excerpt ? { excerpt: v.excerpt } : {}),
 				...(v.message ? { message: v.message } : {}),
-				...(v.fixHint || v.suggestedMarker ? { fixHint: (v.fixHint ?? v.suggestedMarker) as string } : {}),
+				...(v.fixHint ? { fixHint: v.fixHint } : {}),
+				...(v.category ? { category: v.category } : {}),
+				...(v.suggestedMarker ? { suggestedMarker: v.suggestedMarker } : {}),
+				...(v.resolvedPath ? { resolvedPath: v.resolvedPath } : {}),
 			}))
 			return {
 				...base,
@@ -277,6 +284,7 @@ export function toAnswerAuditPayload(
 				advisoryCount: outcome.advisoryCount,
 				violations,
 				schema: outcome.schema,
+				...(outcome.exemptByReason ? { exemptByReason: outcome.exemptByReason } : {}),
 			}
 		}
 	}

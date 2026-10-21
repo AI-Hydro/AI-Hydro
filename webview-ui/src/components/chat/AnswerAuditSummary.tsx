@@ -1,5 +1,5 @@
 import { type AnswerAuditPayload, parseAnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
-import type React from "react"
+import React, { useState } from "react"
 
 /**
  * Interim renderer for the structured `answer_audit` say (W2-B-host). One quiet summary line with an expandable
@@ -20,6 +20,25 @@ export function auditSummaryLine(p: AnswerAuditPayload): string {
 		return `Audit (ungraded server): ${p.violations.length} ${p.violations.length === 1 ? "finding" : "findings"}`
 	}
 	return `Audit: ${[traced, `${p.hardCount} hard`, `${p.advisoryCount} advisory`].filter(Boolean).join(" · ")}`
+}
+
+const CAP = 200
+
+/** Long text capped for display with an inline way to read the rest. */
+const Capped: React.FC<{ text: string }> = ({ text }) => {
+	const [open, setOpen] = useState(false)
+	const flat = text.replace(/\s+/g, " ")
+	if (flat.length <= CAP || open) {
+		return <>{flat}</>
+	}
+	return (
+		<>
+			{flat.slice(0, CAP)}…{" "}
+			<button className="underline cursor-pointer bg-transparent border-0 p-0" onClick={() => setOpen(true)} type="button">
+				Show more
+			</button>
+		</>
+	)
 }
 
 export const AnswerAuditSummary: React.FC<{ text?: string }> = ({ text }) => {
@@ -43,16 +62,32 @@ export const AnswerAuditSummary: React.FC<{ text?: string }> = ({ text }) => {
 			{payload.violations.length > 0 && (
 				<details className="mt-1">
 					<summary className="cursor-pointer select-none">Show findings ({payload.violations.length})</summary>
-					<ol className="mt-1 pl-5 list-decimal space-y-1 max-h-64 overflow-auto">
+					<ol
+						aria-label="Audit findings"
+						className="mt-1 pl-5 list-decimal space-y-1 max-h-64 overflow-auto"
+						tabIndex={0}>
 						{payload.violations.map((v, i) => (
 							<li className="ph-no-capture" key={`${v.kind}-${i}`}>
 								<code>{v.kind}</code>
 								{v.severity !== "unknown" && <span> [{v.severity}]</span>}
 								{v.excerpt && <span> "{v.excerpt.replace(/\s+/g, " ").slice(0, 120)}"</span>}
-								{v.message && <span> {v.message}</span>}
+								{v.message && (
+									<span>
+										{" "}
+										<Capped text={v.message} />
+									</span>
+								)}
 								{v.fixHint && (
 									<div>
-										Fix: <code>{v.fixHint.replace(/\s+/g, " ")}</code>
+										Fix:{" "}
+										<code>
+											<Capped text={v.fixHint} />
+										</code>
+									</div>
+								)}
+								{v.suggestedMarker && (
+									<div>
+										Marker: <code>{v.suggestedMarker}</code>
 									</div>
 								)}
 							</li>

@@ -86,10 +86,14 @@ export interface AnswerAuditViolation {
 	excerpt?: string
 	message?: string
 	fixHint?: string
+	/** Graded schema (aihydro-tools >= 2.6.0) extras, kept as their own fields. */
+	category?: string
+	suggestedMarker?: string
+	resolvedPath?: string
 }
 
 /** Why the answer is shown with a caveat. */
-export type AnswerAuditDisclosureKind = "findings_remain" | "audit_unavailable" | "interrupted"
+export type AnswerAuditDisclosureKind = "findings_remain" | "audit_unavailable" | "audit_skipped" | "interrupted"
 
 export interface AnswerAuditDisclosure {
 	kind: AnswerAuditDisclosureKind
@@ -147,6 +151,8 @@ export interface AnswerAuditPayload extends AnswerDraftRecord {
 	disclosure?: AnswerAuditDisclosure
 	droppedQuantities?: string[]
 	droppedClaimMarkers?: string[]
+	/** Graded schema: count of findings the auditor exempted, by reason (e.g. year-like numbers). */
+	exemptByReason?: Record<string, number>
 	/** Earlier attempts, oldest first. */
 	history?: AnswerRevisionEvent[]
 }
@@ -195,7 +201,23 @@ function parseViolation(raw: any): AnswerAuditViolation | undefined {
 		...(isStr(raw.excerpt) ? { excerpt: raw.excerpt } : {}),
 		...(isStr(raw.message) ? { message: raw.message } : {}),
 		...(isStr(raw.fixHint) ? { fixHint: raw.fixHint } : {}),
+		...(isStr(raw.category) ? { category: raw.category } : {}),
+		...(isStr(raw.suggestedMarker) ? { suggestedMarker: raw.suggestedMarker } : {}),
+		...(isStr(raw.resolvedPath) ? { resolvedPath: raw.resolvedPath } : {}),
 	}
+}
+
+function parseExempt(raw: any): Record<string, number> | undefined {
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+		return undefined
+	}
+	const out: Record<string, number> = {}
+	for (const [k, v] of Object.entries(raw)) {
+		if (isNum(v)) {
+			out[k] = v
+		}
+	}
+	return Object.keys(out).length ? out : undefined
 }
 
 /**
@@ -243,6 +265,7 @@ export function parseAnswerAuditPayload(text: string | undefined): AnswerAuditPa
 			: {}),
 		...(Array.isArray(raw.droppedQuantities) ? { droppedQuantities: raw.droppedQuantities.filter(isStr) } : {}),
 		...(Array.isArray(raw.droppedClaimMarkers) ? { droppedClaimMarkers: raw.droppedClaimMarkers.filter(isStr) } : {}),
+		...(parseExempt(raw.exemptByReason) ? { exemptByReason: parseExempt(raw.exemptByReason) } : {}),
 		...(Array.isArray(raw.history) ? { history: raw.history as AnswerRevisionEvent[] } : {}),
 	}
 }

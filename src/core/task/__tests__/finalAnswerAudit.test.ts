@@ -296,8 +296,37 @@ describe("final-answer audit", () => {
 				total: 5,
 			})
 			expect(payload.draftHash).to.match(/^[0-9a-f]{64}$/)
-			expect(payload.violations[0].fixHint).to.equal("[run:r1#nse]")
+			expect(payload.violations[0].fixHint).to.equal(undefined)
+			expect(payload.violations[0]).to.include({ suggestedMarker: "[run:r1#nse]", category: "quantity" })
+			expect(payload.violations[1].resolvedPath).to.equal("runs/r1/nse")
+			expect(payload.exemptByReason).to.deep.equal({ year_like: 2 })
 			expect(parseAnswerAuditPayload(JSON.stringify(payload))).to.deep.equal(payload)
+		})
+
+		it("passed:false with no violations is unavailable (inconsistent), never 0 findings", async () => {
+			for (const body of [
+				{ session_id: "study-1", passed: false, violations: [] },
+				{ session_id: "study-1", passed: false, hard_count: 0, advisory_count: 0, violations: [] },
+			]) {
+				const out: any = await audit(body)
+				expect(out).to.deep.equal({ status: "unavailable", reason: "inconsistent audit response" })
+			}
+		})
+
+		it("skipped payload has its own disclosure kind; unknown payload fields are ignored", () => {
+			const payload = toAnswerAuditPayload(
+				{ status: "skipped", reason: "no-research-session" },
+				{ stage: "final", attempt: 0, answerTs: 9, answer: "x 1" },
+			)
+			expect(payload.disclosure).to.deep.equal({ kind: "audit_skipped", reason: "no-research-session" })
+			const withExtra = JSON.stringify({
+				...payload,
+				futureField: 1,
+				violations: [{ kind: "k", severity: "hard", zzz: 1 }],
+			})
+			const back = parseAnswerAuditPayload(withExtra) as any
+			expect(back.futureField).to.equal(undefined)
+			expect(back.violations[0]).to.deep.equal({ kind: "k", severity: "hard" })
 		})
 
 		it("unavailable payload carries status and reason, with no violations", () => {
@@ -373,6 +402,21 @@ describe("final-answer audit", () => {
 			const payload = parseAnswerAuditPayload(say.getCalls().find((c: any) => c.args[0] === "answer_audit")!.args[1])
 			expect(payload?.status).to.equal("unavailable")
 			expect(payload?.disclosure?.reason).to.include("server crashed")
+		})
+
+		it("does not emit a second row when the success-path say throws", async () => {
+			const { config, say } = makeConfig({
+				hub: mockHub([server()], sinon.stub().resolves(textResponse(PASS))),
+				enabled: true,
+			})
+			say.callsFake(async (type: string) => {
+				if (type === "answer_audit") {
+					throw new Error("say failed")
+				}
+				return 1
+			})
+			await new AttemptCompletionHandler().execute(config, block)
+			expect(say.getCalls().filter((c: any) => c.args[0] === "answer_audit")).to.have.length(1)
 		})
 
 		it("emits no row when the audit is skipped", async () => {

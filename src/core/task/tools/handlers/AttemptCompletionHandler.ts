@@ -59,6 +59,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 	}
 
 	private async showFinalAnswerAudit(config: TaskConfig, answer: string): Promise<void> {
+		let emitted = false
 		try {
 			if (config.services.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled") === false) {
 				return
@@ -72,9 +73,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			})
 			// Nothing to audit / no research session stays silent, as before: no row for chats outside a study.
 			if (outcome.status !== "skipped") {
+				emitted = true // set before the say: a throw from the say itself must not produce a second row
 				await this.emitAnswerAudit(config, outcome, answer)
 			}
 		} catch (error) {
+			if (emitted) {
+				return
+			}
 			// Never let the audit affect completion; surface that it did not run.
 			await this.emitAnswerAudit(
 				config,
