@@ -74,15 +74,12 @@ export const name = "cline"
 
 // W2-A2: one user turn that reads three workspace files and then answers. The server picks the next step from the tool
 // results already in the request body, so the sequence is deterministic across the four provider requests.
-const read_file_step = (path: string) => `Reading ${path}.
-
-<read_file>
+// No prose before the call: a non-empty text row breaks a work group, and this fixture is about one group of three.
+const read_file_step = (path: string) => `<read_file>
 <path>${path}</path>
 </read_file>`
 
-const read_three_done = `All three files were read.
-
-<attempt_completion>
+const read_three_done = `<attempt_completion>
 <result>
 I read test.ts, README.md and index.html. This is a mock answer, not a result.
 </result>
