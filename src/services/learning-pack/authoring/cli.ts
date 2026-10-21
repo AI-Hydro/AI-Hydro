@@ -203,7 +203,15 @@ async function buildCommand(ctx: CliContext): Promise<number> {
 		env: ctx.env,
 		sourceCommitOverride: values["source-commit"],
 	})
-	if (kind === "release") assertSourcesMatchCommit(rootDir, sources.sourceFiles ?? new Map())
+	if (kind === "release") {
+		// The config decides what is signed (IDs, range, license), so it must be a committed file of the source repo too.
+		if (path.relative(rootDir, configPath).startsWith("..") || path.isAbsolute(path.relative(rootDir, configPath))) {
+			throw new PackBuildError(
+				`A release build needs the config inside the source root so it is tracked at the signed commit; ${configPath} is outside ${rootDir}`,
+			)
+		}
+		assertSourcesMatchCommit(rootDir, new Map([...(sources.sourceFiles ?? new Map()), [configPath, configBytes]]))
+	}
 	const built = await assembleUnsignedPack({
 		config,
 		sources,

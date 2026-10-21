@@ -87,7 +87,7 @@ describe("aihydro-pack CLI", function () {
 		await fs.writeFile(path.join(repo, "modules/water-basics/module.html"), moduleHtml("water-basics"))
 		await fs.writeFile(path.join(repo, "modules/runoff-lab/module.html"), moduleHtml("runoff-lab", { executable: true }))
 		await fs.writeFile(
-			path.join(root, "pack.config.json"),
+			path.join(courseDir, "pack.config.json"),
 			JSON.stringify({
 				schemaVersion: 1,
 				packId: "aihydro.intro-demo",
@@ -246,7 +246,7 @@ describe("aihydro-pack CLI", function () {
 	describe("build, sign, verify", () => {
 		beforeEach(writeFixtureRepo)
 
-		const config = (): string => path.join(root, "pack.config.json")
+		const config = (): string => path.join(courseDir, "pack.config.json")
 
 		it("a development build signed with --ephemeral verifies, even from an agent context", async () => {
 			const unsigned = path.join(root, "dev.unsigned.aihydropack")
@@ -474,7 +474,7 @@ describe("aihydro-pack CLI", function () {
 				return JSON.parse(Buffer.from(read.files?.get("provenance/provenance.json") as Uint8Array).toString("utf8"))
 			}
 			async function configWithFile(): Promise<string> {
-				const withFile = path.join(root, "files.config.json")
+				const withFile = path.join(courseDir, "files.config.json")
 				await fs.writeFile(
 					withFile,
 					JSON.stringify({
@@ -491,6 +491,9 @@ describe("aihydro-pack CLI", function () {
 				await fs.writeFile(path.join(repo, ".gitignore"), "data/\n")
 				git(repo, "add", "-A")
 				git(repo, "commit", "-q", "-m", "ignore data")
+				await configWithFile()
+				git(repo, "add", "-A")
+				git(repo, "commit", "-q", "-m", "files config")
 				const out = path.join(root, "r.unsigned.aihydropack")
 				const result = await release([], out, await configWithFile())
 				expect(result.code, result.err).to.equal(1)
@@ -509,11 +512,7 @@ describe("aihydro-pack CLI", function () {
 				await fs.mkdir(path.join(repo, "data"))
 				await fs.writeFile(path.join(repo, "data/x1.csv"), "tracked\n")
 				await fs.writeFile(path.join(repo, ".gitignore"), "data/*.csv\n")
-				git(repo, "add", "-A")
-				git(repo, "add", "-f", "data/x1.csv") // force-add past the ignore rule
-				git(repo, "commit", "-q", "-m", "tracked x1")
-				await fs.writeFile(path.join(repo, "data/x[12].csv"), "IGNORED BYTES\n")
-				const configPath = path.join(root, "glob.config.json")
+				const configPath = path.join(courseDir, "glob.config.json")
 				await fs.writeFile(
 					configPath,
 					JSON.stringify({
@@ -521,6 +520,10 @@ describe("aihydro-pack CLI", function () {
 						files: [{ source: "data/x[12].csv", dest: "datasets/x.csv" }],
 					}),
 				)
+				git(repo, "add", "-A")
+				git(repo, "add", "-f", "data/x1.csv") // force-add past the ignore rule
+				git(repo, "commit", "-q", "-m", "tracked x1")
+				await fs.writeFile(path.join(repo, "data/x[12].csv"), "IGNORED BYTES\n")
 				const out = path.join(root, "r.unsigned.aihydropack")
 				const result = await release([], out, configPath)
 				expect(result.code, result.err).to.equal(1)
@@ -554,9 +557,39 @@ describe("aihydro-pack CLI", function () {
 				expect(result.code, result.err).to.equal(0)
 			})
 
+			it("requires the config itself to be a committed file inside the source root", async () => {
+				const out = path.join(root, "r.unsigned.aihydropack")
+				// Outside the repository: refused.
+				const outsideConfig = path.join(root, "outside.config.json")
+				await fs.copyFile(config(), outsideConfig)
+				const outside = await release([], out, outsideConfig)
+				expect(outside.code, outside.err).to.equal(1)
+				expect(outside.err).to.contain("config inside the source root")
+				// Inside the repo but untracked: refused.
+				const untrackedConfig = path.join(courseDir, "untracked.config.json")
+				await fs.copyFile(config(), untrackedConfig)
+				const untracked = await release([], out, untrackedConfig)
+				expect(untracked.code, untracked.err).to.equal(1)
+				await fs.rm(untrackedConfig)
+				// Committed (the fixture commits it): accepted. Edited afterwards and hidden from status: refused.
+				const committed = await release([], out)
+				expect(committed.code, committed.err).to.equal(0)
+				await fs.rm(out)
+				git(repo, "update-index", "--assume-unchanged", "courses/demo/pack.config.json")
+				await fs.writeFile(
+					config(),
+					JSON.stringify({ ...JSON.parse(await fs.readFile(config(), "utf8")), version: "9.9.9" }),
+				)
+				const edited = await release([], out)
+				expect(edited.code, edited.err).to.equal(1)
+				expect(edited.err).to.contain("differs from the committed file")
+				expect(edited.err).to.contain("pack.config.json")
+			})
+
 			it("accepts the same file once it is tracked", async () => {
 				await fs.mkdir(path.join(repo, "data"))
 				await fs.writeFile(path.join(repo, "data/x.csv"), "a,b\n1,2\n")
+				await configWithFile()
 				git(repo, "add", "-A")
 				git(repo, "commit", "-q", "-m", "track data")
 				const out = path.join(root, "r.unsigned.aihydropack")
