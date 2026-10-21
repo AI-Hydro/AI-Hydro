@@ -3,6 +3,8 @@
  */
 
 import { getPairing } from "@shared/aihydro/toolCallPresenter"
+import { parseAnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
+import { type PresentOptions, presentTranscript, type TranscriptItem } from "@shared/aihydro/transcriptPresenter"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { AiHydroMessage, AiHydroSayBrowserAction } from "@shared/ExtensionMessage"
@@ -149,4 +151,61 @@ export function groupMessages(visibleMessages: AiHydroMessage[]): (AiHydroMessag
  */
 export function getTaskMessage(messages: AiHydroMessage[]): AiHydroMessage | undefined {
 	return messages.at(0)
+}
+
+// ── Transcript presenter wiring (Wave 2, W2-A2) ─────────────────────────────────────────────────────────────────
+
+/** One Virtuoso row. `legacy` rows are exactly today's ChatRow / BrowserSessionRow output (verbose detail). */
+export type RenderEntry =
+	| { mode: "legacy"; key: string; entry: AiHydroMessage | AiHydroMessage[] }
+	| { mode: "presented"; key: string; item: TranscriptItem; auditMessage?: AiHydroMessage }
+
+export interface TranscriptView {
+	entries: RenderEntry[]
+	/** One entry per row, in the shape useScrollBehavior understands (a message, or the messages a row covers). */
+	scrollEntries: (AiHydroMessage | AiHydroMessage[])[]
+}
+
+/**
+ * Builds what the list renders. `verbose` is today's pipeline untouched (filter + browser-session grouping); every
+ * other level runs the presenter on the UNFILTERED processed list, so nothing the filter drops is lost to it.
+ */
+export function buildTranscriptView(
+	processed: AiHydroMessage[],
+	grouped: (AiHydroMessage | AiHydroMessage[])[],
+	options: PresentOptions,
+): TranscriptView {
+	if (options.detail === "verbose") {
+		return {
+			entries: grouped.map((entry, i) => ({
+				mode: "legacy" as const,
+				key: Array.isArray(entry) ? `legacy:${entry[0]?.ts}:${i}` : `legacy:${entry.ts}:${i}`,
+				entry,
+			})),
+			scrollEntries: grouped,
+		}
+	}
+	const items = presentTranscript(processed, options)
+	const entries: RenderEntry[] = items.map((item) => ({
+		mode: "presented" as const,
+		key: item.key,
+		item,
+		auditMessage:
+			item.kind === "answer" && item.audit
+				? processed.find(
+						(m) => m.say === "answer_audit" && m.text && parseAnswerAuditPayload(m.text)?.answerTs === item.ts,
+					)
+				: undefined,
+	}))
+	const scrollEntries = items.map((item): AiHydroMessage | AiHydroMessage[] => {
+		switch (item.kind) {
+			case "group":
+				return item.members
+			case "passthrough":
+				return item.messages
+			default:
+				return item.message
+		}
+	})
+	return { entries, scrollEntries }
 }

@@ -790,3 +790,20 @@ describe("transcript presenter: final round (resolver throw, write detection, le
 		])
 	})
 })
+
+describe("transcript presenter: pending answer_audit rows (W2-C)", () => {
+	it("are invisible: no item, no revision, no lifted line, and they do not split a group", () => {
+		reset()
+		const pending = say(
+			"answer_audit",
+			JSON.stringify({ stage: "pending", status: "pending", answerTs: 1, draftHash: "h", draft: "UNCHECKED DRAFT TEXT" }),
+		)
+		const items = present([req(), mcpCall(), mcpResp({ ok: true }), pending, req(), mcpCall(), mcpResp({ ok: true })])
+		expect(items.map((i) => i.kind)).to.deep.equal(["group"])
+		const g = groups(items)[0]
+		expect(g.facts.revisionCount).to.equal(0)
+		expect(g.lifted).to.have.length(0)
+		expect(g.facts.toolCount).to.equal(2)
+		expect(JSON.stringify(items)).to.not.include("UNCHECKED DRAFT TEXT")
+	})
+})

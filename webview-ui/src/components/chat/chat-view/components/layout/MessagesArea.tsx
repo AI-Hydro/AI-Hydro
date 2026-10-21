@@ -1,8 +1,17 @@
+import { deriveCallState } from "@shared/aihydro/askOutcome"
+import type { DetailLevel } from "@shared/aihydro/transcriptPresenter"
 import { AiHydroMessage } from "@shared/ExtensionMessage"
-import React, { useCallback, useMemo } from "react"
+import React, { useCallback, useMemo, useState } from "react"
 import { Virtuoso } from "react-virtuoso"
 import TypingIndicator from "@/components/chat/TypingIndicator"
+import { updateSetting } from "@/components/settings/utils/settingsHandlers"
+import { liveActivity } from "../../../transcript/ActivityLine"
+import { describeCall } from "../../../transcript/ToolSummaryLine"
+import { TranscriptDetailToggle } from "../../../transcript/TranscriptDetailToggle"
+import { TranscriptItemRenderer, type TranscriptRenderContext } from "../../../transcript/TranscriptItemRenderer"
+import { TranscriptStatus } from "../../../transcript/TranscriptStatus"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
+import { type TranscriptView } from "../../utils/messageUtils"
 import { createMessageRenderer } from "../messages/MessageRenderer"
 
 interface MessagesAreaProps {
@@ -12,6 +21,34 @@ interface MessagesAreaProps {
 	scrollBehavior: ScrollBehavior
 	chatState: ChatState
 	messageHandlers: MessageHandlers
+	/** What to render: today's rows (verbose) or presenter items. */
+	view: TranscriptView
+	detail: DetailLevel
+	isRunning: boolean
+}
+
+/** The checkpoint a "Rewind" on a user turn points at: the first one taken after it, before the next user turn. */
+function rewindTargets(view: TranscriptView): Map<number, number> {
+	const out = new Map<number, number>()
+	view.entries.forEach((entry, i) => {
+		if (entry.mode !== "presented" || entry.item.kind !== "user") {
+			return
+		}
+		for (let j = i + 1; j < view.entries.length; j++) {
+			const next = view.entries[j]
+			if (next.mode !== "presented" || next.item.kind === "user") {
+				break
+			}
+			if (next.item.kind === "group") {
+				const checkpoint = next.item.members.find((m) => m.say === "checkpoint_created")
+				if (checkpoint) {
+					out.set(i, checkpoint.ts)
+					return
+				}
+			}
+		}
+	})
+	return out
 }
 
 /**
@@ -25,6 +62,9 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	scrollBehavior,
 	chatState,
 	messageHandlers,
+	view,
+	detail,
+	isRunning,
 }) => {
 	const {
 		virtuosoRef,
@@ -39,8 +79,16 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	} = scrollBehavior
 
 	const { expandedRows, inputValue, setActiveQuote } = chatState
+	const presented = detail !== "verbose"
 
-	const itemContent = useCallback(
+	// Group expansion is the user's choice, keyed by the group's stable key, so it survives streaming appends and
+	// Virtuoso unmounting the row. Absent = the presenter's default (the live tail is open at Normal).
+	const [groupExpanded, setGroupExpanded] = useState<Record<string, boolean>>({})
+	const onToggleGroup = useCallback((key: string, current: boolean) => {
+		setGroupExpanded((prev) => ({ ...prev, [key]: !current }))
+	}, [])
+
+	const legacyContent = useCallback(
 		createMessageRenderer(
 			groupedMessages,
 			modifiedMessages,
@@ -63,6 +111,52 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		],
 	)
 
+	const rewinds = useMemo(() => rewindTargets(view), [view])
+	const ctx: TranscriptRenderContext = useMemo(
+		() => ({
+			allMessages: modifiedMessages,
+			modifiedMessages,
+			expandedRows,
+			onToggleExpand: toggleRowExpansion,
+			onHeightChange: handleRowHeightChange,
+			onSetQuote: setActiveQuote,
+			inputValue,
+			messageHandlers,
+			groupExpanded,
+			onToggleGroup,
+			running: isRunning,
+		}),
+		[
+			modifiedMessages,
+			expandedRows,
+			toggleRowExpansion,
+			handleRowHeightChange,
+			setActiveQuote,
+			inputValue,
+			messageHandlers,
+			groupExpanded,
+			onToggleGroup,
+			isRunning,
+		],
+	)
+
+	const itemContent = useCallback(
+		(index: number, entry: TranscriptView["entries"][number]) =>
+			entry.mode === "legacy" ? (
+				legacyContent(index, entry.entry)
+			) : (
+				<TranscriptItemRenderer
+					auditMessage={entry.auditMessage}
+					count={view.entries.length}
+					ctx={ctx}
+					index={index}
+					item={entry.item}
+					rewindTs={rewinds.get(index)}
+				/>
+			),
+		[legacyContent, ctx, view.entries.length, rewinds],
+	)
+
 	// Show typing indicator when the last message is from the user (no assistant response yet)
 	// Also show when an API request has started but the assistant hasn't started responding
 	const showTypingIndicator = useMemo(() => {
@@ -78,16 +172,40 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		// AiHydroSay value, not AiHydroAsk), so the typing indicator could
 		// never fire for the user's own message.
 		if (last.type === "say" && last.say === "user_feedback") return true
-		// API request started but no text response yet
+		// API request started but no text response yet. A live work group has its own activity line instead.
+		const tail = view.entries[view.entries.length - 1]
+		if (presented && tail?.mode === "presented" && tail.item.kind === "group") return false
 		if (last.type === "say" && last.say === "api_req_started") {
 			return true
 		}
 		return false
-	}, [groupedMessages])
+	}, [groupedMessages, view, presented])
+
+	// Status for the single polite live region: short, never streamed text.
+	const statusText = useMemo(() => {
+		const tail = view.entries[view.entries.length - 1]
+		if (!tail || tail.mode !== "presented") {
+			return ""
+		}
+		if (tail.item.kind === "answer" && !tail.item.partial && !isRunning) {
+			return "Answer ready"
+		}
+		if (tail.item.kind === "group" && isRunning) {
+			const a = liveActivity(
+				tail.item.members,
+				(m) => deriveCallState(m, modifiedMessages) === "running",
+				(m) => describeCall(m, tail.item.kind === "group" ? tail.item.members : []).name,
+			)
+			return a.kind === "running" ? `Running ${a.name}` : a.kind === "thinking" ? "Thinking" : "Working"
+		}
+		return ""
+	}, [view, isRunning, modifiedMessages])
 
 	return (
 		<div className="overflow-hidden flex flex-col h-full relative">
-			<div className="flex-grow flex" ref={scrollContainerRef}>
+			<TranscriptDetailToggle onChange={(level) => updateSetting("transcriptDetail", level)} value={detail} />
+			<TranscriptStatus text={statusText} />
+			<div aria-label="Conversation" aria-live="off" className="flex-grow flex" ref={scrollContainerRef} role="log">
 				<Virtuoso
 					atBottomStateChange={(isAtBottom) => {
 						setIsAtBottom(isAtBottom)
@@ -106,15 +224,19 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 							</div>
 						),
 					}}
-					data={groupedMessages}
+					// An explicit `undefined` would replace Virtuoso's default key function, so it is only passed when presented.
+					{...(presented
+						? { computeItemKey: (_index: number, entry: TranscriptView["entries"][number]) => entry.key }
+						: {})}
+					data={view.entries}
 					// increasing top by 3_000 to prevent jumping around when user collapses a row
 					increaseViewportBy={{
 						top: 3_000,
 						bottom: Number.MAX_SAFE_INTEGER,
 					}} // hack to make sure the last message is always rendered to get truly perfect scroll to bottom animation when new messages are added (Number.MAX_SAFE_INTEGER is safe for arithmetic operations, which is all virtuoso uses this value for in src/sizeRangeSystem.ts)
-					initialTopMostItemIndex={groupedMessages.length - 1} // messages is the raw format returned by extension, modifiedMessages is the manipulated structure that combines certain messages of related type, and visibleMessages is the filtered structure that removes messages that should not be rendered
+					initialTopMostItemIndex={view.entries.length - 1} // messages is the raw format returned by extension, modifiedMessages is the manipulated structure that combines certain messages of related type, and visibleMessages is the filtered structure that removes messages that should not be rendered
 					itemContent={itemContent}
-					key={task.ts}
+					key={`${task.ts}:${presented ? "p" : "v"}`}
 					ref={virtuosoRef} // anything lower causes issues with followOutput
 					style={{
 						flexGrow: 1,

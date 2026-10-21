@@ -130,6 +130,7 @@ const chatTx = (
 ): ScreenDef =>
 	chatScreen(id, title, {
 		state: taskState(messages, true),
+		mcpServers: fixtureMcpServers,
 		expectVisible: [`text=${visible}`],
 		steps: SCROLL_TO_END,
 		pixelDiffThreshold: STRUCTURAL_ONLY,
@@ -195,7 +196,9 @@ export const screens: ScreenDef[] = [
 	}),
 	chatScreen("chat-task-mcp", "Task with ai-hydro MCP call and result", {
 		fixtureKind: "recorded-call",
-		state: taskState(mcpCallTask, true),
+		// Measures the card itself, so it renders at Verbose (the card inline, as before W2-A2). The card inside a work
+		// group's expanded call line is covered by the transcript unit tests and the e2e spec.
+		state: { ...taskState(mcpCallTask, true), transcriptDetail: "verbose" },
 		expectVisible: ["text=Raw arguments and result (JSON)"],
 		steps: SCROLL_TO_END,
 		pixelDiffThreshold: STRUCTURAL_ONLY,
@@ -218,13 +221,59 @@ export const screens: ScreenDef[] = [
 		ledger: { sessionId: FIXTURE_SESSION, claims: statusClaims },
 	}),
 	// ── Wave 2 transcript fixtures (W2-0): the "before" state the redesign is measured against ──────
+	// At Normal the cost rows, Thinking rows and the checkpoint marker line are folded into one group; the group header
+	// and the retry notice stay on screen.
 	chatTx(
 		"chat-turn-machinery",
 		"Turn machinery: cost rows, thinking, checkpoints, retry notice, science calls",
 		tx.turnMachineryTask,
 		"Fixture answer, not a result.",
+		{
+			expectVisible: [
+				"text=Fixture answer, not a result.",
+				"[data-testid=work-group] button[aria-expanded]",
+				"text=malformed tool call; retried",
+			],
+			expectAbsent: ["text=API Request", "text=Thinking:", ".codicon-bookmark"],
+		},
 	),
-	chatTx("chat-failure-lifted", "Failures that must stay visible", tx.failureLiftedTask, "which gauge should I use instead?"),
+	chatTx(
+		"chat-detail-verbose",
+		"Turn machinery at Verbose: every row as recorded",
+		tx.turnMachineryTask,
+		"Fixture answer, not a result.",
+		{
+			state: { ...taskState(tx.turnMachineryTask, true), transcriptDetail: "verbose" },
+			expectAbsent: ["[data-testid=work-group]"],
+		},
+	),
+	chatTx(
+		"chat-detail-focus",
+		"Turn machinery at Focus: answers and what needs you",
+		tx.turnMachineryTask,
+		"Fixture answer, not a result.",
+		{
+			state: { ...taskState(tx.turnMachineryTask, true), transcriptDetail: "focus" },
+			expectVisible: [
+				"text=Fixture answer, not a result.",
+				"[data-testid=work-group] button[aria-expanded=false]",
+				"text=malformed tool call; retried",
+			],
+			expectAbsent: ["text=API Request", "text=Thinking:", ".codicon-bookmark", ".transcript-call"],
+		},
+	),
+	// Every lifted line is real text under the collapsed header.
+	chatTx("chat-failure-lifted", "Failures that must stay visible", tx.failureLiftedTask, "which gauge should I use instead?", {
+		expectVisible: [
+			"text=which gauge should I use instead?",
+			"[data-testid=work-group] button[aria-expanded=false]",
+			"text=upstream service returned 503",
+			"text=Skipped: 'fetch_flow' is not a tool",
+			"text=The SEARCH block did not match the file content",
+			"text=Could not read /workspace/missing.csv",
+		],
+		expectAbsent: ["text=API Request"],
+	}),
 	chatTx("chat-run-8-tools", "Eight science calls in one turn", tx.run8ToolsTask, "Eight recorded runs are listed above."),
 	chatTx("chat-approval-mcp", "Pending MCP approval", tx.approvalMcpTask, "I will call the forcing tool next."),
 	chatTx("chat-approval-command", "Pending command approval", tx.approvalCommandTask, "I will run the tests."),

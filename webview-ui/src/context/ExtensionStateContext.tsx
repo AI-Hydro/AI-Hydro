@@ -4,6 +4,7 @@ import { findLastIndex } from "@shared/array"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DEFAULT_DICTATION_SETTINGS, DictationSettings } from "@shared/DictationSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
+import { Environment } from "@shared/environment"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
 import { DEFAULT_MCP_DISPLAY_MODE } from "@shared/McpDisplayMode"
 import type { UserInfo } from "@shared/proto/cline/account"
@@ -14,7 +15,6 @@ import { convertProtoToAiHydroMessage } from "@shared/proto-conversions/aihydro-
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import type React from "react"
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import { Environment } from "@shared/environment"
 import {
 	basetenDefaultModelId,
 	basetenModels,
@@ -273,6 +273,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		backgroundCommandTaskId: undefined,
 		subagentsEnabled: false,
 		finalAnswerAuditEnabled: true,
+		transcriptDetail: "normal",
+		protectedRoots: [],
 
 		// NEW: Add workspace information with defaults
 		workspaceRoots: [],

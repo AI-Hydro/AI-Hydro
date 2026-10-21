@@ -10,6 +10,40 @@
 		}
 	},
 	"screens": {
+		"chat-detail-focus": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-detail-verbose": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 36,
+				"smallText": 0,
+				"contrast": 9,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-answer-audit-graded": {
 			"ref": {
 				"noName": 0,
@@ -2210,6 +2244,26 @@
 						"smallTarget": 24,
 						"smallText": 0,
 						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-detail-focus": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-detail-verbose": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 36,
+						"smallText": 0,
+						"contrast": 9,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6

@@ -816,6 +816,11 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 			}
 			case "answer": {
 				if (kind === "answer_audit") {
+					// A `pending` row holds the unchecked draft until the gate reveals it: it renders as nothing, is not a
+					// revision, and neither breaks nor splits a group (no lifted line, no member, no item).
+					if (parseObject(m.text)?.stage === "pending") {
+						return
+					}
 					closeAll()
 					const p = parseAnswerAuditPayload(m.text)
 					if (!p) {

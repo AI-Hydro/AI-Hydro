@@ -1101,6 +1101,22 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	)
 
+	// Cycle the chat transcript detail level (focus -> normal -> verbose). No default keybinding by design.
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.CycleTranscriptDetail, async () => {
+			const controller = (WebviewProvider.getInstance() as VscodeWebviewProvider).controller
+			if (!controller) {
+				return
+			}
+			const order = ["focus", "normal", "verbose"] as const
+			const current = controller.stateManager.getGlobalSettingsKey("transcriptDetail")
+			const next = order[(Math.max(0, order.indexOf(current)) + 1) % order.length]
+			controller.stateManager.setGlobalState("transcriptDetail", next)
+			await controller.postStateToWebview()
+			vscode.window.setStatusBarMessage(`AI-Hydro transcript detail: ${next}`, 3000)
+		}),
+	)
+
 	// Register the openWalkthrough command handler
 	context.subscriptions.push(
 		vscode.commands.registerCommand(commands.Walkthrough, async () => {

@@ -9,9 +9,9 @@ import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
 import { FileScanner, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
-import { realPathInsideFolder } from "@core/workspace/workspaceGeoPaths"
 import { setupWorkspaceManager } from "@core/workspace/setup"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
+import { realPathInsideFolder } from "@core/workspace/workspaceGeoPaths"
 import { getBoundStudy } from "@integrations/aihydro-session/boundStudy"
 import { cleanupLegacyCheckpoints } from "@integrations/checkpoints/CheckpointMigration"
 import { downloadTask } from "@integrations/misc/export-markdown"
@@ -72,6 +72,7 @@ import {
 import { fetchRemoteConfig } from "../storage/remote-config/fetch"
 import { PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
+import { getHostProtectedRoots } from "../task/protectedRoots"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { appendAiHydroStealthModels } from "./models/refreshOpenRouterModels"
 import { sendStateUpdate } from "./state/subscribeToState"
@@ -1214,6 +1215,7 @@ export class Controller {
 		const lastDismissedModelBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedModelBannerVersion") || 0
 		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
 		const finalAnswerAuditEnabled = this.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled")
+		const transcriptDetail = this.stateManager.getGlobalSettingsKey("transcriptDetail")
 
 		const localAiHydroRulesToggles = this.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
 		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
@@ -1314,6 +1316,8 @@ export class Controller {
 			remoteConfigSettings: this.stateManager.getRemoteConfigSettings(),
 			subagentsEnabled,
 			finalAnswerAuditEnabled,
+			transcriptDetail,
+			protectedRoots: getHostProtectedRoots(),
 			workspaceHtmlFiles: this.workspaceHtmlFiles.map((f) => ({
 				path: f.relativePath,
 				name: f.name,

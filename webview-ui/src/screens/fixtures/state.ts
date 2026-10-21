@@ -69,6 +69,8 @@ export function buildBaseState(overrides: Partial<ExtensionState> = {}): Extensi
 		planActSeparateModelsSetting: true,
 		enableCheckpointsSetting: false,
 		mcpDisplayMode: DEFAULT_MCP_DISPLAY_MODE,
+		transcriptDetail: "normal",
+		protectedRoots: [],
 		globalAiHydroRulesToggles: {},
 		localAiHydroRulesToggles: {},
 		localCursorRulesToggles: {},

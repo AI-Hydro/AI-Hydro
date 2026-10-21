@@ -4,6 +4,7 @@
  * so panels render their real "not reported" / empty branches rather than crashing.
  */
 import type { ExtensionState } from "@shared/ExtensionMessage"
+import { convertMcpServersToProtoMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { getActiveScreen } from "./active"
 import { buildBaseState } from "./fixtures/state"
 
@@ -77,6 +78,16 @@ export function hostSubscribe(service: string, method: string, _request: unknown
 	const screen = getActiveScreen()
 	if (service === "StateServiceClient" && method === "subscribeToState") {
 		queueMicrotask(() => handlers.onResponse?.({ stateJson: JSON.stringify(buildState(screen?.state)) }))
+	}
+	if (service === "McpServiceClient" && method === "subscribeToMcpServers" && screen?.mcpServers) {
+		const servers = screen.mcpServers
+		// The host recomputes trust from the launcher record; the fixture states its verdict instead.
+		const proto = convertMcpServersToProtoMcpServers(servers).map((p, i) => ({
+			...p,
+			trusted: servers[i].trust?.trusted ?? p.trusted,
+			trustReason: servers[i].trust?.reason ?? p.trustReason,
+		}))
+		queueMicrotask(() => handlers.onResponse?.({ mcpServers: proto }))
 	}
 	return () => {}
 }

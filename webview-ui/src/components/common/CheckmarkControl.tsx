@@ -1,14 +1,11 @@
 import { flip, offset, shift, useFloating } from "@floating-ui/react"
-import { CheckpointRestoreRequest } from "@shared/proto/cline/checkpoints"
-import { Int64Request } from "@shared/proto/cline/common"
-import { AiHydroCheckpointRestore } from "@shared/WebviewMessage"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import styled from "styled-components"
 import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { CheckpointsServiceClient } from "@/services/grpc-client"
+import { useCheckpointActions } from "./useCheckpointActions"
 
 interface CheckmarkControlProps {
 	messageTs?: number
@@ -16,10 +13,16 @@ interface CheckmarkControlProps {
 }
 
 export const CheckmarkControl = ({ messageTs, isCheckpointCheckedOut }: CheckmarkControlProps) => {
-	const [compareDisabled, setCompareDisabled] = useState(false)
-	const [restoreTaskDisabled, setRestoreTaskDisabled] = useState(false)
-	const [restoreWorkspaceDisabled, setRestoreWorkspaceDisabled] = useState(false)
-	const [restoreBothDisabled, setRestoreBothDisabled] = useState(false)
+	const {
+		compareDisabled,
+		restoreTaskDisabled,
+		restoreWorkspaceDisabled,
+		restoreBothDisabled,
+		handleCompare,
+		handleRestoreTask,
+		handleRestoreWorkspace,
+		handleRestoreBoth,
+	} = useCheckpointActions(messageTs, isCheckpointCheckedOut)
 	const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
 	const { onRelinquishControl } = useExtensionState()
 
@@ -51,13 +54,6 @@ export const CheckmarkControl = ({ messageTs, isCheckpointCheckedOut }: Checkmar
 		}
 	}, [showRestoreConfirm])
 
-	// Clear "Restore Files" button when checkpoint is no longer checked out
-	useEffect(() => {
-		if (!isCheckpointCheckedOut && restoreWorkspaceDisabled) {
-			setRestoreWorkspaceDisabled(false)
-		}
-	}, [isCheckpointCheckedOut, restoreWorkspaceDisabled])
-
 	const { refs, floatingStyles, update, placement } = useFloating({
 		placement: "bottom-end",
 		middleware: [
@@ -84,64 +80,10 @@ export const CheckmarkControl = ({ messageTs, isCheckpointCheckedOut }: Checkmar
 		}
 	}, [showRestoreConfirm, update])
 
-	// Use the onRelinquishControl hook instead of message event
+	// The menu closes when the host relinquishes control (the busy states reset in useCheckpointActions).
 	useEffect(() => {
-		return onRelinquishControl(() => {
-			setCompareDisabled(false)
-			setRestoreTaskDisabled(false)
-			setRestoreWorkspaceDisabled(false)
-			setRestoreBothDisabled(false)
-			setShowRestoreConfirm(false)
-		})
+		return onRelinquishControl(() => setShowRestoreConfirm(false))
 	}, [onRelinquishControl])
-
-	const handleRestoreTask = async () => {
-		setRestoreTaskDisabled(true)
-		try {
-			const restoreType: AiHydroCheckpointRestore = "task"
-			await CheckpointsServiceClient.checkpointRestore(
-				CheckpointRestoreRequest.create({
-					number: messageTs,
-					restoreType,
-				}),
-			)
-		} catch (err) {
-			console.error("Checkpoint restore task error:", err)
-			setRestoreTaskDisabled(false)
-		}
-	}
-
-	const handleRestoreWorkspace = async () => {
-		setRestoreWorkspaceDisabled(true)
-		try {
-			const restoreType: AiHydroCheckpointRestore = "workspace"
-			await CheckpointsServiceClient.checkpointRestore(
-				CheckpointRestoreRequest.create({
-					number: messageTs,
-					restoreType,
-				}),
-			)
-		} catch (err) {
-			console.error("Checkpoint restore workspace error:", err)
-			setRestoreWorkspaceDisabled(false)
-		}
-	}
-
-	const handleRestoreBoth = async () => {
-		setRestoreBothDisabled(true)
-		try {
-			const restoreType: AiHydroCheckpointRestore = "taskAndWorkspace"
-			await CheckpointsServiceClient.checkpointRestore(
-				CheckpointRestoreRequest.create({
-					number: messageTs,
-					restoreType,
-				}),
-			)
-		} catch (err) {
-			console.error("Checkpoint restore both error:", err)
-			setRestoreBothDisabled(false)
-		}
-	}
 
 	const handleMouseEnter = () => {
 		cancelCloseRestore()
@@ -183,20 +125,7 @@ export const CheckmarkControl = ({ messageTs, isCheckpointCheckedOut }: Checkmar
 					<CustomButton
 						$isCheckedOut={isCheckpointCheckedOut}
 						disabled={compareDisabled}
-						onClick={async () => {
-							setCompareDisabled(true)
-							try {
-								await CheckpointsServiceClient.checkpointDiff(
-									Int64Request.create({
-										value: messageTs,
-									}),
-								)
-							} catch (err) {
-								console.error("CheckpointDiff error:", err)
-							} finally {
-								setCompareDisabled(false)
-							}
-						}}
+						onClick={handleCompare}
 						style={{ cursor: compareDisabled ? "wait" : "pointer" }}>
 						Compare
 					</CustomButton>

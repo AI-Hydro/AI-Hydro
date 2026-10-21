@@ -54,17 +54,43 @@ export const outletSnapResolution = outletSnap
 export const toolsList2_5_0 = toolsList
 export { success as successFixture, provisional as provisionalFixture, areaFail as areaFailFixture }
 
+/**
+ * Tool names the synthetic transcripts call that the recorded 2.5.0 listing does not contain. They are SYNTHETIC
+ * fixture entries (read-only, closed-world annotations) so the transcript presenter can fold their calls the way it
+ * would for an annotated trusted server; they say nothing about what the real tools declare.
+ */
+const SYNTHETIC_READ_TOOLS = [
+	"delineate_basin",
+	"compute_signatures",
+	"extract_hydrologic_signatures",
+	"get_forcing",
+	"baseflow_separation",
+	"flow_duration_curve",
+	"trend_analysis",
+]
+
 /** The ai-hydro server entry as the webview state would carry it, with the recorded tools/list metadata. */
 export const fixtureMcpServers: McpServer[] = [
 	{
 		name: "ai-hydro",
 		config: "{}",
 		status: "connected",
-		tools: Object.entries(listing).map(([name, t]) => ({
-			name,
-			description: t.description ?? undefined,
-			inputSchema: (t.inputSchema ?? undefined) as object | undefined,
-			annotations: t.annotations ?? undefined,
-		})),
+		// The host reports first-party trust (isServerTrusted); the transcript only reads annotations for a trusted server.
+		trust: { trusted: true, reason: "fixture: first-party launcher matches the recorded launch" },
+		tools: Object.entries(listing)
+			.map(([name, t]) => ({
+				name,
+				description: t.description ?? undefined,
+				inputSchema: (t.inputSchema ?? undefined) as object | undefined,
+				annotations: t.annotations ?? undefined,
+			}))
+			.concat(
+				SYNTHETIC_READ_TOOLS.filter((name) => !(name in listing)).map((name) => ({
+					name,
+					description: "Synthetic fixture tool (not a recorded listing entry).",
+					inputSchema: undefined,
+					annotations: { readOnlyHint: true, openWorldHint: false },
+				})),
+			),
 	},
 ]

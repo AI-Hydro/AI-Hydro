@@ -11,6 +11,17 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Changed — the chat transcript renders through the presenter (vision-2040 Wave 2, PR W2-A2, branch `vision2040/w2-a2`)
+
+At Normal detail (the default) the per-request cost rows, "Thinking:" rows, tool-call rows, results and the checkpoint marker line fold into one collapsed **work group** per stretch of work. Prose, pending approvals, errors and the final answer stay top level; `ActionButtons` and the approval flow are unchanged.
+
+- **Group header.** One real `<button aria-expanded aria-controls>`: "Worked 1m 52s · 8 tools · $0.0535", built only from presenter facts: agent time and time waiting for you are separate, cost reads through its honesty label ("no cost recorded", "at least ..."), and retries, reused results, calls that did not run and answer revisions are counted. Its accessible name leads with problems ("Ran 8 tools, 1 failed").
+- **Nothing the reader must not miss is folded.** Failures, refusals, cancellations, truncation, condense, "malformed tool call; retried", security-relevant approvals and the checked-out checkpoint state are real text lines (codicon plus words, never colour alone) under the collapsed header, and are counted in it.
+- **Detail setting.** `transcriptDetail`: `focus` | `normal` | `verbose`, default `normal`, stored with the other UI settings (`UpdateSettingsRequest.transcript_detail`), a three-way control above the transcript, and the command "AI-Hydro: Cycle transcript detail" (`aihydro.cycleTranscriptDetail`, no default keybinding). `verbose` renders exactly the rows of the previous version.
+- **Resolvers.** The webview passes the presenter its two required resolvers. MCP effect class is read from tool annotations only for a server the host reports as trusted (`McpServer.trust`); an untrusted server's `readOnlyHint` never folds a call. Tool annotations now cross the proto boundary (`McpTool.read_only_hint` and three siblings, all optional) so the webview can read them. Protected paths come from the host-computed root list (`ExtensionState.protectedRoots`, from `getHostProtectedRoots`) matched by the string-only `src/shared/aihydro/protectedPathMatch.ts`; it can over-lift but never hides a protected write. Until the first-party tools publish annotations, their MCP calls have effect class UNKNOWN and are listed as lifted lines rather than folded.
+- **Rewind replaces the checkpoint row.** A "Rewind" action on the group header and on each user turn (visible on hover or focus, always in the tab order) opens a disclosure with Compare and three separately labelled restores (files, task, both). Each says it does not undo recorded claims, runs or MCP side effects (`~/.aihydro`). It runs the same RPCs as the old row (`useCheckpointActions`, shared with `CheckmarkControl`).
+- **Accessibility.** The transcript is `role="log"` with `aria-live="off"`; one throttled polite status region announces "Running ...", "Thinking" and "Answer ready", never streamed text; the live activity line is static under `prefers-reduced-motion`; when a live group collapses with focus inside it, focus moves to its header.
+
 ### Changed — the final-answer audit is a structured `answer_audit` row (vision-2040 Wave 2, PR W2-B-host, branch `vision2040/w2-b-host`)
 
 Host side only; the AnswerBlock footer (W2-B-web) comes later.

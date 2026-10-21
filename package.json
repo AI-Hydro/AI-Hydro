@@ -171,6 +171,11 @@
 				"category": "AI-Hydro"
 			},
 			{
+				"command": "aihydro.cycleTranscriptDetail",
+				"title": "Cycle transcript detail",
+				"category": "AI-Hydro"
+			},
+			{
 				"command": "aihydro.historyButtonClicked",
 				"title": "Analysis History",
 				"icon": "$(history)"

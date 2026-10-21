@@ -56,6 +56,11 @@ message McpTool {
   optional string description = 2;
   optional string input_schema = 3;
   optional bool auto_approve = 4;
+  // MCP tool annotations (hints; only meaningful for a trusted server). Optional so "absent" survives the round trip.
+  optional bool read_only_hint = 5;
+  optional bool destructive_hint = 6;
+  optional bool idempotent_hint = 7;
+  optional bool open_world_hint = 8;
 }
 
 message McpResource {

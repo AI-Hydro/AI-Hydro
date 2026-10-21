@@ -300,6 +300,7 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 		const subagentsEnabled = context.globalState.get<GlobalStateAndSettings["subagentsEnabled"]>("subagentsEnabled")
 		const finalAnswerAuditEnabled =
 			context.globalState.get<GlobalStateAndSettings["finalAnswerAuditEnabled"]>("finalAnswerAuditEnabled")
+		const transcriptDetail = context.globalState.get<GlobalStateAndSettings["transcriptDetail"]>("transcriptDetail")
 		const skillToggles = context.globalState.get<GlobalStateAndSettings["skillToggles"]>("skillToggles")
 
 		// Get mode-related configurations
@@ -628,6 +629,11 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			subagentsEnabled: subagentsEnabled ?? false,
 			// Final-answer audit is default-on; it never blocks or alters the answer
 			finalAnswerAuditEnabled: finalAnswerAuditEnabled ?? true,
+			// Anything but a known level reads as the default (Normal)
+			transcriptDetail:
+				transcriptDetail === "focus" || transcriptDetail === "verbose" || transcriptDetail === "normal"
+					? transcriptDetail
+					: "normal",
 			lastDismissedInfoBannerVersion: lastDismissedInfoBannerVersion ?? 0,
 			lastDismissedModelBannerVersion: lastDismissedModelBannerVersion ?? 0,
 			// Multi-root workspace support

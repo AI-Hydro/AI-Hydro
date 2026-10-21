@@ -3,7 +3,7 @@ import type { Socket } from "node:net"
 import { parse } from "node:url"
 import { v4 as uuidv4 } from "uuid"
 import type { BalanceResponse, OrganizationBalanceResponse, UserResponse } from "../../../../shared/AiHydroAccount"
-import { E2E_MOCK_API_RESPONSES, E2E_REGISTERED_MOCK_ENDPOINTS } from "./api"
+import { E2E_MOCK_API_RESPONSES, E2E_READ_THREE_FILES, E2E_REGISTERED_MOCK_ENDPOINTS } from "./api"
 import { AiHydroDataMock } from "./data"
 
 const E2E_API_SERVER_PORT = 7777
@@ -383,6 +383,11 @@ export class AiHydroApiServerMock {
 						}
 						if (body.includes("edit_request")) {
 							responseText = E2E_MOCK_API_RESPONSES.EDIT_REQUEST
+						}
+						// Latest step first: each later step's marker implies the earlier ones are in the history too.
+						const readStep = E2E_READ_THREE_FILES.find((step) => body.includes(step.after))
+						if (readStep) {
+							responseText = readStep.text
 						}
 
 						const generationId = `gen_${++controller.generationCounter}_${Date.now()}`
