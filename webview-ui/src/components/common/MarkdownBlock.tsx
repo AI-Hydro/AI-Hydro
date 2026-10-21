@@ -47,8 +47,6 @@ const ActModeHighlight: React.FC = () => {
 interface MarkdownBlockProps {
 	markdown?: string
 	compact?: boolean
-	/** `strip` removes evidence markers from the prose (the caller renders them as an evidence strip). Default: chips. */
-	evidence?: "chips" | "strip"
 }
 
 /**
@@ -229,9 +227,7 @@ const chipPropertiesFor = (match: RegExpExecArray): Record<string, string> | und
  * An inline-code node whose ENTIRE value is one marker (models often backtick their citations) is chipped
  * too; a marker embedded in longer inline code or a code block stays code (grammar examples, fix hints).
  */
-const remarkAiHydroMarkers = (options?: { mode?: "chips" | "strip" }) => {
-	// "strip": the caller shows the evidence elsewhere (the answer card's evidence strip), so the prose carries no chip.
-	const strip = options?.mode === "strip"
+const remarkAiHydroMarkers = () => {
 	return (tree: Node) => {
 		visit(tree, "inlineCode", (node: any, index: number | undefined, parent: any) => {
 			if (typeof index === "undefined" || !parent || typeof node.value !== "string") return
@@ -240,24 +236,12 @@ const remarkAiHydroMarkers = (options?: { mode?: "chips" | "strip" }) => {
 			if (!match || match[0] !== node.value) return
 			const hProperties = chipPropertiesFor(match)
 			if (!hProperties) return
-			parent.children.splice(
-				index,
-				1,
-				strip ? { type: "text", value: "" } : { type: "strong", data: { hProperties }, children: [] },
-			)
+			parent.children.splice(index, 1, { type: "strong", data: { hProperties }, children: [] })
 		})
 		visit(tree, "text", (node: any, index: number | undefined, parent: any) => {
 			if (typeof index === "undefined" || !parent) return
 
 			const text: string = node.value
-			if (strip) {
-				// Drop each marker and the single space before it, so "index [run:..];" reads "index;".
-				const stripped = text.replace(new RegExp(`\\s?${AIHYDRO_MARKER_SOURCE}`, "g"), "")
-				if (stripped !== text) {
-					node.value = stripped
-				}
-				return
-			}
 			const children: any[] = []
 			let lastIndex = 0
 			let match: RegExpExecArray | null
@@ -439,10 +423,10 @@ const remarkFilePathDetection = () => {
 	}
 }
 
-const MarkdownBlock = memo(({ markdown, compact, evidence }: MarkdownBlockProps) => {
+const MarkdownBlock = memo(({ markdown, compact }: MarkdownBlockProps) => {
 	const [reactContent, setMarkdown] = useRemark({
 		remarkPlugins: [
-			[remarkAiHydroMarkers, { mode: evidence === "strip" ? "strip" : "chips" }],
+			remarkAiHydroMarkers,
 			remarkPreventBoldFilenames,
 			remarkUrlToLink,
 			remarkHighlightActMode,

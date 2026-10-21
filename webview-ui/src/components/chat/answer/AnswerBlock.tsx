@@ -21,7 +21,7 @@ export interface AnswerExtras {
 }
 
 interface AnswerBlockProps {
-	/** The answer text with the HAS_CHANGES flag already removed (the copy action copies exactly this). */
+	/** The answer text with the HAS_CHANGES flag already removed (Copy copies exactly this, markers kept). */
 	text: string
 	partial?: boolean
 	/** The attached `final` audit, when there is one. Absent for old tasks and non-AI-Hydro tasks. */
@@ -35,28 +35,42 @@ interface AnswerBlockProps {
 	onSendFeedback?: (text: string) => void
 	/** Rating buttons (completion ask only); they live in the overflow menu. */
 	feedback?: React.ReactNode
-	/** The rendered answer prose (markdown with evidence markers stripped: the strip below carries them). */
+	/** The rendered answer prose: markdown, with evidence markers as inline chips at the citation. */
 	children: React.ReactNode
 }
 
-/** Evidence strip: claim chips (only `approved` is green, from evidenceStates) and run/lit references. */
+const STRIP_COLLAPSE_ABOVE = 4
+
+/**
+ * Evidence summary row below the body: each distinct claim, run and literature reference the answer cites, once. It
+ * adds to the inline chips in the prose (which say which number each one backs) and never replaces them. More than
+ * STRIP_COLLAPSE_ABOVE references collapse to a count with a "Show all (n)" toggle.
+ */
 const EvidenceStrip: React.FC<{ text: string }> = ({ text }) => {
+	const [showAll, setShowAll] = useState(false)
 	const ev = extractEvidence(text)
-	if (ev.runs.length + ev.claims.length + ev.lits.length === 0) {
+	const n = ev.runs.length + ev.claims.length + ev.lits.length
+	if (n === 0) {
 		return null
 	}
+	const collapsed = n > STRIP_COLLAPSE_ABOVE && !showAll
 	return (
 		<div aria-label="Evidence cited in this answer" className="flex flex-wrap items-center gap-y-0.5 mt-2" role="group">
-			<span className="text-xs opacity-70 mr-1">Evidence</span>
-			{ev.claims.map((id) => (
-				<ClaimChip claimId={id} key={`c:${id}`} />
-			))}
-			{ev.runs.map((r) => (
-				<RunChip jsonPath={r.jsonPath} key={`r:${r.runId}#${r.jsonPath}`} runId={r.runId} />
-			))}
-			{ev.lits.map((t) => (
-				<LitChip key={`l:${t}`} tag={t} />
-			))}
+			<span className="text-xs opacity-70 mr-1">{collapsed ? `Evidence: ${n} cited` : "Evidence"}</span>
+			{!collapsed && ev.claims.map((id) => <ClaimChip claimId={id} key={`c:${id}`} />)}
+			{!collapsed &&
+				ev.runs.map((r) => <RunChip jsonPath={r.jsonPath} key={`r:${r.runId}#${r.jsonPath}`} runId={r.runId} />)}
+			{!collapsed && ev.lits.map((t) => <LitChip key={`l:${t}`} tag={t} />)}
+			{n > STRIP_COLLAPSE_ABOVE && (
+				<button
+					aria-expanded={showAll}
+					className="inline-flex items-center underline cursor-pointer bg-transparent border-0 px-1 text-xs"
+					onClick={() => setShowAll((o) => !o)}
+					style={{ color: "var(--vscode-descriptionForeground)", minHeight: 24 }}
+					type="button">
+					{showAll ? "Show fewer" : `Show all (${n})`}
+				</button>
+			)}
 		</div>
 	)
 }

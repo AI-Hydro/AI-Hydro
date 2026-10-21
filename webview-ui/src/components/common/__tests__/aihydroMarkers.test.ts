@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest"
 import { remarkAiHydroMarkers } from "../MarkdownBlock"
 
 /** Parse + run the marker plugin; return the chip `data-chip-type`s found (in order). */
-function chipsIn(markdown: string, mode?: "chips" | "strip"): string[] {
-	const processor = unified().use(remarkParse).use(remarkAiHydroMarkers, { mode })
+function chipsIn(markdown: string): string[] {
+	const processor = unified().use(remarkParse).use(remarkAiHydroMarkers)
 	const tree: any = processor.runSync(processor.parse(markdown))
 	const out: string[] = []
 	const walk = (n: any) => {
@@ -46,7 +46,7 @@ describe("AI-Hydro marker chips", () => {
 	})
 })
 
-describe("shared marker helper parity (answer evidence strip)", () => {
+describe("shared marker helper parity (answer evidence summary)", () => {
 	const samples = [
 		"Mean flow [run:wshed_ab12#key_outputs.q_mean] per [claim:c-1] and [lit:smith2020].",
 		"`[run:a#b]` and `[claim:c-2]` and [lit:x]",
@@ -58,12 +58,6 @@ describe("shared marker helper parity (answer evidence strip)", () => {
 			const chips = chipsIn(md)
 			const ev = extractEvidence(md.replace(/```[\s\S]*?```/g, "").replace(/`Fix:[^`]*`/g, ""))
 			expect(ev.runs.length + ev.claims.length + ev.lits.length).toBe(chips.length)
-		}
-	})
-
-	it("strip mode removes the chips and leaves code untouched", () => {
-		for (const md of samples) {
-			expect(chipsIn(md, "strip")).toEqual([])
 		}
 	})
 })

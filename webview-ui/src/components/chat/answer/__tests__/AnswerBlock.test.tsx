@@ -1,6 +1,7 @@
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
-import { fireEvent, render } from "@testing-library/react"
+import { fireEvent, render, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
+import MarkdownBlock from "@/components/common/MarkdownBlock"
 import { APPROVED_TOKEN } from "../../../../design/evidenceStates"
 import { AnswerAuditFooter, auditFooterLine } from "../AnswerAuditFooter"
 import { AnswerBlock, ASK_TO_CITE_TEXT } from "../AnswerBlock"
@@ -57,17 +58,61 @@ const audit = (p: Partial<AnswerAuditPayload> = {}): AnswerAuditPayload => ({
 const TEXT = "Answer prose [claim:c-approved] and [claim:c-integrity] with [run:fx-run-1#a.b]."
 
 describe("AnswerBlock", () => {
-	it("renders exactly one approved element for one approved and one integrity-only claim", () => {
+	it("the summary row holds exactly one approved element for one approved and one integrity-only claim", () => {
 		const { container } = render(
 			<AnswerBlock text={TEXT} turn={{ runIds: ["fx-run-1"], claimIds: ["c-approved", "c-integrity"], filesChanged: [] }}>
 				<p>Answer prose.</p>
 			</AnswerBlock>,
 		)
-		expect(container.querySelectorAll('[data-approved="true"]')).toHaveLength(1)
-		expect(container.querySelectorAll("button[data-evidence-state]")).toHaveLength(2)
-		expect(container.querySelector('[data-evidence-state="integrity-only"]')).not.toBeNull()
+		const row = container.querySelector('[aria-label="Evidence cited in this answer"]')!
+		expect(row.querySelectorAll('[data-approved="true"]')).toHaveLength(1)
+		expect(row.querySelectorAll("button[data-evidence-state]")).toHaveLength(2)
+		expect(row.querySelector('[data-evidence-state="integrity-only"]')).not.toBeNull()
 		expect(container.innerHTML.split(APPROVED_TOKEN).length - 1).toBeLessThanOrEqual(1)
-		expect(container.querySelector("[title='run:fx-run-1#a.b']")).not.toBeNull()
+		expect(row.querySelector("[title='run:fx-run-1#a.b']")).not.toBeNull()
+	})
+
+	it("body keeps each marker as an inline chip at its citation, with no stripped-sentence artifacts", async () => {
+		const md = "Baseflow index 0.61 [run:fx-run-1#bfi]; runoff ratio 0.42 [claim:c-approved] and [claim:c-integrity]."
+		const { container } = render(
+			<AnswerBlock text={md}>
+				<div data-testid="body">
+					<MarkdownBlock markdown={md} />
+				</div>
+			</AnswerBlock>,
+		)
+		const body = container.querySelector('[data-testid="body"]')!
+		await waitFor(() => expect(body.querySelectorAll("button")).toHaveLength(3))
+		const t = body.textContent!
+		// the run chip sits right after the number it backs, before the semicolon
+		expect(t).toMatch(/Baseflow index 0\.61\s*fx-run-1.*run reference;/)
+		expect(t.indexOf("fx-run-1")).toBeGreaterThan(t.indexOf("0.61"))
+		expect(t.indexOf("fx-run-1")).toBeLessThan(t.indexOf("runoff ratio 0.42"))
+		expect(t.indexOf("c-approved")).toBeGreaterThan(t.indexOf("runoff ratio 0.42"))
+		expect(t).not.toMatch(/;\s*and\b/)
+		expect(t).not.toMatch(/\band\s*\./)
+		expect(t).not.toContain("[claim:")
+		expect(body.querySelectorAll('[data-approved="true"]')).toHaveLength(1)
+	})
+
+	it("the summary row collapses to a count above 4 references and expands on 'Show all (n)'", () => {
+		const text = ["a", "b", "c", "d", "e"].map((i) => `[claim:c-${i}]`).join(" ")
+		const { container } = render(
+			<AnswerBlock text={text}>
+				<p>x</p>
+			</AnswerBlock>,
+		)
+		const row = container.querySelector('[aria-label="Evidence cited in this answer"]')!
+		expect(row.textContent).toContain("Evidence: 5 cited")
+		expect(row.querySelectorAll("button[data-evidence-state]")).toHaveLength(0)
+		fireEvent.click([...row.querySelectorAll("button")].find((b) => b.textContent === "Show all (5)")!)
+		expect(row.querySelectorAll("button[data-evidence-state]")).toHaveLength(5)
+		const four = render(
+			<AnswerBlock text={["a", "b", "c", "d"].map((i) => `[claim:c-${i}]`).join(" ")}>
+				<p>x</p>
+			</AnswerBlock>,
+		).container
+		expect(four.textContent).not.toContain("Show all")
 	})
 
 	it("header is neutral and the turn line states approval, never implying it", () => {

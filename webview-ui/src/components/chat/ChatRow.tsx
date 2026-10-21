@@ -179,7 +179,7 @@ const ToolMessageCard: React.FC<ToolMessageCardProps> = ({ toolName, children })
 
 // ──────────────────────────────────────────────────────────────────────────────
 
-const Markdown = memo(({ markdown, evidence }: { markdown?: string; evidence?: "chips" | "strip" }) => {
+const Markdown = memo(({ markdown }: { markdown?: string }) => {
 	return (
 		<div
 			style={{
@@ -189,7 +189,7 @@ const Markdown = memo(({ markdown, evidence }: { markdown?: string; evidence?: "
 				marginTop: -15,
 				overflow: "hidden", // contain child margins so that parent diff matches height of children
 			}}>
-			<MarkdownBlock evidence={evidence} markdown={markdown} />
+			<MarkdownBlock markdown={markdown} />
 		</div>
 	)
 })
@@ -507,10 +507,10 @@ export const ChatRowContent = memo(
 			}, 0) // Delay of 0ms pushes execution after current event cycle
 		}, []) // Dependencies remain empty
 
-		/** The answer prose with its quote-selection behaviour. Evidence markers are stripped: the card's strip shows them. */
+		/** The answer prose with its quote-selection behaviour. Markers render as inline chips where they were cited. */
 		const answerBody = (text: string) => (
 			<div onMouseUp={handleMouseUp} ref={contentRef} style={{ position: "relative" }}>
-				<Markdown evidence="strip" markdown={text} />
+				<Markdown markdown={text} />
 				{quoteButtonState.visible && (
 					<QuoteButton left={quoteButtonState.left} onClick={handleQuoteClick} top={quoteButtonState.top} />
 				)}
