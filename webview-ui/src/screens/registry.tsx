@@ -256,6 +256,13 @@ export const screens: ScreenDef[] = [
 		tx.answerAuditViolationsLegacyTask,
 		"no run supports this value",
 	),
+	chatTx("chat-answer-audit-graded", "Answer audit (structured, graded)", tx.answerAuditGradedTask, "1 hard"),
+	chatTx(
+		"chat-answer-audit-unavailable",
+		"Answer audit unavailable (structured)",
+		tx.answerAuditUnavailableTask,
+		"Audit not run: timed out after 15s",
+	),
 	chatTx("chat-context-truncation", "Context truncated for a request", tx.contextTruncationTask, "I have the context I need."),
 	chatTx("chat-condense", "Conversation condensed (summarizeTask)", tx.condenseTask, "Continuing from the summary."),
 	chatTx(

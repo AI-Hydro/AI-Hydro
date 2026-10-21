@@ -8,8 +8,8 @@ import { COMPLETION_RESULT_CHANGES_FLAG } from "@shared/ExtensionMessage"
 import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
 import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
+import { type FinalAnswerAuditOutcome, runFinalAnswerAudit, toAnswerAuditPayload } from "../../finalAnswerAudit"
 import type { ToolResponse } from "../../index"
-import { formatFinalAnswerAudit, runFinalAnswerAudit } from "../../finalAnswerAudit"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -42,6 +42,22 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 	}
 
+	/** Emit one structured `answer_audit` row (never prose): the webview renders it, copy/notification text is derived. */
+	private async emitAnswerAudit(config: TaskConfig, outcome: FinalAnswerAuditOutcome, answer: string): Promise<void> {
+		const answerRow = config.messageState
+			.getAiHydroMessages()
+			.slice()
+			.reverse()
+			.find((m) => m.say === "completion_result")
+		const payload = toAnswerAuditPayload(outcome, {
+			stage: "final",
+			attempt: 0,
+			answerTs: answerRow?.ts ?? Date.now(),
+			answer,
+		})
+		await config.callbacks.say("answer_audit", JSON.stringify(payload))
+	}
+
 	private async showFinalAnswerAudit(config: TaskConfig, answer: string): Promise<void> {
 		try {
 			if (config.services.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled") === false) {
@@ -54,16 +70,17 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				answer,
 				modelIdReturned: config.taskState.lastResponseModelId,
 			})
-			const message = formatFinalAnswerAudit(outcome)
-			if (message) {
-				await config.callbacks.say("text", message)
+			// Nothing to audit / no research session stays silent, as before: no row for chats outside a study.
+			if (outcome.status !== "skipped") {
+				await this.emitAnswerAudit(config, outcome, answer)
 			}
 		} catch (error) {
 			// Never let the audit affect completion; surface that it did not run.
-			await config.callbacks.say(
-				"text",
-				`**Answer audit unavailable** (${error instanceof Error ? error.message : String(error)}). The final answer above was NOT checked against the evidence ledger. Display only: the answer above is unchanged.`,
-			)
+			await this.emitAnswerAudit(
+				config,
+				{ status: "unavailable", reason: error instanceof Error ? error.message : String(error) },
+				answer,
+			).catch(() => {})
 		}
 	}
 

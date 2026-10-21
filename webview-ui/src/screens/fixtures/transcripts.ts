@@ -5,6 +5,7 @@
  * checked-out checkpoint). Message shapes follow what the host writes today; the `info` rows use the legacy
  * plain-string form (the truncation row uses the structured `{class, severity}` form from W2-0h).
  */
+import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import { apiReq, completion, mcpCall, mcpResult, step, t0, task, text } from "./chat"
 
@@ -231,6 +232,72 @@ export const answerAuditViolationsLegacyTask: AiHydroMessage[] = (() => {
 			].join("\n"),
 		),
 	]
+})()
+
+const FIXTURE_DRAFT_HASH = "0".repeat(64)
+
+/** Structured audit (W2-B-host): graded schema, hard and advisory findings, every finding kept. */
+export const answerAuditGradedTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const messages = [
+		task("Summarise the synthetic basin. Layout fixture."),
+		apiReq(c()),
+		completion(c(), "The synthetic runoff ratio is 0.42 and the baseflow index is 0.61. Fixture answer, not a result."),
+	]
+	const payload: AnswerAuditPayload = {
+		v: 1,
+		stage: "final",
+		status: "violations",
+		sessionId: "fx-session-0001",
+		cited: 0,
+		total: 2,
+		hardCount: 1,
+		advisoryCount: 1,
+		schema: "graded",
+		attempt: 0,
+		answerTs: messages[2].ts,
+		draftHash: FIXTURE_DRAFT_HASH,
+		violations: [
+			{
+				kind: "untraced_number",
+				severity: "hard",
+				excerpt: "runoff ratio is 0.42",
+				message: "no run supports this value",
+				fixHint: "cite the run, e.g. " + marker("run", "ID#path"),
+			},
+			{
+				kind: "stale_claim",
+				severity: "advisory",
+				excerpt: "baseflow index is 0.61",
+				message: "claim predates the latest run",
+			},
+		],
+	}
+	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
+})()
+
+/** Audit that could not run: structured status and reason, never presented as a pass. */
+export const answerAuditUnavailableTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const messages = [
+		task("Summarise the synthetic basin. Layout fixture."),
+		apiReq(c()),
+		completion(c(), "The synthetic runoff ratio is 0.42. Fixture answer, not a result."),
+	]
+	const payload: AnswerAuditPayload = {
+		v: 1,
+		stage: "final",
+		status: "unavailable",
+		hardCount: 0,
+		advisoryCount: 0,
+		violations: [],
+		schema: "legacy",
+		attempt: 0,
+		answerTs: messages[2].ts,
+		draftHash: FIXTURE_DRAFT_HASH,
+		disclosure: { kind: "audit_unavailable", reason: "timed out after 15s" },
+	}
+	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
 })()
 
 /** Context truncated to fit the window: the host now says so (structured warning notice) and the range is on the request row. */

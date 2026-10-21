@@ -1,8 +1,17 @@
+import * as fs from "node:fs"
+import * as path from "node:path"
 import { expect } from "chai"
 import { describe, it } from "mocha"
 import sinon from "sinon"
+import { parseAnswerAuditPayload } from "@/shared/aihydro/transcriptContracts"
 import type { McpServer } from "@/shared/mcp"
-import { type AuditHub, formatFinalAnswerAudit, hasAuditableContent, runFinalAnswerAudit } from "../finalAnswerAudit"
+import {
+	type AuditHub,
+	formatFinalAnswerAudit,
+	hasAuditableContent,
+	runFinalAnswerAudit,
+	toAnswerAuditPayload,
+} from "../finalAnswerAudit"
 import { AttemptCompletionHandler } from "../tools/handlers/AttemptCompletionHandler"
 
 const AUDIT_TOOL = { name: "audit_interpretation" }
@@ -64,7 +73,7 @@ describe("final-answer audit", () => {
 				answer: "NSE is 0.71 [run:r1#nse]",
 				modelIdReturned: "claude-opus-5-5-x",
 			})
-			expect(out).to.deep.equal({ status: "passed", sessionId: "study-1", cited: 2, total: 2 })
+			expect(out).to.deep.equal({ status: "passed", sessionId: "study-1", cited: 2, total: 2, schema: "legacy" })
 			const [serverName, tool, args, ulid, meta] = callTool.firstCall.args
 			expect(serverName).to.equal("ai-hydro")
 			expect(tool).to.equal("audit_interpretation")
@@ -84,6 +93,7 @@ describe("final-answer audit", () => {
 			expect(out.status).to.equal("violations")
 			const text = formatFinalAnswerAudit(out) as string
 			expect(text).to.include("found 1 issue")
+			expect(text).to.include("ungraded")
 			expect(text).to.include("study `study-1`")
 			expect(text).to.include("uncited_number")
 			expect(text).to.include("`Fix: Add [run:<id>#nse]")
@@ -192,6 +202,116 @@ describe("final-answer audit", () => {
 		})
 	})
 
+	describe("graded schema, payload and no truncation", () => {
+		const GRADED = {
+			session_id: "study-1",
+			passed: false,
+			hard_count: 1,
+			advisory_count: 1,
+			exempt_by_reason: { year_like: 2 },
+			cited_numeric_count: 3,
+			total_numeric_count: 5,
+			violations: [
+				{
+					kind: "uncited_number",
+					severity: "hard",
+					category: "quantity",
+					text_excerpt: "NSE was 0.71",
+					message: "no marker",
+					suggested_marker: "[run:r1#nse]",
+				},
+				{ kind: "stale_claim", severity: "advisory", resolved_path: "runs/r1/nse", fix_hint: "re-run" },
+			],
+		}
+		const audit = (body: unknown) =>
+			runFinalAnswerAudit({
+				hub: mockHub([server()], sinon.stub().resolves(textResponse(body))),
+				ulid: "c",
+				workspaceRoot: "/w",
+				answer: "NSE was 0.71",
+			})
+
+		it("parses severities, counts, exemptions and extras", async () => {
+			const out: any = await audit(GRADED)
+			expect(out.status).to.equal("violations")
+			expect(out.schema).to.equal("graded")
+			expect(out.hardCount).to.equal(1)
+			expect(out.advisoryCount).to.equal(1)
+			expect(out.exemptByReason).to.deep.equal({ year_like: 2 })
+			expect(out.violations.map((v: any) => v.severity)).to.deep.equal(["hard", "advisory"])
+			expect(out.violations[0]).to.include({ category: "quantity", suggestedMarker: "[run:r1#nse]" })
+			expect(out.violations[1].resolvedPath).to.equal("runs/r1/nse")
+		})
+
+		it("graded pass with only advisories is reported as findings, never as 'passed'", async () => {
+			const out: any = await audit({ ...GRADED, passed: true, hard_count: 0, violations: [GRADED.violations[1]] })
+			expect(out.status).to.equal("violations")
+			expect(out.hardCount).to.equal(0)
+			expect(out.advisoryCount).to.equal(1)
+		})
+
+		it("legacy responses (no hard_count) make every violation severity 'unknown', never hard", async () => {
+			const out: any = await audit({ ...FAIL, violations: [{ ...FAIL.violations[0], severity: "hard" }] })
+			expect(out.schema).to.equal("legacy")
+			expect(out.violations[0].severity).to.equal("unknown")
+			expect(out.hardCount).to.equal(0)
+			const payload = toAnswerAuditPayload(out, { stage: "final", attempt: 0, answerTs: 5, answer: "NSE was 0.71" })
+			expect(payload.schema).to.equal("legacy")
+			expect(payload.violations[0].severity).to.equal("unknown")
+		})
+
+		it("keeps all 21 violations (no 10-item cap) in outcome and payload", async () => {
+			const many = Array.from({ length: 21 }, (_, i) => ({ kind: "uncited_number", severity: "hard", message: `m${i}` }))
+			const out: any = await audit({
+				session_id: "study-1",
+				passed: false,
+				hard_count: 21,
+				advisory_count: 0,
+				violations: many,
+			})
+			expect(out.violations).to.have.length(21)
+			expect(out.totalViolations).to.equal(21)
+			const payload = toAnswerAuditPayload(out, { stage: "final", attempt: 0, answerTs: 5, answer: "x" })
+			expect(payload.violations).to.have.length(21)
+			expect(payload.hardCount).to.equal(21)
+			expect(parseAnswerAuditPayload(JSON.stringify(payload))?.violations).to.have.length(21)
+			// the plain-text fallback is a display surface and may cap
+			expect(formatFinalAnswerAudit(out)).to.include("...and 11 more.")
+		})
+
+		it("builds a frozen-contract v1 payload that the tolerant reader accepts", async () => {
+			const out = await audit(GRADED)
+			const payload = toAnswerAuditPayload(out, { stage: "final", attempt: 0, answerTs: 1234, answer: "NSE was 0.71" })
+			expect(payload).to.include({
+				v: 1,
+				stage: "final",
+				status: "violations",
+				schema: "graded",
+				attempt: 0,
+				answerTs: 1234,
+				hardCount: 1,
+				advisoryCount: 1,
+				sessionId: "study-1",
+				cited: 3,
+				total: 5,
+			})
+			expect(payload.draftHash).to.match(/^[0-9a-f]{64}$/)
+			expect(payload.violations[0].fixHint).to.equal("[run:r1#nse]")
+			expect(parseAnswerAuditPayload(JSON.stringify(payload))).to.deep.equal(payload)
+		})
+
+		it("unavailable payload carries status and reason, with no violations", () => {
+			const payload = toAnswerAuditPayload(
+				{ status: "unavailable", reason: "timed out after 15s" },
+				{ stage: "final", attempt: 0, answerTs: 9, answer: "x 1" },
+			)
+			expect(payload.status).to.equal("unavailable")
+			expect(payload.disclosure).to.deep.equal({ kind: "audit_unavailable", reason: "timed out after 15s" })
+			expect(payload.violations).to.deep.equal([])
+			expect(parseAnswerAuditPayload(JSON.stringify(payload))?.status).to.equal("unavailable")
+		})
+	})
+
 	describe("AttemptCompletionHandler integration", () => {
 		function makeConfig(opts: { hub: AuditHub; enabled?: boolean }) {
 			const order: string[] = []
@@ -232,20 +352,46 @@ describe("final-answer audit", () => {
 			await new AttemptCompletionHandler().execute(config, block)
 			expect(order).to.deep.equal([
 				"say:completion_result:NSE was 0.71",
-				"say:text:**Answer audit (study `s",
+				'say:answer_audit:{"v":1,"stage":"final","',
 				"ask:completion_result",
 				"say:user_feedback:thanks",
 			])
 			// the completion_result text is exactly the model's answer
 			expect(say.firstCall.args).to.deep.equal(["completion_result", "NSE was 0.71", undefined, undefined, false])
 			expect(callTool.firstCall.args[2].prose).to.equal("NSE was 0.71")
+			const auditCall = say.getCalls().find((c: any) => c.args[0] === "answer_audit")
+			const payload = parseAnswerAuditPayload(auditCall!.args[1])
+			expect(payload).to.include({ status: "violations", stage: "final", schema: "legacy" })
+			expect(payload!.violations[0].severity).to.equal("unknown")
+		})
+
+		it("emits a structured unavailable payload with the reason, never say:text", async () => {
+			const callTool = sinon.stub().rejects(new Error("server crashed"))
+			const { config, say } = makeConfig({ hub: mockHub([server()], callTool), enabled: true })
+			await new AttemptCompletionHandler().execute(config, block)
+			expect(say.getCalls().some((c: any) => c.args[0] === "text")).to.equal(false)
+			const payload = parseAnswerAuditPayload(say.getCalls().find((c: any) => c.args[0] === "answer_audit")!.args[1])
+			expect(payload?.status).to.equal("unavailable")
+			expect(payload?.disclosure?.reason).to.include("server crashed")
+		})
+
+		it("emits no row when the audit is skipped", async () => {
+			const { config, order } = makeConfig({ hub: mockHub([]), enabled: true })
+			await new AttemptCompletionHandler().execute(config, block)
+			expect(order.some((o) => o.startsWith("say:answer_audit"))).to.equal(false)
+		})
+
+		it("no source path emits the audit as say:text (grep guard)", () => {
+			const src = fs.readFileSync(path.join(__dirname, "../tools/handlers/AttemptCompletionHandler.ts"), "utf8")
+			expect(src).to.not.match(/say\(\s*"text"/)
+			expect(src).to.not.include("formatFinalAnswerAudit")
 		})
 
 		it("shows 'audit unavailable' and still completes when the MCP hub fails", async () => {
 			const callTool = sinon.stub().rejects(new Error("server crashed"))
 			const { config, order } = makeConfig({ hub: mockHub([server()], callTool), enabled: true })
 			const result: any = await new AttemptCompletionHandler().execute(config, block)
-			expect(order[1]).to.match(/^say:text:\*\*Answer audit unavail/)
+			expect(order[1]).to.match(/^say:answer_audit:/)
 			expect(order[2]).to.equal("ask:completion_result")
 			expect(result[0].text).to.equal("[attempt_completion] Result:")
 		})
@@ -253,7 +399,8 @@ describe("final-answer audit", () => {
 		it("is default-on when the setting is unset, off only when explicitly false", async () => {
 			const on = makeConfig({ hub: mockHub([server()], sinon.stub().resolves(textResponse(PASS))), enabled: undefined })
 			await new AttemptCompletionHandler().execute(on.config, block)
-			expect(on.order.some((o) => o.startsWith("say:text:**Answer audit passed"))).to.equal(true)
+			expect(on.order.some((o) => o.startsWith("say:answer_audit:"))).to.equal(true)
+			expect(on.order.some((o) => o.startsWith("say:text:"))).to.equal(false)
 
 			const callTool = sinon.stub().resolves(textResponse(PASS))
 			const off = makeConfig({ hub: mockHub([server()], callTool), enabled: false })

@@ -136,6 +136,18 @@ describe("aihydro-message proto round trip (W2-0 M2)", () => {
 		expect(ClineSay.ANSWER_AUDIT).to.equal(1001)
 	})
 
+	it("an emitted answer_audit row keeps its say kind and JSON payload through the proto", () => {
+		const text = JSON.stringify({ v: 1, stage: "final", status: "unavailable", answerTs: 3, draftHash: "ab" })
+		const proto = convertAiHydroMessageToProto({ ts: 3, type: "say", say: "answer_audit", text })
+		expect(proto.say).to.equal(ClineSay.ANSWER_AUDIT)
+		expect(roundTrip({ ts: 3, type: "say", say: "answer_audit", text })).to.deep.equal({
+			ts: 3,
+			type: "say",
+			say: "answer_audit",
+			text,
+		})
+	})
+
 	it("an old message without outcome fields round-trips without gaining any", () => {
 		const m: AiHydroMessage = { ts: 5, type: "ask", ask: "command", text: "ls" }
 		const back = roundTrip(m)
