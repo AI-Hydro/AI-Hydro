@@ -25,6 +25,13 @@ export function RewindMenu({ checkpointTs, isCheckedOut, subject }: RewindMenuPr
 	const rootRef = useRef<HTMLDivElement>(null)
 	const actions = useCheckpointActions(checkpointTs, isCheckedOut)
 
+	// Opening the menu moves focus into it, so a keyboard user lands on the first action.
+	useEffect(() => {
+		if (open) {
+			rootRef.current?.querySelector<HTMLElement>(".transcript-rewind-menu button:not(:disabled)")?.focus()
+		}
+	}, [open])
+
 	useEffect(() => {
 		if (!open) {
 			return
@@ -74,7 +81,15 @@ export function RewindMenu({ checkpointTs, isCheckedOut, subject }: RewindMenuPr
 	]
 
 	return (
-		<div className="transcript-rewind" ref={rootRef}>
+		<div
+			className="transcript-rewind"
+			onBlur={(e) => {
+				// Tabbing away (focus leaves the whole control) closes the menu.
+				if (open && !rootRef.current?.contains(e.relatedTarget as Node | null)) {
+					setOpen(false)
+				}
+			}}
+			ref={rootRef}>
 			<button
 				aria-controls={open ? menuId : undefined}
 				aria-expanded={open}
@@ -87,7 +102,7 @@ export function RewindMenu({ checkpointTs, isCheckedOut, subject }: RewindMenuPr
 				<span>Rewind</span>
 			</button>
 			{open && (
-				<div aria-label={`Rewind ${subject}`} className="transcript-rewind-menu" id={menuId} role="group">
+				<div aria-label={`Rewind ${subject}`} className="transcript-rewind-menu" id={menuId} role="group" tabIndex={-1}>
 					<button
 						className="transcript-btn"
 						disabled={actions.compareDisabled}

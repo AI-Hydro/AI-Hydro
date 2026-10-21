@@ -361,3 +361,66 @@ describe("answer-audit rows in the transcript (W2-C)", () => {
 		expect(kinds).toContain("divider")
 	})
 })
+
+describe("W2-A2 review notes", () => {
+	it("N3: the header's accessible name contains the visible summary verbatim and counts notices", () => {
+		const msgs = processed(run8ToolsTask)
+		const unannotated = makeTranscriptResolvers([{ ...fixtureMcpServers[0], tools: [{ name: "data_fetch" }] }], [])
+		const [group] = groups(presentTranscript(msgs, { detail: "normal", ...unannotated }))
+		render(<Harness group={group} messages={msgs} />)
+		const header = document.querySelector(".transcript-group-toggle") as HTMLElement
+		const visible = header.textContent?.trim() ?? ""
+		expect(header.getAttribute("aria-label")).toContain(visible)
+		expect(header.getAttribute("aria-label")).toMatch(/\d+ notices?/)
+	})
+
+	it("N1: an undeclared-effect first-party call is listed with a neutral tone, not a warning", () => {
+		const msgs = processed(run8ToolsTask)
+		const unannotated = makeTranscriptResolvers([{ ...fixtureMcpServers[0], tools: [] }], [])
+		const [group] = groups(presentTranscript(msgs, { detail: "normal", ...unannotated }))
+		expect(group.lifted.length).toBeGreaterThan(0)
+		expect(new Set(group.lifted.map((l) => l.tone))).toEqual(new Set(["notice"]))
+		expect(group.lifted[0].text).toContain("effect not declared by the server")
+	})
+
+	it("B1: an interrupted audit does not make the header say revision", () => {
+		const msgs = processed(answerInterruptedTask)
+		const items = presentTranscript(msgs, { detail: "normal", ...trusted })
+		for (const g of groups(items)) {
+			expect(summarizeGroup(g.facts, g.lifted, false).text).not.toMatch(/revision/)
+		}
+	})
+
+	it("N6: opening Rewind moves focus into the menu; tabbing away closes it", () => {
+		const messages = processed(turnMachineryTask)
+		const [group] = groups(presentNormal(turnMachineryTask))
+		render(
+			<div>
+				<Harness group={group} messages={messages} />
+				<button type="button">elsewhere</button>
+			</div>,
+		)
+		fireEvent.click(screen.getByRole("button", { name: "Rewind this work" }))
+		const menu = screen.getByRole("group", { name: "Rewind this work" })
+		expect(menu.contains(document.activeElement)).toBe(true)
+		const trigger = screen.getByRole("button", { name: "Rewind this work" })
+		fireEvent.blur(document.activeElement as HTMLElement, { relatedTarget: screen.getByText("elsewhere") })
+		expect(trigger.getAttribute("aria-expanded")).toBe("false")
+	})
+
+	it("N2: Rewind on a user turn reads 'Rewind to this message'", async () => {
+		const { RewindMenu } = await import("../RewindMenu")
+		render(<RewindMenu checkpointTs={5} subject="to this message" />)
+		expect(screen.getByRole("button", { name: "Rewind to this message" })).toBeTruthy()
+	})
+
+	it("N4: the detail toggle uses aria-pressed buttons", async () => {
+		const { TranscriptDetailToggle } = await import("../TranscriptDetailToggle")
+		const seen: string[] = []
+		render(<TranscriptDetailToggle onChange={(l) => seen.push(l)} value="normal" />)
+		expect(screen.getByRole("button", { name: "Normal" }).getAttribute("aria-pressed")).toBe("true")
+		expect(screen.getByRole("button", { name: "Focus" }).getAttribute("aria-pressed")).toBe("false")
+		fireEvent.click(screen.getByRole("button", { name: "Verbose" }))
+		expect(seen).toEqual(["verbose"])
+	})
+})

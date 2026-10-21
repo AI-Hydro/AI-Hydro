@@ -94,3 +94,26 @@ export const fixtureMcpServers: McpServer[] = [
 			),
 	},
 ]
+
+/**
+ * The first-party server as a real install presents it today: trusted, but its tools publish no annotations, so every
+ * call has an undeclared effect. Synthetic tool list (names only); used by the "realistic look" screen.
+ */
+export const fixtureUnannotatedServers: McpServer[] = [
+	{
+		name: "ai-hydro",
+		config: "{}",
+		status: "connected",
+		trust: { trusted: true, reason: "fixture: first-party launcher matches the recorded launch" },
+		tools: [
+			"data_fetch",
+			"delineate_basin",
+			"compute_signatures",
+			"extract_hydrologic_signatures",
+			"get_forcing",
+			"baseflow_separation",
+			"flow_duration_curve",
+			"trend_analysis",
+		].map((name) => ({ name, description: "Synthetic fixture tool, no annotations." })),
+	},
+]

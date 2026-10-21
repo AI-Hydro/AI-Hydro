@@ -87,7 +87,7 @@ export const TranscriptItemRenderer: React.FC<TranscriptItemRendererProps> = ({
 			return (
 				<div className="transcript-turn">
 					{row(item.message)}
-					{rewindTs !== undefined && <RewindMenu checkpointTs={rewindTs} subject="to before this message" />}
+					{rewindTs !== undefined && <RewindMenu checkpointTs={rewindTs} subject="to this message" />}
 				</div>
 			)
 		case "answer":
@@ -121,7 +121,7 @@ export const TranscriptItemRenderer: React.FC<TranscriptItemRendererProps> = ({
 					onToggleExpand={ctx.onToggleExpand}
 				/>
 			) : (
-				<>{item.messages.map((m) => row(m))}</>
+				item.messages.map((m) => row(m))
 			)
 		default:
 			// prose, pending, error

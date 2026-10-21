@@ -18,6 +18,11 @@ Active product hardening — last updated 2026-09-08.
 ## Current State
 
 - Active phase: research-grade integration and scientific hardening.
+- Chat transcript (vision-2040 Wave 2, W2-A2, PR #81): the chat renders through
+  `src/shared/aihydro/transcriptPresenter.ts` (work groups, lifted lines, Rewind,
+  `transcriptDetail` focus/normal/verbose; command "AI-Hydro: Cycle transcript
+  detail"). Verbose is the previous row list plus the detail bar. First-party tools
+  publish no annotations yet, so their calls are listed (neutral tone), not folded.
 - Local/uncommitted: Replay, Experiment Table and Evidence Board now consume
   the backend-owned persisted snapshot resource. Repeated tool runs keep their
   true IDs; current nested experiments load; capsule history stays capsule-local.

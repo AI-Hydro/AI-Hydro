@@ -159,7 +159,7 @@
 	font-size: 11px;
 	border-color: var(--vscode-editorGroup-border);
 }
-.transcript-detail-option[aria-checked="true"] {
+.transcript-detail-option[aria-pressed="true"] {
 	background: var(--vscode-toolbar-activeBackground, var(--vscode-toolbar-hoverBackground));
 	color: var(--vscode-foreground);
 	border-color: var(--vscode-focusBorder);

@@ -11,6 +11,7 @@ import { Providers } from "../Providers"
 import {
 	areaFailCall,
 	fixtureMcpServers,
+	fixtureUnannotatedServers,
 	provisionalCall,
 	type RecordedCall,
 	refusalCall,
@@ -275,6 +276,22 @@ export const screens: ScreenDef[] = [
 		expectAbsent: ["text=API Request"],
 	}),
 	chatTx("chat-run-8-tools", "Eight science calls in one turn", tx.run8ToolsTask, "Eight recorded runs are listed above."),
+	// A real install today: first-party tools publish no annotations, so each call is listed (neutral tone), not folded.
+	chatTx(
+		"chat-unannotated-first-party",
+		"Eight first-party calls, tools publish no annotations",
+		tx.run8ToolsTask,
+		"Eight recorded runs are listed above.",
+		{
+			mcpServers: fixtureUnannotatedServers,
+			expectVisible: [
+				"text=Eight recorded runs are listed above.",
+				"[data-testid=work-group] button[aria-expanded=false]",
+				"text=effect not declared by the server",
+			],
+			expectAbsent: ["text=API Request"],
+		},
+	),
 	chatTx("chat-approval-mcp", "Pending MCP approval", tx.approvalMcpTask, "I will call the forcing tool next."),
 	chatTx("chat-approval-command", "Pending command approval", tx.approvalCommandTask, "I will run the tests."),
 	chatTx("chat-approval-edit", "Pending edit approval with diff", tx.approvalEditTask, "The label is wrong; I will edit it."),

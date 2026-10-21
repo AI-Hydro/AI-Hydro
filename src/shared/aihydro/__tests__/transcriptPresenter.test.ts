@@ -807,3 +807,45 @@ describe("transcript presenter: pending answer_audit rows (W2-C)", () => {
 		expect(JSON.stringify(items)).to.not.include("UNCHECKED DRAFT TEXT")
 	})
 })
+
+describe("transcript presenter: W2-A2 review fixes", () => {
+	it("a host-stamped protected_path approval lifts even when the webview matcher says the path is fine", () => {
+		reset()
+		const stamped = ask("tool", JSON.stringify({ tool: "editedExistingFile", path: "id", diff: "x" }), {
+			askOutcome: "approved",
+			policyClass: "protected_path",
+		})
+		const items = presentTranscript([stamped, req()], { detail: "normal", ...SAFE })
+		const g = groups(items)[0]
+		expect(g.lifted.map((l) => l.reason)).to.deep.equal(["policy_command"])
+		expect(g.lifted[0].text).to.include("protected path")
+	})
+
+	it("an interrupted audit row is a divider but not a revision; a revision row is", () => {
+		const audit = (stage: string) =>
+			JSON.stringify({
+				v: 1,
+				stage,
+				status: "unavailable",
+				hardCount: 0,
+				advisoryCount: 0,
+				schema: "legacy",
+				attempt: 1,
+				answerTs: 1,
+				draftHash: "h",
+				violations: [],
+			})
+		reset()
+		const run = (stage: string) => {
+			reset()
+			return presentTranscript([req(), mcpCall(), mcpResp({ ok: true }), say("answer_audit", audit(stage))], {
+				detail: "normal",
+				...SAFE,
+			})
+		}
+		const interrupted = run("interrupted")
+		expect(interrupted.map((i) => i.kind)).to.deep.equal(["group", "divider"])
+		expect(groups(interrupted)[0].facts.revisionCount).to.equal(0)
+		expect(groups(run("revision"))[0].facts.revisionCount).to.equal(1)
+	})
+})

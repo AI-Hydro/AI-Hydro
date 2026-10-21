@@ -21,4 +21,19 @@ describe("isUnderProtectedRoots", () => {
 		expect(isUnderProtectedRoots("../outside/file", roots)).toBe(true)
 		expect(isUnderProtectedRoots("src/a.ts", roots)).toBe(false)
 	})
+	it("lifts workspace-relative paths into a dot-directory root, with or without ./", () => {
+		const r = ["/home/u/.ssh", "/home/u/.aihydro/approvals"]
+		expect(isUnderProtectedRoots(".ssh/id", r)).toBe(true)
+		expect(isUnderProtectedRoots("./.ssh/id", r)).toBe(true)
+		expect(isUnderProtectedRoots(".aihydro/approvals/x.json", r)).toBe(true)
+		expect(isUnderProtectedRoots(".aihydro/other/x.json", r)).toBe(false)
+		// a plain, undotted name is ambiguous and stays with the host stamp
+		expect(isUnderProtectedRoots("approvals/x.json", r)).toBe(false)
+		expect(isUnderProtectedRoots("src/.ssh-notes/x", r)).toBe(false)
+	})
+	it("treats the Windows extended prefix and the macOS /private alias as the same path", () => {
+		expect(isUnderProtectedRoots("\\\\?\\C:\\Users\\u\\AppData\\Roaming\\Code\\globalStorage\\x\\a", roots)).toBe(true)
+		expect(isUnderProtectedRoots("/private/var/folders/u/.ssh/id", ["/var/folders/u/.ssh"])).toBe(true)
+		expect(isUnderProtectedRoots("/var/folders/u/.ssh/id", ["/private/var/folders/u/.ssh"])).toBe(true)
+	})
 })

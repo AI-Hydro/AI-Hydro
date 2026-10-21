@@ -14,14 +14,13 @@ interface TranscriptDetailToggleProps {
 /** Three-way detail control for the transcript (Focus / Normal / Verbose). The same setting the command cycles. */
 export function TranscriptDetailToggle({ value, onChange }: TranscriptDetailToggleProps) {
 	return (
-		<div aria-label="Transcript detail" className="transcript-detail" role="radiogroup">
+		<div aria-label="Transcript detail" className="transcript-detail" role="group">
 			{LEVELS.map((level) => (
 				<button
-					aria-checked={value === level.id}
+					aria-pressed={value === level.id}
 					className="transcript-btn transcript-detail-option"
 					key={level.id}
 					onClick={() => onChange(level.id)}
-					role="radio"
 					title={level.hint}
 					type="button">
 					{level.label}

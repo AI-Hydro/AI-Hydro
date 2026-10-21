@@ -707,30 +707,40 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 		}
 	}
 
-	const securityMarked = (m: AiHydroMessage): boolean => {
+	/**
+	 * Why an approval/run is security-relevant. "security": a policy class, an operation outside the workspace, a
+	 * protected path or a DESTRUCTIVE effect. "unknown_effect": nothing but an effect class the server did not declare
+	 * (an MCP call with no usable annotations): still lifted (never hidden), but it is a missing fact, not a finding,
+	 * so it gets a neutral tone.
+	 */
+	const securityReason = (m: AiHydroMessage): "security" | "unknown_effect" | undefined => {
 		if (m.policyClass || m.isOperationOutsideWorkspace) {
-			return true
+			return "security"
 		}
 		const info = toolInfo(m)
 		if (info) {
 			if (info.operationIsLocatedInWorkspace === false) {
-				return true
+				return "security"
 			}
 			const path = typeof info.path === "string" ? info.path : typeof info.filePath === "string" ? info.filePath : undefined
 			if (path !== undefined) {
 				// Fail safe: with no path resolver anything not known to be read-only that names a path lifts.
 				if (options.isProtectedPath ? protectedPath(path) : !isReadOnlyTool(info)) {
-					return true
+					return "security"
 				}
 			}
 		}
 		const effect = effectOf(m)
-		if (effect === "DESTRUCTIVE" || effect === "UNKNOWN") {
-			return true
+		if (effect === "DESTRUCTIVE") {
+			return "security"
+		}
+		if (effect === "UNKNOWN") {
+			return "unknown_effect"
 		}
 		// No annotations to read means the effect class is UNKNOWN, which lifts.
-		return effect === undefined && kindOf(m) === "use_mcp_server"
+		return effect === undefined && kindOf(m) === "use_mcp_server" ? "unknown_effect" : undefined
 	}
+	const securityMarked = (m: AiHydroMessage): boolean => securityReason(m) !== undefined
 
 	// Tasks from before the host recorded outcomes cannot say "no decision recorded": an ask without an outcome is
 	// just old data there, shown neutrally and counted as a call.
@@ -830,7 +840,8 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 					} else {
 						const interrupted = p.stage === "interrupted"
 						const prev = items[items.length - 1]
-						if (prev?.kind === "group") {
+						// Only a rejected draft (stage "revision") is a revision; an interrupted audit is not.
+						if (prev?.kind === "group" && p.stage === "revision") {
 							prev.facts.revisionCount++
 						}
 						items.push({
@@ -917,6 +928,15 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 					"policy_command",
 					"warning",
 					`${m.type === "ask" ? "You approved" : "Ran"} (${m.policyClass.replace(/_/g, " ")}): ${what}`,
+					m.ts,
+				)
+			} else if (securityReason(m) === "unknown_effect") {
+				lift(
+					grp,
+					m,
+					"approved_security",
+					"notice",
+					`${m.type === "ask" ? "You approved" : "Ran"} (effect not declared by the server): ${what}`,
 					m.ts,
 				)
 			} else if (securityMarked(m)) {

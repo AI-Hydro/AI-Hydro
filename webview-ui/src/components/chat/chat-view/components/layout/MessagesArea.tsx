@@ -187,6 +187,9 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		if (!tail || tail.mode !== "presented") {
 			return ""
 		}
+		if (tail.item.kind === "pending") {
+			return "Waiting for you"
+		}
 		if (tail.item.kind === "answer" && !tail.item.partial && !isRunning) {
 			return "Answer ready"
 		}

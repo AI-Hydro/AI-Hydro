@@ -20,7 +20,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export interface GroupSummary {
 	/** Visible header text, built only from presenter facts. */
 	text: string
-	/** Accessible name: leads with what ran and what went wrong, then the same facts. */
+	/** Accessible name: leads with what ran and what went wrong, then the visible text verbatim. */
 	label: string
 }
 
@@ -33,6 +33,7 @@ export interface GroupSummary {
 export function summarizeGroup(facts: HeaderFacts, lifted: readonly LiftedLine[], live: boolean): GroupSummary {
 	const errors = lifted.filter((l) => l.tone === "error").length
 	const warnings = lifted.filter((l) => l.tone === "warning").length
+	const notices = lifted.filter((l) => l.tone === "notice").length
 
 	const parts: string[] = [`${live ? "Working" : "Worked"} ${formatDuration(facts.agentMs)}`]
 	if (facts.waitingMs >= 1000) {
@@ -67,8 +68,12 @@ export function summarizeGroup(facts: HeaderFacts, lifted: readonly LiftedLine[]
 	if (warnings > 0) {
 		problems.push(plural(warnings, "warning"))
 	}
+	if (notices > 0) {
+		problems.push(plural(notices, "notice"))
+	}
 	const ran =
 		facts.toolCount > 0 ? `${live ? "Running" : "Ran"} ${plural(facts.toolCount, "tool")}` : live ? "Working" : "Worked"
-	const label = [[ran, ...problems].join(", "), parts.join(", ")].join(". ")
+	// The accessible name contains the visible summary verbatim (label in name), led by what ran and what went wrong.
+	const label = `${[ran, ...problems].join(", ")}. ${parts.join(" · ")}`
 	return { text: parts.join(" · "), label }
 }
