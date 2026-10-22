@@ -1,3 +1,4 @@
+import { AIHYDRO_MARKER_SOURCE, markerChipProperties, markerFromMatch } from "@shared/aihydro/evidenceMarkers"
 import { StringRequest } from "@shared/proto/cline/common"
 import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/cline/state"
 import type { ComponentProps } from "react"
@@ -208,24 +209,13 @@ const remarkPreventBoldFilenames = () => {
 	}
 }
 
-// Regex matching [run:<id>#<path>], [claim:<id>], [lit:<tag>]. Every id/tag/path must start alphanumeric, so
-// grammar placeholders such as `[lit:...]` or `[lit:<tag>]` are never mistaken for a real reference.
-export const AIHYDRO_MARKER_SOURCE =
-	"\\[(?:run:([A-Za-z0-9][A-Za-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)|claim:([A-Za-z0-9][A-Za-z0-9._-]*)|lit:([A-Za-z0-9][A-Za-z0-9._-]*))\\]"
+export { AIHYDRO_MARKER_SOURCE }
 const _AIHYDRO_MARKER_RE = new RegExp(AIHYDRO_MARKER_SOURCE, "g")
 
 /** Chip hProperties for a marker match, or undefined when the match carries no usable reference. */
-const markerChipProperties = (match: RegExpExecArray): Record<string, string> | undefined => {
-	if (match[1] && match[2]) {
-		return { "data-chip-type": "run", "data-run-id": match[1], "data-json-path": match[2] }
-	}
-	if (match[3]) {
-		return { "data-chip-type": "claim", "data-claim-id": match[3] }
-	}
-	if (match[4]) {
-		return { "data-chip-type": "lit", "data-lit-tag": match[4] }
-	}
-	return undefined
+const chipPropertiesFor = (match: RegExpExecArray): Record<string, string> | undefined => {
+	const marker = markerFromMatch(match)
+	return marker ? markerChipProperties(marker) : undefined
 }
 
 /**
@@ -244,7 +234,7 @@ const remarkAiHydroMarkers = () => {
 			const re = new RegExp(AIHYDRO_MARKER_SOURCE)
 			const match = re.exec(node.value)
 			if (!match || match[0] !== node.value) return
-			const hProperties = markerChipProperties(match)
+			const hProperties = chipPropertiesFor(match)
 			if (!hProperties) return
 			parent.children.splice(index, 1, { type: "strong", data: { hProperties }, children: [] })
 		})
@@ -258,7 +248,7 @@ const remarkAiHydroMarkers = () => {
 
 			_AIHYDRO_MARKER_RE.lastIndex = 0
 			while ((match = _AIHYDRO_MARKER_RE.exec(text)) !== null) {
-				const hProperties = markerChipProperties(match)
+				const hProperties = chipPropertiesFor(match)
 				if (!hProperties) {
 					continue
 				}
@@ -501,10 +491,16 @@ const MarkdownBlock = memo(({ markdown, compact }: MarkdownBlockProps) => {
 					// AI-Hydro chip types (from remarkAiHydroMarkers plugin via data.hProperties)
 					const chipType = props["data-chip-type"]
 					if (chipType === "run") {
-						return <RunChip jsonPath={props["data-json-path"] ?? ""} runId={props["data-run-id"] ?? ""} />
+						return (
+							<RunChip
+								jsonPath={props["data-json-path"] ?? ""}
+								runId={props["data-run-id"] ?? ""}
+								variant="inline"
+							/>
+						)
 					}
 					if (chipType === "claim") {
-						return <ClaimChip claimId={props["data-claim-id"] ?? ""} />
+						return <ClaimChip claimId={props["data-claim-id"] ?? ""} variant="inline" />
 					}
 					if (chipType === "lit") {
 						return <LitChip tag={props["data-lit-tag"] ?? ""} />

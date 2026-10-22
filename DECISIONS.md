@@ -57,7 +57,7 @@ Branch `vision2040/harness-quickwins` (from the SOTA harness/model audit, items 
   unavailable"; it audits only the study bound to the current chat (it will not fall back to
   the most recent study on disk). The server-side `recent_fallback` in `_resolve_session`
   remains and should be disabled for `audit_interpretation` in aihydro-tools.
-- **Answer-audit gate (W2-C) is default-OFF and scoped to graded hard findings** (`finalAnswerAuditGate`;
+- **Answer-audit gate (W2-C) shipped default-OFF; flipped to default-ON with A2/B-web (W2-B-web) and scoped to graded hard findings** (`finalAnswerAuditGate`;
   turning the audit off turns the gate off). It fires only on a graded audit outcome with `hardCount > 0`,
   at most 2 silent revisions per completion cycle, never on legacy/unavailable/skipped, never on
   `plan_mode_respond`. Eligibility is computed from cached state before streaming (setting, trusted

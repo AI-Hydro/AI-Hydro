@@ -1,30 +1,55 @@
 import React, { useState } from "react"
+import { INLINE_CHIP_STYLE, INLINE_HIT_STYLE } from "./ClaimChip"
 
 interface RunChipProps {
 	runId: string
 	jsonPath: string
+	/** `inline` is the compact chip for prose (see ClaimChip); `strip` is the 24px chip. */
+	variant?: "strip" | "inline"
 }
 
-export const RunChip: React.FC<RunChipProps> = ({ runId, jsonPath }) => {
+export const RunChip: React.FC<RunChipProps> = ({ runId, jsonPath, variant = "strip" }) => {
 	const [open, setOpen] = useState(false)
 
 	return (
 		<span className="relative inline-flex items-center align-middle mx-0.5">
-			<button
-				className="
-					inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-medium
-					leading-5 cursor-pointer border-0
-					border border-[var(--vscode-panel-border)] bg-transparent
-					text-[var(--vscode-disabledForeground)]
-					hover:opacity-90 transition-opacity select-none
-				"
-				onClick={() => setOpen((o) => !o)}
-				title={`run:${runId}#${jsonPath}`}
-				type="button">
-				<span className="codicon codicon-link text-[9px]" />
-				<span className="font-mono">{runId.split(".")[0]}</span>
-				<span className="opacity-75">· run reference</span>
-			</button>
+			{variant === "inline" ? (
+				<button
+					data-variant="inline"
+					onClick={() => setOpen((o) => !o)}
+					style={INLINE_HIT_STYLE}
+					title={`run:${runId}#${jsonPath}`}
+					type="button">
+					<span
+						className="inline-flex items-center gap-1 rounded-full text-[11px] font-medium"
+						style={{
+							...INLINE_CHIP_STYLE,
+							border: "1px solid var(--vscode-panel-border)",
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+						<span className="codicon codicon-link text-[11px]" />
+						<span className="font-mono">{runId.split(".")[0]}</span>
+						<span>· run reference</span>
+					</span>
+				</button>
+			) : (
+				<button
+					className="
+						inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[11px] font-medium
+						leading-5 cursor-pointer border-0
+						border border-[var(--vscode-panel-border)] bg-transparent
+						text-[var(--vscode-descriptionForeground)]
+						hover:opacity-90 transition-opacity select-none
+					"
+					onClick={() => setOpen((o) => !o)}
+					style={{ minHeight: 24 }}
+					title={`run:${runId}#${jsonPath}`}
+					type="button">
+					<span className="codicon codicon-link text-[9px]" />
+					<span className="font-mono">{runId.split(".")[0]}</span>
+					<span>· run reference</span>
+				</button>
+			)}
 
 			{open && (
 				<span
@@ -65,13 +90,13 @@ interface LitChipProps {
 export const LitChip: React.FC<LitChipProps> = ({ tag }) => (
 	<span
 		className="
-			inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[10px] font-medium
+			inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[11px] font-medium
 			leading-5 border border-[var(--vscode-panel-border)]
-			text-[var(--vscode-disabledForeground)] bg-transparent align-middle mx-0.5
+			text-[var(--vscode-descriptionForeground)] bg-transparent align-middle mx-0.5
 			select-none
 		"
 		title={`Literature: ${tag}`}>
-		<span className="codicon codicon-book text-[9px]" />
+		<span className="codicon codicon-book text-[11px]" />
 		<span>{tag}</span>
 	</span>
 )

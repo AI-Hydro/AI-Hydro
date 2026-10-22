@@ -275,7 +275,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		finalAnswerAuditEnabled: true,
 		transcriptDetail: "normal",
 		protectedRoots: [],
-		finalAnswerAuditGate: false,
+		finalAnswerAuditGate: true,
 
 		// NEW: Add workspace information with defaults
 		workspaceRoots: [],

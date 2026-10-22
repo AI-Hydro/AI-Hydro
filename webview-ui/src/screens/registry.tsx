@@ -339,6 +339,20 @@ export const screens: ScreenDef[] = [
 		tx.answerAuditViolationsLegacyTask,
 		"no run supports this value",
 	),
+	chatTx(
+		"chat-answer-claims-audit",
+		"Answer with approved and unapproved claim chips, a run chip and a graded audit footer",
+		tx.answerClaimsAuditTask,
+		"Fixture answer with claims and audit: no value here is a result.",
+		{
+			ledger: { sessionId: FIXTURE_SESSION, claims: [...statusClaims, approvalClaims.approved] },
+			expectVisible: [
+				"text=Fixture answer with claims and audit: no value here is a result.",
+				"[data-testid=answer-turn-summary]",
+				"[data-testid=answer-audit-footer]",
+			],
+		},
+	),
 	chatTx("chat-answer-audit-graded", "Answer audit (structured, graded)", tx.answerAuditGradedTask, "1 hard"),
 	chatTx(
 		"chat-answer-audit-unavailable",

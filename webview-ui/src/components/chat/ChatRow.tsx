@@ -12,7 +12,7 @@ import {
 	COMPLETION_RESULT_CHANGES_FLAG,
 } from "@shared/ExtensionMessage"
 import { BooleanRequest, Int64Request, StringRequest } from "@shared/proto/cline/common"
-import { VSCodeBadge, VSCodeButton, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeBadge, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
 import React, { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSize } from "react-use"
@@ -38,6 +38,7 @@ import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils
 import { CheckpointControls } from "../common/CheckpointControls"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { AnswerAuditSummary } from "./AnswerAuditSummary"
+import { AnswerBlock, type AnswerExtras } from "./answer/AnswerBlock"
 import { ErrorBlockTitle } from "./ErrorBlockTitle"
 import ErrorRow from "./ErrorRow"
 import { MutedNotice } from "./MutedNotice"
@@ -111,6 +112,8 @@ interface ChatRowProps {
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
 	onSetQuote: (text: string) => void
 	onCancelCommand?: () => void
+	/** Answer card extras from the transcript presenter (completion rows only). */
+	answer?: AnswerExtras
 }
 
 interface QuoteButtonState {
@@ -355,6 +358,7 @@ export const ChatRowContent = memo(
 		sendMessageFromChatRow,
 		onSetQuote,
 		onCancelCommand,
+		answer,
 	}: ChatRowContentProps) => {
 		const { mcpServers, mcpMarketplaceCatalog, onRelinquishControl, vscodeTerminalExecutionMode, aihydroMessages } =
 			useExtensionState()
@@ -433,6 +437,13 @@ export const ChatRowContent = memo(
 			setQuoteButtonState({ visible: false, top: 0, left: 0, selectedText: "" })
 		}, [onSetQuote, quoteButtonState.selectedText]) // <-- Use onSetQuote from props
 
+		const viewCompletionChanges = useCallback(() => {
+			setSeeNewChangesDisabled(true)
+			TaskServiceClient.taskCompletionViewChanges(Int64Request.create({ value: message.ts })).catch((err) =>
+				console.error("Failed to show task completion view changes:", err),
+			)
+		}, [message.ts])
+
 		const handleMouseUp = useCallback((event: MouseEvent<HTMLDivElement>) => {
 			// Get the target element immediately, before the timeout
 			const targetElement = event.target as Element
@@ -495,6 +506,16 @@ export const ChatRowContent = memo(
 				// Scenario C (Click WAS on button): Do nothing here, handleQuoteClick takes over.
 			}, 0) // Delay of 0ms pushes execution after current event cycle
 		}, []) // Dependencies remain empty
+
+		/** The answer prose with its quote-selection behaviour. Markers render as inline chips where they were cited. */
+		const answerBody = (text: string) => (
+			<div onMouseUp={handleMouseUp} ref={contentRef} style={{ position: "relative" }}>
+				<Markdown markdown={text} />
+				{quoteButtonState.visible && (
+					<QuoteButton left={quoteButtonState.left} onClick={handleQuoteClick} top={quoteButtonState.top} />
+				)}
+			</div>
+		)
 
 		const [icon, title] = useMemo(() => {
 			switch (type) {
@@ -1660,57 +1681,24 @@ export const ChatRowContent = memo(
 								Loading MCP documentation
 							</div>
 						)
-					case "completion_result":
+					case "completion_result": {
 						const hasChanges = message.text?.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
-						const text = hasChanges ? message.text?.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
+						const text =
+							(hasChanges ? message.text?.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text) ?? ""
 						return (
-							<>
-								<div className="mb-2.5">
-									{icon}
-									{title}
-								</div>
-								<WithCopyButton
-									className="pt-2.5"
-									onMouseUp={handleMouseUp}
-									position="bottom-right"
-									ref={contentRef}
-									style={{ color: normalColor }}
-									textToCopy={text}>
-									<Markdown markdown={text} />
-									{quoteButtonState.visible && (
-										<QuoteButton
-											left={quoteButtonState.left}
-											onClick={handleQuoteClick}
-											top={quoteButtonState.top}
-										/>
-									)}
-								</WithCopyButton>
-								{message.partial !== true && hasChanges && (
-									<div className="pt-4">
-										<VSCodeButton
-											appearance="secondary"
-											className="w-full"
-											disabled={seeNewChangesDisabled}
-											onClick={() => {
-												setSeeNewChangesDisabled(true)
-												TaskServiceClient.taskCompletionViewChanges(
-													Int64Request.create({
-														value: message.ts,
-													}),
-												).catch((err) =>
-													console.error("Failed to show task completion view changes:", err),
-												)
-											}}
-											style={{
-												cursor: seeNewChangesDisabled ? "wait" : "pointer",
-											}}>
-											<i className="codicon codicon-new-file mr-1.5" />
-											See new changes
-										</VSCodeButton>
-									</div>
-								)}
-							</>
+							<AnswerBlock
+								audit={answer?.audit}
+								hasChanges={message.partial !== true && hasChanges}
+								onSeeChanges={viewCompletionChanges}
+								onSendFeedback={isLast ? answer?.onSendFeedback : undefined}
+								partial={message.partial}
+								seeChangesDisabled={seeNewChangesDisabled}
+								text={text}
+								turn={answer?.turn}>
+								{answerBody(text)}
+							</AnswerBlock>
 						)
+					}
 					case "shell_integration_warning":
 						return (
 							<div className="chat-row-shell-warning">
@@ -1911,11 +1899,9 @@ export const ChatRowContent = memo(
 							const hasChanges = message.text.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
 							const text = hasChanges ? message.text.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
 							return (
-								<div>
-									{" "}
-									<div className="mb-2.5">
-										{icon}
-										{title}
+								<AnswerBlock
+									audit={answer?.audit}
+									feedback={
 										<TaskFeedbackButtons
 											isFromHistory={
 												!isLast ||
@@ -1923,53 +1909,17 @@ export const ChatRowContent = memo(
 												lastModifiedMessage?.ask === "resume_task"
 											}
 											messageTs={message.ts}
-											style={{
-												marginLeft: "auto",
-											}}
 										/>
-									</div>
-									<WithCopyButton
-										className="pt-2.5"
-										onMouseUp={handleMouseUp}
-										position="bottom-right"
-										ref={contentRef}
-										style={{ color: normalColor }}
-										textToCopy={text}>
-										<Markdown markdown={text} />
-										{quoteButtonState.visible && (
-											<QuoteButton
-												left={quoteButtonState.left}
-												onClick={handleQuoteClick}
-												top={quoteButtonState.top}
-											/>
-										)}
-									</WithCopyButton>
-									{message.partial !== true && hasChanges && (
-										<div className="mt-4">
-											<VSCodeButton
-												appearance="secondary"
-												disabled={seeNewChangesDisabled}
-												onClick={() => {
-													setSeeNewChangesDisabled(true)
-													TaskServiceClient.taskCompletionViewChanges(
-														Int64Request.create({
-															value: message.ts,
-														}),
-													).catch((err) =>
-														console.error("Failed to show task completion view changes:", err),
-													)
-												}}>
-												<i
-													className="codicon codicon-new-file"
-													style={{
-														cursor: seeNewChangesDisabled ? "wait" : "pointer",
-													}}
-												/>
-												See new changes
-											</VSCodeButton>
-										</div>
-									)}
-								</div>
+									}
+									hasChanges={message.partial !== true && hasChanges}
+									onSeeChanges={viewCompletionChanges}
+									onSendFeedback={isLast ? answer?.onSendFeedback : undefined}
+									partial={message.partial}
+									seeChangesDisabled={seeNewChangesDisabled}
+									text={text}
+									turn={answer?.turn}>
+									{answerBody(text)}
+								</AnswerBlock>
 							)
 						} else {
 							return null // Don't render anything when we get a completion_result ask without text
