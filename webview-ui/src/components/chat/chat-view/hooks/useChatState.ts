@@ -21,6 +21,16 @@ export function useChatState(messages: AiHydroMessage[]): ChatState {
 	const [secondaryButtonText, setSecondaryButtonText] = useState<string | undefined>("Deny")
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 
+	const [askNotice, setAskNoticeState] = useState<string | undefined>()
+	const askNoticeTimer = useRef<ReturnType<typeof setTimeout>>()
+	const setAskNotice = useCallback((notice: string | undefined) => {
+		clearTimeout(askNoticeTimer.current)
+		setAskNoticeState(notice)
+		if (notice) {
+			askNoticeTimer.current = setTimeout(() => setAskNoticeState(undefined), 6000)
+		}
+	}, [])
+
 	// Refs
 	const textAreaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -70,6 +80,8 @@ export function useChatState(messages: AiHydroMessage[]): ChatState {
 		setSecondaryButtonText,
 		expandedRows,
 		setExpandedRows,
+		askNotice,
+		setAskNotice,
 
 		// Refs
 		textAreaRef,

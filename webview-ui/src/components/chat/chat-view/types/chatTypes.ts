@@ -41,6 +41,9 @@ export interface ChatState {
 	setSecondaryButtonText: React.Dispatch<React.SetStateAction<string | undefined>>
 	expandedRows: Record<number, boolean>
 	setExpandedRows: React.Dispatch<React.SetStateAction<Record<number, boolean>>>
+	/** Brief notice above the action buttons (e.g. a response dropped because its ask changed). */
+	askNotice?: string
+	setAskNotice?: (notice: string | undefined) => void
 
 	// Refs
 	textAreaRef: React.RefObject<HTMLTextAreaElement>
@@ -66,7 +69,14 @@ export interface ChatState {
  * Message handlers interface
  */
 export interface MessageHandlers {
-	executeButtonAction: (action: ButtonActionType, text?: string, images?: string[], files?: string[]) => Promise<void>
+	/** `askTs` is the ts of the ask being answered; defaults to the pending (last) ask. An inline card passes its own. */
+	executeButtonAction: (
+		action: ButtonActionType,
+		text?: string,
+		images?: string[],
+		files?: string[],
+		askTs?: number,
+	) => Promise<void>
 	handleSendMessage: (text: string, images: string[], files: string[]) => Promise<void>
 	/**
 	 * Reply to the pending completion with fixed text (the answer card's "Ask agent to cite"). Unlike

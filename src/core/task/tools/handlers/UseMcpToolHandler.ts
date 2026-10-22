@@ -9,6 +9,7 @@ import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
+import { isMcpToolGrantedAutoApprove } from "../mcpAutoApprove"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import { repairMcpArgumentsString } from "../ToolInputRepair"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -125,9 +126,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			arguments: mcp_arguments,
 		} satisfies AiHydroAskUseMcpServer)
 
-		const isToolAutoApproved = config.services.mcpHub.connections
-			?.find((conn: any) => conn.server.name === server_name)
-			?.server.tools?.find((tool: any) => tool.name === tool_name)?.autoApprove
+		const isToolAutoApproved = isMcpToolGrantedAutoApprove(config.services.mcpHub, server_name, tool_name)
 
 		if (config.callbacks.shouldAutoApproveTool(block.name) && isToolAutoApproved) {
 			// Auto-approval flow

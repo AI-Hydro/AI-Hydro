@@ -1,8 +1,7 @@
-import { AskResponseRequest } from "@shared/proto/cline/task"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import React, { useMemo } from "react"
+import React, { useMemo, useState } from "react"
 import VSCodeButtonLink from "@/components/common/VSCodeButtonLink"
-import { TaskServiceClient } from "@/services/grpc-client"
+import { STALE_ASK_NOTICE, sendBoundAskResponse } from "./chat-view/askBinding"
 
 interface CreditLimitErrorProps {
 	currentBalance: number
@@ -10,6 +9,8 @@ interface CreditLimitErrorProps {
 	totalPromotions?: number
 	message: string
 	buyCreditsUrl?: string
+	/** ts of the api_req_failed ask the Retry button answers; dropped by the host if that ask is no longer pending. */
+	askTs: number
 }
 
 const DEFAULT_BUY_CREDITS_URL = {
@@ -23,7 +24,9 @@ const CreditLimitError: React.FC<CreditLimitErrorProps> = ({
 	currentBalance,
 	totalPromotions,
 	totalSpent,
+	askTs,
 }) => {
+	const [stale, setStale] = useState(false)
 	const dashboardUrl = useMemo(() => {
 		return buyCreditsUrl ?? DEFAULT_BUY_CREDITS_URL.USER
 	}, [buyCreditsUrl])
@@ -56,11 +59,7 @@ const CreditLimitError: React.FC<CreditLimitErrorProps> = ({
 				className="w-full"
 				onClick={async () => {
 					try {
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "yesButtonClicked",
-							}),
-						)
+						setStale(await sendBoundAskResponse({ responseType: "yesButtonClicked" }, askTs))
 					} catch (error) {
 						console.error("Error invoking action:", error)
 					}
@@ -68,6 +67,9 @@ const CreditLimitError: React.FC<CreditLimitErrorProps> = ({
 				<span className="codicon codicon-refresh mr-1.5" />
 				Retry Request
 			</VSCodeButton>
+			<div aria-live="polite" className="text-[12px] mt-1" data-testid="credit-stale-notice" role="status">
+				{stale ? STALE_ASK_NOTICE : ""}
+			</div>
 		</div>
 	)
 }
