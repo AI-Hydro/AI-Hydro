@@ -9,7 +9,6 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
-import AutoApproveBar from "./auto-approve-menu/AutoApproveBar"
 // Import utilities and hooks from the new structure
 import {
 	ActionButtons,
@@ -28,6 +27,7 @@ import {
 } from "./chat-view"
 import { isTaskRunning } from "./chat-view/shared/buttonConfig"
 import { buildTranscriptView } from "./chat-view/utils/messageUtils"
+import ComposerStatus from "./composer/ComposerStatus"
 import { makeTranscriptResolvers } from "./transcript/resolvers"
 
 interface ChatViewProps {
@@ -322,8 +322,8 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	)
 
 	const placeholderText = useMemo(() => {
-		const text = task ? "Type a message..." : "Type your task here..."
-		return text
+		// The input hints (@ context, / commands) live in the placeholder, and only while there is no transcript yet.
+		return task ? "Type a message..." : "Type your task here... (@ for context, / for commands)"
 	}, [task])
 
 	return (
@@ -368,7 +368,6 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				)}
 			</div>
 			<footer className="input-footer-glass" style={{ gridRow: "2" }}>
-				<AutoApproveBar />
 				<ActionButtons
 					chatState={chatState}
 					messageHandlers={messageHandlers}
@@ -391,6 +390,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					selectFilesAndImages={selectFilesAndImages}
 					shouldDisableFilesAndImages={shouldDisableFilesAndImages}
 				/>
+				<ComposerStatus contextTokens={lastApiReqTotalTokens} contextWindow={selectedModelInfo?.contextWindow} />
 			</footer>
 		</ChatLayout>
 	)

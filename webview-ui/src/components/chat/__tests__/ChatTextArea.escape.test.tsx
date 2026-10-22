@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
 import { describe, expect, it, vi } from "vitest"
-import { isTaskRunning } from "../chat-view/shared/buttonConfig"
 import { InputSection } from "../chat-view/components/layout/InputSection"
+import { isTaskRunning } from "../chat-view/shared/buttonConfig"
 
 vi.mock("@/context/ExtensionStateContext", () => ({
 	useExtensionState: () => ({
@@ -87,6 +87,67 @@ describe("Escape in the prompt", () => {
 		fireEvent.change(input, { target: { value: "@", selectionStart: 1, selectionEnd: 1 } })
 		fireEvent.keyDown(input, { key: "Escape" })
 		expect(onStop).not.toHaveBeenCalled()
+	})
+})
+
+describe("compact stop button", () => {
+	it("is present only while running, is at least 24px, and calls cancel once", () => {
+		const onStop = vi.fn()
+		const { rerender } = render(<Harness onStop={onStop} running={false} />)
+		expect(screen.queryByRole("button", { name: "Stop task" })).toBeNull()
+		expect(screen.getByTestId("send-button")).toBeInTheDocument()
+		rerender(<Harness onStop={onStop} running />)
+		const stop = screen.getByRole("button", { name: "Stop task" })
+		expect(stop.className).toMatch(/w-\[28px\]/)
+		expect(stop.querySelector(".codicon-debug-stop")).not.toBeNull()
+		expect(screen.queryByTestId("send-button")).toBeNull()
+		fireEvent.click(stop)
+		expect(onStop).toHaveBeenCalledTimes(1)
+	})
+
+	it("latches: two clicks, or a click plus Escape, produce exactly one cancel", () => {
+		const onStop = vi.fn()
+		render(<Harness onStop={onStop} running />)
+		const stop = screen.getByRole("button", { name: "Stop task" })
+		fireEvent.click(stop)
+		fireEvent.click(stop)
+		fireEvent.keyDown(screen.getByTestId("chat-input"), { key: "Escape" })
+		expect(onStop).toHaveBeenCalledTimes(1)
+		const busy = screen.getByRole("button", { name: "Stopping…" })
+		expect(busy).toBeDisabled()
+		expect(busy).toHaveAttribute("aria-busy", "true")
+	})
+
+	it("Escape then a click is also one cancel, and the latch clears when the task stops", () => {
+		const onStop = vi.fn()
+		const { rerender } = render(<Harness onStop={onStop} running />)
+		fireEvent.keyDown(screen.getByTestId("chat-input"), { key: "Escape" })
+		fireEvent.click(screen.getByRole("button", { name: "Stopping…" }))
+		expect(onStop).toHaveBeenCalledTimes(1)
+		rerender(<Harness onStop={onStop} running={false} />)
+		rerender(<Harness onStop={onStop} running />)
+		fireEvent.click(screen.getByRole("button", { name: "Stop task" }))
+		expect(onStop).toHaveBeenCalledTimes(2)
+	})
+
+	it("renders the stop button for a streaming partial, an api_req retry and command_output", () => {
+		const now = Date.now()
+		const states = [
+			{ ts: now, type: "say", say: "text", partial: true },
+			{ ts: now, type: "say", say: "api_req_started" },
+			{ ts: now, type: "ask", ask: "command_output", text: "x" },
+		] as const
+		for (const m of states) {
+			const running = isTaskRunning(m as any)
+			const { unmount } = render(<Harness onStop={() => {}} running={running} />)
+			expect(screen.getByRole("button", { name: "Stop task" })).toBeInTheDocument()
+			unmount()
+		}
+	})
+
+	it("does not render the old hint line under the prompt", () => {
+		render(<Harness onStop={() => {}} running={false} />)
+		expect(screen.queryByText(/Type @ for context/)).toBeNull()
 	})
 })
 

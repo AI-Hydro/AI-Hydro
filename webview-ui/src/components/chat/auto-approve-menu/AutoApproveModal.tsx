@@ -1,7 +1,6 @@
 import { VSCodeButton, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import React, { useEffect, useRef, useState } from "react"
 import { useClickAway, useWindowSize } from "react-use"
-import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
 import HeroTooltip from "@/components/common/HeroTooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAutoApproveActions } from "@/hooks/useAutoApproveActions"
@@ -10,6 +9,11 @@ import AutoApproveMenuItem from "./AutoApproveMenuItem"
 import { ActionMetadata } from "./types"
 
 const breakpoint = 500
+// Theme-aware widget colours. CODE_BLOCK_BG_COLOR is a fixed dark surface, which made the dark-foreground text
+// unreadable in light and high-contrast-light themes.
+const POPOVER_BG = "var(--vscode-editorWidget-background, var(--vscode-editor-background))"
+const POPOVER_FG = "var(--vscode-editorWidget-foreground, var(--vscode-foreground))"
+const POPOVER_BORDER = "var(--vscode-editorWidget-border, var(--vscode-widget-border, var(--vscode-editorGroup-border)))"
 
 interface AutoApproveModalProps {
 	isVisible: boolean
@@ -17,6 +21,10 @@ interface AutoApproveModalProps {
 	buttonRef: React.RefObject<HTMLDivElement>
 	ACTION_METADATA: ActionMetadata[]
 	NOTIFICATIONS_SETTING: ActionMetadata
+	/** Optional content rendered under the title (the composer popover puts the claim disclaimer here). */
+	header?: React.ReactNode
+	/** Escape closes the popover and moves focus here (the control that opened it). */
+	restoreFocusRef?: React.RefObject<HTMLElement>
 }
 
 const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
@@ -25,11 +33,14 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 	buttonRef,
 	ACTION_METADATA,
 	NOTIFICATIONS_SETTING,
+	header,
+	restoreFocusRef,
 }) => {
 	const { autoApprovalSettings } = useExtensionState()
-	const { isChecked, isFavorited, toggleFavorite, updateAction, updateMaxRequests } = useAutoApproveActions()
+	const { isChecked, updateAction, updateMaxRequests } = useAutoApproveActions()
 
 	const modalRef = useRef<HTMLDivElement>(null)
+	const dialogRef = useRef<HTMLDivElement>(null)
 	const itemsContainerRef = useRef<HTMLDivElement>(null)
 	const { width: viewportWidth, height: viewportHeight } = useWindowSize()
 	const [arrowPosition, setArrowPosition] = useState(0)
@@ -42,7 +53,15 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 			return
 		}
 		setIsVisible(false)
+		restoreFocusRef?.current?.focus()
 	})
+
+	// Move focus into the dialog when it opens.
+	useEffect(() => {
+		if (isVisible) {
+			dialogRef.current?.focus()
+		}
+	}, [isVisible])
 
 	// Calculate positions for modal and arrow
 	useEffect(() => {
@@ -117,7 +136,8 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 		return {
 			bottom: `${originalBottom}px`,
 			maxHeight: `${Math.max(finalMaxHeight, 200)}px`, // Ensure minimum usable height
-			background: CODE_BLOCK_BG_COLOR,
+			background: POPOVER_BG,
+			color: POPOVER_FG,
 			overscrollBehavior: "contain" as const,
 		}
 	}
@@ -125,14 +145,29 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 	return (
 		<div className="overflow-hidden" ref={modalRef}>
 			<div
+				aria-label="Tool auto-run settings"
+				aria-modal="false"
 				className="fixed left-[15px] right-[15px] border border-[var(--vscode-editorGroup-border)] rounded z-[1000] flex flex-col"
-				style={calculateModalStyle()}>
+				onKeyDown={(e) => {
+					if (e.key === "Escape") {
+						// Closes the popover only; never reaches the prompt's stop-task Escape.
+						e.stopPropagation()
+						e.preventDefault()
+						setIsVisible(false)
+						restoreFocusRef?.current?.focus()
+					}
+				}}
+				ref={dialogRef}
+				role="dialog"
+				style={{ ...calculateModalStyle(), borderColor: POPOVER_BORDER, outline: "none" }}
+				tabIndex={-1}>
 				<div
 					className="fixed w-[10px] h-[10px] z-[-1] rotate-45 border-r border-b border-[var(--vscode-editorGroup-border)]"
 					style={{
 						bottom: `calc(100vh - ${menuPosition}px)`,
 						right: arrowPosition,
-						background: CODE_BLOCK_BG_COLOR,
+						background: POPOVER_BG,
+						borderColor: POPOVER_BORDER,
 					}}
 				/>
 				{/* Scrollable content container */}
@@ -143,10 +178,18 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 							placement="top">
 							<div className="text-base font-semibold mb-1">Tool auto-run settings</div>
 						</HeroTooltip>
-						<VSCodeButton appearance="icon" onClick={() => setIsVisible(false)}>
+						<VSCodeButton
+							appearance="icon"
+							aria-label="Close"
+							onClick={() => {
+								setIsVisible(false)
+								restoreFocusRef?.current?.focus()
+							}}>
 							<span className="codicon codicon-close text-[10px]"></span>
 						</VSCodeButton>
 					</div>
+
+					{header}
 
 					<div className="mb-2.5">
 						<span className="text-[color:var(--vscode-foreground)] font-medium">Actions:</span>
@@ -172,14 +215,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 
 						{/* All items in a single list - CSS Grid will handle the column distribution */}
 						{ACTION_METADATA.map((action) => (
-							<AutoApproveMenuItem
-								action={action}
-								isChecked={isChecked}
-								isFavorited={isFavorited}
-								key={action.id}
-								onToggle={updateAction}
-								onToggleFavorite={toggleFavorite}
-							/>
+							<AutoApproveMenuItem action={action} isChecked={isChecked} key={action.id} onToggle={updateAction} />
 						))}
 					</div>
 
@@ -190,18 +226,16 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 					<AutoApproveMenuItem
 						action={NOTIFICATIONS_SETTING}
 						isChecked={isChecked}
-						isFavorited={isFavorited}
 						key={NOTIFICATIONS_SETTING.id}
 						onToggle={updateAction}
-						onToggleFavorite={toggleFavorite}
 					/>
 
 					<HeroTooltip
 						content="AI-Hydro will automatically make this many API requests before asking for approval to proceed with the task."
 						placement="top">
 						<div className="flex items-center pl-1.5 my-2">
-							<span className="codicon codicon-settings text-[#CCCCCC] text-[14px]" />
-							<span className="text-[#CCCCCC] text-xs font-medium ml-2">Max Requests:</span>
+							<span className="codicon codicon-settings text-[color:var(--vscode-foreground)] text-[14px]" />
+							<span className="text-[color:var(--vscode-foreground)] text-xs font-medium ml-2">Max Requests:</span>
 							<VSCodeTextField
 								className="flex-1 w-full pr-[35px] ml-4"
 								onInput={async (e) => {

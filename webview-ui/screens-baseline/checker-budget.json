@@ -10,6 +10,40 @@
 		}
 	},
 	"screens": {
+		"composer-popover": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-annotated-first-party": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-answer-audit-graded": {
 			"ref": {
 				"noName": 0,
@@ -112,6 +146,23 @@
 			},
 			"cells": 6
 		},
+		"chat-answer-pending-hidden": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-answer-revised": {
 			"ref": {
 				"noName": 0,
@@ -125,124 +176,6 @@
 				"smallTarget": 18,
 				"smallText": 0,
 				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-finished-claims": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 3,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 18,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-task-answer": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 3,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 40,
-				"smallTarget": 2752,
-				"smallText": 440,
-				"contrast": 455,
-				"contrastIndeterminate": 0
-			}
-		},
-		"chat-annotated-first-party": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-unannotated-first-party": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-answer-pending-hidden": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-detail-focus": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 5,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 30,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-detail-verbose": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 6,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 36,
-				"smallText": 0,
-				"contrast": 9,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -354,14 +287,14 @@
 				"noName": 0,
 				"smallTarget": 4,
 				"smallText": 0,
-				"contrast": 1,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
 				"smallTarget": 24,
 				"smallText": 0,
-				"contrast": 15,
+				"contrast": 3,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -378,7 +311,7 @@
 				"noName": 0,
 				"smallTarget": 30,
 				"smallText": 0,
-				"contrast": 6,
+				"contrast": 3,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -395,7 +328,41 @@
 				"noName": 0,
 				"smallTarget": 30,
 				"smallText": 0,
-				"contrast": 6,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-detail-focus": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-detail-verbose": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 9,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -412,7 +379,24 @@
 				"noName": 0,
 				"smallTarget": 24,
 				"smallText": 0,
-				"contrast": 6,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-finished-claims": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -470,14 +454,14 @@
 				"noName": 0,
 				"smallTarget": 4,
 				"smallText": 0,
-				"contrast": 1,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
 				"smallTarget": 24,
 				"smallText": 0,
-				"contrast": 15,
+				"contrast": 3,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -519,19 +503,35 @@
 		"chat-run-8-tools": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 4,
+				"smallTarget": 3,
 				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 24,
+				"smallTarget": 18,
 				"smallText": 0,
 				"contrast": 3,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
+		},
+		"chat-task-answer": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 2752,
+				"smallText": 440,
+				"contrast": 455,
+				"contrastIndeterminate": 0
+			}
 		},
 		"chat-task-mcp": {
 			"ref": {
@@ -586,16 +586,33 @@
 		"chat-turn-machinery": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 6,
+				"smallTarget": 4,
 				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 36,
+				"smallTarget": 24,
 				"smallText": 0,
-				"contrast": 9,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-unannotated-first-party": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -632,6 +649,125 @@
 				"contrast": 0,
 				"contrastIndeterminate": 40
 			}
+		},
+		"composer-danger-policy": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"composer-running": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"toolcard-area-fail": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"toolcard-provisional": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"toolcard-refusal": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"toolcard-success": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"toolcard-unreported-class": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
 		},
 		"design-primitives": {
 			"ref": {
@@ -1447,91 +1583,6 @@
 				"contrast": 180,
 				"contrastIndeterminate": 0
 			}
-		},
-		"toolcard-area-fail": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"toolcard-provisional": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"toolcard-refusal": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"toolcard-success": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"toolcard-unreported-class": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
 		}
 	},
 	"subsets": {
@@ -2232,7 +2283,7 @@
 						"noName": 0,
 						"smallTarget": 24,
 						"smallText": 0,
-						"contrast": 15,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2242,7 +2293,7 @@
 						"noName": 0,
 						"smallTarget": 30,
 						"smallText": 0,
-						"contrast": 6,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2252,7 +2303,7 @@
 						"noName": 0,
 						"smallTarget": 30,
 						"smallText": 0,
-						"contrast": 6,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2262,7 +2313,7 @@
 						"noName": 0,
 						"smallTarget": 24,
 						"smallText": 0,
-						"contrast": 6,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2282,7 +2333,7 @@
 						"noName": 0,
 						"smallTarget": 24,
 						"smallText": 0,
-						"contrast": 15,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2310,7 +2361,7 @@
 				"chat-run-8-tools": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 24,
+						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2320,9 +2371,9 @@
 				"chat-turn-machinery": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 36,
+						"smallTarget": 24,
 						"smallText": 0,
-						"contrast": 9,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2400,7 +2451,7 @@
 				"chat-answer-pending-hidden": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 24,
+						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2410,7 +2461,7 @@
 				"chat-detail-focus": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 30,
+						"smallTarget": 24,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2420,7 +2471,7 @@
 				"chat-detail-verbose": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 36,
+						"smallTarget": 30,
 						"smallText": 0,
 						"contrast": 9,
 						"contrastIndeterminate": 0
@@ -2430,7 +2481,7 @@
 				"chat-unannotated-first-party": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 24,
+						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2440,7 +2491,7 @@
 				"chat-annotated-first-party": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 24,
+						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2448,6 +2499,36 @@
 					"cells": 6
 				},
 				"chat-answer-claims-audit": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"composer-danger-policy": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"composer-popover": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"composer-running": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 18,
