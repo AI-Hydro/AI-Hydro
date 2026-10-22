@@ -1488,6 +1488,7 @@ export const ChatRowContent = memo(
 										apiRequestFailedMessage={apiRequestFailedMessage}
 										errorType="error"
 										message={message}
+										retryAskTs={apiRequestFailedMessage ? lastModifiedMessage?.ts : undefined}
 									/>
 								)}
 
@@ -1954,6 +1955,7 @@ export const ChatRowContent = memo(
 									textToCopy={question}>
 									<Markdown markdown={question} />
 									<OptionsButtons
+										askTs={message.ts}
 										inputValue={inputValue}
 										isActive={
 											(isLast && lastModifiedMessage?.ask === "followup") ||
@@ -2183,6 +2185,7 @@ export const ChatRowContent = memo(
 								textToCopy={response}>
 								<Markdown markdown={response} />
 								<OptionsButtons
+									askTs={message.ts}
 									inputValue={inputValue}
 									isActive={
 										(isLast && lastModifiedMessage?.ask === "plan_mode_respond") ||

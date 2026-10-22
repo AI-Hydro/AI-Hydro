@@ -116,6 +116,7 @@ import {
 	resetGateCycle,
 	sweepAuditProgress,
 } from "./answerAuditGate"
+import { acceptAskResponse, resetAskResponse } from "./askResponseBinding"
 import {
 	matchProtectedCommand,
 	mentionsAihydroProgram,
@@ -589,10 +590,7 @@ export class Task {
 				// partial=false means its a complete version of a previously partial message
 				if (isUpdatingPreviousPartial) {
 					// this is the complete version of a previously partial message, so replace the partial with the complete version
-					this.taskState.askResponse = undefined
-					this.taskState.askResponseText = undefined
-					this.taskState.askResponseImages = undefined
-					this.taskState.askResponseFiles = undefined
+					resetAskResponse(this.taskState)
 
 					/*
 					Bug for the history books:
@@ -602,6 +600,10 @@ export class Task {
 					*/
 					askTs = lastMessage.ts
 					this.taskState.lastMessageTs = askTs
+					// Recorded before the ask is posted: a click on an older chunk of this command's output must find this ts known.
+					if (type === "command_output") {
+						this.taskState.commandOutputStream?.askTs.add(askTs)
+					}
 					// lastMessage.ts = askTs
 					await this.messageStateHandler.updateAiHydroMessage(lastMessageIndex, {
 						text,
@@ -612,12 +614,13 @@ export class Task {
 					await sendPartialMessageEvent(protoMessage)
 				} else {
 					// this is a new partial=false message, so add it like normal
-					this.taskState.askResponse = undefined
-					this.taskState.askResponseText = undefined
-					this.taskState.askResponseImages = undefined
-					this.taskState.askResponseFiles = undefined
+					resetAskResponse(this.taskState)
 					askTs = Date.now()
 					this.taskState.lastMessageTs = askTs
+					// Recorded before the ask is posted: a click on an older chunk of this command's output must find this ts known.
+					if (type === "command_output") {
+						this.taskState.commandOutputStream?.askTs.add(askTs)
+					}
 					await this.messageStateHandler.addToAiHydroMessages({
 						ts: askTs,
 						type: "ask",
@@ -630,12 +633,13 @@ export class Task {
 		} else {
 			// this is a new non-partial message, so add it like normal
 			// const lastMessage = this.aihydroMessages.at(-1)
-			this.taskState.askResponse = undefined
-			this.taskState.askResponseText = undefined
-			this.taskState.askResponseImages = undefined
-			this.taskState.askResponseFiles = undefined
+			resetAskResponse(this.taskState)
 			askTs = Date.now()
 			this.taskState.lastMessageTs = askTs
+			// Recorded before the ask is posted: a click on an older chunk of this command's output must find this ts known.
+			if (type === "command_output") {
+				this.taskState.commandOutputStream?.askTs.add(askTs)
+			}
 			await this.messageStateHandler.addToAiHydroMessages({
 				ts: askTs,
 				type: "ask",
@@ -673,11 +677,18 @@ export class Task {
 		return result
 	}
 
-	async handleWebviewAskResponse(askResponse: AiHydroAskResponse, text?: string, images?: string[], files?: string[]) {
-		this.taskState.askResponse = askResponse
-		this.taskState.askResponseText = text
-		this.taskState.askResponseImages = images
-		this.taskState.askResponseFiles = files
+	/**
+	 * `askTs` binds the response to the ask it answers (see askResponseBinding.ts); 0/undefined is the legacy or
+	 * internal path (e.g. the auto-retry below). Returns `{ stale: true }` when the response was dropped.
+	 */
+	async handleWebviewAskResponse(
+		askResponse: AiHydroAskResponse,
+		text?: string,
+		images?: string[],
+		files?: string[],
+		askTs?: number,
+	): Promise<{ stale: boolean }> {
+		return acceptAskResponse(this.taskState, { response: askResponse, text, images, files, askTs })
 	}
 
 	async say(
@@ -1402,6 +1413,10 @@ export class Task {
 
 		const process = terminalManager.runCommand(terminalInfo, command)
 
+		// One output stream per command: ends with the command (clearCommandState).
+		const outputStream = { askTs: new Set<number>() }
+		this.taskState.commandOutputStream = outputStream
+
 		// Track command execution for both terminal modes
 		this.controller.updateBackgroundCommandState(true, this.taskId)
 
@@ -1425,6 +1440,9 @@ export class Task {
 		}
 
 		const clearCommandState = async () => {
+			if (this.taskState.commandOutputStream === outputStream) {
+				this.taskState.commandOutputStream = undefined
+			}
 			if (this.terminalExecutionMode === "backgroundExec") {
 				if (this.activeBackgroundCommand?.process !== process) {
 					return

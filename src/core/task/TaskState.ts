@@ -25,6 +25,14 @@ export class TaskState {
 	askResponseImages?: string[]
 	askResponseFiles?: string[]
 	lastMessageTs?: number
+	/** ts of the ask a webview response was last accepted for; a second response for it is a double delivery. */
+	answeredAskTs?: number
+	/**
+	 * The `command_output` asks of the command currently streaming output. `flushBuffer` posts a new ask every few
+	 * lines, so a click made for an earlier chunk of the same stream still answers the pending chunk. Set when the
+	 * command starts and cleared when it ends; never inferred from the message list.
+	 */
+	commandOutputStream?: { askTs: Set<number> }
 
 	// Plan mode specific state
 	isAwaitingPlanResponse = false

@@ -1,3 +1,9 @@
+import {
+	alwaysAllowReasonText,
+	bulkAutoRunState,
+	describeAutoApproveRefusal,
+	parseAutoApproveRefusal,
+} from "@shared/aihydro/alwaysAllowPolicy"
 import { DEFAULT_MCP_TIMEOUT_SECONDS, McpServer } from "@shared/mcp"
 import { StringRequest } from "@shared/proto/cline/common"
 import {
@@ -135,16 +141,36 @@ const ServerRow = ({
 			})
 	}
 
+	const [autoRunNotice, setAutoRunNotice] = useState<string | undefined>()
+
+	// What the bulk control shows and sends. The host re-checks every add; this only avoids sending a request it
+	// would refuse, and never blocks a revoke.
+	const bulk = bulkAutoRunState({
+		serverTrusted: server.trust?.trusted === true,
+		serverConnected: server.status === "connected",
+		tools: server.tools,
+	})
+	const allBlockedReason = bulk.disabled
+		? alwaysAllowReasonText(
+				server.trust?.trusted !== true
+					? "untrusted_server"
+					: server.status !== "connected"
+						? "server_unavailable"
+						: "unknown_effect",
+			)
+		: undefined
+
 	const handleAutoApproveChange = () => {
-		if (!server.name) {
+		if (!server.name || bulk.disabled) {
 			return
 		}
+		setAutoRunNotice(undefined)
 
 		McpServiceClient.toggleToolAutoApprove(
 			ToggleToolAutoApproveRequest.create({
 				serverName: server.name,
-				toolNames: server.tools?.map((tool) => tool.name) || [],
-				autoApprove: !server.tools?.every((tool) => tool.autoApprove),
+				toolNames: bulk.toolNames,
+				autoApprove: bulk.enabling,
 			}),
 		)
 			.then((response) => {
@@ -152,7 +178,13 @@ const ServerRow = ({
 				setMcpServers(mcpServers)
 			})
 			.catch((error) => {
-				console.error("Error toggling all tools auto-approve", error)
+				const parsed = parseAutoApproveRefusal(error instanceof Error ? error.message : String(error))
+				if (parsed) {
+					setAutoRunNotice(describeAutoApproveRefusal(parsed))
+				} else {
+					console.error("Error toggling all tools auto-approve", error)
+					setAutoRunNotice("Could not update auto-run. Nothing was changed.")
+				}
 			})
 	}
 
@@ -370,16 +402,47 @@ const ServerRow = ({
 											width: "100%",
 										}}>
 										{server.tools.map((tool) => (
-											<McpToolRow key={tool.name} serverName={server.name} tool={tool} />
+											<McpToolRow
+												key={tool.name}
+												serverConnected={server.status === "connected"}
+												serverName={server.name}
+												serverTools={server.tools}
+												serverTrusted={server.trust?.trusted === true}
+												tool={tool}
+											/>
 										))}
 										{server.name && autoApprovalSettings.enabled && autoApprovalSettings.actions.useMcp && (
 											<VSCodeCheckbox
-												checked={server.tools.every((tool) => tool.autoApprove)}
+												aria-describedby={
+													allBlockedReason ? `auto-run-all-reason-${server.name}` : undefined
+												}
+												checked={bulk.checked}
 												data-tool="all-tools"
+												disabled={bulk.disabled}
 												onChange={handleAutoApproveChange}
-												style={{ marginBottom: -10 }}>
+												style={{ marginBottom: -10 }}
+												title={allBlockedReason}>
 												Auto-run all tools
 											</VSCodeCheckbox>
+										)}
+										{allBlockedReason && (
+											<div
+												data-testid="auto-run-all-blocked-reason"
+												style={{ marginTop: "10px", opacity: 0.8, fontSize: "12px" }}>
+												{allBlockedReason}
+											</div>
+										)}
+										{autoRunNotice && (
+											<div
+												data-testid="auto-run-refusal"
+												role="alert"
+												style={{
+													marginTop: "10px",
+													fontSize: "12px",
+													color: "var(--vscode-errorForeground)",
+												}}>
+												{autoRunNotice}
+											</div>
 										)}
 									</div>
 								) : (

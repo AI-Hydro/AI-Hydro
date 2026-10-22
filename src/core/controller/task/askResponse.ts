@@ -1,5 +1,4 @@
-import { Empty } from "@shared/proto/cline/common"
-import { AskResponseRequest } from "@shared/proto/cline/task"
+import { AskResponseRequest, AskResponseResult } from "@shared/proto/cline/task"
 import { AiHydroAskResponse } from "../../../shared/WebviewMessage"
 import { Controller } from ".."
 
@@ -8,13 +7,14 @@ import { Controller } from ".."
  *
  * @param controller The controller instance
  * @param request The request containing response type, optional text and optional images
- * @returns Empty response
+ * @returns `stale: true` when the response named an ask that is no longer the pending one and was dropped
  */
-export async function askResponse(controller: Controller, request: AskResponseRequest): Promise<Empty> {
+export async function askResponse(controller: Controller, request: AskResponseRequest): Promise<AskResponseResult> {
 	try {
 		if (!controller.task) {
 			console.warn("askResponse: No active task to receive response")
-			return Empty.create()
+			// A bound response (non-zero ask_ts) with no task to answer is stale too.
+			return AskResponseResult.create({ stale: request.askTs !== 0 })
 		}
 
 		// Map the string responseType to the AiHydroAskResponse enum
@@ -31,13 +31,19 @@ export async function askResponse(controller: Controller, request: AskResponseRe
 				break
 			default:
 				console.warn(`askResponse: Unknown response type: ${request.responseType}`)
-				return Empty.create()
+				return AskResponseResult.create({ stale: false })
 		}
 
 		// Call the task's handler for webview responses
-		await controller.task.handleWebviewAskResponse(responseType, request.text, request.images, request.files)
+		const result = await controller.task.handleWebviewAskResponse(
+			responseType,
+			request.text,
+			request.images,
+			request.files,
+			request.askTs,
+		)
 
-		return Empty.create()
+		return AskResponseResult.create({ stale: result?.stale === true })
 	} catch (error) {
 		console.error("Error in askResponse handler:", error)
 		throw error
