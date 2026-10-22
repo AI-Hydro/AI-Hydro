@@ -5,6 +5,7 @@ import {
 	AUTO_APPROVE_REFUSED_PREFIX,
 	alwaysAllowReasonText,
 	alwaysAllowVerdict,
+	bulkAutoRunState,
 	describeAutoApproveRefusal,
 	formatAutoApproveRefusal,
 	parseAutoApproveRefusal,
@@ -121,5 +122,46 @@ describe("auto-approve refusal wire format", () => {
 		})
 		expect(text).to.include("a (and 1 more)")
 		expect(text).to.include("Nothing was changed")
+	})
+})
+
+describe("bulkAutoRunState (N1: revoke is never blocked)", () => {
+	const granted = (t: { name: string; annotations?: object }, autoApprove = true) => ({ ...t, autoApprove })
+
+	it("a legacy-granted third-party server can be bulk-revoked", () => {
+		const state = bulkAutoRunState({
+			serverTrusted: false,
+			serverConnected: true,
+			tools: [granted(READ), granted(NUKE), { ...BARE }],
+		})
+		expect(state).to.deep.equal({ checked: true, disabled: false, enabling: false, toolNames: ["r", "d", "b"] })
+	})
+
+	it("a disconnected server with grants can still be revoked", () => {
+		const state = bulkAutoRunState({ serverTrusted: true, serverConnected: false, tools: [granted(READ)] })
+		expect(state.disabled).to.equal(false)
+		expect(state.enabling).to.equal(false)
+	})
+
+	it("an add is disabled only when nothing is eligible and nothing is granted", () => {
+		expect(bulkAutoRunState({ serverTrusted: false, serverConnected: true, tools: [READ, NUKE] }).disabled).to.equal(true)
+		expect(bulkAutoRunState({ serverTrusted: true, serverConnected: true, tools: [NUKE, BARE] }).disabled).to.equal(true)
+		expect(bulkAutoRunState({ serverTrusted: true, serverConnected: true, tools: undefined }).disabled).to.equal(true)
+	})
+
+	it("enabling on a trusted server sends only the eligible tools", () => {
+		const state = bulkAutoRunState({ serverTrusted: true, serverConnected: true, tools: [READ, WRITE, NUKE, BARE] })
+		expect(state).to.deep.equal({ checked: false, disabled: false, enabling: true, toolNames: ["r", "w"] })
+	})
+
+	it("all eligible granted shows checked; a click revokes every tool", () => {
+		const state = bulkAutoRunState({
+			serverTrusted: true,
+			serverConnected: true,
+			tools: [granted(READ), granted(WRITE), NUKE],
+		})
+		expect(state.checked).to.equal(true)
+		expect(state.enabling).to.equal(false)
+		expect(state.toolNames).to.deep.equal(["r", "w", "d"])
 	})
 })

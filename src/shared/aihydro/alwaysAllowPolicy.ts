@@ -138,3 +138,45 @@ export function describeAutoApproveRefusal(refusal: AutoApproveRefusal): string 
 	const more = refusal.refused.length > 1 ? ` (and ${refusal.refused.length - 1} more)` : ""
 	return `${first.tool}${more}: ${alwaysAllowReasonText(first.reason)} Nothing was changed.`
 }
+
+// ── Bulk "Auto-run all tools" control state (settings panel) ───────────────
+
+export interface BulkAutoRunTool extends AlwaysAllowTool {
+	autoApprove?: boolean
+}
+
+export interface BulkAutoRunState {
+	/** Shown checked: every eligible tool is granted, or (nothing eligible) some legacy grant exists. */
+	checked: boolean
+	/** Only an ADD can be impossible: nothing is eligible and nothing is granted. Revoking is never disabled. */
+	disabled: boolean
+	/** What a click requests. Enabling sends eligible tools only; disabling sends every granted-or-listed tool. */
+	enabling: boolean
+	toolNames: string[]
+}
+
+export function bulkAutoRunState(input: {
+	serverTrusted: boolean
+	serverConnected: boolean
+	tools: readonly BulkAutoRunTool[] | undefined
+}): BulkAutoRunState {
+	const tools = input.tools ?? []
+	const eligible = tools.filter(
+		(t) =>
+			alwaysAllowVerdict({
+				serverTrusted: input.serverTrusted,
+				serverConnected: input.serverConnected,
+				tools,
+				toolName: t.name,
+			}).ok,
+	)
+	const granted = tools.filter((t) => t.autoApprove)
+	const checked = eligible.length > 0 ? eligible.every((t) => t.autoApprove) : granted.length > 0
+	const enabling = !checked
+	return {
+		checked,
+		disabled: enabling && eligible.length === 0,
+		enabling,
+		toolNames: (enabling ? eligible : tools).map((t) => t.name),
+	}
+}

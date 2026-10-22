@@ -4,10 +4,11 @@ import { AskResponseRequest, NewTaskRequest } from "@shared/proto/cline/task"
 import { useCallback } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { SlashServiceClient, TaskServiceClient } from "@/services/grpc-client"
+import { NO_ASK_TS, STALE_ASK_NOTICE, sendBoundAskResponse } from "../askBinding"
 import type { ButtonActionType } from "../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../types/chatTypes"
 
-export const STALE_ASK_NOTICE = "That request changed — review again"
+export { STALE_ASK_NOTICE }
 
 /**
  * Custom hook for managing message handlers
@@ -33,9 +34,9 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 	// then reviews the new request instead of silently answering it. Resolves true when the response was dropped.
 	const answerAsk = useCallback(
 		async (fields: Partial<AskResponseRequest>, askTsOverride?: number): Promise<boolean> => {
-			const askTs = askTsOverride ?? (lastMessage?.type === "ask" ? lastMessage.ts : 0)
-			const result = await TaskServiceClient.askResponse(AskResponseRequest.create({ ...fields, askTs }))
-			if (result?.stale) {
+			// Never 0: with no ask pending the last message's ts is sent, which the host reports as stale.
+			const askTs = askTsOverride ?? (lastMessage?.type === "ask" ? lastMessage.ts : (lastMessage?.ts ?? NO_ASK_TS))
+			if (await sendBoundAskResponse(fields, askTs)) {
 				setAskNotice?.(STALE_ASK_NOTICE)
 				return true
 			}

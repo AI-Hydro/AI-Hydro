@@ -14,6 +14,13 @@ import {
 	ReadResourceResultSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import {
+	type AutoApproveRefusal,
+	alwaysAllowVerdict,
+	formatAutoApproveRefusal,
+	parseAutoApproveRefusal,
+} from "@shared/aihydro/alwaysAllowPolicy"
+import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
+import {
 	DEFAULT_MCP_TIMEOUT_SECONDS,
 	McpResource,
 	McpResourceResponse,
@@ -23,13 +30,6 @@ import {
 	McpToolCallResponse,
 	MIN_MCP_TIMEOUT_SECONDS,
 } from "@shared/mcp"
-import {
-	type AutoApproveRefusal,
-	alwaysAllowVerdict,
-	formatAutoApproveRefusal,
-	parseAutoApproveRefusal,
-} from "@shared/aihydro/alwaysAllowPolicy"
-import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import { convertMcpServersToProtoMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { fileExistsAtPath } from "@utils/fs"
 import { secondsToMs } from "@utils/time"
@@ -1040,7 +1040,11 @@ export class McpHub {
 			const content = await fs.readFile(settingsPath, "utf-8")
 			const config = JSON.parse(content)
 
-			const entry = config?.mcpServers?.[serverName]
+			// Own-property lookup: the name comes from the webview ("__proto__", "constructor" must not resolve).
+			const entry =
+				config?.mcpServers && typeof config.mcpServers === "object" && Object.hasOwn(config.mcpServers, serverName)
+					? config.mcpServers[serverName]
+					: undefined
 			if (!entry || typeof entry !== "object") {
 				throw new Error(`Server "${serverName}" not found in MCP configuration`)
 			}

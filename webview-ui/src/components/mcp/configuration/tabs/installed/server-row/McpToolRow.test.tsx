@@ -13,9 +13,9 @@ vi.mock("@/context/ExtensionStateContext", () => ({
 }))
 
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
-	VSCodeCheckbox: ({ checked, disabled, onChange, title, children }: any) => (
+	VSCodeCheckbox: ({ checked, disabled, onChange, title, children, ...rest }: any) => (
 		<label title={title}>
-			<input checked={!!checked} disabled={disabled} onChange={onChange} type="checkbox" />
+			<input aria-describedby={rest["aria-describedby"]} checked={!!checked} disabled={disabled} onChange={onChange} type="checkbox" />
 			{children}
 		</label>
 	),
@@ -69,5 +69,15 @@ describe("McpToolRow Always eligibility (W2-E1)", () => {
 		const { container } = render(<McpToolRow serverName="s" serverTools={[READ]} serverTrusted={true} tool={READ} />)
 		fireEvent.click(checkbox(container))
 		await waitFor(() => expect(screen.getByTestId("auto-run-refusal").textContent).toMatch(/Nothing was changed/))
+	})
+})
+
+describe("McpToolRow blocked-reason association (N4)", () => {
+	it("links the checkbox to the visible reason text with aria-describedby", () => {
+		const { container } = render(<McpToolRow serverName="s" serverTools={[READ]} serverTrusted={false} tool={READ} />)
+		const input = container.querySelector("input") as HTMLInputElement
+		const reason = screen.getByTestId("auto-run-blocked-reason")
+		expect(reason.id).toBeTruthy()
+		expect(input.getAttribute("aria-describedby")).toBe(reason.id)
 	})
 })

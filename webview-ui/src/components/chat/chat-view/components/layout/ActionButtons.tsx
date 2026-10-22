@@ -113,22 +113,24 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 		</button>
 	) : null
 
-	const notice = askNotice ? (
+	// Always mounted so assistive tech announces the text change; empty when there is no notice.
+	const notice = (
 		<div
-			className="px-[15px] pb-[6px] text-[12px] text-[var(--vscode-editorWarning-foreground)]"
+			aria-live="polite"
+			className={askNotice ? "px-[15px] pb-[6px] text-[12px] text-[var(--vscode-editorWarning-foreground)]" : "sr-only"}
 			data-testid="ask-notice"
 			role="status">
-			{askNotice}
+			{askNotice ?? ""}
 		</div>
-	) : null
+	)
 
 	if (!hasButtons) {
-		return scrollButton || notice ? (
+		return (
 			<>
 				{notice}
-				<div className="relative h-0">{scrollButton}</div>
+				{scrollButton ? <div className="relative h-0">{scrollButton}</div> : null}
 			</>
-		) : null
+		)
 	}
 
 	return (

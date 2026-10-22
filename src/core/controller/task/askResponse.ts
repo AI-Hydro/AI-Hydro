@@ -13,7 +13,8 @@ export async function askResponse(controller: Controller, request: AskResponseRe
 	try {
 		if (!controller.task) {
 			console.warn("askResponse: No active task to receive response")
-			return AskResponseResult.create({ stale: false })
+			// A bound response (non-zero ask_ts) with no task to answer is stale too.
+			return AskResponseResult.create({ stale: request.askTs !== 0 })
 		}
 
 		// Map the string responseType to the AiHydroAskResponse enum

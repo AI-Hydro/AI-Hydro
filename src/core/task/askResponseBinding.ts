@@ -19,17 +19,44 @@ export interface AskResponseInput {
 }
 
 export function acceptAskResponse(
-	state: Pick<TaskState, "askResponse" | "askResponseText" | "askResponseImages" | "askResponseFiles" | "lastMessageTs">,
+	state: Pick<
+		TaskState,
+		| "askResponse"
+		| "askResponseText"
+		| "askResponseImages"
+		| "askResponseFiles"
+		| "lastMessageTs"
+		| "answeredAskTs"
+		| "commandOutputStream"
+	>,
 	input: AskResponseInput,
 ): { stale: boolean } {
 	const askTs = input.askTs ?? 0
-	if (askTs !== 0 && askTs !== state.lastMessageTs) {
-		console.warn(`askResponse: dropped stale response for ask ${askTs}; pending ask is ${state.lastMessageTs ?? "none"}`)
-		return { stale: true }
+	if (askTs !== 0) {
+		if (askTs !== state.lastMessageTs && !sameCommandOutputStream(state, askTs)) {
+			console.warn(`askResponse: dropped stale response for ask ${askTs}; pending ask is ${state.lastMessageTs ?? "none"}`)
+			return { stale: true }
+		}
+		// Double delivery: the pending ask was already answered; a second answer must not leak into the next ask.
+		if (state.lastMessageTs !== undefined && state.answeredAskTs === state.lastMessageTs) {
+			console.warn(`askResponse: dropped duplicate response for ask ${askTs}; it was already answered`)
+			return { stale: true }
+		}
 	}
+	state.answeredAskTs = state.lastMessageTs
 	state.askResponse = input.response
 	state.askResponseText = input.text
 	state.askResponseImages = input.images
 	state.askResponseFiles = input.files
 	return { stale: false }
+}
+
+/**
+ * `askTs` is an earlier chunk of the same command's output stream and the pending ask is also a chunk of that
+ * stream. Strict otherwise: a `command_output` ts never answers any other kind of ask, and a ts from a finished
+ * command's stream is not in the current set.
+ */
+function sameCommandOutputStream(state: Pick<TaskState, "lastMessageTs" | "commandOutputStream">, askTs: number): boolean {
+	const stream = state.commandOutputStream
+	return !!stream && state.lastMessageTs !== undefined && stream.askTs.has(askTs) && stream.askTs.has(state.lastMessageTs)
 }

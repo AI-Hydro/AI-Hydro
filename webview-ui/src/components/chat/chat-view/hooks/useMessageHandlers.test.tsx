@@ -104,13 +104,22 @@ describe("ask responses are bound to the ask ts (W2-E1, M-1)", () => {
 		expect(askResponse.mock.calls[0][0]).toMatchObject({ responseType: "messageResponse", askTs: 555 })
 	})
 
-	it("sends ts 0 when the last message is not an ask", async () => {
-		const st = state("tool")
-		const { result } = renderHook(() => useMessageHandlers([], st))
+	it("never sends ts 0: with no ask pending it sends the last message's ts, or a non-matching sentinel", async () => {
+		const withSay = { ...state("tool"), lastMessage: { ts: 777, type: "say", say: "text" }, setAskNotice: vi.fn() } as any
+		const first = renderHook(() => useMessageHandlers([], withSay))
 		await act(async () => {
-			await result.current.executeButtonAction("approve", "")
+			await first.result.current.executeButtonAction("approve", "")
 		})
-		expect(askResponse.mock.calls[0][0].askTs).toBe(0)
+		expect(askResponse.mock.calls[0][0].askTs).toBe(777)
+
+		const empty = state("tool")
+		const second = renderHook(() => useMessageHandlers([], empty))
+		await act(async () => {
+			await second.result.current.executeButtonAction("approve", "")
+		})
+		const sentinel = askResponse.mock.calls[1][0].askTs
+		expect(sentinel).not.toBe(0)
+		expect(sentinel).toBeLessThan(0)
 	})
 
 	it("a stale result shows the notice and keeps the draft and attachments", async () => {

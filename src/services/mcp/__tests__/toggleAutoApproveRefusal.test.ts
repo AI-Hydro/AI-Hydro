@@ -213,6 +213,24 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 		expect(await readFile()).to.equal(before)
 	})
 
+	it("N2: a server name is looked up as an own property only (__proto__, constructor, ...)", async () => {
+		await start("ai-hydro", { trusted: true })
+		const before = await readFile()
+		for (const name of ["__proto__", "constructor", "hasOwnProperty", "toString"]) {
+			for (const shouldAllow of [true, false]) {
+				let message = ""
+				try {
+					await hub.toggleToolAutoApproveRPC(name, ["read_tool"], shouldAllow)
+				} catch (error) {
+					message = (error as Error).message
+				}
+				expect(message, `${name} allow=${shouldAllow}`).to.include("not found in MCP configuration")
+			}
+		}
+		expect(await readFile()).to.equal(before)
+		expect(({} as any).autoApprove).to.equal(undefined)
+	})
+
 	it("(d) removing a tool is always accepted, even a destructive one already in the baseline, on any server", async () => {
 		await start("stub", { trusted: false, autoApprove: ["nuke_tool", "read_tool"] })
 		expect(await onDisk("stub")).to.deep.equal(["nuke_tool", "read_tool"])

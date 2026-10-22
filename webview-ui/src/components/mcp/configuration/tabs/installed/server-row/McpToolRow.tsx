@@ -40,6 +40,7 @@ const McpToolRow = ({ tool, serverName, serverTrusted, serverConnected, serverTo
 		toolName: tool.name,
 	})
 	const addBlocked = !tool.autoApprove && !verdict.ok
+	const reasonId = `auto-run-reason-${serverName ?? ""}-${tool.name}`
 	const blockedReason = !verdict.ok ? alwaysAllowReasonText(verdict.reason) : undefined
 
 	// Accept the event object
@@ -86,6 +87,7 @@ const McpToolRow = ({ tool, serverName, serverTrusted, serverConnected, serverTo
 				</div>
 				{serverName && autoApprovalSettings.enabled && autoApprovalSettings.actions.useMcp && (
 					<VSCodeCheckbox
+						aria-describedby={addBlocked ? reasonId : undefined}
 						checked={tool.autoApprove ?? false}
 						data-tool={tool.name}
 						disabled={addBlocked}
@@ -96,7 +98,10 @@ const McpToolRow = ({ tool, serverName, serverTrusted, serverConnected, serverTo
 				)}
 			</div>
 			{addBlocked && blockedReason && (
-				<div data-testid="auto-run-blocked-reason" style={{ marginTop: "4px", opacity: 0.8, fontSize: "12px" }}>
+				<div
+					data-testid="auto-run-blocked-reason"
+					id={reasonId}
+					style={{ marginTop: "4px", opacity: 0.8, fontSize: "12px" }}>
 					{blockedReason}
 				</div>
 			)}

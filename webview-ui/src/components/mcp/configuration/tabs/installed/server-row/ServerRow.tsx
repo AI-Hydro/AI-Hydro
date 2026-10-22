@@ -1,6 +1,6 @@
 import {
 	alwaysAllowReasonText,
-	alwaysAllowVerdict,
+	bulkAutoRunState,
 	describeAutoApproveRefusal,
 	parseAutoApproveRefusal,
 } from "@shared/aihydro/alwaysAllowPolicy"
@@ -143,31 +143,25 @@ const ServerRow = ({
 
 	const [autoRunNotice, setAutoRunNotice] = useState<string | undefined>()
 
-	// Tools the host would accept a grant for (the host re-checks; this only avoids sending a request it would refuse).
-	const eligibleTools = (server.tools ?? []).filter(
-		(tool) =>
-			alwaysAllowVerdict({
-				serverTrusted: server.trust?.trusted === true,
-				serverConnected: server.status === "connected",
-				tools: server.tools,
-				toolName: tool.name,
-			}).ok,
-	)
-	// "All" means every tool the host would accept; ineligible tools are never requested.
-	const allGranted = eligibleTools.length > 0 ? eligibleTools.every((tool) => tool.autoApprove) : false
-	const allBlockedReason =
-		eligibleTools.length === 0
-			? alwaysAllowReasonText(server.trust?.trusted === true ? "unknown_effect" : "untrusted_server")
-			: undefined
+	// What the bulk control shows and sends. The host re-checks every add; this only avoids sending a request it
+	// would refuse, and never blocks a revoke.
+	const bulk = bulkAutoRunState({
+		serverTrusted: server.trust?.trusted === true,
+		serverConnected: server.status === "connected",
+		tools: server.tools,
+	})
+	const allBlockedReason = bulk.disabled
+		? alwaysAllowReasonText(
+				server.trust?.trusted !== true
+					? "untrusted_server"
+					: server.status !== "connected"
+						? "server_unavailable"
+						: "unknown_effect",
+			)
+		: undefined
 
 	const handleAutoApproveChange = () => {
-		if (!server.name) {
-			return
-		}
-		// Turning on sends only the eligible tools; turning off sends every tool (removal is always allowed).
-		const enabling = !allGranted
-		const toolNames = enabling ? eligibleTools.map((tool) => tool.name) : server.tools?.map((tool) => tool.name) || []
-		if (enabling && toolNames.length === 0) {
+		if (!server.name || bulk.disabled) {
 			return
 		}
 		setAutoRunNotice(undefined)
@@ -175,8 +169,8 @@ const ServerRow = ({
 		McpServiceClient.toggleToolAutoApprove(
 			ToggleToolAutoApproveRequest.create({
 				serverName: server.name,
-				toolNames,
-				autoApprove: enabling,
+				toolNames: bulk.toolNames,
+				autoApprove: bulk.enabling,
 			}),
 		)
 			.then((response) => {
@@ -419,9 +413,12 @@ const ServerRow = ({
 										))}
 										{server.name && autoApprovalSettings.enabled && autoApprovalSettings.actions.useMcp && (
 											<VSCodeCheckbox
-												checked={allGranted}
+												aria-describedby={
+													allBlockedReason ? `auto-run-all-reason-${server.name}` : undefined
+												}
+												checked={bulk.checked}
 												data-tool="all-tools"
-												disabled={!!allBlockedReason}
+												disabled={bulk.disabled}
 												onChange={handleAutoApproveChange}
 												style={{ marginBottom: -10 }}
 												title={allBlockedReason}>

@@ -1,8 +1,7 @@
-import { AskResponseRequest } from "@shared/proto/cline/task"
 import { useState } from "react"
 import styled from "styled-components"
 import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
-import { TaskServiceClient } from "@/services/grpc-client"
+import { STALE_ASK_NOTICE, sendBoundAskResponse } from "./chat-view/askBinding"
 
 const OptionButton = styled.button<{ isSelected?: boolean; isNotSelectable?: boolean }>`
 	padding: 8px 12px;
@@ -43,11 +42,14 @@ export const OptionsButtons = ({
 	selected,
 	isActive,
 	inputValue,
+	askTs,
 }: {
 	options?: string[]
 	selected?: string
 	isActive?: boolean
 	inputValue?: string
+	/** ts of the ask message these options belong to; the response is dropped if that ask is no longer pending. */
+	askTs: number
 }) => {
 	// Inline free-text answer (mirrors Claude Code's "Other"): clicking the
 	// escape-hatch reveals an editable field right here, so the user can always
@@ -55,6 +57,7 @@ export const OptionsButtons = ({
 	// missed) main chat box at the bottom.
 	const [freeTextMode, setFreeTextMode] = useState(false)
 	const [freeText, setFreeText] = useState("")
+	const [staleNotice, setStaleNotice] = useState(false)
 
 	if (!options?.length) {
 		return null
@@ -69,13 +72,7 @@ export const OptionsButtons = ({
 			return
 		}
 		try {
-			await TaskServiceClient.askResponse(
-				AskResponseRequest.create({
-					responseType: "messageResponse",
-					text: trimmed,
-					images: [],
-				}),
-			)
+			setStaleNotice(await sendBoundAskResponse({ responseType: "messageResponse", text: trimmed, images: [] }, askTs))
 		} catch (error) {
 			console.error("Error sending response:", error)
 		}
@@ -155,6 +152,9 @@ export const OptionsButtons = ({
 					</div>
 				</div>
 			)}
+			<div aria-live="polite" data-testid="options-stale-notice" role="status" style={{ fontSize: "12px", opacity: 0.85 }}>
+				{staleNotice ? STALE_ASK_NOTICE : ""}
+			</div>
 		</div>
 	)
 }

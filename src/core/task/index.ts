@@ -116,6 +116,7 @@ import {
 	resetGateCycle,
 	sweepAuditProgress,
 } from "./answerAuditGate"
+import { acceptAskResponse } from "./askResponseBinding"
 import {
 	matchProtectedCommand,
 	mentionsAihydroProgram,
@@ -123,7 +124,6 @@ import {
 	SUBAGENTS_DISABLED_MESSAGE,
 	subagentLaunchRefusal,
 } from "./commandPolicy"
-import { acceptAskResponse } from "./askResponseBinding"
 import { FocusChainManager } from "./focus-chain"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
@@ -644,6 +644,12 @@ export class Task {
 				text,
 			})
 			await this.postStateToWebview()
+		}
+
+		// Chunks of one command's output are consecutive asks; remember them so a click made for an earlier chunk
+		// still answers the pending one (askResponseBinding.ts).
+		if (type === "command_output") {
+			this.taskState.commandOutputStream?.askTs.add(askTs)
 		}
 
 		await pWaitFor(() => this.taskState.askResponse !== undefined || this.taskState.lastMessageTs !== askTs, {
@@ -1410,6 +1416,10 @@ export class Task {
 
 		const process = terminalManager.runCommand(terminalInfo, command)
 
+		// One output stream per command: ends with the command (clearCommandState).
+		const outputStream = { askTs: new Set<number>() }
+		this.taskState.commandOutputStream = outputStream
+
 		// Track command execution for both terminal modes
 		this.controller.updateBackgroundCommandState(true, this.taskId)
 
@@ -1433,6 +1443,9 @@ export class Task {
 		}
 
 		const clearCommandState = async () => {
+			if (this.taskState.commandOutputStream === outputStream) {
+				this.taskState.commandOutputStream = undefined
+			}
 			if (this.terminalExecutionMode === "backgroundExec") {
 				if (this.activeBackgroundCommand?.process !== process) {
 					return
