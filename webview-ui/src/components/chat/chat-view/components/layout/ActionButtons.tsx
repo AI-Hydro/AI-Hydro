@@ -34,7 +34,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	messageHandlers,
 	scrollBehavior,
 }) => {
-	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
+	const { inputValue, selectedImages, selectedFiles, setSendingDisabled, askNotice } = chatState
 	const [isProcessing, setIsProcessing] = useState(false)
 
 	// Memoize last messages to avoid unnecessary recalculations
@@ -53,6 +53,13 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 		setSendingDisabled(buttonConfig.sendingDisabled)
 		setIsProcessing(false)
 	}, [buttonConfig, setSendingDisabled])
+
+	// A response dropped as stale leaves the buttons unchanged: let the user act on the new request.
+	useEffect(() => {
+		if (askNotice) {
+			setIsProcessing(false)
+		}
+	}, [askNotice])
 
 	// Clear input when transitioning from command_output to api_req
 	// This happens when user provides feedback during command execution
@@ -106,31 +113,48 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 		</button>
 	) : null
 
+	const notice = askNotice ? (
+		<div
+			className="px-[15px] pb-[6px] text-[12px] text-[var(--vscode-editorWarning-foreground)]"
+			data-testid="ask-notice"
+			role="status">
+			{askNotice}
+		</div>
+	) : null
+
 	if (!hasButtons) {
-		return scrollButton ? <div className="relative h-0">{scrollButton}</div> : null
+		return scrollButton || notice ? (
+			<>
+				{notice}
+				<div className="relative h-0">{scrollButton}</div>
+			</>
+		) : null
 	}
 
 	return (
-		<div className="relative flex px-[15px]" style={{ opacity }}>
-			{scrollButton}
-			{primaryText && primaryAction && (
-				<VSCodeButton
-					appearance="primary"
-					className={secondaryText ? "flex-1 mr-[6px]" : "flex-[2]"}
-					disabled={!canInteract}
-					onClick={() => handleActionClick(primaryAction, inputValue, selectedImages, selectedFiles)}>
-					{primaryText}
-				</VSCodeButton>
-			)}
-			{secondaryText && secondaryAction && (
-				<VSCodeButton
-					appearance="secondary"
-					className={primaryText ? "flex-1" : "flex-[2]"}
-					disabled={!canInteract}
-					onClick={() => handleActionClick(secondaryAction, inputValue, selectedImages, selectedFiles)}>
-					{secondaryText}
-				</VSCodeButton>
-			)}
-		</div>
+		<>
+			{notice}
+			<div className="relative flex px-[15px]" style={{ opacity }}>
+				{scrollButton}
+				{primaryText && primaryAction && (
+					<VSCodeButton
+						appearance="primary"
+						className={secondaryText ? "flex-1 mr-[6px]" : "flex-[2]"}
+						disabled={!canInteract}
+						onClick={() => handleActionClick(primaryAction, inputValue, selectedImages, selectedFiles)}>
+						{primaryText}
+					</VSCodeButton>
+				)}
+				{secondaryText && secondaryAction && (
+					<VSCodeButton
+						appearance="secondary"
+						className={primaryText ? "flex-1" : "flex-[2]"}
+						disabled={!canInteract}
+						onClick={() => handleActionClick(secondaryAction, inputValue, selectedImages, selectedFiles)}>
+						{secondaryText}
+					</VSCodeButton>
+				)}
+			</div>
+		</>
 	)
 }

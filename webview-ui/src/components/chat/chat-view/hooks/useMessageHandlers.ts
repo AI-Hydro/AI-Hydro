@@ -7,6 +7,8 @@ import { SlashServiceClient, TaskServiceClient } from "@/services/grpc-client"
 import type { ButtonActionType } from "../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../types/chatTypes"
 
+export const STALE_ASK_NOTICE = "That request changed — review again"
+
 /**
  * Custom hook for managing message handlers
  * Handles sending messages, button clicks, and task management
@@ -23,7 +25,24 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 		setEnableButtons,
 		aihydroAsk,
 		lastMessage,
+		setAskNotice,
 	} = chatState
+
+	// Every ask response names the ask it answers (W2-E1, M-1): the ts of the pending ask message, or `askTsOverride`
+	// (an inline card passes its own). The host drops a response whose ask has since changed and says so; the user
+	// then reviews the new request instead of silently answering it. Resolves true when the response was dropped.
+	const answerAsk = useCallback(
+		async (fields: Partial<AskResponseRequest>, askTsOverride?: number): Promise<boolean> => {
+			const askTs = askTsOverride ?? (lastMessage?.type === "ask" ? lastMessage.ts : 0)
+			const result = await TaskServiceClient.askResponse(AskResponseRequest.create({ ...fields, askTs }))
+			if (result?.stale) {
+				setAskNotice?.(STALE_ASK_NOTICE)
+				return true
+			}
+			return false
+		},
+		[lastMessage, setAskNotice],
+	)
 
 	// Handle sending a message
 	const handleSendMessage = useCallback(
@@ -67,14 +86,17 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 						case "new_task":
 						case "condense":
 						case "report_bug":
-							await TaskServiceClient.askResponse(
-								AskResponseRequest.create({
+							if (
+								await answerAsk({
 									responseType: "messageResponse",
 									text: messageToSend,
 									images,
 									files,
-								}),
-							)
+								})
+							) {
+								// Dropped as stale: keep the draft, quote and attachments so nothing is lost.
+								return
+							}
 							break
 					}
 				}
@@ -92,6 +114,7 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 			}
 		},
 		[
+			answerAsk,
 			messages.length,
 			aihydroAsk,
 			activeQuote,
@@ -111,15 +134,15 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 			if (aihydroAsk !== "completion_result" || !text.trim()) {
 				return false
 			}
-			await TaskServiceClient.askResponse(
-				AskResponseRequest.create({ responseType: "messageResponse", text, images: [], files: [] }),
-			)
+			if (await answerAsk({ responseType: "messageResponse", text, images: [], files: [] })) {
+				return false
+			}
 			// The agent is working again: same lock a normal reply applies.
 			setSendingDisabled(true)
 			setEnableButtons(false)
 			return true
 		},
-		[aihydroAsk, setSendingDisabled, setEnableButtons],
+		[answerAsk, aihydroAsk, setSendingDisabled, setEnableButtons],
 	)
 
 	// Start a new task
@@ -138,76 +161,58 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 
 	// Execute button action based on type
 	const executeButtonAction = useCallback(
-		async (actionType: ButtonActionType, text?: string, images?: string[], files?: string[]) => {
+		async (actionType: ButtonActionType, text?: string, images?: string[], files?: string[], askTs?: number) => {
 			const trimmedInput = text?.trim()
 			const hasContent = trimmedInput || (images && images.length > 0) || (files && files.length > 0)
 
 			switch (actionType) {
 				case "retry":
 					// For API retry (api_req_failed), always send simple approval without content
-					await TaskServiceClient.askResponse(
-						AskResponseRequest.create({
-							responseType: "yesButtonClicked",
-						}),
-					)
+					if (await answerAsk({ responseType: "yesButtonClicked" }, askTs)) {
+						break
+					}
 					clearInputState()
 					break
 				case "approve":
-					if (hasContent) {
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "yesButtonClicked",
-								text: trimmedInput,
-								images: images,
-								files: files,
-							}),
+					if (
+						await answerAsk(
+							hasContent
+								? { responseType: "yesButtonClicked", text: trimmedInput, images: images, files: files }
+								: { responseType: "yesButtonClicked" },
+							askTs,
 						)
-					} else {
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "yesButtonClicked",
-							}),
-						)
+					) {
+						break
 					}
 					clearInputState()
 					break
 
 				case "reject":
-					if (hasContent) {
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "noButtonClicked",
-								text: trimmedInput,
-								images: images,
-								files: files,
-							}),
+					if (
+						await answerAsk(
+							hasContent
+								? { responseType: "noButtonClicked", text: trimmedInput, images: images, files: files }
+								: { responseType: "noButtonClicked" },
+							askTs,
 						)
-					} else {
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "noButtonClicked",
-							}),
-						)
+					) {
+						break
 					}
 					clearInputState()
 					break
 
 				case "proceed":
-					if (hasContent) {
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "yesButtonClicked",
-								text: trimmedInput,
-								images: images,
-								files: files,
-							}),
+					if (
+						await answerAsk(
+							hasContent
+								? { responseType: "yesButtonClicked", text: trimmedInput, images: images, files: files }
+								: { responseType: "yesButtonClicked" },
+							askTs,
 						)
-					} else {
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "yesButtonClicked",
-							}),
-						)
+					) {
+						break
+					}
+					if (!hasContent) {
 						clearInputState()
 					}
 					break
@@ -255,6 +260,7 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 			}
 		},
 		[
+			answerAsk,
 			aihydroAsk,
 			lastMessage,
 			messages,

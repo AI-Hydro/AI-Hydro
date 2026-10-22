@@ -1,3 +1,9 @@
+import {
+	alwaysAllowReasonText,
+	alwaysAllowVerdict,
+	describeAutoApproveRefusal,
+	parseAutoApproveRefusal,
+} from "@shared/aihydro/alwaysAllowPolicy"
 import { DEFAULT_MCP_TIMEOUT_SECONDS, McpServer } from "@shared/mcp"
 import { StringRequest } from "@shared/proto/cline/common"
 import {
@@ -135,16 +141,42 @@ const ServerRow = ({
 			})
 	}
 
+	const [autoRunNotice, setAutoRunNotice] = useState<string | undefined>()
+
+	// Tools the host would accept a grant for (the host re-checks; this only avoids sending a request it would refuse).
+	const eligibleTools = (server.tools ?? []).filter(
+		(tool) =>
+			alwaysAllowVerdict({
+				serverTrusted: server.trust?.trusted === true,
+				serverConnected: server.status === "connected",
+				tools: server.tools,
+				toolName: tool.name,
+			}).ok,
+	)
+	// "All" means every tool the host would accept; ineligible tools are never requested.
+	const allGranted = eligibleTools.length > 0 ? eligibleTools.every((tool) => tool.autoApprove) : false
+	const allBlockedReason =
+		eligibleTools.length === 0
+			? alwaysAllowReasonText(server.trust?.trusted === true ? "unknown_effect" : "untrusted_server")
+			: undefined
+
 	const handleAutoApproveChange = () => {
 		if (!server.name) {
 			return
 		}
+		// Turning on sends only the eligible tools; turning off sends every tool (removal is always allowed).
+		const enabling = !allGranted
+		const toolNames = enabling ? eligibleTools.map((tool) => tool.name) : server.tools?.map((tool) => tool.name) || []
+		if (enabling && toolNames.length === 0) {
+			return
+		}
+		setAutoRunNotice(undefined)
 
 		McpServiceClient.toggleToolAutoApprove(
 			ToggleToolAutoApproveRequest.create({
 				serverName: server.name,
-				toolNames: server.tools?.map((tool) => tool.name) || [],
-				autoApprove: !server.tools?.every((tool) => tool.autoApprove),
+				toolNames,
+				autoApprove: enabling,
 			}),
 		)
 			.then((response) => {
@@ -152,7 +184,13 @@ const ServerRow = ({
 				setMcpServers(mcpServers)
 			})
 			.catch((error) => {
-				console.error("Error toggling all tools auto-approve", error)
+				const parsed = parseAutoApproveRefusal(error instanceof Error ? error.message : String(error))
+				if (parsed) {
+					setAutoRunNotice(describeAutoApproveRefusal(parsed))
+				} else {
+					console.error("Error toggling all tools auto-approve", error)
+					setAutoRunNotice("Could not update auto-run. Nothing was changed.")
+				}
 			})
 	}
 
@@ -370,16 +408,44 @@ const ServerRow = ({
 											width: "100%",
 										}}>
 										{server.tools.map((tool) => (
-											<McpToolRow key={tool.name} serverName={server.name} tool={tool} />
+											<McpToolRow
+												key={tool.name}
+												serverConnected={server.status === "connected"}
+												serverName={server.name}
+												serverTools={server.tools}
+												serverTrusted={server.trust?.trusted === true}
+												tool={tool}
+											/>
 										))}
 										{server.name && autoApprovalSettings.enabled && autoApprovalSettings.actions.useMcp && (
 											<VSCodeCheckbox
-												checked={server.tools.every((tool) => tool.autoApprove)}
+												checked={allGranted}
 												data-tool="all-tools"
+												disabled={!!allBlockedReason}
 												onChange={handleAutoApproveChange}
-												style={{ marginBottom: -10 }}>
+												style={{ marginBottom: -10 }}
+												title={allBlockedReason}>
 												Auto-run all tools
 											</VSCodeCheckbox>
+										)}
+										{allBlockedReason && (
+											<div
+												data-testid="auto-run-all-blocked-reason"
+												style={{ marginTop: "10px", opacity: 0.8, fontSize: "12px" }}>
+												{allBlockedReason}
+											</div>
+										)}
+										{autoRunNotice && (
+											<div
+												data-testid="auto-run-refusal"
+												role="alert"
+												style={{
+													marginTop: "10px",
+													fontSize: "12px",
+													color: "var(--vscode-errorForeground)",
+												}}>
+												{autoRunNotice}
+											</div>
 										)}
 									</div>
 								) : (

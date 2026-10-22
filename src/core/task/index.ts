@@ -123,6 +123,7 @@ import {
 	SUBAGENTS_DISABLED_MESSAGE,
 	subagentLaunchRefusal,
 } from "./commandPolicy"
+import { acceptAskResponse } from "./askResponseBinding"
 import { FocusChainManager } from "./focus-chain"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
@@ -673,11 +674,18 @@ export class Task {
 		return result
 	}
 
-	async handleWebviewAskResponse(askResponse: AiHydroAskResponse, text?: string, images?: string[], files?: string[]) {
-		this.taskState.askResponse = askResponse
-		this.taskState.askResponseText = text
-		this.taskState.askResponseImages = images
-		this.taskState.askResponseFiles = files
+	/**
+	 * `askTs` binds the response to the ask it answers (see askResponseBinding.ts); 0/undefined is the legacy or
+	 * internal path (e.g. the auto-retry below). Returns `{ stale: true }` when the response was dropped.
+	 */
+	async handleWebviewAskResponse(
+		askResponse: AiHydroAskResponse,
+		text?: string,
+		images?: string[],
+		files?: string[],
+		askTs?: number,
+	): Promise<{ stale: boolean }> {
+		return acceptAskResponse(this.taskState, { response: askResponse, text, images, files, askTs })
 	}
 
 	async say(

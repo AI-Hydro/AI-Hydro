@@ -1,22 +1,46 @@
+import {
+	alwaysAllowReasonText,
+	alwaysAllowVerdict,
+	describeAutoApproveRefusal,
+	parseAutoApproveRefusal,
+} from "@shared/aihydro/alwaysAllowPolicy"
 import { McpTool } from "@shared/mcp"
 import { ToggleToolAutoApproveRequest } from "@shared/proto/cline/mcp"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
+import { useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { McpServiceClient } from "@/services/grpc-client"
 
 type McpToolRowProps = {
 	tool: McpTool
 	serverName?: string
+	/** The host's trust verdict for the server (McpServer.trust?.trusted) and its connection state. */
+	serverTrusted?: boolean
+	serverConnected?: boolean
+	/** The server's listed tools, for the duplicate-name check in the verdict. */
+	serverTools?: McpTool[]
 	// In the chat transcript we want a slim row: the full tool description and the
 	// parameter schema are noise there (the actual call arguments render separately).
 	compact?: boolean
 }
 
-const McpToolRow = ({ tool, serverName, compact = false }: McpToolRowProps) => {
+const McpToolRow = ({ tool, serverName, serverTrusted, serverConnected, serverTools, compact = false }: McpToolRowProps) => {
 	const { autoApprovalSettings } = useExtensionState()
 
 	const { setMcpServers } = useExtensionState()
+	const [refusal, setRefusal] = useState<string | undefined>()
+
+	// Mirrors the host's refusal (McpHub.toggleToolAutoApproveRPC): the host decides, this only avoids offering
+	// a request it would refuse. Unchecking is always allowed.
+	const verdict = alwaysAllowVerdict({
+		serverTrusted: serverTrusted === true,
+		serverConnected: serverConnected !== false,
+		tools: serverTools ?? [tool],
+		toolName: tool.name,
+	})
+	const addBlocked = !tool.autoApprove && !verdict.ok
+	const blockedReason = !verdict.ok ? alwaysAllowReasonText(verdict.reason) : undefined
 
 	// Accept the event object
 	const handleAutoApproveChange = (_event: any) => {
@@ -24,6 +48,7 @@ const McpToolRow = ({ tool, serverName, compact = false }: McpToolRowProps) => {
 			return
 		}
 
+		setRefusal(undefined)
 		McpServiceClient.toggleToolAutoApprove(
 			ToggleToolAutoApproveRequest.create({
 				serverName,
@@ -36,7 +61,13 @@ const McpToolRow = ({ tool, serverName, compact = false }: McpToolRowProps) => {
 				setMcpServers(mcpServers)
 			})
 			.catch((error) => {
-				console.error("Error toggling tool auto-approve", error)
+				const parsed = parseAutoApproveRefusal(error instanceof Error ? error.message : String(error))
+				if (parsed) {
+					setRefusal(describeAutoApproveRefusal(parsed))
+				} else {
+					console.error("Error toggling tool auto-approve", error)
+					setRefusal("Could not update auto-run. Nothing was changed.")
+				}
 			})
 	}
 	return (
@@ -54,11 +85,29 @@ const McpToolRow = ({ tool, serverName, compact = false }: McpToolRowProps) => {
 					<span style={{ fontWeight: 500 }}>{tool.name}</span>
 				</div>
 				{serverName && autoApprovalSettings.enabled && autoApprovalSettings.actions.useMcp && (
-					<VSCodeCheckbox checked={tool.autoApprove ?? false} data-tool={tool.name} onChange={handleAutoApproveChange}>
+					<VSCodeCheckbox
+						checked={tool.autoApprove ?? false}
+						data-tool={tool.name}
+						disabled={addBlocked}
+						onChange={handleAutoApproveChange}
+						title={addBlocked ? blockedReason : undefined}>
 						Tool auto-run
 					</VSCodeCheckbox>
 				)}
 			</div>
+			{addBlocked && blockedReason && (
+				<div data-testid="auto-run-blocked-reason" style={{ marginTop: "4px", opacity: 0.8, fontSize: "12px" }}>
+					{blockedReason}
+				</div>
+			)}
+			{refusal && (
+				<div
+					data-testid="auto-run-refusal"
+					role="alert"
+					style={{ marginTop: "4px", fontSize: "12px", color: "var(--vscode-errorForeground)" }}>
+					{refusal}
+				</div>
+			)}
 			{tool.description && (
 				<div
 					style={{

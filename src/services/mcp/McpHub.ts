@@ -23,6 +23,13 @@ import {
 	McpToolCallResponse,
 	MIN_MCP_TIMEOUT_SECONDS,
 } from "@shared/mcp"
+import {
+	type AutoApproveRefusal,
+	alwaysAllowVerdict,
+	formatAutoApproveRefusal,
+	parseAutoApproveRefusal,
+} from "@shared/aihydro/alwaysAllowPolicy"
+import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import { convertMcpServersToProtoMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { fileExistsAtPath } from "@utils/fs"
 import { secondsToMs } from "@utils/time"
@@ -1033,12 +1040,40 @@ export class McpHub {
 			const content = await fs.readFile(settingsPath, "utf-8")
 			const config = JSON.parse(content)
 
-			// Initialize autoApprove if it doesn't exist
-			if (!config.mcpServers[serverName].autoApprove) {
-				config.mcpServers[serverName].autoApprove = []
+			const entry = config?.mcpServers?.[serverName]
+			if (!entry || typeof entry !== "object") {
+				throw new Error(`Server "${serverName}" not found in MCP configuration`)
 			}
 
-			const autoApprove = config.mcpServers[serverName].autoApprove
+			// Granting is checked against the host's own view of the connection (never the webview's), synchronously
+			// after the file read and right before the write, so nothing can change between verdict and write.
+			// Removing a grant tightens policy and is always allowed.
+			if (shouldAllow) {
+				const connection = this.connections.find((conn) => conn.server.name === serverName)
+				const trusted = connection ? isServerTrusted(connection.server) : false
+				const refused: AutoApproveRefusal["refused"] = []
+				for (const tool of toolNames) {
+					const verdict = alwaysAllowVerdict({
+						serverTrusted: trusted,
+						serverConnected: connection?.server.status === "connected",
+						tools: connection?.server.tools,
+						toolName: tool,
+					})
+					if (!verdict.ok) {
+						refused.push({ tool, reason: verdict.reason })
+					}
+				}
+				if (refused.length > 0) {
+					throw new Error(formatAutoApproveRefusal({ server: serverName, refused }))
+				}
+			}
+
+			// Initialize autoApprove if it doesn't exist
+			if (!Array.isArray(entry.autoApprove)) {
+				entry.autoApprove = []
+			}
+
+			const autoApprove = entry.autoApprove
 			for (const toolName of toolNames) {
 				const toolIndex = autoApprove.indexOf(toolName)
 
@@ -1070,56 +1105,11 @@ export class McpHub {
 			const serverOrder = Object.keys(config.mcpServers || {})
 			return this.getSortedMcpServers(serverOrder)
 		} catch (error) {
-			console.error("Failed to update autoApprove settings:", error)
-			throw error // Re-throw to ensure the error is properly handled
-		}
-	}
-
-	async toggleToolAutoApprove(serverName: string, toolNames: string[], shouldAllow: boolean): Promise<void> {
-		try {
-			const settingsPath = await this.getMcpSettingsFilePath()
-			const content = await fs.readFile(settingsPath, "utf-8")
-			const config = JSON.parse(content)
-
-			// Initialize autoApprove if it doesn't exist
-			if (!config.mcpServers[serverName].autoApprove) {
-				config.mcpServers[serverName].autoApprove = []
+			if (parseAutoApproveRefusal(error instanceof Error ? error.message : undefined)) {
+				console.warn("Refused to auto-approve MCP tools:", error instanceof Error ? error.message : error)
+			} else {
+				console.error("Failed to update autoApprove settings:", error)
 			}
-
-			const autoApprove = config.mcpServers[serverName].autoApprove
-			for (const toolName of toolNames) {
-				const toolIndex = autoApprove.indexOf(toolName)
-
-				if (shouldAllow && toolIndex === -1) {
-					// Add tool to autoApprove list
-					autoApprove.push(toolName)
-				} else if (!shouldAllow && toolIndex !== -1) {
-					// Remove tool from autoApprove list
-					autoApprove.splice(toolIndex, 1)
-				}
-			}
-
-			await this.writeSettingsFromUi(settingsPath, config, {
-				server: serverName,
-				tools: shouldAllow ? toolNames : [],
-			})
-
-			// Update the tools list to reflect the change
-			const connection = this.connections.find((conn) => conn.server.name === serverName)
-			if (connection && connection.server.tools) {
-				// Update the autoApprove property of each tool in the in-memory server object
-				connection.server.tools = markAutoApprove(
-					connection.server.tools,
-					this.policyGate.acceptedAutoApprove(serverName),
-				)
-				await this.notifyWebviewOfServerChanges()
-			}
-		} catch (error) {
-			console.error("Failed to update autoApprove settings:", error)
-			HostProvider.window.showMessage({
-				type: ShowMessageType.ERROR,
-				message: "Failed to update autoApprove settings",
-			})
 			throw error // Re-throw to ensure the error is properly handled
 		}
 	}

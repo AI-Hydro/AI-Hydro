@@ -8,7 +8,7 @@ vi.mock("@/services/grpc-client", () => ({
 }))
 vi.mock("@/context/ExtensionStateContext", () => ({ useExtensionState: () => ({ backgroundCommandRunning: false }) }))
 
-import { useMessageHandlers } from "./useMessageHandlers"
+import { STALE_ASK_NOTICE, useMessageHandlers } from "./useMessageHandlers"
 
 function state(ask: string | undefined) {
 	return {
@@ -60,5 +60,91 @@ describe("sendAnswerFeedback", () => {
 			expect(st.setEnableButtons).not.toHaveBeenCalled()
 		}
 		expect(askResponse).not.toHaveBeenCalled()
+	})
+})
+
+describe("ask responses are bound to the ask ts (W2-E1, M-1)", () => {
+	beforeEach(() => {
+		askResponse.mockReset()
+		askResponse.mockResolvedValue({})
+	})
+
+	const askState = (ts: number) =>
+		({ ...state("tool"), lastMessage: { ts, type: "ask", ask: "tool" }, setAskNotice: vi.fn() }) as any
+
+	it("executeButtonAction sends the pending ask's ts, for every response action", async () => {
+		const st = askState(1234)
+		const { result } = renderHook(() => useMessageHandlers([], st))
+		for (const action of ["approve", "reject", "proceed", "retry"] as const) {
+			await act(async () => {
+				await result.current.executeButtonAction(action, "")
+			})
+		}
+		for (const call of askResponse.mock.calls) {
+			expect(call[0].askTs).toBe(1234)
+		}
+		expect(askResponse).toHaveBeenCalledTimes(4)
+	})
+
+	it("an explicit ts (an inline card's own) wins over the pending ask", async () => {
+		const st = askState(1234)
+		const { result } = renderHook(() => useMessageHandlers([], st))
+		await act(async () => {
+			await result.current.executeButtonAction("approve", "", [], [], 99)
+		})
+		expect(askResponse.mock.calls[0][0].askTs).toBe(99)
+	})
+
+	it("messageResponse (handleSendMessage) sends the pending ask's ts", async () => {
+		const st = askState(555)
+		const { result } = renderHook(() => useMessageHandlers([{ ts: 1, type: "say", say: "task", text: "t" }] as any, st))
+		await act(async () => {
+			await result.current.handleSendMessage("hello", [], [])
+		})
+		expect(askResponse.mock.calls[0][0]).toMatchObject({ responseType: "messageResponse", askTs: 555 })
+	})
+
+	it("sends ts 0 when the last message is not an ask", async () => {
+		const st = state("tool")
+		const { result } = renderHook(() => useMessageHandlers([], st))
+		await act(async () => {
+			await result.current.executeButtonAction("approve", "")
+		})
+		expect(askResponse.mock.calls[0][0].askTs).toBe(0)
+	})
+
+	it("a stale result shows the notice and keeps the draft and attachments", async () => {
+		askResponse.mockResolvedValue({ stale: true })
+		const st = askState(10)
+		const { result } = renderHook(() => useMessageHandlers([], st))
+		await act(async () => {
+			await result.current.executeButtonAction("approve", "my feedback", [], [])
+		})
+		expect(st.setAskNotice).toHaveBeenCalledWith(STALE_ASK_NOTICE)
+		expect(STALE_ASK_NOTICE).toBe("That request changed \u2014 review again")
+		expect(st.setInputValue).not.toHaveBeenCalled()
+		expect(st.setSelectedImages).not.toHaveBeenCalled()
+	})
+
+	it("a stale reply through handleSendMessage keeps the draft and does not lock the input", async () => {
+		askResponse.mockResolvedValue({ stale: true })
+		const st = askState(10)
+		const { result } = renderHook(() => useMessageHandlers([{ ts: 1, type: "say", say: "task", text: "t" }] as any, st))
+		await act(async () => {
+			await result.current.handleSendMessage("hello", [], [])
+		})
+		expect(st.setAskNotice).toHaveBeenCalledWith(STALE_ASK_NOTICE)
+		expect(st.setInputValue).not.toHaveBeenCalled()
+		expect(st.setSendingDisabled).not.toHaveBeenCalled()
+	})
+
+	it("a fresh result clears the draft as before", async () => {
+		const st = askState(10)
+		const { result } = renderHook(() => useMessageHandlers([], st))
+		await act(async () => {
+			await result.current.executeButtonAction("approve", "ok")
+		})
+		expect(st.setAskNotice).not.toHaveBeenCalled()
+		expect(st.setInputValue).toHaveBeenCalledWith("")
 	})
 })

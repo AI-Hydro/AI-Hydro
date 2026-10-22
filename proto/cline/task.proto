@@ -29,7 +29,7 @@ service TaskService {
   // Gets filtered task history
   rpc getTaskHistory(GetTaskHistoryRequest) returns (TaskHistoryArray);
   // Sends a response to a previous ask operation
-  rpc askResponse(AskResponseRequest) returns (Empty);
+  rpc askResponse(AskResponseRequest) returns (AskResponseResult);
   // Records task feedback (thumbs up/down)
   rpc taskFeedback(StringRequest) returns (Empty);
   // Shows task completion changes diff in a view
@@ -106,6 +106,14 @@ message AskResponseRequest {
   string text = 3;
   repeated string images = 4;
   repeated string files = 5;
+  // AI-Hydro (W2-E1): ts of the ask message this response answers. The host drops the response when it no longer
+  // matches the pending ask. 0 = legacy/internal caller (not bound).
+  int64 ask_ts = 1000;
+}
+
+// Result of an ask response. stale=true means the response was dropped because the ask had changed.
+message AskResponseResult {
+  bool stale = 1;
 }
 
 // Request for executing a quick win task
