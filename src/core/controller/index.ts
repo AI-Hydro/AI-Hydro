@@ -76,6 +76,7 @@ import { getHostProtectedRoots } from "../task/protectedRoots"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { appendAiHydroStealthModels } from "./models/refreshOpenRouterModels"
 import { sendStateUpdate } from "./state/subscribeToState"
+import { clearPending } from "./ui/pendingAskBadge"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
 
 /*
@@ -1339,6 +1340,7 @@ export class Controller {
 			await this.stateManager.clearTaskSettings()
 		}
 		await this.task?.abortTask()
+		clearPending() // cancel and new task: nothing is waiting on the user any more
 		this.task = undefined // removes reference to it, so once promises end it will be garbage collected
 	}
 

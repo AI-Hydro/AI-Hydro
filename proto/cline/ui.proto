@@ -302,6 +302,9 @@ service UiService {
   // Subscribe to focus chat input events
   rpc subscribeToFocusChatInput(EmptyRequest) returns (stream Empty);
   
+  // Subscribe to focus pending prompt events (the approval group of the ask the agent is waiting on)
+  rpc subscribeToFocusPendingPrompt(EmptyRequest) returns (stream Empty);
+
   // Subscribe to webview visibility change events
   rpc subscribeToDidBecomeVisible(EmptyRequest) returns (stream Empty);
 
