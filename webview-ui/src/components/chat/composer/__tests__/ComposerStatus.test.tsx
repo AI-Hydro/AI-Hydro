@@ -7,9 +7,10 @@ import ComposerStatus, { CLAIM_DISCLAIMER } from "../ComposerStatus"
 
 let settings: AutoApprovalSettings = DEFAULT_AUTO_APPROVAL_SETTINGS
 let servers: McpServer[] = []
+let yolo = false
 
 vi.mock("@/context/ExtensionStateContext", () => ({
-	useExtensionState: () => ({ autoApprovalSettings: settings, mcpServers: servers }),
+	useExtensionState: () => ({ autoApprovalSettings: settings, mcpServers: servers, yoloModeToggled: yolo }),
 }))
 vi.mock("@/hooks/useAutoApproveActions", () => ({
 	useAutoApproveActions: () => ({
@@ -49,6 +50,7 @@ afterEach(() => {
 	cleanup()
 	settings = DEFAULT_AUTO_APPROVAL_SETTINGS
 	servers = []
+	yolo = false
 })
 
 describe("ComposerStatus chip", () => {
@@ -93,7 +95,7 @@ describe("ComposerStatus chip", () => {
 			],
 			[
 				"mcp always-allow",
-				{ readFiles: true },
+				{ readFiles: true, useMcp: true },
 				[
 					server([
 						{ name: "a", autoApprove: true },
@@ -116,7 +118,7 @@ describe("ComposerStatus chip", () => {
 	})
 
 	it("shows the count of MCP always-allowed tools, ignoring disabled servers", () => {
-		settings = withActions({ readFiles: true })
+		settings = withActions({ readFiles: true, useMcp: true })
 		servers = [server([{ name: "a", autoApprove: true }]), server([{ name: "b", autoApprove: true }], true)]
 		render(<ComposerStatus />)
 		expect(screen.getByTestId("auto-run-chip")).toHaveTextContent("1 MCP tool always allowed")
@@ -144,6 +146,57 @@ describe("ComposerStatus chip", () => {
 	})
 })
 
+describe("ComposerStatus YOLO and dormant MCP grants", () => {
+	it("marks YOLO as risky even when auto-run is off, with YOLO in the chip text", () => {
+		settings = withActions({ readFiles: true }, { enabled: false })
+		yolo = true
+		render(<ComposerStatus />)
+		const chip = screen.getByTestId("auto-run-chip")
+		expect(chip).toHaveTextContent("YOLO: everything auto-runs")
+		expect(screen.getByTestId("auto-run-risk")).toHaveTextContent("(risky)")
+		expect(chip.getAttribute("aria-label")).toMatch(/YOLO mode is on: everything auto-runs, even when auto-run is off/)
+	})
+
+	it("is not risky with YOLO off and the defaults", () => {
+		render(<ComposerStatus />)
+		expect(screen.queryByTestId("auto-run-risk")).toBeNull()
+		expect(deriveAutoRunPolicy(DEFAULT_AUTO_APPROVAL_SETTINGS, [], false).risky).toBe(false)
+	})
+
+	it("labels dormant MCP always-allow truthfully and still flags it", () => {
+		settings = withActions({ readFiles: true }, { enabled: false })
+		servers = [
+			server([
+				{ name: "a", autoApprove: true },
+				{ name: "b", autoApprove: true },
+			]),
+		]
+		render(<ComposerStatus />)
+		expect(screen.getByTestId("auto-run-risk")).toBeInTheDocument()
+		expect(screen.getByTestId("auto-run-chip")).toHaveTextContent(
+			"2 MCP tools set to always allow (inactive while auto-run is off)",
+		)
+	})
+
+	it("says MCP auto-run is off when only the MCP action is off", () => {
+		settings = withActions({ readFiles: true })
+		servers = [server([{ name: "a", autoApprove: true }])]
+		expect(deriveAutoRunPolicy(settings, servers).mcpLabel).toBe(
+			"1 MCP tool set to always allow (inactive while MCP auto-run is off)",
+		)
+	})
+
+	it("flags All Commands only together with read-only commands, as core gates it", () => {
+		expect(deriveAutoRunPolicy(withActions({ executeAllCommands: true }), []).risky).toBe(false)
+		expect(deriveAutoRunPolicy(withActions({ executeAllCommands: true, executeSafeCommands: true }), []).risky).toBe(true)
+	})
+
+	it("uses truthiness for the master switch like core", () => {
+		const s = withActions({ editFiles: true, editFilesExternally: true }, { enabled: undefined as unknown as boolean })
+		expect(deriveAutoRunPolicy(s, []).risky).toBe(false)
+	})
+})
+
 describe("ComposerStatus disclaimer and popover", () => {
 	it("keeps the claim disclaimer visible in the footer (owner decision O2 is pending)", () => {
 		render(<ComposerStatus />)
@@ -158,6 +211,30 @@ describe("ComposerStatus disclaimer and popover", () => {
 		expect(chip).toHaveAttribute("aria-expanded", "true")
 		expect(screen.getByText("Tool auto-run settings")).toBeInTheDocument()
 		expect(screen.getAllByText(CLAIM_DISCLAIMER)).toHaveLength(2)
+	})
+
+	it("is a labelled dialog, takes focus, closes on Escape and returns focus to the chip", () => {
+		const onStop = vi.fn()
+		render(<ComposerStatus />)
+		const chip = screen.getByTestId("auto-run-chip")
+		fireEvent.click(chip)
+		const dialog = screen.getByRole("dialog", { name: "Tool auto-run settings" })
+		expect(document.activeElement).toBe(dialog)
+		expect(screen.getByLabelText("Close")).toBeInTheDocument()
+		// a window-level listener stands in for anything that would cancel on Escape
+		window.addEventListener("keydown", onStop)
+		const bubbled = fireEvent.keyDown(dialog, { key: "Escape" })
+		window.removeEventListener("keydown", onStop)
+		expect(onStop).not.toHaveBeenCalled()
+		expect(bubbled).toBe(false)
+		expect(screen.queryByRole("dialog")).toBeNull()
+		expect(document.activeElement).toBe(chip)
+	})
+
+	it("has no favourite stars (they only fed the removed bar)", () => {
+		render(<ComposerStatus />)
+		fireEvent.click(screen.getByTestId("auto-run-chip"))
+		expect(document.querySelector(".codicon-star-empty, .codicon-star-full")).toBeNull()
 	})
 })
 

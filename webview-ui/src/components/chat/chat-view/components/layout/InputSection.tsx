@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import ChatTextArea from "@/components/chat/ChatTextArea"
 import QuotedMessagePreview from "@/components/chat/QuotedMessagePreview"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
@@ -43,6 +43,35 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
 	const { isAtBottom, scrollToBottomAuto } = scrollBehavior
 
+	// One guard for every stop path (button and Escape). Controller.cancelTask waits for the task to abort and then
+	// re-initialises it, so concurrent cancels would re-init twice. Cleared when the task stops running, with a
+	// safety reset in case the cancel never takes effect.
+	const [stopping, setStopping] = useState(false)
+	const stoppingRef = useRef(false)
+	useEffect(() => {
+		if (!isTaskRunning) {
+			stoppingRef.current = false
+			setStopping(false)
+			return
+		}
+		if (!stopping) {
+			return
+		}
+		const t = setTimeout(() => {
+			stoppingRef.current = false
+			setStopping(false)
+		}, 8000)
+		return () => clearTimeout(t)
+	}, [isTaskRunning, stopping])
+	const requestStop = useCallback(() => {
+		if (!isTaskRunning || stoppingRef.current) {
+			return
+		}
+		stoppingRef.current = true
+		setStopping(true)
+		messageHandlers.executeButtonAction("cancel")
+	}, [isTaskRunning, messageHandlers])
+
 	return (
 		<>
 			{activeQuote && (
@@ -58,12 +87,9 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			<ChatTextArea
 				activeQuote={activeQuote}
 				inputValue={inputValue}
+				isStopping={stopping}
 				isTaskRunning={isTaskRunning}
-				onEscape={() => {
-					if (isTaskRunning) {
-						messageHandlers.executeButtonAction("cancel")
-					}
-				}}
+				onEscape={requestStop}
 				onFocusChange={handleFocusChange}
 				onHeightChange={() => {
 					if (isAtBottom) {
@@ -72,7 +98,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 				}}
 				onSelectFilesAndImages={selectFilesAndImages}
 				onSend={() => messageHandlers.handleSendMessage(inputValue, selectedImages, selectedFiles)}
-				onStop={() => messageHandlers.executeButtonAction("cancel")}
+				onStop={requestStop}
 				placeholderText={placeholderText}
 				ref={textAreaRef}
 				selectedFiles={selectedFiles}

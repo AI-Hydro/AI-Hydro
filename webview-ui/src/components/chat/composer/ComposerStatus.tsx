@@ -25,10 +25,14 @@ interface ComposerStatusProps {
  * auto-run settings content as a popover.
  */
 export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusProps) {
-	const { autoApprovalSettings, mcpServers } = useExtensionState()
+	const { autoApprovalSettings, mcpServers, yoloModeToggled } = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const rowRef = useRef<HTMLDivElement>(null)
-	const policy = useMemo(() => deriveAutoRunPolicy(autoApprovalSettings, mcpServers), [autoApprovalSettings, mcpServers])
+	const chipRef = useRef<HTMLButtonElement>(null)
+	const policy = useMemo(
+		() => deriveAutoRunPolicy(autoApprovalSettings, mcpServers, !!yoloModeToggled),
+		[autoApprovalSettings, mcpServers, yoloModeToggled],
+	)
 
 	// Count of MCP tools is part of the visible chip text so it is never colour- or tooltip-only.
 	const showMcpCount = policy.mcpAlwaysAllowed > 0
@@ -42,6 +46,7 @@ export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusP
 					className="inline-flex flex-wrap items-center gap-x-1 py-0.5 min-h-[24px] px-2 rounded-[10px] text-[11px] cursor-pointer border border-[var(--vscode-editorGroup-border)] bg-transparent text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)] max-w-full"
 					data-testid="auto-run-chip"
 					onClick={() => setOpen((v) => !v)}
+					ref={chipRef}
 					type="button">
 					<span className="min-w-0 text-left">{policy.chipText}</span>
 					{policy.risky && (
@@ -54,9 +59,7 @@ export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusP
 						</span>
 					)}
 					{showMcpCount && (
-						<span className="shrink-0 text-[var(--vscode-descriptionForeground)]">
-							{policy.mcpAlwaysAllowed} MCP {policy.mcpAlwaysAllowed === 1 ? "tool" : "tools"} always allowed
-						</span>
+						<span className="shrink-0 text-[var(--vscode-descriptionForeground)]">{policy.mcpLabel}</span>
 					)}
 					<span aria-hidden="true" className={`codicon codicon-chevron-${open ? "down" : "up"} text-[12px] shrink-0`} />
 				</button>
@@ -79,6 +82,7 @@ export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusP
 				}
 				isVisible={open}
 				NOTIFICATIONS_SETTING={NOTIFICATIONS_SETTING}
+				restoreFocusRef={chipRef}
 				setIsVisible={setOpen}
 			/>
 		</div>

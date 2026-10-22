@@ -19,6 +19,8 @@ interface AutoApproveModalProps {
 	NOTIFICATIONS_SETTING: ActionMetadata
 	/** Optional content rendered under the title (the composer popover puts the claim disclaimer here). */
 	header?: React.ReactNode
+	/** Escape closes the popover and moves focus here (the control that opened it). */
+	restoreFocusRef?: React.RefObject<HTMLElement>
 }
 
 const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
@@ -28,11 +30,13 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 	ACTION_METADATA,
 	NOTIFICATIONS_SETTING,
 	header,
+	restoreFocusRef,
 }) => {
 	const { autoApprovalSettings } = useExtensionState()
-	const { isChecked, isFavorited, toggleFavorite, updateAction, updateMaxRequests } = useAutoApproveActions()
+	const { isChecked, updateAction, updateMaxRequests } = useAutoApproveActions()
 
 	const modalRef = useRef<HTMLDivElement>(null)
+	const dialogRef = useRef<HTMLDivElement>(null)
 	const itemsContainerRef = useRef<HTMLDivElement>(null)
 	const { width: viewportWidth, height: viewportHeight } = useWindowSize()
 	const [arrowPosition, setArrowPosition] = useState(0)
@@ -46,6 +50,13 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 		}
 		setIsVisible(false)
 	})
+
+	// Move focus into the dialog when it opens.
+	useEffect(() => {
+		if (isVisible) {
+			dialogRef.current?.focus()
+		}
+	}, [isVisible])
 
 	// Calculate positions for modal and arrow
 	useEffect(() => {
@@ -128,8 +139,22 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 	return (
 		<div className="overflow-hidden" ref={modalRef}>
 			<div
+				aria-label="Tool auto-run settings"
+				aria-modal="false"
 				className="fixed left-[15px] right-[15px] border border-[var(--vscode-editorGroup-border)] rounded z-[1000] flex flex-col"
-				style={calculateModalStyle()}>
+				onKeyDown={(e) => {
+					if (e.key === "Escape") {
+						// Closes the popover only; never reaches the prompt's stop-task Escape.
+						e.stopPropagation()
+						e.preventDefault()
+						setIsVisible(false)
+						restoreFocusRef?.current?.focus()
+					}
+				}}
+				ref={dialogRef}
+				role="dialog"
+				style={{ ...calculateModalStyle(), outline: "none" }}
+				tabIndex={-1}>
 				<div
 					className="fixed w-[10px] h-[10px] z-[-1] rotate-45 border-r border-b border-[var(--vscode-editorGroup-border)]"
 					style={{
@@ -146,7 +171,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 							placement="top">
 							<div className="text-base font-semibold mb-1">Tool auto-run settings</div>
 						</HeroTooltip>
-						<VSCodeButton appearance="icon" onClick={() => setIsVisible(false)}>
+						<VSCodeButton appearance="icon" aria-label="Close" onClick={() => setIsVisible(false)}>
 							<span className="codicon codicon-close text-[10px]"></span>
 						</VSCodeButton>
 					</div>
@@ -177,14 +202,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 
 						{/* All items in a single list - CSS Grid will handle the column distribution */}
 						{ACTION_METADATA.map((action) => (
-							<AutoApproveMenuItem
-								action={action}
-								isChecked={isChecked}
-								isFavorited={isFavorited}
-								key={action.id}
-								onToggle={updateAction}
-								onToggleFavorite={toggleFavorite}
-							/>
+							<AutoApproveMenuItem action={action} isChecked={isChecked} key={action.id} onToggle={updateAction} />
 						))}
 					</div>
 
@@ -195,10 +213,8 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 					<AutoApproveMenuItem
 						action={NOTIFICATIONS_SETTING}
 						isChecked={isChecked}
-						isFavorited={isFavorited}
 						key={NOTIFICATIONS_SETTING.id}
 						onToggle={updateAction}
-						onToggleFavorite={toggleFavorite}
 					/>
 
 					<HeroTooltip

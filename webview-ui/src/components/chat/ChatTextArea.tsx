@@ -95,6 +95,8 @@ interface ChatTextAreaProps {
 	onEscape?: () => void
 	/** While true the send button is replaced by a compact stop button that calls `onStop`. */
 	isTaskRunning?: boolean
+	/** A stop request is in flight: the stop button is disabled and says so. */
+	isStopping?: boolean
 	onStop?: () => void
 }
 
@@ -232,6 +234,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			sendingDisabled,
 			placeholderText,
 			isTaskRunning = false,
+			isStopping = false,
 			onStop,
 			selectedFiles,
 			selectedImages,
@@ -1654,11 +1657,13 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							)}
 							{!isVoiceRecording && isTaskRunning && (
 								<button
-									aria-label="Stop task"
-									className="flex items-center justify-center w-[28px] h-[28px] rounded-md cursor-pointer border border-[var(--vscode-editorGroup-border)] bg-transparent text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)]"
+									aria-busy={isStopping}
+									aria-label={isStopping ? "Stopping…" : "Stop task"}
+									className="flex items-center justify-center w-[28px] h-[28px] rounded-md cursor-pointer border border-[var(--vscode-editorGroup-border)] bg-transparent text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)] disabled:opacity-50 disabled:cursor-not-allowed"
 									data-testid="stop-button"
+									disabled={isStopping}
 									onClick={() => onStop?.()}
-									title="Stop task (Esc)"
+									title={isStopping ? "Stopping…" : "Stop task (Esc)"}
 									type="button">
 									<span aria-hidden="true" className="codicon codicon-debug-stop text-sm" />
 								</button>
