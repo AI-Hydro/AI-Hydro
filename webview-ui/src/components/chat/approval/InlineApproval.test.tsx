@@ -103,7 +103,14 @@ function mount({ message, rest = [], servers = [server()], draft = "", autoRun }
 		</PendingAskProvider>
 	)
 	const view = render(tree(message))
-	return { ...view, rerenderWith: (m: AiHydroMessage, notice?: string) => view.rerender(tree(m, notice)) }
+	return {
+		...view,
+		rerenderWith: (m: AiHydroMessage, notice?: string) => {
+			// A new message list, as a state post delivers it.
+			state = { ...state, aihydroMessages: [taskRow, m, ...rest] }
+			view.rerender(tree(m, notice))
+		},
+	}
 }
 
 beforeEach(() => {
@@ -180,6 +187,20 @@ describe("InlineApproval answers", () => {
 		mount({ message: editAsk })
 		fireEvent.click(screen.getByRole("button", { name: "Save" }))
 		await waitFor(() => expect(executeButtonAction).toHaveBeenCalledWith("approve", "", [], [], 100))
+	})
+
+	it("a rejected answer shows a visible note and leaves no unhandled rejection", async () => {
+		executeButtonAction.mockRejectedValue(new Error("network"))
+		const unhandled = vi.fn()
+		process.on("unhandledRejection", unhandled)
+		mount({ message: commandAsk })
+		fireEvent.click(screen.getByRole("button", { name: "Run Command" }))
+		const note = await screen.findByTestId("inline-approval-note")
+		expect(note.textContent).toContain("not sent")
+		await new Promise((r) => setTimeout(r, 20))
+		process.off("unhandledRejection", unhandled)
+		expect(unhandled).not.toHaveBeenCalled()
+		expect((screen.getByRole("button", { name: "Run Command" }) as HTMLButtonElement).disabled).toBe(false)
 	})
 
 	it("says the draft is sent with the choice, only when there is a draft", () => {
@@ -362,18 +383,27 @@ describe("InlineApproval Always flow", () => {
 		expect(note.textContent).toContain("not the registered first-party server")
 	})
 
-	it("after a saved grant says where to revoke it, and keeps saying so once the buttons are gone", async () => {
+	it("a saved grant puts no success line on the card (it is shown in the footer, which survives folding)", async () => {
 		toggle.mockResolvedValue(
 			protoReply([server({}, [tool("read_tool", { readOnlyHint: true, openWorldHint: false }, true)])]),
 		)
-		const view = mount({ message: mcpAsk() })
+		mount({ message: mcpAsk() })
 		fireEvent.click(always() as HTMLElement)
 		await waitFor(() => expect(executeButtonAction).toHaveBeenCalled())
+		expect(screen.queryByTestId("inline-approval-note")).toBeNull()
+	})
+
+	it("the grant saved but the approval failed to send: says so, not 'could not save'", async () => {
+		toggle.mockResolvedValue(
+			protoReply([server({}, [tool("read_tool", { readOnlyHint: true, openWorldHint: false }, true)])]),
+		)
+		executeButtonAction.mockRejectedValue(new Error("network"))
+		mount({ message: mcpAsk() })
+		fireEvent.click(always() as HTMLElement)
 		const note = await screen.findByTestId("inline-approval-note")
-		expect(note.textContent).toBe("Always allowed read_tool. Revoke it any time in MCP settings.")
-		view.rerenderWith(mcpAsk({ askOutcome: "approved" }))
-		expect(group()).toBeNull()
-		expect(screen.getByTestId("inline-approval-note").textContent).toContain("MCP settings")
+		expect(note.textContent).toBe("Always was saved, but the approval was not sent — press Run.")
+		expect(note.textContent).not.toContain("Could not save")
+		expect((screen.getByRole("button", { name: "Run" }) as HTMLButtonElement).disabled).toBe(false)
 	})
 
 	it("a double click saves once", async () => {

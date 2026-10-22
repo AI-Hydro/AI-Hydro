@@ -3,7 +3,7 @@ import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/cline/common"
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useMount } from "react-use"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -58,6 +58,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		mcpServers,
 		protectedRoots,
 		transcriptDetail,
+		navigateToChat,
 	} = useExtensionState()
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
@@ -334,19 +335,32 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		return task ? "Type a message..." : "Type your task here... (@ for context, / for commands)"
 	}, [task, approvalPending])
 
-	// "Focus pending prompt" command: scroll to the tail and focus its approval group (never a button).
+	// "Focus pending prompt" command: scroll to the tail and focus its approval group (never a button). When another
+	// view (History, Settings, ...) covers the chat, switch back to it first and focus once it is showing.
 	const scrollToTail = scrollBehavior.scrollToBottomSmooth
+	const focusAfterShow = useRef(false)
+	const focusPending = useCallback(() => {
+		scrollToTail()
+		focusPendingPrompt(() => textAreaRef.current?.focus())
+	}, [scrollToTail, textAreaRef])
 	useEffect(() => {
 		const handle = () => {
 			if (isHidden) {
+				focusAfterShow.current = true
+				navigateToChat()
 				return
 			}
-			scrollToTail()
-			focusPendingPrompt(() => textAreaRef.current?.focus())
+			focusPending()
 		}
 		window.addEventListener("focusPendingPrompt", handle)
 		return () => window.removeEventListener("focusPendingPrompt", handle)
-	}, [isHidden, scrollToTail])
+	}, [isHidden, navigateToChat, focusPending])
+	useEffect(() => {
+		if (!isHidden && focusAfterShow.current) {
+			focusAfterShow.current = false
+			focusPending()
+		}
+	}, [isHidden, focusPending])
 
 	return (
 		<PendingAskProvider chatState={chatState} messageHandlers={messageHandlers}>
@@ -400,6 +414,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 							scrollToBottomSmooth: scrollBehavior.scrollToBottomSmooth,
 							disableAutoScrollRef: scrollBehavior.disableAutoScrollRef,
 							showScrollToBottom: scrollBehavior.showScrollToBottom,
+							isAtBottom: scrollBehavior.isAtBottom,
 							virtuosoRef: scrollBehavior.virtuosoRef,
 						}}
 						task={task}

@@ -2,7 +2,7 @@ import { alwaysAllowVerdict } from "@shared/aihydro/alwaysAllowPolicy"
 import { deriveCallState } from "@shared/aihydro/askOutcome"
 import { isInlineApprovalAsk } from "@shared/aihydro/pendingAsk"
 import type { AiHydroAskUseMcpServer, AiHydroMessage } from "@shared/ExtensionMessage"
-import { useEffect, useId, useMemo, useRef, useState } from "react"
+import { useId, useMemo, useRef, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { getButtonConfig } from "../chat-view/shared/buttonConfig"
 import { mcpGrantInactiveReason } from "../composer/autoRunPolicy"
@@ -45,22 +45,14 @@ function mcpToolOf(message: AiHydroMessage): { serverName: string; toolName: str
 export function InlineApproval({ message }: { message: AiHydroMessage }) {
 	const api = usePendingAsk()
 	const { mcpServers, autoApprovalSettings, yoloModeToggled, aihydroMessages } = useExtensionState()
-	const [note, setNote] = useState<{ kind: "error" | "info"; text: string } | undefined>()
+	// Errors only: they appear while the card is still pending. The success line lives in the footer (grantNote).
+	const [note, setNote] = useState<string | undefined>()
 	const groupRef = useRef<HTMLDivElement>(null)
-	const restoreFocus = useRef(false)
 	const noteId = useId()
 	const hintId = useId()
 	const inactiveId = useId()
 
 	const visible = isInlineApprovalAsk(message) && deriveCallState(message, aihydroMessages ?? []) === "pending"
-
-	// Focus returns to the composer when an inline answer removes the group the user was in; otherwise it is left alone.
-	useEffect(() => {
-		if (!visible && restoreFocus.current) {
-			restoreFocus.current = false
-			api?.focusComposer()
-		}
-	}, [visible, api])
 
 	const config = useMemo(() => getButtonConfig(message), [message])
 	const mcp = useMemo(() => mcpToolOf(message), [message])
@@ -87,11 +79,11 @@ export function InlineApproval({ message }: { message: AiHydroMessage }) {
 
 	const noteEl = note && (
 		<div
-			className={`text-[12px] ${note.kind === "error" ? "text-[var(--vscode-errorForeground)]" : "text-[var(--vscode-descriptionForeground)]"}`}
+			className="text-[12px] text-[var(--vscode-errorForeground)]"
 			data-testid="inline-approval-note"
 			id={noteId}
-			role={note.kind === "error" ? "alert" : "status"}>
-			{note.text}
+			role="alert">
+			{note}
 		</div>
 	)
 
@@ -100,35 +92,28 @@ export function InlineApproval({ message }: { message: AiHydroMessage }) {
 	}
 	// Answered: the buttons are gone, but a saved "Always" keeps saying where to revoke it.
 	if (!visible) {
-		return note?.kind === "info" ? <div className="pt-[6px]">{noteEl}</div> : null
+		return null
 	}
 
 	const inactive = eligibleAlways ? mcpGrantInactiveReason(autoApprovalSettings, !!yoloModeToggled) : undefined
 	const busy = api.busyTs === message.ts
 	const name = describeCall(message, []).name
 
-	const rememberFocus = () => {
-		restoreFocus.current = !!groupRef.current && groupRef.current.contains(document.activeElement)
-	}
+	const focusInside = () => !!groupRef.current && groupRef.current.contains(document.activeElement)
 	const answer = (action: "approve" | "reject") => {
-		rememberFocus()
 		setNote(undefined)
-		void api.respond(message.ts, action)
+		api.respond(message.ts, action, { focusWasInside: focusInside() }).catch(() =>
+			setNote("The answer was not sent. Check the connection and try again."),
+		)
 	}
 	const always = async () => {
 		if (!mcp) {
 			return
 		}
-		rememberFocus()
 		setNote(undefined)
-		const result = await api.alwaysAllow({ askTs: message.ts, ...mcp })
-		if (result.ok) {
-			setNote({ kind: "info", text: `Always allowed ${mcp.toolName}. ${ALWAYS_REVOKE_NOTE}` })
-		} else {
-			restoreFocus.current = false
-			if (result.message) {
-				setNote({ kind: "error", text: result.message })
-			}
+		const result = await api.alwaysAllow({ askTs: message.ts, ...mcp, focusWasInside: focusInside() })
+		if (!result.ok && result.message) {
+			setNote(result.message)
 		}
 	}
 

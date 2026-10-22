@@ -161,7 +161,7 @@ describe("approval asks are answered on their card at every detail level", () =>
 })
 
 describe("asks that are not approvals keep the footer", () => {
-	for (const ask of ["api_req_failed", "completion_result", "resume_task"] as const) {
+	for (const ask of ["api_req_failed", "completion_result", "resume_task", "some_future_ask" as AiHydroAsk] as const) {
 		for (const detail of LEVELS) {
 			it(`${ask} at ${detail}: footer actions present, no inline group`, () => {
 				expect(isInlineApprovalAsk({ ts: 1, type: "ask", ask })).toBe(false)

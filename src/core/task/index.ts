@@ -1204,6 +1204,8 @@ export class Task {
 	}
 
 	async abortTask() {
+		// First, before any awaited work below can throw or stall: an aborted task is no longer waiting on the user.
+		clearPending()
 		try {
 			// Check for incomplete progress before aborting
 			if (this.FocusChainManager) {
@@ -1214,7 +1216,6 @@ export class Task {
 			await this.revealHiddenAnswerDraft(this.taskState.answerAuditGate.interruptReason ?? "stopped by user")
 
 			this.taskState.abort = true // will stop any autonomously running promises
-			clearPending() // an aborted task is no longer waiting on the user
 			this.terminalManager.disposeAll()
 			this.urlContentFetcher.closeBrowser()
 			await this.browserSession.dispose()

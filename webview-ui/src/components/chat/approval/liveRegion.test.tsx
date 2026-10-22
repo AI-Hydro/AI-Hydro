@@ -49,7 +49,7 @@ const settle = () => act(() => void vi.advanceTimersByTime(2500))
 const status = () => screen.getByTestId("transcript-status").textContent
 
 describe("live region announces a pending approval once per ask", () => {
-	for (const detail of ["normal", "verbose"] as const) {
+	for (const detail of ["focus", "normal", "verbose"] as const) {
 		it(`${detail}: says what is waiting, and a state post for the same ask does not change the text`, () => {
 			const view = render(area([task, command(100, "pytest -q")], detail))
 			expect(status()).toBe("Waiting for your approval: Command pytest -q")
