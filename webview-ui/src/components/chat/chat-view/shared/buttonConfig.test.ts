@@ -164,6 +164,25 @@ describe("tool-call ask vocabulary", () => {
 		expect([cmd.primaryText, cmd.secondaryText]).toEqual(["Run Command", "Deny"])
 	})
 
+	it("has no full-width Cancel in running states; they are cancelable instead (compact stop button)", () => {
+		for (const key of ["partial", "api_req_active"]) {
+			const config = BUTTON_CONFIGS[key]
+			expect(config.secondaryText).toBeUndefined()
+			expect(config.secondaryAction).toBeUndefined()
+			expect(config.cancelable).toBe(true)
+		}
+		for (const config of Object.values(BUTTON_CONFIGS)) {
+			expect(config.secondaryText).not.toBe("Cancel")
+		}
+	})
+
+	it("keeps task-level buttons", () => {
+		expect(BUTTON_CONFIGS.api_req_failed.primaryText).toBe("Retry")
+		expect(BUTTON_CONFIGS.resume_task.primaryText).toBe("Resume Task")
+		expect(BUTTON_CONFIGS.completion_result.primaryText).toBe("Start New Task")
+		expect(BUTTON_CONFIGS.auto_approval_max_req_reached.primaryText).toBe("Proceed")
+	})
+
 	it("never labels a button Approve or Reject", () => {
 		for (const config of Object.values(BUTTON_CONFIGS)) {
 			expect(config.primaryText).not.toBe("Approve")

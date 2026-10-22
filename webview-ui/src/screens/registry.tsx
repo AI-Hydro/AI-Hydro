@@ -4,12 +4,14 @@
  * data it should see. Do not import this file from production code.
  */
 
+import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import App from "../App"
 import { ScienceToolCard } from "../components/chat/ScienceToolCard"
 import HistoryView from "../components/history/HistoryView"
 import { Providers } from "../Providers"
 import {
 	areaFailCall,
+	fixtureAlwaysAllowServers,
 	fixtureAnnotatedServers,
 	fixtureMcpServers,
 	fixtureUnannotatedServers,
@@ -187,7 +189,52 @@ export const screens: ScreenDef[] = [
 
 	// ── Chat (sidebar) ──────────────────────────────────────────────
 	chatScreen("chat-welcome", "Welcome / first run", { state: { welcomeViewCompleted: false } }),
-	chatScreen("chat-home-history", "Chat home with history cards and auto-approve bar"),
+	chatScreen("chat-home-history", "Chat home with history cards and composer status"),
+	// W2-D: the composer footer. One status line replaces the 3-line "Tool auto-run" bar, the hint line and the
+	// full-width Cancel.
+	chatScreen("composer-danger-policy", "Composer: risky auto-run grants (edit all, all commands, MCP always allow)", {
+		state: {
+			...taskState(tx.runningTaskIdle),
+			autoApprovalSettings: {
+				...DEFAULT_AUTO_APPROVAL_SETTINGS,
+				// The state stream only replaces the auto-approval settings when their version is higher.
+				version: DEFAULT_AUTO_APPROVAL_SETTINGS.version + 1,
+				actions: {
+					...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
+					readFiles: true,
+					editFiles: true,
+					editFilesExternally: true,
+					executeSafeCommands: true,
+					executeAllCommands: true,
+					useMcp: true,
+				},
+			},
+		},
+		mcpServers: fixtureAlwaysAllowServers,
+		expectVisible: [
+			"[data-testid=auto-run-risk]",
+			"text=(risky)",
+			"text=2 MCP tools always allowed",
+			"[data-testid=composer-status]",
+			"[data-testid=send-button]",
+		],
+		expectAbsent: ["text=Tool auto-run", "text=hold shift to drag", "[data-testid=stop-button]"],
+	}),
+	chatScreen("composer-running", "Composer: request in flight (compact stop, no full-width Cancel)", {
+		state: taskState(tx.runningTask),
+		expectVisible: ["[data-testid=stop-button]", "[aria-label='Stop task']", "[data-testid=composer-status]"],
+		expectAbsent: ["text=Tool auto-run", "text=hold shift to drag", "text=Type @ for context", "[data-testid=send-button]"],
+	}),
+	chatScreen("composer-popover", "Composer: auto-run popover with the claim disclaimer in its header", {
+		state: taskState(tx.runningTaskIdle),
+		steps: [{ wait: 600 }, { click: "[data-testid=auto-run-chip]" }, { wait: 400 }],
+		expectVisible: [
+			"text=Tool auto-run settings",
+			"[data-testid=popover-disclaimer]",
+			"[data-testid=auto-run-chip][aria-expanded=true]",
+		],
+		expectAbsent: ["text=hold shift to drag"],
+	}),
 	chatScreen("chat-home-empty-history", "Chat home, no history", { state: { taskHistory: [] } }),
 	chatScreen("chat-task-text", "Task with plain text", {
 		state: taskState(plainTextTask),

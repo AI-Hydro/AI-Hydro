@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
 import { describe, expect, it, vi } from "vitest"
-import { isTaskRunning } from "../chat-view/shared/buttonConfig"
 import { InputSection } from "../chat-view/components/layout/InputSection"
+import { isTaskRunning } from "../chat-view/shared/buttonConfig"
 
 vi.mock("@/context/ExtensionStateContext", () => ({
 	useExtensionState: () => ({
@@ -87,6 +87,27 @@ describe("Escape in the prompt", () => {
 		fireEvent.change(input, { target: { value: "@", selectionStart: 1, selectionEnd: 1 } })
 		fireEvent.keyDown(input, { key: "Escape" })
 		expect(onStop).not.toHaveBeenCalled()
+	})
+})
+
+describe("compact stop button", () => {
+	it("is present only while running, is at least 24px, and calls cancel once", () => {
+		const onStop = vi.fn()
+		const { rerender } = render(<Harness onStop={onStop} running={false} />)
+		expect(screen.queryByRole("button", { name: "Stop task" })).toBeNull()
+		expect(screen.getByTestId("send-button")).toBeInTheDocument()
+		rerender(<Harness onStop={onStop} running />)
+		const stop = screen.getByRole("button", { name: "Stop task" })
+		expect(stop.className).toMatch(/w-\[28px\]/)
+		expect(stop.querySelector(".codicon-debug-stop")).not.toBeNull()
+		expect(screen.queryByTestId("send-button")).toBeNull()
+		fireEvent.click(stop)
+		expect(onStop).toHaveBeenCalledTimes(1)
+	})
+
+	it("does not render the old hint line under the prompt", () => {
+		render(<Harness onStop={() => {}} running={false} />)
+		expect(screen.queryByText(/Type @ for context/)).toBeNull()
 	})
 })
 

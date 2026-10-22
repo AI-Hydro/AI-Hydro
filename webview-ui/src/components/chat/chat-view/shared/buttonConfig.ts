@@ -24,6 +24,11 @@ export interface ButtonConfig {
 	secondaryText?: string
 	primaryAction?: ButtonActionType
 	secondaryAction?: ButtonActionType
+	/**
+	 * True while there is something to stop (streaming reply, in-flight request). Stopping is the composer's compact
+	 * stop button and Escape in the prompt, never a full-width footer button.
+	 */
+	cancelable?: boolean
 }
 
 /**
@@ -200,9 +205,10 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		sendingDisabled: true,
 		enableButtons: true,
 		primaryText: undefined,
-		secondaryText: "Cancel",
+		secondaryText: undefined,
 		primaryAction: undefined,
-		secondaryAction: "cancel",
+		secondaryAction: undefined,
+		cancelable: true,
 	},
 
 	// Default states
@@ -218,9 +224,10 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		sendingDisabled: true,
 		enableButtons: true,
 		primaryText: undefined,
-		secondaryText: "Cancel",
+		secondaryText: undefined,
 		primaryAction: undefined,
-		secondaryAction: "cancel",
+		secondaryAction: undefined,
+		cancelable: true,
 	},
 }
 
@@ -320,7 +327,7 @@ export function getButtonConfig(message: AiHydroMessage | undefined, _mode: Mode
 
 /**
  * True while there is something for Escape to stop: a streaming reply or in-flight API request (the states that
- * show a Cancel button), a foreground command producing output, or a background command. Idle, awaiting-answer and
+ * show the compact stop button), a foreground command producing output, or a background command. Idle, awaiting-answer and
  * finished states are not running, so Escape does nothing there.
  */
 export function isTaskRunning(lastMessage: AiHydroMessage | undefined, backgroundCommandRunning = false): boolean {
@@ -333,5 +340,5 @@ export function isTaskRunning(lastMessage: AiHydroMessage | undefined, backgroun
 	if (lastMessage.type === "ask" && lastMessage.ask === "command_output") {
 		return true
 	}
-	return getButtonConfig(lastMessage).secondaryAction === "cancel"
+	return getButtonConfig(lastMessage).cancelable === true
 }

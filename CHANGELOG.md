@@ -11,6 +11,16 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Changed — the composer's auto-run bar, hint line and full-width Cancel become one status footer (vision-2040 Wave 2, PR W2-D, branch `vision2040/w2-d`)
+
+- **One status line.** `ComposerStatus` replaces the 3-line "Tool auto-run" bar: a policy chip such as "Auto-run: Read, Edit, MCP" (derived from the action ids in `auto-approve-menu/constants.ts`), the context ring, and the claim disclaimer. The chip opens the existing auto-run settings as a popover.
+- **Risk is text and an icon, not colour.** A warning icon and "(risky)" appear when "Edit (all)", "All Commands", every action at once, or any per-server MCP tool "always allow" grant is set; MCP grants show their count ("2 MCP tools always allowed"). The chip's accessible name states the full policy.
+- **Disclaimer kept.** "Does not approve claims…" stays visible as one muted line and also heads the popover. Removing the always-visible line (owner decision O2) awaits owner sign-off.
+- **Context ring** (per-request context over the model window, same data as the task header) with `role="img"` and an "unknown" state.
+- **Compact stop.** While a request is in flight the send button is replaced by a 28 px stop button ("Stop task"); the full-width Cancel is removed from `partial` and `api_req_active`. Task-level buttons (Retry, Resume, Start New Task, Proceed) are unchanged.
+- **Hint line removed** from under the prompt; the `@` / `/` hint lives in the placeholder while there is no task.
+- The favourites quick-toggles that the old bar showed are no longer in the footer; they remain in the popover.
+
 ### Changed — the chat transcript renders through the presenter (vision-2040 Wave 2, PR W2-A2, branch `vision2040/w2-a2`)
 
 At Normal detail (the default) the per-request cost rows, "Thinking:" rows, tool-call rows, results and the checkpoint marker line fold into one collapsed **work group** per stretch of work. Prose, pending approvals, errors and the final answer stay top level; `ActionButtons` and the approval flow are unchanged.

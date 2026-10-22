@@ -1,4 +1,3 @@
-import { Badge } from "@/design"
 import { cn } from "@heroui/react"
 import { PulsingBorder } from "@paper-design/shaders-react"
 import { mentionRegex, mentionRegexGlobal } from "@shared/context-mentions"
@@ -25,6 +24,7 @@ import ApiOptions from "@/components/settings/ApiOptions"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { usePlatform } from "@/context/PlatformContext"
+import { Badge } from "@/design"
 import { FileServiceClient, ModelsServiceClient, StateServiceClient } from "@/services/grpc-client"
 import {
 	ContextMenuOptionType,
@@ -93,6 +93,9 @@ interface ChatTextAreaProps {
 	onFocusChange?: (isFocused: boolean) => void
 	/** Escape pressed in the prompt with no menu open. Stop-task is bound here, not on `window`. */
 	onEscape?: () => void
+	/** While true the send button is replaced by a compact stop button that calls `onStop`. */
+	isTaskRunning?: boolean
+	onStop?: () => void
 }
 
 interface GitCommit {
@@ -228,6 +231,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			setInputValue,
 			sendingDisabled,
 			placeholderText,
+			isTaskRunning = false,
+			onStop,
 			selectedFiles,
 			selectedImages,
 			setSelectedImages,
@@ -1589,11 +1594,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						}}
 						value={inputValue}
 					/>
-					{!inputValue && selectedImages.length === 0 && selectedFiles.length === 0 && (
-						<div className="text-[11px] absolute bottom-5 left-5 right-16 text-[var(--vscode-input-placeholderForeground)]/50 whitespace-nowrap overflow-hidden text-ellipsis pointer-events-none z-1">
-							Type @ for context, / for slash commands & workflows, hold shift to drag in files/images
-						</div>
-					)}
 					{(selectedImages.length > 0 || selectedFiles.length > 0) && (
 						<Thumbnails
 							files={selectedFiles}
@@ -1652,7 +1652,18 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									}}
 								/>
 							)}
-							{!isVoiceRecording && (
+							{!isVoiceRecording && isTaskRunning && (
+								<button
+									aria-label="Stop task"
+									className="flex items-center justify-center w-[28px] h-[28px] rounded-md cursor-pointer border border-[var(--vscode-editorGroup-border)] bg-transparent text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)]"
+									data-testid="stop-button"
+									onClick={() => onStop?.()}
+									title="Stop task (Esc)"
+									type="button">
+									<span aria-hidden="true" className="codicon codicon-debug-stop text-sm" />
+								</button>
+							)}
+							{!isVoiceRecording && !isTaskRunning && (
 								<button
 									aria-label="Send message"
 									className={cn(
@@ -1715,10 +1726,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							<ModelContainer ref={modelSelectorRef}>
 								<ModelButtonWrapper ref={buttonRef}>
 									<ModelDisplayButton
+										aria-label={`Model as configured: ${modelDisplayName}. Select model or API provider`}
 										disabled={false}
 										isActive={showModelSelector}
 										onClick={handleModelButtonClick}
-										aria-label={`Model as configured: ${modelDisplayName}. Select model or API provider`}
 										role="button"
 										tabIndex={0}
 										title="Model as configured (the provider-returned model id is not recorded yet). Select model / API provider">

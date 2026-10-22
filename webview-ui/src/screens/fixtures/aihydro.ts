@@ -145,3 +145,17 @@ export const fixtureAnnotatedServers: McpServer[] = [
 		})),
 	},
 ]
+
+/** Two tools under per-tool "always allow" (the `autoApprove` grant), for the composer's risk marker. */
+export const fixtureAlwaysAllowServers: McpServer[] = [
+	{
+		name: "fixture-notes",
+		config: "{}",
+		status: "connected",
+		tools: [
+			{ name: "append_note", description: "Synthetic fixture tool.", autoApprove: true },
+			{ name: "delete_note", description: "Synthetic fixture tool.", autoApprove: true },
+			{ name: "list_notes", description: "Synthetic fixture tool.", autoApprove: false },
+		],
+	},
+]

@@ -10,6 +10,57 @@
 		}
 	},
 	"screens": {
+		"composer-danger-policy": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"composer-popover": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 45,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"composer-running": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-annotated-first-party": {
 			"ref": {
 				"noName": 0,
@@ -2424,6 +2475,36 @@
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"composer-danger-policy": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"composer-popover": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 45,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"composer-running": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0

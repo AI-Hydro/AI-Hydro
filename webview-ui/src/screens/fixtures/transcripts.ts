@@ -581,3 +581,28 @@ export const oldTaskNoOutcomesTask: AiHydroMessage[] = (() => {
 		text(c(), "Both steps ran. Fixture prose only."),
 	]
 })()
+
+/** W2-D: a request in flight (last message is an unfinished api_req_started), so the composer shows the stop button. */
+export const runningTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	return [
+		task("Fetch and summarise. Layout fixture."),
+		apiReq(c()),
+		mcpCall(c(), "delineate_basin", { gauge_id: "SYN-00000001" }),
+		mcpResult(c(), { _run_id: "fx-run-0401", note: "synthetic" }),
+		say(c(), "api_req_started", JSON.stringify({ request: "fixture request in flight" })),
+	]
+})()
+
+/** W2-D: an idle task that finished (no request in flight); the composer shows the send button. */
+export const runningTaskIdle: AiHydroMessage[] = (() => {
+	const c = clock()
+	return [
+		task("Fetch and summarise. Layout fixture."),
+		apiReq(c()),
+		mcpCall(c(), "delineate_basin", { gauge_id: "SYN-00000001" }),
+		mcpResult(c(), { _run_id: "fx-run-0402", note: "synthetic" }),
+		completion(c(), "Fixture answer, not a result."),
+		ask(c(), "completion_result"),
+	]
+})()

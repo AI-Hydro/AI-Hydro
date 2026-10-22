@@ -58,6 +58,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			<ChatTextArea
 				activeQuote={activeQuote}
 				inputValue={inputValue}
+				isTaskRunning={isTaskRunning}
 				onEscape={() => {
 					if (isTaskRunning) {
 						messageHandlers.executeButtonAction("cancel")
@@ -71,6 +72,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 				}}
 				onSelectFilesAndImages={selectFilesAndImages}
 				onSend={() => messageHandlers.handleSendMessage(inputValue, selectedImages, selectedFiles)}
+				onStop={() => messageHandlers.executeButtonAction("cancel")}
 				placeholderText={placeholderText}
 				ref={textAreaRef}
 				selectedFiles={selectedFiles}

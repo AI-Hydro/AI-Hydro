@@ -17,6 +17,8 @@ interface AutoApproveModalProps {
 	buttonRef: React.RefObject<HTMLDivElement>
 	ACTION_METADATA: ActionMetadata[]
 	NOTIFICATIONS_SETTING: ActionMetadata
+	/** Optional content rendered under the title (the composer popover puts the claim disclaimer here). */
+	header?: React.ReactNode
 }
 
 const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
@@ -25,6 +27,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 	buttonRef,
 	ACTION_METADATA,
 	NOTIFICATIONS_SETTING,
+	header,
 }) => {
 	const { autoApprovalSettings } = useExtensionState()
 	const { isChecked, isFavorited, toggleFavorite, updateAction, updateMaxRequests } = useAutoApproveActions()
@@ -147,6 +150,8 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 							<span className="codicon codicon-close text-[10px]"></span>
 						</VSCodeButton>
 					</div>
+
+					{header}
 
 					<div className="mb-2.5">
 						<span className="text-[color:var(--vscode-foreground)] font-medium">Actions:</span>
