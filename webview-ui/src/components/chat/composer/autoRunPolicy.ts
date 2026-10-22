@@ -74,7 +74,7 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 			riskReasons.push("runs any terminal command without asking")
 		}
 	}
-	const mcpDormant = mcpAlwaysAllowed > 0 && (!enabled || !actions.useMcp)
+	const mcpDormant = mcpAlwaysAllowed > 0 && !yolo && (!enabled || !actions.useMcp)
 	const noun = mcpAlwaysAllowed === 1 ? "tool" : "tools"
 	const mcpLabel =
 		mcpAlwaysAllowed === 0

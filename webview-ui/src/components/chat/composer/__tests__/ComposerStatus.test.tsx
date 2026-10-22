@@ -191,6 +191,13 @@ describe("ComposerStatus YOLO and dormant MCP grants", () => {
 		expect(deriveAutoRunPolicy(withActions({ executeAllCommands: true, executeSafeCommands: true }), []).risky).toBe(true)
 	})
 
+	it("does not call MCP grants dormant under YOLO (core makes them live)", () => {
+		const s = withActions({ readFiles: true }, { enabled: false })
+		const p = deriveAutoRunPolicy(s, [server([{ name: "a", autoApprove: true }])], true)
+		expect(p.mcpDormant).toBe(false)
+		expect(p.mcpLabel).toBe("1 MCP tool always allowed")
+	})
+
 	it("uses truthiness for the master switch like core", () => {
 		const s = withActions({ editFiles: true, editFilesExternally: true }, { enabled: undefined as unknown as boolean })
 		expect(deriveAutoRunPolicy(s, []).risky).toBe(false)
@@ -227,6 +234,25 @@ describe("ComposerStatus disclaimer and popover", () => {
 		window.removeEventListener("keydown", onStop)
 		expect(onStop).not.toHaveBeenCalled()
 		expect(bubbled).toBe(false)
+		expect(screen.queryByRole("dialog")).toBeNull()
+		expect(document.activeElement).toBe(chip)
+	})
+
+	it("restores focus to the chip when closed with the Close button", () => {
+		render(<ComposerStatus />)
+		const chip = screen.getByTestId("auto-run-chip")
+		fireEvent.click(chip)
+		fireEvent.click(screen.getByLabelText("Close"))
+		expect(screen.queryByRole("dialog")).toBeNull()
+		expect(document.activeElement).toBe(chip)
+	})
+
+	it("closes on a click away and restores focus to the chip", () => {
+		render(<ComposerStatus />)
+		const chip = screen.getByTestId("auto-run-chip")
+		fireEvent.click(chip)
+		fireEvent.mouseDown(document.body)
+		fireEvent.touchStart(document.body)
 		expect(screen.queryByRole("dialog")).toBeNull()
 		expect(document.activeElement).toBe(chip)
 	})

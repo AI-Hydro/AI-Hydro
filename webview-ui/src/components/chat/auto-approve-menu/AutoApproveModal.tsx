@@ -1,7 +1,6 @@
 import { VSCodeButton, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import React, { useEffect, useRef, useState } from "react"
 import { useClickAway, useWindowSize } from "react-use"
-import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
 import HeroTooltip from "@/components/common/HeroTooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAutoApproveActions } from "@/hooks/useAutoApproveActions"
@@ -10,6 +9,11 @@ import AutoApproveMenuItem from "./AutoApproveMenuItem"
 import { ActionMetadata } from "./types"
 
 const breakpoint = 500
+// Theme-aware widget colours. CODE_BLOCK_BG_COLOR is a fixed dark surface, which made the dark-foreground text
+// unreadable in light and high-contrast-light themes.
+const POPOVER_BG = "var(--vscode-editorWidget-background, var(--vscode-editor-background))"
+const POPOVER_FG = "var(--vscode-editorWidget-foreground, var(--vscode-foreground))"
+const POPOVER_BORDER = "var(--vscode-editorWidget-border, var(--vscode-widget-border, var(--vscode-editorGroup-border)))"
 
 interface AutoApproveModalProps {
 	isVisible: boolean
@@ -49,6 +53,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 			return
 		}
 		setIsVisible(false)
+		restoreFocusRef?.current?.focus()
 	})
 
 	// Move focus into the dialog when it opens.
@@ -131,7 +136,8 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 		return {
 			bottom: `${originalBottom}px`,
 			maxHeight: `${Math.max(finalMaxHeight, 200)}px`, // Ensure minimum usable height
-			background: CODE_BLOCK_BG_COLOR,
+			background: POPOVER_BG,
+			color: POPOVER_FG,
 			overscrollBehavior: "contain" as const,
 		}
 	}
@@ -153,14 +159,15 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 				}}
 				ref={dialogRef}
 				role="dialog"
-				style={{ ...calculateModalStyle(), outline: "none" }}
+				style={{ ...calculateModalStyle(), borderColor: POPOVER_BORDER, outline: "none" }}
 				tabIndex={-1}>
 				<div
 					className="fixed w-[10px] h-[10px] z-[-1] rotate-45 border-r border-b border-[var(--vscode-editorGroup-border)]"
 					style={{
 						bottom: `calc(100vh - ${menuPosition}px)`,
 						right: arrowPosition,
-						background: CODE_BLOCK_BG_COLOR,
+						background: POPOVER_BG,
+						borderColor: POPOVER_BORDER,
 					}}
 				/>
 				{/* Scrollable content container */}
@@ -171,7 +178,13 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 							placement="top">
 							<div className="text-base font-semibold mb-1">Tool auto-run settings</div>
 						</HeroTooltip>
-						<VSCodeButton appearance="icon" aria-label="Close" onClick={() => setIsVisible(false)}>
+						<VSCodeButton
+							appearance="icon"
+							aria-label="Close"
+							onClick={() => {
+								setIsVisible(false)
+								restoreFocusRef?.current?.focus()
+							}}>
 							<span className="codicon codicon-close text-[10px]"></span>
 						</VSCodeButton>
 					</div>
