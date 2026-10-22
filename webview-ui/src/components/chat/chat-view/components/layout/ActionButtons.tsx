@@ -1,3 +1,5 @@
+import { deriveCallState } from "@shared/aihydro/askOutcome"
+import { isInlineApprovalAsk } from "@shared/aihydro/pendingAsk"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
@@ -95,29 +97,50 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 		disableAutoScrollRef.current = false
 	}
 
+	// Run / Deny for a tool, command, MCP or browser ask live on the card that asks (InlineApproval), so the footer
+	// shows none of them. Every other ask, and any ask kind we do not know, keeps its footer buttons.
+	const inlineApproval = isInlineApprovalAsk(lastMessage)
+	const approvalWaiting = inlineApproval && !!lastMessage && deriveCallState(lastMessage, messages) === "pending"
 	const { primaryText, secondaryText, primaryAction, secondaryAction, enableButtons } = buttonConfig
-	const hasButtons = primaryText || secondaryText
+	const hasButtons = !inlineApproval && (primaryText || secondaryText)
 	const isStreaming = task.partial === true
 	const canInteract = enableButtons && !isProcessing
 
 	const opacity = canInteract || isStreaming ? 1 : 0.5
 
+	// While an approval waits on its card, the scroll button says so: the card (and its buttons) may be out of view,
+	// and the label tells the user why scrolling down matters. It scrolls only; it never answers the ask.
 	const scrollButton = showScrollToBottom ? (
-		<button
-			aria-label="Scroll to bottom"
-			className="absolute right-[15px] bottom-full mb-[6px] z-10 flex items-center justify-center w-6 h-6 rounded-full border border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] cursor-pointer p-0 hover:bg-[var(--vscode-toolbar-hoverBackground)] shadow-sm"
-			onClick={handleScrollToBottom}
-			title="Scroll to bottom"
-			type="button">
-			<span aria-hidden="true" className="codicon codicon-chevron-down text-[14px]" />
-		</button>
+		approvalWaiting ? (
+			<button
+				aria-label="Scroll to pending approval"
+				className="absolute right-[15px] bottom-full mb-[6px] z-10 flex items-center gap-[4px] h-6 px-[10px] rounded-full border border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] text-[12px] cursor-pointer hover:bg-[var(--vscode-toolbar-hoverBackground)] shadow-sm"
+				data-testid="approval-waiting-pill"
+				onClick={handleScrollToBottom}
+				type="button">
+				Approval waiting <span aria-hidden="true">↓</span>
+			</button>
+		) : (
+			<button
+				aria-label="Scroll to bottom"
+				className="absolute right-[15px] bottom-full mb-[6px] z-10 flex items-center justify-center w-6 h-6 rounded-full border border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)] cursor-pointer p-0 hover:bg-[var(--vscode-toolbar-hoverBackground)] shadow-sm"
+				onClick={handleScrollToBottom}
+				title="Scroll to bottom"
+				type="button">
+				<span aria-hidden="true" className="codicon codicon-chevron-down text-[14px]" />
+			</button>
+		)
 	) : null
 
 	// Always mounted so assistive tech announces the text change; empty when there is no notice.
 	const notice = (
 		<div
 			aria-live="polite"
-			className={askNotice ? "px-[15px] pb-[6px] text-[12px] text-[var(--vscode-editorWarning-foreground)]" : "sr-only"}
+			className={
+				askNotice && !inlineApproval
+					? "px-[15px] pb-[6px] text-[12px] text-[var(--vscode-editorWarning-foreground)]"
+					: "sr-only"
+			}
 			data-testid="ask-notice"
 			role="status">
 			{askNotice ?? ""}
@@ -136,7 +159,13 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	return (
 		<>
 			{notice}
-			<div className="relative flex px-[15px]" style={{ opacity }}>
+			<div
+				aria-label="Pending request actions"
+				className="relative flex px-[15px]"
+				data-testid="footer-actions"
+				role="group"
+				style={{ opacity }}
+				tabIndex={-1}>
 				{scrollButton}
 				{primaryText && primaryAction && (
 					<VSCodeButton

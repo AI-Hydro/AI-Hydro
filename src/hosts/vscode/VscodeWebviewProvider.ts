@@ -1,3 +1,4 @@
+import { setPendingAskSink } from "@core/controller/ui/pendingAskBadge"
 import { sendDidBecomeVisibleEvent } from "@core/controller/ui/subscribeToDidBecomeVisible"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
 import { WebviewProvider } from "@core/webview"
@@ -8,6 +9,7 @@ import { ExtensionRegistryInfo } from "@/registry"
 import { handleHydroMapCommand } from "@/services/hydrology/handleHydroMapCommand"
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { WebviewMessage } from "@/shared/WebviewMessage"
+import { applyPendingAsk } from "./pendingAskSink"
 
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
@@ -91,10 +93,18 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 			this.disposables,
 		)
 
+		// The "waiting for you" badge and context key. Registering applies what is pending now, so a re-resolved
+		// view shows the current ask.
+		setPendingAskSink((pending) =>
+			applyPendingAsk(webviewView, pending, (key, value) => vscode.commands.executeCommand("setContext", key, value)),
+		)
+
 		// Listen for when the view is disposed
 		// This happens when the user closes the view or when the view is closed programmatically
 		webviewView.onDidDispose(
 			async () => {
+				setPendingAskSink(undefined)
+				applyPendingAsk(undefined, undefined, (key, value) => vscode.commands.executeCommand("setContext", key, value))
 				await this.dispose()
 			},
 			null,

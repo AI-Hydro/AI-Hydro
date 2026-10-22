@@ -26,6 +26,7 @@ import {
 	refreshExternalRulesToggles,
 } from "@core/context/instructions/user-instructions/external-rules"
 import { getInstalledSkillsInstructions } from "@core/context/instructions/user-instructions/skills"
+import { clearPending, markPending } from "@core/controller/ui/pendingAskBadge"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
 import { AiHydroIgnoreController } from "@core/ignore/AiHydroIgnoreController"
 import { buildMapContextForTask } from "@core/map/MapContextForTask"
@@ -649,11 +650,19 @@ export class Task {
 			await this.postStateToWebview()
 		}
 
-		await pWaitFor(() => this.taskState.askResponse !== undefined || this.taskState.lastMessageTs !== askTs, {
-			interval: 100,
-		})
-		if (this.taskState.lastMessageTs !== askTs) {
-			throw new Error("Current ask promise was ignored") // could happen if we send multiple asks in a row i.e. with command_output. It's important that when we know an ask could fail, it is handled gracefully
+		// The agent is blocked on the user from here: badge the view. Cleared when the answer arrives (askResponse.ts),
+		// and here whatever ends the wait (superseded, aborted), so a badge can never outlive its ask. A clear for an
+		// older ts is a no-op, so a superseded ask cannot wipe the badge of the ask that replaced it.
+		markPending(askTs, type)
+		try {
+			await pWaitFor(() => this.taskState.askResponse !== undefined || this.taskState.lastMessageTs !== askTs, {
+				interval: 100,
+			})
+			if (this.taskState.lastMessageTs !== askTs) {
+				throw new Error("Current ask promise was ignored") // could happen if we send multiple asks in a row i.e. with command_output. It's important that when we know an ask could fail, it is handled gracefully
+			}
+		} finally {
+			clearPending(askTs)
 		}
 		// Record the user's decision on the ask row so the transcript can tell "ran" from "denied" from "unknown".
 		const recorded = recordedOutcomeFor(type, this.taskState.askResponse!)
@@ -1205,6 +1214,7 @@ export class Task {
 			await this.revealHiddenAnswerDraft(this.taskState.answerAuditGate.interruptReason ?? "stopped by user")
 
 			this.taskState.abort = true // will stop any autonomously running promises
+			clearPending() // an aborted task is no longer waiting on the user
 			this.terminalManager.disposeAll()
 			this.urlContentFetcher.closeBrowser()
 			await this.browserSession.dispose()

@@ -39,6 +39,7 @@ import { CheckpointControls } from "../common/CheckpointControls"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { AnswerAuditSummary } from "./AnswerAuditSummary"
 import { AnswerBlock, type AnswerExtras } from "./answer/AnswerBlock"
+import { InlineApproval } from "./approval/InlineApproval"
 import { ErrorBlockTitle } from "./ErrorBlockTitle"
 import ErrorRow from "./ErrorRow"
 import { MutedNotice } from "./MutedNotice"
@@ -321,6 +322,7 @@ const ChatRow = memo(
 		const [chatrow, { height }] = useSize(
 			<ChatRowContainer>
 				<ChatRowContent {...props} />
+				<InlineApproval message={message} />
 				<TimestampLabel>{formatMessageTime(message.ts)}</TimestampLabel>
 			</ChatRowContainer>,
 		)
@@ -1411,7 +1413,10 @@ export const ChatRowContent = memo(
 									<div onClick={(e) => e.stopPropagation()}>
 										<McpToolRow
 											compact={true}
+											serverConnected={server?.status === "connected"}
 											serverName={useMcpServer.serverName}
+											serverTools={server?.tools}
+											serverTrusted={server?.trust?.trusted === true}
 											tool={{
 												name: useMcpServer.toolName || "",
 												description:
@@ -2113,6 +2118,30 @@ export const ChatRowContent = memo(
 								</>
 							)
 						}
+					case "browser_action_launch":
+						// A pending launch used to fall through to `return null`: an empty card with nothing to approve.
+						return (
+							<>
+								<div className="chat-row-header">
+									<span
+										className="codicon codicon-globe"
+										style={{
+											color: normalColor,
+											marginBottom: "-1.5px",
+										}}></span>
+									<span className="font-bold" style={{ color: normalColor }}>
+										{isPendingAsk
+											? "AI Hydro wants to launch a browser:"
+											: "AI Hydro asked to launch a browser:"}
+									</span>
+								</div>
+								{message.text && (
+									<div className="browser-code-block-container" style={{ marginTop: 8 }}>
+										<CodeBlock forceWrap={true} source={`${"```"}shell\n${message.text}\n${"```"}`} />
+									</div>
+								)}
+							</>
+						)
 					case "new_task":
 						return (
 							<>
