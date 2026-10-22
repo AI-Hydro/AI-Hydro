@@ -234,8 +234,8 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 						content="AI-Hydro will automatically make this many API requests before asking for approval to proceed with the task."
 						placement="top">
 						<div className="flex items-center pl-1.5 my-2">
-							<span className="codicon codicon-settings text-[#CCCCCC] text-[14px]" />
-							<span className="text-[#CCCCCC] text-xs font-medium ml-2">Max Requests:</span>
+							<span className="codicon codicon-settings text-[color:var(--vscode-foreground)] text-[14px]" />
+							<span className="text-[color:var(--vscode-foreground)] text-xs font-medium ml-2">Max Requests:</span>
 							<VSCodeTextField
 								className="flex-1 w-full pr-[35px] ml-4"
 								onInput={async (e) => {
