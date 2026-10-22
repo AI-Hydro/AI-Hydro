@@ -60,3 +60,17 @@ function sameCommandOutputStream(state: Pick<TaskState, "lastMessageTs" | "comma
 	const stream = state.commandOutputStream
 	return !!stream && state.lastMessageTs !== undefined && stream.askTs.has(askTs) && stream.askTs.has(state.lastMessageTs)
 }
+
+/**
+ * Clears the previous response when an ask is (re)posted or a partial ask completes, including the answered
+ * marker: a response accepted while the ask was still partial must not block the click on its completed form.
+ */
+export function resetAskResponse(
+	state: Pick<TaskState, "askResponse" | "askResponseText" | "askResponseImages" | "askResponseFiles" | "answeredAskTs">,
+): void {
+	state.askResponse = undefined
+	state.askResponseText = undefined
+	state.askResponseImages = undefined
+	state.askResponseFiles = undefined
+	state.answeredAskTs = undefined
+}

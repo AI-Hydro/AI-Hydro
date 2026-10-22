@@ -34,7 +34,10 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 	// then reviews the new request instead of silently answering it. Resolves true when the response was dropped.
 	const answerAsk = useCallback(
 		async (fields: Partial<AskResponseRequest>, askTsOverride?: number): Promise<boolean> => {
-			// Never 0: with no ask pending the last message's ts is sent, which the host reports as stale.
+			// Never 0 (the host's "unbound" path). With no ask pending the last message's ts is sent. When that last
+			// message is a say, its ts equals the host's lastMessageTs, so the host ACCEPTS it rather than reporting
+			// it stale; that is safe because the response only lands in the audit gate's takeUserMessage path, and
+			// a stray response is reset by the next ask(). With no messages at all the sentinel is reported stale.
 			const askTs = askTsOverride ?? (lastMessage?.type === "ask" ? lastMessage.ts : (lastMessage?.ts ?? NO_ASK_TS))
 			if (await sendBoundAskResponse(fields, askTs)) {
 				setAskNotice?.(STALE_ASK_NOTICE)

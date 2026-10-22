@@ -1,6 +1,6 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import { acceptAskResponse } from "../askResponseBinding"
+import { acceptAskResponse, resetAskResponse } from "../askResponseBinding"
 import { TaskState } from "../TaskState"
 
 /** Mirrors what Task.ask does when it posts an ask: clears the previous response and records the ask ts. */
@@ -139,5 +139,18 @@ describe("acceptAskResponse (W2-E1 M-1: response bound to the ask ts)", () => {
 			expect(acceptAskResponse(state, { response: "yesButtonClicked", askTs: 99 })).to.deep.equal({ stale: true })
 			expect(state.askResponse).to.equal(undefined)
 		})
+	})
+
+	it("partial-to-complete: a response accepted while the ask was partial does not block its completed form", () => {
+		const state = new TaskState()
+		state.lastMessageTs = 100 // partial ask streaming under ts 100
+		expect(acceptAskResponse(state, { response: "yesButtonClicked", askTs: 100 })).to.deep.equal({ stale: false })
+		// Without the reset the duplicate guard would drop the real click:
+		expect(acceptAskResponse(state, { response: "yesButtonClicked", askTs: 100 })).to.deep.equal({ stale: true })
+		resetAskResponse(state) // Task.ask completing the same ask (same ts)
+		expect(state.askResponse).to.equal(undefined)
+		expect(state.answeredAskTs).to.equal(undefined)
+		expect(acceptAskResponse(state, { response: "noButtonClicked", askTs: 100 })).to.deep.equal({ stale: false })
+		expect(state.askResponse).to.equal("noButtonClicked")
 	})
 })

@@ -116,7 +116,7 @@ import {
 	resetGateCycle,
 	sweepAuditProgress,
 } from "./answerAuditGate"
-import { acceptAskResponse } from "./askResponseBinding"
+import { acceptAskResponse, resetAskResponse } from "./askResponseBinding"
 import {
 	matchProtectedCommand,
 	mentionsAihydroProgram,
@@ -590,10 +590,7 @@ export class Task {
 				// partial=false means its a complete version of a previously partial message
 				if (isUpdatingPreviousPartial) {
 					// this is the complete version of a previously partial message, so replace the partial with the complete version
-					this.taskState.askResponse = undefined
-					this.taskState.askResponseText = undefined
-					this.taskState.askResponseImages = undefined
-					this.taskState.askResponseFiles = undefined
+					resetAskResponse(this.taskState)
 
 					/*
 					Bug for the history books:
@@ -603,6 +600,10 @@ export class Task {
 					*/
 					askTs = lastMessage.ts
 					this.taskState.lastMessageTs = askTs
+					// Recorded before the ask is posted: a click on an older chunk of this command's output must find this ts known.
+					if (type === "command_output") {
+						this.taskState.commandOutputStream?.askTs.add(askTs)
+					}
 					// lastMessage.ts = askTs
 					await this.messageStateHandler.updateAiHydroMessage(lastMessageIndex, {
 						text,
@@ -613,12 +614,13 @@ export class Task {
 					await sendPartialMessageEvent(protoMessage)
 				} else {
 					// this is a new partial=false message, so add it like normal
-					this.taskState.askResponse = undefined
-					this.taskState.askResponseText = undefined
-					this.taskState.askResponseImages = undefined
-					this.taskState.askResponseFiles = undefined
+					resetAskResponse(this.taskState)
 					askTs = Date.now()
 					this.taskState.lastMessageTs = askTs
+					// Recorded before the ask is posted: a click on an older chunk of this command's output must find this ts known.
+					if (type === "command_output") {
+						this.taskState.commandOutputStream?.askTs.add(askTs)
+					}
 					await this.messageStateHandler.addToAiHydroMessages({
 						ts: askTs,
 						type: "ask",
@@ -631,12 +633,13 @@ export class Task {
 		} else {
 			// this is a new non-partial message, so add it like normal
 			// const lastMessage = this.aihydroMessages.at(-1)
-			this.taskState.askResponse = undefined
-			this.taskState.askResponseText = undefined
-			this.taskState.askResponseImages = undefined
-			this.taskState.askResponseFiles = undefined
+			resetAskResponse(this.taskState)
 			askTs = Date.now()
 			this.taskState.lastMessageTs = askTs
+			// Recorded before the ask is posted: a click on an older chunk of this command's output must find this ts known.
+			if (type === "command_output") {
+				this.taskState.commandOutputStream?.askTs.add(askTs)
+			}
 			await this.messageStateHandler.addToAiHydroMessages({
 				ts: askTs,
 				type: "ask",
@@ -644,12 +647,6 @@ export class Task {
 				text,
 			})
 			await this.postStateToWebview()
-		}
-
-		// Chunks of one command's output are consecutive asks; remember them so a click made for an earlier chunk
-		// still answers the pending one (askResponseBinding.ts).
-		if (type === "command_output") {
-			this.taskState.commandOutputStream?.askTs.add(askTs)
 		}
 
 		await pWaitFor(() => this.taskState.askResponse !== undefined || this.taskState.lastMessageTs !== askTs, {
