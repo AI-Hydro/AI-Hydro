@@ -121,9 +121,9 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(state.sessionStarted).to.equal(true)
 		})
 
-		it("the gate is off by default in state defaults", () => {
+		it("the gate is on by default in state defaults (A2/B-web); eligibility still needs a trusted graded server", () => {
 			const src = fs.readFileSync(path.join(__dirname, "../../storage/utils/state-helpers.ts"), "utf8")
-			expect(src).to.match(/finalAnswerAuditGate: finalAnswerAuditGate \?\? false/)
+			expect(src).to.match(/finalAnswerAuditGate: finalAnswerAuditGate \?\? true/)
 		})
 	})
 

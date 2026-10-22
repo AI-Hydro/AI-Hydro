@@ -33,7 +33,7 @@ export function auditSummaryLine(p: AnswerAuditPayload): string {
 const CAP = 200
 
 /** Long text capped for display with an inline way to read the rest. */
-const Capped: React.FC<{ text: string }> = ({ text }) => {
+export const Capped: React.FC<{ text: string }> = ({ text }) => {
 	const [open, setOpen] = useState(false)
 	const flat = text.replace(/\s+/g, " ")
 	if (flat.length <= CAP || open) {
@@ -49,9 +49,18 @@ const Capped: React.FC<{ text: string }> = ({ text }) => {
 	)
 }
 
-const FindingsList: React.FC<{ violations: AnswerAuditViolation[]; label: string }> = ({ violations, label }) => (
+const SEVERITY_RANK: Record<AnswerAuditViolation["severity"], number> = { hard: 0, advisory: 1, unknown: 2 }
+
+/** Hard findings first, then advisory, then ungraded; the recorded order is kept within a severity. */
+export const bySeverity = (violations: readonly AnswerAuditViolation[]): AnswerAuditViolation[] =>
+	violations
+		.map((v, i) => ({ v, i }))
+		.sort((a, b) => SEVERITY_RANK[a.v.severity] - SEVERITY_RANK[b.v.severity] || a.i - b.i)
+		.map((x) => x.v)
+
+export const FindingsList: React.FC<{ violations: AnswerAuditViolation[]; label: string }> = ({ violations, label }) => (
 	<ol aria-label={label} className="mt-1 pl-5 list-decimal space-y-1 max-h-64 overflow-auto" tabIndex={0}>
-		{violations.map((v, i) => (
+		{bySeverity(violations).map((v, i) => (
 			<li className="ph-no-capture" key={`${v.kind}-${i}`}>
 				<code>{v.kind}</code>
 				{v.severity !== "unknown" && <span> [{v.severity}]</span>}
@@ -81,7 +90,7 @@ const FindingsList: React.FC<{ violations: AnswerAuditViolation[]; label: string
 )
 
 /** A held-back draft: plain text, never rendered as markdown (so a draft's markers cannot become chips here). */
-const DraftText: React.FC<{ text: string; truncated?: boolean; label: string }> = ({ text, truncated, label }) => (
+export const DraftText: React.FC<{ text: string; truncated?: boolean; label: string }> = ({ text, truncated, label }) => (
 	<div
 		aria-label={label}
 		className="ph-no-capture mt-1 p-2 max-h-72 overflow-auto whitespace-pre-wrap break-words"
@@ -93,7 +102,7 @@ const DraftText: React.FC<{ text: string; truncated?: boolean; label: string }> 
 	</div>
 )
 
-const Icon: React.FC<{ attention: boolean }> = ({ attention }) => (
+export const Icon: React.FC<{ attention: boolean }> = ({ attention }) => (
 	<span
 		aria-hidden="true"
 		className={`codicon ${attention ? "codicon-warning" : "codicon-info"} mr-1 align-middle`}
@@ -102,7 +111,7 @@ const Icon: React.FC<{ attention: boolean }> = ({ attention }) => (
 )
 
 /** Findings in narration from earlier turns: a revision cannot change that text, so they are disclosed, not revised. */
-const Unrevisable: React.FC<{ findings?: AnswerAuditViolation[] }> = ({ findings }) =>
+export const Unrevisable: React.FC<{ findings?: AnswerAuditViolation[] }> = ({ findings }) =>
 	findings && findings.length > 0 ? (
 		<details className="mt-1" data-testid="answer-audit-unrevisable">
 			<summary className="cursor-pointer select-none py-1.5">

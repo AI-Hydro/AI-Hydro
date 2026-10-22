@@ -105,6 +105,23 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 		],
 	)
 
+	// Reply to the pending completion with fixed text, leaving the user's draft, quote and attachments alone.
+	const sendAnswerFeedback = useCallback(
+		async (text: string): Promise<boolean> => {
+			if (aihydroAsk !== "completion_result" || !text.trim()) {
+				return false
+			}
+			await TaskServiceClient.askResponse(
+				AskResponseRequest.create({ responseType: "messageResponse", text, images: [], files: [] }),
+			)
+			// The agent is working again: same lock a normal reply applies.
+			setSendingDisabled(true)
+			setEnableButtons(false)
+			return true
+		},
+		[aihydroAsk, setSendingDisabled, setEnableButtons],
+	)
+
 	// Start a new task
 	const startNewTask = useCallback(async () => {
 		setActiveQuote(null)
@@ -256,6 +273,7 @@ export function useMessageHandlers(messages: AiHydroMessage[], chatState: ChatSt
 
 	return {
 		handleSendMessage,
+		sendAnswerFeedback,
 		executeButtonAction,
 		handleTaskCloseButtonClick,
 		startNewTask,

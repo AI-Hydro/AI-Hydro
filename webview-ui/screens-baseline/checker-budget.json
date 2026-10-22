@@ -10,41 +10,7 @@
 		}
 	},
 	"screens": {
-		"composer-danger-policy": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"composer-popover": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 45,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"composer-running": {
+		"chat-answer-audit-graded": {
 			"ref": {
 				"noName": 0,
 				"smallTarget": 3,
@@ -60,6 +26,141 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
+		},
+		"chat-answer-audit-unavailable": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-answer-audit-violations": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-answer-claims-audit": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-answer-disclosure": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-answer-interrupted": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-answer-revised": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-finished-claims": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-task-answer": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 2752,
+				"smallText": 440,
+				"contrast": 455,
+				"contrastIndeterminate": 0
+			}
 		},
 		"chat-annotated-first-party": {
 			"ref": {
@@ -89,23 +190,6 @@
 			"matrixTotal": {
 				"noName": 0,
 				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-answer-interrupted": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 3,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 18,
 				"smallText": 0,
 				"contrast": 3,
 				"contrastIndeterminate": 0
@@ -159,91 +243,6 @@
 				"smallTarget": 36,
 				"smallText": 0,
 				"contrast": 9,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-answer-audit-graded": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-answer-audit-unavailable": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-answer-audit-violations": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 5,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 30,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-answer-disclosure": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-answer-revised": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -418,23 +417,6 @@
 			},
 			"cells": 6
 		},
-		"chat-finished-claims": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 7,
-				"smallText": 2,
-				"contrast": 2,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 42,
-				"smallText": 12,
-				"contrast": 15,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
 		"chat-history-list": {
 			"ref": {
 				"noName": 0,
@@ -550,22 +532,6 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
-		},
-		"chat-task-answer": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 6,
-				"smallText": 2,
-				"contrast": 2,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 40,
-				"smallTarget": 2752,
-				"smallText": 440,
-				"contrast": 455,
-				"contrastIndeterminate": 0
-			}
 		},
 		"chat-task-mcp": {
 			"ref": {
@@ -1604,9 +1570,9 @@
 				"chat-task-answer": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 36,
-						"smallText": 12,
-						"contrast": 15,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2204,7 +2170,7 @@
 				"chat-answer-audit-violations": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 30,
+						"smallTarget": 24,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2304,9 +2270,9 @@
 				"chat-finished-claims": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 42,
-						"smallText": 12,
-						"contrast": 15,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2384,7 +2350,7 @@
 				"chat-answer-audit-graded": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 24,
+						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2394,7 +2360,7 @@
 				"chat-answer-audit-unavailable": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 24,
+						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2404,7 +2370,7 @@
 				"chat-answer-disclosure": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 24,
+						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2424,7 +2390,7 @@
 				"chat-answer-revised": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 24,
+						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
 						"contrastIndeterminate": 0
@@ -2481,27 +2447,7 @@
 					},
 					"cells": 6
 				},
-				"composer-danger-policy": {
-					"matrixTotal": {
-						"noName": 0,
-						"smallTarget": 24,
-						"smallText": 0,
-						"contrast": 3,
-						"contrastIndeterminate": 0
-					},
-					"cells": 6
-				},
-				"composer-popover": {
-					"matrixTotal": {
-						"noName": 0,
-						"smallTarget": 24,
-						"smallText": 0,
-						"contrast": 45,
-						"contrastIndeterminate": 0
-					},
-					"cells": 6
-				},
-				"composer-running": {
+				"chat-answer-claims-audit": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 18,

@@ -68,6 +68,12 @@ export interface ChatState {
 export interface MessageHandlers {
 	executeButtonAction: (action: ButtonActionType, text?: string, images?: string[], files?: string[]) => Promise<void>
 	handleSendMessage: (text: string, images: string[], files: string[]) => Promise<void>
+	/**
+	 * Reply to the pending completion with fixed text (the answer card's "Ask agent to cite"). Unlike
+	 * `handleSendMessage` it never reads or clears the draft input, quote or attachments, and never prepends a quote.
+	 * Resolves true when the reply was sent; false (nothing sent, input untouched) when no completion ask is pending.
+	 */
+	sendAnswerFeedback: (text: string) => Promise<boolean>
 	handleTaskCloseButtonClick: () => void
 	startNewTask: () => Promise<void>
 }

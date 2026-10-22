@@ -276,6 +276,41 @@ export const answerAuditGradedTask: AiHydroMessage[] = (() => {
 	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
 })()
 
+/** W2-B-web: one answer citing an approved claim, a supported claim and a run, with a graded audit (1 hard, 1 advisory). */
+export const answerClaimsAuditTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const messages = [
+		task("Summarise the synthetic basin with evidence. Layout fixture."),
+		apiReq(c()),
+		mcpCall(c(), "compute_signatures", { gauge_id: "SYN-00000001" }),
+		mcpResult(c(), { _run_id: "fx-run-0003", signatures: { note: "synthetic" } }),
+		apiReq(c()),
+		completion(
+			c(),
+			`Baseflow index ${marker("run", "fx-run-0003#signatures.bfi")}; ${marker("claim", "fx-appr-approved")} and ${marker("claim", "fx-claim-supported")}.\n\nFixture answer with claims and audit: no value here is a result.`,
+		),
+	]
+	const payload: AnswerAuditPayload = {
+		v: 1,
+		stage: "final",
+		status: "violations",
+		sessionId: "fx-session-0001",
+		cited: 1,
+		total: 2,
+		hardCount: 1,
+		advisoryCount: 1,
+		schema: "graded",
+		attempt: 0,
+		answerTs: messages[5].ts,
+		draftHash: FIXTURE_DRAFT_HASH,
+		violations: [
+			{ kind: "untraced_number", severity: "hard", excerpt: "runoff ratio 0.42", message: "no run supports this value" },
+			{ kind: "stale_claim", severity: "advisory", excerpt: "baseflow index", message: "claim predates the latest run" },
+		],
+	}
+	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
+})()
+
 const gateHardFinding = {
 	kind: "untraced_number",
 	severity: "hard" as const,

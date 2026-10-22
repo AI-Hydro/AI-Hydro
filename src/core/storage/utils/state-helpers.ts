@@ -636,8 +636,9 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 				transcriptDetail === "focus" || transcriptDetail === "verbose" || transcriptDetail === "normal"
 					? transcriptDetail
 					: "normal",
-			// The pre-completion gate (W2-C) ships default-off; it is flipped on later with the A2/B-web UI.
-			finalAnswerAuditGate: finalAnswerAuditGate ?? false,
+			// The pre-completion gate (W2-C) defaults ON since A2/B-web (its footer UI). Eligibility still needs a trusted
+			// first-party server with the graded audit, so other setups behave as before.
+			finalAnswerAuditGate: finalAnswerAuditGate ?? true,
 			lastDismissedInfoBannerVersion: lastDismissedInfoBannerVersion ?? 0,
 			lastDismissedModelBannerVersion: lastDismissedModelBannerVersion ?? 0,
 			// Multi-root workspace support

@@ -1,6 +1,8 @@
 import type { TranscriptItem } from "@shared/aihydro/transcriptPresenter"
+import { summarizeTurn } from "@shared/aihydro/turnSummary"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
-import React from "react"
+import React, { useMemo } from "react"
+import type { AnswerExtras } from "@/components/chat/answer/AnswerBlock"
 import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
 import ChatRow from "@/components/chat/ChatRow"
 import { MessageHandlers } from "../chat-view/types/chatTypes"
@@ -51,8 +53,17 @@ export const TranscriptItemRenderer: React.FC<TranscriptItemRendererProps> = ({
 	ctx,
 }) => {
 	const isLast = index === count - 1
-	const row = (message: AiHydroMessage, last = isLast) => (
+	// The turn facts are computed once per finished answer, not on every render of the transcript.
+	const answerTs = item.kind === "answer" && !item.partial ? item.ts : undefined
+	const turn = useMemo(
+		() => (answerTs === undefined ? undefined : summarizeTurn(ctx.allMessages, answerTs)),
+		// Messages before a finished answer do not change, so the list identity is not a dependency.
+		// biome-ignore lint/correctness/useExhaustiveDependencies: see above
+		[answerTs],
+	)
+	const row = (message: AiHydroMessage, last = isLast, answer?: AnswerExtras) => (
 		<ChatRow
+			answer={answer}
 			inputValue={ctx.inputValue}
 			isExpanded={ctx.expandedRows[message.ts] || false}
 			isLast={last}
@@ -90,13 +101,22 @@ export const TranscriptItemRenderer: React.FC<TranscriptItemRendererProps> = ({
 					{rewindTs !== undefined && <RewindMenu checkpointTs={rewindTs} subject="to this message" />}
 				</div>
 			)
-		case "answer":
+		case "answer": {
+			// The audit rides in the answer card's footer. A final audit row that did not parse (or is not final) still
+			// renders on its own, so nothing the gate recorded is dropped.
+			const audit = item.audit
 			return (
 				<>
-					{row(item.message)}
-					{auditMessage && row(auditMessage)}
+					{row(item.message, isLast, {
+						audit,
+						turn,
+						// Dedicated reply path: never touches the draft input or quote.
+						onSendFeedback: ctx.messageHandlers.sendAnswerFeedback,
+					})}
+					{auditMessage && !audit && row(auditMessage)}
 				</>
 			)
+		}
 		case "divider":
 			// An interrupted audit reveals the held draft as unchecked (with the reason): that is the existing audit row, so
 			// the draft text is never lost to a one-line divider.

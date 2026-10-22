@@ -1,10 +1,17 @@
 import { describeApproval } from "@shared/aihydro/claimApproval"
+import type { ClaimRecord } from "@shared/proto/cline/ledger"
 import React, { useState } from "react"
 import { useLedgerContext } from "../../context/LedgerContext"
 import { type EvidenceStateId, evidenceState } from "../../design"
 
 interface ClaimChipProps {
 	claimId: string
+	/**
+	 * `strip` (default): the 24px chip. `inline`: a compact chip for use inside prose. The visible chip is small so
+	 * the line rhythm holds; the button around it is 24px tall with negative vertical margins, so the hit area still
+	 * meets the target size without growing the line.
+	 */
+	variant?: "strip" | "inline"
 }
 
 // Status is the evidence-grading label, NOT an approval. The chip's colour, icon and border come from the shared
@@ -40,11 +47,8 @@ function chipState(statusKey: string, approved: boolean, tone: string | undefine
 	return "unverified"
 }
 
-export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
-	const { getClaim } = useLedgerContext()
-	const [open, setOpen] = useState(false)
-	const claim = getClaim(claimId)
-
+/** The approval display of a ledger claim and whether it earns the approved styling (explicit, verified, not stale/contradicted). */
+export function claimApprovalState(claim: ClaimRecord | undefined) {
 	const statusKey = claim?.status ?? "proposed"
 	const approval = claim
 		? describeApproval({
@@ -62,26 +66,74 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 	// A contradicted claim never shows green: the contradiction must stay visible even if it was once approved.
 	const approved =
 		approval?.approved === true && statusKey !== "stale" && statusKey !== "retracted" && statusKey !== "contradicted"
+	return { statusKey, approval, approved }
+}
+
+/** Hit area of an inline chip: 24px square minimum, pulled back into the line with negative vertical margins. */
+export const INLINE_HIT_STYLE: React.CSSProperties = {
+	display: "inline-flex",
+	alignItems: "center",
+	minHeight: 24,
+	minWidth: 24,
+	margin: "-5px 1px",
+	padding: "0 1px",
+	background: "transparent",
+	border: 0,
+	color: "inherit",
+	cursor: "pointer",
+	verticalAlign: "middle",
+}
+/** The visible compact chip inside an inline hit area. */
+export const INLINE_CHIP_STYLE: React.CSSProperties = { minHeight: 16, lineHeight: "14px", padding: "0 4px" }
+
+export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId, variant = "strip" }) => {
+	const { getClaim } = useLedgerContext()
+	const [open, setOpen] = useState(false)
+	const claim = getClaim(claimId)
+
+	const { statusKey, approval, approved } = claimApprovalState(claim)
 	const def = evidenceState(chipState(statusKey, approved, approval?.tone))
 	const label = approved ? "approved" : (STATUS_LABELS[statusKey] ?? "?")
 
 	return (
 		<span className="relative inline-flex items-center align-middle mx-0.5">
-			<button
-				className={`
+			{variant === "inline" ? (
+				<button
+					data-approved={approved ? "true" : "false"}
+					data-evidence-state={def.id}
+					data-variant="inline"
+					onClick={() => setOpen((o) => !o)}
+					style={
+						{
+							"--aih-badge-color": def.token,
+							...INLINE_HIT_STYLE,
+						} as React.CSSProperties
+					}
+					title={claim?.statement || `Claim ${claimId}`}
+					type="button">
+					<span className={`aih-badge aih-badge--${def.shape}`} style={INLINE_CHIP_STYLE}>
+						<span aria-hidden="true" className={`codicon ${def.icon}`} />
+						<span>{claimId}</span>
+						<span className="opacity-75">· {label}</span>
+					</span>
+				</button>
+			) : (
+				<button
+					className={`
 					aih-badge aih-badge--${def.shape} min-h-6 cursor-pointer
 					hover:opacity-90 transition-opacity select-none
 				`}
-				data-approved={approved ? "true" : "false"}
-				data-evidence-state={def.id}
-				style={{ "--aih-badge-color": def.token } as React.CSSProperties}
-				onClick={() => setOpen((o) => !o)}
-				title={claim?.statement || `Claim ${claimId}`}
-				type="button">
-				<span aria-hidden="true" className={`codicon ${def.icon}`} />
-				<span>{claimId}</span>
-				<span className="opacity-75">· {label}</span>
-			</button>
+					data-approved={approved ? "true" : "false"}
+					data-evidence-state={def.id}
+					onClick={() => setOpen((o) => !o)}
+					style={{ "--aih-badge-color": def.token, minHeight: 24 } as React.CSSProperties}
+					title={claim?.statement || `Claim ${claimId}`}
+					type="button">
+					<span aria-hidden="true" className={`codicon ${def.icon}`} />
+					<span>{claimId}</span>
+					<span className="opacity-75">· {label}</span>
+				</button>
+			)}
 
 			{open && claim && (
 				<span
@@ -105,6 +157,9 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId }) => {
 							{approval.label}
 						</p>
 					)}
+					<p className="mb-0.5 opacity-70" data-testid="chip-approval-note">
+						Does not approve claims. Claim approval is a signed step you perform in a terminal (aihydro-approve).
+					</p>
 					{claim.confidence && (
 						<p className="mb-0.5">
 							<span className="opacity-60">Confidence: </span>
