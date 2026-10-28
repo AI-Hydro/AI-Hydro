@@ -23,7 +23,7 @@ export class TaskState {
 	 * its view, so the map-context block is forgotten and the next turn sends it again.
 	 */
 	setConversationHistoryDeletedRange(range: [number, number] | undefined): void {
-		this.conversationHistoryDeletedRange = range
+		this._conversationHistoryDeletedRange = range
 		this.lastInjectedMapContext = undefined
 	}
 
@@ -51,7 +51,11 @@ export class TaskState {
 	didRespondToPlanAskBySwitchingMode = false
 
 	// Context and history
-	conversationHistoryDeletedRange?: [number, number]
+	private _conversationHistoryDeletedRange?: [number, number]
+	/** Read-only on purpose: assign through setConversationHistoryDeletedRange so dependent per-turn state is reset. */
+	get conversationHistoryDeletedRange(): [number, number] | undefined {
+		return this._conversationHistoryDeletedRange
+	}
 
 	// Tool execution flags
 	didRejectTool = false

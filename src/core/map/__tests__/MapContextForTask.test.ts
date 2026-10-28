@@ -166,6 +166,20 @@ describe("map context gate (X0-8)", () => {
 		expect(userMessageReferencesMap([{ type: "text", text: "<task>\nWhat is on the map?\n</task>" }])).to.equal(true)
 		expect(userMessageReferencesMap([{ type: "text", text: "<task>\nCompute NSE\n</task>" }])).to.equal(false)
 		expect(userMessageReferencesMap([{ type: "text", text: "[read_file] result: the map of keys" }])).to.equal(false)
+		for (const yes of ["show me the basemap", "what is on the map", "describe the selected feature", "area of this basin"]) {
+			expect(userMessageReferencesMap([{ type: "text", text: `<task>\n${yes}\n</task>` }]), yes).to.equal(true)
+		}
+	})
+
+	it("does not treat generic words as a map reference", () => {
+		for (const no of [
+			"tune the LSTM layers",
+			"stop drawing conclusions",
+			"delineation theory background",
+			"this layer norm helps",
+		]) {
+			expect(userMessageReferencesMap([{ type: "text", text: `<task>\n${no}\n</task>` }]), no).to.equal(false)
+		}
 	})
 })
 
@@ -287,9 +301,17 @@ describe("map context wiring into environment_details", () => {
 		expect(mapContextForEnvironmentDetails(c, state, cwd, false, [])).to.contain("Map context")
 	})
 
-	it("every deleted-range change in the Task goes through the resetting setter, and loadContext uses the shared helper", () => {
+	it("the compiler rejects a direct assignment to the deleted range", () => {
+		const state = new TaskState()
+		expect(() => {
+			// @ts-expect-error read-only accessor: only setConversationHistoryDeletedRange may change it
+			state.conversationHistoryDeletedRange = [0, 1]
+		}).to.throw(TypeError)
+		expect(state.conversationHistoryDeletedRange).to.equal(undefined)
+	})
+
+	it("getEnvironmentDetails uses the shared helper and the compaction path clears the block", () => {
 		const src = fs.readFileSync(path.join(__dirname, "../../task/index.ts"), "utf8")
-		expect(src).not.to.match(/taskState\.conversationHistoryDeletedRange\s*=[^=]/)
 		expect(src).to.contain(
 			"mapContextForEnvironmentDetails(this.controller, this.taskState, this.cwd, this.launchedFromMap, userContent)",
 		)

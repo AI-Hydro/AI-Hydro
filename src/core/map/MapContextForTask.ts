@@ -1,4 +1,5 @@
 import type { Controller } from "@core/controller"
+import * as fs from "fs"
 import os from "os"
 import type { MapEvent } from "@shared/proto/cline/map"
 
@@ -27,7 +28,11 @@ export function isCameraEvent(type: string | undefined): boolean {
 	return t === "view.changed" || t.startsWith("command.fit_") || t === "command.fly_to" || /pan|zoom|move/i.test(t)
 }
 
-const MAP_REFERENCE = /\b(maps?|basemaps?|layers?|viewport|map view|basin outline|choropleth|delineat\w*|drawn?|drawing)\b/i
+/**
+ * Words that point at the map specifically. Generic words (layers, drawing, delineation) are left out on purpose:
+ * "LSTM layers" or "drawing conclusions" is not a map reference. "this layer" counts only next to a map word.
+ */
+const MAP_REFERENCE = /\b(maps?|basemaps?|selected features?|this basin)\b/i
 
 /** True when this turn's user-authored text refers to the map. Tool results are not user text and never count. */
 export function userMessageReferencesMap(userContent: ReadonlyArray<{ type: string; text?: string }>): boolean {
@@ -59,9 +64,19 @@ function normalizeRoot(p: string): string {
 /** Fewer path segments than this (after any drive letter) is too broad a parent to claim its children. */
 const MIN_PARENT_DEPTH = 3
 
+/** The home directory as reported and with symlinks resolved (a symlinked home would otherwise slip past). */
+function homeDirectories(): string[] {
+	const homes = [normalizeRoot(os.homedir())]
+	try {
+		homes.push(normalizeRoot(fs.realpathSync(os.homedir())))
+	} catch {
+		// an unresolvable home keeps only the reported path
+	}
+	return homes
+}
+
 function isBroadRoot(normalized: string): boolean {
-	const home = normalizeRoot(os.homedir())
-	if (normalized === home) {
+	if (homeDirectories().includes(normalized)) {
 		return true
 	}
 	const segments = normalized
@@ -73,7 +88,8 @@ function isBroadRoot(normalized: string): boolean {
 
 /**
  * Same folder, or one contains the other (a project folder inside a workspace and vice versa). A containing folder
- * that is the home directory, a drive root or shallower than MIN_PARENT_DEPTH never claims its children.
+ * that is the home directory (reported or symlink-resolved), a drive root or shallower than MIN_PARENT_DEPTH never claims
+ * its children: a project that shallow does not match its own subfolders, only an identical folder.
  */
 export function workspaceMatches(mapRoot: string, taskCwd: string): boolean {
 	const a = normalizeRoot(mapRoot)
