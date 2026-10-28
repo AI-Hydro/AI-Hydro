@@ -65,19 +65,20 @@ export const StudyChipView: React.FC<StudyChipViewProps> = ({ binding, onOpen, o
 				<>
 					{/* The study id is what users look for: first and never truncated. */}
 					<span className="shrink-0 font-medium">{id}</span>
-					{label && (
-						<span className="overflow-hidden text-ellipsis whitespace-nowrap min-w-0 opacity-80">· {label}</span>
-					)}
+					{label && <span className="overflow-hidden text-ellipsis whitespace-nowrap min-w-0">· {label}</span>}
 				</>
 			) : (
-				<span className={pending ? "font-semibold" : "opacity-80"}>{text}</span>
+				<span className={pending ? "font-semibold" : undefined}>{text}</span>
 			)}
 		</>
 	)
 
 	if (!interactive) {
 		return (
-			<div className="task-header-chip mr-1 max-w-[220px]" id="bound-study" title={title}>
+			<div
+				className="task-header-chip task-header-chip--solid mr-1 max-w-[132px] min-[480px]:max-w-[220px]"
+				id="bound-study"
+				title={title}>
 				{chipBody}
 			</div>
 		)
@@ -86,7 +87,7 @@ export const StudyChipView: React.FC<StudyChipViewProps> = ({ binding, onOpen, o
 		<button
 			aria-expanded={picking}
 			aria-label={`Study for this chat: ${id ? `${id}${label ? ` ${label}` : ""}` : text}. Change study`}
-			className={`task-header-chip task-header-chip--button mr-1 max-w-[220px] cursor-pointer ${pending ? "task-header-chip--attention" : ""}`}
+			className={`task-header-chip task-header-chip--solid task-header-chip--button mr-1 max-w-[132px] min-[480px]:max-w-[220px] cursor-pointer ${pending ? "task-header-chip--attention" : ""}`}
 			id="bound-study"
 			onClick={(e) => {
 				e.stopPropagation()
