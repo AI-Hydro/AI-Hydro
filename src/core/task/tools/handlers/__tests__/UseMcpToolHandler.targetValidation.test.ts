@@ -117,6 +117,8 @@ describe("use_mcp_tool structured evidence (W2-0h)", () => {
 		;(mcpHub as any).getPendingNotifications = () =>
 			calls++ === 0 ? [{ serverName: "aihydro-tools", level: "warning", message: "rate limited", timestamp: 1 }] : []
 		config.callbacks.shouldAutoApproveTool = sinon.stub().returns(true)
+		// This stub server has no recorded launcher, so the M-3 run-time recheck asks; the user approves here.
+		callbacks.ask = sinon.stub().resolves({ response: "yesButtonClicked" })
 		await new UseMcpToolHandler().execute(config, block("list_claims")).catch(() => {})
 		const notice = callbacks.say.getCalls().find((c) => c.args[0] === "mcp_notification")
 		expect(notice?.args[1]).to.equal("[aihydro-tools] rate limited")

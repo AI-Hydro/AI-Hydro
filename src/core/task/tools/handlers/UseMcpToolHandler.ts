@@ -9,7 +9,7 @@ import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
-import { isMcpToolGrantedAutoApprove } from "../mcpAutoApprove"
+import { mcpAutoApproveDecision, mcpConnectionIdentity } from "../mcpAutoApprove"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import { repairMcpArgumentsString } from "../ToolInputRepair"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -39,7 +39,11 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 
 		// Check if tool should be auto-approved using MCP-specific logic
 		const config = uiHelpers.getConfig()
-		const shouldAutoApprove = config.callbacks.shouldAutoApproveTool(block.name)
+		// Only show the auto-approved row when the call would really auto-run (grant passes the run-time recheck),
+		// so a call that ends up asking never flashes as approved.
+		const shouldAutoApprove =
+			config.callbacks.shouldAutoApproveTool(block.name) &&
+			mcpAutoApproveDecision(config.services.mcpHub, server_name, tool_name).auto
 
 		if (shouldAutoApprove) {
 			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "use_mcp_server")
@@ -118,15 +122,20 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// Handle approval flow
+		// Handle approval flow. A stored grant is rechecked against the live connection (M-3); a paused one asks,
+		// and the ask says why.
+		const autoDecision = mcpAutoApproveDecision(config.services.mcpHub, server_name, tool_name)
 		const completeMessage = JSON.stringify({
 			type: "use_mcp_tool",
 			serverName: server_name,
 			toolName: tool_name,
 			arguments: mcp_arguments,
+			...(autoDecision.auto === false && autoDecision.granted ? { autoApprovePaused: autoDecision.pausedText } : {}),
 		} satisfies AiHydroAskUseMcpServer)
 
-		const isToolAutoApproved = isMcpToolGrantedAutoApprove(config.services.mcpHub, server_name, tool_name)
+		const isToolAutoApproved = autoDecision.auto
+		// The connection this decision (or the user's approval) applies to; rechecked right before callTool.
+		const boundIdentity = mcpConnectionIdentity(config.services.mcpHub, server_name)
 
 		if (config.callbacks.shouldAutoApproveTool(block.name) && isToolAutoApproved) {
 			// Auto-approval flow
@@ -198,6 +207,36 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 				)
 				argsWithChatId = callContext.args
 				callMeta = callContext.meta
+			}
+
+			// N1: callTool looks the connection up again by name. If it is no longer the one that was decided on (or
+			// approved), an auto-run asks first, and an approval given for the old one is void. No await between this
+			// check and the call.
+			if (mcpConnectionIdentity(config.services.mcpHub, server_name) !== boundIdentity) {
+				if (!isToolAutoApproved) {
+					return formatResponse.toolError(
+						`The MCP server '${server_name}' changed after you approved this call (it was restarted with a different launch configuration), so '${tool_name}' was not run. Ask again to retry.`,
+					)
+				}
+				const reask = JSON.stringify({
+					type: "use_mcp_tool",
+					serverName: server_name,
+					toolName: tool_name,
+					arguments: mcp_arguments,
+					autoApprovePaused: `Always for ${tool_name} is paused: the server changed while this call was being prepared.`,
+				} satisfies AiHydroAskUseMcpServer)
+				const askedAbout = mcpConnectionIdentity(config.services.mcpHub, server_name)
+				if (askedAbout === undefined) {
+					return formatResponse.toolError(`The MCP server '${server_name}' is no longer connected.`)
+				}
+				if (!(await ToolResultUtils.askApprovalAndPushFeedback("use_mcp_server", reask, config))) {
+					return formatResponse.toolDenied()
+				}
+				if (mcpConnectionIdentity(config.services.mcpHub, server_name) !== askedAbout) {
+					return formatResponse.toolError(
+						`The MCP server '${server_name}' changed again after you approved this call, so '${tool_name}' was not run.`,
+					)
+				}
 			}
 
 			// Execute the MCP tool

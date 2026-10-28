@@ -270,6 +270,8 @@ export interface AiHydroAskUseMcpServer {
 	toolName?: string
 	arguments?: string
 	uri?: string
+	/** Set when a stored "Always" grant exists but failed the run-time recheck (M-3); the ask says why. */
+	autoApprovePaused?: string
 }
 
 export interface AiHydroPlanModeResponse {

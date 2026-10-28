@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import * as os from "os"
 import * as path from "path"
 import { HostProvider } from "@/hosts/host-provider"
+import { findLoosenings, policySnapshot } from "../policyGate"
 
 /**
  * B3 integration (security review of PR 61, finding 4): edit -> refresh -> still not auto-approved -> revert.
@@ -153,5 +154,58 @@ describe("McpHub reads autoApprove only from the accepted policy (B3, review fin
 			["describe_tool", true],
 			["run_python", true],
 		])
+	})
+
+	// M-3: a launch-identity change on a server that keeps a grant is a loosening (defence in depth; the run-time
+	// recheck in mcpAutoApprove.ts is the primary control).
+	describe("M-3: launch-identity change on a server with grants", () => {
+		const watch = async (servers: Record<string, unknown>) => {
+			await fs.writeFile(file, JSON.stringify({ mcpServers: servers }))
+			const settings = await hub.readAndValidateMcpSettingsFile()
+			const effective = await hub.policyGate.gateExternal(settings.mcpServers)
+			await hub.updateServerConnections(effective)
+			hub.syncToolApproveFlags()
+		}
+		const onDisk = async () => JSON.parse(await fs.readFile(file, "utf-8")).mcpServers.s
+
+		it("(f) an external edit that changes command is classified as a loosening, asked, and reverted on decline", async () => {
+			const original = launch(["describe_tool"])
+			const changed = { ...original, command: "/usr/bin/env", args: [(original as any).command, ...(original as any).args] }
+			expect(
+				findLoosenings(policySnapshot({ s: original } as any), { s: changed } as any).map((c) => c.kind),
+			).to.deep.equal(["launch-changed"])
+			answer = "Revert"
+			await watch({ s: changed })
+			expect(prompts).to.have.length(1)
+			expect(prompts[0]).to.include("different command")
+			const disk = await onDisk()
+			expect(disk.command).to.equal((original as any).command)
+			expect(disk.args).to.deep.equal((original as any).args)
+			expect(disk.autoApprove).to.deep.equal(["describe_tool"])
+		})
+
+		it("(f) env and cwd changes count too, and confirming applies the new launch", async () => {
+			const original = launch(["describe_tool"])
+			answer = "Apply changes"
+			await watch({ s: { ...original, env: { PYTHONPATH: "/elsewhere" } } })
+			expect(prompts).to.have.length(1)
+			expect((await onDisk()).env).to.deep.equal({ PYTHONPATH: "/elsewhere" })
+			await watch({ s: { ...original, env: { PYTHONPATH: "/elsewhere" }, cwd: dir } })
+			expect(prompts).to.have.length(2)
+		})
+
+		it("(g) the same edit on a server with no grants needs no confirmation", async () => {
+			const original = launch([])
+			await watch({ s: original }) // tightening: grant removed, no prompt
+			expect(prompts).to.have.length(0)
+			await watch({ s: { ...original, env: { PYTHONPATH: "/elsewhere" }, cwd: dir } })
+			expect(prompts).to.have.length(0)
+			expect((await onDisk()).env).to.deep.equal({ PYTHONPATH: "/elsewhere" })
+		})
+
+		it("a non-identity edit (timeout) on a server with grants needs no confirmation", async () => {
+			await watch({ s: { ...launch(["describe_tool"]), timeout: 120 } })
+			expect(prompts).to.have.length(0)
+		})
 	})
 })

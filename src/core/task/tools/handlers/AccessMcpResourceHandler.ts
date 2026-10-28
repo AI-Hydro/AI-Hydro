@@ -5,6 +5,7 @@ import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
+import { mcpResourceAutoRunAllowed, UNTRUSTED_AUTO_RUN_TEXT } from "../mcpAutoApprove"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -30,7 +31,10 @@ export class AccessMcpResourceHandler implements IFullyManagedTool {
 		} satisfies AiHydroAskUseMcpServer)
 
 		// Check if tool should be auto-approved (access_mcp_resource uses general auto-approval)
-		const shouldAutoApprove = uiHelpers.shouldAutoApproveTool(block.name)
+		// A resource read auto-runs only against the trusted first-party server (live connection), YOLO included.
+		const shouldAutoApprove =
+			uiHelpers.shouldAutoApproveTool(block.name) &&
+			mcpResourceAutoRunAllowed(uiHelpers.getConfig().services.mcpHub, server_name)
 
 		if (shouldAutoApprove) {
 			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "use_mcp_server")
@@ -58,16 +62,19 @@ export class AccessMcpResourceHandler implements IFullyManagedTool {
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// Handle approval flow
+		// Handle approval flow. Auto-run needs the trusted first-party server on the live connection, YOLO included;
+		// otherwise ask, and say why.
+		const settingsAllow = config.callbacks.shouldAutoApproveTool(block.name)
+		const trustedServer = mcpResourceAutoRunAllowed(config.services.mcpHub, server_name)
+		const shouldAutoApprove = !!settingsAllow && trustedServer
 		const completeMessage = JSON.stringify({
 			type: "access_mcp_resource",
 			serverName: server_name,
 			toolName: undefined,
 			uri: uri,
 			arguments: undefined,
+			...(settingsAllow && !trustedServer ? { autoApprovePaused: UNTRUSTED_AUTO_RUN_TEXT } : {}),
 		} satisfies AiHydroAskUseMcpServer)
-
-		const shouldAutoApprove = config.callbacks.shouldAutoApproveTool(block.name)
 
 		if (shouldAutoApprove) {
 			// Auto-approval flow

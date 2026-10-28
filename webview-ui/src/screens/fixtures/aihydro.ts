@@ -152,9 +152,21 @@ export const fixtureAlwaysAllowServers: McpServer[] = [
 		name: "fixture-notes",
 		config: "{}",
 		status: "connected",
+		// The host's verdict (M-3): trusted, and both granted tools declare an effect, so both grants are live.
+		trust: { trusted: true, reason: "Fixture: trusted." },
 		tools: [
-			{ name: "append_note", description: "Synthetic fixture tool.", autoApprove: true },
-			{ name: "delete_note", description: "Synthetic fixture tool.", autoApprove: true },
+			{
+				name: "append_note",
+				description: "Synthetic fixture tool.",
+				autoApprove: true,
+				annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+			},
+			{
+				name: "delete_note",
+				description: "Synthetic fixture tool.",
+				autoApprove: true,
+				annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+			},
 			{ name: "list_notes", description: "Synthetic fixture tool.", autoApprove: false },
 		],
 	},

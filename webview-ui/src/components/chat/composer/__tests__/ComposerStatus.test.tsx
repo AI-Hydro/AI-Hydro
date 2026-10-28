@@ -152,9 +152,11 @@ describe("ComposerStatus YOLO and dormant MCP grants", () => {
 		yolo = true
 		render(<ComposerStatus />)
 		const chip = screen.getByTestId("auto-run-chip")
-		expect(chip).toHaveTextContent("YOLO: everything auto-runs")
+		expect(chip).toHaveTextContent("YOLO: auto-runs all but MCP tools without a working Always")
 		expect(screen.getByTestId("auto-run-risk")).toHaveTextContent("(risky)")
-		expect(chip.getAttribute("aria-label")).toMatch(/YOLO mode is on: everything auto-runs, even when auto-run is off/)
+		expect(chip.getAttribute("aria-label")).toMatch(
+			/YOLO mode is on: everything auto-runs, even when auto-run is off, except MCP tools without a working Always grant/,
+		)
 	})
 
 	it("is not risky with YOLO off and the defaults", () => {
@@ -271,5 +273,49 @@ describe("ComposerStatus context ring", () => {
 		unmount()
 		render(<ComposerStatus />)
 		expect(screen.getByRole("img", { name: "Context usage unknown" })).toBeInTheDocument()
+	})
+})
+
+describe("ComposerStatus paused MCP grants (M-3)", () => {
+	const trusted = { trusted: true, reason: "" }
+	const tool = (name: string, annotations?: Record<string, boolean>) => ({ name, autoApprove: true, annotations })
+	const srv = (tools: ReturnType<typeof tool>[], trust: McpServer["trust"], status: McpServer["status"] = "connected") =>
+		({ name: "ai-hydro", config: "{}", status, tools, trust }) as McpServer
+
+	it("counts a grant the host would honour, and pauses the ones its run-time recheck refuses", () => {
+		const s = withActions({ readFiles: true, useMcp: true })
+		const p = deriveAutoRunPolicy(s, [
+			srv([tool("r", { readOnlyHint: true }), tool("nuke", { destructiveHint: true }), tool("bare")], trusted),
+		])
+		expect(p.mcpAlwaysAllowed).toBe(1)
+		expect(p.mcpPaused).toBe(2)
+		expect(p.mcpLabel).toBe("1 MCP tool always allowed, 2 MCP tools paused (asks first)")
+	})
+
+	it("a server that lost trust or is disconnected pauses everything and is not risky", () => {
+		const s = withActions({ readFiles: true, useMcp: true })
+		const tools = [tool("r", { readOnlyHint: true })]
+		for (const server of [srv(tools, { trusted: false, reason: "changed" }), srv(tools, trusted, "disconnected")]) {
+			const p = deriveAutoRunPolicy(s, [server])
+			expect(p.mcpAlwaysAllowed).toBe(0)
+			expect(p.mcpPaused).toBe(1)
+			expect(p.risky).toBe(false)
+			expect(p.mcpLabel).toBe("1 MCP tool paused (asks first)")
+		}
+	})
+
+	it("without a trust verdict from the host the grant still counts (over-warn)", () => {
+		const p = deriveAutoRunPolicy(withActions({ readFiles: true, useMcp: true }), [srv([tool("r")], undefined)])
+		expect(p.mcpAlwaysAllowed).toBe(1)
+		expect(p.mcpPaused).toBe(0)
+		expect(p.risky).toBe(true)
+	})
+
+	it("shows the paused count in the chip", () => {
+		settings = withActions({ readFiles: true, useMcp: true })
+		servers = [srv([tool("r", { readOnlyHint: true })], { trusted: false, reason: "changed" })]
+		render(<ComposerStatus />)
+		expect(screen.getByTestId("auto-run-chip")).toHaveTextContent("1 MCP tool paused (asks first)")
+		expect(screen.queryByTestId("auto-run-risk")).toBeNull()
 	})
 })
