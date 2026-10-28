@@ -181,32 +181,49 @@ const COMMAND_WRAPPERS = new Set([
 	"time",
 	"nice",
 	"builtin",
+	"timeout",
+	"setsid",
+	"stdbuf",
+	"ionice",
+	"watch",
+	"chronic",
 	"sh",
 	"bash",
 	"zsh",
 	"dash",
 ])
+/** Shell keywords and `!` after which a command starts (`if true; then aihydro x; fi`, `! aihydro`). They take no flags. */
+const SHELL_KEYWORDS = new Set(["then", "do", "else", "elif", "!", "if", "while", "until"])
 /** Wrapper flags that take a separate value, which must not be mistaken for the command. */
 const WRAPPER_FLAGS_WITH_VALUE: Record<string, readonly string[]> = {
-	env: ["-u", "-c", "-s", "-p"],
+	env: ["-u", "-c"],
 	sudo: ["-u", "-g", "-h", "-p", "-c", "-r", "-t"],
 	doas: ["-u"],
 	xargs: ["-i", "-l", "-n", "-p", "-s", "-d"],
 	nice: ["-n"],
+	exec: ["-a"],
+	stdbuf: ["-i", "-o", "-e"],
+	ionice: ["-c", "-n", "-p"],
+	watch: ["-n", "-d"],
+	timeout: ["-s", "-k"],
 }
+/** Wrappers whose first non-flag word is an argument of their own (`timeout 5 aihydro x`). */
+const WRAPPER_POSITIONAL_ARGS: Record<string, number> = { timeout: 1 }
 
 /**
  * Whether the `aihydro` CLI program is run by this command: the word in COMMAND POSITION of any segment (after
- * `; && || | & ( ) { }`, a newline, a backtick or `$(`), after `NAME=value` prefixes and wrappers such as `env`,
- * `sudo`, `command`, `exec`, `nohup`, `xargs` or `sh -c`. The word must have the exact basename `aihydro` or
- * `aihydro.exe` after quote, escape, case and path normalisation (`/usr/local/bin/aihydro`, `"AIHYDRO"`,
- * `C:\\tools\\aihydro.exe`). No glob is expanded, and a path argument or variable that merely contains the word
- * (`ls ~/code/aihydro`, `pytest tests/aihydro`, `export PROJ=aihydro`, `echo > aihydro.js`) is not a launch.
- * The indirection limits in the file header apply here too.
+ * `; && || | & ( ) { }`, a newline, a backtick or `$(`), after `NAME=value` prefixes, shell keywords (`then`, `do`,
+ * `!`, ...) and wrappers such as `env`, `sudo`, `command`, `exec`, `nohup`, `xargs`, `timeout` or `sh -c`. `eval` and
+ * `env -S` are looked into: their argument string is checked as a command. The word must have the exact basename
+ * `aihydro` with an optional `.exe`, `.cmd`, `.bat` or `.ps1` (the Windows shims) after quote, escape, case and path
+ * normalisation (`/usr/local/bin/aihydro`, `"AIHYDRO"`, `C:\\tools\\aihydro.exe`). No glob is expanded, and a path
+ * argument or variable that merely contains the word (`ls ~/code/aihydro`, `pytest tests/aihydro`,
+ * `export PROJ=aihydro`, `echo > aihydro.js`) is not a launch. The indirection limits in the file header apply here too.
  */
 export function mentionsAihydroProgram(raw: string): boolean {
 	const base = raw
 		.toLowerCase()
+		.replace(/[\t\r]/g, " ")
 		.replace(/['"]/g, "")
 		.replace(/[^\x20-\x7e\n]/g, "")
 	for (const text of [base.replace(/\\/g, ""), base.replace(/\\/g, "/")]) {
@@ -222,12 +239,15 @@ export function mentionsAihydroProgram(raw: string): boolean {
 function segmentRunsAihydro(tokens: string[]): boolean {
 	for (let i = 0; i < tokens.length; i++) {
 		const token = tokens[i]
-		if (/^[a-z_][a-z0-9_]*=/.test(token)) {
-			continue // NAME=value prefix
+		if (/^[a-z_][a-z0-9_]*=/.test(token) || SHELL_KEYWORDS.has(token)) {
+			continue // NAME=value prefix, or a keyword after which a command starts
 		}
-		const program = (token.split("/").pop() ?? "").replace(/\.exe$/, "")
+		const program = (token.split("/").pop() ?? "").replace(/\.(exe|cmd|bat|ps1)$/, "")
 		if (program === "aihydro") {
 			return true
+		}
+		if (program === "eval") {
+			return mentionsAihydroProgram(tokens.slice(i + 1).join(" "))
 		}
 		if (!COMMAND_WRAPPERS.has(program)) {
 			return false // some other command: its arguments are not a launch
@@ -235,10 +255,19 @@ function segmentRunsAihydro(tokens: string[]): boolean {
 		// Skip the wrapper's own flags (and the value of those that take one).
 		while (i + 1 < tokens.length && tokens[i + 1].startsWith("-")) {
 			i += 1
-			if (WRAPPER_FLAGS_WITH_VALUE[program]?.includes(tokens[i]) && i + 1 < tokens.length) {
+			const flag = tokens[i]
+			if (program === "env" && (flag === "-s" || flag === "--split-string")) {
+				return mentionsAihydroProgram(tokens.slice(i + 1).join(" ")) // env -S 'aihydro x'
+			}
+			if (program === "env" && /^-s./.test(flag)) {
+				return mentionsAihydroProgram([flag.slice(2), ...tokens.slice(i + 1)].join(" ")) // env -Saihydro
+			}
+			if (WRAPPER_FLAGS_WITH_VALUE[program]?.includes(flag) && i + 1 < tokens.length) {
 				i += 1
 			}
 		}
+		// Positional arguments of the wrapper itself, such as the duration of `timeout`.
+		i += Math.min(WRAPPER_POSITIONAL_ARGS[program] ?? 0, Math.max(0, tokens.length - i - 2))
 	}
 	return false
 }

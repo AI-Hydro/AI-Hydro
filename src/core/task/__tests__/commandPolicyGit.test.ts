@@ -228,6 +228,30 @@ describe("C: only the exact program name in command position is a launch (no glo
 		"FOO=1 BAR=2 aihydro x",
 		"C:\\tools\\aihydro.exe x",
 		"AIHYDRO x",
+		"aihydro\tx",
+		"sudo\taihydro x",
+		"aihydro x\r",
+		"if true; then aihydro x; fi",
+		"! aihydro x",
+		"while true; do aihydro x; done",
+		"if aihydro x; then echo y; else echo n; fi",
+		"aihydro.cmd x",
+		"C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\npm\\\\aihydro.cmd x",
+		"aihydro.bat x",
+		"aihydro.ps1 x",
+		"timeout 5 aihydro x",
+		"timeout -s KILL 5 aihydro x",
+		"setsid aihydro x",
+		"stdbuf -oL aihydro x",
+		"stdbuf -o L aihydro x",
+		"ionice -c 3 aihydro x",
+		"watch -n 5 aihydro x",
+		"chronic aihydro x",
+		"exec -a name aihydro x",
+		"eval aihydro x",
+		"eval 'echo hi; aihydro x'",
+		"env -S 'aihydro x'",
+		"env -Saihydro",
 	]) {
 		it(`is a launch: ${JSON.stringify(c)}`, () => {
 			expect(mentionsAihydroProgram(c), c).to.equal(true)
@@ -251,6 +275,12 @@ describe("C: only the exact program name in command position is a launch (no glo
 		"grep -r aihydro src",
 		"git add aihydro/",
 		"python -m aihydro",
+		"timeout 5 ls aihydro",
+		"eval echo aihydro",
+		"env -S 'ls aihydro'",
+		"if true; then ls aihydro; fi",
+		"echo aihydro.cmd",
+		"cat aihydro.ps1",
 	]) {
 		it(`is not a launch and falls to the normal policy: ${JSON.stringify(c)}`, () => {
 			expect(mentionsAihydroProgram(c), c).to.equal(false)
