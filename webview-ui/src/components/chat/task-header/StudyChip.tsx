@@ -1,5 +1,5 @@
 import type { StudyBindingState } from "@shared/ExtensionMessage"
-import React, { useCallback } from "react"
+import React, { useCallback, useEffect } from "react"
 import { PLATFORM_CONFIG } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import StudyPicker from "./StudyPicker"
@@ -133,6 +133,20 @@ export const StudyPickerPanelView: React.FC<Omit<StudyChipViewProps, "onOpen"> &
 /** True while the picker is open because the user clicked the chip (so it may take focus, and gives it back). */
 let pickerOpenedByUser = false
 
+/** Test seam and reset: the flag survives only while a picker is actually showing. */
+export const pickerFocusFlag = {
+	get: () => pickerOpenedByUser,
+	set: (v: boolean) => {
+		pickerOpenedByUser = v
+	},
+	/** A chip click that opened no picker (host answered unavailable/none/bound) must not arm a later host-opened one. */
+	settle: (binding: StudyBindingState | undefined) => {
+		if (!isPicking(binding)) {
+			pickerOpenedByUser = false
+		}
+	},
+}
+
 function giveFocusBackToChip() {
 	if (pickerOpenedByUser) {
 		pickerOpenedByUser = false
@@ -165,6 +179,8 @@ const StudyChip: React.FC = () => {
 /** Mounted under the task header's title row. */
 export const StudyPickerPanel: React.FC = () => {
 	const { studyBinding } = useExtensionState()
+	// Every host state that is not a picker disarms the flag (see pickerFocusFlag.settle).
+	useEffect(() => pickerFocusFlag.settle(studyBinding), [studyBinding])
 	return <StudyPickerPanelView autoFocus={pickerOpenedByUser} binding={studyBinding} {...useStudyBindingActions()} />
 }
 

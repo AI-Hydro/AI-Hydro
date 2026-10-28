@@ -177,6 +177,24 @@ describe("X0-2 review fixes", () => {
 		expect(history().map((h) => h.id)).to.deep.equal(["task2"])
 	})
 
+	it("bulk delete tombstones every removed id, so in-flight saves cannot bring them back", async () => {
+		const mk = (id: string): HistoryItem => ({
+			id,
+			ulid: `U${id}`,
+			ts: 1,
+			task: "t",
+			tokensIn: 0,
+			tokensOut: 0,
+			totalCost: 0,
+		})
+		const { c, history } = makeController(new FakeBindingServer([TRY]), [mk("a"), mk("b")])
+		c.markTasksDeleted(["a", "b"])
+		c.stateManager.setGlobalState("taskHistory", [])
+		await c.updateTaskHistory({ ...mk("a"), tokensIn: 5 })
+		await c.updateTaskHistory({ ...mk("b"), tokensIn: 5 })
+		expect(history()).to.deep.equal([])
+	})
+
 	it("initTask passes Task the same chat id it bound (stubbed Task)", async () => {
 		const server = new FakeBindingServer([TRY, PISC])
 		const { c } = makeController(server)

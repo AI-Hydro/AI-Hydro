@@ -1199,6 +1199,13 @@ export class Controller {
 	/** Ids deleted in this session: a late loop save for one is a no-op (see patchTaskHistory). */
 	private deletedTaskIds = new Set<string>()
 
+	/** Tombstone ids removed in bulk (delete all), so a save already in flight cannot bring one back. */
+	markTasksDeleted(ids: Iterable<string>): void {
+		for (const id of ids) {
+			this.deletedTaskIds.add(id)
+		}
+	}
+
 	async deleteTaskFromState(id: string) {
 		this.deletedTaskIds.add(id)
 		// Remove the task from history

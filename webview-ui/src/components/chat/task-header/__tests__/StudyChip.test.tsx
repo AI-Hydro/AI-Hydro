@@ -1,7 +1,7 @@
 import type { StudyBindingState } from "@shared/ExtensionMessage"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { StudyChipView, StudyPickerPanelView } from "../StudyChip"
+import { pickerFocusFlag, StudyChipView, StudyPickerPanelView } from "../StudyChip"
 
 afterEach(cleanup)
 
@@ -152,5 +152,16 @@ describe("StudyPicker (X0-2)", () => {
 	it("a picker the user opened takes focus on its first option", () => {
 		render(<StudyPickerPanelView autoFocus binding={choose} {...handlers()} />)
 		expect(document.activeElement?.textContent).toContain("Piscataquis")
+	})
+
+	it("a chip click that opened no picker does not let a later host-opened picker take focus", () => {
+		pickerFocusFlag.set(true) // the click
+		pickerFocusFlag.settle({ chatId: CHAT, status: "unavailable", canChoose: false }) // host answered: no picker
+		expect(pickerFocusFlag.get()).toBe(false)
+		pickerFocusFlag.set(true)
+		pickerFocusFlag.settle(choose) // the picker did open: stays armed
+		expect(pickerFocusFlag.get()).toBe(true)
+		pickerFocusFlag.settle(bound) // closed/bound: disarmed
+		expect(pickerFocusFlag.get()).toBe(false)
 	})
 })
