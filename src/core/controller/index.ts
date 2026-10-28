@@ -145,6 +145,7 @@ export class Controller {
 	private htmlPreviewSubscribers: Set<(item: HtmlPreviewItem) => void> = new Set()
 	private htmlPreviewVersion = 0
 	private htmlPreviewActiveId: string | null = null
+	private htmlPreviewActivationSeq = 0
 
 	// Public getter for workspace manager with lazy initialization - To get workspaces when task isn't initialized (Used by file mentions)
 	async ensureWorkspaceManager(): Promise<WorkspaceRootManager | undefined> {
@@ -1330,6 +1331,7 @@ export class Controller {
 			})),
 			htmlPreviewVersion: this.htmlPreviewVersion,
 			htmlPreviewActiveId: this.htmlPreviewActiveId,
+			htmlPreviewActivationSeq: this.htmlPreviewActivationSeq,
 		}
 	}
 
@@ -1674,6 +1676,7 @@ export class Controller {
 		// The service already stored it; we just need to update the
 		// active-id pointer + notify streaming subscribers + push state.
 		this.htmlPreviewActiveId = ref.id
+		this.htmlPreviewActivationSeq++
 		this.htmlPreviewVersion++
 		const item = this.toHtmlPreviewItem(ref)
 		this.notifyHtmlPreviewSubscribers(item)

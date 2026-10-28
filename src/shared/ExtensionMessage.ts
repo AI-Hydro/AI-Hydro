@@ -132,6 +132,12 @@ export interface ExtensionState {
 	htmlPreviewVersion: number
 	/** Currently active HTML preview item ID, or null */
 	htmlPreviewActiveId: string | null
+	/**
+	 * Incremented each time the host explicitly opens a document in Studio (auto-open, "Add to Studio",
+	 * an agent hand-off). The shell activates `htmlPreviewActiveId` once per increment, so opening a
+	 * document shows it without the shell having to reload.
+	 */
+	htmlPreviewActivationSeq?: number
 }
 
 export interface AiHydroMessage {
