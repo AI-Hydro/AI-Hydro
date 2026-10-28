@@ -23,6 +23,7 @@ function makeController(server: FakeBindingServer, history: HistoryItem[] = []) 
 	const c: any = Object.create(Controller.prototype)
 	c.mcpHub = server
 	c.studyBinding = undefined
+	c.deletedTaskIds = new Set()
 	c.workspaceManager = undefined
 	c.task = { ulid: CHAT, taskId: "task1" }
 	c.stateManager = {

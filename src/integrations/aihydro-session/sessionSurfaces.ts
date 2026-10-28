@@ -1,6 +1,6 @@
 import * as path from "path"
 import type { ResearchSnapshot, SnapshotReader } from "./researchSnapshot"
-import { type BindingHub, findBindingServer, listStudies } from "./studyBinding"
+import { type BindingHub, findBindingServer, listStudies, readCapabilities, STUDY_LIST_NEEDS_282 } from "./studyBinding"
 
 export interface EvidenceSpanSurface {
 	sourceType: string
@@ -117,17 +117,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Session ids for the Replay and Experiment pickers, newest first, from the server's own study list. The extension
- * reads none of the server's files; an unreachable server is an empty list, shown as such.
+ * reads none of the server's files. An empty list always comes with a `notice` saying why (not connected, server too
+ * old to list studies, a failed read), so "no studies" and "cannot list" are never confused.
  */
-export async function listSessionIds(hub: BindingHub, limit = 20): Promise<string[]> {
+export async function listSessionIds(hub: BindingHub, limit = 20): Promise<{ sessions: string[]; notice?: string }> {
 	const server = findBindingServer(hub)
 	if (!server) {
-		return []
+		return { sessions: [], notice: "The AI-Hydro server is not connected, so the study list cannot be read." }
+	}
+	if (!(await readCapabilities(hub, server)).has("study.list")) {
+		return { sessions: [], notice: STUDY_LIST_NEEDS_282 }
 	}
 	try {
-		return (await listStudies(hub, server)).slice(0, limit).map((s) => s.studyId)
-	} catch {
-		return []
+		return { sessions: (await listStudies(hub, server)).slice(0, limit).map((s) => s.studyId) }
+	} catch (error) {
+		return {
+			sessions: [],
+			notice: `The study list could not be read: ${error instanceof Error ? error.message : String(error)}`,
+		}
 	}
 }
 

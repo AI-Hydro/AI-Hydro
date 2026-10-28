@@ -9,6 +9,8 @@ export interface StudyPickerProps {
 	reason?: string
 	/** False when the server cannot switch studies: the list is information only. */
 	canChoose: boolean
+	/** Move focus into the list. Only when the user opened the picker: an unprompted picker must never steal focus. */
+	autoFocus?: boolean
 	onChoose: (studyId: string) => void
 	/** "none" = continue without a study, "new" = the next delineation creates one. Closing in switch mode = "none". */
 	onDecline: (kind: "none" | "new") => void
@@ -32,13 +34,24 @@ const ACTION_CLASS =
  * The studies a chat can be bound to, with the server's labels. A choice is made once and binds; nothing here
  * picks a study on the user's behalf. Reused by the Evidence Board and Replay later (F-EV6).
  */
-const StudyPicker: React.FC<StudyPickerProps> = ({ candidates, currentStudyId, reason, canChoose, onChoose, onDecline }) => {
+const StudyPicker: React.FC<StudyPickerProps> = ({
+	candidates,
+	currentStudyId,
+	reason,
+	canChoose,
+	autoFocus = false,
+	onChoose,
+	onDecline,
+}) => {
 	const listRef = useRef<HTMLDivElement>(null)
 
-	// Focus the first option when the picker opens so the keyboard can pick without a mouse.
+	// Opened from the chip: focus the first option so the keyboard can pick. Opened by the host (launch, a failed
+	// resolution): focus stays wherever the user is typing, and the polite status line below announces it.
 	useEffect(() => {
-		listRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus()
-	}, [])
+		if (autoFocus) {
+			listRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus()
+		}
+	}, [autoFocus])
 
 	return (
 		<div
@@ -53,6 +66,9 @@ const StudyPicker: React.FC<StudyPickerProps> = ({ candidates, currentStudyId, r
 				}
 			}}
 			role="group">
+			<div className="sr-only" role="status">
+				{autoFocus ? "" : `Choose a study for this chat. ${reason ?? ""}`}
+			</div>
 			{reason && <div className="px-1 text-[var(--vscode-descriptionForeground)]">{reason}</div>}
 			<div className="flex flex-col" ref={listRef}>
 				{candidates.length === 0 && (

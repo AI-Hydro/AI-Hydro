@@ -321,6 +321,7 @@ export const ReplayPanel: React.FC = () => {
 	const [filterTool, setFilterTool] = useState("")
 	const [statusFilter, setStatusFilter] = useState<ReviewFilter>("all")
 	const [recentSessions, setRecentSessions] = useState<string[]>([])
+	const [sessionListNotice, setSessionListNotice] = useState<string | null>(null)
 	const [focusRunId, setFocusRunId] = useState<string | null>(null)
 	const [showMinimal, setShowMinimal] = useState(false)
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -357,6 +358,7 @@ export const ReplayPanel: React.FC = () => {
 				setLoading(false)
 			} else if (msg.type === "session_list") {
 				setRecentSessions(Array.isArray(msg.sessions) ? msg.sessions.map(String) : [])
+				setSessionListNotice(typeof msg.notice === "string" && msg.notice ? msg.notice : null)
 			} else if (msg.type === "load_replay") {
 				const sid = String(msg.session_id ?? "")
 				const target = String(msg.focus_run_id ?? "")
@@ -516,6 +518,11 @@ export const ReplayPanel: React.FC = () => {
 			</div>
 
 			<div className="px-3 py-1 text-[10px] opacity-65">Recorded history and checks; analyses are not recomputed here.</div>
+			{sessionListNotice && (
+				<p className="px-3 text-xs" data-testid="session-list-notice" role="status">
+					{sessionListNotice}
+				</p>
+			)}
 			{data?.warnings?.map((warning) => (
 				<p className="px-3 text-[11px]" key={warning}>
 					{warning}

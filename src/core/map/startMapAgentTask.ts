@@ -24,7 +24,7 @@ export interface MapLaunchResult {
 const REPLACE_LABEL = "Stop and start new chat"
 
 /** Ask before replacing a chat that is still working or waiting for the user. True = go ahead. */
-async function confirmReplaceChat(): Promise<boolean> {
+export async function confirmReplaceChat(): Promise<boolean> {
 	const response = await HostProvider.window.showMessage({
 		type: ShowMessageType.WARNING,
 		message:
@@ -35,7 +35,7 @@ async function confirmReplaceChat(): Promise<boolean> {
 }
 
 /** Show the chat sidebar and focus its input. */
-async function focusChat(): Promise<void> {
+export async function focusChat(): Promise<void> {
 	await sendChatButtonClickedEvent()
 	const webview = WebviewProvider.getInstance()
 	if (webview instanceof VscodeWebviewProvider) {

@@ -34,6 +34,7 @@ const loopSave = (n: number, cwd = "/elsewhere"): HistoryItem => ({
 function fakeController(initial: HistoryItem[]) {
 	let history = initial
 	const stub: any = {
+		deletedTaskIds: new Set<string>(),
 		stateManager: {
 			getGlobalStateKey: () => history,
 			setGlobalState: (_k: string, v: HistoryItem[]) => {

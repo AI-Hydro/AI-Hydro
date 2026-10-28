@@ -143,8 +143,13 @@ export class VscodeExperimentTableProvider {
 					case "list_sessions":
 						{
 							const hub = VscodeExperimentTableProvider.controller?.mcpHub
-							const sessions = hub ? await listSessionIds(hub) : []
-							panel.webview.postMessage({ type: "session_list", sessions })
+							const listed = hub
+								? await listSessionIds(hub)
+								: {
+										sessions: [],
+										notice: "The AI-Hydro server is not connected, so the study list cannot be read.",
+									}
+							panel.webview.postMessage({ type: "session_list", ...listed })
 						}
 						break
 					case "experiment_table_ready":

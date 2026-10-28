@@ -13,6 +13,8 @@ export interface FakeStudy {
 	label: string
 	lastRun?: string
 	workspace: string
+	/** Why the server hides it from lists and refuses to bind it (a test study, archived). */
+	hidden?: string
 }
 
 export const CAPS_282 = [
@@ -70,7 +72,7 @@ export class FakeBindingServer implements BindingHub {
 				throw new Error("Unknown resource")
 			}
 			const ws = url.searchParams.get("workspace")
-			const rows = this.studies.filter((s) => !ws || s.workspace === ws).map((s) => this.row(s))
+			const rows = this.studies.filter((s) => !s.hidden && (!ws || s.workspace === ws)).map((s) => this.row(s))
 			return text({ studies: rows, n_studies: rows.length })
 		}
 		if (url.host === "study" && url.pathname === "/by-artifact") {
@@ -111,6 +113,17 @@ export class FakeBindingServer implements BindingHub {
 					true,
 				)
 			}
+			if (study.hidden) {
+				return reply(
+					{
+						error: true,
+						code: "STUDY_HIDDEN",
+						message: `Study '${study.id}' is hidden (${study.hidden}); nothing was bound.`,
+						candidates: [],
+					},
+					true,
+				)
+			}
 			if (a.chat_id && chat && a.chat_id !== chat) {
 				return reply({ error: true, code: "CHAT_ID_MISMATCH", message: "chat_id differs from the injected id" }, true)
 			}
@@ -135,6 +148,31 @@ export class FakeBindingServer implements BindingHub {
 			return reply(
 				bound ? { bound: true, study_id: bound, chat_id: chat } : { bound: false, study_id: null, chat_id: chat },
 			)
+		}
+		if (tool === "delineate") {
+			// A writer that creates a study and binds the chat; the middleware adds session_binding at the TOP level.
+			const id = `basin_${this.studies.length + 1}`
+			this.studies.push({ id, label: `Outlet ${id}`, workspace: ctx?.workspace ?? "" })
+			const previous = this.bindings.get(chat!)
+			this.bindings.set(chat!, id)
+			return reply({
+				data: { area_km2: 3.2 },
+				session_id: id,
+				session_binding: {
+					chat_id: chat,
+					study_id: id,
+					label: `Outlet ${id}`,
+					previous_study_id: previous ?? null,
+					bound_by: "auto_create",
+				},
+			})
+		}
+		if (tool === "start_session") {
+			// An existing study of another workspace: not re-homed, the chat is not bound.
+			return reply({
+				session_id: a.session_id,
+				session_binding_skipped: "study belongs to a different workspace; the chat was not bound",
+			})
 		}
 		if (tool === "measure_feature") {
 			// A read-only tool: it resolves by the chat binding or the call's own session_id, and never binds.

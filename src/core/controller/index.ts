@@ -28,7 +28,6 @@ import { cleanupLegacyCheckpoints } from "@integrations/checkpoints/CheckpointMi
 import { downloadTask } from "@integrations/misc/export-markdown"
 import { ulid } from "ulid"
 import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
-import { isAiHydroServerName } from "@/core/task/tools/handlers/aiHydroServer"
 import { AiHydroAccountService } from "@services/account/AiHydroAccountService"
 import { ArtifactKernelService } from "@services/artifact-preview/ArtifactKernelService"
 import type { ArtifactRef } from "@services/artifact-preview/ArtifactPreviewService"
@@ -102,7 +101,7 @@ https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/c
 */
 
 /** The longest the launch binding may hold a task back. */
-const LAUNCH_BINDING_BUDGET_MS = 10_000
+export const LAUNCH_BINDING_BUDGET_MS = 10_000
 
 /** How a chat is launched: where from, the user's own words when the prompt is wrapped, and what is known of its study. */
 export interface ChatLaunch {
@@ -1197,7 +1196,11 @@ export class Controller {
 		await downloadTask(historyItem.ts, apiConversationHistory)
 	}
 
+	/** Ids deleted in this session: a late loop save for one is a no-op (see patchTaskHistory). */
+	private deletedTaskIds = new Set<string>()
+
 	async deleteTaskFromState(id: string) {
+		this.deletedTaskIds.add(id)
 		// Remove the task from history
 		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
 		const updatedTaskHistory = removeFromHistory(taskHistory, id)
@@ -1418,6 +1421,10 @@ export class Controller {
 	 */
 	patchTaskHistory(id: string, patch: Partial<HistoryItem>, writer: HistoryWriter): HistoryItem[] {
 		const history = this.stateManager.getGlobalStateKey("taskHistory") ?? []
+		// A save that was in flight when its chat was deleted must not bring the chat back (DECISIONS 2026-10-28).
+		if (this.deletedTaskIds.has(id) && !history.some((h) => h.id === id)) {
+			return history
+		}
 		const { history: next } = patchHistory(history, { ...patch, id }, writer)
 		this.stateManager.setGlobalState("taskHistory", next)
 		return next
@@ -1433,6 +1440,9 @@ export class Controller {
 	/** The chat's binding as the chip and picker show it. Only ever set through `setStudyBinding`. */
 	studyBinding: StudyBindingState | undefined
 	private studyBindingRefreshing = false
+	/** Overridable in tests. */
+	launchBindingBudgetMs = LAUNCH_BINDING_BUDGET_MS
+	launchBindingRecheckMs = 2_000
 	/** A binding made before the chat's first save: mirrored into history once the item exists. */
 	private pendingStudyMirror: { taskId?: string; ulid: string; studyId: string } | undefined
 
@@ -1455,28 +1465,34 @@ export class Controller {
 			// A hung server must not hold the task back: after the budget the chip says so, and the next tool result
 			// re-reads the binding from the server (observeStudyBindingSignal).
 			let timer: ReturnType<typeof setTimeout> | undefined
+			const abort = { aborted: false }
 			const state = await Promise.race([
-				resolveLaunchBinding({
-					hub: this.bindingHub,
-					chatId: chatUlid,
-					workspace: await this.bindingWorkspace(cwd),
-					hint: launch?.studyHint,
-					resumeStudyId: historyItem?.activeStudyId,
-					resuming: !!historyItem,
-				}),
+				(async () =>
+					resolveLaunchBinding({
+						hub: this.bindingHub,
+						chatId: chatUlid,
+						workspace: await this.bindingWorkspace(cwd),
+						hint: launch?.studyHint,
+						resumeStudyId: historyItem?.activeStudyId,
+						resuming: !!historyItem,
+						abort,
+					}))(),
 				new Promise<StudyBindingState>((resolve) => {
-					timer = setTimeout(
-						() =>
-							resolve({
-								chatId: chatUlid,
-								status: "unavailable",
-								reason: "The AI-Hydro server did not answer in time, so the study was not bound.",
-								canChoose: false,
-							}),
-						LAUNCH_BINDING_BUDGET_MS,
-					)
+					timer = setTimeout(() => {
+						// No write (rebind) starts after this; one already in flight is picked up by the re-read below.
+						abort.aborted = true
+						resolve({
+							chatId: chatUlid,
+							status: "unavailable",
+							reason: "The AI-Hydro server did not answer in time, so the study was not bound. Re-checking.",
+							canChoose: false,
+						})
+					}, this.launchBindingBudgetMs)
 				}),
 			]).finally(() => timer && clearTimeout(timer))
+			if (abort.aborted) {
+				setTimeout(() => void this.refreshStudyBinding(), this.launchBindingRecheckMs)
+			}
 			this.setStudyBinding(state, historyItem?.id)
 		} catch (error) {
 			this.setStudyBinding(
@@ -1519,7 +1535,9 @@ export class Controller {
 	 */
 	observeStudyBindingSignal(serverName: string, resultText: string): void {
 		const task = this.task
-		if (!task || !isAiHydroServerName(serverName)) {
+		// Only the trusted, connected first-party server may change what the chip says or what history mirrors: a
+		// server that merely carries the name is ignored.
+		if (!task || findBindingServer(this.bindingHub)?.name !== serverName) {
 			return
 		}
 		const chatId = task.ulid
@@ -1540,17 +1558,32 @@ export class Controller {
 				by: "agent",
 				canChoose,
 			})
+		} else if (signal?.kind === "skipped") {
+			if (this.studyBinding) {
+				this.setStudyBinding({ ...this.studyBinding, reason: signal.message })
+			}
 		} else if (signal?.kind === "unresolved") {
-			this.setStudyBinding({
-				chatId,
-				status: signal.candidates.length > 0 ? "choose" : "none",
-				candidates: signal.candidates,
-				reason:
-					signal.candidates.length > 0
-						? "A tool could not tell which study this chat is about. Pick one."
-						: "No study is bound to this chat.",
-				canChoose,
-			})
+			const current = this.studyBinding?.chatId === chatId ? this.studyBinding : undefined
+			if (current?.studyId) {
+				// A known binding is never dropped by one call's failure: keep the study, show the error.
+				this.setStudyBinding({
+					...current,
+					status: "bound",
+					candidates: undefined,
+					reason: `A tool call could not resolve a study: ${signal.message ?? "unresolved"}. This chat stays bound to ${current.studyId}.`,
+				})
+			} else {
+				this.setStudyBinding({
+					chatId,
+					status: signal.candidates.length > 0 ? "choose" : "none",
+					candidates: signal.candidates,
+					reason:
+						signal.candidates.length > 0
+							? "A tool could not tell which study this chat is about. Pick one."
+							: "No study is bound to this chat.",
+					canChoose,
+				})
+			}
 		} else if (this.studyBinding?.status !== "bound") {
 			// An older server reports no binding change: ask it, so the chip still follows the agent's own binding.
 			void this.refreshStudyBinding()
@@ -1681,9 +1714,14 @@ export class Controller {
 		this.setStudyBinding({
 			chatId: task.ulid,
 			status: "none",
-			reason: kind === "new" ? "A new study is created by the next delineation." : "This chat works without a study.",
+			reason:
+				kind === "new"
+					? "Not bound by you. A delineation creates a new study; the server may still resolve one."
+					: "Not bound by you; the server may still resolve a study.",
 			canChoose: this.studyBinding.canChoose,
 		})
+		// The server is the authority: show what it says now.
+		void this.refreshStudyBinding()
 	}
 
 	// Map layer management methods

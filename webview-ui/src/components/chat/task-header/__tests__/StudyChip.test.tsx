@@ -121,4 +121,36 @@ describe("StudyPicker (X0-2)", () => {
 		const { container } = render(<StudyPickerPanelView binding={bound} {...handlers()} />)
 		expect(container).toBeEmptyDOMElement()
 	})
+
+	it("an unprompted picker never takes focus: typing in the composer cannot bind", async () => {
+		const h = handlers()
+		const { rerender } = render(
+			<div>
+				<textarea aria-label="composer" />
+				<StudyPickerPanelView binding={undefined} {...h} />
+			</div>,
+		)
+		const composer = screen.getByLabelText("composer")
+		composer.focus()
+		rerender(
+			<div>
+				<textarea aria-label="composer" />
+				<StudyPickerPanelView binding={choose} {...h} />
+			</div>,
+		)
+		expect(document.activeElement).toBe(composer)
+		for (const key of ["Enter", " ", "ArrowDown"]) {
+			fireEvent.keyDown(composer, { key })
+			fireEvent.keyUp(composer, { key })
+		}
+		expect(h.onChoose).not.toHaveBeenCalled()
+		expect(h.onDecline).not.toHaveBeenCalled()
+		// announced politely instead
+		expect(screen.getByRole("status").textContent).toContain("Choose a study for this chat")
+	})
+
+	it("a picker the user opened takes focus on its first option", () => {
+		render(<StudyPickerPanelView autoFocus binding={choose} {...handlers()} />)
+		expect(document.activeElement?.textContent).toContain("Piscataquis")
+	})
 })

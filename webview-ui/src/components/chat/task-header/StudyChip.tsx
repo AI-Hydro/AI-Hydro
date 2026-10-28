@@ -22,7 +22,7 @@ export function chipText(b: StudyBindingState | undefined): { id?: string; label
 		return { text: "Choose study" }
 	}
 	if (b.status === "none") {
-		return { text: "No study" }
+		return { text: "No study bound" }
 	}
 	return { text: "Study unavailable" }
 }
@@ -106,7 +106,12 @@ export const StudyChipView: React.FC<StudyChipViewProps> = ({ binding, onOpen, o
 }
 
 /** The picker, laid out under the header row (in flow, never floating) so it cannot cover the chat or an ask. */
-export const StudyPickerPanelView: React.FC<Omit<StudyChipViewProps, "onOpen">> = ({ binding, onChoose, onDecline }) => {
+export const StudyPickerPanelView: React.FC<Omit<StudyChipViewProps, "onOpen"> & { autoFocus?: boolean }> = ({
+	binding,
+	autoFocus = false,
+	onChoose,
+	onDecline,
+}) => {
 	if (!isPicking(binding)) {
 		return null
 	}
@@ -114,6 +119,7 @@ export const StudyPickerPanelView: React.FC<Omit<StudyChipViewProps, "onOpen">> 
 		<div data-testid="study-picker-slot">
 			<StudyPicker
 				candidates={binding.candidates ?? []}
+				autoFocus={autoFocus}
 				canChoose={binding.canChoose}
 				currentStudyId={binding.studyId}
 				onChoose={onChoose}
@@ -124,10 +130,29 @@ export const StudyPickerPanelView: React.FC<Omit<StudyChipViewProps, "onOpen">> 
 	)
 }
 
+/** True while the picker is open because the user clicked the chip (so it may take focus, and gives it back). */
+let pickerOpenedByUser = false
+
+function giveFocusBackToChip() {
+	if (pickerOpenedByUser) {
+		pickerOpenedByUser = false
+		requestAnimationFrame(() => document.getElementById("bound-study")?.focus())
+	}
+}
+
 function useStudyBindingActions() {
-	const onOpen = useCallback(() => postStudyBinding({ action: "open" }), [])
-	const onChoose = useCallback((studyId: string) => postStudyBinding({ action: "choose", studyId }), [])
-	const onDecline = useCallback((kind: "none" | "new") => postStudyBinding({ action: "decline", kind }), [])
+	const onOpen = useCallback(() => {
+		pickerOpenedByUser = true
+		postStudyBinding({ action: "open" })
+	}, [])
+	const onChoose = useCallback((studyId: string) => {
+		giveFocusBackToChip()
+		postStudyBinding({ action: "choose", studyId })
+	}, [])
+	const onDecline = useCallback((kind: "none" | "new") => {
+		giveFocusBackToChip()
+		postStudyBinding({ action: "decline", kind })
+	}, [])
 	return { onOpen, onChoose, onDecline }
 }
 
@@ -140,7 +165,7 @@ const StudyChip: React.FC = () => {
 /** Mounted under the task header's title row. */
 export const StudyPickerPanel: React.FC = () => {
 	const { studyBinding } = useExtensionState()
-	return <StudyPickerPanelView binding={studyBinding} {...useStudyBindingActions()} />
+	return <StudyPickerPanelView autoFocus={pickerOpenedByUser} binding={studyBinding} {...useStudyBindingActions()} />
 }
 
 export default StudyChip

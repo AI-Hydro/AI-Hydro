@@ -18,6 +18,9 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - **Study chip.** The task header shows the bound study (id first, then the server's label) as a button; clicking it opens the picker to switch. It follows the server's `session_binding` field on tool results and shows why a study is or is not bound.
 - **A map action no longer silently stops a running chat.** "Ask" and "Delineate here" (and the transect and annotation actions) ask for confirmation before replacing a chat that is working or waiting for you; declining keeps the chat. A finished chat is replaced without a prompt.
 - **The extension no longer reads the server's files for studies.** The header chip, the Replay and Experiment session lists, and the launch binding all go through the server's resources and tools. `src/integrations/aihydro-session/` has no filesystem import (guarded by a test). `boundStudy.ts` is removed.
+- **Replay and Experiment panels on aihydro-tools older than 2.8.2** show "Study list needs AI-Hydro tools >= 2.8.2." instead of an empty session list, and say when the server is not connected or the list could not be read.
+- **Scope of the fix.** The 2026-10-28 owner failure is fixed in tests (a fake server written from the tools 2.8.2 contract); owner checkpoint pending on the installed build with published tools 2.8.2.
+- **Ledger and preview launchers** ask before replacing a chat that is working or waiting, like the map actions, and record their origin.
 - **Older servers.** Features are detected from `aihydro://capabilities` flags, never version numbers. With aihydro-tools 2.8.1 (no capabilities resource) the extension cannot list studies: the chip is read-only, the picker is off, a layer's own study id is still bound through `aihydro_rebind_chat`, and nothing is guessed. Full behaviour needs aihydro-tools 2.8.2.
 
 ### Security — zod 4 to clear GHSA-mrhx-c7xc-m3w5 (branch `vision2040/zod-advisory`, PR #88)

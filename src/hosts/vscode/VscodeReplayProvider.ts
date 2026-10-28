@@ -140,8 +140,13 @@ export class VscodeReplayProvider {
 					case "list_sessions":
 						{
 							const hub = VscodeReplayProvider.controller?.mcpHub
-							const sessions = hub ? await listSessionIds(hub) : []
-							panel.webview.postMessage({ type: "session_list", sessions })
+							const listed = hub
+								? await listSessionIds(hub)
+								: {
+										sessions: [],
+										notice: "The AI-Hydro server is not connected, so the study list cannot be read.",
+									}
+							panel.webview.postMessage({ type: "session_list", ...listed })
 						}
 						break
 					case "load_replay":

@@ -13,6 +13,8 @@ import { isAiHydroServerName } from "@/core/task/tools/handlers/aiHydroServer"
  * (a layer's study id, the artifact manifest, the only study in the folder, the stored binding) did not name.
  */
 
+/** Shown where a study list is needed and the server cannot give one. */
+export const STUDY_LIST_NEEDS_282 = "Study list needs AI-Hydro tools >= 2.8.2."
 export const CAPABILITIES_URI = "aihydro://capabilities"
 export const STUDY_LIST_URI = "aihydro://study/list"
 export const STUDY_BY_ARTIFACT_URI = "aihydro://study/by-artifact"
@@ -53,6 +55,8 @@ export interface ResolveLaunchInput {
 	/** True when the chat is being resumed from history (a bound chat stays bound; no folder guess is made). */
 	resuming?: boolean
 	modelIdReturned?: string
+	/** Set to `aborted: true` by the caller when its budget ran out: no further write (rebind) is started. */
+	abort?: { aborted: boolean }
 }
 
 function withTimeout<T>(p: Promise<T>, ms = CALL_TIMEOUT_MS): Promise<T> {
@@ -269,13 +273,21 @@ export async function resolveLaunchBinding(input: ResolveLaunchInput): Promise<S
 
 		// 2. Evidence the launch carries.
 		const tried = new Set<string>()
+		/** Why a study the launch named could not be bound (hidden, missing), shown with the picker or chip. */
+		const notes: string[] = []
+		const withNotes = (state: StudyBindingState): StudyBindingState =>
+			notes.length > 0 ? { ...state, reason: [state.reason, ...notes].filter(Boolean).join(" ") } : state
 		const tryBind = async (studyId: string, by: StudyBindingState["by"], reason: string) => {
-			if (tried.has(studyId)) {
+			if (tried.has(studyId) || input.abort?.aborted) {
 				return undefined
 			}
 			tried.add(studyId)
 			const r = await rebindChat(hub, server, chatId, studyId, workspace, input.modelIdReturned)
-			return r.ok ? bound(r.studyId, by, reason, await labelPool(hub, server, r.studyId, known, canList)) : undefined
+			if (!r.ok) {
+				notes.push(`Study '${studyId}' was not bound: ${r.message}`)
+				return undefined
+			}
+			return bound(r.studyId, by, reason, await labelPool(hub, server, r.studyId, known, canList))
 		}
 		if (input.hint?.sessionId) {
 			const r = await tryBind(input.hint.sessionId, "map-layer", "The map layer belongs to this study.")
@@ -305,18 +317,18 @@ export async function resolveLaunchBinding(input: ResolveLaunchInput): Promise<S
 			}
 		}
 		if (artifactCandidates.length > 0) {
-			return {
+			return withNotes({
 				chatId,
 				status: "choose",
 				candidates: artifactCandidates,
 				reason: "More than one study could own this file. Pick one.",
 				canChoose,
-			}
+			})
 		}
 
 		// 3 and 4. The folder.
 		if (!canList) {
-			return unavailable("This server version cannot list studies; the study is chosen when a tool runs.")
+			return withNotes(unavailable(STUDY_LIST_NEEDS_282))
 		}
 		if (known.length === 1) {
 			const r = await tryBind(known[0].studyId, "workspace", "The only study in this folder.")
@@ -325,15 +337,20 @@ export async function resolveLaunchBinding(input: ResolveLaunchInput): Promise<S
 			}
 		}
 		if (known.length > 1) {
-			return {
+			return withNotes({
 				chatId,
 				status: "choose",
 				candidates: known,
 				reason: `${known.length} studies in this folder. Pick one before the first run.`,
 				canChoose,
-			}
+			})
 		}
-		return { chatId, status: "none", reason: "No study in this folder yet. Delineating a watershed creates one.", canChoose }
+		return withNotes({
+			chatId,
+			status: "none",
+			reason: "No study in this folder yet. Delineating a watershed creates one.",
+			canChoose,
+		})
 	} catch (error) {
 		return unavailable(error instanceof Error ? error.message : String(error))
 	}
@@ -369,6 +386,8 @@ export interface SessionBindingField {
 /** What a tool result tells the host about the binding, with no tool-name knowledge: a field or an error code. */
 export type BindingSignal =
 	| { kind: "binding"; binding: SessionBindingField }
+	/** The call tried to bind the chat and the server declined (`session_binding_skipped`): shown, never acted on. */
+	| { kind: "skipped"; message: string }
 	| { kind: "unresolved"; candidates: StudyCandidateView[]; message?: string }
 
 /**
@@ -413,6 +432,9 @@ export function parseBindingSignal(resultText: string): BindingSignal | undefine
 				...(typeof sb.bound_by === "string" ? { boundBy: sb.bound_by } : {}),
 			},
 		}
+	}
+	if (typeof json?.session_binding_skipped === "string" && json.session_binding_skipped) {
+		return { kind: "skipped", message: json.session_binding_skipped }
 	}
 	if (json?.error && json?.code === RESOLUTION_FAILED_CODE) {
 		return {
