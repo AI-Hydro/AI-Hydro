@@ -207,22 +207,54 @@ describe("B: prototype keys are not programs or git subcommands", () => {
 	}
 })
 
-describe("C: glob forms that could match aihydro are a launch", () => {
+describe("C: only the exact program name in command position is a launch (no glob expansion)", () => {
 	for (const c of [
-		'aihydr? "x"',
-		'aihyd* "x"',
-		'a*hydro "x"',
-		'[a]ihydro "x"',
-		"/usr/local/bin/aihyd* x",
-		"aihydr[o] x",
-		"ai*ro x",
-		"aih?dro x",
-		'env aihyd* "x" -y',
-		"cd . && aihydr? x",
+		"aihydro t o",
+		'aihydro "x"',
+		"env X=1 aihydro",
+		"env -u FOO aihydro x",
+		"/usr/local/bin/aihydro",
+		"sudo aihydro",
+		"sudo -u root aihydro x",
+		"command aihydro x",
+		"exec aihydro x",
+		"nohup aihydro x &",
+		"echo x | xargs aihydro",
+		"sh -c 'aihydro x'",
+		"cd . && aihydro x",
+		"cd . || aihydro x",
+		"ls; aihydro x",
+		"(aihydro x)",
+		"FOO=1 BAR=2 aihydro x",
+		"C:\\tools\\aihydro.exe x",
+		"AIHYDRO x",
 	]) {
 		it(`is a launch: ${JSON.stringify(c)}`, () => {
 			expect(mentionsAihydroProgram(c), c).to.equal(true)
 			expect(decideCommand({ ...BASE, command: c, autoApproveAll: true }).action, c).to.equal("deny")
+		})
+	}
+
+	for (const c of [
+		"ls ~/code/aihydro",
+		"cd src/shared/aihydro",
+		"pytest tests/aihydro",
+		"pip install -e ./aihydro",
+		"export PROJ=aihydro",
+		"echo > aihydro.js",
+		"cat aihydro",
+		"ls ai*",
+		"ls aihydr?",
+		"a*hydro x",
+		"aihyd* x",
+		"[a]ihydro x",
+		"grep -r aihydro src",
+		"git add aihydro/",
+		"python -m aihydro",
+	]) {
+		it(`is not a launch and falls to the normal policy: ${JSON.stringify(c)}`, () => {
+			expect(mentionsAihydroProgram(c), c).to.equal(false)
+			expect(decideCommand({ ...BASE, command: c }).action, c).to.not.equal("deny")
 		})
 	}
 

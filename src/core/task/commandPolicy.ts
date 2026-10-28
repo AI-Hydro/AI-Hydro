@@ -169,12 +169,40 @@ export function matchProtectedCommand(raw: string): string | undefined {
 export const AIHYDRO_CLI_RETIRED_MESSAGE =
 	"The `aihydro` command-line subagent was retired and cannot be launched from a terminal command. Do not retry it; do the work in this chat with the available tools."
 
+/** Words that run the next word as a command: skipped, with their own flags, to find the command position. */
+const COMMAND_WRAPPERS = new Set([
+	"env",
+	"sudo",
+	"doas",
+	"command",
+	"exec",
+	"nohup",
+	"xargs",
+	"time",
+	"nice",
+	"builtin",
+	"sh",
+	"bash",
+	"zsh",
+	"dash",
+])
+/** Wrapper flags that take a separate value, which must not be mistaken for the command. */
+const WRAPPER_FLAGS_WITH_VALUE: Record<string, readonly string[]> = {
+	env: ["-u", "-c", "-s", "-p"],
+	sudo: ["-u", "-g", "-h", "-p", "-c", "-r", "-t"],
+	doas: ["-u"],
+	xargs: ["-i", "-l", "-n", "-p", "-s", "-d"],
+	nice: ["-n"],
+}
+
 /**
- * Whether any word of the command is the `aihydro` CLI program, after quote/escape/case/path normalisation and
- * across chains, `env`/prefix wrappers and absolute paths: `cd . && aihydro "x"`, `env aihydro "x"`,
- * `/usr/local/bin/aihydro "x"`, `AIHYDRO "x"`, `aihydro -y "x"`. Deliberately broad: a word that merely equals
- * `aihydro` (`cat aihydro`) is also treated as a launch, which only means it is refused. The indirection limits in
- * the file header apply here too.
+ * Whether the `aihydro` CLI program is run by this command: the word in COMMAND POSITION of any segment (after
+ * `; && || | & ( ) { }`, a newline, a backtick or `$(`), after `NAME=value` prefixes and wrappers such as `env`,
+ * `sudo`, `command`, `exec`, `nohup`, `xargs` or `sh -c`. The word must have the exact basename `aihydro` or
+ * `aihydro.exe` after quote, escape, case and path normalisation (`/usr/local/bin/aihydro`, `"AIHYDRO"`,
+ * `C:\\tools\\aihydro.exe`). No glob is expanded, and a path argument or variable that merely contains the word
+ * (`ls ~/code/aihydro`, `pytest tests/aihydro`, `export PROJ=aihydro`, `echo > aihydro.js`) is not a launch.
+ * The indirection limits in the file header apply here too.
  */
 export function mentionsAihydroProgram(raw: string): boolean {
 	const base = raw
@@ -182,15 +210,33 @@ export function mentionsAihydroProgram(raw: string): boolean {
 		.replace(/['"]/g, "")
 		.replace(/[^\x20-\x7e\n]/g, "")
 	for (const text of [base.replace(/\\/g, ""), base.replace(/\\/g, "/")]) {
-		for (const token of text.split(/[\s;&|()<>`${}=,]+/)) {
-			const program = (token.split("/").pop() ?? "").replace(/\.(exe|cmd|bat|ps1|js|mjs)$/, "")
-			if (program === "aihydro") {
+		for (const segment of text.split(/[;&|(){}`\n]|\$\(/)) {
+			if (segmentRunsAihydro(segment.trim().split(/\s+/).filter(Boolean))) {
 				return true
 			}
-			// A glob that could expand to `aihydro` (`aihydr?`, `aihyd*`, `a*hydro`, `[a]ihydro`). Needs two literal
-			// characters outside bracket classes so a bare `*` or `[abc]*` is not a launch; over-matching only means it is refused.
-			if (program.replace(/\[[^\]]*\]|[?*[\]]/g, "").length >= 2 && globCouldMatch(program, "aihydro")) {
-				return true
+		}
+	}
+	return false
+}
+
+function segmentRunsAihydro(tokens: string[]): boolean {
+	for (let i = 0; i < tokens.length; i++) {
+		const token = tokens[i]
+		if (/^[a-z_][a-z0-9_]*=/.test(token)) {
+			continue // NAME=value prefix
+		}
+		const program = (token.split("/").pop() ?? "").replace(/\.exe$/, "")
+		if (program === "aihydro") {
+			return true
+		}
+		if (!COMMAND_WRAPPERS.has(program)) {
+			return false // some other command: its arguments are not a launch
+		}
+		// Skip the wrapper's own flags (and the value of those that take one).
+		while (i + 1 < tokens.length && tokens[i + 1].startsWith("-")) {
+			i += 1
+			if (WRAPPER_FLAGS_WITH_VALUE[program]?.includes(tokens[i]) && i + 1 < tokens.length) {
+				i += 1
 			}
 		}
 	}

@@ -12,14 +12,6 @@ export interface EnvironmentConfig {
 	recognitionApiBaseUrl: string
 	connectorsBaseUrl: string
 	skillsBaseUrl: string
-	firebase: {
-		apiKey: string
-		authDomain: string
-		projectId: string
-		storageBucket?: string
-		messagingSenderId?: string
-		appId?: string
-	}
 }
 
 function getEnvOrDefault(name: string, fallback: string): string {
@@ -91,14 +83,6 @@ class AiHydroEndpoint {
 						"https://ai-hydro.github.io/Connectors/api",
 					),
 					skillsBaseUrl: getEnvOrDefault("AI_HYDRO_SKILLS_BASE_URL_STAGING", "https://ai-hydro.github.io/Skills/api"),
-					firebase: {
-						apiKey: getEnvOrDefault("AI_HYDRO_FIREBASE_API_KEY_STAGING", ""),
-						authDomain: getEnvOrDefault("AI_HYDRO_FIREBASE_AUTH_DOMAIN_STAGING", ""),
-						projectId: getEnvOrDefault("AI_HYDRO_FIREBASE_PROJECT_ID_STAGING", ""),
-						storageBucket: getEnvOrDefault("AI_HYDRO_FIREBASE_STORAGE_BUCKET_STAGING", ""),
-						messagingSenderId: getEnvOrDefault("AI_HYDRO_FIREBASE_MESSAGING_SENDER_ID_STAGING", ""),
-						appId: getEnvOrDefault("AI_HYDRO_FIREBASE_APP_ID_STAGING", ""),
-					},
 				}
 			case Environment.local:
 				return {
@@ -117,11 +101,6 @@ class AiHydroEndpoint {
 						"https://ai-hydro.github.io/Connectors/api",
 					),
 					skillsBaseUrl: getEnvOrDefault("AI_HYDRO_SKILLS_BASE_URL_LOCAL", "https://ai-hydro.github.io/Skills/api"),
-					firebase: {
-						apiKey: getEnvOrDefault("AI_HYDRO_FIREBASE_API_KEY_LOCAL", ""),
-						authDomain: getEnvOrDefault("AI_HYDRO_FIREBASE_AUTH_DOMAIN_LOCAL", ""),
-						projectId: getEnvOrDefault("AI_HYDRO_FIREBASE_PROJECT_ID_LOCAL", ""),
-					},
 				}
 			default:
 				return {
@@ -143,14 +122,6 @@ class AiHydroEndpoint {
 						"https://ai-hydro.github.io/Connectors/api",
 					),
 					skillsBaseUrl: getEnvOrDefault("AI_HYDRO_SKILLS_BASE_URL", "https://ai-hydro.github.io/Skills/api"),
-					firebase: {
-						apiKey: getEnvOrDefault("AI_HYDRO_FIREBASE_API_KEY", ""),
-						authDomain: getEnvOrDefault("AI_HYDRO_FIREBASE_AUTH_DOMAIN", ""),
-						projectId: getEnvOrDefault("AI_HYDRO_FIREBASE_PROJECT_ID", ""),
-						storageBucket: getEnvOrDefault("AI_HYDRO_FIREBASE_STORAGE_BUCKET", ""),
-						messagingSenderId: getEnvOrDefault("AI_HYDRO_FIREBASE_MESSAGING_SENDER_ID", ""),
-						appId: getEnvOrDefault("AI_HYDRO_FIREBASE_APP_ID", ""),
-					},
 				}
 		}
 	}
@@ -163,11 +134,3 @@ class AiHydroEndpoint {
  * - AiHydroEnv.setEnvironment(Environment.local) to change the environment.
  */
 export const AiHydroEnv = AiHydroEndpoint.instance
-
-/**
- * Cloud account/remote-config integrations are opt-in for AI-Hydro.
- * Default is disabled to keep BYO-provider mode fully self-sufficient.
- */
-export function isAiHydroCloudAccountEnabled(): boolean {
-	return process?.env?.AI_HYDRO_ENABLE_CLOUD_ACCOUNT === "true"
-}

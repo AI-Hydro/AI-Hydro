@@ -26,6 +26,7 @@ import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
 import { noteSessionStarted, START_SESSION_TOOL_NAME } from "./answerAuditGate"
+import { browserToolRefusal } from "./browserGate"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
@@ -400,16 +401,11 @@ export class ToolExecutor {
 				return true
 			}
 
-			// The browser tool is off by default (X0-5). The prompt omits it, but a model can still emit the call
-			// (history, older prompts), so refuse it here instead of relying on the prompt.
-			if (
-				block.name === AiHydroDefaultTool.BROWSER &&
-				this.stateManager.getGlobalSettingsKey("browserSettings")?.disableToolUse === true
-			) {
-				const errorMessage =
-					"The browser tool is turned off. The user can turn it on in AI-Hydro Settings > Browser. Use other tools."
-				await this.say("error", errorMessage)
-				this.pushToolResult(formatResponse.toolError(errorMessage), block)
+			// The browser tool is off by default (X0-5); refuse a call the prompt no longer offers (see browserGate.ts).
+			const browserRefusal = browserToolRefusal(block.name, this.stateManager.getGlobalSettingsKey("browserSettings"))
+			if (browserRefusal) {
+				await this.say("error", browserRefusal)
+				this.pushToolResult(formatResponse.toolError(browserRefusal), block)
 				await this.saveCheckpoint()
 				return true
 			}

@@ -31,30 +31,65 @@ function walk(dir: string, exts: string[], out: string[] = []): string[] {
 	return out
 }
 
+/** Block comments are not user-visible; blank them but keep the newlines so line numbers stay right. */
+const stripBlockComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+
 describe("brand spelling guard (F-NM1)", () => {
 	// A line may opt out with the marker below, for text that must quote the old spelling (for example a test of the guard).
-	const ALLOW = "brand-guard:allow"
-	// Built so that this file does not match its own pattern.
-	const BAD = new RegExp(["AI", " ", "Hydro"].join(""))
+	const ALLOW_MARKER = "brand-guard:allow"
+	// Whole files that may quote the old spelling, each with the reason. Keep this list short.
+	const ALLOWED_FILES: Record<string, string> = {
+		"docs/ui-naming.md": "documents the rule and quotes the spellings it forbids",
+		"src/shared/__tests__/uiContract.test.ts": "holds the guard's own sample strings",
+		"CHANGELOG.md": "history: past entries quote strings as they were",
+	}
+	// Built so that this file does not match its own pattern: "AI", a space or no-break space, "Hydro" (not "Hydrol...").
+	const BAD = new RegExp(["AI", "[\\s\u00a0]+", "Hydro(?!l)"].join(""), "i")
 
-	it('the old two-word spelling never appears in extension source, webview source, the walkthrough or package.json', () => {
+	const docFiles = (dir: string) => walk(path.join(ROOT, dir), [".md", ".mdx"])
+
+	it("the old two-word spelling never appears in extension source, webview source, the walkthrough, package.json, the README or the docs", () => {
 		const files = [
 			...walk(path.join(ROOT, "src"), [".ts", ".tsx", ".js", ".json", ".md"]),
 			...walk(path.join(ROOT, "webview-ui/src"), [".ts", ".tsx", ".css", ".md"]),
 			...walk(path.join(ROOT, "walkthrough"), [".md", ".svg"]),
+			...docFiles("docs"),
 			path.join(ROOT, "package.json"),
+			path.join(ROOT, "README.md"),
+			path.join(ROOT, "PRIVACY.md"),
+			path.join(ROOT, "CHANGELOG.md"),
 		]
 		const hits: string[] = []
 		for (const file of files) {
-			fs.readFileSync(file, "utf8")
+			const rel = path.relative(ROOT, file)
+			if (ALLOWED_FILES[rel]) {
+				continue
+			}
+			stripBlockComments(fs.readFileSync(file, "utf8"))
 				.split("\n")
 				.forEach((line, i) => {
-					if (BAD.test(line) && !line.includes(ALLOW)) {
-						hits.push(`${path.relative(ROOT, file)}:${i + 1}: ${line.trim().slice(0, 100)}`)
+					if (BAD.test(line) && !line.includes(ALLOW_MARKER)) {
+						hits.push(`${rel}:${i + 1}: ${line.trim().slice(0, 100)}`)
 					}
 				})
 		}
 		expect(hits, `Use "AI-Hydro" (see docs/ui-naming.md). Offending lines:\n${hits.join("\n")}`).to.deep.equal([])
+	})
+
+	it("the guard catches the spellings it is meant to catch", () => {
+		for (const bad of ["AI Hydro", "ai hydro", "AI\u00a0Hydro wants to edit", "the AI  Hydro app"]) {
+			expect(BAD.test(bad), bad).to.equal(true)
+		}
+		for (const ok of ["AI-Hydro", "AI Hydrology course", "aihydro", "AiHydroError"]) {
+			expect(BAD.test(ok), ok).to.equal(false)
+		}
+		expect(BAD.test(stripBlockComments("/* AI Hydro */ x")), "block comments are skipped").to.equal(false)
+	})
+
+	it("every allowlisted file exists (no stale entries)", () => {
+		for (const rel of Object.keys(ALLOWED_FILES)) {
+			expect(fs.existsSync(path.join(ROOT, rel)), rel).to.equal(true)
+		}
 	})
 
 	it("the naming glossary exists", () => {
@@ -183,21 +218,26 @@ describe("removed Cline remnants stay removed", () => {
 	})
 
 	it("no account, credits, dictation or commit-message UI is shipped in the webview source", () => {
+		// Credit-balance and sign-in wording only: words such as "attribution credits" (map tiles) are legitimate.
+		const BANNED = [
+			/\bdictation\b/i,
+			/\b(?:buy|purchase|out of|insufficient|remaining|low)\s+credits\b/i,
+			/\bcredits?\s+(?:balance|limit|history|used)\b/i,
+			/\bcredit\s+limit\b/i,
+			/\$[\d.]+\s+credits\b/i,
+			/\b(?:AiHydroAuthContext|AccountServiceClient|DictationServiceClient)\b/,
+		]
 		const files = walk(path.join(ROOT, "webview-ui/src"), [".ts", ".tsx"]).filter(
 			(f) => !f.includes("/services/grpc-client") && !f.includes("__tests__") && !f.includes("OcaProvider"),
 		)
 		const offenders: string[] = []
 		for (const f of files) {
-			// Line comments are not UI text.
-			const body = fs
-				.readFileSync(f, "utf8")
+			// Block and line comments are not UI text.
+			const body = stripBlockComments(fs.readFileSync(f, "utf8"))
 				.split("\n")
 				.map((line) => line.replace(/(^|\s)\/\/.*$/, ""))
 				.join("\n")
-			if (
-				/\b(?:credits|dictation)\b/i.test(body) ||
-				/\b(?:AiHydroAuthContext|AccountServiceClient|DictationServiceClient)\b/.test(body)
-			) {
+			if (BANNED.some((re) => re.test(body))) {
 				offenders.push(path.relative(ROOT, f))
 			}
 		}

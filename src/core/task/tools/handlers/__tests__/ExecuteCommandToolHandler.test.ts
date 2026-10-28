@@ -185,8 +185,14 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 		})
 	}
 
-	it('T15 the retired aihydro CLI subagent is refused in every setting, with a message and without asking or running', async () => {
-		for (const opts of [{}, { yolo: true }, { safe: true, all: true }, { subagentsEnabled: true }, { subagentsEnabled: false }]) {
+	it("T15 the retired aihydro CLI subagent is refused in every setting, with a message and without asking or running", async () => {
+		for (const opts of [
+			{},
+			{ yolo: true },
+			{ safe: true, all: true },
+			{ subagentsEnabled: true },
+			{ subagentsEnabled: false },
+		]) {
 			const { result, calls } = await run('aihydro "x"', false, opts)
 			expect(calls.ask, JSON.stringify(opts)).to.have.length(0)
 			expect(calls.executed, JSON.stringify(opts)).to.have.length(0)

@@ -18,24 +18,6 @@ const EXPECTED_EXCELJS_VERSION = "4.4.0"
 // - The exact range/node/source checks below still fail on any new advisory or changed entry.
 const BASELINE_REVIEW_BY = "2026-12-31"
 const HIGH_BASELINE = {
-	"@firebase/firestore": {
-		isDirect: false,
-		range: "1.3.1-0 - 1.3.1-canary.df1b588 || 1.3.2-0 - 1.3.3-canary.bc4a844 || 1.13.1-0 - 1.13.1-canary.ce3addba || 1.14.0-0 - 1.15.1 || 3.7.3-20221108184443 - 3.7.3-canary.fde5adf63 || >=3.8.0-20221206221533",
-		nodes: ["node_modules/@firebase/firestore"],
-		advisorySources: [1240623, 1240625],
-	},
-	"@firebase/firestore-compat": {
-		isDirect: false,
-		range: "<=0.0.900-exp.520ca39d0 || 0.2.3-20221108184443 - 0.2.3-canary.fde5adf63 || >=0.3.0-20221206221533",
-		nodes: ["node_modules/@firebase/firestore-compat"],
-		advisorySources: [1240623, 1240625],
-	},
-	"@grpc/grpc-js": {
-		isDirect: false,
-		range: "<=1.13.5",
-		nodes: ["node_modules/@firebase/firestore/node_modules/@grpc/grpc-js"],
-		advisorySources: [1240623, 1240625],
-	},
 	"@puppeteer/browsers": {
 		isDirect: false,
 		range: "*",
@@ -65,12 +47,6 @@ const HIGH_BASELINE = {
 		range: "*",
 		nodes: ["node_modules/fast-glob"],
 		advisorySources: [1240992],
-	},
-	firebase: {
-		isDirect: true,
-		range: "0.900.22 || 6.0.2-0 - 6.0.2-canary.42eae23 || 6.0.3-0 - 6.0.4-canary.bc4a844 || 7.9.1-0 - 7.9.1-canary.0396117e || 7.13.2-0 - 7.13.2-canary.ce3addba || 7.14.0-0 - 7.15.1 || 8.10.0-20217172214 - 8.10.0-canary.f40c0db53 || 9.0.0-20217250818 - 9.0.0-canary.d0d3acb10 || 9.0.1-2021727231341 - 9.0.1-canary.e039e1472 || 9.0.2-2021891633 - 9.0.2-canary.ff9baf70c || 9.0.3-202181503543 - 9.1.0-canary.f7d8324a1 || 9.1.1-2021830195733 - 9.1.1-canary.e70de6201 || 9.1.2-20219523556 - 9.1.2-canary.fc1d36497 || 9.13.1-20221108184443 - 9.14.0-canary.fde5adf63 || >=9.15.0-20221206221533",
-		nodes: ["node_modules/firebase"],
-		advisorySources: [1240623, 1240625],
 	},
 	"get-uri": {
 		isDirect: false,

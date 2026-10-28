@@ -341,7 +341,6 @@ ripgrep-binaries/
 standalone.zip
 cline-core.js.map
 package-lock.json
-tree-sitter*.wasm
 node_modules/vscode
 `
 

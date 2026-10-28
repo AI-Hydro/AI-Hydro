@@ -17,6 +17,12 @@ Active product hardening — last updated 2026-09-08.
 
 ## Current State
 
+- Wave 0 clean-up (vision-2040 X0-4 to X0-7, PR #92): the inherited Cline account/credits/Firebase
+  stack, voice dictation, "Generate Commit Message", the code-definition tool, the `aihydro` CLI
+  subagent path and the coding walkthrough are removed; the walkthrough is hydrology; the browser
+  tool is off by default; "AI-Hydro" spelling and palette titles are guarded by
+  `src/shared/__tests__/uiContract.test.ts` (words in `docs/ui-naming.md`). Running a program named
+  `aihydro` is always denied. The two retired `clineAccountId` secrets are deleted once on start.
 - Active phase: research-grade integration and scientific hardening.
 - Chat transcript (vision-2040 Wave 2, W2-A2, PR #81): the chat renders through
   `src/shared/aihydro/transcriptPresenter.ts` (work groups, lifted lines, Rewind,
