@@ -168,7 +168,6 @@ export class Task {
 	// Core task variables
 	readonly taskId: string
 	readonly ulid: string
-	private taskIsFavorited?: boolean
 	private cwd: string
 	private taskInitializationStartTime: number
 
@@ -324,7 +323,6 @@ export class Task {
 		// Initialize taskId first
 		if (historyItem) {
 			this.ulid = historyItem.ulid ?? ulid()
-			this.taskIsFavorited = historyItem.isFavorited
 			this.taskState.conversationHistoryDeletedRange = historyItem.conversationHistoryDeletedRange
 			if (historyItem.checkpointManagerErrorMessage) {
 				this.taskState.checkpointManagerErrorMessage = historyItem.checkpointManagerErrorMessage
@@ -339,7 +337,6 @@ export class Task {
 			taskId: this.taskId,
 			ulid: this.ulid,
 			taskState: this.taskState,
-			taskIsFavorited: this.taskIsFavorited,
 			updateTaskHistory: this.updateTaskHistory,
 		})
 

@@ -17,7 +17,6 @@ import { TaskState } from "./TaskState"
 interface MessageStateHandlerParams {
 	taskId: string
 	ulid: string
-	taskIsFavorited?: boolean
 	updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
 	taskState: TaskState
 	checkpointManagerErrorMessage?: string
@@ -26,18 +25,17 @@ interface MessageStateHandlerParams {
 export class MessageStateHandler {
 	private apiConversationHistory: Anthropic.MessageParam[] = []
 	private aihydroMessages: AiHydroMessage[] = []
-	private taskIsFavorited: boolean
 	private checkpointTracker: CheckpointTracker | undefined
 	private updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
 	private taskId: string
 	private ulid: string
 	private taskState: TaskState
+	private cwdAtInitialization: string | undefined
 
 	constructor(params: MessageStateHandlerParams) {
 		this.taskId = params.taskId
 		this.ulid = params.ulid
 		this.taskState = params.taskState
-		this.taskIsFavorited = params.taskIsFavorited ?? false
 		this.updateTaskHistory = params.updateTaskHistory
 	}
 
@@ -100,7 +98,11 @@ export class MessageStateHandler {
 			} catch (error) {
 				console.error("Failed to get task directory size:", taskDir, error)
 			}
-			const cwd = await getCwd(getDesktopDir())
+			// Loop-owned fields only; creation fields are first-write-wins and user/binding fields are never sent
+			// (see historyPatch.ts), so a favourite, rename or study mirror made mid-task survives this save.
+			// Resolved once per handler: the stored value is first-write-wins anyway, so a later folder switch
+			// never reaches the item.
+			this.cwdAtInitialization ??= await getCwd(getDesktopDir())
 			await this.updateTaskHistory({
 				id: this.taskId,
 				ulid: this.ulid,
@@ -113,9 +115,8 @@ export class MessageStateHandler {
 				totalCost: apiMetrics.totalCost,
 				size: taskDirSize,
 				shadowGitConfigWorkTree: await this.checkpointTracker?.getShadowGitConfigWorkTree(),
-				cwdOnTaskInitialization: cwd,
+				cwdOnTaskInitialization: this.cwdAtInitialization,
 				conversationHistoryDeletedRange: this.taskState.conversationHistoryDeletedRange,
-				isFavorited: this.taskIsFavorited,
 				checkpointManagerErrorMessage: this.taskState.checkpointManagerErrorMessage,
 			})
 		} catch (error) {

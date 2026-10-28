@@ -69,6 +69,7 @@ import {
 	GlobalFileNames,
 	writeMcpMarketplaceCatalogToCache,
 } from "../storage/disk"
+import { type HistoryWriter, patchHistory, removeFromHistory } from "../storage/historyPatch"
 import { fetchRemoteConfig } from "../storage/remote-config/fetch"
 import { PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
@@ -1166,7 +1167,7 @@ export class Controller {
 	async deleteTaskFromState(id: string) {
 		// Remove the task from history
 		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
-		const updatedTaskHistory = taskHistory.filter((task) => task.id !== id)
+		const updatedTaskHistory = removeFromHistory(taskHistory, id)
 		this.stateManager.setGlobalState("taskHistory", updatedTaskHistory)
 
 		// Notify the webview that the task has been deleted
@@ -1364,16 +1365,28 @@ export class Controller {
 	For now we'll store the conversation history in memory, and if we need to store in state directly we'd need to do a manual conversion to ensure proper json stringification.
 	*/
 
+	/**
+	 * The task loop's save: loop-owned fields merge over the stored item (historyPatch.ts), so user and binding
+	 * fields written in between are kept. Other writers use `patchTaskHistory` with their own writer name.
+	 */
 	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
-		const history = this.stateManager.getGlobalStateKey("taskHistory")
-		const existingItemIndex = history.findIndex((h) => h.id === item.id)
-		if (existingItemIndex !== -1) {
-			history[existingItemIndex] = item
-		} else {
-			history.push(item)
-		}
-		this.stateManager.setGlobalState("taskHistory", history)
-		return history
+		return this.patchTaskHistory(item.id, item, "loop")
+	}
+
+	/**
+	 * The single write path for `HistoryItem`. Read-modify-write is synchronous (no await between the read and the
+	 * set), so concurrent callers cannot interleave and lose each other's fields.
+	 */
+	patchTaskHistory(id: string, patch: Partial<HistoryItem>, writer: HistoryWriter): HistoryItem[] {
+		const history = this.stateManager.getGlobalStateKey("taskHistory") ?? []
+		const { history: next } = patchHistory(history, { ...patch, id }, writer)
+		this.stateManager.setGlobalState("taskHistory", next)
+		return next
+	}
+
+	/** A user rename: persists across every later save (`titleSource: "user"`). */
+	renameTaskHistory(id: string, title: string): HistoryItem[] {
+		return this.patchTaskHistory(id, { title, titleSource: "user" }, "user")
 	}
 
 	// Map layer management methods

@@ -1,3 +1,6 @@
+/** Where a chat was launched from. Written once at creation (see HISTORY_FIELD_OWNERS). */
+export type HistoryOrigin = "chat" | "map" | "ledger" | "preview"
+
 export type HistoryItem = {
 	id: string
 	ulid?: string // ULID for better tracking and metrics
@@ -15,4 +18,21 @@ export type HistoryItem = {
 	conversationHistoryDeletedRange?: [number, number]
 	isFavorited?: boolean
 	checkpointManagerErrorMessage?: string
+
+	// Fields below are declared now so later PRs never reopen the merge rules. Each has exactly one owner
+	// (src/core/storage/historyPatch.ts). A build that predates them keeps them on disk and ignores them.
+	/** Display title. A "user" title is never overwritten by the loop or the system. */
+	title?: string
+	titleSource?: "auto" | "user"
+	description?: string
+	pinned?: boolean
+	memoryMode?: string
+	/** Project the chat belongs to. Immutable once set. */
+	projectId?: string
+	/** How the chat was launched. Immutable once set. */
+	origin?: HistoryOrigin
+	/** The user's own question when the prompt was wrapped (a map launch). Immutable once set. */
+	userQuestion?: string
+	/** Study the chat is bound to, mirrored from the server's `session_binding`. Written by the binding writer only. */
+	activeStudyId?: string
 }
