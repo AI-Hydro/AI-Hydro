@@ -173,6 +173,22 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 		[recordOp],
 	)
 
+	// The host opened a document (auto-open, "Add to Studio", agent hand-off): show it. Applied once per
+	// host activation, so it never overrides a selection the user makes afterwards, and it does not rely on
+	// the shell reloading to pick up the newest item.
+	const lastActivationSeqRef = useRef(0)
+	const hostActivationSeq = extensionState.htmlPreviewActivationSeq ?? 0
+	const hostActiveId = extensionState.htmlPreviewActiveId
+	useEffect(() => {
+		if (hostActivationSeq <= lastActivationSeqRef.current || !hostActiveId) {
+			return
+		}
+		if (items.some((i) => i.id === hostActiveId)) {
+			lastActivationSeqRef.current = hostActivationSeq
+			setActiveItemId(hostActiveId)
+		}
+	}, [hostActivationSeq, hostActiveId, items])
+
 	// React to htmlPreviewVersion changes from ExtensionState — this is the
 	// reliable signal that the controller mutated HTML previews.
 	useEffect(() => {

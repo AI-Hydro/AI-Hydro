@@ -50,21 +50,34 @@ interface RunTicket {
 	done: Promise<void>
 }
 
-/** Kill a kernel and anything it spawned (subprocess.Popen children, multiprocessing workers). */
-function killProcessTree(child: ChildProcessWithoutNullStreams, hard: boolean): void {
+/**
+ * Kill a kernel and anything it spawned (subprocess.Popen children, multiprocessing workers).
+ * The returned promise settles once the kill has been carried out (on Windows: when `taskkill`
+ * has finished walking the tree), so a caller that must release the kernel's working directory
+ * can wait on an explicit signal instead of sleeping.
+ */
+function killProcessTree(child: ChildProcessWithoutNullStreams, hard: boolean): Promise<void> {
 	const pid = child.pid
 	try {
 		if (pid !== undefined && process.platform === "win32") {
 			// /T walks the tree, /F because a hung kernel will not honour a polite request.
-			spawn("taskkill", ["/T", "/F", "/PID", String(pid)], { stdio: "ignore", windowsHide: true }).on("error", () => {
-				child.kill()
+			return new Promise<void>((resolve) => {
+				const killer = spawn("taskkill", ["/T", "/F", "/PID", String(pid)], { stdio: "ignore", windowsHide: true })
+				killer.on("error", () => {
+					try {
+						child.kill()
+					} catch {
+						// already gone
+					}
+					resolve()
+				})
+				killer.on("close", () => resolve())
 			})
-			return
 		}
 		if (pid !== undefined) {
 			// The kernel leads its own process group (spawned detached), so -pid reaches the whole tree.
 			process.kill(-pid, hard ? "SIGKILL" : "SIGTERM")
-			return
+			return Promise.resolve()
 		}
 	} catch {
 		// fall through to the single-process kill
@@ -74,6 +87,15 @@ function killProcessTree(child: ChildProcessWithoutNullStreams, hard: boolean): 
 	} catch {
 		// already gone
 	}
+	return Promise.resolve()
+}
+
+/** Resolves when the child has exited (immediately if it already has). */
+function waitForExit(child: ChildProcessWithoutNullStreams): Promise<void> {
+	if (child.exitCode !== null || child.signalCode !== null) {
+		return Promise.resolve()
+	}
+	return new Promise<void>((resolve) => child.once("exit", () => resolve()))
 }
 
 /** The exec currently running in a kernel (at most one: execution is serialised per session). */
@@ -156,6 +178,8 @@ function truncateOutput(text: string): { text: string; truncated: boolean } {
 
 export class ArtifactKernelService {
 	private readonly sessions = new Map<string, KernelSession>()
+	/** Kills in progress (see whenTerminated). */
+	private readonly terminating = new Set<Promise<void>>()
 	private readonly activeProfileByWorkspace = new Map<string, string>()
 	/** Per-session tail of the execution chain; cells run one at a time, in arrival order. */
 	private readonly execChains = new Map<string, Promise<void>>()
@@ -186,6 +210,30 @@ export class ArtifactKernelService {
 	dispose(): void {
 		for (const key of [...this.sessions.keys()]) {
 			this.stopKernel(key)
+		}
+	}
+
+	/**
+	 * Resolves once every kernel stopped so far (including process-tree children) has actually
+	 * exited. Windows keeps a working directory locked until then, so anything that deletes it
+	 * (test cleanup) waits on this instead of sleeping.
+	 */
+	async whenTerminated(timeoutMs = 15_000): Promise<void> {
+		let timer: NodeJS.Timeout | undefined
+		const expired = new Promise<void>((resolve) => {
+			timer = setTimeout(resolve, timeoutMs)
+		})
+		try {
+			await Promise.race([
+				(async () => {
+					while (this.terminating.size > 0) {
+						await Promise.all([...this.terminating])
+					}
+				})(),
+				expired,
+			])
+		} finally {
+			clearTimeout(timer)
 		}
 	}
 
@@ -324,7 +372,9 @@ export class ArtifactKernelService {
 		}
 		session.pending.clear()
 		session.rl.close()
-		killProcessTree(session.process, hard)
+		const termination = Promise.all([killProcessTree(session.process, hard), waitForExit(session.process)]).then(() => {})
+		this.terminating.add(termination)
+		void termination.finally(() => this.terminating.delete(termination))
 		this.sessions.delete(sessionKey)
 	}
 

@@ -44,9 +44,10 @@ vi.mock("../../services/grpc-client", () => ({
 	},
 }))
 
-// Stub useExtensionState — the context only reads `htmlPreviewVersion`.
+// Stub useExtensionState — the context reads `htmlPreviewVersion` and the host's activation signal.
+let mockExtensionState: Record<string, unknown> = { htmlPreviewVersion: 0 }
 vi.mock("../ExtensionStateContext", () => ({
-	useExtensionState: () => ({ htmlPreviewVersion: 0 }),
+	useExtensionState: () => mockExtensionState,
 	ExtensionStateContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
@@ -76,6 +77,38 @@ const TestConsumer: React.FC = () => {
 describe("HtmlPreviewContext", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
+		mockExtensionState = { htmlPreviewVersion: 0 }
+	})
+
+	it("shows a document the host just opened without a shell reload, once per activation", async () => {
+		const items: HtmlPreviewItem[] = [mk("html_1", "Preview 1"), mk("html_2", "Preview 2")]
+		mockGetHtmlPreviewState.mockResolvedValue({ items })
+		mockSubscribeToHtmlPreviews.mockReturnValue(() => {})
+		// A fresh element each time: re-rendering the identical element would bail out before the hook re-reads state.
+		const tree = () => (
+			<HtmlPreviewContextProvider>
+				<TestConsumer />
+			</HtmlPreviewContextProvider>
+		)
+		const { rerender } = render(tree())
+		await waitFor(() => expect(screen.getByTestId("active-id").textContent).to.equal("html_2"))
+
+		// The user is looking at html_1 when the host opens html_2 (activation 1): the shell switches.
+		act(() => {
+			screen.getByTestId("set-active-btn").click()
+		})
+		expect(screen.getByTestId("active-id").textContent).to.equal("html_1")
+		mockExtensionState = { htmlPreviewVersion: 1, htmlPreviewActiveId: "html_2", htmlPreviewActivationSeq: 1 }
+		rerender(tree())
+		await waitFor(() => expect(screen.getByTestId("active-id").textContent).to.equal("html_2"))
+
+		// The user goes back to html_1; an unrelated state push (same activation) must not undo that.
+		act(() => {
+			screen.getByTestId("set-active-btn").click()
+		})
+		mockExtensionState = { htmlPreviewVersion: 2, htmlPreviewActiveId: "html_2", htmlPreviewActivationSeq: 1 }
+		rerender(tree())
+		expect(screen.getByTestId("active-id").textContent).to.equal("html_1")
 	})
 
 	it("provides initial empty state", async () => {

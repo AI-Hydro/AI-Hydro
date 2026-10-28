@@ -20,6 +20,12 @@ export interface ShellReadyOptions {
 	maxAttempts?: number
 }
 
+/**
+ * Identifies this shell document (one per page load). The host serialises shell reloads on it: a
+ * reload is finished when a document it has not heard from before reports in.
+ */
+export const SHELL_INSTANCE_ID = Math.random().toString(36).slice(2) + Date.now().toString(36)
+
 export const SHELL_READY_INTERVAL_MS = 1000
 export const SHELL_READY_MAX_ATTEMPTS = 30
 

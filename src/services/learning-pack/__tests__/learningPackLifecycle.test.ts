@@ -37,7 +37,13 @@ function inspection(options?: Parameters<typeof createValidLearningPackFiles>[0]
 	})
 }
 
-describe("Learning Pack transactional lifecycle", () => {
+describe("Learning Pack transactional lifecycle", function () {
+	// Each install is a transactional sequence of many small synced writes and renames (staging, verify,
+	// registry swap, cleanup), and several tests run three of them back to back. Mocha's 2 s default is
+	// about 14x the ~140 ms this takes on macOS, but a hosted Windows disk (Defender scanning every new
+	// file) was observed to exceed it. No unawaited cleanup or held lock was found: the lock is released
+	// and afterEach awaits removal. Same budget as the other Windows-sensitive learning-pack suites.
+	this.timeout(60_000)
 	let temporaryRoot: string
 	let root: string
 
