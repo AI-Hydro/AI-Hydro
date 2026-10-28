@@ -1,9 +1,16 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
+import * as fs from "fs"
+import * as os from "os"
+import * as path from "path"
+import { TaskState } from "../../task/TaskState"
 import {
 	buildMapContextForTask,
 	capWithMarker,
 	decideMapContextInjection,
+	isMapLaunched,
+	mapContextForEnvironmentDetails,
+	workspaceMatches,
 	MAP_CONTEXT_MAX_CHARS,
 	MAP_CONTEXT_TRUNCATION_MARKER,
 	userMessageReferencesMap,
@@ -70,7 +77,18 @@ describe("map context gate (X0-8)", () => {
 	it("injects a map that belongs to the task's workspace, including a project folder inside it", () => {
 		const c = fakeController({ root: "/work/colorado", layers: 2 })
 		expect(buildMapContextForTask(c, req())).to.contain("Layers: 2")
-		expect(buildMapContextForTask(c, req({ taskCwd: "/work/colorado/study_a" }))).to.contain("Layers: 2")
+		expect(
+			buildMapContextForTask(
+				fakeController({ root: "/data/hydro/colorado", layers: 2 }),
+				req({ taskCwd: "/data/hydro/colorado/study_a" }),
+			),
+		).to.contain("Layers: 2")
+	})
+
+	it("a map-launched chat or an explicit map mention gets context even when the folders differ", () => {
+		const c = fakeController({ root: "/work/india", layers: 2 })
+		expect(buildMapContextForTask(c, req({ launchedFromMap: true }))).to.contain("Layers: 2")
+		expect(buildMapContextForTask(c, req({ userReferencedMap: true }))).to.contain("Layers: 2")
 	})
 
 	it("with no workspace key, injects only for a map-launched chat or when the user referred to the map", () => {
@@ -187,5 +205,95 @@ describe("map context size per turn (session-study fixture)", () => {
 		}
 		expect(sends).to.equal(1)
 		expect(total).to.be.at.most(MAP_CONTEXT_MAX_CHARS)
+	})
+})
+
+describe("workspaceMatches: broad parents never claim children", () => {
+	it("matches equal folders and real containment", () => {
+		expect(workspaceMatches("/data/hydro/colorado", "/data/hydro/colorado")).to.equal(true)
+		expect(workspaceMatches("/data/hydro/colorado", "/data/hydro/colorado/a")).to.equal(true)
+		expect(workspaceMatches("/data/hydro/colorado/a", "/data/hydro/colorado")).to.equal(true)
+		expect(workspaceMatches("C:\\Users\\me\\proj", "c:/users/me/proj/sub")).to.equal(true)
+	})
+
+	it("a drive root, the home directory or a folder shallower than depth 3 does not match its children", () => {
+		expect(workspaceMatches("/", "/work/colorado")).to.equal(false)
+		expect(workspaceMatches("C:\\", "C:\\work\\colorado\\x")).to.equal(false)
+		expect(workspaceMatches("/Users/me", "/Users/me/proj/a")).to.equal(false)
+		expect(workspaceMatches("/work/colorado", "/work/colorado/a")).to.equal(false)
+		const home = os.homedir().replace(/\\/g, "/")
+		expect(workspaceMatches(home, `${home}/a/b/c`)).to.equal(false)
+		expect(workspaceMatches("/work/colorado/a", "/work/colorado")).to.equal(false)
+	})
+
+	it("a different folder never matches", () => {
+		expect(workspaceMatches("/data/hydro/india", "/data/hydro/colorado")).to.equal(false)
+		expect(workspaceMatches("", "/data/hydro/colorado")).to.equal(false)
+	})
+})
+
+describe("capWithMarker truncation safety", () => {
+	it("never leaves a lone high surrogate in front of the marker", () => {
+		const keep = MAP_CONTEXT_MAX_CHARS - MAP_CONTEXT_TRUNCATION_MARKER.length
+		const text = `${"a".repeat(keep - 1)}\u{1F30A}${"b".repeat(100)}` // the pair straddles the cut
+		const out = capWithMarker(text)
+		expect(out.length).to.be.at.most(MAP_CONTEXT_MAX_CHARS)
+		expect(out.endsWith(MAP_CONTEXT_TRUNCATION_MARKER)).to.equal(true)
+		const before = out.slice(0, out.length - MAP_CONTEXT_TRUNCATION_MARKER.length)
+		const last = before.charCodeAt(before.length - 1)
+		expect(last >= 0xd800 && last <= 0xdbff).to.equal(false)
+	})
+})
+
+describe("map context wiring into environment_details", () => {
+	const ctl = () =>
+		fakeController({ root: "/data/hydro/colorado", layers: 2, events: [ev("layer.geojson", { name: "Basin" })] })
+	const cwd = "/data/hydro/colorado"
+	const text = (t: string) => [{ type: "text", text: t }]
+
+	it("threads the user's content: a map mention re-sends an unchanged block", () => {
+		const state = new TaskState()
+		const c = ctl()
+		expect(mapContextForEnvironmentDetails(c, state, cwd, false, text("<task>\nrun NSE\n</task>"))).to.contain("Map context")
+		expect(mapContextForEnvironmentDetails(c, state, cwd, false, text("<feedback>\nok\n</feedback>"))).to.equal("")
+		expect(
+			mapContextForEnvironmentDetails(c, state, cwd, false, text("<feedback>\nwhat is on the map?\n</feedback>")),
+		).to.contain("Map context")
+	})
+
+	it("launchedFromMap comes from the launch and from the history item", () => {
+		expect(isMapLaunched({ origin: "map" }, undefined)).to.equal(true)
+		expect(isMapLaunched(undefined, { origin: "map" })).to.equal(true)
+		expect(isMapLaunched({ origin: "chat" }, { origin: "map" })).to.equal(false)
+		expect(isMapLaunched(undefined, { origin: "chat" })).to.equal(false)
+		expect(isMapLaunched(undefined, undefined)).to.equal(false)
+		const state = new TaskState()
+		const noKey = fakeController({ root: "", layers: 2 })
+		expect(mapContextForEnvironmentDetails(noKey, state, cwd, isMapLaunched(undefined, { origin: "map" }), [])).to.contain(
+			"Map context",
+		)
+		expect(
+			mapContextForEnvironmentDetails(noKey, new TaskState(), cwd, isMapLaunched(undefined, { origin: "chat" }), []),
+		).to.equal("")
+	})
+
+	it("truncation (setConversationHistoryDeletedRange) makes an unchanged map be re-sent", () => {
+		const state = new TaskState()
+		const c = ctl()
+		expect(mapContextForEnvironmentDetails(c, state, cwd, false, [])).to.contain("Map context")
+		expect(mapContextForEnvironmentDetails(c, state, cwd, false, [])).to.equal("")
+		state.setConversationHistoryDeletedRange([1, 4])
+		expect(state.conversationHistoryDeletedRange).to.deep.equal([1, 4])
+		expect(mapContextForEnvironmentDetails(c, state, cwd, false, [])).to.contain("Map context")
+	})
+
+	it("every deleted-range change in the Task goes through the resetting setter, and loadContext uses the shared helper", () => {
+		const src = fs.readFileSync(path.join(__dirname, "../../task/index.ts"), "utf8")
+		expect(src).not.to.match(/taskState\.conversationHistoryDeletedRange\s*=[^=]/)
+		expect(src).to.contain(
+			"mapContextForEnvironmentDetails(this.controller, this.taskState, this.cwd, this.launchedFromMap, userContent)",
+		)
+		expect(src).to.contain("this.getEnvironmentDetails(includeFileDetails, userContent)")
+		expect(src).to.contain("this.taskState.lastInjectedMapContext = undefined") // compaction path
 	})
 })

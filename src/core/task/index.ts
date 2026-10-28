@@ -29,7 +29,7 @@ import { getInstalledSkillsInstructions } from "@core/context/instructions/user-
 import { clearPending, markPending } from "@core/controller/ui/pendingAskBadge"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
 import { AiHydroIgnoreController } from "@core/ignore/AiHydroIgnoreController"
-import { buildMapContextForTask, decideMapContextInjection, userMessageReferencesMap } from "@core/map/MapContextForTask"
+import { isMapLaunched, mapContextForEnvironmentDetails } from "@core/map/MapContextForTask"
 import { parseMentions } from "@core/mentions"
 import { summarizeTask } from "@core/prompts/contextManagement"
 import { formatResponse } from "@core/prompts/responses"
@@ -301,7 +301,7 @@ export class Task {
 		this.contextManager = new ContextManager()
 		this.diffViewProvider = HostProvider.get().createDiffViewProvider()
 		this.cwd = cwd
-		this.launchedFromMap = (params.launch?.origin ?? historyItem?.origin) === "map"
+		this.launchedFromMap = isMapLaunched(params.launch, historyItem)
 		this.stateManager = stateManager
 		this.workspaceManager = workspaceManager
 
@@ -318,7 +318,7 @@ export class Task {
 		// Initialize taskId first
 		if (historyItem) {
 			this.ulid = params.ulid ?? historyItem.ulid ?? ulid()
-			this.taskState.conversationHistoryDeletedRange = historyItem.conversationHistoryDeletedRange
+			this.taskState.setConversationHistoryDeletedRange(historyItem.conversationHistoryDeletedRange)
 			if (historyItem.checkpointManagerErrorMessage) {
 				this.taskState.checkpointManagerErrorMessage = historyItem.checkpointManagerErrorMessage
 			}
@@ -1770,10 +1770,12 @@ export class Task {
 		const apiConversationHistory = this.messageStateHandler.getApiConversationHistory()
 
 		const previousDeletedRange = this.taskState.conversationHistoryDeletedRange
-		this.taskState.conversationHistoryDeletedRange = this.contextManager.getNextTruncationRange(
-			apiConversationHistory,
-			previousDeletedRange,
-			"quarter", // Force aggressive truncation
+		this.taskState.setConversationHistoryDeletedRange(
+			this.contextManager.getNextTruncationRange(
+				apiConversationHistory,
+				previousDeletedRange,
+				"quarter", // Force aggressive truncation
+			),
 		)
 		await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 		await this.contextManager.triggerApplyStandardContextTruncationNoticeChange(
@@ -1884,7 +1886,7 @@ export class Task {
 		)
 
 		if (contextManagementMetadata.updatedConversationHistoryDeletedRange) {
-			this.taskState.conversationHistoryDeletedRange = contextManagementMetadata.conversationHistoryDeletedRange
+			this.taskState.setConversationHistoryDeletedRange(contextManagementMetadata.conversationHistoryDeletedRange)
 			await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 			// saves task history item which we use to keep track of conversation history deleted range
 		}
@@ -2431,7 +2433,7 @@ export class Task {
 					// we want to increment the deleted range to remove the pre-summarization tool call output, with additional safety check
 					const safeEnd = Math.min(end + 2, apiHistory.length - 1)
 					if (end + 2 <= safeEnd) {
-						this.taskState.conversationHistoryDeletedRange = [start, end + 2]
+						this.taskState.setConversationHistoryDeletedRange([start, end + 2])
 						await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 					}
 				}
@@ -3393,17 +3395,7 @@ export class Task {
 		}
 
 		// Map context (X0-8 stop-gap): only for a map that belongs to this chat, and only when it changed since the last send.
-		const userReferencedMap = userMessageReferencesMap(userContent)
-		const mapContext = buildMapContextForTask(this.controller, {
-			taskCwd: this.cwd,
-			launchedFromMap: this.launchedFromMap,
-			userReferencedMap,
-		})
-		const mapDecision = decideMapContextInjection(mapContext, this.taskState.lastInjectedMapContext, userReferencedMap)
-		this.taskState.lastInjectedMapContext = mapDecision.next
-		if (mapDecision.inject) {
-			details += mapContext
-		}
+		details += mapContextForEnvironmentDetails(this.controller, this.taskState, this.cwd, this.launchedFromMap, userContent)
 
 		return `<environment_details>\n${details.trim()}\n</environment_details>`
 	}

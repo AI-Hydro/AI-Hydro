@@ -1,4 +1,5 @@
 import type { Controller } from "@core/controller"
+import os from "os"
 import type { MapEvent } from "@shared/proto/cline/map"
 
 /** Hard cap on the whole block, separator included (X0-8 stop-gap, replaced by the MAP digest in Wave 2). */
@@ -55,14 +56,41 @@ function normalizeRoot(p: string): string {
 	return out
 }
 
-/** Same folder, or one contains the other (a project folder inside a workspace and vice versa). */
+/** Fewer path segments than this (after any drive letter) is too broad a parent to claim its children. */
+const MIN_PARENT_DEPTH = 3
+
+function isBroadRoot(normalized: string): boolean {
+	const home = normalizeRoot(os.homedir())
+	if (normalized === home) {
+		return true
+	}
+	const segments = normalized
+		.replace(/^[a-z]:/, "")
+		.split("/")
+		.filter(Boolean)
+	return segments.length < MIN_PARENT_DEPTH
+}
+
+/**
+ * Same folder, or one contains the other (a project folder inside a workspace and vice versa). A containing folder
+ * that is the home directory, a drive root or shallower than MIN_PARENT_DEPTH never claims its children.
+ */
 export function workspaceMatches(mapRoot: string, taskCwd: string): boolean {
 	const a = normalizeRoot(mapRoot)
 	const b = normalizeRoot(taskCwd)
 	if (!a || !b) {
 		return false
 	}
-	return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
+	if (a === b) {
+		return true
+	}
+	if (b.startsWith(`${a}/`)) {
+		return !isBroadRoot(a)
+	}
+	if (a.startsWith(`${b}/`)) {
+		return !isBroadRoot(b)
+	}
+	return false
 }
 
 function parsePayload(event: MapEvent): Record<string, unknown> {
@@ -121,20 +149,26 @@ export function capWithMarker(text: string, max: number = MAP_CONTEXT_MAX_CHARS)
 	if (text.length <= max) {
 		return text
 	}
-	return text.slice(0, max - MAP_CONTEXT_TRUNCATION_MARKER.length) + MAP_CONTEXT_TRUNCATION_MARKER
+	let head = text.slice(0, max - MAP_CONTEXT_TRUNCATION_MARKER.length)
+	const last = head.charCodeAt(head.length - 1)
+	if (last >= 0xd800 && last <= 0xdbff) {
+		head = head.slice(0, -1) // never leave half a surrogate pair in front of the marker
+	}
+	return head + MAP_CONTEXT_TRUNCATION_MARKER
 }
 
 /**
  * Compact map context for the agent: the layers, the last selection and meaningful recent actions.
  *
- * Returns "" unless the map belongs to this chat: the map session's workspace matches the task folder, or the map
- * session carries no workspace and the chat was launched from the map or the user referred to it. A basemap alone is
- * never enough, and the pan/zoom view is left out (it changes constantly and says nothing about the study).
+ * Returns "" unless the map belongs to this chat: the map session's workspace matches the task folder, or the chat
+ * was launched from the map, or the user referred to the map this turn (either of the last two wins even when the
+ * folders differ). A basemap alone is never enough, and the pan/zoom view is left out (it changes constantly and says
+ * nothing about the study).
  */
 export function buildMapContextForTask(controller: Controller, request: MapContextRequest): string {
 	const svc = controller.mapSessionService
-	const mapRoot = svc.getWorkspaceRoot()
-	const belongs = mapRoot ? workspaceMatches(mapRoot, request.taskCwd) : request.launchedFromMap || request.userReferencedMap
+	const belongs =
+		workspaceMatches(svc.getWorkspaceRoot(), request.taskCwd) || request.launchedFromMap || request.userReferencedMap
 	if (!belongs) {
 		return ""
 	}
@@ -205,4 +239,24 @@ export function decideMapContextInjection(
 		return { inject: false, next: lastInjected }
 	}
 	return { inject: true, next: block }
+}
+
+/** A chat is map-launched when it was created from the map, now or in the history item it resumes. */
+export function isMapLaunched(launch?: { origin?: string }, historyItem?: { origin?: string }): boolean {
+	return (launch?.origin ?? historyItem?.origin) === "map"
+}
+
+/** The one place environment_details asks for map context: builds, dedups, and records what was sent. */
+export function mapContextForEnvironmentDetails(
+	controller: Controller,
+	state: { lastInjectedMapContext?: string },
+	taskCwd: string,
+	launchedFromMap: boolean,
+	userContent: ReadonlyArray<{ type: string; text?: string }>,
+): string {
+	const userReferencedMap = userMessageReferencesMap(userContent)
+	const block = buildMapContextForTask(controller, { taskCwd, launchedFromMap, userReferencedMap })
+	const decision = decideMapContextInjection(block, state.lastInjectedMapContext, userReferencedMap)
+	state.lastInjectedMapContext = decision.next
+	return decision.inject ? block : ""
 }

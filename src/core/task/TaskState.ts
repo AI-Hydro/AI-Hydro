@@ -18,6 +18,15 @@ export class TaskState {
 	/** The map-context block last sent in this task; undefined when none was sent or compaction dropped it. */
 	lastInjectedMapContext?: string
 
+	/**
+	 * Every change to the deleted range goes through here: whatever the model was sent earlier may now be cut from
+	 * its view, so the map-context block is forgotten and the next turn sends it again.
+	 */
+	setConversationHistoryDeletedRange(range: [number, number] | undefined): void {
+		this.conversationHistoryDeletedRange = range
+		this.lastInjectedMapContext = undefined
+	}
+
 	// Presentation locks
 	presentAssistantMessageLocked = false
 	presentAssistantMessageHasPendingUpdates = false
