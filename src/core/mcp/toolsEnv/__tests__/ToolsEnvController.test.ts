@@ -98,6 +98,16 @@ describe("ToolsEnvController", () => {
 		expect(machine.calls.filter((x) => x.includes("pip"))).to.have.length(1)
 	})
 
+	it("autoInstall:false (test hosts) never creates a venv or runs pip, and reports 'missing' with Install available", async () => {
+		const c = controller()
+		await c.startup({ autoInstall: false })
+		await settled(c)
+		expect(c.getStatus().phase).to.equal("missing")
+		expect(machine.calls.some((x) => x.includes("pip") || x.includes("venv"))).to.equal(false)
+		await c.runAction("install")
+		expect(c.getStatus().phase).to.equal("ready")
+	})
+
 	it("adopts an existing healthy venv: no pip, no venv creation, registered and recorded", async () => {
 		makeVenv(machine, "2.8.2")
 		const c = controller()

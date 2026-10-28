@@ -6,6 +6,7 @@ import * as path from "path"
 import * as vscode from "vscode"
 import { createVscodeToolsEnv } from "@/hosts/vscode/VscodeToolsEnv"
 import { HostProvider } from "@/hosts/host-provider"
+import { isIsolatedLocalE2E } from "@/services/test/isIsolatedLocalE2E"
 import { migrateFirstPartyAnchor } from "./firstPartyLauncher"
 import { findFirstPartyEntryName, readMcpSettings } from "./toolsEnv/launcherRegistration"
 
@@ -99,7 +100,9 @@ export async function ensureDefaultMcpServer(context: vscode.ExtensionContext): 
 			settingsPath,
 			cacheDir: CACHE_DIR,
 		})
-		await controller.startup()
+		// Test hosts (vscode-test integration runs, the isolated Playwright host) must not create a venv or reach PyPI;
+		// they still get the status chip, the registration of an environment already on disk and the manual actions.
+		await controller.startup({ autoInstall: context.extensionMode !== vscode.ExtensionMode.Test && !isIsolatedLocalE2E() })
 	} catch (error) {
 		// Non-fatal: the status chip and the install commands stay available.
 		console.error("[AI-Hydro] Failed to start the tools environment:", error)

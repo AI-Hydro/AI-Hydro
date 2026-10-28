@@ -134,10 +134,11 @@ export class ToolsEnvController {
 
 	/**
 	 * Activation: register the managed launcher right away when the environment is already on disk (so the MCP hub
-	 * starts it), then verify health or install in the background. Resolves after the quick part; the slow part
+	 * starts it), then verify health or, unless `autoInstall` is false (test hosts), install in the background. Resolves after the quick part; the slow part
 	 * continues and is observable through `onDidChange`.
 	 */
-	async startup(): Promise<void> {
+	async startup(options: { autoInstall?: boolean } = {}): Promise<void> {
+		const autoInstall = options.autoInstall ?? true
 		const venv = this.venvDir()
 		this.setStatus({ venvPath: venv, interpreterPath: "", serverCommand: this.managedCommand() })
 		const settings = await readMcpSettings(this.paths.settingsPath)
@@ -159,7 +160,7 @@ export class ToolsEnvController {
 			await this.register(false)
 		}
 		await this.refreshTrust()
-		void this.refresh({ auto: cls === "none" || cls === "managed" || cls === "custom-broken", cls })
+		void this.refresh({ auto: autoInstall && (cls === "none" || cls === "managed" || cls === "custom-broken"), cls })
 	}
 
 	/** Re-probe (and, when `auto`, install if needed). Safe to call repeatedly: a second call joins the running one. */
