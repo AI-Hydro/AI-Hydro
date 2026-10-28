@@ -4,7 +4,7 @@ import {
 	ConversationRole as BedrockConversationRole,
 	type Message as BedrockMessage,
 } from "@aws-sdk/client-bedrock-runtime"
-import { ChatMessages, LlmModuleConfig, OrchestrationClient, TemplatingModuleConfig } from "@sap-ai-sdk/orchestration"
+import { ChatMessages, OrchestrationClient, OrchestrationModuleConfig } from "@sap-ai-sdk/orchestration"
 import { ModelInfo, SapAiCoreModelId, sapAiCoreDefaultModelId, sapAiCoreModels } from "@shared/api"
 import axios from "axios"
 import OpenAI from "openai"
@@ -496,23 +496,23 @@ export class SapAiCoreHandler implements ApiHandler {
 			this.ensureAiCoreEnvSetup()
 			const model = this.getModel()
 
-			// Define the LLM to be used by the Orchestration pipeline
-			const llm: LlmModuleConfig = {
-				model_name: model.id,
-			}
-
-			const templating: TemplatingModuleConfig = {
-				template: [
-					{
-						role: "system",
-						content: systemPrompt,
+			// SAP AI SDK 2.x: the LLM and the static system prompt live under `promptTemplating`
+			const config: OrchestrationModuleConfig = {
+				promptTemplating: {
+					model: { name: model.id },
+					prompt: {
+						template: [
+							{
+								role: "system",
+								content: systemPrompt,
+							},
+						],
 					},
-				],
+				},
 			}
-			const orchestrationClient = new OrchestrationClient(
-				{ llm, templating },
-				{ resourceGroup: this.options.sapAiResourceGroup || "default" },
-			)
+			const orchestrationClient = new OrchestrationClient(config, {
+				resourceGroup: this.options.sapAiResourceGroup || "default",
+			})
 
 			const sapMessages = this.convertMessageParamToSAPMessages(messages)
 
