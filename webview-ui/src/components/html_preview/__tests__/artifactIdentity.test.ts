@@ -80,7 +80,10 @@ describe("deriveArtifactIdentity", () => {
 	})
 
 	it("labels an unsigned marketplace module as unsigned and static", () => {
-		const id = deriveArtifactIdentity(makeItem({ metadata: { source: "file", trustSource: "unsigned-module" } }), EXECUTABLE_MANIFEST)
+		const id = deriveArtifactIdentity(
+			makeItem({ metadata: { source: "file", trustSource: "unsigned-module" } }),
+			EXECUTABLE_MANIFEST,
+		)
 		expect(id.capability).to.equal("static")
 		expect(id.capabilityLabel).to.equal("Unsigned")
 	})
@@ -94,7 +97,9 @@ describe("deriveArtifactIdentity", () => {
 	})
 
 	it("marks a manifest without executable cells as a module", () => {
-		const id = deriveArtifactIdentity(makeItem({ metadata: { source: "file", ...TRUSTED } }), { requires: { executable: false } })
+		const id = deriveArtifactIdentity(makeItem({ metadata: { source: "file", ...TRUSTED } }), {
+			requires: { executable: false },
+		})
 		expect(id.capability).to.equal("module")
 	})
 
@@ -117,7 +122,12 @@ describe("deriveArtifactIdentity", () => {
 
 	it("uses the pack edition as profile and marks capability as installed-pack", () => {
 		const item = makeItem({
-			metadata: { source: "file", trustSource: "learning-pack", artifactKind: "learning-pack-v1", learningPackEdition: "student" },
+			metadata: {
+				source: "file",
+				trustSource: "learning-pack",
+				artifactKind: "learning-pack-v1",
+				learningPackEdition: "student",
+			},
 		})
 		const id = deriveArtifactIdentity(item, EXECUTABLE_MANIFEST)
 		expect(id.capability).to.equal("installed-pack")

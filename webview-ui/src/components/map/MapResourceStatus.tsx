@@ -68,8 +68,12 @@ export function MapResourceStatus({
 	const imageryErrors = rows.filter((row) => row.status === "error")
 	const loading = rows.filter((row) => row.status !== "error")
 	const notes = [
-		...sourceIds.filter((id) => tileNotes[id] && !layerIds.has(id)).map((id) => ({ id: `__${id}__`, name: sourceLabels[id], message: tileNotes[id] })),
-		...visibleLayers.filter((layer) => tileNotes[layer.id]).map((layer) => ({ id: layer.id, name: layer.name, message: tileNotes[layer.id] })),
+		...sourceIds
+			.filter((id) => tileNotes[id] && !layerIds.has(id))
+			.map((id) => ({ id: `__${id}__`, name: sourceLabels[id], message: tileNotes[id] })),
+		...visibleLayers
+			.filter((layer) => tileNotes[layer.id])
+			.map((layer) => ({ id: layer.id, name: layer.name, message: tileNotes[layer.id] })),
 	]
 
 	const problemKey = JSON.stringify([rendererError ?? null, imageryErrors.map((row) => [row.id, row.message])])
@@ -98,7 +102,11 @@ export function MapResourceStatus({
 	if (hasProblem && dismissedKey === problemKey) {
 		return (
 			<div style={{ ...frame, padding: "4px 8px" }}>
-				<button onClick={() => setDismissedKey(null)} style={button} title="Show the map problems that were dismissed" type="button">
+				<button
+					onClick={() => setDismissedKey(null)}
+					style={button}
+					title="Show the map problems that were dismissed"
+					type="button">
 					Map issues ({imageryErrors.length + (rendererError ? 1 : 0)})
 				</button>
 			</div>
@@ -112,7 +120,11 @@ export function MapResourceStatus({
 					<strong style={{ flex: 1 }}>
 						{rendererError && imageryErrors.length === 0 ? "Map renderer stopped" : "Map display incomplete"}
 					</strong>
-					<button aria-label="Dismiss map issues" onClick={() => setDismissedKey(problemKey)} style={button} type="button">
+					<button
+						aria-label="Dismiss map issues"
+						onClick={() => setDismissedKey(problemKey)}
+						style={button}
+						type="button">
 						Dismiss
 					</button>
 				</div>

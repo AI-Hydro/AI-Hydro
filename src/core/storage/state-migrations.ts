@@ -568,7 +568,6 @@ export async function migrateWelcomeViewCompleted(context: vscode.ExtensionConte
 			// Fetch API keys directly from secrets
 			const apiKey = await context.secrets.get("apiKey")
 			const openRouterApiKey = await context.secrets.get("openRouterApiKey")
-			const clineAccountId = await context.secrets.get("clineAccountId")
 			const openAiApiKey = await context.secrets.get("openAiApiKey")
 			const ollamaApiKey = await context.secrets.get("ollamaApiKey")
 			const liteLlmApiKey = await context.secrets.get("liteLlmApiKey")
@@ -620,7 +619,6 @@ export async function migrateWelcomeViewCompleted(context: vscode.ExtensionConte
 				mistralApiKey,
 				planModeVsCodeLmModelSelector,
 				actModeVsCodeLmModelSelector,
-				clineAccountId,
 				asksageApiKey,
 				xaiApiKey,
 				sambanovaApiKey,
@@ -654,6 +652,32 @@ export async function cleanupMcpMarketplaceCatalogFromGlobalState(context: vscod
 		}
 	} catch (error) {
 		console.error("Failed to cleanup mcpMarketplaceCatalog from global state:", error)
+		// Continue execution - cleanup failure shouldn't break extension startup
+	}
+}
+
+/**
+ * Marker for {@link removeRetiredAccountSecrets}. The value is the migration version so a later migration of the same
+ * kind can use a new key.
+ */
+const RETIRED_ACCOUNT_SECRETS_MIGRATION_KEY = "migrations.retiredAccountSecrets.v1"
+
+/**
+ * The cloud-account sign-in (Firebase refresh token at `clineAccountId`, the account auth blob at
+ * `cline:clineAccountId`) was removed in X0-6: nothing reads these two secrets any more and they belong to a
+ * third-party service. Delete them exactly once. Only these two keys are touched; no provider API key is. A failed
+ * delete leaves the marker unset so the next activation retries, and a second run is a no-op.
+ */
+export async function removeRetiredAccountSecrets(context: vscode.ExtensionContext) {
+	try {
+		if (context.globalState.get(RETIRED_ACCOUNT_SECRETS_MIGRATION_KEY) === true) {
+			return
+		}
+		await context.secrets.delete("clineAccountId")
+		await context.secrets.delete("cline:clineAccountId")
+		await context.globalState.update(RETIRED_ACCOUNT_SECRETS_MIGRATION_KEY, true)
+	} catch (error) {
+		console.error("Failed to remove retired account secrets:", error)
 		// Continue execution - cleanup failure shouldn't break extension startup
 	}
 }

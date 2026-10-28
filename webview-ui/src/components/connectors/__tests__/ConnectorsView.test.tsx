@@ -37,7 +37,14 @@ const remoteCatalog = (extra: Record<string, unknown> = {}) =>
 		},
 	])
 
-const status = (ok: boolean) => ({ ok, authenticated: ok, projectId: ok ? "my-proj" : "", eeVersion: "", pythonExecutable: "", message: "" })
+const status = (ok: boolean) => ({
+	ok,
+	authenticated: ok,
+	projectId: ok ? "my-proj" : "",
+	eeVersion: "",
+	pythonExecutable: "",
+	message: "",
+})
 const settle = async () => {
 	await act(async () => {
 		await Promise.resolve()

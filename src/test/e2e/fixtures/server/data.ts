@@ -5,7 +5,7 @@ import type {
 	PaymentTransaction,
 	UsageTransaction,
 	UserResponse,
-} from "../../../../shared/AiHydroAccount"
+} from "./types"
 
 const organizations = [
 	{

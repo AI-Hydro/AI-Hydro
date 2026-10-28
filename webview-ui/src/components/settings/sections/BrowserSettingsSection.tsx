@@ -153,7 +153,8 @@ export const BrowserSettingsSection: React.FC<BrowserSettingsSectionProps> = ({ 
 	// Determine if we should show the relaunch button
 	const isRemoteEnabled = Boolean(browserSettings.remoteBrowserEnabled)
 	const shouldShowRelaunchButton = isRemoteEnabled && connectionStatus === false
-	const isSubSettingsOpen = !(browserSettings.disableToolUse || false)
+	const isBrowserToolEnabled = browserSettings.disableToolUse === false
+	const isSubSettingsOpen = isBrowserToolEnabled
 
 	return (
 		<div>
@@ -163,14 +164,15 @@ export const BrowserSettingsSection: React.FC<BrowserSettingsSectionProps> = ({ 
 					{/* Master Toggle */}
 					<div className={`settings-card ${isSubSettingsOpen ? "mb-0" : "mb-2.5"}`}>
 						<VSCodeCheckbox
-							checked={browserSettings.disableToolUse || false}
+							checked={isBrowserToolEnabled}
 							onChange={(e) =>
-								updateSetting("browserSettings", { disableToolUse: (e.target as HTMLInputElement).checked })
+								updateSetting("browserSettings", { disableToolUse: !(e.target as HTMLInputElement).checked })
 							}>
-							Disable browser tool usage
+							Enable browser tool
 						</VSCodeCheckbox>
 						<p className="toggle-description mt-1">
-							Prevent AI-Hydro from using browser actions (e.g. launch, click, type).
+							Off by default. Lets AI-Hydro launch a browser and click, type and take screenshots. Most hydrology
+							work does not need it.
 						</p>
 					</div>
 

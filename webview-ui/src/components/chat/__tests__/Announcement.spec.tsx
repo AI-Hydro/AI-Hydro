@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import React from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { AiHydroAuthProvider } from "@/context/AiHydroAuthContext"
 import Announcement from "../Announcement"
 
 // Mock the VSCode webview toolkit
@@ -10,15 +9,6 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	useTheme: () => ({ themeType: "light" }),
 	VSCodeButton: (props: ComponentProps<"button">) => <button {...props}>{props.children}</button>,
 	VSCodeLink: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
-}))
-
-// Mock the gRPC service client
-vi.mock("@/services/grpc-client", () => ({
-	AccountServiceClient: {
-		accountLoginClicked: vi.fn().mockResolvedValue({}),
-		subscribeToAuthStatusUpdate: vi.fn().mockReturnValue(() => {}),
-		getUserOrganizations: vi.fn().mockResolvedValue({ organizations: [] }),
-	},
 }))
 
 // Mock HeroUI components
@@ -60,7 +50,7 @@ vi.mock("@/context/ExtensionStateContext", () => ({
 
 // Test wrapper component that provides all necessary contexts
 const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	return <AiHydroAuthProvider>{children}</AiHydroAuthProvider>
+	return <>{children}</>
 }
 
 describe("Announcement", () => {

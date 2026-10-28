@@ -10,13 +10,11 @@ import type { InfoNotice, McpNotificationLevel } from "./aihydro/infoNotice"
 import { AiHydroRulesToggles } from "./aihydro-rules"
 import { ApiConfiguration } from "./api"
 import { BrowserSettings } from "./BrowserSettings"
-import { DictationSettings } from "./DictationSettings"
 import { FocusChainSettings } from "./FocusChainSettings"
 import { HistoryItem } from "./HistoryItem"
 import { McpDisplayMode } from "./McpDisplayMode"
 import { Mode, OpenaiReasoningEffort } from "./storage/types"
 import { TelemetrySetting } from "./TelemetrySetting"
-import { UserInfo } from "./UserInfo"
 // webview will hold state
 export interface ExtensionMessage {
 	type: "grpc_response" | "commandResult"
@@ -87,13 +85,11 @@ export interface ExtensionState {
 	terminalReuseEnabled?: boolean
 	terminalOutputLineLimit: number
 	maxConsecutiveMistakes: number
-	subagentTerminalOutputLineLimit: number
 	defaultTerminalProfile?: string
 	vscodeTerminalExecutionMode: string
 	backgroundCommandRunning?: boolean
 	backgroundCommandTaskId?: string
 	lastCompletedCommandTs?: number
-	userInfo?: UserInfo
 	version: string
 	distinctId: string
 	globalAiHydroRulesToggles: AiHydroRulesToggles
@@ -107,7 +103,6 @@ export interface ExtensionState {
 	yoloModeToggled?: boolean
 	useAutoCondense?: boolean
 	focusChainSettings: FocusChainSettings
-	dictationSettings: DictationSettings
 	customPrompt?: string
 	autoCondenseThreshold?: number
 	favoritedModelIds: string[]

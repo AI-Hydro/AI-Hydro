@@ -1,7 +1,6 @@
 import { cn } from "@heroui/react"
 import type { Decorator } from "@storybook/react-vite"
 import React from "react"
-import { AiHydroAuthContext, AiHydroAuthContextType, AiHydroAuthProvider, useAiHydroAuth } from "@/context/AiHydroAuthContext"
 import {
 	ExtensionStateContext,
 	ExtensionStateContextProvider,
@@ -41,9 +40,7 @@ function StorybookDecoratorProvider(className = "relative"): Decorator {
 		return (
 			<div className={className}>
 				<ExtensionStateContextProvider>
-					<AiHydroAuthProvider>
-						<ThemeHandler theme={parameters?.globals?.theme}>{React.createElement(story)}</ThemeHandler>
-					</AiHydroAuthProvider>
+					<ThemeHandler theme={parameters?.globals?.theme}>{React.createElement(story)}</ThemeHandler>
 				</ExtensionStateContextProvider>
 			</div>
 		)
@@ -59,23 +56,12 @@ const ExtensionStateProviderWithOverrides: React.FC<{
 	return <ExtensionStateContext.Provider value={{ ...extensionState, ...overrides }}>{children}</ExtensionStateContext.Provider>
 }
 
-const AiHydroAuthProviderWithOverrides: React.FC<{
-	overrides?: Partial<AiHydroAuthContextType>
-	children: React.ReactNode
-}> = ({ overrides, children }) => {
-	const authContext = useAiHydroAuth()
-	return <AiHydroAuthContext.Provider value={{ ...authContext, ...overrides }}>{children}</AiHydroAuthContext.Provider>
-}
-
 export const createStorybookDecorator =
-	(overrideStates?: Partial<ExtensionStateContextType>, classNames?: string, authOverrides?: Partial<AiHydroAuthContextType>) =>
-	(Story: any) => (
+	(overrideStates?: Partial<ExtensionStateContextType>, classNames?: string) => (Story: any) => (
 		<ExtensionStateProviderWithOverrides overrides={overrideStates}>
-			<AiHydroAuthProviderWithOverrides overrides={authOverrides}>
-				<div className={cn("max-w-lg mx-auto", classNames)}>
-					<Story />
-				</div>
-			</AiHydroAuthProviderWithOverrides>
+			<div className={cn("max-w-lg mx-auto", classNames)}>
+				<Story />
+			</div>
 		</ExtensionStateProviderWithOverrides>
 	)
 

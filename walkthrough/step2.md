@@ -1,7 +1,7 @@
-# Deep Codebase Intelligence
+# Check that the AI-Hydro tools are ready
 
-**AI-Hydro starts with broad context and explores deeply where needed.**
+The hydrology tools (watershed delineation, streamflow, signatures, claims) come from the `aihydro-tools` MCP server. Open **Hydro Tools & Data Sources** and look at the server row. **Trusted** means the server was started with the launch line AI-Hydro recorded for it, so its instructions reach the model and claim approval is enabled. **Not trusted** gives the reason.
 
-AI-Hydro is designed with inherent codebase intelligence. It doesn't operate in a vacuum, but starts with a structural understanding of your project. Before making changes, it performs targeted agentic exploration to gain any additional specific context required, ensuring its actions are always well-informed and aligned with your architecture.
+![The chat talks to the aihydro-tools server, which the tools panel marks Trusted](images/step2-tools-ready.svg)
 
-![AI-Hydro Deep Codebase Intelligence Demo](https://storage.googleapis.com/cline_public_images/docs/assets/cline-reading-codebase-hifi-2_compress.webp)
+[Open Hydro Tools & Data Sources](command:aihydro.mcpButtonClicked)

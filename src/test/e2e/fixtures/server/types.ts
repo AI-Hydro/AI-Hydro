@@ -1,3 +1,6 @@
+// Response shapes of the mock account endpoints served by this e2e fixture. They lived in src/shared/AiHydroAccount.ts
+// until the account stack was removed (X0-6); only the mock server uses them now.
+
 export interface UserResponse {
 	id: string
 	email: string
@@ -76,6 +79,3 @@ export interface OrganizationUsageTransaction {
 	totalTokens: number
 	userId: string
 }
-
-// Used in aihydro.ts provider and in webview-ui/src/components/chat/ChatRow.tsx to display the login button
-export const AIHYDRO_ACCOUNT_AUTH_ERROR_MESSAGE = "Unauthorized: Please sign in to AI-Hydro before trying again."

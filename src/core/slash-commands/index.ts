@@ -7,7 +7,6 @@ import {
 	newRuleToolResponse,
 	newTaskToolResponse,
 	reportBugToolResponse,
-	subagentToolResponse,
 } from "../prompts/commands"
 
 /**
@@ -21,7 +20,7 @@ export async function parseSlashCommands(
 	ulid: string,
 	focusChainSettings?: { enabled: boolean },
 ): Promise<{ processedText: string; needsAihydrorulesFileCheck: boolean }> {
-	const SUPPORTED_DEFAULT_COMMANDS = ["newtask", "smol", "compact", "newrule", "reportbug", "deep-planning", "subagent"]
+	const SUPPORTED_DEFAULT_COMMANDS = ["newtask", "smol", "compact", "newrule", "reportbug", "deep-planning"]
 
 	const commandReplacements: Record<string, string> = {
 		newtask: newTaskToolResponse(),
@@ -30,7 +29,6 @@ export async function parseSlashCommands(
 		newrule: newRuleToolResponse(),
 		reportbug: reportBugToolResponse(),
 		"deep-planning": deepPlanningToolResponse(focusChainSettings),
-		subagent: subagentToolResponse(),
 	}
 
 	// this currently allows matching prepended whitespace prior to /slash-command

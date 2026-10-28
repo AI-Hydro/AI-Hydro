@@ -1,7 +1,6 @@
 import { HeroUIProvider } from "@heroui/react"
 import { type ReactNode } from "react"
 import { CustomPostHogProvider } from "./CustomPostHogProvider"
-import { AiHydroAuthProvider } from "./context/AiHydroAuthContext"
 import { BrushContextProvider } from "./context/BrushContext"
 import { ExtensionStateContextProvider } from "./context/ExtensionStateContext"
 import { HtmlPreviewContextProvider } from "./context/HtmlPreviewContext"
@@ -18,9 +17,7 @@ export function Providers({ children }: { children: ReactNode }) {
 						<LedgerContextProvider>
 							<HtmlPreviewContextProvider>
 								<CustomPostHogProvider>
-									<AiHydroAuthProvider>
-										<HeroUIProvider>{children}</HeroUIProvider>
-									</AiHydroAuthProvider>
+									<HeroUIProvider>{children}</HeroUIProvider>
 								</CustomPostHogProvider>
 							</HtmlPreviewContextProvider>
 						</LedgerContextProvider>

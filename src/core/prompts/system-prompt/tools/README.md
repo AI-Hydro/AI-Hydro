@@ -85,7 +85,6 @@ The following tools are currently registered:
 - `browser_action`
 - `execute_command`
 - `focus_chain`
-- `list_code_definition_names`
 - `list_files`
 - `load_mcp_documentation`
 - `new_task`

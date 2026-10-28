@@ -9,7 +9,6 @@ export enum AiHydroDefaultTool {
 	MULTI_FILE_EDIT = "edit_files",
 	SEARCH = "search_files",
 	LIST_FILES = "list_files",
-	LIST_CODE_DEF = "list_code_definition_names",
 	BROWSER = "browser_action",
 	MCP_USE = "use_mcp_tool",
 	MCP_ACCESS = "access_mcp_resource",

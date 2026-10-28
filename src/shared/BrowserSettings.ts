@@ -9,6 +9,7 @@ export interface BrowserSettings {
 	remoteBrowserHost?: string
 	remoteBrowserEnabled?: boolean
 	chromeExecutablePath?: string
+	/** True (the default) keeps `browser_action` out of the tool list and refuses calls to it. */
 	disableToolUse?: boolean
 	customArgs?: string
 }
@@ -22,7 +23,8 @@ export const DEFAULT_BROWSER_SETTINGS: BrowserSettings = {
 	remoteBrowserHost: "http://localhost:9222",
 	chromeExecutablePath: "", // Changed from undefined to empty string
 	// chromeType: "chromium",
-	disableToolUse: false,
+	// Off by default (X0-5): the browser tool is not part of the hydrology workflow. Users who turned it on keep their stored choice.
+	disableToolUse: true,
 	customArgs: "",
 }
 

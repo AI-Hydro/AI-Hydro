@@ -15,9 +15,13 @@ describe("handlePreviewAgentTaskMessage trust gate", () => {
 	it("refuses a request without an artifact id", async () => {
 		const start = sinon.stub(starter, "startPreviewAgentTask").resolves({ ok: true })
 		const replies: Record<string, unknown>[] = []
-		await handlePreviewAgentTaskMessage(controllerWith(() => true), { requestId: "r1", prompt: "do it" }, (r) => {
-			replies.push(r)
-		})
+		await handlePreviewAgentTaskMessage(
+			controllerWith(() => true),
+			{ requestId: "r1", prompt: "do it" },
+			(r) => {
+				replies.push(r)
+			},
+		)
 		expect(start.called).to.be.false
 		expect(replies[0]).to.include({ ok: false, requestId: "r1" })
 	})

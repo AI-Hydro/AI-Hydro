@@ -267,6 +267,8 @@ message LiteLLMModelInfo {
 
 // Main ApiConfiguration message
 message ModelsApiConfiguration {
+  // Removed in the X0-6 clean-up (cline_account_id); never reuse this number.
+  reserved 60;
   // Global configuration fields (not mode-specific)
   optional string api_key = 1;
   optional string cline_api_key = 2;
@@ -327,7 +329,6 @@ message ModelsApiConfiguration {
   optional string moonshot_api_line = 57;
   optional string aws_authentication = 58;
   optional string aws_bedrock_api_key = 59;
-  optional string cline_account_id = 60;
   optional string groq_api_key = 61;
   optional string hugging_face_api_key = 62;
   optional string huawei_cloud_maas_api_key = 63;

@@ -447,7 +447,6 @@ export const config = createVariant(ModelFamily.GENERIC)
     ClineDefaultTool.FILE_EDIT,
     ClineDefaultTool.SEARCH,
     ClineDefaultTool.LIST_FILES,
-    ClineDefaultTool.LIST_CODE_DEF,
     ClineDefaultTool.BROWSER,
     ClineDefaultTool.MCP_USE,
     ClineDefaultTool.MCP_ACCESS,
@@ -518,7 +517,6 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
     ClineDefaultTool.FILE_EDIT,
     ClineDefaultTool.SEARCH,
     ClineDefaultTool.LIST_FILES,
-    ClineDefaultTool.LIST_CODE_DEF,
     ClineDefaultTool.BROWSER,
     ClineDefaultTool.WEB_FETCH,  // Additional tool for next-gen
     ClineDefaultTool.MCP_USE,
@@ -758,7 +756,6 @@ The system supports the following tools (mapped to `ClineDefaultTool` enum):
 - `FILE_EDIT`: Edit existing files
 - `SEARCH`: Search through files
 - `LIST_FILES`: List directory contents
-- `LIST_CODE_DEF`: List code definitions
 - `BROWSER`: Browser automation (conditional)
 - `WEB_FETCH`: Web content fetching (next-gen only)
 - `MCP_USE`: Use MCP tools

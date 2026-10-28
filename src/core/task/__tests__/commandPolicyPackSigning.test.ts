@@ -19,7 +19,6 @@ const BASE: CommandPolicyInput = {
 	modelRequiresApproval: false,
 	autoApproveSafe: true,
 	autoApproveAll: true,
-	subagentsEnabled: true,
 	touchesProtectedPath: false,
 	shellEnvironment: { platform: "darwin", shell: "/bin/zsh", workspaceTrusted: true },
 }

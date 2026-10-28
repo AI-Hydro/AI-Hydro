@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" width="640" height="240" role="img" aria-labelledby="t d">
+	<title id="t">Connect a model</title>
+	<desc id="d">Settings leads to a provider and API key, after which the model is ready.</desc>
+	<rect width="640" height="240" rx="10" fill="#0f2a43"/>
+	<rect x="40" y="70" width="150" height="80" rx="8" fill="#17476e" stroke="#5fb3e6" stroke-width="1.5"/>
+	<text x="115.0" y="108.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff">Settings</text>
+	<text x="115.0" y="127.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">API Configuration</text>
+	<path d="M190 110 L242 110" stroke="#5fb3e6" stroke-width="2" fill="none"/>
+	<path d="M242 105 L250 110 L242 115 Z" fill="#5fb3e6"/>
+	<rect x="250" y="70" width="150" height="80" rx="8" fill="#17476e" stroke="#5fb3e6" stroke-width="1.5"/>
+	<text x="325.0" y="108.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff">Provider + key</text>
+	<text x="325.0" y="127.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">stored in VS Code secrets</text>
+	<path d="M400 110 L452 110" stroke="#5fb3e6" stroke-width="2" fill="none"/>
+	<path d="M452 105 L460 110 L452 115 Z" fill="#5fb3e6"/>
+	<rect x="460" y="70" width="140" height="80" rx="8" fill="#17476e" stroke="#5fb3e6" stroke-width="1.5"/>
+	<text x="530.0" y="108.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff">Model ready</text>
+	<text x="530.0" y="127.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">chat can run</text>
+
+</svg>

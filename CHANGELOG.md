@@ -11,6 +11,19 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Removed / Changed — Wave 0 clean-up of inherited Cline features (vision-2040 X0-4 to X0-7, branch `vision2040/x0-cleanup`)
+
+- **Removed: the account, credits and dictation stack.** The webview Account views, credits tables, `AiHydroAuthContext`, `AiHydroAccountInfoCard`, the `AiHydroProvider` form and `CreditLimitError`; on the host `AuthService`, `FirebaseAuthProvider`, `AiHydroAuthProvider`, `AiHydroAccountService`, the `AccountService` and `DictationService` RPCs, the remote-config fetch that depended on them, the unreferenced `AiHydroHandler` API handler, the `/auth` URI route, voice dictation (settings card, recorder, audio and transcription services, telemetry) and its `dictationSettings` state. The cloud-account path was already off unless `AI_HYDRO_ENABLE_CLOUD_ACCOUNT=true`. The webview CSP no longer allows the Firebase hosts. No provider form changed: Anthropic, OpenAI, Google, OpenRouter, DeepSeek, Ollama and the others are untouched.
+- **Secrets migration.** The two secrets `clineAccountId` and `cline:clineAccountId` (third-party sign-in tokens nothing reads any more) are deleted once, on first start, by `removeRetiredAccountSecrets`; it is idempotent (marker `migrations.retiredAccountSecrets.v1`) and touches no provider key.
+- **Removed: Generate Commit Message** (SCM button, keybinding, handler, palette entries).
+- **Removed: the `aihydro "…"` CLI subagent path** (SUB PR-0): the `/subagent` slash command, the `CLI_SUBAGENTS` prompt sections, `checkCliInstallation`, `cli-detector`, `subagent_command`, the Settings card and its output-line slider. Any command that runs a program named `aihydro` is now denied with a message, in every setting (`subagentsEnabled` no longer re-enables it). The explorer policy file stays for the in-process explorer; nothing reads `AIHYDRO_PROFILE` any more (the approval terminal still clears it).
+- **Removed: the code-definition tool** (`list_code_definition_names`) from the tool list, the system prompts, auto-approve and the explorer allowlist.
+- **Changed: the browser tool is off by default** (`browserSettings.disableToolUse` now defaults to true; a stored value is kept). A `browser_action` call is refused by the host while it is off. Settings > Browser now has a positive "Enable browser tool" checkbox.
+- **Fixed: audit settings copy.** It said the answer audit is "Display only: it never blocks"; the gate is on by default. The copy now says an answer with uncited numbers can cost up to 2 extra model requests.
+- **Changed: command palette.** Every command has the category "AI-Hydro" and no title repeats it; "New Analysis" is "New Task" (the word the sidebar button uses); "Create Test Tasks" is hidden outside dev mode through `menus.commandPalette`; the duplicate "Test Google Earth Engine Connection" is hidden from the palette (the Connectors panel still calls it). There is no capsule-export command yet, so no palette entry was added.
+- **Changed: "AI Hydro" is now "AI-Hydro"** in every user-visible string, including approval headers; `docs/ui-naming.md` records the words and `src/shared/__tests__/uiContract.test.ts` fails on a new "AI Hydro" in source, webview source, the walkthrough or `package.json`. The settings privacy text links to `PRIVACY.md`.
+- **Changed: the walkthrough is now hydrology** (connect a model, tools ready, delineate a basin, compute signatures, record and approve a claim), with local SVG images and no network fetch. `openWalkthrough` from the webview now uses the real walkthrough id.
+
 ### Security — zod 4 to clear GHSA-mrhx-c7xc-m3w5 (branch `vision2040/zod-advisory`, PR #88)
 
 - `zod` moves from ^3.24.2 to ^4.6.7 (every 3.x release is in the advisory range; no patched 3.x exists). `z.record` now takes key and value schemas. `body-parser` 2.3.0 to 2.4.0.

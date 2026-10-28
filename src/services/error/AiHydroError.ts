@@ -1,11 +1,9 @@
 import { serializeError } from "serialize-error"
-import { AIHYDRO_ACCOUNT_AUTH_ERROR_MESSAGE } from "../../shared/AiHydroAccount"
 
 export enum AiHydroErrorType {
 	Auth = "auth",
 	Network = "network",
 	RateLimit = "rateLimit",
-	Balance = "balance",
 }
 
 interface ErrorDetails {
@@ -136,21 +134,12 @@ export class AiHydroError extends Error {
 	static getErrorType(err: AiHydroError): AiHydroErrorType | undefined {
 		const { code, status, details } = err._error
 
-		// Check balance error first (most specific)
-		if (code === "insufficient_credits" && typeof details?.current_balance === "number") {
-			return AiHydroErrorType.Balance
-		}
-
 		// Check auth errors
 		if (code === "ERR_BAD_REQUEST" || status === 401) {
 			return AiHydroErrorType.Auth
 		}
 
-		// Check for auth message (only if message exists)
 		const message = err.message
-		if (message?.includes(AIHYDRO_ACCOUNT_AUTH_ERROR_MESSAGE)) {
-			return AiHydroErrorType.Auth
-		}
 
 		// Check rate limit patterns
 		if (message) {

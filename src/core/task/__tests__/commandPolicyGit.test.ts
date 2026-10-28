@@ -21,7 +21,6 @@ const BASE: CommandPolicyInput = {
 	modelRequiresApproval: false,
 	autoApproveSafe: true,
 	autoApproveAll: false,
-	subagentsEnabled: true,
 	touchesProtectedPath: false,
 	shellEnvironment: posix(true),
 }
@@ -223,10 +222,7 @@ describe("C: glob forms that could match aihydro are a launch", () => {
 	]) {
 		it(`is a launch: ${JSON.stringify(c)}`, () => {
 			expect(mentionsAihydroProgram(c), c).to.equal(true)
-			expect(decideCommand({ ...BASE, command: c, autoApproveAll: true, subagentsEnabled: false }).action, c).to.equal(
-				"deny",
-			)
-			expect(["ask", "deny"]).to.include(decideCommand({ ...BASE, command: c, autoApproveAll: true }).action)
+			expect(decideCommand({ ...BASE, command: c, autoApproveAll: true }).action, c).to.equal("deny")
 		})
 	}
 

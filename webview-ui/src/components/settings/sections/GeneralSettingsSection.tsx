@@ -52,22 +52,15 @@ const GeneralSettingsSection = ({ renderSectionHeader }: GeneralSettingsSectionP
 						</VSCodeCheckbox>
 					)}
 					<p className="toggle-description">
-						Help improve AI-Hydro by sending usage data and error reports. No code, prompts, or personal information
-						are ever sent. See our{" "}
+						Help improve AI-Hydro by sending anonymous usage data and error reports. Prompts, file contents and API
+						keys are not part of what is sent. See what is collected, and what stays on your machine, in the{" "}
 						<VSCodeLink
 							className="text-inherit"
-							href="https://github.com/AI-Hydro/AI-Hydro#readme"
+							href="https://github.com/AI-Hydro/AI-Hydro/blob/main/PRIVACY.md"
 							style={{ fontSize: "inherit", textDecoration: "underline" }}>
-							telemetry overview
-						</VSCodeLink>{" "}
-						and{" "}
-						<VSCodeLink
-							className="text-inherit"
-							href="https://github.com/AI-Hydro/AI-Hydro#readme"
-							style={{ fontSize: "inherit", textDecoration: "underline" }}>
-							privacy policy
-						</VSCodeLink>{" "}
-						for more details.
+							privacy and telemetry notes
+						</VSCodeLink>
+						.
 					</p>
 				</div>
 			</Section>

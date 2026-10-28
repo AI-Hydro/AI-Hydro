@@ -2,12 +2,10 @@ import { AiHydroFeatureSetting } from "@shared/AiHydroFeatureSetting"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { findLastIndex } from "@shared/array"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
-import { DEFAULT_DICTATION_SETTINGS, DictationSettings } from "@shared/DictationSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import { Environment } from "@shared/environment"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
 import { DEFAULT_MCP_DISPLAY_MODE } from "@shared/McpDisplayMode"
-import type { UserInfo } from "@shared/proto/cline/account"
 import { EmptyRequest } from "@shared/proto/cline/common"
 import type { OpenRouterCompatibleModelInfo } from "@shared/proto/cline/models"
 import { type TerminalProfile } from "@shared/proto/cline/state"
@@ -55,7 +53,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	mcpTab?: McpViewTab
 	showSettings: boolean
 	showHistory: boolean
-	showAccount: boolean
 	showMap: boolean
 	showConnectors: boolean
 	showSkills: boolean
@@ -64,7 +61,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	expandTaskHeader: boolean
 
 	// Setters
-	setDictationSettings: (value: DictationSettings) => void
 	setShowAnnouncement: (value: boolean) => void
 	setShowChatModelSelector: (value: boolean) => void
 	setShouldShowAnnouncement: (value: boolean) => void
@@ -86,7 +82,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 
 	// Refresh functions
 	refreshOpenRouterModels: () => void
-	setUserInfo: (userInfo?: UserInfo) => void
 
 	// Navigation state setters
 	setShowMcp: (value: boolean) => void
@@ -96,7 +91,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	navigateToMcp: (tab?: McpViewTab) => void
 	navigateToSettings: () => void
 	navigateToHistory: () => void
-	navigateToAccount: () => void
 	navigateToMap: () => void
 	navigateToConnectors: () => void
 	navigateToSkills: () => void
@@ -105,7 +99,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	// Hide functions
 	hideSettings: () => void
 	hideHistory: () => void
-	hideAccount: () => void
 	hideMap: () => void
 	hideConnectors: () => void
 	hideSkills: () => void
@@ -127,7 +120,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [mcpTab, setMcpTab] = useState<McpViewTab | undefined>(undefined)
 	const [showSettings, setShowSettings] = useState(false)
 	const [showHistory, setShowHistory] = useState(false)
-	const [showAccount, setShowAccount] = useState(false)
 	const [showMap, setShowMap] = useState(false)
 	const [showConnectors, setShowConnectors] = useState(false)
 	const [showSkills, setShowSkills] = useState(false)
@@ -143,7 +135,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	// Hide functions
 	const hideSettings = useCallback(() => setShowSettings(false), [setShowSettings])
 	const hideHistory = useCallback(() => setShowHistory(false), [setShowHistory])
-	const hideAccount = useCallback(() => setShowAccount(false), [setShowAccount])
 	const hideMap = useCallback(() => setShowMap(false), [setShowMap])
 	const hideConnectors = useCallback(() => setShowConnectors(false), [setShowConnectors])
 	const hideSkills = useCallback(() => setShowSkills(false), [setShowSkills])
@@ -155,76 +146,61 @@ export const ExtensionStateContextProvider: React.FC<{
 		(tab?: McpViewTab) => {
 			setShowSettings(false)
 			setShowHistory(false)
-			setShowAccount(false)
 			if (tab) {
 				setMcpTab(tab)
 			}
 			setShowMcp(true)
 		},
-		[setShowMcp, setMcpTab, setShowSettings, setShowHistory, setShowAccount],
+		[setShowMcp, setMcpTab, setShowSettings, setShowHistory],
 	)
 
 	const navigateToSettings = useCallback(() => {
 		setShowHistory(false)
 		closeMcpView()
-		setShowAccount(false)
 		setShowSettings(true)
-	}, [setShowSettings, setShowHistory, closeMcpView, setShowAccount])
+	}, [setShowSettings, setShowHistory, closeMcpView])
 
 	const navigateToHistory = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
-		setShowAccount(false)
 		setShowHistory(true)
-	}, [setShowSettings, closeMcpView, setShowAccount, setShowHistory])
-
-	const navigateToAccount = useCallback(() => {
-		setShowSettings(false)
-		closeMcpView()
-		setShowHistory(false)
-		setShowMap(false)
-		setShowAccount(true)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowMap, setShowAccount])
+	}, [setShowSettings, closeMcpView, setShowHistory])
 
 	const navigateToMap = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
-		setShowAccount(false)
 		setShowConnectors(false)
 		setShowSkills(false)
 		setShowMap(true)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowConnectors, setShowSkills, setShowMap])
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowConnectors, setShowSkills, setShowMap])
 
 	const navigateToConnectors = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
-		setShowAccount(false)
 		setShowMap(false)
 		setShowSkills(false)
 		setShowConnectors(true)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowMap, setShowSkills, setShowConnectors])
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowMap, setShowSkills, setShowConnectors])
 
 	const navigateToSkills = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
-		setShowAccount(false)
 		setShowMap(false)
 		setShowConnectors(false)
 		setShowSkills(true)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowMap, setShowConnectors, setShowSkills])
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowMap, setShowConnectors, setShowSkills])
 
 	const navigateToChat = useCallback(() => {
 		setShowSettings(false)
 		closeMcpView()
 		setShowHistory(false)
-		setShowAccount(false)
 		setShowMap(false)
 		setShowConnectors(false)
 		setShowSkills(false)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowMap, setShowConnectors, setShowSkills])
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowMap, setShowConnectors, setShowSkills])
 
 	const [state, setState] = useState<ExtensionState>({
 		version: "",
@@ -233,7 +209,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		shouldShowAnnouncement: false,
 		autoApprovalSettings: DEFAULT_AUTO_APPROVAL_SETTINGS,
 		browserSettings: DEFAULT_BROWSER_SETTINGS,
-		dictationSettings: DEFAULT_DICTATION_SETTINGS,
 		focusChainSettings: DEFAULT_FOCUS_CHAIN_SETTINGS,
 		preferredLanguage: "English",
 		openaiReasoningEffort: "medium",
@@ -256,7 +231,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		vscodeTerminalExecutionMode: "vscodeTerminal",
 		terminalOutputLineLimit: 500,
 		maxConsecutiveMistakes: 3,
-		subagentTerminalOutputLineLimit: 2000,
 		defaultTerminalProfile: "default",
 		isNewUser: false,
 		welcomeViewCompleted: false,
@@ -816,7 +790,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		mcpTab,
 		showSettings,
 		showHistory,
-		showAccount,
 		showMap,
 		showConnectors,
 		showSkills,
@@ -835,7 +808,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		navigateToMcp,
 		navigateToSettings,
 		navigateToHistory,
-		navigateToAccount,
 		navigateToMap,
 		navigateToConnectors,
 		navigateToSkills,
@@ -844,7 +816,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		// Hide functions
 		hideSettings,
 		hideHistory,
-		hideAccount,
 		hideMap,
 		hideConnectors,
 		hideSkills,
@@ -900,14 +871,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		setTotalTasksSize,
 		refreshOpenRouterModels,
 		onRelinquishControl,
-		setUserInfo: (userInfo?: UserInfo) => setState((prevState) => ({ ...prevState, userInfo })),
 		expandTaskHeader,
 		setExpandTaskHeader,
-		setDictationSettings: (value: DictationSettings) =>
-			setState((prevState) => ({
-				...prevState,
-				dictationSettings: value,
-			})),
 	}
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>

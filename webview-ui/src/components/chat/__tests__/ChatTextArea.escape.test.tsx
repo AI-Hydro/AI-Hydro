@@ -14,7 +14,6 @@ vi.mock("@/context/ExtensionStateContext", () => ({
 		globalWorkflowToggles: {},
 		showChatModelSelector: false,
 		setShowChatModelSelector: () => {},
-		dictationSettings: { featureEnabled: false },
 	}),
 }))
 vi.mock("@/services/grpc-client", () => ({

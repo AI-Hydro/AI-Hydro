@@ -324,6 +324,32 @@ describe("Prompt System Integration Tests", () => {
 			}
 		})
 
+		it("never offers the code-definition tool or the CLI subagent, and omits browser_action unless the browser is on (X0-5)", async function () {
+			this.timeout(30000)
+
+			for (const [modelId, providerId] of [
+				["gpt-3", "openai"],
+				["claude-sonnet-4", "anthropic"],
+				["qwen3_coder", "lmstudio"],
+			]) {
+				const base = makeMockContext(modelId, providerId)
+				for (const supportsBrowserUse of [undefined, false]) {
+					const prompt = await getSystemPrompt({ ...base, supportsBrowserUse })
+					const label = `${providerId}/${modelId} browser=${String(supportsBrowserUse)}`
+					expect(prompt, label).to.not.include("list_code_definition_names")
+					expect(prompt, label).to.not.include("browser_action")
+					expect(prompt, label).to.not.match(/CLI tool|CLI subagent|cline t o|aihydro t o/i)
+				}
+				// With the browser explicitly on the tool is still available (the compact variant has no browser tool),
+				// so the opt-in keeps working.
+				const withBrowser = await getSystemPrompt({ ...base, supportsBrowserUse: true })
+				if (providerId !== "lmstudio") {
+					expect(withBrowser, `${providerId}/${modelId} browser=true`).to.include("browser_action")
+				}
+				expect(withBrowser, `${providerId}/${modelId} browser=true`).to.not.include("list_code_definition_names")
+			}
+		})
+
 		it("should include MCP content when MCP servers are present", async function () {
 			this.timeout(30000)
 

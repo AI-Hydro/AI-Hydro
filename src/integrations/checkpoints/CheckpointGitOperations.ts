@@ -84,7 +84,7 @@ export class GitOperations {
 		// Configure repo with git settings
 		await git.addConfig("core.worktree", cwd)
 		await git.addConfig("commit.gpgSign", "false")
-		await git.addConfig("user.name", "AI Hydro Checkpoint")
+		await git.addConfig("user.name", "AI-Hydro Checkpoint")
 		await git.addConfig("user.email", "checkpoint@aihydro.bot")
 
 		// Set up LFS patterns

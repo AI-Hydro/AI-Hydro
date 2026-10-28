@@ -52,7 +52,6 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		apiConfiguration,
 		telemetrySetting,
 		mode,
-		userInfo,
 		currentFocusChainChecklist,
 		backgroundCommandRunning,
 		mcpServers,

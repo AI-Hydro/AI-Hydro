@@ -1,6 +1,7 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
 import {
+	AIHYDRO_CLI_RETIRED_MESSAGE,
 	classifyCommand,
 	commandMentionsProtectedPath,
 	decideCommand,
@@ -14,8 +15,6 @@ const base: CommandPolicyInput = {
 	modelRequiresApproval: false,
 	autoApproveSafe: true,
 	autoApproveAll: false,
-	isSubagentLaunch: false,
-	subagentsEnabled: true,
 	touchesProtectedPath: false,
 	// Classification is shell-dependent (fail closed outside bash/zsh/sh/dash and on Windows): pin it.
 	shellEnvironment: { platform: "darwin", shell: "/bin/zsh", workspaceTrusted: true },
@@ -202,21 +201,20 @@ describe("commandPolicy: host-side read-only classification (T14)", () => {
 	})
 })
 
-describe("commandPolicy: subagent launch (T15)", () => {
-	const launch = { command: 'aihydro "summarise the repo"', isSubagentLaunch: true }
+describe("commandPolicy: the retired aihydro CLI subagent (T15)", () => {
+	const launch = { command: 'aihydro "summarise the repo"' }
 
-	it("T15 asks with requires_approval=false and default settings", () => {
-		expect(decide(launch).action).to.equal("ask")
+	it("T15 is denied with default settings", () => {
+		const result = decide(launch)
+		expect(result.action).to.equal("deny")
+		if (result.action === "deny") {
+			expect(result.message).to.equal(AIHYDRO_CLI_RETIRED_MESSAGE)
+		}
 	})
 
-	it("T15 asks even under execute-all / YOLO", () => {
-		expect(decide({ ...launch, autoApproveAll: true, autoApproveSafe: true }).action).to.equal("ask")
-	})
-
-	it("T15 is refused when subagentsEnabled is false, in every setting", () => {
+	it("T15 is denied under execute-all / YOLO, there is no setting that re-enables it", () => {
 		for (const autoApproveAll of [false, true]) {
-			const result = decide({ ...launch, subagentsEnabled: false, autoApproveAll })
-			expect(result.action).to.equal("deny")
+			expect(decide({ ...launch, autoApproveAll, autoApproveSafe: true }).action).to.equal("deny")
 		}
 	})
 })

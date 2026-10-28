@@ -67,8 +67,8 @@ export class ReportBugHandler implements IToolHandler, IPartialBlockHandler {
 		// Show notification if auto-approval is enabled
 		if (config.autoApprovalSettings.enabled && config.autoApprovalSettings.enableNotifications) {
 			showSystemNotification({
-				subtitle: "AI Hydro wants to create a github issue...",
-				message: `AI Hydro is suggesting to create a github issue with the title: ${title}`,
+				subtitle: "AI-Hydro wants to create a github issue...",
+				message: `AI-Hydro is suggesting to create a github issue with the title: ${title}`,
 			})
 		}
 

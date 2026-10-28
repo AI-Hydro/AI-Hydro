@@ -1,7 +1,7 @@
-# Beyond Autocomplete: True Agentic Planning
+# Connect a model
 
-**AI-Hydro analyzes your request, explores your code, and presents a clear plan.**
+AI-Hydro runs on a language model that you choose. Open **Settings**, pick a provider (Anthropic, OpenAI, Google, OpenRouter, DeepSeek, Ollama and others) and paste your API key. The key is kept in VS Code's secret storage on this machine.
 
-Watch AI-Hydro break down complex tasks, ask clarifying questions, and outline its approach. Understand the 'why' before any code is written, ensuring changes align with your architecture and intent.
+![Settings leads to a provider and an API key, after which the model is ready](images/step1-connect-model.svg)
 
-![AI-Hydro planning demonstration](https://storage.googleapis.com/cline_public_images/docs/assets/cline-plan-hifi-1_compress.webp)
+[Open Settings](command:aihydro.settingsButtonClicked)

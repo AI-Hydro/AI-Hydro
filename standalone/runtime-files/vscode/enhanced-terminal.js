@@ -341,7 +341,6 @@ class StandaloneTerminalManager {
 		this.shellIntegrationTimeout = 4000
 		this.terminalReuseEnabled = true
 		this.terminalOutputLineLimit = 500
-		this.subagentTerminalOutputLineLimit = 2000
 		this.defaultTerminalProfile = "default"
 	}
 
@@ -438,8 +437,8 @@ class StandaloneTerminalManager {
 		return process ? process.isHot : false
 	}
 
-	processOutput(outputLines, overrideLimit, isSubagentCommand) {
-		const limit = isSubagentCommand && overrideLimit ? overrideLimit : this.terminalOutputLineLimit
+	processOutput(outputLines) {
+		const limit = this.terminalOutputLineLimit
 		if (outputLines.length > limit) {
 			const halfLimit = Math.floor(limit / 2)
 			const start = outputLines.slice(0, halfLimit)
@@ -485,12 +484,6 @@ class StandaloneTerminalManager {
 	setTerminalOutputLineLimit(limit) {
 		this.terminalOutputLineLimit = limit
 		console.log(`[StandaloneTerminalManager] Set terminal output line limit to ${limit}`)
-	}
-
-	// Set subagent terminal output line limit (compatibility method)
-	setSubagentTerminalOutputLineLimit(limit) {
-		this.subagentTerminalOutputLineLimit = limit
-		console.log(`[StandaloneTerminalManager] Set subagent terminal output line limit to ${limit}`)
 	}
 
 	// Set default terminal profile (compatibility method)

@@ -47,12 +47,9 @@ import { sendFocusPendingPromptEvent } from "./core/controller/ui/subscribeToFoc
 import { setWorkspaceTrustProvider } from "./core/task/workspaceTrust"
 import { workspaceResolver } from "./core/workspace"
 import { focusChatInput, getContextForCommand } from "./hosts/vscode/commandUtils"
-import { abortCommitGeneration, generateCommitMessage } from "./hosts/vscode/commit-message-generator"
 import { VscodeDiffViewProvider } from "./hosts/vscode/VscodeDiffViewProvider"
 import { VscodeWebviewProvider } from "./hosts/vscode/VscodeWebviewProvider"
 import { ExtensionRegistryInfo } from "./registry"
-import { AuthService } from "./services/auth/AuthService"
-import { LogoutReason } from "./services/auth/types"
 import { telemetryService } from "./services/telemetry"
 import { SharedUriHandler } from "./services/uri/SharedUriHandler"
 import { ShowMessageType } from "./shared/proto/host/window"
@@ -1142,36 +1139,6 @@ export async function activate(context: vscode.ExtensionContext) {
 			const { reconstructTaskHistory } = await import("./core/commands/reconstructTaskHistory")
 			await reconstructTaskHistory()
 			telemetryService.captureButtonClick("aihydro_reconstructTaskHistory")
-		}),
-	)
-
-	// Register the generateGitCommitMessage command handler
-	context.subscriptions.push(
-		vscode.commands.registerCommand(commands.GenerateCommit, async (scm) => {
-			generateCommitMessage(webview.controller.stateManager, scm)
-		}),
-		vscode.commands.registerCommand(commands.AbortCommit, () => {
-			abortCommitGeneration()
-		}),
-	)
-
-	context.subscriptions.push(
-		context.secrets.onDidChange(async (event) => {
-			if (event.key === "aihydroAccountId" || event.key === "aihydro:aihydroAccountId") {
-				// Check if the secret was removed (logout) or added/updated (login)
-				const secretValue = await context.secrets.get(event.key)
-				const activeWebview = WebviewProvider.getVisibleInstance()
-				const controller = activeWebview?.controller
-
-				const authService = AuthService.getInstance(controller)
-				if (secretValue) {
-					// Secret was added or updated - restore auth info (login from another window)
-					authService?.restoreRefreshTokenAndRetrieveAuthInfo()
-				} else {
-					// Secret was removed - handle logout for all windows
-					authService?.handleDeauth(LogoutReason.CROSS_WINDOW_SYNC)
-				}
-			}
 		}),
 	)
 

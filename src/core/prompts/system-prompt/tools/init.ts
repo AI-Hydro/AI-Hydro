@@ -7,7 +7,6 @@ import { browser_action_variants } from "./browser_action"
 import { edit_files_variants } from "./edit_files"
 import { execute_command_variants } from "./execute_command"
 import { focus_chain_variants } from "./focus_chain"
-import { list_code_definition_names_variants } from "./list_code_definition_names"
 import { list_files_variants } from "./list_files"
 import { load_mcp_documentation_variants } from "./load_mcp_documentation"
 import { new_task_variants } from "./new_task"
@@ -34,7 +33,6 @@ export function registerAiHydroToolSets(): void {
 		...edit_files_variants,
 		...execute_command_variants,
 		...focus_chain_variants,
-		...list_code_definition_names_variants,
 		...list_files_variants,
 		...load_mcp_documentation_variants,
 		...new_task_variants,

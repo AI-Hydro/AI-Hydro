@@ -465,7 +465,6 @@ export class StateManager {
 			asksageApiKey,
 			asksageApiUrl,
 			xaiApiKey,
-			clineAccountId,
 			sambanovaApiKey,
 			cerebrasApiKey,
 			groqApiKey,
@@ -680,7 +679,6 @@ export class StateManager {
 		this.setSecretsBatch({
 			apiKey,
 			openRouterApiKey,
-			clineAccountId,
 			awsAccessKey,
 			awsSecretKey,
 			awsSessionToken,
@@ -951,7 +949,6 @@ export class StateManager {
 			// Secrets
 			apiKey: this.secretsCache["apiKey"],
 			openRouterApiKey: this.secretsCache["openRouterApiKey"],
-			clineAccountId: this.secretsCache["clineAccountId"],
 			awsAccessKey: this.secretsCache["awsAccessKey"],
 			awsSecretKey: this.secretsCache["awsSecretKey"],
 			awsSessionToken: this.secretsCache["awsSessionToken"],

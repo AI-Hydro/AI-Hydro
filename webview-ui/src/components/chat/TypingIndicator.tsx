@@ -19,7 +19,7 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ visible = true
 				<div className="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--vscode-descriptionForeground)] animate-typing-dot-delay-1" />
 				<div className="typing-dot w-1.5 h-1.5 rounded-full bg-[var(--vscode-descriptionForeground)] animate-typing-dot-delay-2" />
 			</div>
-			<span className="text-xs text-[var(--vscode-descriptionForeground)] ml-1">AI Hydro is thinking...</span>
+			<span className="text-xs text-[var(--vscode-descriptionForeground)] ml-1">AI-Hydro is thinking...</span>
 		</div>
 	)
 }

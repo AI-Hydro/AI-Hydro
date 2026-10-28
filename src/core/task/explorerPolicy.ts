@@ -25,7 +25,6 @@ export const EXPLORER_ALLOWED_TOOLS: readonly AiHydroDefaultTool[] = [
 	AiHydroDefaultTool.FILE_READ,
 	AiHydroDefaultTool.SEARCH,
 	AiHydroDefaultTool.LIST_FILES,
-	AiHydroDefaultTool.LIST_CODE_DEF,
 	AiHydroDefaultTool.WEB_FETCH,
 	AiHydroDefaultTool.MCP_USE, // gated by readOnlyHint
 	AiHydroDefaultTool.MCP_ACCESS,
@@ -39,7 +38,7 @@ export const EXPLORER_ALLOWED_TOOLS: readonly AiHydroDefaultTool[] = [
 ]
 
 const READ_ONLY_TOOL_LIST =
-	"read_file, search_files, list_files, list_code_definition_names, web_fetch, and read-only MCP tools (readOnlyHint=true, openWorldHint=false) on the trusted first-party server"
+	"read_file, search_files, list_files, web_fetch, and read-only MCP tools (readOnlyHint=true, openWorldHint=false) on the trusted first-party server"
 
 export interface ExplorerMcpHub {
 	getServers(): McpServer[]

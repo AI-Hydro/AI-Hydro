@@ -3,8 +3,6 @@
  * Allows switching between different analytics providers (PostHog, etc.)
  */
 
-import type { AiHydroAccountUserInfo } from "../../auth/AuthService"
-
 /**
  * JSON-serializable primitive types for telemetry properties
  */
@@ -47,6 +45,13 @@ export interface TelemetrySettings {
  * Abstract interface for telemetry providers
  * Any analytics provider must implement this interface
  */
+/** The identity a telemetry provider may attach to its events. */
+export interface TelemetryUserInfo {
+	id: string
+	email?: string
+	displayName?: string
+}
+
 export interface ITelemetryProvider {
 	/**
 	 * Log an event with optional properties
@@ -68,7 +73,7 @@ export interface ITelemetryProvider {
 	 * @param userInfo The user's information
 	 * @param properties Optional additional JSON-serializable properties
 	 */
-	identifyUser(userInfo: AiHydroAccountUserInfo, properties?: TelemetryProperties): void
+	identifyUser(userInfo: TelemetryUserInfo, properties?: TelemetryProperties): void
 
 	/**
 	 * Update telemetry opt-in/out status

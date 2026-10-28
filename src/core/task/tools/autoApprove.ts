@@ -56,7 +56,6 @@ export class AutoApprove {
 			switch (toolName) {
 				case AiHydroDefaultTool.FILE_READ:
 				case AiHydroDefaultTool.LIST_FILES:
-				case AiHydroDefaultTool.LIST_CODE_DEF:
 				case AiHydroDefaultTool.SEARCH:
 				case AiHydroDefaultTool.NEW_RULE:
 				case AiHydroDefaultTool.FILE_NEW:
@@ -79,7 +78,6 @@ export class AutoApprove {
 			switch (toolName) {
 				case AiHydroDefaultTool.FILE_READ:
 				case AiHydroDefaultTool.LIST_FILES:
-				case AiHydroDefaultTool.LIST_CODE_DEF:
 				case AiHydroDefaultTool.SEARCH:
 					return [autoApprovalSettings.actions.readFiles, autoApprovalSettings.actions.readFilesExternally ?? false]
 				case AiHydroDefaultTool.NEW_RULE:

@@ -76,7 +76,6 @@ export const PATH_REQUIRED_TOOLS = [
 	"replace_in_file",
 	"new_rule",
 	"list_files",
-	"list_code_definition_names",
 	"search_files",
 ] as const
 

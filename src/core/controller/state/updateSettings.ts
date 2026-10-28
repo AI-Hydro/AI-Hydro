@@ -29,7 +29,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 	try {
 		if (request.clineEnv !== undefined) {
 			AiHydroEnv.setEnvironment(request.clineEnv)
-			await controller.handleSignOut()
 		}
 
 		if (request.apiConfiguration) {
@@ -157,22 +156,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			)
 		}
 
-		// Update subagent terminal output line limit
-		if (request.subagentTerminalOutputLineLimit !== undefined) {
-			controller.stateManager.setGlobalState(
-				"subagentTerminalOutputLineLimit",
-				Number(request.subagentTerminalOutputLineLimit),
-			)
-		}
-
-		// Update subagent terminal output line limit
-		if (request.subagentTerminalOutputLineLimit !== undefined) {
-			controller.stateManager.setGlobalState(
-				"subagentTerminalOutputLineLimit",
-				Number(request.subagentTerminalOutputLineLimit),
-			)
-		}
-
 		// Update max consecutive mistakes
 		if (request.maxConsecutiveMistakes !== undefined) {
 			controller.stateManager.setGlobalState("maxConsecutiveMistakes", Number(request.maxConsecutiveMistakes))
@@ -190,15 +173,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("yoloModeToggled", request.yoloModeToggled)
 		}
 
-		if (request.dictationSettings !== undefined) {
-			// Convert from protobuf format (snake_case) to TypeScript format (camelCase)
-			const dictationSettings = {
-				featureEnabled: request.dictationSettings.featureEnabled ?? true,
-				dictationEnabled: request.dictationSettings.dictationEnabled ?? true,
-				dictationLanguage: request.dictationSettings.dictationLanguage ?? "en",
-			}
-			controller.stateManager.setGlobalState("dictationSettings", dictationSettings)
-		}
 		// Update auto-condense setting
 		if (request.useAutoCondense !== undefined) {
 			if (controller.task) {

@@ -107,7 +107,6 @@ export class TerminalManager {
 	private shellIntegrationTimeout: number = 4000
 	private terminalReuseEnabled: boolean = true
 	private terminalOutputLineLimit: number = 500
-	private subagentTerminalOutputLineLimit: number = 2000
 	private defaultTerminalProfile: string = "default"
 
 	constructor() {
@@ -444,16 +443,8 @@ export class TerminalManager {
 		this.terminalOutputLineLimit = limit
 	}
 
-	setSubagentTerminalOutputLineLimit(limit: number): void {
-		this.subagentTerminalOutputLineLimit = limit
-	}
-
-	public processOutput(outputLines: string[], overrideLimit?: number, isSubagentCommand?: boolean): string {
-		const limit = isSubagentCommand
-			? overrideLimit !== undefined
-				? overrideLimit
-				: this.subagentTerminalOutputLineLimit
-			: this.terminalOutputLineLimit
+	public processOutput(outputLines: string[]): string {
+		const limit = this.terminalOutputLineLimit
 		if (outputLines.length > limit) {
 			const halfLimit = Math.floor(limit / 2)
 			const start = outputLines.slice(0, halfLimit)
