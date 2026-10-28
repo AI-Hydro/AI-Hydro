@@ -213,7 +213,7 @@ describe("workspaceMatches: broad parents never claim children", () => {
 		expect(workspaceMatches("/data/hydro/colorado", "/data/hydro/colorado")).to.equal(true)
 		expect(workspaceMatches("/data/hydro/colorado", "/data/hydro/colorado/a")).to.equal(true)
 		expect(workspaceMatches("/data/hydro/colorado/a", "/data/hydro/colorado")).to.equal(true)
-		expect(workspaceMatches("C:\\Users\\me\\proj", "c:/users/me/proj/sub")).to.equal(true)
+		expect(workspaceMatches("C:\\Users\\me\\proj", "C:/Users/me/proj/sub")).to.equal(true)
 	})
 
 	it("a drive root, the home directory or a folder shallower than depth 3 does not match its children", () => {

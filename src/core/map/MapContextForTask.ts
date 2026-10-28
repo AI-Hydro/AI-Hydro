@@ -65,7 +65,7 @@ function isBroadRoot(normalized: string): boolean {
 		return true
 	}
 	const segments = normalized
-		.replace(/^[a-z]:/, "")
+		.replace(/^[a-z]:/i, "")
 		.split("/")
 		.filter(Boolean)
 	return segments.length < MIN_PARENT_DEPTH
