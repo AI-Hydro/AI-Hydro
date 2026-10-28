@@ -72,7 +72,7 @@ import MapLegend from "./MapLegend"
 import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
-import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext } from "./mapAgentBridge"
+import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext, mapLayerStudyHint } from "./mapAgentBridge"
 import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapHydroGuards"
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
 import { type CursorRasterReading, getLayerBounds, isGeoJsonLayer, sampleTopRasterAtPoint } from "./mapLayerAdapters"
@@ -325,10 +325,12 @@ function buildMapAgentContext(
 	selectedFeatures: ClickedFeature[] = [],
 ): MapAgentInspectContext {
 	const primary = features[0]
+	const primaryLayer = primary ? layers.find((l) => l.id === primary.layerId) : undefined
 	return {
 		lat: pt.lat,
 		lon: pt.lon,
 		layerName: primary?.layerName,
+		studyHint: mapLayerStudyHint(primaryLayer),
 		featureProperties: primary?.properties,
 		visibleLayerNames: layers.filter((l) => visibleLayerIds.has(l.id)).map((l) => l.name),
 		selectedFeatureCount: selectedFeatures.filter((feature) => feature.geometry).length,
@@ -2996,7 +2998,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				setAgentStatus(
 					result.ok
 						? "Chat opened — edit the prompt and send when ready."
-						: result.error || "Could not start agent task",
+						: result.cancelled
+							? "Kept the current chat."
+							: result.error || "Could not start agent task",
 				)
 			} catch (e) {
 				setAgentStatus(e instanceof Error ? e.message : String(e))
@@ -3018,7 +3022,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				setAgentStatus(
 					result.ok
 						? "Chat opened — agent will delineate and push to map."
-						: result.error || "Could not start agent task",
+						: result.cancelled
+							? "Kept the current chat."
+							: result.error || "Could not start agent task",
 				)
 			} catch (e) {
 				setAgentStatus(e instanceof Error ? e.message : String(e))

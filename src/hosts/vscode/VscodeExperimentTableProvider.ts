@@ -141,7 +141,11 @@ export class VscodeExperimentTableProvider {
 						}
 						break
 					case "list_sessions":
-						panel.webview.postMessage({ type: "session_list", sessions: listSessionIds() })
+						{
+							const hub = VscodeExperimentTableProvider.controller?.mcpHub
+							const sessions = hub ? await listSessionIds(hub) : []
+							panel.webview.postMessage({ type: "session_list", sessions })
+						}
 						break
 					case "experiment_table_ready":
 						VscodeExperimentTableProvider.tableWebviewReady = true

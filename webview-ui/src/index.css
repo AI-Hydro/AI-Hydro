@@ -1031,6 +1031,23 @@ vscode-dropdown::part(listbox) {
 	white-space: nowrap;
 }
 
+/* Study chip: a button when the host can switch studies; attention while a choice is pending. */
+.task-header-chip--button {
+	font-family: inherit;
+	min-height: 24px;
+}
+
+.task-header-chip--button:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+.task-header-chip--attention {
+	background: var(--vscode-inputValidation-warningBackground, var(--vscode-badge-background));
+	border-color: var(--vscode-inputValidation-warningBorder, var(--vscode-badge-background));
+	color: var(--vscode-foreground);
+}
+
 /* ===== Input Footer Glassmorphism ===== */
 
 .input-footer-glass {

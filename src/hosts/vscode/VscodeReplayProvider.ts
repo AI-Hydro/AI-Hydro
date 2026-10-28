@@ -138,7 +138,11 @@ export class VscodeReplayProvider {
 						}
 						break
 					case "list_sessions":
-						panel.webview.postMessage({ type: "session_list", sessions: listSessionIds() })
+						{
+							const hub = VscodeReplayProvider.controller?.mcpHub
+							const sessions = hub ? await listSessionIds(hub) : []
+							panel.webview.postMessage({ type: "session_list", sessions })
+						}
 						break
 					case "load_replay":
 						VscodeReplayProvider.handleLoadReplay(panel, message.session_id, message.focus_run_id)

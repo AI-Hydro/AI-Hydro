@@ -12,9 +12,23 @@ import { FileScanner, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
 import { setupWorkspaceManager } from "@core/workspace/setup"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { realPathInsideFolder } from "@core/workspace/workspaceGeoPaths"
-import { getBoundStudy } from "@integrations/aihydro-session/boundStudy"
+import {
+	type BindingHub,
+	type ChatStatus,
+	candidatesForPicker,
+	chatStatus,
+	findBindingServer,
+	type LaunchStudyHint,
+	parseBindingSignal,
+	readCapabilities,
+	rebindChat,
+	resolveLaunchBinding,
+} from "@integrations/aihydro-session/studyBinding"
 import { cleanupLegacyCheckpoints } from "@integrations/checkpoints/CheckpointMigration"
 import { downloadTask } from "@integrations/misc/export-markdown"
+import { ulid } from "ulid"
+import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
+import { isAiHydroServerName } from "@/core/task/tools/handlers/aiHydroServer"
 import { AiHydroAccountService } from "@services/account/AiHydroAccountService"
 import { ArtifactKernelService } from "@services/artifact-preview/ArtifactKernelService"
 import type { ArtifactRef } from "@services/artifact-preview/ArtifactPreviewService"
@@ -29,7 +43,8 @@ import { ARTIFACT_TRUST_METADATA_KEYS } from "@shared/artifactTrust"
 import { ChatContent } from "@shared/ChatContent"
 import { MAX_REMOTE_CATALOG_BYTES, MAX_REMOTE_CONNECTORS } from "@shared/connectors"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
-import { HistoryItem } from "@shared/HistoryItem"
+import type { StudyBindingState } from "@shared/ExtensionMessage"
+import { HistoryItem, type HistoryOrigin } from "@shared/HistoryItem"
 import { McpMarketplaceCatalog } from "@shared/mcp"
 import { HtmlPreviewItem, HtmlPreviewMode, LearningModuleCatalog } from "@shared/proto/cline/html_preview"
 import type { ClaimUpdate } from "@shared/proto/cline/ledger"
@@ -85,6 +100,13 @@ https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default
 
 https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
 */
+
+/** How a chat is launched: where from, the user's own words when the prompt is wrapped, and what is known of its study. */
+export interface ChatLaunch {
+	origin: HistoryOrigin
+	userQuestion?: string
+	studyHint?: LaunchStudyHint
+}
 
 export class Controller {
 	task?: Task
@@ -374,6 +396,7 @@ export class Controller {
 		files?: string[],
 		historyItem?: HistoryItem,
 		taskSettings?: Partial<Settings>,
+		launch?: ChatLaunch,
 	) {
 		try {
 			await fetchRemoteConfig(this)
@@ -445,7 +468,14 @@ export class Controller {
 			this.stateManager.setTaskSettingsBatch(taskId, taskSettings)
 		}
 
+		// X0-2: the chat id exists before the task does, so the chat is bound to its study BEFORE the task's first
+		// tool call. A failure to bind never stops the task; it is shown in the chip instead.
+		const chatUlid = historyItem?.ulid ?? ulid()
+		await this.bindChatAtLaunch(chatUlid, cwd, historyItem, launch)
+
 		this.task = new Task({
+			ulid: chatUlid,
+			launch: historyItem ? undefined : { origin: launch?.origin ?? "chat", userQuestion: launch?.userQuestion },
 			controller: this,
 			mcpHub: this.mcpHub,
 			updateTaskHistory: (historyItem) => this.updateTaskHistory(historyItem),
@@ -1234,10 +1264,9 @@ export class Controller {
 		const currentTaskItem = this.task?.taskId ? (taskHistory || []).find((item) => item.id === this.task?.taskId) : undefined
 		const aihydroMessages = this.task?.messageStateHandler.getAiHydroMessages() || []
 		const checkpointManagerErrorMessage = this.task?.taskState.checkpointManagerErrorMessage
-		// Resolve the ai-hydro study bound to this chat for the header chip. Keyed by
-		// the task ulid (the injected _chat_id), NOT taskId — the two differ. Recomputed
-		// on every state post, so it tracks bindings created mid-conversation.
-		const boundStudy = getBoundStudy(this.task?.ulid)
+		// The study chip's state is host-owned (launch binding, tool-result signals, the user's choice); a state
+		// for another chat is never shown.
+		const studyBinding = this.task && this.studyBinding?.chatId === this.task.ulid ? this.studyBinding : undefined
 
 		const processedTaskHistory = (taskHistory || [])
 			.filter((item) => item.ts && item.task)
@@ -1262,7 +1291,7 @@ export class Controller {
 			apiConfiguration,
 			currentTaskItem,
 			aihydroMessages,
-			boundStudy,
+			studyBinding,
 			currentFocusChainChecklist: this.task?.taskState.currentFocusChainChecklist || null,
 			checkpointManagerErrorMessage,
 			autoApprovalSettings,
@@ -1345,6 +1374,7 @@ export class Controller {
 		await this.task?.abortTask()
 		clearPending() // cancel and new task: nothing is waiting on the user any more
 		this.task = undefined // removes reference to it, so once promises end it will be garbage collected
+		this.studyBinding = undefined
 	}
 
 	// Caching mechanism to keep track of webview messages + API conversation history per provider instance
@@ -1370,7 +1400,13 @@ export class Controller {
 	 * fields written in between are kept. Other writers use `patchTaskHistory` with their own writer name.
 	 */
 	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
-		return this.patchTaskHistory(item.id, item, "loop")
+		const history = this.patchTaskHistory(item.id, item, "loop")
+		const pending = this.pendingStudyMirror
+		if (pending && (pending.taskId === item.id || (!pending.taskId && item.ulid === pending.ulid))) {
+			this.pendingStudyMirror = undefined
+			return this.patchTaskHistory(item.id, { activeStudyId: pending.studyId }, "binding")
+		}
+		return history
 	}
 
 	/**
@@ -1387,6 +1423,247 @@ export class Controller {
 	/** A user rename: persists across every later save (`titleSource: "user"`). */
 	renameTaskHistory(id: string, title: string): HistoryItem[] {
 		return this.patchTaskHistory(id, { title, titleSource: "user" }, "user")
+	}
+
+	// ---- Study binding (X0-2) -------------------------------------------------------------------------------
+
+	/** The chat's binding as the chip and picker show it. Only ever set through `setStudyBinding`. */
+	studyBinding: StudyBindingState | undefined
+	private studyBindingRefreshing = false
+	/** A binding made before the chat's first save: mirrored into history once the item exists. */
+	private pendingStudyMirror: { taskId?: string; ulid: string; studyId: string } | undefined
+
+	private get bindingHub(): BindingHub {
+		return this.mcpHub as unknown as BindingHub
+	}
+
+	private async bindingWorkspace(cwd?: string): Promise<string | undefined> {
+		return await resolveWorkspaceRoot(cwd ?? this.workspaceManager?.getPrimaryRoot()?.path)
+	}
+
+	/** Bind (or resume the binding of) a chat that is starting. Never throws and never blocks a task for long. */
+	private async bindChatAtLaunch(
+		chatUlid: string,
+		cwd: string,
+		historyItem: HistoryItem | undefined,
+		launch: ChatLaunch | undefined,
+	) {
+		try {
+			const state = await resolveLaunchBinding({
+				hub: this.bindingHub,
+				chatId: chatUlid,
+				workspace: await this.bindingWorkspace(cwd),
+				hint: launch?.studyHint,
+				resumeStudyId: historyItem?.activeStudyId,
+				resuming: !!historyItem,
+			})
+			this.setStudyBinding(state, historyItem?.id)
+		} catch (error) {
+			this.setStudyBinding(
+				{
+					chatId: chatUlid,
+					status: "unavailable",
+					reason: error instanceof Error ? error.message : String(error),
+					canChoose: false,
+				},
+				historyItem?.id,
+			)
+		}
+	}
+
+	/** Set the chip state; a bound study is mirrored into the chat's history item (binding writer). */
+	setStudyBinding(state: StudyBindingState, taskId?: string): void {
+		this.studyBinding = state
+		if (state.status === "bound" && state.studyId) {
+			this.mirrorStudy(taskId ?? this.task?.taskId, state.chatId, state.studyId)
+		}
+		void this.postStateToWebview().catch(() => {})
+	}
+
+	private mirrorStudy(taskId: string | undefined, chatId: string, studyId: string): void {
+		const history = this.stateManager.getGlobalStateKey("taskHistory") ?? []
+		const item = taskId ? history.find((h) => h.id === taskId) : undefined
+		if (item) {
+			if (item.activeStudyId !== studyId) {
+				this.patchTaskHistory(item.id, { activeStudyId: studyId }, "binding")
+			}
+			this.pendingStudyMirror = undefined
+		} else {
+			this.pendingStudyMirror = { taskId, ulid: chatId, studyId }
+		}
+	}
+
+	/**
+	 * Tool results carry the server's own account of a binding change (`session_binding`) or of a failed resolution
+	 * (an error code with labelled candidates). No tool name is consulted: only the shape of the result.
+	 */
+	observeStudyBindingSignal(serverName: string, resultText: string): void {
+		const task = this.task
+		if (!task || !isAiHydroServerName(serverName)) {
+			return
+		}
+		const chatId = task.ulid
+		const canChoose = this.studyBinding?.canChoose ?? false
+		const signal = parseBindingSignal(resultText)
+		if (signal?.kind === "binding") {
+			if (signal.binding.chatId !== chatId) {
+				return
+			}
+			this.setStudyBinding({
+				chatId,
+				status: "bound",
+				studyId: signal.binding.studyId,
+				label: signal.binding.label,
+				reason: signal.binding.previousStudyId
+					? `Changed from ${signal.binding.previousStudyId}.`
+					: "Bound by the agent's last call.",
+				by: "agent",
+				canChoose,
+			})
+		} else if (signal?.kind === "unresolved") {
+			this.setStudyBinding({
+				chatId,
+				status: signal.candidates.length > 0 ? "choose" : "none",
+				candidates: signal.candidates,
+				reason:
+					signal.candidates.length > 0
+						? "A tool could not tell which study this chat is about. Pick one."
+						: "No study is bound to this chat.",
+				canChoose,
+			})
+		} else if (this.studyBinding?.status !== "bound") {
+			// An older server reports no binding change: ask it, so the chip still follows the agent's own binding.
+			void this.refreshStudyBinding()
+		}
+	}
+
+	/** Ask the server what this chat is bound to (the audit's channel) and show it. */
+	async refreshStudyBinding(): Promise<void> {
+		const task = this.task
+		if (!task || this.studyBindingRefreshing) {
+			return
+		}
+		this.studyBindingRefreshing = true
+		try {
+			const server = findBindingServer(this.bindingHub)
+			if (!server) {
+				return
+			}
+			const status: ChatStatus | undefined = await chatStatus(
+				this.bindingHub,
+				server,
+				task.ulid,
+				await this.bindingWorkspace(),
+			)
+			if (this.task !== task) {
+				return
+			}
+			if (status?.bound && status.studyId && this.studyBinding?.studyId !== status.studyId) {
+				this.setStudyBinding({
+					chatId: task.ulid,
+					status: "bound",
+					studyId: status.studyId,
+					label: this.studyBinding?.candidates?.find((c) => c.studyId === status.studyId)?.label,
+					reason: "Bound to this chat.",
+					by: "server",
+					canChoose: this.studyBinding?.canChoose ?? false,
+				})
+			}
+		} finally {
+			this.studyBindingRefreshing = false
+		}
+	}
+
+	/** The chip was opened: list the studies to pick from (labelled by the server) and show the picker. */
+	async openStudyPicker(): Promise<void> {
+		const task = this.task
+		if (!task) {
+			return
+		}
+		const current = this.studyBinding?.chatId === task.ulid ? this.studyBinding : undefined
+		try {
+			const caps = findBindingServer(this.bindingHub)
+			const canChoose = caps ? (await readCapabilities(this.bindingHub, caps)).has("binding.v2") : false
+			if (!canChoose) {
+				this.setStudyBinding({
+					chatId: task.ulid,
+					status: current?.status === "bound" ? "bound" : "unavailable",
+					studyId: current?.studyId,
+					label: current?.label,
+					reason: "This AI-Hydro server version cannot switch the study from here. Update aihydro-tools.",
+					canChoose: false,
+				})
+				return
+			}
+			const candidates = await candidatesForPicker(this.bindingHub, await this.bindingWorkspace())
+			this.setStudyBinding({
+				chatId: task.ulid,
+				status: "choose",
+				studyId: current?.studyId,
+				label: current?.label,
+				candidates,
+				reason: current?.studyId ? "Switch this chat to another study." : "Pick the study this chat is about.",
+				by: current?.by,
+				canChoose: true,
+			})
+		} catch (error) {
+			this.setStudyBinding({
+				chatId: task.ulid,
+				status: current?.status === "bound" ? "bound" : "unavailable",
+				studyId: current?.studyId,
+				label: current?.label,
+				reason: `Could not list studies: ${error instanceof Error ? error.message : String(error)}`,
+				canChoose: false,
+			})
+		}
+	}
+
+	/** The user chose a study in the picker: bind once, then show it. A refusal keeps the picker open with the reason. */
+	async chooseStudy(studyId: string): Promise<void> {
+		const task = this.task
+		const current = this.studyBinding
+		if (!task || !current || current.chatId !== task.ulid || !current.candidates?.some((c) => c.studyId === studyId)) {
+			return // only a study that was offered can be chosen
+		}
+		const server = findBindingServer(this.bindingHub)
+		const result = server
+			? await rebindChat(this.bindingHub, server, task.ulid, studyId, await this.bindingWorkspace())
+			: ({ ok: false, code: "NO_SERVER", message: "The AI-Hydro server is not connected." } as const)
+		if (this.task !== task) {
+			return
+		}
+		if (result.ok) {
+			this.setStudyBinding({
+				chatId: task.ulid,
+				status: "bound",
+				studyId: result.studyId,
+				label: current.candidates.find((c) => c.studyId === studyId)?.label,
+				reason: "Chosen by you.",
+				by: "user",
+				canChoose: current.canChoose,
+			})
+		} else {
+			this.setStudyBinding({ ...current, reason: `Could not bind: ${result.message}` })
+		}
+	}
+
+	/** Dismiss the picker without binding ("No study", or "New study" which the next delineation creates). */
+	declineStudyChoice(kind: "none" | "new"): void {
+		const task = this.task
+		if (!task || !this.studyBinding || this.studyBinding.chatId !== task.ulid) {
+			return
+		}
+		if (this.studyBinding.studyId) {
+			// Closing the picker over a bound chat (switch mode) keeps the binding.
+			this.setStudyBinding({ ...this.studyBinding, status: "bound", candidates: undefined, reason: "Bound to this chat." })
+			return
+		}
+		this.setStudyBinding({
+			chatId: task.ulid,
+			status: "none",
+			reason: kind === "new" ? "A new study is created by the next delineation." : "This chat works without a study.",
+			canChoose: this.studyBinding.canChoose,
+		})
 	}
 
 	// Map layer management methods

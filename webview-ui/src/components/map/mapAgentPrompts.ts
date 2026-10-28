@@ -17,6 +17,8 @@ export interface MapAgentInspectContext {
 		properties: Record<string, unknown>
 	}>
 	userQuestion?: string
+	/** Lookup keys for the study the clicked layer belongs to; sent to the host, never put in the prompt. */
+	studyHint?: { sessionId?: string; artifactPath?: string }
 }
 
 function formatCoords(lat: number, lon: number): string {

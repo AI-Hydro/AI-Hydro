@@ -75,7 +75,7 @@ import {
 	AiHydroSay,
 	COMMAND_CANCEL_TOKEN,
 } from "@shared/ExtensionMessage"
-import { HistoryItem } from "@shared/HistoryItem"
+import { HistoryItem, type HistoryOrigin } from "@shared/HistoryItem"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay } from "@shared/Languages"
 import { convertAiHydroMessageToProto } from "@shared/proto-conversions/aihydro-message"
 import { AiHydroDefaultTool } from "@shared/tools"
@@ -156,6 +156,10 @@ type TaskParams = {
 	historyItem?: HistoryItem
 	taskId: string
 	taskLockAcquired: boolean
+	/** The chat id, minted by the controller so the chat can be bound to its study before the task starts. */
+	ulid?: string
+	/** Creation-time facts for a new chat (written once to its history item). */
+	launch?: { origin: HistoryOrigin; userQuestion?: string }
 }
 
 export class Task {
@@ -322,13 +326,13 @@ export class Task {
 
 		// Initialize taskId first
 		if (historyItem) {
-			this.ulid = historyItem.ulid ?? ulid()
+			this.ulid = params.ulid ?? historyItem.ulid ?? ulid()
 			this.taskState.conversationHistoryDeletedRange = historyItem.conversationHistoryDeletedRange
 			if (historyItem.checkpointManagerErrorMessage) {
 				this.taskState.checkpointManagerErrorMessage = historyItem.checkpointManagerErrorMessage
 			}
 		} else if (task || images || files) {
-			this.ulid = ulid()
+			this.ulid = params.ulid ?? ulid()
 		} else {
 			throw new Error("Either historyItem or task/images must be provided")
 		}
@@ -337,6 +341,7 @@ export class Task {
 			taskId: this.taskId,
 			ulid: this.ulid,
 			taskState: this.taskState,
+			creation: params.launch,
 			updateTaskHistory: this.updateTaskHistory,
 		})
 

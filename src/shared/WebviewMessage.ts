@@ -6,6 +6,7 @@ export interface WebviewMessage {
 		| "aihydro-hydro-command"
 		| "aihydro-map-agent-task"
 		| "open_replay"
+		| "aihydro-study-binding"
 	/** open_replay: the session and run a tool-call card links to. Both are validated host-side. */
 	session_id?: string
 	run_id?: string
@@ -13,6 +14,7 @@ export interface WebviewMessage {
 	grpc_request_cancel?: GrpcCancel
 	command?: string
 	requestId?: string
+	/** aihydro-study-binding: `{ action: "open" | "choose" | "decline", studyId?, kind? }` (see handleStudyBindingMessage). */
 	payload?: Record<string, unknown>
 	prompt?: string
 }

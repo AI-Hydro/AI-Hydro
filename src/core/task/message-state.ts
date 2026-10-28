@@ -7,7 +7,7 @@ import { combineApiRequests } from "@/shared/combineApiRequests"
 import { combineCommandSequences } from "@/shared/combineCommandSequences"
 import { AiHydroMessage } from "@/shared/ExtensionMessage"
 import { getApiMetrics } from "@/shared/getApiMetrics"
-import { HistoryItem } from "@/shared/HistoryItem"
+import { HistoryItem, type HistoryOrigin } from "@/shared/HistoryItem"
 import { getCwd, getDesktopDir } from "@/utils/path"
 import { ensureTaskDirectoryExists, saveAiHydroMessages, saveApiConversationHistory } from "../storage/disk"
 import { getHostProtectedRoots } from "./protectedRoots"
@@ -20,6 +20,8 @@ interface MessageStateHandlerParams {
 	updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
 	taskState: TaskState
 	checkpointManagerErrorMessage?: string
+	/** Creation-time facts written once to the history item (first-write-wins in historyPatch). */
+	creation?: { origin: HistoryOrigin; userQuestion?: string }
 }
 
 export class MessageStateHandler {
@@ -30,12 +32,14 @@ export class MessageStateHandler {
 	private taskId: string
 	private ulid: string
 	private taskState: TaskState
+	private creation: MessageStateHandlerParams["creation"]
 	private cwdAtInitialization: string | undefined
 
 	constructor(params: MessageStateHandlerParams) {
 		this.taskId = params.taskId
 		this.ulid = params.ulid
 		this.taskState = params.taskState
+		this.creation = params.creation
 		this.updateTaskHistory = params.updateTaskHistory
 	}
 
@@ -116,6 +120,8 @@ export class MessageStateHandler {
 				size: taskDirSize,
 				shadowGitConfigWorkTree: await this.checkpointTracker?.getShadowGitConfigWorkTree(),
 				cwdOnTaskInitialization: this.cwdAtInitialization,
+				...(this.creation ? { origin: this.creation.origin } : {}),
+				...(this.creation?.userQuestion ? { userQuestion: this.creation.userQuestion } : {}),
 				conversationHistoryDeletedRange: this.taskState.conversationHistoryDeletedRange,
 				checkpointManagerErrorMessage: this.taskState.checkpointManagerErrorMessage,
 			})
