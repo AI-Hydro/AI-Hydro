@@ -216,22 +216,27 @@ export class ArtifactKernelService {
 	/**
 	 * Resolves once every kernel stopped so far (including process-tree children) has actually
 	 * exited. Windows keeps a working directory locked until then, so anything that deletes it
-	 * (test cleanup) waits on this instead of sleeping.
+	 * (test cleanup) waits on this instead of sleeping. Returns false (and logs) if the wait timed out.
 	 */
-	async whenTerminated(timeoutMs = 15_000): Promise<void> {
+	async whenTerminated(timeoutMs = 15_000): Promise<boolean> {
 		let timer: NodeJS.Timeout | undefined
-		const expired = new Promise<void>((resolve) => {
-			timer = setTimeout(resolve, timeoutMs)
+		const expired = new Promise<false>((resolve) => {
+			timer = setTimeout(() => resolve(false), timeoutMs)
 		})
+		const done = (async () => {
+			while (this.terminating.size > 0) {
+				await Promise.all([...this.terminating])
+			}
+			return true as const
+		})()
 		try {
-			await Promise.race([
-				(async () => {
-					while (this.terminating.size > 0) {
-						await Promise.all([...this.terminating])
-					}
-				})(),
-				expired,
-			])
+			const ok = await Promise.race([done, expired])
+			if (!ok) {
+				this.outputChannel.appendLine(
+					`[kernel] ${this.terminating.size} kernel(s) still had not exited after ${timeoutMs} ms`,
+				)
+			}
+			return ok
 		} finally {
 			clearTimeout(timer)
 		}

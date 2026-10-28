@@ -16,7 +16,7 @@ export class ShellReloadGate {
 	private loading = false
 	private dirty = false
 	private cancelWatchdog: (() => void) | undefined
-	private readonly seen = new Set<string>()
+	private loadStartedAt = 0
 
 	constructor(
 		/** Performs the content update (sets `webview.options` / `webview.html`). */
@@ -24,6 +24,8 @@ export class ShellReloadGate {
 		/** Schedules a callback; returns a function that cancels it. Injected so tests need no real timers. */
 		private readonly schedule: (fn: () => void, ms: number) => () => void,
 		private readonly settleTimeoutMs = 10_000,
+		/** Clock shared with the shell documents (same machine); injected for tests. */
+		private readonly now: () => number = Date.now,
 	) {}
 
 	/** Ask for a reload. Runs now if none is in flight, otherwise is coalesced into one follow-up. */
@@ -37,6 +39,7 @@ export class ShellReloadGate {
 
 	/** Record that a load has been started outside the gate (the initial `html` assignment). */
 	markLoading(): void {
+		this.loadStartedAt = this.now()
 		this.loading = true
 		this.dirty = false
 		this.cancelWatchdog?.()
@@ -44,17 +47,16 @@ export class ShellReloadGate {
 	}
 
 	/**
-	 * A shell document reported ready. Only a document the host has not heard from before can be the
-	 * one that was loading; repeats from a document that already settled (its handshake keeps asking
-	 * until it has state) and late messages from a replaced document are not new.
+	 * A shell document reported ready. It settles the load only if that document started running
+	 * after the current load began (`loadedAt`, stamped by the document itself): a late message from
+	 * a document that was already being replaced carries an older stamp and must not release the
+	 * gate, or the next reload would stack on the one that is really still loading.
 	 */
-	shellReady(instance: unknown): void {
-		if (typeof instance !== "string" || instance === "") {
+	shellReady(instance: unknown, loadedAt?: unknown): void {
+		if (typeof instance !== "string" || instance === "" || typeof loadedAt !== "number" || !Number.isFinite(loadedAt)) {
 			return
 		}
-		const fresh = !this.seen.has(instance)
-		this.seen.add(instance)
-		if (fresh && this.loading) {
+		if (this.loading && loadedAt >= this.loadStartedAt) {
 			this.settle()
 		}
 	}

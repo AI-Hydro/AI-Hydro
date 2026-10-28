@@ -54,6 +54,27 @@ declare global {
 // Initialize the vscode API if available
 const vsCodeApi = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null
 
+/**
+ * VS Code's per-webview state: survives a reload of the same webview (a shell reload), unlike React
+ * state. Reads and writes merge by key so independent features do not clobber each other.
+ */
+export const webviewState = {
+	get<T>(key: string): T | undefined {
+		try {
+			return (vsCodeApi?.getState?.() as Record<string, unknown> | undefined)?.[key] as T | undefined
+		} catch {
+			return undefined
+		}
+	},
+	set(key: string, value: unknown): void {
+		try {
+			vsCodeApi?.setState?.({ ...((vsCodeApi.getState?.() as object | undefined) ?? {}), [key]: value })
+		} catch {
+			// state is a convenience; never break the shell over it
+		}
+	},
+}
+
 // Implementations for post message handling
 const postMessageStrategies: Record<string, PostMessageFunction> = {
 	vscode: (message: any) => {

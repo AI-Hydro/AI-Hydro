@@ -2,6 +2,7 @@ import { EmptyRequest } from "@shared/proto/cline/common"
 import type { HtmlPreviewItem } from "@shared/proto/cline/html_preview"
 import { RemoveHtmlPreviewItemRequest } from "@shared/proto/cline/html_preview"
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { webviewState } from "../config/platform.config"
 import { HtmlPreviewServiceClient } from "../services/grpc-client"
 import { useExtensionState } from "./ExtensionStateContext"
 import { applyPreviewItemOp, type PreviewItemOp, reconcileSnapshot } from "./htmlPreviewReconcile"
@@ -70,6 +71,8 @@ const HtmlPreviewContext = createContext<HtmlPreviewContextType>({
 
 /** Preview ids are `<source>_<hash of the path>`; log only a short prefix so traces carry no stable file identity. */
 const shortId = (id: string) => id.slice(0, 10)
+
+const ACTIVATION_SEQ_KEY = "studioLastActivationSeq"
 
 export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [items, setItems] = useState<HtmlPreviewItem[]>([])
@@ -176,7 +179,9 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 	// The host opened a document (auto-open, "Add to Studio", agent hand-off): show it. Applied once per
 	// host activation, so it never overrides a selection the user makes afterwards, and it does not rely on
 	// the shell reloading to pick up the newest item.
-	const lastActivationSeqRef = useRef(0)
+	// Persisted in webview state so a shell reload (same webview, fresh React state) does not re-apply an
+	// activation the user has since moved on from.
+	const lastActivationSeqRef = useRef(webviewState.get<number>(ACTIVATION_SEQ_KEY) ?? 0)
 	const hostActivationSeq = extensionState.htmlPreviewActivationSeq ?? 0
 	const hostActiveId = extensionState.htmlPreviewActiveId
 	useEffect(() => {
@@ -185,6 +190,7 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 		}
 		if (items.some((i) => i.id === hostActiveId)) {
 			lastActivationSeqRef.current = hostActivationSeq
+			webviewState.set(ACTIVATION_SEQ_KEY, hostActivationSeq)
 			setActiveItemId(hostActiveId)
 		}
 	}, [hostActivationSeq, hostActiveId, items])
