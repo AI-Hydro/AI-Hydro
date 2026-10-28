@@ -63,11 +63,22 @@ describe("managed tools venv lifecycle", () => {
 		expect(m.calls.filter((c) => c.includes("pip"))).to.have.length(1)
 	})
 
-	it("retries once with --force-reinstall and then reports UNHEALTHY with the probe error", async () => {
+	it("without Repair an unhealthy result is reported after one pip run: no automatic --force-reinstall", async () => {
 		const m = createFakeMachine(VENV)
 		makeVenv(m, "2.8.2")
 		m.handshakeFailures.count = 5
-		const r = await ensureToolsEnv(m.deps, { ...base, handshakeTimeoutMs: 10 })
+		const r = await ensureToolsEnv(m.deps, { ...base })
+		expect(r.errorCode).to.equal("UNHEALTHY")
+		const pips = m.calls.filter((c) => c.includes("pip"))
+		expect(pips).to.have.length(1)
+		expect(pips[0]).to.not.include("--force-reinstall")
+	})
+
+	it("an explicit Repair retries once with --force-reinstall and then reports UNHEALTHY with the probe error", async () => {
+		const m = createFakeMachine(VENV)
+		makeVenv(m, "2.8.2")
+		m.handshakeFailures.count = 5
+		const r = await ensureToolsEnv(m.deps, { ...base, repair: true })
 		expect(r.outcome).to.equal("failed")
 		expect(r.errorCode).to.equal("UNHEALTHY")
 		expect(r.message).to.match(/MCP handshake/)
@@ -118,6 +129,73 @@ describe("managed tools venv lifecycle", () => {
 		const r = await ensureToolsEnv(m.deps, base)
 		expect(r.errorCode).to.equal("NOT_A_VENV")
 		expect(m.calls.some((c) => c.includes("venv") || c.includes("pip"))).to.equal(false)
+	})
+
+	it("never pip-installs into a working python that is not a venv (no pyvenv.cfg)", async () => {
+		const m = createFakeMachine(VENV)
+		m.files.add(VENV)
+		m.files.add(PY) // a conda/system prefix: python runs, no pyvenv.cfg
+		const r = await ensureToolsEnv(m.deps, { ...base, repair: true })
+		expect(r.errorCode).to.equal("NOT_A_VENV")
+		expect(m.calls.some((c) => c.includes("pip"))).to.equal(false)
+	})
+
+	it("never pip-installs when pyvenv.cfg exists but the interpreter reports sys.prefix == sys.base_prefix", async () => {
+		const m = createFakeMachine(VENV)
+		makeVenv(m, "")
+		m.nonVenvPython.value = true
+		const r = await ensureToolsEnv(m.deps, { ...base })
+		expect(r.errorCode).to.equal("NOT_A_VENV")
+		expect(m.calls.some((c) => c.includes("pip"))).to.equal(false)
+	})
+
+	it("a python that exists but fails or times out is unhealthy, never recreated or cleared", async () => {
+		const m = createFakeMachine(VENV)
+		makeVenv(m, "2.8.2")
+		m.venvPythonBroken.value = true
+		const r = await ensureToolsEnv(m.deps, { ...base, isDefaultDir: true, confirmRecreate: async () => true })
+		expect(r.errorCode).to.equal("UNHEALTHY")
+		expect(m.calls.some((c) => c.includes("--clear") || c.includes("venv") || c.includes("pip"))).to.equal(false)
+	})
+
+	it("a venv that lost its interpreter is only cleared for the default dir and after confirmation", async () => {
+		const mk = () => {
+			const m = createFakeMachine(VENV)
+			m.files.add(VENV)
+			m.files.add(`${VENV}/pyvenv.cfg`) // interpreter file is gone
+			return m
+		}
+		let m = mk()
+		expect((await ensureToolsEnv(m.deps, base)).errorCode).to.equal("VENV_BROKEN")
+		m = mk()
+		expect(
+			(await ensureToolsEnv(m.deps, { ...base, isDefaultDir: false, confirmRecreate: async () => true })).errorCode,
+		).to.equal("VENV_BROKEN")
+		m = mk()
+		expect(
+			(await ensureToolsEnv(m.deps, { ...base, isDefaultDir: true, confirmRecreate: async () => false })).errorCode,
+		).to.equal("VENV_BROKEN")
+		expect(m.calls.some((c) => c.includes("--clear"))).to.equal(false)
+		m = mk()
+		const r = await ensureToolsEnv(m.deps, { ...base, isDefaultDir: true, confirmRecreate: async () => true })
+		expect(r.outcome).to.equal("created")
+		expect(m.calls.find((c) => c.includes("venv"))).to.include("--clear")
+	})
+
+	it("stops with LOCKED when another process holds the install lock", async () => {
+		const m = createFakeMachine(VENV)
+		m.lockHeld.pid = 4242
+		const r = await ensureToolsEnv(m.deps, base)
+		expect(r.errorCode).to.equal("LOCKED")
+		expect(r.message).to.match(/4242/)
+		expect(m.calls.some((c) => c.includes("venv") || c.includes("pip"))).to.equal(false)
+	})
+
+	it("health probes run the interpreter isolated (-I)", async () => {
+		const m = createFakeMachine(VENV)
+		makeVenv(m, "2.8.2")
+		await probeToolsEnv(m.deps, VENV)
+		expect(m.calls.filter((c) => c[0] === PY).every((c) => c[1] === "-I")).to.equal(true)
 	})
 
 	it("treats an install cancelled mid-pip as cancelled, not failed, and leaves the venv for a retry", async () => {

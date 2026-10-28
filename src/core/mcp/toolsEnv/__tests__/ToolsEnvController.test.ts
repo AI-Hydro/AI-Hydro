@@ -6,7 +6,7 @@ import * as path from "path"
 import { getRecordedFirstPartyLauncher, setRecordedFirstPartyLauncher } from "@/shared/aihydro/firstPartyServers"
 import { type ToolsEnvStatus, venvMcpPath } from "@/shared/aihydro/toolsEnv"
 import { readFirstPartyLauncher, recordFirstPartyLauncher } from "../../firstPartyLauncher"
-import { ToolsEnvController, type ToolsEnvHost } from "../ToolsEnvController"
+import { ToolsEnvController, type ToolsEnvHost, type ToolsEnvPersisted } from "../ToolsEnvController"
 import { createFakeMachine, type FakeMachine, makeVenv } from "./fakeToolsEnv"
 
 describe("ToolsEnvController", () => {
@@ -18,7 +18,11 @@ describe("ToolsEnvController", () => {
 	let trustAnswers: boolean[]
 	let trustAsked: number
 	let notices: { kind: string; message: string; actions: string[] }[]
-	let kept: string | undefined
+	let state: ToolsEnvPersisted
+	let config: { autoInstall: boolean; venvPath: string }
+	let installAnswer: boolean
+	let installAsked: { venvPath: string; requirement: string }[]
+	let recreateAnswer: boolean
 	let switchAnswer: "switch" | "keep" | undefined
 	let abortOnProgress: boolean
 
@@ -26,13 +30,17 @@ describe("ToolsEnvController", () => {
 		saved = getRecordedFirstPartyLauncher()
 		setRecordedFirstPartyLauncher(undefined)
 		dir = await fs.mkdtemp(path.join(os.tmpdir(), "tools-ctl-"))
-		venv = path.join(dir, "venvs", "tools-2.8")
+		venv = path.join(dir, "venvs", "tools-2.8") // the default managed dir under paths.venvsDir
 		settingsPath = path.join(dir, "aihydro_mcp_settings.json")
 		machine = createFakeMachine(venv)
 		trustAnswers = []
 		trustAsked = 0
 		notices = []
-		kept = undefined
+		state = {}
+		config = { autoInstall: true, venvPath: "" }
+		installAnswer = true
+		installAsked = []
+		recreateAnswer = false
 		switchAnswer = "switch"
 		abortOnProgress = false
 	})
@@ -42,7 +50,7 @@ describe("ToolsEnvController", () => {
 	})
 
 	const host = (): ToolsEnvHost => ({
-		getConfig: () => ({ venvPath: venv, pythonPaths: [] }),
+		getConfig: () => ({ venvPath: config.venvPath, pythonPaths: [], autoInstall: config.autoInstall }),
 		withProgress: async (_title, task) => {
 			const ac = new AbortController()
 			if (abortOnProgress) {
@@ -61,10 +69,15 @@ describe("ToolsEnvController", () => {
 		},
 		showLog: () => {},
 		copyText: async () => {},
-		getKeptLauncher: async () => kept,
-		setKeptLauncher: async (c) => {
-			kept = c
+		readState: async () => ({ ...state }),
+		writeState: async (patch) => {
+			state = { ...state, ...patch }
 		},
+		confirmInstall: async (info) => {
+			installAsked.push(info)
+			return installAnswer
+		},
+		confirmRecreate: async () => recreateAnswer,
 		extensionVersion: () => "0.0.0-test",
 	})
 	const controller = () =>
@@ -95,6 +108,10 @@ describe("ToolsEnvController", () => {
 		expect((await readEntry("ai-hydro")).command).to.equal(mcp())
 		expect((await readFirstPartyLauncher(dir))?.command).to.equal(mcp())
 		expect(trustAsked).to.equal(0) // first registration records without a prompt
+		expect(installAsked).to.have.length(1) // one-time consent naming the venv path
+		expect(installAsked[0].venvPath).to.equal(venv)
+		expect(state.installConsent).to.equal(true)
+		expect(state.recordExisted).to.equal(true)
 		expect(machine.calls.filter((x) => x.includes("pip"))).to.have.length(1)
 	})
 
@@ -106,6 +123,88 @@ describe("ToolsEnvController", () => {
 		expect(machine.calls.some((x) => x.includes("pip") || x.includes("venv"))).to.equal(false)
 		await c.runAction("install")
 		expect(c.getStatus().phase).to.equal("ready")
+	})
+
+	it("no consent, or autoInstall off, or a custom venvPath: nothing is installed automatically", async () => {
+		installAnswer = false
+		let c = controller()
+		await c.startup()
+		await settled(c)
+		expect(c.getStatus().phase).to.equal("missing")
+		expect(state.installConsent).to.equal(undefined)
+		installAnswer = true
+		config.autoInstall = false
+		c = controller()
+		await c.startup()
+		await settled(c)
+		expect(c.getStatus().phase).to.equal("missing")
+		config = { autoInstall: true, venvPath: venv }
+		c = controller()
+		await c.startup()
+		await settled(c)
+		expect(c.getStatus().phase).to.equal("missing")
+		expect(machine.calls.some((x) => x.includes("pip") || x.includes("venv"))).to.equal(false)
+	})
+
+	it("an existing but unhealthy venv is never auto-repaired; Repair does it", async () => {
+		makeVenv(machine, "2.8.2")
+		machine.handshakeFailures.count = 1
+		const c = controller()
+		await c.startup()
+		await settled(c)
+		expect(c.getStatus().phase).to.equal("unhealthy")
+		expect(machine.calls.some((x) => x.includes("pip"))).to.equal(false)
+		await c.runAction("repair")
+		expect(c.getStatus().phase).to.equal("ready")
+	})
+
+	it("an outdated healthy venv (2.8.0) is reported, not upgraded automatically", async () => {
+		makeVenv(machine, "2.8.0")
+		const c = controller()
+		await c.startup()
+		await settled(c)
+		expect(c.getStatus()).to.include({ phase: "unhealthy", version: "2.8.0" })
+		expect(machine.calls.some((x) => x.includes("pip"))).to.equal(false)
+		await c.runAction("repair")
+		expect(c.getStatus()).to.include({ phase: "ready", version: "2.8.2" })
+	})
+
+	it("a forged 'trust' with no record shows the modal and records nothing without confirmation", async () => {
+		await fs.writeFile(settingsPath, JSON.stringify({ mcpServers: { "ai-hydro": { command: mcp(), args: [] } } }))
+		const c = controller()
+		trustAnswers = [false]
+		await c.runAction("trust")
+		expect(trustAsked).to.equal(1)
+		expect(await readFirstPartyLauncher(dir)).to.equal(undefined)
+		trustAnswers = [true]
+		await c.runAction("trust")
+		expect((await readFirstPartyLauncher(dir))?.command).to.equal(mcp())
+	})
+
+	it("a record that existed and is now missing is not silently re-recorded: notice plus confirmation", async () => {
+		makeVenv(machine, "2.8.2")
+		state.recordExisted = true
+		await fs.writeFile(settingsPath, JSON.stringify({ mcpServers: { "ai-hydro": { command: mcp(), args: [] } } }))
+		trustAnswers = [false]
+		const c = controller()
+		await c.startup()
+		await settled(c)
+		expect(trustAsked).to.equal(1)
+		expect(notices.some((n) => /record .* is missing/.test(n.message))).to.equal(true)
+		expect(await readFirstPartyLauncher(dir)).to.equal(undefined)
+		expect(c.getStatus().trust).to.equal("untrusted")
+	})
+
+	it("after a declined confirmation the existing record is loaded into memory", async () => {
+		makeVenv(machine, "2.8.2")
+		await recordFirstPartyLauncher(dir, { name: "ai-hydro", command: "/opt/old/aihydro-mcp", args: [] })
+		setRecordedFirstPartyLauncher(undefined)
+		await fs.writeFile(settingsPath, JSON.stringify({ mcpServers: { "ai-hydro": { command: mcp(), args: [] } } }))
+		trustAnswers = [false]
+		const c = controller()
+		await c.startup()
+		await settled(c)
+		expect(getRecordedFirstPartyLauncher()?.command).to.equal("/opt/old/aihydro-mcp")
 	})
 
 	it("adopts an existing healthy venv: no pip, no venv creation, registered and recorded", async () => {
@@ -149,11 +248,12 @@ describe("ToolsEnvController", () => {
 		expect(s.errorCode).to.equal("OFFLINE")
 		expect(notices.some((n) => n.kind === "error" && n.actions.includes("Retry"))).to.equal(true)
 
-		// A second controller (a later session) still tries again: nothing was dismissed.
+		// A later session still shows it (nothing was dismissed). The half-created venv is "unhealthy" and is only
+		// repaired by an explicit action, never automatically.
 		const again = controller()
 		await again.startup()
 		await settled(again)
-		expect(again.getStatus().phase).to.equal("failed")
+		expect(again.getStatus().phase).to.equal("unhealthy")
 
 		machine.pipResult = { exitCode: 0, stderr: "" }
 		await c.runAction("retry")
@@ -209,7 +309,7 @@ describe("ToolsEnvController", () => {
 		await c.startup()
 		await settled(c)
 		expect(c.getStatus().phase).to.equal("custom")
-		expect(kept).to.equal("/usr/local/bin/aihydro-mcp")
+		expect(state.keptLauncher).to.equal("/usr/local/bin/aihydro-mcp")
 		expect((await readEntry("ai-hydro")).command).to.equal("/usr/local/bin/aihydro-mcp")
 		// Next start does not ask again.
 		switchAnswer = "switch"

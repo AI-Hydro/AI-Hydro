@@ -20,6 +20,13 @@ export interface FakeMachine {
 	/** Version pip installs. */
 	pipInstalls: { version: string }
 	logs: string[]
+	/** The venv's python runs but reports sys.prefix == sys.base_prefix (a conda base, Homebrew or system prefix). */
+	nonVenvPython: { value: boolean }
+	/** The venv's python file exists but spawning it fails or times out. */
+	venvPythonBroken: { value: boolean }
+	/** Another process holds the install lock. */
+	lockHeld: { pid: number | undefined }
+	locks: number
 }
 
 export function createFakeMachine(venvDir: string, platform: NodeJS.Platform = "linux"): FakeMachine {
@@ -35,6 +42,10 @@ export function createFakeMachine(venvDir: string, platform: NodeJS.Platform = "
 		handshakeFailures: { count: 0 },
 		pipInstalls: { version: "2.8.2" },
 		logs: [],
+		nonVenvPython: { value: false },
+		venvPythonBroken: { value: false },
+		lockHeld: { pid: undefined },
+		locks: 0,
 		deps: undefined as unknown as ToolsEnvDeps,
 	}
 	const venvIsReal = () => m.files.has(venvPy)
@@ -44,6 +55,13 @@ export function createFakeMachine(venvDir: string, platform: NodeJS.Platform = "
 		listDir: async (p) =>
 			[...m.files].filter((f) => f.startsWith(`${p}/`) || f.startsWith(`${p}\\`)).map((f) => f.slice(p.length + 1)),
 		log: (line) => m.logs.push(line),
+		lock: async () => {
+			if (m.lockHeld.pid !== undefined) {
+				return { ok: false, pid: m.lockHeld.pid }
+			}
+			m.locks++
+			return { ok: true, release: async () => {} }
+		},
 		run: async (command, args, options): Promise<RunResult> => {
 			m.calls.push([command, ...args])
 			if (options?.signal?.aborted) {
@@ -51,6 +69,12 @@ export function createFakeMachine(venvDir: string, platform: NodeJS.Platform = "
 			}
 			const joined = args.join(" ")
 			if (command === venvPy) {
+				if (m.venvPythonBroken.value) {
+					return { exitCode: null, stdout: "", stderr: "", timedOut: true }
+				}
+				if (joined.includes("base_prefix")) {
+					return { exitCode: 0, stdout: m.nonVenvPython.value ? "False\n" : "True\n", stderr: "" }
+				}
 				if (args[0] === "-m" && args[1] === "pip") {
 					const hook = await m.onPip?.(options)
 					if (hook) {
@@ -75,7 +99,7 @@ export function createFakeMachine(venvDir: string, platform: NodeJS.Platform = "
 					return { exitCode: 1, stdout: "", stderr: "no python" }
 				}
 				m.files.add(dir)
-				m.files.add(`${dir}/pyvenv.cfg`)
+				m.files.add(`${dir}${platform === "win32" ? "\\" : "/"}pyvenv.cfg`)
 				m.files.add(venvPy)
 				return { exitCode: 0, stdout: "", stderr: "" }
 			}
@@ -99,7 +123,7 @@ export function createFakeMachine(venvDir: string, platform: NodeJS.Platform = "
 	// helper to simulate a venv that exists already
 	;(m as unknown as { makeVenv: (version: string) => void }).makeVenv = (version: string) => {
 		m.files.add(venvDir)
-		m.files.add(`${venvDir}/pyvenv.cfg`)
+		m.files.add(`${venvDir}${platform === "win32" ? "\\" : "/"}pyvenv.cfg`)
 		m.files.add(venvPy)
 		if (version) {
 			m.files.add(venvMcp)

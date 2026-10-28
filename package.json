@@ -654,6 +654,12 @@
 					"scope": "machine",
 					"description": "Directory of the managed AI-Hydro tools virtual environment. Leave empty to use <AIHYDRO_HOME or ~/.aihydro>/venvs/tools-2.8. An existing healthy environment there is adopted, not recreated. Machine scope: a repository's workspace settings cannot change it."
 				},
+				"aihydro.tools.autoInstall": {
+					"type": "boolean",
+					"default": true,
+					"scope": "machine",
+					"description": "Offer to install the managed AI-Hydro tools environment automatically when it is missing. Even when true, the first install asks once and names the download source (PyPI), size and directory. Only a fresh, missing environment at the default path is installed automatically; an unhealthy one is only repaired by the Repair action. Machine scope: a repository's workspace settings cannot change it."
+				},
 				"aihydro.tools.pythonPath": {
 					"type": "string",
 					"default": "",

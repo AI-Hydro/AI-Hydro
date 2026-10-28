@@ -7,6 +7,7 @@ import { describeToolsStatus, TOOLS_ACTION_LABEL, type ToolsEnvAction, type Tool
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as vscode from "vscode"
+import { atomicWriteFile } from "@/core/mcp/toolsEnv/atomicWrite"
 import type { ToolsEnvConfig, ToolsEnvHost } from "@/core/mcp/toolsEnv/ToolsEnvController"
 import { ToolsEnvController } from "@/core/mcp/toolsEnv/ToolsEnvController"
 import { createNodeToolsEnvDeps } from "@/core/mcp/toolsEnv/nodeDeps"
@@ -22,14 +23,18 @@ const TOOLS_COMMANDS = {
 	copyDiagnostics: commands.ToolsCopyDiagnostics,
 } as const
 
-/** The launcher the user chose to keep instead of the managed one; lives with the other first-party launcher state. */
-const KEPT_LAUNCHER_FILE = "aihydro_tools_env.json"
+/** Per-machine tools state (kept launcher, install consent, record-existed marker), next to the launcher record. */
+const STATE_FILE = "aihydro_tools_env.json"
 
 function readConfig(): ToolsEnvConfig {
 	const cfg = vscode.workspace.getConfiguration("aihydro.tools")
 	// Machine-scoped settings (package.json): a workspace cannot redirect which interpreter or directory we use.
 	const python = (cfg.get<string>("pythonPath") ?? "").trim()
-	return { venvPath: (cfg.get<string>("venvPath") ?? "").trim(), pythonPaths: python ? [python] : [] }
+	return {
+		venvPath: (cfg.get<string>("venvPath") ?? "").trim(),
+		pythonPaths: python ? [python] : [],
+		autoInstall: cfg.get<boolean>("autoInstall") ?? true,
+	}
 }
 
 export function statusBarText(s: ToolsEnvStatus): { text: string; tooltip: string; warn: boolean } {
@@ -72,7 +77,7 @@ export function createVscodeToolsEnv(
 ): ToolsEnvController {
 	const channel = vscode.window.createOutputChannel("AI-Hydro Tools")
 	const log = (line: string) => channel.appendLine(line)
-	const keptFile = path.join(paths.settingsDir, KEPT_LAUNCHER_FILE)
+	const stateFile = path.join(paths.settingsDir, STATE_FILE)
 	const host: ToolsEnvHost = {
 		getConfig: readConfig,
 		withProgress: (title, task) =>
@@ -122,17 +127,50 @@ export function createVscodeToolsEnv(
 				: vscode.window.showInformationMessage(message, ...actions),
 		showLog: () => channel.show(true),
 		copyText: (text) => Promise.resolve(vscode.env.clipboard.writeText(text)),
-		getKeptLauncher: async () => {
+		readState: async () => {
 			try {
-				const kept = JSON.parse(await fs.readFile(keptFile, "utf-8")).keptLauncher
-				return typeof kept === "string" ? kept : undefined
+				const parsed = JSON.parse(await fs.readFile(stateFile, "utf-8"))
+				return {
+					keptLauncher: typeof parsed.keptLauncher === "string" ? parsed.keptLauncher : undefined,
+					installConsent: parsed.installConsent === true,
+					recordExisted: parsed.recordExisted === true,
+				}
 			} catch {
-				return undefined
+				return {}
 			}
 		},
-		setKeptLauncher: async (command) => {
-			await fs.mkdir(path.dirname(keptFile), { recursive: true })
-			await fs.writeFile(keptFile, JSON.stringify({ keptLauncher: command ?? null }, null, 2))
+		writeState: async (patch) => {
+			let current: Record<string, unknown> = {}
+			try {
+				current = JSON.parse(await fs.readFile(stateFile, "utf-8"))
+			} catch {
+				// first write
+			}
+			const next: Record<string, unknown> = { ...current, ...patch }
+			for (const key of Object.keys(next)) {
+				if (next[key] === undefined) {
+					delete next[key]
+				}
+			}
+			await atomicWriteFile(stateFile, JSON.stringify(next, null, 2))
+		},
+		confirmInstall: async ({ venvPath, requirement }) => {
+			const install = "Install"
+			const choice = await vscode.window.showInformationMessage(
+				`AI-Hydro needs its Python tools. Install ${requirement} into ${venvPath}? This downloads packages from PyPI (pypi.org and files.pythonhosted.org), typically several hundred MB (estimate), and creates a private virtual environment. Nothing is installed into your system Python.`,
+				install,
+				"Not now",
+			)
+			return choice === install
+		},
+		confirmRecreate: async (venvPath) => {
+			const recreate = "Recreate"
+			const choice = await vscode.window.showWarningMessage(
+				`The AI-Hydro tools environment at ${venvPath} has lost its Python interpreter. Delete and recreate it? Packages installed into it by hand are removed.`,
+				{ modal: true },
+				recreate,
+			)
+			return choice === recreate
 		},
 		extensionVersion: () => ExtensionRegistryInfo.version,
 	}
@@ -147,6 +185,7 @@ export function createVscodeToolsEnv(
 		const t = statusBarText(s)
 		item.text = t.text
 		item.tooltip = t.tooltip
+		item.accessibilityInformation = { label: `AI-Hydro tools: ${t.tooltip.replace(/\n/g, ". ")}`, role: "button" }
 		item.backgroundColor = t.warn ? new vscode.ThemeColor("statusBarItem.warningBackground") : undefined
 	}
 	paint(controller.getStatus())

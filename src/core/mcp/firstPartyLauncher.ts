@@ -15,6 +15,7 @@ import {
 	setRecordedFirstPartyLauncher,
 } from "@shared/aihydro/firstPartyServers"
 import * as fs from "fs/promises"
+import { atomicWriteFile } from "./toolsEnv/atomicWrite"
 import * as path from "path"
 
 export const FIRST_PARTY_LAUNCHER_FILE = "aihydro_first_party_launcher.json"
@@ -53,8 +54,7 @@ export async function loadFirstPartyLauncher(settingsDir: string): Promise<First
 
 /** Persist and install a record. Call only from registration or an explicit user action in the UI. */
 export async function recordFirstPartyLauncher(settingsDir: string, launcher: FirstPartyLauncher): Promise<void> {
-	await fs.mkdir(settingsDir, { recursive: true })
-	await fs.writeFile(
+	await atomicWriteFile(
 		path.join(settingsDir, FIRST_PARTY_LAUNCHER_FILE),
 		JSON.stringify(
 			{ name: launcher.name, command: launcher.command, args: launcher.args, launchHash: launcher.launchHash },

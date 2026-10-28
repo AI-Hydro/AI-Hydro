@@ -5,9 +5,42 @@
  */
 import { spawn } from "node:child_process"
 import * as fs from "fs/promises"
+import * as path from "path"
 import type { HandshakeResult, RunOptions, RunResult, ToolsEnvDeps } from "./managedVenv"
 
 const MAX_CAPTURE = 256 * 1024
+/** A child that ignores the first kill is force-killed after this long. */
+const FORCE_KILL_MS = 2_000
+
+/** The process environment without the variables that would redirect Python to another environment. */
+export function scrubbedEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+	const env = { ...base }
+	for (const key of Object.keys(env)) {
+		if (key.toUpperCase() === "PYTHONPATH" || key.toUpperCase() === "PYTHONHOME") {
+			delete env[key]
+		}
+	}
+	return env
+}
+
+/** Terminate, then SIGKILL if it has not exited shortly after. */
+function terminate(child: ReturnType<typeof spawn>): void {
+	try {
+		child.kill()
+	} catch {
+		// already gone
+	}
+	const timer = setTimeout(() => {
+		if (child.exitCode === null && child.signalCode === null) {
+			try {
+				child.kill("SIGKILL")
+			} catch {
+				// already gone
+			}
+		}
+	}, FORCE_KILL_MS)
+	timer.unref()
+}
 
 function pushLines(buffer: { text: string }, chunk: string, onLine?: (line: string) => void): void {
 	buffer.text += chunk
@@ -30,7 +63,12 @@ export function runProcess(command: string, args: string[], options: RunOptions 
 		}
 		let child: ReturnType<typeof spawn>
 		try {
-			child = spawn(command, args, { cwd: options.cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
+			child = spawn(command, args, {
+				cwd: options.cwd,
+				env: scrubbedEnv(),
+				stdio: ["ignore", "pipe", "pipe"],
+				windowsHide: true,
+			})
 		} catch (error) {
 			resolve({
 				exitCode: null,
@@ -46,13 +84,7 @@ export function runProcess(command: string, args: string[], options: RunOptions 
 		let timedOut = false
 		const outLines = { text: "" }
 		const errLines = { text: "" }
-		const kill = () => {
-			try {
-				child.kill()
-			} catch {
-				// already gone
-			}
-		}
+		const kill = () => terminate(child)
 		const onAbort = () => {
 			aborted = true
 			kill()
@@ -108,7 +140,7 @@ export function mcpHandshake(
 		try {
 			child = spawn(command, args, {
 				cwd: options.cwd,
-				env: options.env ?? process.env,
+				env: scrubbedEnv(options.env),
 				stdio: ["pipe", "pipe", "pipe"],
 				windowsHide: true,
 			})
@@ -129,10 +161,10 @@ export function mcpHandshake(
 			options.signal?.removeEventListener("abort", onAbort)
 			try {
 				child.stdin?.end()
-				child.kill()
 			} catch {
 				// already gone
 			}
+			terminate(child)
 			resolve(result)
 		}
 		const onAbort = () => done({ ok: false, error: "cancelled" })
@@ -210,6 +242,50 @@ export function mcpHandshake(
 	})
 }
 
+/** `O_EXCL` lock file holding our pid. A lock whose pid is no longer alive is stale and is taken over once. */
+export async function acquireLock(
+	lockPath: string,
+): Promise<{ ok: true; release(): Promise<void> } | { ok: false; pid?: number }> {
+	await fs.mkdir(path.dirname(lockPath), { recursive: true })
+	for (let attempt = 0; attempt < 2; attempt++) {
+		try {
+			const handle = await fs.open(lockPath, "wx")
+			await handle.writeFile(String(process.pid))
+			await handle.close()
+			return {
+				ok: true,
+				release: async () => {
+					await fs.rm(lockPath, { force: true })
+				},
+			}
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+				return { ok: false }
+			}
+		}
+		let pid = Number.NaN
+		try {
+			pid = Number.parseInt((await fs.readFile(lockPath, "utf-8")).trim(), 10)
+		} catch {
+			continue // vanished between open and read: try again
+		}
+		let alive = false
+		if (Number.isInteger(pid) && pid > 0) {
+			try {
+				process.kill(pid, 0)
+				alive = true
+			} catch (error) {
+				alive = (error as NodeJS.ErrnoException).code === "EPERM"
+			}
+		}
+		if (alive && pid !== process.pid) {
+			return { ok: false, pid }
+		}
+		await fs.rm(lockPath, { force: true }) // stale (dead pid or unreadable)
+	}
+	return { ok: false }
+}
+
 export function createNodeToolsEnvDeps(log: (line: string) => void, handshakeCwd?: string): ToolsEnvDeps {
 	return {
 		platform: process.platform,
@@ -229,6 +305,7 @@ export function createNodeToolsEnvDeps(log: (line: string) => void, handshakeCwd
 			}
 		},
 		run: runProcess,
+		lock: acquireLock,
 		handshake: (command, args, options) => mcpHandshake(command, args, { ...options, cwd: handshakeCwd }),
 		log,
 	}

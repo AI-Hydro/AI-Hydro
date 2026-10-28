@@ -46,10 +46,22 @@ export interface ToolsEnvDeps {
 	run(command: string, args: string[], options?: RunOptions): Promise<RunResult>
 	/** Spawn `command` and perform MCP initialize + tools/list over stdio, then terminate it. */
 	handshake(command: string, args: string[], options: { signal?: AbortSignal; timeoutMs: number }): Promise<HandshakeResult>
+	/**
+	 * Exclusive `O_EXCL` lock file (stale-pid aware). `ok:false` means another live process holds it.
+	 */
+	lock(lockPath: string): Promise<{ ok: true; release(): Promise<void> } | { ok: false; pid?: number }>
 	log(line: string): void
 }
 
-export type EnsureErrorCode = "NO_PYTHON" | "VENV_FAILED" | "NOT_A_VENV" | "PIP_FAILED" | "OFFLINE" | "UNHEALTHY"
+export type EnsureErrorCode =
+	| "NO_PYTHON"
+	| "VENV_FAILED"
+	| "NOT_A_VENV"
+	| "VENV_BROKEN"
+	| "PIP_FAILED"
+	| "OFFLINE"
+	| "UNHEALTHY"
+	| "LOCKED"
 
 export interface ProbeResult {
 	venvExists: boolean
@@ -82,14 +94,20 @@ export interface EnsureOptions {
 	requirement?: string
 	signal?: AbortSignal
 	onStep?: (step: string) => void
-	/** Force a pip run even when the environment looks healthy (Repair). */
+	/** User-initiated Repair: force a pip run even when healthy, and allow one `--force-reinstall` retry. */
 	repair?: boolean
+	/** True only for the exact default managed directory; only then may a venv missing its interpreter be recreated. */
+	isDefaultDir?: boolean
+	/** Asked before `venv --clear` of a venv whose interpreter is missing. Without it nothing is ever cleared. */
+	confirmRecreate?: () => Promise<boolean>
 	handshakeTimeoutMs?: number
 }
 
 const PY_VERSION_SNIPPET = "import sys;print('%d.%d.%d' % sys.version_info[:3])"
 const TOOLS_IMPORT_SNIPPET = "import importlib.metadata as m, ai_hydro.mcp; print(m.version('aihydro-tools'))"
-const DEFAULT_HANDSHAKE_TIMEOUT_MS = 90_000
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = 30_000
+const VENV_CHECK_SNIPPET = "import sys;print(sys.prefix != sys.base_prefix)"
+export const INSTALL_LOCK_NAME = ".install.lock"
 const OFFLINE_PATTERN =
 	/Could not find a version that satisfies|No matching distribution|Temporary failure in name resolution|Network is unreachable|Connection (?:refused|reset|timed out|aborted)|getaddrinfo|ProxyError|SSLError|Max retries exceeded|Name or service not known|nodename nor servname/i
 
@@ -130,7 +148,7 @@ export async function findBasePython(
 				.pop() === "py"
 				? ["-3"]
 				: []
-		const r = await deps.run(candidate, [...launcherArgs, "-c", PY_VERSION_SNIPPET], { signal, timeoutMs: 20_000 })
+		const r = await deps.run(candidate, [...launcherArgs, "-I", "-c", PY_VERSION_SNIPPET], { signal, timeoutMs: 20_000 })
 		const version = r.exitCode === 0 ? r.stdout.trim() : ""
 		if (!version) {
 			deps.log(`[python] ${candidate}: not usable${r.spawnError ? ` (${r.spawnError})` : ""}`)
@@ -167,13 +185,13 @@ export async function probeToolsEnv(
 		result.error = "The environment has no Python interpreter."
 		return result
 	}
-	const py = await deps.run(python, ["-c", PY_VERSION_SNIPPET], { signal: options.signal, timeoutMs: 20_000 })
+	const py = await deps.run(python, ["-I", "-c", PY_VERSION_SNIPPET], { signal: options.signal, timeoutMs: 20_000 })
 	result.pythonRuns = py.exitCode === 0
 	if (!result.pythonRuns) {
 		result.error = `The environment's Python does not run${py.spawnError ? ` (${py.spawnError})` : ""}.`
 		return result
 	}
-	const imp = await deps.run(python, ["-c", TOOLS_IMPORT_SNIPPET], { signal: options.signal, timeoutMs: 60_000 })
+	const imp = await deps.run(python, ["-I", "-c", TOOLS_IMPORT_SNIPPET], { signal: options.signal, timeoutMs: 60_000 })
 	if (imp.exitCode !== 0) {
 		result.error = `aihydro-tools is not importable: ${tail(imp.stderr, 3) || "no output"}`
 		return result
@@ -198,6 +216,19 @@ export async function probeToolsEnv(
 	return result
 }
 
+/** pip may only ever run in a real virtualenv: `pyvenv.cfg` present and the interpreter itself reports a venv. */
+export async function verifyIsVenv(deps: ToolsEnvDeps, venvDir: string, signal?: AbortSignal): Promise<boolean> {
+	const sep = deps.platform === "win32" ? "\\" : "/"
+	if (!(await deps.pathExists(`${venvDir.replace(/[\\/]+$/, "")}${sep}pyvenv.cfg`))) {
+		return false
+	}
+	const r = await deps.run(venvPythonPath(venvDir, deps.platform), ["-I", "-c", VENV_CHECK_SNIPPET], {
+		signal,
+		timeoutMs: 20_000,
+	})
+	return r.exitCode === 0 && r.stdout.trim() === "True"
+}
+
 async function runPip(deps: ToolsEnvDeps, python: string, requirement: string, opts: EnsureOptions, force: boolean) {
 	const args = [
 		"-m",
@@ -219,6 +250,10 @@ function fail(probe: ProbeResult, basePython: string, errorCode: EnsureErrorCode
 /**
  * Bring the managed environment to a healthy state: adopt it when it already is, otherwise create and/or install.
  * Resolves (never throws) with the outcome; the caller maps it onto status and notifications.
+ *
+ * Safety rules: pip runs only in a verified virtualenv; an interpreter that exists but does not run (spawn failure,
+ * timeout) is "unhealthy", never "missing", so nothing is recreated or cleared because of it; `venv --clear` happens only
+ * for the default managed directory, only when its interpreter file is gone, and only after `confirmRecreate`.
  */
 export async function ensureToolsEnv(deps: ToolsEnvDeps, opts: EnsureOptions): Promise<EnsureResult> {
 	const requirement = opts.requirement ?? TOOLS_REQUIREMENT
@@ -240,110 +275,158 @@ export async function ensureToolsEnv(deps: ToolsEnvDeps, opts: EnsureOptions): P
 		deps.log(`[env] adopted existing environment ${opts.venvDir} (aihydro-tools ${probe.version})`)
 		return { outcome: "adopted", probe, basePython }
 	}
-	const wasMissing = !probe.pythonExists || !probe.pythonRuns
+	const wasMissing = !probe.pythonExists
 	const wasHealthy = probe.healthy
-
-	if (wasMissing) {
-		opts.onStep?.("Looking for Python 3.10 or newer")
-		const found = await findBasePython(deps, opts.pythonCandidates, opts.signal)
-		if (opts.signal?.aborted) {
-			return cancelled(probe)
-		}
-		if (!found) {
-			return fail(
-				probe,
-				"",
-				"NO_PYTHON",
-				"No Python 3.10 or newer was found. Install Python from python.org or your package manager, or set aihydro.tools.pythonPath to an interpreter, then choose Retry.",
-			)
-		}
-		basePython = found.path
-		deps.log(`[python] using ${found.path} (${found.version}) to create the environment`)
-
-		// Never overwrite a directory that is not one of our virtualenvs.
-		let clear = false
-		if (probe.venvExists) {
-			const hasCfg = await deps.pathExists(
-				`${opts.venvDir.replace(/[\\/]+$/, "")}${deps.platform === "win32" ? "\\" : "/"}pyvenv.cfg`,
-			)
-			const entries = await deps.listDir(opts.venvDir)
-			if (hasCfg) {
-				clear = true
-			} else if (entries.length > 0) {
-				return fail(
-					probe,
-					basePython,
-					"NOT_A_VENV",
-					`${opts.venvDir} exists and is not a Python virtual environment, so AI-Hydro will not overwrite it. Move it or set aihydro.tools.venvPath.`,
-				)
-			}
-		}
-		opts.onStep?.("Creating the virtual environment")
-		const launcherArgs =
-			basePython
-				.replace(/\.exe$/i, "")
-				.split(/[\\/]/)
-				.pop() === "py"
-				? ["-3"]
-				: []
-		const venvArgs = [...launcherArgs, "-m", "venv", ...(clear ? ["--clear"] : []), opts.venvDir]
-		deps.log(`$ ${basePython} ${venvArgs.join(" ")}`)
-		const created = await deps.run(basePython, venvArgs, { signal: opts.signal, onLine: (l) => deps.log(l) })
-		if (opts.signal?.aborted || created.aborted) {
-			return cancelled(probe)
-		}
-		if (created.exitCode !== 0) {
-			const debian = /ensurepip|python3-venv/i.test(created.stderr)
-				? " On Debian or Ubuntu, install the python3-venv package."
-				: ""
-			return fail(
-				probe,
-				basePython,
-				"VENV_FAILED",
-				`Could not create the virtual environment: ${tail(created.stderr, 3) || created.spawnError || "unknown error"}.${debian}`,
-			)
-		}
-	}
-
-	opts.onStep?.("Installing AI-Hydro tools (this can take several minutes)")
-	let pip = await runPip(deps, python, requirement, opts, false)
-	if (opts.signal?.aborted || pip.aborted) {
-		return cancelled(probe)
-	}
-	if (pip.exitCode !== 0) {
-		const offline = OFFLINE_PATTERN.test(pip.stderr) || OFFLINE_PATTERN.test(pip.stdout)
+	if (probe.pythonExists && !probe.pythonRuns) {
 		return fail(
 			probe,
 			basePython,
-			offline ? "OFFLINE" : "PIP_FAILED",
-			offline
-				? `pip could not download aihydro-tools. Check your network or proxy settings, then choose Retry. ${tail(pip.stderr, 2)}`.trim()
-				: `pip failed to install ${requirement}: ${tail(pip.stderr, 4) || pip.spawnError || "unknown error"}`,
+			"UNHEALTHY",
+			`The interpreter in ${opts.venvDir} exists but did not run (${probe.error ?? "no output"}). It is not being recreated automatically: move or delete that directory, or point aihydro.tools.venvPath elsewhere, then choose Retry.`,
 		)
 	}
 
-	opts.onStep?.("Checking the tools environment")
-	probe = await probeToolsEnv(deps, opts.venvDir, { signal: opts.signal, handshakeTimeoutMs: opts.handshakeTimeoutMs })
-	if (opts.signal?.aborted) {
-		return cancelled(probe)
+	const sepChar = deps.platform === "win32" ? "\\" : "/"
+	const lock = await deps.lock(`${opts.venvDir.replace(/[\\/]+$/, "")}${sepChar}${INSTALL_LOCK_NAME}`)
+	if (!lock.ok) {
+		return fail(
+			probe,
+			basePython,
+			"LOCKED",
+			`Another AI-Hydro window${lock.pid ? ` (process ${lock.pid})` : ""} is installing into ${opts.venvDir}. Wait for it to finish, then choose Retry.`,
+		)
 	}
-	if (!probe.healthy) {
-		// One forced reinstall repairs a half-installed package set.
-		opts.onStep?.("Reinstalling AI-Hydro tools")
-		pip = await runPip(deps, python, requirement, opts, true)
-		if (opts.signal?.aborted || pip.aborted) {
-			return cancelled(probe)
-		}
-		if (pip.exitCode === 0) {
-			probe = await probeToolsEnv(deps, opts.venvDir, { signal: opts.signal, handshakeTimeoutMs: opts.handshakeTimeoutMs })
+	try {
+		if (wasMissing) {
+			opts.onStep?.("Looking for Python 3.10 or newer")
+			const found = await findBasePython(deps, opts.pythonCandidates, opts.signal)
 			if (opts.signal?.aborted) {
 				return cancelled(probe)
 			}
+			if (!found) {
+				return fail(
+					probe,
+					"",
+					"NO_PYTHON",
+					"No Python 3.10 or newer was found. Install Python from python.org or your package manager, or set aihydro.tools.pythonPath to an interpreter, then choose Retry.",
+				)
+			}
+			basePython = found.path
+			deps.log(`[python] using ${found.path} (${found.version}) to create the environment`)
+
+			let clear = false
+			if (probe.venvExists) {
+				const hasCfg = await deps.pathExists(`${opts.venvDir.replace(/[\\/]+$/, "")}${sepChar}pyvenv.cfg`)
+				const entries = (await deps.listDir(opts.venvDir)).filter((e) => e !== INSTALL_LOCK_NAME)
+				if (hasCfg) {
+					if (!(opts.isDefaultDir && opts.confirmRecreate && (await opts.confirmRecreate()))) {
+						return fail(
+							probe,
+							basePython,
+							"VENV_BROKEN",
+							`The environment in ${opts.venvDir} has lost its interpreter. Delete that directory and choose Retry, or confirm recreating it when asked.`,
+						)
+					}
+					clear = true
+				} else if (entries.length > 0) {
+					return fail(
+						probe,
+						basePython,
+						"NOT_A_VENV",
+						`${opts.venvDir} exists and is not a Python virtual environment, so AI-Hydro will not overwrite it. Move it or set aihydro.tools.venvPath.`,
+					)
+				}
+			}
+			opts.onStep?.("Creating the virtual environment")
+			const launcherArgs =
+				basePython
+					.replace(/\.exe$/i, "")
+					.split(/[\\/]/)
+					.pop() === "py"
+					? ["-3"]
+					: []
+			const venvArgs = [...launcherArgs, "-m", "venv", ...(clear ? ["--clear"] : []), opts.venvDir]
+			deps.log(`$ ${basePython} ${venvArgs.join(" ")}`)
+			const created = await deps.run(basePython, venvArgs, { signal: opts.signal, onLine: (l) => deps.log(l) })
+			if (opts.signal?.aborted || created.aborted) {
+				return cancelled(probe)
+			}
+			if (created.exitCode !== 0) {
+				const debian = /ensurepip|python3-venv/i.test(created.stderr)
+					? " On Debian or Ubuntu, install the python3-venv package."
+					: ""
+				return fail(
+					probe,
+					basePython,
+					"VENV_FAILED",
+					`Could not create the virtual environment: ${tail(created.stderr, 3) || created.spawnError || "unknown error"}.${debian}`,
+				)
+			}
 		}
+
+		// Never pip into anything that is not a real virtualenv (a conda base, Homebrew or system prefix).
+		if (!(await verifyIsVenv(deps, opts.venvDir, opts.signal))) {
+			if (opts.signal?.aborted) {
+				return cancelled(probe)
+			}
+			return fail(
+				probe,
+				basePython,
+				"NOT_A_VENV",
+				`${opts.venvDir} is not a Python virtual environment (no pyvenv.cfg, or its interpreter is not running as a venv), so AI-Hydro will not install into it. Set aihydro.tools.venvPath to a new directory.`,
+			)
+		}
+
+		opts.onStep?.("Installing AI-Hydro tools (this can take several minutes)")
+		let pip = await runPip(deps, python, requirement, opts, false)
+		if (opts.signal?.aborted || pip.aborted) {
+			return cancelled(probe)
+		}
+		if (pip.exitCode !== 0) {
+			const offline = OFFLINE_PATTERN.test(pip.stderr) || OFFLINE_PATTERN.test(pip.stdout)
+			return fail(
+				probe,
+				basePython,
+				offline ? "OFFLINE" : "PIP_FAILED",
+				offline
+					? `pip could not download aihydro-tools. Check your network or proxy settings, then choose Retry. ${tail(pip.stderr, 2)}`.trim()
+					: `pip failed to install ${requirement}: ${tail(pip.stderr, 4) || pip.spawnError || "unknown error"}`,
+			)
+		}
+
+		opts.onStep?.("Checking the tools environment")
+		probe = await probeToolsEnv(deps, opts.venvDir, { signal: opts.signal, handshakeTimeoutMs: opts.handshakeTimeoutMs })
+		if (opts.signal?.aborted) {
+			return cancelled(probe)
+		}
+		if (!probe.healthy && opts.repair) {
+			// Only an explicit Repair may force-reinstall.
+			opts.onStep?.("Reinstalling AI-Hydro tools")
+			pip = await runPip(deps, python, requirement, opts, true)
+			if (opts.signal?.aborted || pip.aborted) {
+				return cancelled(probe)
+			}
+			if (pip.exitCode === 0) {
+				probe = await probeToolsEnv(deps, opts.venvDir, {
+					signal: opts.signal,
+					handshakeTimeoutMs: opts.handshakeTimeoutMs,
+				})
+				if (opts.signal?.aborted) {
+					return cancelled(probe)
+				}
+			}
+		}
+		if (!probe.healthy) {
+			return fail(
+				probe,
+				basePython,
+				"UNHEALTHY",
+				`${probe.error ?? "The installed tools did not pass the health check."} Choose Repair to reinstall.`,
+			)
+		}
+		const outcome: EnsureOutcome = wasMissing ? "created" : wasHealthy && !opts.repair ? "upgraded" : "repaired"
+		return { outcome, probe, basePython }
+	} finally {
+		await lock.release()
 	}
-	if (!probe.healthy) {
-		return fail(probe, basePython, "UNHEALTHY", probe.error ?? "The installed tools did not pass the health check.")
-	}
-	const outcome: EnsureOutcome = wasMissing ? "created" : wasHealthy && !opts.repair ? "upgraded" : "repaired"
-	return { outcome, probe, basePython }
 }

@@ -1,7 +1,9 @@
+import { isFirstPartyServerName } from "@shared/aihydro/firstPartyServers"
 import { NewTaskRequest } from "@shared/proto/cline/task"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
-import { Check, ChevronRight, Copy, Droplets } from "lucide-react"
+import { Check, ChevronRight, Droplets } from "lucide-react"
 import { memo, useCallback, useEffect, useState } from "react"
+import ToolsStatusChip from "@/components/tools/ToolsStatusChip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { TaskServiceClient } from "@/services/grpc-client"
 
@@ -54,14 +56,7 @@ const Announcement = ({ hideAnnouncement }: AnnouncementProps) => {
 	const step1Done = true
 
 	// ── Step 2: MCP tools ────────────────────────────────────────────────────────
-	const isMcpReady = mcpServers.some((s) => s.name === "ai-hydro")
-	const [copied, setCopied] = useState(false)
-
-	const handleCopy = useCallback(async () => {
-		await navigator.clipboard.writeText("pip install aihydro-tools")
-		setCopied(true)
-		setTimeout(() => setCopied(false), 1500)
-	}, [])
+	const isMcpReady = mcpServers.some((s) => isFirstPartyServerName(s.name))
 
 	// ── Step 3: profile ──────────────────────────────────────────────────────────
 	const [profileDone, setProfileDone] = useState(false)
@@ -151,14 +146,10 @@ const Announcement = ({ hideAnnouncement }: AnnouncementProps) => {
 					) : (
 						<>
 							<p className="announcement-step-desc">
-								Run the command below in your terminal, then restart AI-Hydro.
+								AI-Hydro installs its tools into its own managed environment. Use the status below; no terminal is
+								needed.
 							</p>
-							<div className="announcement-code-row">
-								<span className="flex-1">pip install aihydro-tools</span>
-								<VSCodeButton appearance="icon" onClick={handleCopy} title={copied ? "Copied!" : "Copy"}>
-									{copied ? <Check size={13} /> : <Copy size={13} />}
-								</VSCodeButton>
-							</div>
+							<ToolsStatusChip />
 						</>
 					)}
 				</div>

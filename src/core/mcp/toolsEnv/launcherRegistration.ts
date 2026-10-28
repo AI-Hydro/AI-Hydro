@@ -16,6 +16,7 @@ import {
 } from "@shared/aihydro/firstPartyServers"
 import type { ToolsTrustVerdict } from "@shared/aihydro/toolsEnv"
 import * as fs from "fs/promises"
+import { atomicWriteFile } from "./atomicWrite"
 import { loadFirstPartyLauncher, readFirstPartyLauncher, recordFirstPartyLauncher } from "../firstPartyLauncher"
 
 export const DEFAULT_SERVER_NAME = "ai-hydro"
@@ -28,6 +29,19 @@ export interface McpSettingsFile {
 export type ReadSettingsResult = { ok: true; config: McpSettingsFile; existed: boolean } | { ok: false; error: string }
 
 export async function readMcpSettings(settingsPath: string): Promise<ReadSettingsResult> {
+	const first = await readMcpSettingsOnce(settingsPath)
+	if (first.ok || first.retryable !== true) {
+		return first.ok ? first : { ok: false, error: first.error }
+	}
+	// Another writer may have been mid-write: one short retry before reporting the file unreadable.
+	await new Promise((resolve) => setTimeout(resolve, 150))
+	const second = await readMcpSettingsOnce(settingsPath)
+	return second.ok ? second : { ok: false, error: second.error }
+}
+
+async function readMcpSettingsOnce(
+	settingsPath: string,
+): Promise<{ ok: true; config: McpSettingsFile; existed: boolean } | { ok: false; error: string; retryable?: boolean }> {
 	let text: string
 	try {
 		text = await fs.readFile(settingsPath, "utf-8")
@@ -48,7 +62,7 @@ export async function readMcpSettings(settingsPath: string): Promise<ReadSetting
 		return { ok: true, config: parsed, existed: true }
 	} catch {
 		// Malformed JSON: McpHub reports it; never overwrite the user's file.
-		return { ok: false, error: "The MCP settings file is not valid JSON." }
+		return { ok: false, error: "The MCP settings file is not valid JSON.", retryable: true }
 	}
 }
 
@@ -104,6 +118,8 @@ export interface RegisterOptions {
 	cacheDir: string
 	/** Rewrite an existing, different first-party command to the managed one. Only true after the caller decided so. */
 	switchExisting: boolean
+	/** A record was written on this machine before (marker), so an absent one is a loss to confirm, not a first run. */
+	recordExisted?: boolean
 	/** The human gate for a launcher that differs from the recorded one. Never answered by the model. */
 	confirmTrust: (
 		launcher: { name: string; command: string; args: string[] },
@@ -159,7 +175,7 @@ export async function registerManagedLauncher(options: RegisterOptions): Promise
 		}
 	}
 	if (wrote) {
-		await fs.writeFile(options.settingsPath, JSON.stringify(config, null, 2))
+		await atomicWriteFile(options.settingsPath, JSON.stringify(config, null, 2))
 	}
 
 	const entry = config.mcpServers[serverName]
@@ -169,18 +185,30 @@ export async function registerManagedLauncher(options: RegisterOptions): Promise
 		args: entryCommand(entry).args,
 		launchHash: launchContextHash({ env: entry.env, cwd: entry.cwd }),
 	}
-	const record = await reconcileLauncherRecord(options.settingsDir, current, options.confirmTrust)
+	const record = await reconcileLauncherRecord(options.settingsDir, current, options.confirmTrust, {
+		recordExisted: options.recordExisted,
+	})
 	return { serverName, wrote, switchedFrom, record }
+}
+
+export interface ReconcileOptions {
+	/** Always show the confirmation unless the launcher already equals the record. Used by the explicit "trust" action. */
+	forceConfirm?: boolean
+	/** A record existed before (marker), so an absent one needs confirmation instead of silent first-run recording. */
+	recordExisted?: boolean
 }
 
 /**
  * Compare a registered launcher with the recorded one.
- * No record: record it. Same: nothing. Different: record only after `confirmTrust` returns true.
+ * Same: nothing. No record: record it silently ONLY on a genuine first registration (never with `forceConfirm`, never when
+ * a record is known to have existed). Otherwise record only after `confirmTrust` returns true. A declined confirmation
+ * leaves the old record and loads it into memory.
  */
 export async function reconcileLauncherRecord(
 	settingsDir: string,
 	current: { name: string; command: string; args: string[]; launchHash: string },
 	confirmTrust: RegisterOptions["confirmTrust"],
+	options: ReconcileOptions = {},
 ): Promise<RecordOutcome> {
 	const recorded = await readFirstPartyLauncher(settingsDir)
 	if (
@@ -194,7 +222,7 @@ export async function reconcileLauncherRecord(
 		await loadFirstPartyLauncher(settingsDir) // install the anchor in memory; the file is unchanged
 		return "unchanged"
 	}
-	if (!recorded) {
+	if (!recorded && !options.forceConfirm && !options.recordExisted) {
 		await recordFirstPartyLauncher(settingsDir, current)
 		return "recorded"
 	}
@@ -202,6 +230,7 @@ export async function reconcileLauncherRecord(
 		await recordFirstPartyLauncher(settingsDir, current)
 		return "confirmed"
 	}
+	await loadFirstPartyLauncher(settingsDir)
 	return "declined"
 }
 

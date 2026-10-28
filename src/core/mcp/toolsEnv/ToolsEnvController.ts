@@ -19,6 +19,7 @@ import {
 } from "@shared/aihydro/toolsEnv"
 import { launchContextHash, looksLikeFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
 import * as path from "path"
+import { loadFirstPartyLauncher, readFirstPartyLauncher } from "../firstPartyLauncher"
 import { defaultPythonNames, ensureToolsEnv, probeToolsEnv, type ToolsEnvDeps } from "./managedVenv"
 import {
 	classifyLauncher,
@@ -35,6 +36,18 @@ export interface ToolsEnvConfig {
 	venvPath: string
 	/** Interpreters to try first, in order (settings). */
 	pythonPaths: string[]
+	/** `aihydro.tools.autoInstall`: allow the one consented first install without a click. Default true. */
+	autoInstall: boolean
+}
+
+/** Small per-machine state kept next to the first-party launcher record (settings dir). */
+export interface ToolsEnvPersisted {
+	/** The launcher command the user chose to keep instead of the managed one. */
+	keptLauncher?: string
+	/** The user agreed to the first network install (PyPI) into the default venv. */
+	installConsent?: boolean
+	/** A first-party launcher record has been written on this machine before. */
+	recordExisted?: boolean
 }
 
 export interface TrustPrompt {
@@ -55,9 +68,12 @@ export interface ToolsEnvHost {
 	notify(kind: "info" | "error", message: string, actions: string[]): Promise<string | undefined>
 	showLog(): void
 	copyText(text: string): Promise<void>
-	/** The launcher command the user chose to keep (so the switch prompt is not repeated), or undefined. */
-	getKeptLauncher(): Promise<string | undefined>
-	setKeptLauncher(command: string | undefined): Promise<void>
+	readState(): Promise<ToolsEnvPersisted>
+	writeState(patch: Partial<ToolsEnvPersisted>): Promise<void>
+	/** One-time consent before the first network install: names PyPI, the approximate size and the venv path. */
+	confirmInstall(info: { venvPath: string; requirement: string }): Promise<boolean>
+	/** Confirmation before recreating the default managed venv whose interpreter file has gone missing. */
+	confirmRecreate(venvPath: string): Promise<boolean>
 	extensionVersion(): string
 }
 
@@ -139,6 +155,7 @@ export class ToolsEnvController {
 	 */
 	async startup(options: { autoInstall?: boolean } = {}): Promise<void> {
 		const autoInstall = options.autoInstall ?? true
+		await loadFirstPartyLauncher(this.paths.settingsDir) // install the recorded anchor before anything can decline
 		const venv = this.venvDir()
 		this.setStatus({ venvPath: venv, interpreterPath: "", serverCommand: this.managedCommand() })
 		const settings = await readMcpSettings(this.paths.settingsPath)
@@ -149,6 +166,7 @@ export class ToolsEnvController {
 		const name = findFirstPartyEntryName(settings.config.mcpServers)
 		const entry = name ? settings.config.mcpServers[name] : undefined
 		const cls = await classifyLauncher(entry, this.managedCommand(), this.deps)
+		await this.noticeMissingRecord()
 		const onDisk =
 			(await this.deps.pathExists(venvPythonPath(venv, this.deps.platform))) &&
 			(await this.deps.pathExists(this.managedCommand()))
@@ -172,7 +190,7 @@ export class ToolsEnvController {
 		this.setStatus({ phase: "checking", message: "Checking the tools environment", errorCode: "" })
 		const probe = await probeToolsEnv(this.deps, this.venvDir())
 		if (probe.healthy) {
-			this.setStatus({ interpreterPath: venvPythonPath(this.venvDir(), this.deps.platform) })
+			this.setStatus({ interpreterPath: venvPythonPath(this.venvDir(), this.deps.platform), version: probe.version })
 			await this.adopt(probe.version, options.cls)
 			return
 		}
@@ -187,15 +205,39 @@ export class ToolsEnvController {
 			message: probe.error ?? "",
 		})
 		await this.refreshTrust()
-		if (options.auto) {
+		// Automatic install is limited to a fresh, missing default venv, with the user's one-time consent. An existing but
+		// unhealthy environment is never touched without an explicit Repair.
+		if (options.auto && !probe.venvExists && (await this.mayAutoInstall())) {
 			await this.doInstall({ repair: false })
 		}
 	}
 
+	private async mayAutoInstall(): Promise<boolean> {
+		const config = this.host.getConfig()
+		if (!config.autoInstall || config.venvPath.trim()) {
+			return false
+		}
+		const state = await this.host.readState()
+		if (state.installConsent) {
+			return true
+		}
+		const yes = await this.host.confirmInstall({ venvPath: this.venvDir(), requirement: TOOLS_REQUIREMENT })
+		if (yes) {
+			await this.host.writeState({ installConsent: true })
+		}
+		return yes
+	}
+
 	private async adopt(version: string, cls: LauncherClass | undefined): Promise<void> {
-		// Below the pinned floor: go through ensure, which upgrades within ~=2.8.2.
+		// Below the pinned floor: report it; the upgrade within ~=2.8.2 is the user's Repair, not automatic.
 		if (!versionMeetsFloor(version)) {
-			await this.doInstall({ repair: false })
+			this.setStatus({
+				phase: "unhealthy",
+				healthy: false,
+				version,
+				message: `aihydro-tools ${version} is older than the pinned 2.8.2. Choose Repair to upgrade within ~=2.8.2.`,
+			})
+			await this.refreshTrust()
 			return
 		}
 		await this.finishReady(version, cls)
@@ -208,7 +250,7 @@ export class ToolsEnvController {
 		const current = cls ?? (await classifyLauncher(entry, this.managedCommand(), this.deps))
 		let switchExisting = false
 		if (current === "custom-working") {
-			const kept = await this.host.getKeptLauncher()
+			const kept = (await this.host.readState()).keptLauncher
 			const command = typeof entry?.command === "string" ? entry.command : ""
 			if (kept !== undefined && kept === command) {
 				this.setStatus({ phase: "custom", healthy: true, version })
@@ -217,7 +259,7 @@ export class ToolsEnvController {
 			}
 			const choice = await this.host.askSwitch(command, this.managedCommand())
 			if (choice === "keep") {
-				await this.host.setKeptLauncher(command)
+				await this.host.writeState({ keptLauncher: command })
 				this.setStatus({ phase: "custom", healthy: true, version })
 				await this.refreshTrust()
 				return
@@ -247,7 +289,7 @@ export class ToolsEnvController {
 			})
 			return
 		}
-		await this.host.setKeptLauncher(undefined)
+		await this.host.writeState({ keptLauncher: undefined })
 		this.setStatus({
 			phase: "ready",
 			healthy: true,
@@ -288,6 +330,8 @@ export class ToolsEnvController {
 				progressSignal.addEventListener("abort", () => this.abort?.abort(), { once: true })
 				return ensureToolsEnv(this.deps, {
 					venvDir: venv,
+					isDefaultDir: !this.host.getConfig().venvPath.trim(),
+					confirmRecreate: () => this.host.confirmRecreate(venv),
 					pythonCandidates: this.pythonCandidates(),
 					signal,
 					repair: options.repair,
@@ -365,7 +409,7 @@ export class ToolsEnvController {
 				await this.trustCurrent()
 				return
 			case "useManaged":
-				await this.host.setKeptLauncher(undefined)
+				await this.host.writeState({ keptLauncher: undefined })
 				await this.install({ repair: false })
 				return
 		}
@@ -385,11 +429,11 @@ export class ToolsEnvController {
 		if (!name || !entry) {
 			return
 		}
-		await this.reconcileExisting(name, entry)
+		await this.reconcileExisting(name, entry, true)
 		await this.refreshTrust()
 	}
 
-	private async reconcileExisting(name: string, entry: Record<string, unknown>): Promise<void> {
+	private async reconcileExisting(name: string, entry: Record<string, unknown>, forceConfirm = false): Promise<void> {
 		const args = Array.isArray(entry.args) ? (entry.args as unknown[]).filter((a): a is string => typeof a === "string") : []
 		const command = typeof entry.command === "string" ? entry.command : ""
 		if (!looksLikeFirstPartyLauncher(command, args)) {
@@ -401,11 +445,35 @@ export class ToolsEnvController {
 			)
 			return
 		}
-		await reconcileLauncherRecord(
+		const state = await this.host.readState()
+		const outcome = await reconcileLauncherRecord(
 			this.paths.settingsDir,
 			{ name, command, args, launchHash: launchContextHash({ env: entry.env, cwd: entry.cwd }) },
 			(launcher, recorded) => this.confirmTrustOnce(launcher, recorded),
+			{ forceConfirm, recordExisted: state.recordExisted },
 		)
+		await this.markRecord(outcome)
+	}
+
+	private async markRecord(outcome: string): Promise<void> {
+		if (outcome === "recorded" || outcome === "confirmed" || outcome === "unchanged") {
+			if (!(await this.host.readState()).recordExisted) {
+				await this.host.writeState({ recordExisted: true })
+			}
+		}
+	}
+
+	/** A record that existed before is gone: say so and ask again instead of silently re-trusting. */
+	private async noticeMissingRecord(): Promise<void> {
+		const state = await this.host.readState()
+		if (state.recordExisted && !(await readFirstPartyLauncher(this.paths.settingsDir))) {
+			this.deps.log("[trust] the first-party launcher record is missing; it will not be re-recorded without confirmation")
+			void this.host.notify(
+				"info",
+				"AI-Hydro's record of the first-party tools launcher is missing. The registered launcher is not trusted until you confirm it (Trust this launcher).",
+				[],
+			)
+		}
 	}
 
 	private async confirmTrustOnce(
@@ -424,8 +492,10 @@ export class ToolsEnvController {
 	}
 
 	private async register(switchExisting: boolean) {
+		const state = await this.host.readState()
 		this.deps.log(`[register] managed launcher ${this.managedCommand()}`)
-		return registerManagedLauncher({
+		const registration = await registerManagedLauncher({
+			recordExisted: state.recordExisted,
 			settingsDir: this.paths.settingsDir,
 			settingsPath: this.paths.settingsPath,
 			managedCommand: this.managedCommand(),
@@ -433,6 +503,8 @@ export class ToolsEnvController {
 			switchExisting,
 			confirmTrust: (launcher, recorded) => this.confirmTrustOnce(launcher, recorded),
 		})
+		await this.markRecord(registration.record)
+		return registration
 	}
 
 	private async refreshTrust(): Promise<void> {
