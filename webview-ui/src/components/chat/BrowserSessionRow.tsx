@@ -7,6 +7,7 @@ import React, { type CSSProperties, memo, useCallback, useEffect, useMemo, useRe
 import { useSize } from "react-use"
 import styled from "styled-components"
 import { BrowserSettingsMenu } from "@/components/browser/BrowserSettingsMenu"
+import { InlineApproval } from "@/components/chat/approval/InlineApproval"
 import { ChatRowContent, ProgressIndicator } from "@/components/chat/ChatRow"
 import { CheckpointControls } from "@/components/common/CheckpointControls"
 import CodeBlock, { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
@@ -155,6 +156,9 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 		const launchMessage = messages.find((m) => m.ask === "browser_action_launch" || m.say === "browser_action_launch")
 		return launchMessage?.text || ""
 	}, [messages])
+
+	// The launch ask is answered on this row's own card (InlineApproval gates itself on the ask being pending).
+	const launchAsk = useMemo(() => messages.find((m) => m.ask === "browser_action_launch"), [messages])
 
 	const isAutoApproved = useMemo(() => {
 		const launchMessage = messages.find((m) => m.ask === "browser_action_launch" || m.say === "browser_action_launch")
@@ -363,6 +367,8 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 
 			{/* Action content with min height */}
 			<div style={{ minHeight: maxActionHeight }}>{actionContent}</div>
+
+			{launchAsk && <InlineApproval message={launchAsk} />}
 
 			{/* Pagination moved to bottom */}
 			{pages.length > 1 && (

@@ -123,6 +123,26 @@ export const approvalMcpTask: AiHydroMessage[] = (() => {
 	]
 })()
 
+/** Pending approval of a tool the server declares destructive (tail ask); "Always" must not be offered. */
+export const approvalMcpDestructiveTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	return [
+		task("Run the synthetic trend analysis. Layout fixture."),
+		apiReq(c()),
+		text(c(), "I will run the trend analysis next."),
+		ask(
+			c(),
+			"use_mcp_server",
+			toolJson({
+				serverName: "ai-hydro",
+				type: "use_mcp_tool",
+				toolName: "trend_analysis",
+				arguments: JSON.stringify(MCP_ARGS, null, 2),
+			}),
+		),
+	]
+})()
+
 /** Pending approval of a shell command (tail ask). */
 export const approvalCommandTask: AiHydroMessage[] = (() => {
 	const c = clock()

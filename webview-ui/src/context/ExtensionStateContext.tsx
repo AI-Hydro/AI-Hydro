@@ -223,7 +223,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		setShowAccount(false)
 		setShowMap(false)
 		setShowConnectors(false)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowMap, setShowConnectors])
+		setShowSkills(false)
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowMap, setShowConnectors, setShowSkills])
 
 	const [state, setState] = useState<ExtensionState>({
 		version: "",
@@ -356,6 +357,7 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	// Reference for focusChatInput subscription
 	const focusChatInputUnsubscribeRef = useRef<(() => void) | null>(null)
+	const focusPendingPromptUnsubscribeRef = useRef<(() => void) | null>(null)
 	const mcpButtonUnsubscribeRef = useRef<(() => void) | null>(null)
 	const historyButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const chatButtonUnsubscribeRef = useRef<(() => void) | null>(null)
@@ -694,6 +696,20 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 		)
 
+		// Subscribe to focus pending prompt events (the "Focus Pending Prompt" command)
+		focusPendingPromptUnsubscribeRef.current = UiServiceClient.subscribeToFocusPendingPrompt(
+			{},
+			{
+				onResponse: () => {
+					window.dispatchEvent(new CustomEvent("focusPendingPrompt"))
+				},
+				onError: (error: Error) => {
+					console.error("Error in focusPendingPrompt subscription:", error)
+				},
+				onComplete: () => {},
+			},
+		)
+
 		// Clean up subscriptions when component unmounts
 		return () => {
 			if (stateSubscriptionRef.current) {
@@ -752,6 +768,11 @@ export const ExtensionStateContextProvider: React.FC<{
 				focusChatInputUnsubscribeRef.current()
 				focusChatInputUnsubscribeRef.current = null
 			}
+			if (focusPendingPromptUnsubscribeRef.current) {
+				focusPendingPromptUnsubscribeRef.current()
+				focusPendingPromptUnsubscribeRef.current = null
+			}
+
 			if (mcpServersSubscriptionRef.current) {
 				mcpServersSubscriptionRef.current()
 				mcpServersSubscriptionRef.current = null

@@ -117,6 +117,9 @@ const SCROLL_TO_END: ScreenDef["steps"] = [
  */
 const STRUCTURAL_ONLY = 1
 const PINNED = "[data-virtuoso-scroller=true]"
+const APPROVAL_INLINE = "[data-testid=inline-approval]"
+const APPROVAL_ALWAYS = "[data-testid=inline-approval-always]"
+const FOOTER_ACTIONS = "[data-testid=footer-actions]"
 
 const taskState = (aihydroMessages: NonNullable<ScreenDef["state"]>["aihydroMessages"], withScienceServer = false) => ({
 	currentTaskItem: taskItem,
@@ -356,20 +359,83 @@ export const screens: ScreenDef[] = [
 			expectAbsent: ["text=API Request"],
 		},
 	),
-	chatTx("chat-approval-mcp", "Pending MCP approval", tx.approvalMcpTask, "I will call the forcing tool next."),
-	chatTx("chat-approval-command", "Pending command approval", tx.approvalCommandTask, "I will run the tests."),
-	chatTx("chat-approval-edit", "Pending edit approval with diff", tx.approvalEditTask, "The label is wrong; I will edit it."),
+	// Approvals are answered on their own card (W2-E2): the footer carries no Run/Deny for these asks.
+	chatTx("chat-approval-mcp", "Pending MCP approval", tx.approvalMcpTask, "I will call the forcing tool next.", {
+		expectVisible: ["text=I will call the forcing tool next.", APPROVAL_INLINE],
+		expectAbsent: [FOOTER_ACTIONS],
+	}),
+	chatTx("chat-approval-command", "Pending command approval", tx.approvalCommandTask, "I will run the tests.", {
+		expectVisible: ["text=I will run the tests.", APPROVAL_INLINE],
+		expectAbsent: [FOOTER_ACTIONS],
+	}),
+	chatTx("chat-approval-edit", "Pending edit approval with diff", tx.approvalEditTask, "The label is wrong; I will edit it.", {
+		expectVisible: ["text=The label is wrong; I will edit it.", APPROVAL_INLINE],
+		expectAbsent: [FOOTER_ACTIONS],
+	}),
 	chatTx(
 		"chat-approval-protected-path",
 		"Pending approval outside the workspace",
 		tx.protectedPathApprovalTask,
 		"This needs a file outside the workspace.",
+		{
+			expectVisible: ["text=This needs a file outside the workspace.", APPROVAL_INLINE],
+			// A security-marked call is never offered "Always".
+			expectAbsent: [FOOTER_ACTIONS, APPROVAL_ALWAYS],
+		},
 	),
 	chatTx(
 		"chat-approval-protected-path-answered",
 		"Answered approval outside the workspace",
 		tx.protectedPathApprovedTask,
 		"The hosts entry is in place.",
+	),
+	chatTx(
+		"chat-approval-mcp-always",
+		"Pending MCP approval, tool declared safe by a trusted server: Always offered",
+		tx.approvalMcpTask,
+		"I will call the forcing tool next.",
+		{
+			mcpServers: fixtureAnnotatedServers,
+			expectVisible: ["text=I will call the forcing tool next.", APPROVAL_INLINE, APPROVAL_ALWAYS],
+			expectAbsent: [FOOTER_ACTIONS],
+		},
+	),
+	chatTx(
+		"chat-approval-mcp-destructive",
+		"Pending MCP approval, tool declared destructive: no Always",
+		tx.approvalMcpDestructiveTask,
+		"I will run the trend analysis next.",
+		{
+			mcpServers: fixtureAnnotatedServers,
+			expectVisible: ["text=I will run the trend analysis next.", APPROVAL_INLINE],
+			expectAbsent: [FOOTER_ACTIONS, APPROVAL_ALWAYS],
+		},
+	),
+	// The realistic case today: the real server publishes no annotations, so every call has an undeclared effect.
+	chatTx(
+		"chat-approval-mcp-unannotated",
+		"Pending MCP approval, server without annotations: no Always",
+		tx.approvalMcpTask,
+		"I will call the forcing tool next.",
+		{
+			mcpServers: fixtureUnannotatedServers,
+			expectVisible: ["text=I will call the forcing tool next.", APPROVAL_INLINE],
+			expectAbsent: [FOOTER_ACTIONS, APPROVAL_ALWAYS],
+		},
+	),
+	chatTx(
+		"chat-approval-mcp-untrusted",
+		"Pending MCP approval, untrusted server: no Always",
+		tx.approvalMcpTask,
+		"I will call the forcing tool next.",
+		{
+			mcpServers: fixtureAnnotatedServers.map((s) => ({
+				...s,
+				trust: { trusted: false, reason: "fixture: not the registered server" },
+			})),
+			expectVisible: ["text=I will call the forcing tool next.", APPROVAL_INLINE],
+			expectAbsent: [FOOTER_ACTIONS, APPROVAL_ALWAYS],
+		},
 	),
 	chatTx(
 		"chat-finished-claims",

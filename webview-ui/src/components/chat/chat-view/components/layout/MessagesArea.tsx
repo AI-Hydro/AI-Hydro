@@ -1,7 +1,8 @@
 import { deriveCallState } from "@shared/aihydro/askOutcome"
+import { isInlineApprovalAsk } from "@shared/aihydro/pendingAsk"
 import type { DetailLevel } from "@shared/aihydro/transcriptPresenter"
 import { AiHydroMessage } from "@shared/ExtensionMessage"
-import React, { useCallback, useMemo, useState } from "react"
+import React, { useCallback, useMemo, useRef, useState } from "react"
 import { Virtuoso } from "react-virtuoso"
 import TypingIndicator from "@/components/chat/TypingIndicator"
 import { updateSetting } from "@/components/settings/utils/settingsHandlers"
@@ -181,8 +182,30 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		return false
 	}, [groupedMessages, view, presented])
 
+	// A pending approval is announced once per ask: the text for an ask ts is fixed the first time it is built, so a
+	// state post that rebuilds this memo (same ask, same text) is not a new announcement. Presented and verbose alike.
+	const approvalAnnounced = useRef<{ ts: number; text: string } | undefined>(undefined)
+	const pendingApprovalText = useMemo(() => {
+		const last = modifiedMessages[modifiedMessages.length - 1]
+		if (!last || !isInlineApprovalAsk(last) || deriveCallState(last, modifiedMessages) !== "pending") {
+			approvalAnnounced.current = undefined
+			return undefined
+		}
+		if (approvalAnnounced.current?.ts !== last.ts) {
+			const call = describeCall(last, [])
+			approvalAnnounced.current = {
+				ts: last.ts,
+				text: `Waiting for your approval: ${call.name}${call.target ? ` ${call.target}` : ""}`,
+			}
+		}
+		return approvalAnnounced.current.text
+	}, [modifiedMessages])
+
 	// Status for the single polite live region: short, never streamed text.
 	const statusText = useMemo(() => {
+		if (pendingApprovalText) {
+			return pendingApprovalText
+		}
 		const tail = view.entries[view.entries.length - 1]
 		if (!tail || tail.mode !== "presented") {
 			return ""
@@ -202,7 +225,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 			return a.kind === "running" ? `Running ${a.name}` : a.kind === "thinking" ? "Thinking" : "Working"
 		}
 		return ""
-	}, [view, isRunning, modifiedMessages])
+	}, [view, isRunning, modifiedMessages, pendingApprovalText])
 
 	return (
 		<div className="overflow-hidden flex flex-col h-full relative">

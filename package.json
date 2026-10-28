@@ -176,6 +176,11 @@
 				"category": "AI-Hydro"
 			},
 			{
+				"command": "aihydro.focusPendingPrompt",
+				"title": "Focus Pending Prompt",
+				"category": "AI-Hydro"
+			},
+			{
 				"command": "aihydro.historyButtonClicked",
 				"title": "Analysis History",
 				"icon": "$(history)"
@@ -484,6 +489,10 @@
 				}
 			],
 			"commandPalette": [
+				{
+					"command": "aihydro.focusPendingPrompt",
+					"when": "aihydro.hasPendingAsk"
+				},
 				{
 					"command": "aihydro.map.addLayerFromUrl"
 				},

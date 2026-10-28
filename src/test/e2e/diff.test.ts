@@ -57,6 +57,10 @@ e2e.describe("Diff Editor", () => {
 				timeout: 30_000,
 			})
 
+			// The edit is approved on its own card (W2-E2): Save is inline and the footer carries no actions.
+			await expect(sidebar.getByTestId("inline-approval").getByRole("button", { name: "Save" })).toBeVisible()
+			await expect(sidebar.getByTestId("footer-actions")).toHaveCount(0)
+
 			// AI-Hydro Diff Editor should open with the file name and diff
 			await expect(page.getByText("test.ts: Original ↔ AI-Hydro's Changes (Editable)")).toBeVisible({
 				timeout: 30_000,

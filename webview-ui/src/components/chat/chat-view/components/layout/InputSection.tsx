@@ -8,6 +8,8 @@ interface InputSectionProps {
 	messageHandlers: MessageHandlers
 	scrollBehavior: ScrollBehavior
 	placeholderText: string
+	/** Send button tooltip (see ChatTextArea.sendTitle). */
+	sendTitle?: string
 	shouldDisableFilesAndImages: boolean
 	selectFilesAndImages: () => Promise<void>
 	/** Escape in the prompt stops the task only while this is true. */
@@ -22,6 +24,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	messageHandlers,
 	scrollBehavior,
 	placeholderText,
+	sendTitle,
 	shouldDisableFilesAndImages,
 	selectFilesAndImages,
 	isTaskRunning,
@@ -104,6 +107,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 				selectedFiles={selectedFiles}
 				selectedImages={selectedImages}
 				sendingDisabled={sendingDisabled}
+				sendTitle={sendTitle}
 				setInputValue={setInputValue}
 				setSelectedFiles={setSelectedFiles}
 				setSelectedImages={setSelectedImages}

@@ -43,6 +43,7 @@ import { fixWithAiHydro } from "./core/controller/commands/fixWithAiHydro"
 import { improveWithAiHydro } from "./core/controller/commands/improveWithAiHydro"
 import { sendAddToInputEvent } from "./core/controller/ui/subscribeToAddToInput"
 import { sendFocusChatInputEvent } from "./core/controller/ui/subscribeToFocusChatInput"
+import { sendFocusPendingPromptEvent } from "./core/controller/ui/subscribeToFocusPendingPrompt"
 import { setWorkspaceTrustProvider } from "./core/task/workspaceTrust"
 import { workspaceResolver } from "./core/workspace"
 import { focusChatInput, getContextForCommand } from "./hosts/vscode/commandUtils"
@@ -1098,6 +1099,16 @@ export async function activate(context: vscode.ExtensionContext) {
 			// Send focus event
 			sendFocusChatInputEvent()
 			telemetryService.captureButtonClick("aihydro_focusChatInput", webview.controller?.task?.ulid)
+		}),
+	)
+
+	// Focus the approval group of the ask the agent is waiting on (never its Run button). Enabled by
+	// `aihydro.hasPendingAsk`; no default keybinding by design, and nothing focuses it automatically.
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.FocusPendingPrompt, async () => {
+			const webview = WebviewProvider.getInstance() as VscodeWebviewProvider
+			webview.getWebview()?.show()
+			await sendFocusPendingPromptEvent()
 		}),
 	)
 
