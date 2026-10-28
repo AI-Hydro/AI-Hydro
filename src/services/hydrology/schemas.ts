@@ -17,7 +17,7 @@ export const hydroCommandSchema = z.object({
 		"delineatePoint",
 		"listPresets",
 	]),
-	payload: z.record(z.unknown()).optional(),
+	payload: z.record(z.string(), z.unknown()).optional(),
 })
 
 export const meritEnsureBasinPayloadSchema = z.object({
