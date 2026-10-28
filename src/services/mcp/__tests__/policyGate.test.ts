@@ -108,6 +108,16 @@ describe("MCP settings policy loosening (T16, T17, B3)", () => {
 			).to.deep.equal([])
 		})
 
+		it("type, transportType and headers are deliberately not launch identity (run-time trust is stdio-only)", () => {
+			const base = { command: "py", autoApprove: ["a"] }
+			for (const extra of [{ type: "stdio" }, { transportType: "stdio" }, { headers: { Authorization: "x" } }]) {
+				expect(
+					findLoosenings(policySnapshot(servers({ s: base })), servers({ s: { ...base, ...extra } })),
+					JSON.stringify(extra),
+				).to.deep.equal([])
+			}
+		})
+
 		it("M-3 revertLoosenings restores the accepted launch identity and keeps other keys", () => {
 			const prev = policySnapshot(servers({ s: { command: "py", args: ["a"], env: { A: "1" }, autoApprove: ["t"] } }))
 			const out = revertLoosenings(

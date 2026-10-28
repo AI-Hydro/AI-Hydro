@@ -79,7 +79,9 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 	const riskReasons: string[] = []
 	if (yolo) {
 		// Core honours YOLO first and approves everything, even when auto-run is switched off.
-		riskReasons.push("YOLO mode is on: everything auto-runs, even when auto-run is off")
+		riskReasons.push(
+			"YOLO mode is on: everything auto-runs, even when auto-run is off, except MCP tools without a working Always grant",
+		)
 	}
 	if (enabled) {
 		// "Toggle all" / YOLO: every action in the menu, sub-actions included, is on.
@@ -111,7 +113,7 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 	const mcpLabel = [activeLabel, pausedLabel].filter(Boolean).join(", ")
 
 	const chipText = yolo
-		? "YOLO: everything auto-runs"
+		? "YOLO: auto-runs all but MCP tools without a working Always"
 		: !enabled
 			? "Auto-run: off"
 			: labels.length === 0

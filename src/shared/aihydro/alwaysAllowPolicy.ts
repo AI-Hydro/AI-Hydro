@@ -93,7 +93,7 @@ export function alwaysPausedText(toolName: string, reason: AlwaysAllowRefusalRea
 	let why: string
 	switch (reason) {
 		case "untrusted_server":
-			why = "the server's launch identity changed or it is no longer the registered first-party server"
+			why = "this server is not the registered first-party server, or its launch identity changed"
 			break
 		case "server_unavailable":
 			why = "the server is not connected"

@@ -1,4 +1,5 @@
 import { recordFirstPartyLauncher } from "@core/mcp/firstPartyLauncher"
+import { AccessMcpResourceHandler } from "@core/task/tools/handlers/AccessMcpResourceHandler"
 import { UseMcpToolHandler } from "@core/task/tools/handlers/UseMcpToolHandler"
 import { isMcpToolGrantedAutoApprove, mcpAutoApproveDecision } from "@core/task/tools/mcpAutoApprove"
 import { formatAutoApproveRefusal, parseAutoApproveRefusal } from "@shared/aihydro/alwaysAllowPolicy"
@@ -382,7 +383,7 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 			expect(r.asked).to.equal(true)
 			expect(r.autoRan).to.equal(false)
 			expect(r.askPayload.autoApprovePaused).to.equal(
-				"Always for read_tool is paused: the server's launch identity changed or it is no longer the registered first-party server.",
+				"Always for read_tool is paused: this server is not the registered first-party server, or its launch identity changed.",
 			)
 			expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"]) // (e)
 
@@ -396,7 +397,7 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 			setRecordedFirstPartyLauncher({ ...recorded, launchHash: "0".repeat(64) })
 			const r = await runHandler("read_tool")
 			expect(r.asked).to.equal(true)
-			expect(r.askPayload.autoApprovePaused).to.include("launch identity changed")
+			expect(r.askPayload.autoApprovePaused).to.include("or its launch identity changed")
 		})
 
 		it("(c) the same grant asks after a reconnect in which the tool is annotated destructive", async () => {
@@ -449,6 +450,183 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 			const r = await runHandler("write_tool")
 			expect(r.asked).to.equal(true)
 			expect(r.askPayload.autoApprovePaused).to.equal(undefined)
+		})
+
+		// N1: callTool looks the connection up again by name, so the identity decided on is rechecked right before it.
+		describe("N1: the connection is rechecked immediately before callTool", () => {
+			/** A hub view that swaps the launcher record (the trusted identity) when `swap` runs, i.e. between the decision and the call. */
+			function swappingHub(swap: () => void, when: "notify" | "never" = "notify") {
+				let swapped = false
+				const callTool = sinon.stub().resolves({ content: [{ type: "text", text: "ran" }] })
+				const view: any = {
+					get connections() {
+						return hub.connections
+					},
+					callTool,
+					getPendingNotifications: () => {
+						if (when === "notify" && !swapped) {
+							swapped = true
+							swap()
+						}
+						return []
+					},
+				}
+				return { view, callTool, swapNow: () => swap() }
+			}
+			const cfg = (view: any, ask: sinon.SinonStub) => {
+				const callbacks = {
+					say: sinon.stub().resolves(1),
+					ask,
+					removeLastPartialMessageIfExistsWithType: sinon.stub().resolves(),
+					shouldAutoApproveTool: sinon.stub().returns(true),
+					sayAndCreateMissingParamError: sinon.stub().resolves("missing"),
+				}
+				const config: any = {
+					callbacks,
+					services: { mcpHub: view },
+					taskState: { consecutiveMistakeCount: 0, consecutiveAutoApprovedRequestsCount: 0, userMessageContent: [] },
+					autoApprovalSettings: { enabled: true, enableNotifications: false },
+					yoloModeToggled: false,
+					cwd: dir,
+					api: { getModel: () => ({ id: "m", info: {} }) },
+				}
+				return config
+			}
+			const run = (config: any, tool: string) =>
+				new UseMcpToolHandler().execute(config, {
+					name: "use_mcp_tool",
+					params: { server_name: "ai-hydro", tool_name: tool },
+				} as any)
+			const loseTrust = () => {
+				const recorded = getRecordedFirstPartyLauncher()!
+				setRecordedFirstPartyLauncher({ ...recorded, command: "/some/other/python" })
+			}
+
+			it("an auto-run whose server is swapped before the call asks first, and a refusal means no call", async () => {
+				const { view, callTool } = swappingHub(loseTrust)
+				const ask = sinon.stub().resolves({ response: "noButtonClicked" })
+				await run(cfg(view, ask), "read_tool")
+				expect(ask.calledOnce).to.equal(true)
+				expect(JSON.parse(ask.firstCall.args[1]).autoApprovePaused).to.include("the server changed")
+				expect(callTool.called).to.equal(false)
+				expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"])
+			})
+
+			it("an auto-run whose server is NOT swapped calls without asking", async () => {
+				const { view, callTool } = swappingHub(loseTrust, "never")
+				const ask = sinon.stub().resolves({ response: "noButtonClicked" })
+				await run(cfg(view, ask), "read_tool")
+				expect(ask.called).to.equal(false)
+				expect(callTool.calledOnce).to.equal(true)
+			})
+
+			it("an approval given for one server is void if it is swapped while the ask is open: error, no call", async () => {
+				const { view, callTool } = swappingHub(loseTrust, "never")
+				const ask = sinon.stub().callsFake(async () => {
+					loseTrust()
+					return { response: "yesButtonClicked" }
+				})
+				const out = await run(cfg(view, ask), "write_tool") // no grant: the manual path
+				expect(ask.calledOnce).to.equal(true)
+				expect(String(out)).to.include("changed after you approved")
+				expect(callTool.called).to.equal(false)
+			})
+		})
+
+		// N4: any throw while deciding means ask.
+		it("N4: a throw while deciding asks (fail closed), through the helper and the handler", async () => {
+			const throwing: any = {
+				get connections() {
+					throw new Error("boom")
+				},
+			}
+			const d = mcpAutoApproveDecision(throwing, "ai-hydro", "read_tool")
+			expect(d).to.include({ auto: false, granted: true, reason: "check_failed" })
+			expect(isMcpToolGrantedAutoApprove(throwing, "ai-hydro", "read_tool")).to.equal(false)
+			const tools = hub.connections[0].server.tools
+			const realFind = tools.find
+			// A tool list whose lookup throws once the handler's own target check has passed.
+			let armed = false
+			tools.find = function (...a: any[]) {
+				if (armed) {
+					throw new Error("boom")
+				}
+				return realFind.apply(this, a)
+			}
+			const decisionHub: any = { connections: hub.connections }
+			armed = true
+			expect(mcpAutoApproveDecision(decisionHub, "ai-hydro", "read_tool")).to.include({ reason: "check_failed" })
+			armed = false
+			tools.find = realFind
+		})
+
+		// N5: the streaming placeholder is the auto-approved row only if the call would really auto-run.
+		it("N5: handlePartialBlock shows the auto-approved row only when the call would auto-run", async () => {
+			const mk = () => {
+				const ui: any = {
+					removeClosingTag: (_b: any, _n: string, v: string) => v,
+					removeLastPartialMessageIfExistsWithType: sinon.stub().resolves(),
+					say: sinon.stub().resolves(1),
+					ask: sinon.stub().resolves({}),
+				}
+				ui.getConfig = () => ({ callbacks: { shouldAutoApproveTool: () => true }, services: { mcpHub: hub } })
+				return ui
+			}
+			const block = (tool: string) =>
+				({ name: "use_mcp_tool", partial: true, params: { server_name: "ai-hydro", tool_name: tool } }) as any
+			const ok = mk()
+			await new UseMcpToolHandler().handlePartialBlock(block("read_tool"), ok)
+			expect(ok.say.called).to.equal(true)
+			expect(ok.ask.called).to.equal(false)
+			const recorded = getRecordedFirstPartyLauncher()!
+			setRecordedFirstPartyLauncher({ ...recorded, command: "/some/other/python" })
+			const paused = mk()
+			await new UseMcpToolHandler().handlePartialBlock(block("read_tool"), paused)
+			expect(paused.say.called).to.equal(false)
+			expect(paused.ask.called).to.equal(true)
+		})
+
+		// N2: a resource read auto-runs only against the trusted first-party server, YOLO or not.
+		describe("N2: access_mcp_resource", () => {
+			const runResource = async (server: string) => {
+				const readResource = sinon.stub().resolves({ contents: [{ text: "body" }] })
+				const callbacks = {
+					say: sinon.stub().resolves(1),
+					ask: sinon.stub().resolves({ response: "noButtonClicked" }),
+					removeLastPartialMessageIfExistsWithType: sinon.stub().resolves(),
+					shouldAutoApproveTool: sinon.stub().returns(true), // MCP auto-run on, or YOLO: both land here
+					sayAndCreateMissingParamError: sinon.stub().resolves("missing"),
+				}
+				const config: any = {
+					callbacks,
+					services: { mcpHub: { connections: hub.connections, readResource } },
+					taskState: { consecutiveMistakeCount: 0, consecutiveAutoApprovedRequestsCount: 0, userMessageContent: [] },
+					autoApprovalSettings: { enabled: true, enableNotifications: false },
+					yoloModeToggled: true,
+					api: { getModel: () => ({ id: "m", info: {} }) },
+				}
+				await new AccessMcpResourceHandler().execute(config, {
+					name: "access_mcp_resource",
+					params: { server_name: server, uri: "file:///x" },
+				} as any)
+				return { callbacks, readResource }
+			}
+
+			it("auto-reads from the trusted first-party server", async () => {
+				const { callbacks, readResource } = await runResource("ai-hydro")
+				expect(callbacks.ask.called).to.equal(false)
+				expect(readResource.calledOnce).to.equal(true)
+			})
+
+			it("asks, with a neutral reason, once the server is not the recorded first-party launcher", async () => {
+				setRecordedFirstPartyLauncher({ ...getRecordedFirstPartyLauncher()!, command: "/some/other/python" })
+				const { callbacks, readResource } = await runResource("ai-hydro")
+				expect(callbacks.ask.calledOnce).to.equal(true)
+				expect(JSON.parse(callbacks.ask.firstCall.args[1]).autoApprovePaused).to.equal(
+					"Auto-run is off for this server: it is not the registered first-party server, or its launch identity changed.",
+				)
+				expect(readResource.called).to.equal(false)
+			})
 		})
 	})
 })

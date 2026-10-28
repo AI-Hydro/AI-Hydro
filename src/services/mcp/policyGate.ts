@@ -21,7 +21,12 @@
 
 import * as fs from "fs/promises"
 
-/** The fields that decide what process (or endpoint) a server entry launches. Headers/timeout are not identity. */
+/**
+ * The fields that decide what process (or endpoint) a server entry launches. Not identity, on purpose: `headers`
+ * and `timeout` (credentials rotate, limits change), and `type`/`transportType` (raw files spell them differently
+ * from the validated config, which would raise false loosenings; the run-time trust that matters is stdio-only and
+ * is decided by command/args plus the recorded launch hash, so a transport relabel cannot make a server trusted).
+ */
 export interface LaunchIdentity {
 	command?: string
 	args?: string[]

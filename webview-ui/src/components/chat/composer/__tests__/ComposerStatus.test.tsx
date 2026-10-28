@@ -152,9 +152,11 @@ describe("ComposerStatus YOLO and dormant MCP grants", () => {
 		yolo = true
 		render(<ComposerStatus />)
 		const chip = screen.getByTestId("auto-run-chip")
-		expect(chip).toHaveTextContent("YOLO: everything auto-runs")
+		expect(chip).toHaveTextContent("YOLO: auto-runs all but MCP tools without a working Always")
 		expect(screen.getByTestId("auto-run-risk")).toHaveTextContent("(risky)")
-		expect(chip.getAttribute("aria-label")).toMatch(/YOLO mode is on: everything auto-runs, even when auto-run is off/)
+		expect(chip.getAttribute("aria-label")).toMatch(
+			/YOLO mode is on: everything auto-runs, even when auto-run is off, except MCP tools without a working Always grant/,
+		)
 	})
 
 	it("is not risky with YOLO off and the defaults", () => {
