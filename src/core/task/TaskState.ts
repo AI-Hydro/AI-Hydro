@@ -15,6 +15,9 @@ export class TaskState {
 	userMessageContent: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
 	userMessageContentReady = false
 
+	/** The map-context block last sent in this task; undefined when none was sent or compaction dropped it. */
+	lastInjectedMapContext?: string
+
 	// Presentation locks
 	presentAssistantMessageLocked = false
 	presentAssistantMessageHasPendingUpdates = false

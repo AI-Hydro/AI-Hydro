@@ -1,194 +1,208 @@
 import type { Controller } from "@core/controller"
-import { layerToCatalogEntry, type MapLayerCatalogEntry } from "@core/map/mapLayerCatalog"
-import type { MapEvent, MapSessionView } from "@shared/proto/cline/map"
+import type { MapEvent } from "@shared/proto/cline/map"
 
-const MAX_CONTEXT_BYTES = 4096
+/** Hard cap on the whole block, separator included (X0-8 stop-gap, replaced by the MAP digest in Wave 2). */
+export const MAP_CONTEXT_MAX_CHARS = 600
+export const MAP_CONTEXT_TRUNCATION_MARKER = "…[map context truncated]"
 
-function formatView(view: MapSessionView): string {
-	const lat = view.latitude
-	const lon = view.longitude
-	const zoom = view.zoom
-	const latStr = Number.isFinite(lat) ? `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? "N" : "S"}` : "?"
-	const lonStr = Number.isFinite(lon) ? `${Math.abs(lon).toFixed(4)}°${lon >= 0 ? "E" : "W"}` : "?"
-	const zoomStr = Number.isFinite(zoom) ? zoom.toFixed(2) : "?"
-	return `${latStr}, ${lonStr} · zoom ${zoomStr}`
+const MAX_VISIBLE_LAYERS = 5
+const MAX_ACTIVITY_ITEMS = 3
+/** How far back to look for meaningful events once camera moves are filtered out. */
+const ACTIVITY_WINDOW = 40
+
+/** Facts the gate needs about the task asking for context. */
+export interface MapContextRequest {
+	/** The task's workspace / project folder. */
+	taskCwd: string
+	/** The chat was started from the map (its history origin is "map"). */
+	launchedFromMap: boolean
+	/** The user's message this turn refers to the map. */
+	userReferencedMap: boolean
+}
+
+/** Camera movement is not research evidence: it changes on every pan and would defeat change detection. */
+export function isCameraEvent(type: string | undefined): boolean {
+	const t = type ?? ""
+	return t === "view.changed" || t.startsWith("command.fit_") || t === "command.fly_to" || /pan|zoom|move/i.test(t)
+}
+
+const MAP_REFERENCE = /\b(maps?|basemaps?|layers?|viewport|map view|basin outline|choropleth|delineat\w*|drawn?|drawing)\b/i
+
+/** True when this turn's user-authored text refers to the map. Tool results are not user text and never count. */
+export function userMessageReferencesMap(userContent: ReadonlyArray<{ type: string; text?: string }>): boolean {
+	return userContent.some((block) => {
+		if (block.type !== "text" || !block.text) {
+			return false
+		}
+		const markers = ["task", "feedback", "answer", "user_message"]
+		return markers.some((tag) => {
+			const open = block.text!.indexOf(`<${tag}>`)
+			if (open < 0) {
+				return false
+			}
+			const close = block.text!.indexOf(`</${tag}>`, open)
+			const inner = block.text!.slice(open + tag.length + 2, close < 0 ? undefined : close)
+			return MAP_REFERENCE.test(inner)
+		})
+	})
+}
+
+function normalizeRoot(p: string): string {
+	let out = p.trim().replace(/\\/g, "/").replace(/\/+$/, "")
+	if (process.platform === "win32" || process.platform === "darwin") {
+		out = out.toLowerCase()
+	}
+	return out
+}
+
+/** Same folder, or one contains the other (a project folder inside a workspace and vice versa). */
+export function workspaceMatches(mapRoot: string, taskCwd: string): boolean {
+	const a = normalizeRoot(mapRoot)
+	const b = normalizeRoot(taskCwd)
+	if (!a || !b) {
+		return false
+	}
+	return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
+}
+
+function parsePayload(event: MapEvent): Record<string, unknown> {
+	if (!event.payloadJson) {
+		return {}
+	}
+	try {
+		return JSON.parse(event.payloadJson) as Record<string, unknown>
+	} catch {
+		return {}
+	}
 }
 
 function summarizeEvent(event: MapEvent): string {
-	const payload = (() => {
-		if (!event.payloadJson) {
-			return {}
-		}
-		try {
-			return JSON.parse(event.payloadJson) as Record<string, unknown>
-		} catch {
-			return {}
-		}
-	})()
-
+	const payload = parsePayload(event)
 	switch (event.type) {
-		case "basemap.changed":
-			return `basemap → ${String(payload.basemapName ?? payload.basemapId ?? "")}`
 		case "user.file_saved":
 			return `saved vector ${String(payload.path ?? "")}`
 		case "user.file_loaded":
 			return `loaded ${String(payload.name ?? payload.path ?? "file")}`
+		case "layer.geojson":
+			return `layer added ${String(payload.name ?? payload.layerId ?? "")}`.trim()
 		case "layer.visibility":
 			return `toggled ${String(payload.layerId ?? "layer")}`
 		case "inspect.click":
-			return `map click (${String(payload.featureCount ?? 0)} features)`
+			return `feature selected (${String(payload.featureCount ?? 0)} features)`
+		case "roi.set":
+		case "roi.saved":
+			return "region of interest set"
+		case "roi.cleared":
+			return "region of interest cleared"
 		case "delineation.requested": {
 			const lat = payload.lat
 			const lon = payload.lon
 			if (typeof lat === "number" && typeof lon === "number") {
-				return `delineate outlet at ${lat.toFixed(5)}°, ${lon.toFixed(5)}° — use delineate_watershed_from_point`
+				return `delineation requested at ${lat.toFixed(4)}°, ${lon.toFixed(4)}°`
 			}
-			return "delineation requested at map click"
+			return "delineation requested"
 		}
 		case "delineation.started":
-			return "watershed delineation started"
+			return "delineation started"
 		case "delineation.completed":
-			return `delineation done (${String(payload.method_used ?? "")}, ${String(payload.area_km2 ?? "")} km²)`
-		case "view.changed":
-			return "panned/zoomed map"
-		case "command.fit_extent":
-			return "fit extent requested"
-		case "command.fit_layer":
-			return `zoom to layer ${String(payload.layerId ?? "")}`
+			return `delineation done (${String(payload.area_km2 ?? "")} km²)`
 		default:
 			return event.type || "map activity"
 	}
 }
 
-function formatCatalogLayer(entry: MapLayerCatalogEntry): string {
-	const styleBits: string[] = []
-	if (entry.symbology_mode === "graduated" && entry.graduated) {
-		styleBits.push(
-			`graduated:${entry.graduated.attr}/${entry.graduated.method}/${entry.graduated.classes}cls/${entry.graduated.ramp}`,
-		)
-	} else if (entry.symbology_mode === "raster") {
-		const cmap = entry.style.raster_colormap
-		styleBits.push(`raster:${cmap ?? "viridis"}`)
-	} else if (entry.style.fillColor) {
-		styleBits.push(`fill=${entry.style.fillColor}`)
-	}
-	const attrs =
-		entry.numeric_attributes.length > 0
-			? ` attrs=[${entry.numeric_attributes
-					.slice(0, 4)
-					.map((a) => a.name)
-					.join(",")}]`
-			: ""
-	const path = entry.workspace_path ? ` path=${entry.workspace_path}` : ""
-	return `${entry.id} "${entry.name}" [${entry.layer_type}, ${entry.symbology_mode}${styleBits.length ? ", " + styleBits.join(" ") : ""}]${attrs}${path}`
+/** Meaningful recent events, camera moves and the basemap switch (already a line of its own) removed. */
+function meaningfulEvents(events: MapEvent[]): MapEvent[] {
+	return events.filter((e) => !isCameraEvent(e.type) && e.type !== "basemap.changed")
 }
 
-function hasMapSessionSignal(controller: Controller): boolean {
-	const svc = controller.mapSessionService
-	return Boolean(
-		svc.getBasemap() ||
-			svc.getView() ||
-			controller.getMapLayers().length > 0 ||
-			controller.getWorkspaceGeoJsonFiles().length > 0 ||
-			svc.getRecentEvents(1).length > 0,
-	)
+/** Cut to `max` characters with a marker that is part of the budget, so the result is deterministic and never over. */
+export function capWithMarker(text: string, max: number = MAP_CONTEXT_MAX_CHARS): string {
+	if (text.length <= max) {
+		return text
+	}
+	return text.slice(0, max - MAP_CONTEXT_TRUNCATION_MARKER.length) + MAP_CONTEXT_TRUNCATION_MARKER
 }
 
 /**
- * Compact map context for the agent: basemap, view, layers, workspace files, recent actions.
+ * Compact map context for the agent: the layers, the last selection and meaningful recent actions.
+ *
+ * Returns "" unless the map belongs to this chat: the map session's workspace matches the task folder, or the map
+ * session carries no workspace and the chat was launched from the map or the user referred to it. A basemap alone is
+ * never enough, and the pan/zoom view is left out (it changes constantly and says nothing about the study).
  */
-export function buildMapContextForTask(controller: Controller): string {
-	if (!hasMapSessionSignal(controller)) {
+export function buildMapContextForTask(controller: Controller, request: MapContextRequest): string {
+	const svc = controller.mapSessionService
+	const mapRoot = svc.getWorkspaceRoot()
+	const belongs = mapRoot ? workspaceMatches(mapRoot, request.taskCwd) : request.launchedFromMap || request.userReferencedMap
+	if (!belongs) {
 		return ""
 	}
 
-	const svc = controller.mapSessionService
-	const events = svc.getRecentEvents(8)
+	const events = meaningfulEvents(svc.getRecentEvents(ACTIVITY_WINDOW))
 	const layers = controller.getMapLayers()
-	const visible = layers.filter((l) => l.visible !== false)
-	const hiddenCount = layers.length - visible.length
-	const workspaceFiles = controller.getWorkspaceGeoJsonFiles()
+	const inspect = svc.getLastInspect()
+	if (layers.length === 0 && events.length === 0 && !inspect) {
+		return ""
+	}
 
 	const lines: string[] = ["## Map context"]
 
 	const basemap = svc.getBasemap()
 	if (basemap) {
-		lines.push(`Active basemap: ${basemap.name} (id: ${basemap.id})`)
+		lines.push(`Basemap: ${basemap.name}`)
 	}
 
-	const view = svc.getView()
-	if (view) {
-		lines.push(`Map view: ${formatView(view)}`)
-	}
-
+	const visible = layers.filter((l) => l.visible !== false)
 	if (layers.length > 0) {
+		const hidden = layers.length - visible.length
+		const shown = visible
+			.slice(0, MAX_VISIBLE_LAYERS)
+			.map((l) => `${l.id} "${l.name}" [${l.layerType || "vector"}]`)
+			.join("; ")
+		const more = visible.length > MAX_VISIBLE_LAYERS ? ` (+${visible.length - MAX_VISIBLE_LAYERS} more)` : ""
 		lines.push(
-			`Map layers: ${layers.length} total (${visible.length} visible${hiddenCount > 0 ? `, ${hiddenCount} hidden` : ""})`,
+			`Layers: ${layers.length} (${visible.length} visible${hidden > 0 ? `, ${hidden} hidden` : ""})${shown ? `: ${shown}${more}` : ""}`,
 		)
+		lines.push("Restyle existing layers by id instead of re-sending their data.")
 	}
 
-	if (visible.length > 0) {
-		const names = visible
-			.slice(0, 8)
-			.map((l) => {
-				const path = l.metadata?.path
-				const kind = l.layerType || "vector"
-				return path ? `${l.id} "${l.name}" [${kind}, ${path}]` : `${l.id} "${l.name}" [${kind}]`
-			})
-			.join("; ")
-		const more = visible.length > 8 ? ` (+${visible.length - 8} more)` : ""
-		lines.push(`Visible layers (use map_update_layer by id): ${names}${more}`)
-	}
-
-	const catalogEntries = layers.map((layer) => layerToCatalogEntry(layer))
-	if (catalogEntries.length > 0) {
-		lines.push("Style existing layers with map_update_layer(layer_id=…) — do not write duplicate GeoJSON for symbology.")
-		const catalogLines = catalogEntries
-			.slice(0, 6)
-			.map((e) => formatCatalogLayer(e))
-			.join("; ")
-		const moreCat = catalogEntries.length > 6 ? ` (+${catalogEntries.length - 6} more)` : ""
-		lines.push(`Layer catalog: ${catalogLines}${moreCat}`)
-	}
-
-	const fileLines = workspaceFiles
-		.slice(0, 10)
-		.map((f) => f.relativePath)
-		.join(", ")
-	if (fileLines) {
-		const more = workspaceFiles.length > 10 ? ` (+${workspaceFiles.length - 10} more)` : ""
-		lines.push(`Workspace geo files: ${fileLines}${more}`)
+	if (inspect) {
+		const props = Object.entries(inspect.featureProperties ?? {})
+			.filter(([k]) => !k.startsWith("_"))
+			.slice(0, 4)
+			.map(([k, v]) => `${k}=${v}`)
+			.join(", ")
+		lines.push(
+			`Selected: ${inspect.layerName ?? "feature"} at ${inspect.lat.toFixed(4)}°, ${inspect.lon.toFixed(4)}°${props ? ` (${props})` : ""}`,
+		)
 	}
 
 	if (events.length > 0) {
 		const recent = events
-			.slice(-5)
+			.slice(-MAX_ACTIVITY_ITEMS)
 			.map((e) => `${e.source || "user"}: ${summarizeEvent(e)}`)
 			.join("; ")
 		lines.push(`Recent map activity: ${recent}`)
 	}
 
-	const inspect = svc.getLastInspect()
-	if (inspect) {
-		lines.push(
-			`Last map click: ${inspect.lat.toFixed(5)}°, ${inspect.lon.toFixed(5)}° (${inspect.featureCount ?? 0} features)`,
-		)
-		if (inspect.layerName) {
-			lines.push(`Selected layer: ${inspect.layerName}`)
-		}
-		if (inspect.featureProperties && Object.keys(inspect.featureProperties).length > 0) {
-			const props = Object.entries(inspect.featureProperties)
-				.filter(([k]) => !k.startsWith("_"))
-				.slice(0, 6)
-				.map(([k, v]) => `${k}=${v}`)
-				.join(", ")
-			lines.push(`Feature attrs: ${props}`)
-		}
-	}
+	return `\n\n${capWithMarker(lines.join("\n"), MAP_CONTEXT_MAX_CHARS - 2)}`
+}
 
-	let block = lines.join("\n")
-	if (block.length > MAX_CONTEXT_BYTES) {
-		block = `${block.slice(0, MAX_CONTEXT_BYTES - 3)}...`
+/**
+ * Send-only-when-changed decision. `lastInjected` is the block this task sent last (undefined = none, or it was
+ * lost to compaction). An identical block is re-sent only when the user referred to the map this turn.
+ */
+export function decideMapContextInjection(
+	block: string,
+	lastInjected: string | undefined,
+	userReferencedMap: boolean,
+): { inject: boolean; next: string | undefined } {
+	if (!block) {
+		return { inject: false, next: undefined }
 	}
-	return `\n\n${block}`
+	if (block === lastInjected && !userReferencedMap) {
+		return { inject: false, next: lastInjected }
+	}
+	return { inject: true, next: block }
 }

@@ -29,7 +29,7 @@ import { getInstalledSkillsInstructions } from "@core/context/instructions/user-
 import { clearPending, markPending } from "@core/controller/ui/pendingAskBadge"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
 import { AiHydroIgnoreController } from "@core/ignore/AiHydroIgnoreController"
-import { buildMapContextForTask } from "@core/map/MapContextForTask"
+import { buildMapContextForTask, decideMapContextInjection, userMessageReferencesMap } from "@core/map/MapContextForTask"
 import { parseMentions } from "@core/mentions"
 import { summarizeTask } from "@core/prompts/contextManagement"
 import { formatResponse } from "@core/prompts/responses"
@@ -163,6 +163,8 @@ export class Task {
 	readonly taskId: string
 	readonly ulid: string
 	private cwd: string
+	/** The chat was started from the map (new launch or resumed history item); its map context is its own. */
+	private launchedFromMap: boolean
 	private taskInitializationStartTime: number
 
 	taskState: TaskState
@@ -299,6 +301,7 @@ export class Task {
 		this.contextManager = new ContextManager()
 		this.diffViewProvider = HostProvider.get().createDiffViewProvider()
 		this.cwd = cwd
+		this.launchedFromMap = (params.launch?.origin ?? historyItem?.origin) === "map"
 		this.stateManager = stateManager
 		this.workspaceManager = workspaceManager
 
@@ -2472,6 +2475,8 @@ export class Task {
 				parsedUserContent = userContent
 				environmentDetails = ""
 				aihydrorulesError = false
+				// The summary replaces earlier turns, so the model no longer holds the last map block.
+				this.taskState.lastInjectedMapContext = undefined
 				this.taskState.lastAutoCompactTriggerIndex = previousApiReqIndex
 			} else {
 				;[parsedUserContent, environmentDetails, aihydrorulesError] = await this.loadContext(
@@ -3108,7 +3113,7 @@ export class Task {
 		// Run initial promises in parallel
 		const [processedUserContent, environmentDetails] = await Promise.all([
 			processUserContent(),
-			this.getEnvironmentDetails(includeFileDetails),
+			this.getEnvironmentDetails(includeFileDetails, userContent),
 		])
 
 		// After processing content, check aihydrorulesData if needed
@@ -3192,7 +3197,7 @@ export class Task {
 		}
 	}
 
-	async getEnvironmentDetails(includeFileDetails: boolean = false) {
+	async getEnvironmentDetails(includeFileDetails: boolean = false, userContent: UserContent = []) {
 		const host = await HostProvider.env.getHostVersion({})
 		let details = ""
 
@@ -3387,8 +3392,16 @@ export class Task {
 			details += "\nACT MODE"
 		}
 
-		const mapContext = buildMapContextForTask(this.controller)
-		if (mapContext) {
+		// Map context (X0-8 stop-gap): only for a map that belongs to this chat, and only when it changed since the last send.
+		const userReferencedMap = userMessageReferencesMap(userContent)
+		const mapContext = buildMapContextForTask(this.controller, {
+			taskCwd: this.cwd,
+			launchedFromMap: this.launchedFromMap,
+			userReferencedMap,
+		})
+		const mapDecision = decideMapContextInjection(mapContext, this.taskState.lastInjectedMapContext, userReferencedMap)
+		this.taskState.lastInjectedMapContext = mapDecision.next
+		if (mapDecision.inject) {
 			details += mapContext
 		}
 
