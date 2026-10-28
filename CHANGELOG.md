@@ -11,6 +11,14 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.0] — unreleased (version set 2026-10-17; not published)
 
+### Security — zod 4 to clear GHSA-mrhx-c7xc-m3w5 (branch `vision2040/zod-advisory`, PR #88)
+
+- `zod` moves from ^3.24.2 to ^4.6.7 (every 3.x release is in the advisory range; no patched 3.x exists). `z.record` now takes key and value schemas. `body-parser` 2.3.0 to 2.4.0.
+- **Overrides outside declared ranges.** `package.json` `overrides` force `openai` (declares zod ^3), `@sap-ai-sdk/prompt-registry` 1.x (zod ^3) and `chromium-bidi` (zod 3.23.8) onto the root zod 4. Remove each entry once that package declares zod 4.
+- **Runtime-tested on zod 4.6.7:** MCP SDK 1.32.1 stdio round trip (listTools with annotations, callTool, listResources, `notifications/message`; now `zodMcpRoundTrip.test.ts`), mistral, and construction of all SAP prompt-registry schemas. **Not tested:** SAP orchestration against a live AI Core tenant, openai's zod helpers (unused), the chromium-bidi parser (not in the bundle).
+- **Behaviour change:** zod 4 injects `autoApprove: []` when the field is absent from a server config (pinned by a test); `policyGate` treats absent and `[]` alike, so this is not reported as a policy loosening.
+- SAP AI SDK 2.x was rejected: it pulls node-forge/node-rsa into the bundle, whose PEM header constants trip the VSIX private-key scan.
+
 ### Security — the host refuses "Always" for untrusted or unannotated MCP tools; ask responses are bound to their ask (vision-2040 Wave 2, PR W2-E1, branch `vision2040/w2-e1`)
 
 - **Behaviour change from Cline.** The MCP settings panel's per-tool "Tool auto-run" and "Auto-run all tools" no longer accept every tool. The extension host now refuses to add a tool to a server's auto-approve list unless **all** of these hold: the server is the registered first-party AI-Hydro server (name AND the recorded launcher, `isServerTrusted`), it is connected, the tool is listed exactly once under that exact (case-sensitive) name, and its declared effect class is read, write or network. A **destructive** tool, a tool with **no declared effect** (no annotations), and **every tool of a third-party server** are refused, even if that server declares `readOnlyHint` (annotations count only on a trusted server). Removing a tool from the list is always allowed. A request is all-or-nothing: if any tool in it is refused, nothing is written. Existing grants in `aihydro_mcp_settings.json` are not touched and keep working; edit the file by hand to keep a grant for a third-party server (an external edit is still confirmed by the policy gate). Cost: users who relied on auto-run for third-party servers must approve those calls one by one.
