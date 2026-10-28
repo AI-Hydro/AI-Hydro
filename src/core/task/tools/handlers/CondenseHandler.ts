@@ -33,8 +33,8 @@ export class CondenseHandler implements IToolHandler, IPartialBlockHandler {
 		// Show notification if auto-approval is enabled
 		if (config.autoApprovalSettings.enabled && config.autoApprovalSettings.enableNotifications) {
 			showSystemNotification({
-				subtitle: "AI Hydro wants to condense the conversation...",
-				message: `AI Hydro is suggesting to condense your conversation with: ${context}`,
+				subtitle: "AI-Hydro wants to condense the conversation...",
+				message: `AI-Hydro is suggesting to condense your conversation with: ${context}`,
 			})
 		}
 

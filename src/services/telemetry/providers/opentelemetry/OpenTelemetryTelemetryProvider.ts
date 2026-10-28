@@ -4,8 +4,7 @@ import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { getDistinctId, setDistinctId } from "@/services/logging/distinctId"
 import { Setting } from "@/shared/proto/index.host"
-import type { AiHydroAccountUserInfo } from "../../../auth/AuthService"
-import type { ITelemetryProvider, TelemetryProperties, TelemetrySettings } from "../ITelemetryProvider"
+import type { ITelemetryProvider, TelemetryProperties, TelemetrySettings, TelemetryUserInfo } from "../ITelemetryProvider"
 import { OpenTelemetryClientProvider } from "./OpenTelemetryClientProvider"
 
 /**
@@ -113,7 +112,7 @@ export class OpenTelemetryTelemetryProvider implements ITelemetryProvider {
 		}
 	}
 
-	public identifyUser(userInfo: AiHydroAccountUserInfo, properties: TelemetryProperties = {}): void {
+	public identifyUser(userInfo: TelemetryUserInfo, properties: TelemetryProperties = {}): void {
 		const distinctId = getDistinctId()
 		// Only identify user if telemetry is enabled and user ID is different than the currently set distinct ID
 		if (this.isEnabled() && userInfo && userInfo?.id !== distinctId) {

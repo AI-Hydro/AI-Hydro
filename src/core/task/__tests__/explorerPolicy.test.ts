@@ -116,7 +116,6 @@ describe("explorer profile policy", () => {
 			"read_file",
 			"search_files",
 			"list_files",
-			"list_code_definition_names",
 			"access_mcp_resource",
 			"load_mcp_documentation",
 			"web_fetch",

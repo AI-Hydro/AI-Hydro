@@ -62,19 +62,19 @@ const _cancelledColor = "var(--vscode-descriptionForeground)"
 function askText(state: CallState, noun: string, past: string, tail = ":"): string {
 	switch (state) {
 		case "pending":
-			return `AI Hydro wants to ${noun}${tail}`
+			return `AI-Hydro wants to ${noun}${tail}`
 		case "approved":
 			return `Approved: ${noun}${tail}`
 		case "running":
 			return `Running: ${noun}…${tail === ":" ? "" : tail}`
 		case "executed":
-			return `AI Hydro ${past}${tail}`
+			return `AI-Hydro ${past}${tail}`
 		case "failed":
 			return `Failed: ${noun}${tail}`
 		case "denied":
 			return tail === ":" ? `Denied: ${noun} (not run)` : `Denied: ${noun}`
 		default:
-			return `AI Hydro asked to ${noun}${tail}`
+			return `AI-Hydro asked to ${noun}${tail}`
 	}
 }
 
@@ -539,7 +539,7 @@ export const ChatRowContent = memo(
 								color: errorColor,
 								marginBottom: "-1.5px",
 							}}></span>,
-						<span style={{ color: errorColor, fontWeight: "bold" }}>AI Hydro is having trouble...</span>,
+						<span style={{ color: errorColor, fontWeight: "bold" }}>AI-Hydro is having trouble...</span>,
 					]
 				case "auto_approval_max_req_reached":
 					return [
@@ -615,7 +615,7 @@ export const ChatRowContent = memo(
 								color: normalColor,
 								marginBottom: "-1.5px",
 							}}></span>,
-						<span style={{ color: normalColor, fontWeight: "bold" }}>AI Hydro has a question:</span>,
+						<span style={{ color: normalColor, fontWeight: "bold" }}>AI-Hydro has a question:</span>,
 					]
 				default:
 					return [null, null]
@@ -870,7 +870,7 @@ export const ChatRowContent = memo(
 						<ToolMessageCard toolName="summarizeTask">
 							<div className="chat-row-header">
 								{toolIcon("book")}
-								<span className="font-bold">AI Hydro is condensing the conversation:</span>
+								<span className="font-bold">AI-Hydro is condensing the conversation:</span>
 							</div>
 							<div
 								className="modern-card overflow-hidden"
@@ -1060,54 +1060,10 @@ export const ChatRowContent = memo(
 			// backgroundExec left default-mode users with no way to cancel a hung command.
 			const showCancelButton = (isCommandExecuting || isCommandPending) && typeof onCancelCommand === "function"
 
-			// Check if this is a AI-Hydro subagent command
-			const isSubagentCommand = command.trim().startsWith("aihydro ")
-			let subagentPrompt: string | undefined
-
-			if (isSubagentCommand) {
-				// Parse the aihydro command to extract prompt
-				// Format: aihydro "prompt"
-				const aihydroCommandRegex = /^aihydro\s+"([^"]+)"(?:\s+--no-interactive)?/
-				const match = command.match(aihydroCommandRegex)
-
-				if (match) {
-					subagentPrompt = match[1]
-				}
-			}
-
-			// Compact AI-Hydro SVG icon component
-			const AiHydroIcon = () => (
-				<svg height="16" style={{ marginBottom: "-1.5px" }} viewBox="0 0 92 96" width="16">
-					<g fill="currentColor">
-						<path d="M65.4492701,16.3 C76.3374701,16.3 85.1635558,25.16479 85.1635558,36.1 L85.1635558,42.7 L90.9027661,54.1647464 C91.4694141,55.2966923 91.4668177,56.6300535 90.8957658,57.7597839 L85.1635558,69.1 L85.1635558,75.7 C85.1635558,86.63554 76.3374701,95.5 65.4492701,95.5 L26.0206986,95.5 C15.1328272,95.5 6.30641291,86.63554 6.30641291,75.7 L6.30641291,69.1 L0.448507752,57.7954874 C-0.14693501,56.6464093 -0.149634367,55.2802504 0.441262896,54.1288283 L6.30641291,42.7 L6.30641291,36.1 C6.30641291,25.16479 15.1328272,16.3 26.0206986,16.3 L65.4492701,16.3 Z M62.9301895,22 L29.189529,22 C19.8723267,22 12.3191987,29.5552188 12.3191987,38.875 L12.3191987,44.5 L7.44288578,53.9634655 C6.84794449,55.1180686 6.85066096,56.4896598 7.45017099,57.6418974 L12.3191987,67 L12.3191987,72.625 C12.3191987,81.9450625 19.8723267,89.5 29.189529,89.5 L62.9301895,89.5 C72.2476729,89.5 79.8005198,81.9450625 79.8005198,72.625 L79.8005198,67 L84.5682187,57.6061395 C85.1432011,56.473244 85.1458141,55.1345713 84.5752587,53.9994398 L79.8005198,44.5 L79.8005198,38.875 C79.8005198,29.5552188 72.2476729,22 62.9301895,22 Z" />
-						<ellipse cx="45.7349843" cy="11" rx="12" ry="14" />
-						<ellipse cx="33.5" cy="55.5" rx="8" ry="9" />
-						<ellipse cx="57.5" cy="55.5" rx="8" ry="9" />
-					</g>
-				</svg>
-			)
-
-			// Customize icon and title for subagent commands
-			const displayIcon = isSubagentCommand ? (
-				<span style={{ color: normalColor }}>
-					<AiHydroIcon />
-				</span>
-			) : (
-				icon
-			)
-
-			const displayTitle = isSubagentCommand ? (
-				<span style={{ color: normalColor, fontWeight: "bold" }}>
-					{askText(askOutcome, "use a subagent", "used a subagent")}
-				</span>
-			) : (
-				title
-			)
-
 			const commandHeader = (
 				<div className="chat-row-header">
-					{displayIcon}
-					{displayTitle}
+					{icon}
+					{title}
 				</div>
 			)
 
@@ -1230,78 +1186,47 @@ export const ChatRowContent = memo(
 								</div>
 							</div>
 						)}
-						{isSubagentCommand && subagentPrompt && (
-							<div style={{ padding: "10px", borderBottom: "1px solid var(--vscode-editorGroup-border)" }}>
-								<div style={{ marginBottom: 0 }}>
-									<strong>Prompt:</strong>{" "}
-									<span className="ph-no-capture" style={{ fontFamily: "var(--vscode-editor-font-family)" }}>
-										{subagentPrompt}
-									</span>
-								</div>
-							</div>
-						)}
-						{/* {output.length > 0 && (
-							<div style={{ width: "100%" }}>
-								<div
-									onClick={handleToggle}
-									style={{
-										display: "flex",
-										alignItems: "center",
-										gap: "4px",
-										width: "100%",
-										justifyContent: "flex-start",
-										cursor: "pointer",
-										padding: `2px 8px ${isExpanded ? 0 : 8}px 8px`,
-									}}>
-									<span className={`codicon codicon-chevron-${isExpanded ? "down" : "right"}`}></span>
-									<span style={{ fontSize: "0.8em" }}>
-										{isSubagentCommand ? "Subagent Output" : "Command Output"}
-									</span>
-								</div>
-							</div>
-						)} */}
-						{!isSubagentCommand &&
-							(() => {
-								const commandLines = command.split("\n")
-								const isLongCommand = commandLines.length > 1 || command.length > 120
-								const showFull = isCommandExpanded || !isLongCommand
-								return (
-									<div style={{ opacity: 0.6, backgroundColor: CHAT_ROW_EXPANDED_BG_COLOR }}>
-										{isLongCommand && (
-											<div
-												onClick={() => setIsCommandExpanded((v) => !v)}
-												style={{
-													display: "flex",
-													alignItems: "center",
-													gap: "6px",
-													padding: "6px 10px",
-													cursor: "pointer",
-													fontFamily: "var(--vscode-editor-font-family)",
-													fontSize: "12px",
-													whiteSpace: "nowrap",
-													overflow: "hidden",
-												}}>
-												<span className={`codicon codicon-chevron-${showFull ? "down" : "right"}`} />
-												<span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-													{commandLines[0]}
+						{(() => {
+							const commandLines = command.split("\n")
+							const isLongCommand = commandLines.length > 1 || command.length > 120
+							const showFull = isCommandExpanded || !isLongCommand
+							return (
+								<div style={{ opacity: 0.6, backgroundColor: CHAT_ROW_EXPANDED_BG_COLOR }}>
+									{isLongCommand && (
+										<div
+											onClick={() => setIsCommandExpanded((v) => !v)}
+											style={{
+												display: "flex",
+												alignItems: "center",
+												gap: "6px",
+												padding: "6px 10px",
+												cursor: "pointer",
+												fontFamily: "var(--vscode-editor-font-family)",
+												fontSize: "12px",
+												whiteSpace: "nowrap",
+												overflow: "hidden",
+											}}>
+											<span className={`codicon codicon-chevron-${showFull ? "down" : "right"}`} />
+											<span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+												{commandLines[0]}
+											</span>
+											{!showFull && (
+												<span style={{ flexShrink: 0, opacity: 0.7 }}>
+													{`  (+${commandLines.length - 1} more line${
+														commandLines.length - 1 === 1 ? "" : "s"
+													})`}
 												</span>
-												{!showFull && (
-													<span style={{ flexShrink: 0, opacity: 0.7 }}>
-														{`  (+${commandLines.length - 1} more line${
-															commandLines.length - 1 === 1 ? "" : "s"
-														})`}
-													</span>
-												)}
-											</div>
-										)}
-										{showFull && (
-											<div style={{ backgroundColor: CHAT_ROW_EXPANDED_BG_COLOR }}>
-												<CodeBlock forceWrap={true} source={`${"```"}shell\n${command}\n${"```"}`} />
-											</div>
-										)}
-									</div>
-								)
-							})()}
+											)}
+										</div>
+									)}
+									{showFull && (
+										<div style={{ backgroundColor: CHAT_ROW_EXPANDED_BG_COLOR }}>
+											<CodeBlock forceWrap={true} source={`${"```"}shell\n${command}\n${"```"}`} />
+										</div>
+									)}
+								</div>
+							)
+						})()}
 						{output.length > 0 && (
 							<CommandOutput
 								isContainerExpanded={true}
@@ -1502,7 +1427,6 @@ export const ChatRowContent = memo(
 										apiRequestFailedMessage={apiRequestFailedMessage}
 										errorType="error"
 										message={message}
-										retryAskTs={apiRequestFailedMessage ? lastModifiedMessage?.ts : undefined}
 									/>
 								)}
 
@@ -1722,7 +1646,7 @@ export const ChatRowContent = memo(
 									<span className="chat-row-shell-warning-title">Shell Integration Unavailable</span>
 								</div>
 								<div className="chat-row-retry-body">
-									AI Hydro may have trouble viewing the command's output. Please update VSCode (
+									AI-Hydro may have trouble viewing the command's output. Please update VSCode (
 									<code>CMD/CTRL + Shift + P</code> → "Update") and make sure you're using a supported shell:
 									zsh, bash, fish, or PowerShell (<code>CMD/CTRL + Shift + P</code> → "Terminal: Select Default
 									Profile").{" "}
@@ -2140,8 +2064,8 @@ export const ChatRowContent = memo(
 										}}></span>
 									<span className="font-bold" style={{ color: normalColor }}>
 										{isPendingAsk
-											? "AI Hydro wants to launch a browser:"
-											: "AI Hydro asked to launch a browser:"}
+											? "AI-Hydro wants to launch a browser:"
+											: "AI-Hydro asked to launch a browser:"}
 									</span>
 								</div>
 								{message.text && (
@@ -2162,7 +2086,7 @@ export const ChatRowContent = memo(
 											marginBottom: "-1.5px",
 										}}></span>
 									<span className="font-bold" style={{ color: normalColor }}>
-										AI Hydro wants to start a new task:
+										AI-Hydro wants to start a new task:
 									</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
@@ -2179,7 +2103,7 @@ export const ChatRowContent = memo(
 											marginBottom: "-1.5px",
 										}}></span>
 									<span className="font-bold" style={{ color: normalColor }}>
-										AI Hydro wants to condense your conversation:
+										AI-Hydro wants to condense your conversation:
 									</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
@@ -2196,7 +2120,7 @@ export const ChatRowContent = memo(
 											marginBottom: "-1.5px",
 										}}></span>
 									<span className="font-bold" style={{ color: normalColor }}>
-										AI Hydro wants to create a Github issue:
+										AI-Hydro wants to create a Github issue:
 									</span>
 								</div>
 								<ReportBugPreview data={message.text || ""} />

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" width="640" height="240" role="img" aria-labelledby="t d">
+	<title id="t">Tools ready</title>
+	<desc id="d">The chat talks to the aihydro-tools MCP server, which the tools panel marks Trusted when its launch matches the recorded first-party launcher.</desc>
+	<rect width="640" height="240" rx="10" fill="#0f2a43"/>
+	<rect x="30" y="70" width="160" height="80" rx="8" fill="#17476e" stroke="#5fb3e6" stroke-width="1.5"/>
+	<text x="110.0" y="108.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff">AI-Hydro</text>
+	<text x="110.0" y="127.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">chat</text>
+	<path d="M190 110 L232 110" stroke="#5fb3e6" stroke-width="2" fill="none"/>
+	<path d="M232 105 L240 110 L232 115 Z" fill="#5fb3e6"/>
+	<rect x="240" y="70" width="170" height="80" rx="8" fill="#17476e" stroke="#5fb3e6" stroke-width="1.5"/>
+	<text x="325.0" y="108.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff">aihydro-tools</text>
+	<text x="325.0" y="127.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">MCP server</text>
+	<path d="M410 110 L452 110" stroke="#5fb3e6" stroke-width="2" fill="none"/>
+	<path d="M452 105 L460 110 L452 115 Z" fill="#5fb3e6"/>
+	<rect x="460" y="70" width="150" height="80" rx="8" fill="#14532d" stroke="#4ade80" stroke-width="1.5"/>
+	<text x="535.0" y="108.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff">Trusted</text>
+	<text x="535.0" y="127.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">launch matches</text>
+	<text x="320.0" y="222" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#8fc7ea">Hydro Tools &amp; Data Sources shows Trusted or Not trusted, with the reason</text>
+
+</svg>

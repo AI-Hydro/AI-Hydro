@@ -3,7 +3,6 @@ import { formatResponse } from "@core/prompts/responses"
 import { commandMentionsProtectedPath, commandToExecute, decideCommand } from "@core/task/commandPolicy"
 import { getHostProtectedRoots } from "@core/task/protectedRoots"
 import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
-import { isSubagentCommand, SUBAGENT_NO_YOLO_NOTICE } from "@integrations/cli-subagents/subagent_command"
 import { showSystemNotification } from "@integrations/notifications"
 import { findLastIndex } from "@shared/array"
 import { COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
@@ -137,15 +136,12 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			? autoApproveResult
 			: [autoApproveResult, false]
 
-		const isSubagentLaunch = isSubagentCommand(actualCommand)
 		const policy = decideCommand({
 			command: actualCommand,
 			rawCommand: block.params.command,
 			modelRequiresApproval: requiresApprovalPerLLM,
 			autoApproveSafe: !!autoApproveSafe,
 			autoApproveAll: !!autoApproveAll,
-			isSubagentLaunch,
-			subagentsEnabled: !!config.services.stateManager.getGlobalSettingsKey("subagentsEnabled"),
 			touchesProtectedPath: commandMentionsProtectedPath(block.params.command ?? actualCommand, getHostProtectedRoots()),
 		})
 		if (policy.action === "deny") {
@@ -186,9 +182,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			didAutoApprove = true
 			telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, true, true, workspaceContext)
 		} else {
-			if (isSubagentLaunch) {
-				await config.callbacks.say("text", SUBAGENT_NO_YOLO_NOTICE)
-			}
 			// Manual approval flow
 			showNotificationForApprovalIfAutoApprovalEnabled(
 				`AI-Hydro wants to execute a command: ${actualCommand}`,

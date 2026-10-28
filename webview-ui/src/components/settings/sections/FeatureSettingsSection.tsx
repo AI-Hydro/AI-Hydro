@@ -1,15 +1,11 @@
-import { SUPPORTED_DICTATION_LANGUAGES } from "@shared/DictationSettings"
 import { McpDisplayMode } from "@shared/McpDisplayMode"
-import { EmptyRequest } from "@shared/proto/index.cline"
 import { OpenaiReasoningEffort } from "@shared/storage/types"
 import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
-import { memo, useEffect, useState } from "react"
+import { memo } from "react"
 import HeroTooltip from "@/components/common/HeroTooltip"
 import McpDisplayModeDropdown from "@/components/mcp/chat-display/McpDisplayModeDropdown"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { StateServiceClient } from "@/services/grpc-client"
 import Section from "../Section"
-import SubagentOutputLineLimitSlider from "../SubagentOutputLineLimitSlider"
 import { updateSetting } from "../utils/settingsHandlers"
 
 interface FeatureSettingsSectionProps {
@@ -27,92 +23,23 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		finalAnswerAuditEnabled,
 		finalAnswerAuditGate,
 		yoloModeToggled,
-		dictationSettings,
 		useAutoCondense,
 		focusChainSettings,
 		maxConsecutiveMistakes,
 		multiRootSetting,
 		hooksEnabled,
 		remoteConfigSettings,
-		subagentsEnabled,
-		platform,
 	} = useExtensionState()
-
-	const isMacOS = platform === "darwin"
-
-	const [isAiHydroCliInstalled, setIsAiHydroCliInstalled] = useState(false)
 
 	const handleReasoningEffortChange = (newValue: OpenaiReasoningEffort) => {
 		updateSetting("openaiReasoningEffort", newValue)
 	}
-
-	// Poll for CLI installation status while the component is mounted
-	useEffect(() => {
-		const checkInstallation = async () => {
-			try {
-				const result = await StateServiceClient.checkCliInstallation(EmptyRequest.create())
-				setIsAiHydroCliInstalled(result.value)
-			} catch (error) {
-				console.error("Failed to check CLI installation:", error)
-			}
-		}
-
-		checkInstallation()
-
-		// Poll ever 1.5 seconds to see if CLI is installed (only when form is open)
-		const pollInterval = setInterval(checkInstallation, 1500)
-
-		return () => {
-			clearInterval(pollInterval)
-		}
-	}, [])
 
 	return (
 		<div>
 			{renderSectionHeader("features")}
 			<Section>
 				<div className="mb-5">
-					{/* Subagents - Only show on macOS (for now) */}
-					{isMacOS && (
-						<div className="settings-card relative" id="subagents-section">
-							<div className="new-badge absolute -top-2 -right-2">NEW</div>{" "}
-							<div className="mt-1.5 mb-2 px-2 pt-0.5 pb-1.5 rounded bg-[var(--vscode-inputValidation-warningBackground)] bg-opacity-20">
-								<p className="text-xs mb-2 flex items-start text-[var(--vscode-inputValidation-warningForeground)]">
-									<span
-										className="codicon codicon-warning mr-1"
-										style={{ fontSize: "12px", marginTop: "1px", flexShrink: 0 }}></span>
-									<span>
-										Subagents need a separate AI-Hydro command-line tool, which is not available in this
-										release. The toggle is disabled until it is.
-									</span>
-								</p>
-							</div>
-							<VSCodeCheckbox
-								checked={subagentsEnabled}
-								disabled={!isAiHydroCliInstalled}
-								onChange={(e: any) => {
-									const checked = e.target.checked === true
-									updateSetting("subagentsEnabled", checked)
-								}}>
-								<span className="font-semibold">
-									{subagentsEnabled ? "Subagents Enabled" : "Enable Subagents"}
-								</span>
-							</VSCodeCheckbox>
-							<p className="text-xs mt-1 mb-0">
-								<span className="text-[var(--vscode-errorForeground)]">Experimental: </span>{" "}
-								<span className="text-description">
-									Allows AI-Hydro to spawn subprocesses to handle focused tasks like exploring large codebases,
-									keeping your main context clean.
-								</span>
-							</p>
-							{subagentsEnabled && (
-								<div className="mt-3">
-									<SubagentOutputLineLimitSlider />
-								</div>
-							)}
-						</div>
-					)}
-
 					<div className="settings-card">
 						<div className="settings-section-header">
 							<span className="codicon codicon-checklist" />
@@ -245,8 +172,8 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							</VSCodeCheckbox>
 							<p className="toggle-description">
 								When the AI-Hydro MCP server is connected, checks each final answer for uncited numbers and
-								unsupported claims and shows the result below the answer. Display only: it never blocks or changes
-								the answer.
+								unsupported claims and shows the result below the answer. With the check below on (the default),
+								an answer with uncited numbers can cost up to 2 extra model requests while the agent revises it.
 							</p>
 						</div>
 						<div className="mt-2">
@@ -330,63 +257,6 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							</div>
 						)}
 					</div>
-
-					{dictationSettings?.featureEnabled && (
-						<div className="settings-card">
-							<div className="settings-section-header">
-								<span className="codicon codicon-mic" />
-								Dictation
-							</div>
-							<div className="mt-2.5">
-								<VSCodeCheckbox
-									checked={dictationSettings?.dictationEnabled}
-									onChange={(e: any) => {
-										const checked = e.target.checked === true
-										const updatedDictationSettings = {
-											...dictationSettings,
-											dictationEnabled: checked,
-										}
-										updateSetting("dictationSettings", updatedDictationSettings)
-									}}>
-									Enable Dictation
-								</VSCodeCheckbox>
-								<p className="toggle-description">
-									Enables speech-to-text transcription using your AI-Hydro account. Uses the Whisper model, at
-									$0.006 credits per minute of audio processed. 5 minutes max per message.
-								</p>
-							</div>
-
-							{dictationSettings?.dictationEnabled && (
-								<div className="mt-2.5 ml-5">
-									<label className="settings-label" htmlFor="dictation-language-dropdown">
-										Dictation Language
-									</label>
-									<VSCodeDropdown
-										className="w-full"
-										currentValue={dictationSettings?.dictationLanguage || "en"}
-										id="dictation-language-dropdown"
-										onChange={(e: any) => {
-											const newValue = e.target.value
-											const updatedDictationSettings = {
-												...dictationSettings,
-												dictationLanguage: newValue,
-											}
-											updateSetting("dictationSettings", updatedDictationSettings)
-										}}>
-										{SUPPORTED_DICTATION_LANGUAGES.map((language) => (
-											<VSCodeOption className="py-0.5" key={language.code} value={language.code}>
-												{language.name}
-											</VSCodeOption>
-										))}
-									</VSCodeDropdown>
-									<p className="toggle-description">
-										The language you want to speak to the Dictation service in. This is separate from your
-										preferred UI language.
-									</p>
-								</div>
-							)}
-						</div>
-					)}
 
 					<div className="settings-card">
 						<div className="settings-section-header">

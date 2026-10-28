@@ -107,7 +107,13 @@ describe("Studio naming guard (one name everywhere)", () => {
 		const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"))
 		const titles = (pkg.contributes.commands as Array<{ title: string }>).map((c) => c.title)
 		expect(titles).to.include("Add to AI-Hydro Studio")
-		expect(titles).to.include("AI-Hydro Studio")
+		// Palette label is "<category>: <title>" and every command's category is "AI-Hydro" (X0-4), so the toolbar
+		// command is titled "Studio" and reads "AI-Hydro: Studio" without a doubled prefix.
+		const toolbar = (pkg.contributes.commands as Array<{ command: string; title: string; category?: string }>).find(
+			(c) => c.command === "aihydro.htmlPreviewButtonClicked",
+		)
+		expect(toolbar?.category).to.equal("AI-Hydro")
+		expect(toolbar?.title).to.equal("Studio")
 	})
 
 	it("webview strings have no old product name", () => {

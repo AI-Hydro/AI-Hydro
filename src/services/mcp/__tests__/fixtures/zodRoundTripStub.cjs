@@ -1,7 +1,11 @@
 // Minimal stdio MCP server used by zodMcpRoundTrip.test.ts. Plain CommonJS so the test can spawn it with `node`.
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js")
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js")
-const { ListToolsRequestSchema, CallToolRequestSchema, ListResourcesRequestSchema } = require("@modelcontextprotocol/sdk/types.js")
+const {
+	ListToolsRequestSchema,
+	CallToolRequestSchema,
+	ListResourcesRequestSchema,
+} = require("@modelcontextprotocol/sdk/types.js")
 
 const server = new Server({ name: "stub", version: "1" }, { capabilities: { tools: {}, resources: {}, logging: {} } })
 server.setRequestHandler(ListToolsRequestSchema, async () => ({

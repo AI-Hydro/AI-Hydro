@@ -10,10 +10,8 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 		</button>
 	),
 }))
-vi.mock("@/components/common/VSCodeButtonLink", () => ({ default: ({ children }: any) => <a href="#x">{children}</a> }))
 vi.mock("@/components/common/CodeBlock", () => ({ CODE_BLOCK_BG_COLOR: "#000" }))
 
-import CreditLimitError from "./CreditLimitError"
 import { STALE_ASK_NOTICE } from "./chat-view/askBinding"
 import { OptionsButtons } from "./OptionsButtons"
 
@@ -36,19 +34,5 @@ describe("remaining ask senders are bound to their ask ts (W2-E1 B2)", () => {
 		expect(screen.getByTestId("options-stale-notice").textContent).toBe("")
 		fireEvent.click(screen.getByText("yes please"))
 		await waitFor(() => expect(screen.getByTestId("options-stale-notice").textContent).toBe(STALE_ASK_NOTICE))
-	})
-
-	it("Retry on a credit-limit error sends the api_req_failed ask's ts", async () => {
-		render(<CreditLimitError askTs={555} currentBalance={0} message="out of credits" />)
-		fireEvent.click(screen.getByText("Retry Request"))
-		await waitFor(() => expect(askResponse).toHaveBeenCalledTimes(1))
-		expect(askResponse.mock.calls[0][0]).toMatchObject({ responseType: "yesButtonClicked", askTs: 555 })
-	})
-
-	it("an old credit-limit Retry comes back stale and shows the notice", async () => {
-		askResponse.mockResolvedValue({ stale: true })
-		render(<CreditLimitError askTs={555} currentBalance={0} message="out of credits" />)
-		fireEvent.click(screen.getByText("Retry Request"))
-		await waitFor(() => expect(screen.getByTestId("credit-stale-notice").textContent).toBe(STALE_ASK_NOTICE))
 	})
 })

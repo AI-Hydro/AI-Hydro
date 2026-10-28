@@ -26,7 +26,7 @@ import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
 import { noteSessionStarted, START_SESSION_TOOL_NAME } from "./answerAuditGate"
-import { explorerBlockReason } from "./explorerPolicy"
+import { browserToolRefusal } from "./browserGate"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
@@ -38,7 +38,6 @@ import { isAiHydroServerName } from "./tools/handlers/aiHydroServer"
 import { BrowserToolHandler } from "./tools/handlers/BrowserToolHandler"
 import { CondenseHandler } from "./tools/handlers/CondenseHandler"
 import { ExecuteCommandToolHandler } from "./tools/handlers/ExecuteCommandToolHandler"
-import { ListCodeDefinitionNamesToolHandler } from "./tools/handlers/ListCodeDefinitionNamesToolHandler"
 import { ListFilesToolHandler } from "./tools/handlers/ListFilesToolHandler"
 import { LoadMcpDocumentationHandler } from "./tools/handlers/LoadMcpDocumentationHandler"
 import { MultiFileEditToolHandler } from "./tools/handlers/MultiFileEditToolHandler"
@@ -230,7 +229,6 @@ export class ToolExecutor {
 		this.coordinator.register(new SharedToolHandler(AiHydroDefaultTool.NEW_RULE, writeHandler))
 		this.coordinator.register(new MultiFileEditToolHandler(validator))
 
-		this.coordinator.register(new ListCodeDefinitionNamesToolHandler(validator))
 		this.coordinator.register(new SearchFilesToolHandler(validator))
 		this.coordinator.register(new ExecuteCommandToolHandler(validator))
 		this.coordinator.register(new UseMcpToolHandler())
@@ -360,11 +358,6 @@ export class ToolExecutor {
 		AiHydroDefaultTool.NEW_RULE,
 	]
 
-	/** True when running as an explorer-profile subagent. */
-	private static isExplorerProfile(): boolean {
-		return process.env.AIHYDRO_PROFILE === "explorer"
-	}
-
 	/**
 	 * Execute a tool through the coordinator if it's registered
 	 */
@@ -408,19 +401,13 @@ export class ToolExecutor {
 				return true
 			}
 
-			// Explorer-profile capability enforcement (read-only subagent).
-			// Activated via AIHYDRO_PROFILE=explorer in the subagent's environment.
-			// This is NOT a prompt convention — it physically blocks the tool call, including MCP
-			// tools that are not declared read-only.
-			if (ToolExecutor.isExplorerProfile() && block.name) {
-				// Built-in write tools by name; MCP tools only when annotated readOnlyHint=true (see explorerPolicy.ts).
-				const explorerBlock = explorerBlockReason(block.name, block.params, this.mcpHub)
-				if (explorerBlock) {
-					await this.say("error", explorerBlock)
-					this.pushToolResult(formatResponse.toolError(explorerBlock), block)
-					await this.saveCheckpoint()
-					return true
-				}
+			// The browser tool is off by default (X0-5); refuse a call the prompt no longer offers (see browserGate.ts).
+			const browserRefusal = browserToolRefusal(block.name, this.stateManager.getGlobalSettingsKey("browserSettings"))
+			if (browserRefusal) {
+				await this.say("error", browserRefusal)
+				this.pushToolResult(formatResponse.toolError(browserRefusal), block)
+				await this.saveCheckpoint()
+				return true
 			}
 
 			// Close browser for non-browser tools

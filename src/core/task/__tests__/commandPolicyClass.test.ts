@@ -6,7 +6,6 @@ const base: CommandPolicyInput = {
 	modelRequiresApproval: false,
 	autoApproveSafe: true,
 	autoApproveAll: false,
-	subagentsEnabled: true,
 	touchesProtectedPath: false,
 	shellEnvironment: { platform: "darwin", shell: "/bin/zsh", workspaceTrusted: true },
 }
@@ -16,8 +15,8 @@ const cls = (over: Partial<CommandPolicyInput>) => {
 }
 
 describe("decideCommand policyClass (W2-0h)", () => {
-	it("flags subagent launches, protected paths, danger grants, model-requested and unclassified approvals", () => {
-		expect(cls({ command: "aihydro run --task x" })).to.equal("subagent_launch")
+	it("denies the retired CLI subagent and flags protected paths, danger grants, model-requested and unclassified approvals", () => {
+		expect(cls({ command: "aihydro run --task x" })).to.equal("deny")
 		expect(cls({ touchesProtectedPath: true })).to.equal("protected_path")
 		expect(cls({ autoApproveAll: true })).to.equal("auto_run_all")
 		expect(cls({ modelRequiresApproval: true })).to.equal("model_requested_approval")

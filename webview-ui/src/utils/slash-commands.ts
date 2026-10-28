@@ -30,11 +30,6 @@ export const DEFAULT_SLASH_COMMANDS: SlashCommand[] = [
 		description: "Create a comprehensive implementation plan before coding",
 		section: "default",
 	},
-	{
-		name: "subagent",
-		description: "Invoke an AI-Hydro CLI subagent for focused research tasks",
-		section: "default",
-	},
 ]
 
 export function getWorkflowCommands(

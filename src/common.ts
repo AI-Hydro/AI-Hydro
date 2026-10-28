@@ -5,6 +5,7 @@ import {
 	migrateTaskHistoryToFile,
 	migrateWelcomeViewCompleted,
 	migrateWorkspaceToGlobalStorage,
+	removeRetiredAccountSecrets,
 } from "./core/storage/state-migrations"
 import { WebviewProvider } from "./core/webview"
 import { Logger } from "./services/logging/Logger"
@@ -15,7 +16,6 @@ import { FileContextTracker } from "./core/context/context-tracking/FileContextT
 import { ensureDefaultMcpServer, setupActiveWorkspaceTracking } from "./core/mcp/ensureDefaultMcpServer"
 import { StateManager } from "./core/storage/StateManager"
 import { ExtensionRegistryInfo } from "./registry"
-import { audioRecordingService } from "./services/dictation/AudioRecordingService"
 import { ErrorService } from "./services/error"
 import { featureFlagsService } from "./services/feature-flags"
 import { initializeDistinctId } from "./services/logging/distinctId"
@@ -55,6 +55,9 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 
 	// Migrate welcomeViewCompleted setting based on existing API keys (one-time cleanup)
 	await migrateWelcomeViewCompleted(context)
+
+	// Delete the retired cloud-account secrets once (X0-6)
+	await removeRetiredAccountSecrets(context)
 
 	// Migrate workspace storage values back to global storage (reverting previous migration)
 	await migrateWorkspaceToGlobalStorage(context)
@@ -123,9 +126,6 @@ async function showVersionUpdateAnnouncement(context: vscode.ExtensionContext) {
  * Performs cleanup when AI-Hydro is deactivated that is common to all platforms.
  */
 export async function tearDown(): Promise<void> {
-	// Clean up audio recording service to ensure no orphaned processes
-	audioRecordingService.cleanup()
-
 	PostHogClientProvider.getInstance().dispose()
 	telemetryService.dispose()
 	ErrorService.get().dispose()

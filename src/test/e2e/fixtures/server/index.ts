@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Socket } from "node:net"
 import { parse } from "node:url"
 import { v4 as uuidv4 } from "uuid"
-import type { BalanceResponse, OrganizationBalanceResponse, UserResponse } from "../../../../shared/AiHydroAccount"
+import type { BalanceResponse, OrganizationBalanceResponse, UserResponse } from "./types"
 import { E2E_MOCK_API_RESPONSES, E2E_READ_THREE_FILES, E2E_REGISTERED_MOCK_ENDPOINTS } from "./api"
 import { AiHydroDataMock } from "./data"
 

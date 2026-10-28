@@ -43,7 +43,7 @@ export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlo
 		// Show notification if auto-approval is enabled
 		if (config.autoApprovalSettings.enabled && config.autoApprovalSettings.enableNotifications) {
 			showSystemNotification({
-				subtitle: "AI Hydro has a question...",
+				subtitle: "AI-Hydro has a question...",
 				message: question.replace(/\n/g, " "),
 			})
 		}

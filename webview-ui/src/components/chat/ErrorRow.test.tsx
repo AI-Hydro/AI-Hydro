@@ -3,27 +3,12 @@ import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import ErrorRow from "./ErrorRow"
 
-// Mock the auth context
-vi.mock("@/context/AiHydroAuthContext", () => ({
-	useAiHydroAuth: () => ({
-		aihydroUser: null,
-	}),
-	handleSignIn: vi.fn(),
-	handleSignOut: vi.fn(),
-}))
-
-// Mock CreditLimitError component
-vi.mock("@/components/chat/CreditLimitError", () => ({
-	default: ({ message }: { message: string }) => <div data-testid="credit-limit-error">{message}</div>,
-}))
-
 // Mock AiHydroError
 vi.mock("../../../../src/services/error/AiHydroError", () => ({
 	AiHydroError: {
 		parse: vi.fn(),
 	},
 	AiHydroErrorType: {
-		Balance: "balance",
 		RateLimit: "rateLimit",
 		Auth: "auth",
 	},
@@ -78,30 +63,6 @@ describe("ErrorRow", () => {
 	})
 
 	describe("API error handling", () => {
-		it("renders credit limit error when balance error is detected", async () => {
-			const mockAiHydroError = {
-				message: "Insufficient credits",
-				isErrorType: vi.fn((type) => type === "balance"),
-				_error: {
-					details: {
-						current_balance: 0,
-						total_spent: 10.5,
-						total_promotions: 5.0,
-						message: "You have run out of credits.",
-						buy_credits_url: "https://app.cline.bot/dashboard",
-					},
-				},
-			}
-
-			const { AiHydroError } = await import("../../../../src/services/error/AiHydroError")
-			vi.mocked(AiHydroError.parse).mockReturnValue(mockAiHydroError as any)
-
-			render(<ErrorRow apiRequestFailedMessage="Insufficient credits error" errorType="error" message={mockMessage} />)
-
-			expect(screen.getByTestId("credit-limit-error")).toBeInTheDocument()
-			expect(screen.getByText("You have run out of credits.")).toBeInTheDocument()
-		})
-
 		it("renders rate limit error with request ID", async () => {
 			const mockAiHydroError = {
 				message: "Rate limit exceeded",

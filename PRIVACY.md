@@ -29,7 +29,7 @@ capture methods; nothing there reads file bodies or model responses.
 
 The distinct ID used to correlate events is either your host machine ID
 (`node-machine-id`) or a locally-generated UUID, not tied to any personal
-account unless you sign in (see `src/services/logging/distinctId.ts`).
+account (there is no account sign-in; see `src/services/logging/distinctId.ts`).
 
 ## What's collected only if you explicitly enable it
 
@@ -42,11 +42,11 @@ OTLP collector instead of (or alongside) PostHog. See
 
 ## What isn't telemetry, despite living near telemetry code
 
-**Firebase.** Used exclusively as an authentication provider for account
-sign-in (`src/services/auth/providers/FirebaseAuthProvider.ts`) — it does not
-collect usage telemetry. An earlier draft of this audit's findings grouped it
-with the telemetry surface by proximity in `package.json`; that was
-inaccurate and is corrected here.
+**Account sign-in.** AI-Hydro has no account sign-in. The inherited Firebase
+authentication stack (and the credits and dictation features that depended on
+it) was removed in the X0-6 clean-up, and the webview no longer allows
+connections to the Firebase hosts. Stored sign-in secrets from earlier versions
+(`clineAccountId`, `cline:clineAccountId`) are deleted once on first start.
 
 **Recognition worker** (marketplace star/usage counters). This **is** telemetry
 and is treated as such. When you install, star, open or cite a marketplace item,

@@ -47,13 +47,7 @@ Description: Execute a CLI command on the system. Use this when you need to perf
 </list_files>
 Description: List files and directories within the specified directory. If recursive is true, it will list all files and directories recursively. If recursive is false or not provided, it will only list the top-level contents.
 
-3. list_code_definition_names:
-<list_code_definition_names>
-<path>Directory path here</path>
-</list_code_definition_names>
-Description: Lists definition names (classes, functions, methods, etc.) used in source code files at the top level of the specified directory. This tool provides insights into the codebase structure and important constructs, encapsulating high-level concepts and relationships that are crucial for understanding the overall architecture.
-
-4. search_files:
+3. search_files:
 <search_files>
 <path>Directory path here</path>
 <regex>Your regex pattern here</regex>
@@ -61,13 +55,13 @@ Description: Lists definition names (classes, functions, methods, etc.) used in 
 </search_files>
 Description: Perform a regex search across files in a specified directory, providing context-rich results. This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context.
 
-5. read_file:
+4. read_file:
 <read_file>
 <path>File path here</path>
 </read_file>
 Description: Read the contents of a file at the specified path. Use this when you need to examine the contents of an existing file, for example to analyze code, review text files, or extract information from configuration files. Automatically extracts raw text from PDF and DOCX files. May not be suitable for other types of binary files, as it returns the raw content as a string.
 
-6. write_to_file:
+5. write_to_file:
 <write_to_file>
 <path>File path here</path>
 <content>
@@ -76,13 +70,13 @@ Your file content here
 </write_to_file>
 Description: Write content to a file at the specified path. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. Always provide the full intended content of the file, without any truncation. This tool will automatically create any directories needed to write the file.
 
-7. ask_followup_question:
+6. ask_followup_question:
 <ask_followup_question>
 <question>Your question here</question>
 </ask_followup_question>
 Description: Ask the user a question to gather additional information needed to complete the task. This tool should be used when you encounter ambiguities, need clarification, or require more details to proceed effectively. It allows for interactive problem-solving by enabling direct communication with the user. Use this tool judiciously to maintain a balance between gathering necessary information and avoiding excessive back-and-forth.
 
-8. attempt_completion:
+7. attempt_completion:
 <attempt_completion>
 <command>Optional command to demonstrate result</command>
 <result>
@@ -236,7 +230,6 @@ interface ToolCall {
 const toolNames = [
 	"execute_command",
 	"list_files",
-	"list_code_definition_names",
 	"search_files",
 	"read_file",
 	"write_to_file",
@@ -329,7 +322,6 @@ function validateToolInput(toolName: string, tool_input: Record<string, string>)
 		case "execute_command":
 			return "command" in tool_input
 		case "read_file":
-		case "list_code_definition_names":
 		case "list_files":
 			return "path" in tool_input
 		case "search_files":

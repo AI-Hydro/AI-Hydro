@@ -5,7 +5,7 @@ import { type ReactNode, useEffect, useState } from "react"
 import { useExtensionState } from "./context/ExtensionStateContext"
 
 export function CustomPostHogProvider({ children }: { children: ReactNode }) {
-	const { distinctId, version, userInfo } = useExtensionState()
+	const { distinctId, version } = useExtensionState()
 
 	// NOTE: This is a hack to stop recording webview click events temporarily.
 	// Remove this to re-enable.
@@ -55,16 +55,12 @@ export function CustomPostHogProvider({ children }: { children: ReactNode }) {
 
 		const optedIn = posthog.has_opted_in_capturing()
 		const optedOut = posthog.has_opted_out_capturing()
-		const args = {
-			email: userInfo?.email,
-			name: userInfo?.displayName,
-		}
 		if (isTelemetryEnabled && !optedIn) {
 			posthog.opt_in_capturing()
-			posthog.identify(distinctId, args)
+			posthog.identify(distinctId)
 		} else if (!isTelemetryEnabled && !optedOut) {
 			// For feature flags to work, we need to identify the user even when telemetry is disabled
-			posthog.identify(distinctId, args)
+			posthog.identify(distinctId)
 			// Then opt out of capturing other events
 			posthog.opt_out_capturing()
 		}

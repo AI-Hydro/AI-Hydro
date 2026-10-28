@@ -28,7 +28,6 @@ import { cleanupLegacyCheckpoints } from "@integrations/checkpoints/CheckpointMi
 import { downloadTask } from "@integrations/misc/export-markdown"
 import { ulid } from "ulid"
 import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
-import { AiHydroAccountService } from "@services/account/AiHydroAccountService"
 import { ArtifactKernelService } from "@services/artifact-preview/ArtifactKernelService"
 import type { ArtifactRef } from "@services/artifact-preview/ArtifactPreviewService"
 import { ArtifactPreviewService } from "@services/artifact-preview/ArtifactPreviewService"
@@ -51,7 +50,6 @@ import { MapLayer } from "@shared/proto/cline/map"
 import { Settings } from "@shared/storage/state-keys"
 import { Mode } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
-import { UserInfo } from "@shared/UserInfo"
 import { fileExistsAtPath } from "@utils/fs"
 import axios from "axios"
 import fs from "fs/promises"
@@ -59,10 +57,9 @@ import pWaitFor from "p-wait-for"
 import * as path from "path"
 import type { FolderLockWithRetryResult } from "src/core/locks/types"
 import * as vscode from "vscode"
-import { AiHydroEnv, isAiHydroCloudAccountEnabled } from "@/config"
+import { AiHydroEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
-import { AuthService } from "@/services/auth/AuthService"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
 import { LogoutReason } from "@/services/auth/types"
 import { featureFlagsService } from "@/services/feature-flags"
@@ -84,7 +81,6 @@ import {
 	writeMcpMarketplaceCatalogToCache,
 } from "../storage/disk"
 import { type HistoryWriter, patchHistory, removeFromHistory } from "../storage/historyPatch"
-import { fetchRemoteConfig } from "../storage/remote-config/fetch"
 import { PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
 import { getHostProtectedRoots } from "../task/protectedRoots"
@@ -114,8 +110,6 @@ export class Controller {
 	task?: Task
 
 	mcpHub: McpHub
-	accountService: AiHydroAccountService
-	authService: AuthService
 	ocaAuthService: OcaAuthService
 	readonly stateManager: StateManager
 
@@ -135,7 +129,6 @@ export class Controller {
 	} = { timestamps: [] }
 
 	// Timer for periodic remote config fetching
-	private remoteConfigTimer?: NodeJS.Timeout
 
 	// Map layer storage, streaming, and Python event bridge
 	private mapLayers: Map<string, MapLayer> = new Map()
@@ -191,28 +184,6 @@ export class Controller {
 	// Synchronous getter for workspace manager
 	getWorkspaceManager(): WorkspaceRootManager | undefined {
 		return this.workspaceManager
-	}
-
-	/**
-	 * Starts the periodic remote config fetching timer
-	 * Fetches immediately and then every 30 seconds
-	 */
-	private startRemoteConfigTimer() {
-		if (!isAiHydroCloudAccountEnabled()) {
-			return
-		}
-
-		// Initial fetch
-		fetchRemoteConfig(this).catch((error) => {
-			console.error("Failed to fetch remote config:", error)
-		})
-
-		// Set up 30-second interval
-		this.remoteConfigTimer = setInterval(() => {
-			fetchRemoteConfig(this).catch((error) => {
-				console.error("Failed to fetch remote config:", error)
-			})
-		}, 30000) // 30 seconds
 	}
 
 	constructor(readonly context: vscode.ExtensionContext) {
@@ -281,14 +252,7 @@ export class Controller {
 				await this.postStateToWebview()
 			},
 		})
-		this.authService = AuthService.getInstance(this)
 		this.ocaAuthService = OcaAuthService.initialize(this)
-		this.accountService = AiHydroAccountService.getInstance()
-		if (isAiHydroCloudAccountEnabled()) {
-			this.authService.restoreRefreshTokenAndRetrieveAuthInfo().then(() => {
-				this.startRemoteConfigTimer()
-			})
-		}
 
 		this.mcpHub = new McpHub(
 			() => ensureMcpServersDirectoryExists(),
@@ -309,12 +273,6 @@ export class Controller {
 	- https://github.com/microsoft/vscode-extension-samples/blob/main/webview-sample/src/extension.ts
 	*/
 	async dispose() {
-		// Clear the remote config timer
-		if (this.remoteConfigTimer) {
-			clearInterval(this.remoteConfigTimer)
-			this.remoteConfigTimer = undefined
-		}
-
 		// Stop map and ledger event watchers
 		this.mapEventWatcher.stop()
 		this.mapCommandWatcher.stop()
@@ -343,34 +301,6 @@ export class Controller {
 		console.error("Controller disposed")
 	}
 
-	// Auth methods
-	async handleSignOut() {
-		try {
-			// AuthService now handles its own storage cleanup in handleDeauth()
-			this.stateManager.setGlobalState("userInfo", undefined)
-
-			// Update API providers through cache service
-			const apiConfiguration = this.stateManager.getApiConfiguration()
-			const updatedConfig = {
-				...apiConfiguration,
-				planModeApiProvider: "openrouter" as ApiProvider,
-				actModeApiProvider: "openrouter" as ApiProvider,
-			}
-			this.stateManager.setApiConfiguration(updatedConfig)
-
-			await this.postStateToWebview()
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: "Successfully logged out of AI-Hydro",
-			})
-		} catch (_error) {
-			HostProvider.window.showMessage({
-				type: ShowMessageType.INFORMATION,
-				message: "Logout failed",
-			})
-		}
-	}
-
 	// Oca Auth methods
 	async handleOcaSignOut() {
 		try {
@@ -388,10 +318,6 @@ export class Controller {
 		}
 	}
 
-	async setUserInfo(info?: UserInfo) {
-		this.stateManager.setGlobalState("userInfo", info)
-	}
-
 	async initTask(
 		task?: string,
 		images?: string[],
@@ -400,12 +326,6 @@ export class Controller {
 		taskSettings?: Partial<Settings>,
 		launch?: ChatLaunch,
 	) {
-		try {
-			await fetchRemoteConfig(this)
-		} catch (error) {
-			console.error("Failed to fetch remote config on task init:", error)
-		}
-
 		await this.clearTask() // ensures that an existing task doesn't exist before starting a new one, although this shouldn't be possible since user must clear task before starting a new one
 
 		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
@@ -413,7 +333,6 @@ export class Controller {
 		const terminalReuseEnabled = this.stateManager.getGlobalStateKey("terminalReuseEnabled")
 		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
 		const terminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("terminalOutputLineLimit")
-		const subagentTerminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("subagentTerminalOutputLineLimit")
 		const defaultTerminalProfile = this.stateManager.getGlobalSettingsKey("defaultTerminalProfile")
 		const isNewUser = this.stateManager.getGlobalStateKey("isNewUser")
 		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
@@ -487,7 +406,6 @@ export class Controller {
 			shellIntegrationTimeout,
 			terminalReuseEnabled: terminalReuseEnabled ?? true,
 			terminalOutputLineLimit: terminalOutputLineLimit ?? 500,
-			subagentTerminalOutputLineLimit: subagentTerminalOutputLineLimit ?? 2000,
 			defaultTerminalProfile: defaultTerminalProfile ?? "default",
 			vscodeTerminalExecutionMode,
 			cwd,
@@ -659,29 +577,6 @@ export class Controller {
 		}
 
 		return false
-	}
-
-	async handleAuthCallback(customToken: string, provider: string | null = null) {
-		try {
-			await this.authService.handleAuthCallback(customToken, provider ? provider : "google")
-			const currentMode = this.stateManager.getGlobalSettingsKey("mode")
-			const updatedConfig = this.stateManager.getApiConfiguration()
-			this.stateManager.setGlobalState("welcomeViewCompleted", true)
-
-			if (this.task) {
-				this.task.api = buildApiHandler({ ...updatedConfig, ulid: this.task.ulid }, currentMode)
-			}
-
-			await this.postStateToWebview()
-		} catch (error) {
-			console.error("Failed to handle auth callback:", error)
-			HostProvider.window.showMessage({
-				type: ShowMessageType.ERROR,
-				message: "Failed to log in to AI-Hydro",
-			})
-			// Even on login failure, we preserve any existing tokens
-			// Only clear tokens on explicit logout
-		}
 	}
 
 	async handleOcaAuthCallback(code: string, state: string) {
@@ -1232,14 +1127,12 @@ export class Controller {
 		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 		const browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
 		const focusChainSettings = this.stateManager.getGlobalSettingsKey("focusChainSettings")
-		const dictationSettings = this.stateManager.getGlobalSettingsKey("dictationSettings")
 		const preferredLanguage = this.stateManager.getGlobalSettingsKey("preferredLanguage")
 		const openaiReasoningEffort = this.stateManager.getGlobalSettingsKey("openaiReasoningEffort")
 		const mode = this.stateManager.getGlobalSettingsKey("mode")
 		const strictPlanModeEnabled = this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled")
 		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
-		const userInfo = this.stateManager.getGlobalStateKey("userInfo")
 		const mcpMarketplaceEnabled = this.stateManager.getGlobalStateKey("mcpMarketplaceEnabled")
 		const mcpDisplayMode = this.stateManager.getGlobalStateKey("mcpDisplayMode")
 		const telemetrySetting = this.stateManager.getGlobalSettingsKey("telemetrySetting")
@@ -1252,14 +1145,11 @@ export class Controller {
 		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
 		const defaultTerminalProfile = this.stateManager.getGlobalSettingsKey("defaultTerminalProfile")
 		const isNewUser = this.stateManager.getGlobalStateKey("isNewUser")
-		const welcomeViewCompleted = Boolean(
-			this.stateManager.getGlobalStateKey("welcomeViewCompleted") || this.authService.getInfo()?.user?.uid,
-		)
+		const welcomeViewCompleted = Boolean(this.stateManager.getGlobalStateKey("welcomeViewCompleted"))
 		const customPrompt = this.stateManager.getGlobalSettingsKey("customPrompt")
 		const mcpResponsesCollapsed = this.stateManager.getGlobalStateKey("mcpResponsesCollapsed")
 		const terminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("terminalOutputLineLimit")
 		const maxConsecutiveMistakes = this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes")
-		const subagentTerminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("subagentTerminalOutputLineLimit")
 		const favoritedModelIds = this.stateManager.getGlobalStateKey("favoritedModelIds")
 		const lastDismissedInfoBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedInfoBannerVersion") || 0
 		const lastDismissedModelBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedModelBannerVersion") || 0
@@ -1293,12 +1183,6 @@ export class Controller {
 		const version = ExtensionRegistryInfo.version
 		const environment = AiHydroEnv.config().environment
 
-		// Set feature flag in dictation settings based on platform
-		const updatedDictationSettings = {
-			...dictationSettings,
-			featureEnabled: process.platform === "darwin", // Enable dictation only on macOS
-		}
-
 		return {
 			version,
 			apiConfiguration,
@@ -1310,14 +1194,12 @@ export class Controller {
 			autoApprovalSettings,
 			browserSettings,
 			focusChainSettings,
-			dictationSettings: updatedDictationSettings,
 			preferredLanguage,
 			openaiReasoningEffort,
 			mode,
 			strictPlanModeEnabled,
 			yoloModeToggled,
 			useAutoCondense,
-			userInfo,
 			mcpMarketplaceEnabled,
 			mcpDisplayMode,
 			telemetrySetting,
@@ -1341,7 +1223,6 @@ export class Controller {
 			mcpResponsesCollapsed,
 			terminalOutputLineLimit,
 			maxConsecutiveMistakes,
-			subagentTerminalOutputLineLimit,
 			customPrompt,
 			taskHistory: processedTaskHistory,
 			shouldShowAnnouncement,

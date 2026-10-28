@@ -1,16 +1,10 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
 import {
-	prepareSubagentCommand,
-	sanitizeSubagentFlags,
-	transformAiHydroCommand,
-} from "@/integrations/cli-subagents/subagent_command"
-import {
 	classifyCommand,
 	decideCommand,
 	matchProtectedCommand,
 	mentionsAihydroProgram,
-	subagentLaunchRefusal,
 	type CommandPolicyInput,
 } from "../commandPolicy"
 
@@ -24,7 +18,6 @@ const BASE: CommandPolicyInput = {
 	modelRequiresApproval: false,
 	autoApproveSafe: true,
 	autoApproveAll: false,
-	subagentsEnabled: true,
 	touchesProtectedPath: false,
 	shellEnvironment: ZSH,
 }
@@ -241,13 +234,12 @@ describe("B1: the classifier does not parse shell syntax it cannot model", () =>
 	})
 })
 
-describe("B2: the model cannot supply YOLO or its own subagent policy", () => {
-	it("refuses -y, --yolo, yolo_mode_toggled and model-set flags in every launch form", () => {
+describe("B2: the model cannot launch the retired aihydro CLI subagent with its own policy", () => {
+	it("denies every launch form, including model-set YOLO, profile and extra flags", () => {
 		for (const c of [
 			'aihydro "x" -s yolo_mode_toggled=true -y',
 			'aihydro "x" -y',
 			'aihydro "x" --yolo',
-			'aihydro "x" -s yolo_mode_toggled=true',
 			'aihydro "x" -s auto_approve=1',
 			'aihydro "x" --profile explorer -s anything=1',
 			'aihydro -y "x"',
@@ -256,42 +248,19 @@ describe("B2: the model cannot supply YOLO or its own subagent policy", () => {
 			'cd . && aihydro "x" -y',
 			'AIHYDRO_PROFILE=explorer aihydro "x"',
 			'aihydro "x"; AIHYDRO_PROFILE=data-runner aihydro "y"',
-		]) {
-			expect(subagentLaunchRefusal(c), c).to.be.a("string")
-			for (const autoApproveAll of [false, true]) {
-				const result = decide({ command: c, autoApproveAll, subagentsEnabled: true })
-				expect(result.action, `${c} all=${autoApproveAll}`).to.equal("deny")
-			}
-		}
-	})
-
-	it("allows the supported forms (and only asks)", () => {
-		for (const c of [
 			'aihydro "summarise the repo"',
 			'aihydro "x" --profile explorer',
 			'aihydro "x" --workdir ./sub --profile data-runner',
 		]) {
-			expect(subagentLaunchRefusal(c), c).to.equal(undefined)
-			expect(decide({ command: c, autoApproveAll: true }).action, c).to.equal("ask")
+			for (const autoApproveAll of [false, true]) {
+				const result = decide({ command: c, autoApproveAll })
+				expect(result.action, `${c} all=${autoApproveAll}`).to.equal("deny")
+			}
 		}
-	})
-
-	it("a prompt that merely mentions yolo is not a flag", () => {
-		expect(subagentLaunchRefusal('aihydro "explain yolo mode and -y"')).to.equal(undefined)
-	})
-
-	it("the injected command never ends with a model flag that overrides it", () => {
-		const out = transformAiHydroCommand('aihydro "x" -s yolo_mode_toggled=true -y')
-		expect(out).to.not.include("yolo_mode_toggled=true")
-		expect(out).to.not.match(/\s-y(\s|$)/)
-		expect(sanitizeSubagentFlags(" -y -s yolo_mode_toggled=true --workdir ./w")).to.equal(" --workdir ./w")
-		const job = prepareSubagentCommand('aihydro "x" -s yolo_mode_toggled=true -y')
-		expect(job?.command ?? "").to.not.include("yolo_mode_toggled=true")
-		expect(job?.command ?? "").to.not.match(/\s-y(\s|$)/)
 	})
 })
 
-describe("B2: launch-rule evasion is treated as a subagent launch", () => {
+describe("B2: launch-rule evasion is still treated as a launch (and refused)", () => {
 	const FORMS = [
 		'aihydro "x"',
 		'aihydro -y "x"',
@@ -312,10 +281,9 @@ describe("B2: launch-rule evasion is treated as a subagent launch", () => {
 	for (const c of FORMS) {
 		it(`is a launch: ${JSON.stringify(c)}`, () => {
 			expect(mentionsAihydroProgram(c)).to.equal(true)
-			// never runs under executeAll/YOLO
-			expect(["ask", "deny"]).to.include(decide({ command: c, autoApproveAll: true, subagentsEnabled: true }).action)
-			// refused while subagents are disabled
-			expect(decide({ command: c, autoApproveAll: true, subagentsEnabled: false }).action).to.equal("deny")
+			// refused under executeAll/YOLO and under the default settings
+			expect(decide({ command: c, autoApproveAll: true }).action).to.equal("deny")
+			expect(decide({ command: c }).action).to.equal("deny")
 		})
 	}
 
@@ -353,7 +321,7 @@ describe("protected-command matcher: reviewer's forms and the added spaced/glob 
 		expect(
 			matchProtectedCommand("python -c \"import importlib;importlib.import_module('ai_hydro.approva'+'l.cli')\""),
 		).to.equal(undefined)
-		// `aihydro approve s c` is the aihydro CLI with a prompt: a subagent launch, which always asks.
+		// `aihydro approve s c` is the aihydro CLI with a prompt: a (retired) subagent launch, which is refused.
 		expect(mentionsAihydroProgram("aihydro approve s c")).to.equal(true)
 	})
 

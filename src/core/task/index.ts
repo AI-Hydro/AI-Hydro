@@ -86,7 +86,6 @@ import { arePathsEqual, getDesktopDir } from "@utils/path"
 import { filterExistingFiles } from "@utils/tabFiltering"
 import cloneDeep from "clone-deep"
 import { execa } from "execa"
-import * as fs from "fs"
 import pWaitFor from "p-wait-for"
 import * as path from "path"
 import { ulid } from "ulid"
@@ -94,16 +93,9 @@ import * as vscode from "vscode"
 import type { SystemPromptContext } from "@/core/prompts/system-prompt"
 import { getSystemPrompt } from "@/core/prompts/system-prompt"
 import { HostProvider } from "@/hosts/host-provider"
-import {
-	isSubagentCommand,
-	prepareSubagentCommand,
-	type SubagentJob,
-	transformAiHydroCommand,
-} from "@/integrations/cli-subagents/subagent_command"
-import { AiHydroError, AiHydroErrorType, ErrorService } from "@/services/error"
+import { ErrorService } from "@/services/error"
 import { TerminalHangStage, TerminalUserInterventionAction, telemetryService } from "@/services/telemetry"
 import { ShowMessageType } from "@/shared/proto/index.host"
-import { isAiHydroCliInstalled, isCliSubagentContext } from "@/utils/cli-detector"
 import { isInTestMode } from "../../services/test/TestMode"
 import { ensureLocalAiHydroDirExists } from "../context/instructions/user-instructions/rule-helpers"
 import { refreshWorkflowToggles } from "../context/instructions/user-instructions/workflows"
@@ -119,11 +111,10 @@ import {
 } from "./answerAuditGate"
 import { acceptAskResponse, resetAskResponse } from "./askResponseBinding"
 import {
+	AIHYDRO_CLI_RETIRED_MESSAGE,
 	matchProtectedCommand,
 	mentionsAihydroProgram,
 	protectedCommandDenyMessage,
-	SUBAGENTS_DISABLED_MESSAGE,
-	subagentLaunchRefusal,
 } from "./commandPolicy"
 import { FocusChainManager } from "./focus-chain"
 import { MessageStateHandler } from "./message-state"
@@ -144,7 +135,6 @@ type TaskParams = {
 	shellIntegrationTimeout: number
 	terminalReuseEnabled: boolean
 	terminalOutputLineLimit: number
-	subagentTerminalOutputLineLimit: number
 	defaultTerminalProfile: string
 	vscodeTerminalExecutionMode: "vscodeTerminal" | "backgroundExec"
 	cwd: string
@@ -242,7 +232,6 @@ export class Task {
 			shellIntegrationTimeout,
 			terminalReuseEnabled,
 			terminalOutputLineLimit,
-			subagentTerminalOutputLineLimit,
 			defaultTerminalProfile,
 			vscodeTerminalExecutionMode,
 			cwd,
@@ -303,7 +292,6 @@ export class Task {
 		this.terminalManager.setShellIntegrationTimeout(shellIntegrationTimeout)
 		this.terminalManager.setTerminalReuseEnabled(terminalReuseEnabled ?? true)
 		this.terminalManager.setTerminalOutputLineLimit(terminalOutputLineLimit)
-		this.terminalManager.setSubagentTerminalOutputLineLimit(subagentTerminalOutputLineLimit)
 		this.terminalManager.setDefaultTerminalProfile(defaultTerminalProfile)
 
 		this.urlContentFetcher = new UrlContentFetcher(controller.context)
@@ -1340,40 +1328,14 @@ export class Task {
 
 	async executeCommandTool(command: string, timeoutSeconds: number | undefined): Promise<[boolean, ToolResponse]> {
 		// Defence in depth behind ExecuteCommandToolHandler (approval redesign AP1): whatever reaches the terminal,
-		// the claim-approval CLI is never run by the agent and a subagent is never launched while disabled.
+		// the claim-approval CLI is never run by the agent and the retired `aihydro` CLI subagent is never launched.
 		const protectedMatch = matchProtectedCommand(command)
 		if (protectedMatch) {
 			return [false, formatResponse.toolError(protectedCommandDenyMessage(protectedMatch))]
 		}
 		if (mentionsAihydroProgram(command)) {
-			if (!this.stateManager.getGlobalSettingsKey("subagentsEnabled")) {
-				return [false, formatResponse.toolError(SUBAGENTS_DISABLED_MESSAGE)]
-			}
-			const refusal = subagentLaunchRefusal(command)
-			if (refusal) {
-				return [false, formatResponse.toolError(refusal)]
-			}
+			return [false, formatResponse.toolError(AIHYDRO_CLI_RETIRED_MESSAGE)]
 		}
-
-		// For AI-Hydro CLI subagents: prepare a job (result dir, augmented prompt, flags).
-		const isSubagent = isSubagentCommand(command)
-		// CLI subagents legitimately run for minutes and manage their own job lifecycle,
-		// so the default command timeout must never apply to them.
-		if (isSubagent) {
-			timeoutSeconds = undefined
-		}
-		let subagentJob: SubagentJob | null = null
-		if (isSubagent) {
-			subagentJob = prepareSubagentCommand(command)
-			if (subagentJob) {
-				command = subagentJob.command
-			} else {
-				// fallback: just inject flags without job tracking
-				command = transformAiHydroCommand(command)
-			}
-		}
-
-		const subAgentStartTime = isSubagent ? performance.now() : 0
 
 		Logger.info("IS_TEST: " + isInTestMode())
 
@@ -1384,45 +1346,12 @@ export class Task {
 			return this.executeCommandInNode(command)
 		}
 
-		// CRITICAL: CLI subagent commands MUST use VSCode terminal mode (not backgroundExec)
-		// Reason: Creates a three-way deadlock when using backgroundExec:
-		//   1. Extension blocks in 'await process' waiting for CLI to exit
-		//   2. CLI blocks waiting for gRPC messages from its child gRPC server
-		//   3. gRPC server (child of CLI) needs extension to process tasks
-		// Solution: Always use VSCode terminal for CLI commands
-		const useVscodeTerminal = isSubagent
-
 		Logger.info("Executing command in terminal: " + command)
 
-		let terminalManager: TerminalManager
-		if (useVscodeTerminal) {
-			// Create a VSCode TerminalManager for CLI subagents
-			terminalManager = new TerminalManager()
-			terminalManager.setShellIntegrationTimeout(this.terminalManager["shellIntegrationTimeout"] || 4000)
-			terminalManager.setTerminalReuseEnabled(this.terminalManager["terminalReuseEnabled"] ?? true)
-			terminalManager.setTerminalOutputLineLimit(this.terminalManager["terminalOutputLineLimit"] || 500)
-			terminalManager.setSubagentTerminalOutputLineLimit(this.terminalManager["subagentTerminalOutputLineLimit"] || 2000)
-		} else {
-			// Use the configured terminal manager for regular commands
-			terminalManager = this.terminalManager
-		}
+		const terminalManager = this.terminalManager
 
 		const terminalInfo = await terminalManager.getOrCreateTerminal(this.cwd)
 		terminalInfo.terminal.show() // weird visual bug when creating new terminals (even manually) where there's an empty space at the top.
-
-		// Persist shell PID for cancel_job support (Python reads ~/.aihydro/subagents/<jobId>/pid)
-		if (subagentJob) {
-			const _job = subagentJob
-			terminalInfo.terminal.processId.then((pid) => {
-				if (pid) {
-					try {
-						fs.writeFileSync(path.join(_job.resultDir, "pid"), String(pid))
-					} catch {
-						// non-fatal
-					}
-				}
-			})
-		}
 
 		const process = terminalManager.runCommand(terminalInfo, command)
 
@@ -1679,7 +1608,7 @@ export class Task {
 
 					// Process any output we captured before timeout
 					await setTimeoutPromise(50)
-					const result = this.terminalManager.processOutput(outputLines, undefined, false)
+					const result = this.terminalManager.processOutput(outputLines)
 
 					if (error.message === "COMMAND_TIMEOUT") {
 						return [
@@ -1711,11 +1640,7 @@ export class Task {
 			await setTimeoutPromise(50)
 		}
 
-		const result = terminalManager.processOutput(
-			outputLines,
-			isSubagent ? terminalManager["subagentTerminalOutputLineLimit"] : undefined,
-			isSubagent,
-		)
+		const result = terminalManager.processOutput(outputLines)
 
 		if (didCancelViaUi) {
 			return [
@@ -1724,12 +1649,6 @@ export class Task {
 					`Command cancelled. ${result.length > 0 ? `\nOutput captured before cancellation:\n${result}` : ""}`,
 				),
 			]
-		}
-
-		// Capture subagent telemetry if this was a subagent command
-		if (isSubagent && subAgentStartTime > 0) {
-			const durationMs = Math.round(performance.now() - subAgentStartTime)
-			telemetryService.captureSubagentExecution(this.ulid, durationMs, outputLines.length, completed)
 		}
 
 		if (userFeedback) {
@@ -1756,34 +1675,6 @@ export class Task {
 			// Record the exit code on the row before the result goes back (ToolExecutor derives execOutcome from it).
 			await Promise.race([process.exitSettled, setTimeoutPromise(500)])
 			const exitNote = describeExit(await this.recordCommandExit(process.exitCode))
-			// For subagents: try to surface structured result.json written by the subagent.
-			if (isSubagent && subagentJob) {
-				const _job = subagentJob
-				// Mark status complete
-				try {
-					const statusPath = path.join(_job.resultDir, "status.json")
-					const existing = JSON.parse(fs.readFileSync(statusPath, "utf8"))
-					existing.status = "complete"
-					existing.updated_at = new Date().toISOString()
-					fs.writeFileSync(statusPath, JSON.stringify(existing, null, 2))
-				} catch {
-					// non-fatal
-				}
-				// Read structured result if the subagent wrote one
-				try {
-					const structured = JSON.parse(fs.readFileSync(path.join(_job.resultDir, "result.json"), "utf8"))
-					return [
-						false,
-						`Subagent completed (job_id: ${_job.jobId}).\n\nStructured result:\n${JSON.stringify(structured, null, 2)}${result.length > 0 ? `\n\nFull terminal output:\n${result}` : ""}`,
-					]
-				} catch {
-					// result.json not written — fall back to plain output with job_id note
-					return [
-						false,
-						`Subagent completed (job_id: ${_job.jobId}).${result.length > 0 ? `\nOutput:\n${result}` : ""}`,
-					]
-				}
-			}
 			return [false, `Command executed (${exitNote}).${result.length > 0 ? `\nOutput:\n${result}` : ""}`]
 		} else {
 			return [
@@ -1911,7 +1802,7 @@ export class Task {
 		const ide = (await HostProvider.env.getHostVersion({})).platform || "Unknown"
 		await this.migrateDisableBrowserToolSetting()
 		const browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
-		const disableBrowserTool = browserSettings.disableToolUse ?? false
+		const disableBrowserTool = browserSettings.disableToolUse ?? true
 		// cline browser tool uses image recognition for navigation (requires model image support).
 		const modelSupportsBrowserUse = providerInfo.model.info.supportsImages ?? false
 
@@ -1922,14 +1813,6 @@ export class Task {
 			preferredLanguage && preferredLanguage !== DEFAULT_LANGUAGE_SETTINGS
 				? `# Preferred Language\n\nSpeak in ${preferredLanguage}.`
 				: ""
-
-		// Check CLI installation status only if subagents are enabled
-		const subagentsEnabled = this.stateManager.getGlobalSettingsKey("subagentsEnabled")
-		let isSubagentsEnabledAndCliInstalled = false
-		if (subagentsEnabled) {
-			const aihydroCliInstalled = await isAiHydroCliInstalled()
-			isSubagentsEnabledAndCliInstalled = subagentsEnabled && aihydroCliInstalled
-		}
 
 		const { globalToggles, localToggles } = await refreshAiHydroRulesToggles(this.controller, this.cwd)
 		const { windsurfLocalToggles, cursorLocalToggles } = await refreshExternalRulesToggles(this.controller, this.cwd)
@@ -1964,13 +1847,6 @@ export class Task {
 			}))
 		}
 
-		// Detect if this is a CLI subagent to prevent nested subagent creation
-		const isCliSubagent = isCliSubagentContext({
-			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
-			maxConsecutiveMistakes: this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes"),
-			agentContext: process.env.AIHYDRO_AGENT_CONTEXT === "1",
-		})
-
 		const promptContext: SystemPromptContext = {
 			cwd: this.cwd,
 			ide,
@@ -1990,8 +1866,6 @@ export class Task {
 			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
 			isMultiRootEnabled: multiRootEnabled,
 			workspaceRoots,
-			isSubagentsEnabledAndCliInstalled,
-			isCliSubagent,
 		}
 
 		const systemPrompt = await getSystemPrompt(promptContext)
@@ -2074,22 +1948,8 @@ export class Task {
 					// this.ask will trigger postStateToWebview, so this change should be picked up.
 				}
 
-				// Check if this is a AI-Hydro provider insufficient credits error - don't auto-retry these
-				const isAiHydroProviderInsufficientCredits = (() => {
-					if (providerId !== "cline") {
-						return false
-					}
-					try {
-						const parsedError = AiHydroError.transform(error, model.id, providerId)
-						return parsedError.isErrorType(AiHydroErrorType.Balance)
-					} catch {
-						return false
-					}
-				})()
-
 				let response: AiHydroAskResponse
-				// Skip auto-retry for AI-Hydro provider insufficient credits errors
-				if (!isAiHydroProviderInsufficientCredits && this.taskState.autoRetryAttempts < 3) {
+				if (this.taskState.autoRetryAttempts < 3) {
 					// Auto-retry enabled with max 3 attempts: automatically approve the retry
 					this.taskState.autoRetryAttempts++
 
@@ -2122,18 +1982,16 @@ export class Task {
 					)
 					await setTimeoutPromise(delay)
 				} else {
-					// Show error_retry with failed flag to indicate all retries exhausted (but not for insufficient credits)
-					if (!isAiHydroProviderInsufficientCredits) {
-						await this.say(
-							"error_retry",
-							JSON.stringify({
-								attempt: 3,
-								maxAttempts: 3,
-								delaySeconds: 0,
-								failed: true, // Special flag to indicate retries exhausted
-							}),
-						)
-					}
+					// Show error_retry with failed flag to indicate all retries exhausted
+					await this.say(
+						"error_retry",
+						JSON.stringify({
+							attempt: 3,
+							maxAttempts: 3,
+							delaySeconds: 0,
+							failed: true, // Special flag to indicate retries exhausted
+						}),
+					)
 					await this.revealHiddenAnswerDraft("the model request failed after retries")
 					const askResult = await this.ask("api_req_failed", streamingFailedMessage)
 					response = askResult.response

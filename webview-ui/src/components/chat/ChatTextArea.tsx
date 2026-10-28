@@ -1,5 +1,4 @@
 import { cn } from "@heroui/react"
-import { PulsingBorder } from "@paper-design/shaders-react"
 import { mentionRegex, mentionRegexGlobal } from "@shared/context-mentions"
 import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
 import { FileSearchRequest, FileSearchType, RelativePathsRequest } from "@shared/proto/cline/file"
@@ -51,7 +50,6 @@ import { validateApiConfiguration, validateModelId } from "@/utils/validate"
 import AiHydroRulesToggleModal from "../aihydro-rules/AiHydroRulesToggleModal"
 import { ACT_MODE_COLOR, PLAN_MODE_COLOR, PlanActSwitch } from "./PlanActSwitch"
 import ServersToggleModal from "./ServersToggleModal"
-import VoiceRecorder from "./VoiceRecorder"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
 
@@ -261,12 +259,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			globalWorkflowToggles,
 			showChatModelSelector: showModelSelector,
 			setShowChatModelSelector: setShowModelSelector,
-			dictationSettings,
 		} = useExtensionState()
 		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
 		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
-		const [isVoiceRecording, setIsVoiceRecording] = useState(false)
 		const [showSlashCommandsMenu, setShowSlashCommandsMenu] = useState(false)
 		const [selectedSlashCommandsIndex, setSelectedSlashCommandsIndex] = useState(0)
 		const [slashCommandsQuery, setSlashCommandsQuery] = useState("")
@@ -1437,37 +1433,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					onDragLeave={handleDragLeave}
 					onDragOver={onDragOver}
 					onDrop={onDrop}>
-					{isVoiceRecording && (
-						<div
-							className={cn(
-								"absolute pointer-events-none z-10 overflow-hidden rounded-xs transition-all ease-in-out duration-300 left-3.5 right-3.5 top-2.5 bottom-2.5",
-								"ring-2 ring-aihydro-ocean-blue/40 ring-offset-1 ring-offset-transparent",
-							)}>
-							<PulsingBorder
-								bloom={1}
-								className="w-full h-full"
-								colorBack={"rgba(0,0,0,0)"}
-								colors={[
-									"#9d57fa", // purple
-									"#57c7fa", // cyan
-									"#fa57a8", // pink
-									"#9d57fa", // purple again for smooth loop
-								]}
-								intensity={0.4}
-								pulse={0.3}
-								roundness={0} // Match textarea border radius
-								scale={1.0}
-								smoke={0.25}
-								smokeSize={0.8}
-								softness={0.8}
-								speed={1.5}
-								spotSize={0.5}
-								spots={4}
-								thickness={0.1}
-							/>
-						</div>
-					)}
-
 					{showDimensionError && (
 						<div className="absolute inset-2.5 bg-[rgba(var(--vscode-errorForeground-rgb),0.1)] border-2 border-error rounded-xs flex items-center justify-center z-10 pointer-events-none">
 							<span className="text-error font-bold text-xs text-center">Image dimensions exceed 7500px</span>
@@ -1511,7 +1476,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						className={cn(
 							"absolute bottom-2.5 top-2.5 whitespace-pre-wrap break-words rounded-lg overflow-hidden",
 							"bg-input-background",
-							isTextAreaFocused || isVoiceRecording ? "left-3.5 right-3.5 shadow-lg" : "left-3.5 right-3.5",
+							isTextAreaFocused ? "left-3.5 right-3.5 shadow-lg" : "left-3.5 right-3.5",
 						)}
 						ref={highlightLayerRef}
 						style={{
@@ -1525,10 +1490,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							fontSize: "var(--vscode-editor-font-size)",
 							lineHeight: "var(--vscode-editor-line-height)",
 							borderRadius: 8,
-							borderLeft: isTextAreaFocused || isVoiceRecording ? 0 : undefined,
-							borderRight: isTextAreaFocused || isVoiceRecording ? 0 : undefined,
-							borderTop: isTextAreaFocused || isVoiceRecording ? 0 : undefined,
-							borderBottom: isTextAreaFocused || isVoiceRecording ? 0 : undefined,
+							borderLeft: isTextAreaFocused ? 0 : undefined,
+							borderRight: isTextAreaFocused ? 0 : undefined,
+							borderTop: isTextAreaFocused ? 0 : undefined,
+							borderBottom: isTextAreaFocused ? 0 : undefined,
 							padding: `9px 28px ${9 + thumbnailsHeight}px 9px`,
 						}}
 					/>
@@ -1585,7 +1550,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							borderTop: 0,
 							borderBottom: `${thumbnailsHeight}px solid transparent`,
 							borderColor: "transparent",
-							padding: `12px ${dictationSettings?.dictationEnabled ? "52" : "32"}px 12px 14px`,
+							padding: "12px 32px 12px 14px",
 							cursor: "text",
 							flex: 1,
 							zIndex: 1,
@@ -1621,44 +1586,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						className="absolute flex items-end bottom-4.5 right-5 z-10 h-8 text-xs"
 						style={{ height: textAreaBaseHeight }}>
 						<div className="flex flex-row items-center gap-1">
-							{dictationSettings?.dictationEnabled === true && dictationSettings?.featureEnabled && (
-								<VoiceRecorder
-									disabled={sendingDisabled}
-									isAuthenticated={true}
-									language={dictationSettings?.dictationLanguage || "en"}
-									onProcessingStateChange={(isProcessing, message) => {
-										if (isProcessing && message) {
-											// Show processing message in input
-											setInputValue(`${inputValue} [${message}]`.trim())
-										}
-										// When processing is done, the onTranscription callback will handle the final text
-									}}
-									onRecordingStateChange={setIsVoiceRecording}
-									onTranscription={(text) => {
-										// Remove any processing text first
-										const processingPattern = /\s*\[Transcribing\.\.\.\]$/
-										const cleanedValue = inputValue.replace(processingPattern, "")
-
-										if (!text) {
-											setInputValue(cleanedValue)
-											return
-										}
-
-										// Append the transcribed text to the cleaned input
-										const newValue = cleanedValue + (cleanedValue ? " " : "") + text
-										setInputValue(newValue)
-										// Focus the textarea and move cursor to end
-										setTimeout(() => {
-											if (textAreaRef.current) {
-												textAreaRef.current.focus()
-												const length = newValue.length
-												textAreaRef.current.setSelectionRange(length, length)
-											}
-										}, 0)
-									}}
-								/>
-							)}
-							{!isVoiceRecording && isTaskRunning && (
+							{isTaskRunning && (
 								<button
 									aria-busy={isStopping}
 									aria-label={isStopping ? "Stopping…" : "Stop task"}
@@ -1671,7 +1599,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									<span aria-hidden="true" className="codicon codicon-debug-stop text-sm" />
 								</button>
 							)}
-							{!isVoiceRecording && !isTaskRunning && (
+							{!isTaskRunning && (
 								<button
 									aria-label="Send message"
 									className={cn(

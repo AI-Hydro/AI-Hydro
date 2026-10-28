@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" width="640" height="240" role="img" aria-labelledby="t d">
+	<title id="t">Delineate a basin</title>
+	<desc id="d">A stream line with an outlet point and a dashed basin outline drawn around it.</desc>
+	<rect width="640" height="240" rx="10" fill="#0f2a43"/>
+	<path d="M60 170 C120 90 170 150 230 80 S330 70 380 130" stroke="#5fb3e6" stroke-width="4" fill="none"/>
+	<circle cx="380" cy="130" r="8" fill="#fbbf24" stroke="#fff" stroke-width="2"/>
+	<path d="M120 60 L300 40 L420 90 L430 190 L260 205 L130 170 Z" fill="#fbbf24" fill-opacity="0.18" stroke="#fbbf24" stroke-width="2" stroke-dasharray="6 4"/>
+	<rect x="436" y="70" width="188" height="70" rx="8" fill="#17476e" stroke="#5fb3e6" stroke-width="1.5"/>
+	<text x="530.0" y="103.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="600" fill="#ffffff">Delineate watershed here</text>
+	<text x="530.0" y="122.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">right-click a river</text>
+	<text x="320.0" y="222" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#8fc7ea">Right-click a stream on the map, then choose Delineate watershed here</text>
+
+</svg>

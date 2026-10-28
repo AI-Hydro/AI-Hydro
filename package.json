@@ -57,50 +57,62 @@
 			{
 				"id": "AIHydroWalkthrough",
 				"title": "Meet AI-Hydro, your computational hydrology research assistant",
-				"description": "AI-Hydro understands hydrology, works with CAMELS data, and executes reproducible workflows. Here are 5 ways to accelerate your research:",
+				"description": "Five steps from a model key to an evidence-backed claim that you approve.",
 				"steps": [
 					{
-						"id": "welcome",
-						"title": "Start with a Goal, Not Just a Prompt",
-						"description": "Tell AI-Hydro what you want to achieve. It plans, asks, and then codes, like a true partner.",
+						"id": "connect-model",
+						"title": "Connect a model",
+						"description": "Choose a provider and add your API key. [Open Settings](command:aihydro.settingsButtonClicked)",
 						"media": {
 							"markdown": "walkthrough/step1.md"
-						}
+						},
+						"completionEvents": [
+							"onCommand:aihydro.settingsButtonClicked"
+						]
 					},
 					{
-						"id": "learn",
-						"title": "Let AI-Hydro Learn Your Codebase",
-						"description": "Point AI-Hydro to your project. It builds understanding to make smart, context-aware changes.",
+						"id": "tools-ready",
+						"title": "Check that the AI-Hydro tools are ready",
+						"description": "The hydrology tools come from the aihydro-tools server. Make sure it shows Trusted. [Open Hydro Tools & Data Sources](command:aihydro.mcpButtonClicked)",
 						"media": {
 							"markdown": "walkthrough/step2.md"
-						}
+						},
+						"completionEvents": [
+							"onCommand:aihydro.mcpButtonClicked"
+						]
 					},
 					{
-						"id": "advanced-features",
-						"title": "Always Use the Best AI Models",
-						"description": "AI-Hydro empowers you with state-of-the-art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
+						"id": "delineate-basin",
+						"title": "Delineate a basin from the map",
+						"description": "Right-click a stream and delineate the watershed upstream. [Open the Map View](command:aihydro.mapButtonClicked)",
 						"media": {
 							"markdown": "walkthrough/step3.md"
-						}
+						},
+						"completionEvents": [
+							"onCommand:aihydro.mapButtonClicked"
+						]
 					},
 					{
-						"id": "mcp",
-						"title": "Extend with Powerful Tools (MCP)",
-						"description": "Connect to databases, APIs, or discover new capabilities in the MCP Marketplace.",
+						"id": "signatures",
+						"title": "Compute hydrologic signatures",
+						"description": "Ask for the signatures of the basin; every number cites its run. [Start a new task](command:aihydro.plusButtonClicked)",
 						"media": {
 							"markdown": "walkthrough/step4.md"
-						}
+						},
+						"completionEvents": [
+							"onCommand:aihydro.plusButtonClicked"
+						]
 					},
 					{
-						"id": "getting-started",
-						"title": "You're Always in Control",
-						"description": "Review AI-Hydro's plans and diffs. Approve changes before they happen. No surprises.",
+						"id": "claim",
+						"title": "Record a claim and approve it yourself",
+						"description": "Claims are recorded with their runs; only you can approve them. [Open the Evidence Board](command:aihydro.evidenceBoardButtonClicked)",
 						"media": {
 							"markdown": "walkthrough/step5.md"
 						},
-						"content": {
-							"path": "walkthrough/step5.md"
-						}
+						"completionEvents": [
+							"onCommand:aihydro.evidenceBoardButtonClicked"
+						]
 					}
 				]
 			}
@@ -127,23 +139,27 @@
 		"commands": [
 			{
 				"command": "aihydro.plusButtonClicked",
-				"title": "New Analysis",
-				"icon": "$(add)"
+				"title": "New Task",
+				"icon": "$(add)",
+				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.mcpButtonClicked",
 				"title": "Hydro Tools & Data Sources",
-				"icon": "$(server)"
+				"icon": "$(server)",
+				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.mapButtonClicked",
 				"title": "Map View",
-				"icon": "$(map)"
+				"icon": "$(map)",
+				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.htmlPreviewButtonClicked",
-				"title": "AI-Hydro Studio",
-				"icon": "$(preview)"
+				"title": "Studio",
+				"icon": "$(preview)",
+				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.validateModule",
@@ -183,17 +199,20 @@
 			{
 				"command": "aihydro.historyButtonClicked",
 				"title": "Analysis History",
-				"icon": "$(history)"
+				"icon": "$(history)",
+				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.connectorsButtonClicked",
 				"title": "External Connectors",
-				"icon": "$(plug)"
+				"icon": "$(plug)",
+				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.skillsButtonClicked",
 				"title": "Skills",
-				"icon": "$(book)"
+				"icon": "$(book)",
+				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.experimentTableButtonClicked",
@@ -216,13 +235,13 @@
 			{
 				"command": "aihydro.settingsButtonClicked",
 				"title": "Settings",
-				"icon": "$(settings-gear)"
+				"icon": "$(settings-gear)",
+				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.dev.createTestTasks",
 				"title": "Create Test Tasks",
-				"category": "AI-Hydro",
-				"when": "aihydro.isDevMode"
+				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.addToChat",
@@ -238,21 +257,6 @@
 				"command": "aihydro.focusChatInput",
 				"title": "Jump to Chat Input",
 				"category": "AI-Hydro"
-			},
-			{
-				"command": "aihydro.generateGitCommitMessage",
-				"title": "Generate Commit Message with AI-Hydro",
-				"category": "AI-Hydro",
-				"icon": {
-					"light": "assets/icons/robot_panel_light.png",
-					"dark": "assets/icons/robot_panel_dark.png"
-				}
-			},
-			{
-				"command": "aihydro.abortGitCommitMessage",
-				"title": "Generate Commit Message with AI-Hydro - Stop",
-				"category": "AI-Hydro",
-				"icon": "$(debug-stop)"
 			},
 			{
 				"command": "aihydro.explainCode",
@@ -286,56 +290,56 @@
 			},
 			{
 				"command": "aihydro.map.addLayerFromUrl",
-				"title": "AI-Hydro Map: Add Layer from URL",
+				"title": "Map: Add Layer from URL",
 				"category": "AI-Hydro",
 				"icon": "$(link-external)"
 			},
 			{
 				"command": "aihydro.map.gallery",
-				"title": "AI-Hydro Map: Open Research Gallery",
+				"title": "Map: Open Research Gallery",
 				"category": "AI-Hydro",
 				"icon": "$(preview)"
 			},
 			{
 				"command": "aihydro.map.saveScene",
-				"title": "AI-Hydro Map: Save Scene",
+				"title": "Map: Save Scene",
 				"category": "AI-Hydro",
 				"icon": "$(save)"
 			},
 			{
 				"command": "aihydro.map.openScene",
-				"title": "AI-Hydro Map: Open Scene",
+				"title": "Map: Open Scene",
 				"category": "AI-Hydro",
 				"icon": "$(folder-opened)"
 			},
 			{
 				"command": "aihydro.gee.connect",
-				"title": "AI-Hydro: Connect Google Earth Engine",
+				"title": "Connect Google Earth Engine",
 				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.gee.status",
-				"title": "AI-Hydro: Show Google Earth Engine Status",
+				"title": "Show Google Earth Engine Status",
 				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.gee.chooseProject",
-				"title": "AI-Hydro: Select Google Earth Engine Project",
+				"title": "Select Google Earth Engine Project",
 				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.gee.previewChirpsLayer",
-				"title": "AI-Hydro: Add CHIRPS Demo Layer",
+				"title": "Add CHIRPS Demo Layer",
 				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.gee.test",
-				"title": "AI-Hydro: Test Google Earth Engine Connection",
+				"title": "Test Google Earth Engine Connection",
 				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.gee.disconnect",
-				"title": "AI-Hydro: Disconnect Google Earth Engine",
+				"title": "Disconnect Google Earth Engine",
 				"category": "AI-Hydro"
 			},
 			{
@@ -345,17 +349,17 @@
 			},
 			{
 				"command": "aihydro.openInStudio",
-				"title": "AI-Hydro: Open in Studio",
+				"title": "Open in Studio",
 				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.showStudio",
-				"title": "AI-Hydro: Show Studio",
+				"title": "Show Studio",
 				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.addArtifactToStudio",
-				"title": "AI-Hydro: Add Artifact to Studio",
+				"title": "Add Artifact to Studio",
 				"category": "AI-Hydro"
 			}
 		],
@@ -367,10 +371,6 @@
 				"win": "ctrl+'",
 				"linux": "ctrl+'",
 				"when": "editorHasSelection"
-			},
-			{
-				"command": "aihydro.generateGitCommitMessage",
-				"when": "config.git.enabled && scmProvider == git"
 			},
 			{
 				"command": "aihydro.focusChatInput",
@@ -476,18 +476,6 @@
 					"group": "navigation"
 				}
 			],
-			"scm/title": [
-				{
-					"command": "aihydro.generateGitCommitMessage",
-					"group": "navigation",
-					"when": "config.git.enabled && scmProvider == git && !aihydro.isGeneratingCommit"
-				},
-				{
-					"command": "aihydro.abortGitCommitMessage",
-					"group": "navigation",
-					"when": "config.git.enabled && scmProvider == git && aihydro.isGeneratingCommit"
-				}
-			],
 			"commandPalette": [
 				{
 					"command": "aihydro.focusPendingPrompt",
@@ -506,12 +494,12 @@
 					"command": "aihydro.map.openScene"
 				},
 				{
-					"command": "aihydro.generateGitCommitMessage",
-					"when": "config.git.enabled && scmProvider == git && !aihydro.isGeneratingCommit"
+					"command": "aihydro.dev.createTestTasks",
+					"when": "aihydro.isDevMode"
 				},
 				{
-					"command": "aihydro.abortGitCommitMessage",
-					"when": "config.git.enabled && scmProvider == git && aihydro.isGeneratingCommit"
+					"command": "aihydro.gee.test",
+					"when": "false"
 				}
 			],
 			"aihydro.scienceViews": [
@@ -782,8 +770,8 @@
 		"should": "^13.2.3",
 		"sinon": "^19.0.2",
 		"tree-kill": "^1.2.2",
-		"ts-node": "^10.9.2",
 		"ts-morph": "^25.0.1",
+		"ts-node": "^10.9.2",
 		"ts-proto": "^2.6.1",
 		"tsconfig-paths": "^4.2.0",
 		"typescript": "^5.4.5"
@@ -834,7 +822,6 @@
 		"exceljs": "4.4.0",
 		"execa": "^9.5.2",
 		"fast-deep-equal": "^3.1.3",
-		"firebase": "^11.2.0",
 		"flatgeobuf": "^3.24.1",
 		"fzf": "^0.5.2",
 		"get-folder-size": "^5.0.0",
@@ -869,12 +856,10 @@
 		"simple-git": "^4.0.2",
 		"strip-ansi": "^7.1.2",
 		"topojson-client": "^3.1.0",
-		"tree-sitter-wasms": "^0.1.11",
 		"turndown": "^7.2.0",
 		"ulid": "^2.4.0",
 		"uuid": "^11.1.0",
 		"vscode-uri": "^3.1.0",
-		"web-tree-sitter": "^0.22.6",
 		"yauzl": "^3.4.0",
 		"zod": "^4.6.7"
 	},

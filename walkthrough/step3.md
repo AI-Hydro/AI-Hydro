@@ -1,7 +1,7 @@
-# Always Use the Best Models
+# Delineate a basin from the map
 
-**Connect your keys for Anthropic (Claude), Google (Gemini), OpenAI (GPT), and other leading LLMs.**
+Open the **Map View**, right-click the stream at the outlet you care about and choose **Delineate watershed here**. AI-Hydro traces the basin upstream of that point and draws it on the map, and the result is saved to a study you can return to.
 
-AI-Hydro puts you at the forefront of AI. Bring your own API keys for leading models like Anthropic (Claude), Google (Gemini), and OpenAI (GPT). Always leverage the most powerful State-of-the-Art (SOTA) capabilities, ensuring you control both cost and cutting-edge performance.
+![A stream with an outlet point and a dashed basin outline](images/step3-delineate-basin.svg)
 
-![AI-Hydro Models Demo](https://storage.googleapis.com/cline_public_images/docs/assets/clines-models-hifi-3_compress.webp)
+[Open the Map View](command:aihydro.mapButtonClicked)

@@ -21,7 +21,6 @@ const BASE: CommandPolicyInput = {
 	modelRequiresApproval: false,
 	autoApproveSafe: true,
 	autoApproveAll: false,
-	subagentsEnabled: true,
 	touchesProtectedPath: false,
 	shellEnvironment: posix(true),
 }
@@ -208,25 +207,84 @@ describe("B: prototype keys are not programs or git subcommands", () => {
 	}
 })
 
-describe("C: glob forms that could match aihydro are a launch", () => {
+describe("C: only the exact program name in command position is a launch (no glob expansion)", () => {
 	for (const c of [
-		'aihydr? "x"',
-		'aihyd* "x"',
-		'a*hydro "x"',
-		'[a]ihydro "x"',
-		"/usr/local/bin/aihyd* x",
-		"aihydr[o] x",
-		"ai*ro x",
-		"aih?dro x",
-		'env aihyd* "x" -y',
-		"cd . && aihydr? x",
+		"aihydro t o",
+		'aihydro "x"',
+		"env X=1 aihydro",
+		"env -u FOO aihydro x",
+		"/usr/local/bin/aihydro",
+		"sudo aihydro",
+		"sudo -u root aihydro x",
+		"command aihydro x",
+		"exec aihydro x",
+		"nohup aihydro x &",
+		"echo x | xargs aihydro",
+		"sh -c 'aihydro x'",
+		"cd . && aihydro x",
+		"cd . || aihydro x",
+		"ls; aihydro x",
+		"(aihydro x)",
+		"FOO=1 BAR=2 aihydro x",
+		"C:\\tools\\aihydro.exe x",
+		"AIHYDRO x",
+		"aihydro\tx",
+		"sudo\taihydro x",
+		"aihydro x\r",
+		"if true; then aihydro x; fi",
+		"! aihydro x",
+		"while true; do aihydro x; done",
+		"if aihydro x; then echo y; else echo n; fi",
+		"aihydro.cmd x",
+		"C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\npm\\\\aihydro.cmd x",
+		"aihydro.bat x",
+		"aihydro.ps1 x",
+		"timeout 5 aihydro x",
+		"timeout -s KILL 5 aihydro x",
+		"setsid aihydro x",
+		"stdbuf -oL aihydro x",
+		"stdbuf -o L aihydro x",
+		"ionice -c 3 aihydro x",
+		"watch -n 5 aihydro x",
+		"chronic aihydro x",
+		"exec -a name aihydro x",
+		"eval aihydro x",
+		"eval 'echo hi; aihydro x'",
+		"env -S 'aihydro x'",
+		"env -Saihydro",
 	]) {
 		it(`is a launch: ${JSON.stringify(c)}`, () => {
 			expect(mentionsAihydroProgram(c), c).to.equal(true)
-			expect(decideCommand({ ...BASE, command: c, autoApproveAll: true, subagentsEnabled: false }).action, c).to.equal(
-				"deny",
-			)
-			expect(["ask", "deny"]).to.include(decideCommand({ ...BASE, command: c, autoApproveAll: true }).action)
+			expect(decideCommand({ ...BASE, command: c, autoApproveAll: true }).action, c).to.equal("deny")
+		})
+	}
+
+	for (const c of [
+		"ls ~/code/aihydro",
+		"cd src/shared/aihydro",
+		"pytest tests/aihydro",
+		"pip install -e ./aihydro",
+		"export PROJ=aihydro",
+		"echo > aihydro.js",
+		"cat aihydro",
+		"ls ai*",
+		"ls aihydr?",
+		"a*hydro x",
+		"aihyd* x",
+		"[a]ihydro x",
+		"grep -r aihydro src",
+		"git add aihydro/",
+		"python -m aihydro",
+		"timeout 5 ls aihydro",
+		"eval echo aihydro",
+		"env -S 'ls aihydro'",
+		"if true; then ls aihydro; fi",
+		"echo aihydro.cmd",
+		"cat aihydro.ps1",
+	]) {
+		it(`is not a launch and falls to the normal policy: ${JSON.stringify(c)}`, () => {
+			expect(mentionsAihydroProgram(c), c).to.equal(false)
+			expect(decideCommand({ ...BASE, command: c }).action, c).to.not.equal("deny")
 		})
 	}
 

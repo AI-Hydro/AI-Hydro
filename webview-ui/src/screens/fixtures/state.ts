@@ -4,7 +4,6 @@
  */
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
-import { DEFAULT_DICTATION_SETTINGS } from "@shared/DictationSettings"
 import { type ExtensionState } from "@shared/ExtensionMessage"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
 import type { HistoryItem } from "@shared/HistoryItem"
@@ -58,7 +57,6 @@ export function buildBaseState(overrides: Partial<ExtensionState> = {}): Extensi
 		shouldShowAnnouncement: false,
 		autoApprovalSettings: DEFAULT_AUTO_APPROVAL_SETTINGS,
 		browserSettings: DEFAULT_BROWSER_SETTINGS,
-		dictationSettings: DEFAULT_DICTATION_SETTINGS,
 		focusChainSettings: DEFAULT_FOCUS_CHAIN_SETTINGS,
 		preferredLanguage: "English",
 		openaiReasoningEffort: "medium",
@@ -82,7 +80,6 @@ export function buildBaseState(overrides: Partial<ExtensionState> = {}): Extensi
 		vscodeTerminalExecutionMode: "vscodeTerminal",
 		terminalOutputLineLimit: 500,
 		maxConsecutiveMistakes: 3,
-		subagentTerminalOutputLineLimit: 2000,
 		defaultTerminalProfile: "default",
 		mcpResponsesCollapsed: true,
 		strictPlanModeEnabled: false,

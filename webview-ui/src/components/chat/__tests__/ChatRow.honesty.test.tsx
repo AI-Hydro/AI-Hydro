@@ -83,18 +83,18 @@ const errorRow: AiHydroMessage = { ts: 60, type: "say", say: "error", text: "boo
 describe("tense of tool-call headers comes from evidence, not position or approval", () => {
 	const tool = (name: string) => JSON.stringify({ tool: name, path: "a.py", content: "x" })
 	const cases: Array<[string, string, string, string, string]> = [
-		["readFile", "read this file", "AI Hydro read this file:", "Denied: read this file (not run)", tool("readFile")],
+		["readFile", "read this file", "AI-Hydro read this file:", "Denied: read this file (not run)", tool("readFile")],
 		[
 			"editedExistingFile",
 			"edit this file",
-			"AI Hydro edited this file:",
+			"AI-Hydro edited this file:",
 			"Denied: edit this file (not run)",
 			tool("editedExistingFile"),
 		],
 		[
 			"newFileCreated",
 			"create a new file",
-			"AI Hydro created a new file:",
+			"AI-Hydro created a new file:",
 			"Denied: create a new file (not run)",
 			tool("newFileCreated"),
 		],
@@ -174,22 +174,22 @@ describe("tense of tool-call headers comes from evidence, not position or approv
 			)
 			expect(
 				renderRow({ ...ask, askOutcome: "approved", commandCompleted: true }, later()).container.textContent,
-			).toContain("AI Hydro ran this command:")
+			).toContain("AI-Hydro ran this command:")
 			expect(
 				renderRow({ ...ask, askOutcome: "approved", execOutcome: "completed" }, later()).container.textContent,
-			).toContain("AI Hydro ran this command:")
+			).toContain("AI-Hydro ran this command:")
 		})
 		it("command output is evidence it ran; an unanswered superseded ask is only 'asked to'", () => {
 			const output: AiHydroMessage = { ts: 6, type: "say", say: "command_output", text: "ok" }
 			expect(renderRow({ ...ask, askOutcome: "approved" }, [output]).container.textContent).toContain(
-				"AI Hydro ran this command:",
+				"AI-Hydro ran this command:",
 			)
 			expect(renderRow(ask, later()).container.textContent).toContain("asked to execute this command:")
 		})
 		it("auto-run command row says Running until output or completion", () => {
 			const say: AiHydroMessage = { ts: 5, type: "say", say: "command", text: "ls" }
 			expect(renderRow(say).container.textContent).toContain("Running: execute this command…")
-			expect(renderRow({ ...say, commandCompleted: true }).container.textContent).toContain("AI Hydro ran this command:")
+			expect(renderRow({ ...say, commandCompleted: true }).container.textContent).toContain("AI-Hydro ran this command:")
 		})
 	})
 

@@ -43,7 +43,6 @@ export interface ApiHandlerSecrets {
 	awsSecretKey?: string
 	openRouterApiKey?: string
 
-	clineAccountId?: string
 	awsSessionToken?: string
 	awsBedrockApiKey?: string
 	openAiApiKey?: string

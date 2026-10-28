@@ -22,8 +22,6 @@ const AiHydroCommands = {
 	ImproveCode: prefix + ".improveCode",
 	FocusChatInput: prefix + ".focusChatInput",
 	Walkthrough: prefix + ".openWalkthrough",
-	GenerateCommit: prefix + ".generateGitCommitMessage",
-	AbortCommit: prefix + ".abortGitCommitMessage",
 	ReconstructTaskHistory: prefix + ".reconstructTaskHistory",
 	LoadGeojsonToMap: prefix + ".loadGeojsonToMap",
 	AddFileToMap: prefix + ".addFileToMap",

@@ -185,20 +185,18 @@ describe("ExecuteCommandToolHandler host-side command policy", () => {
 		})
 	}
 
-	it('T15 aihydro "x" with requires_approval=false asks, including in YOLO, and names the no-YOLO launch', async () => {
-		for (const opts of [{}, { yolo: true }, { safe: true, all: true }]) {
-			const { calls } = await run('aihydro "x"', false, opts)
-			expect(calls.ask, JSON.stringify(opts)).to.have.length(1)
-			expect(calls.say.some(([, text]) => /WITHOUT YOLO/.test(text ?? ""))).to.equal(true)
-		}
-	})
-
-	it('T15 aihydro "x" is refused when subagents are disabled', async () => {
-		for (const opts of [{ subagentsEnabled: false }, { subagentsEnabled: false, yolo: true }]) {
+	it("T15 the retired aihydro CLI subagent is refused in every setting, with a message and without asking or running", async () => {
+		for (const opts of [
+			{},
+			{ yolo: true },
+			{ safe: true, all: true },
+			{ subagentsEnabled: true },
+			{ subagentsEnabled: false },
+		]) {
 			const { result, calls } = await run('aihydro "x"', false, opts)
-			expect(calls.ask).to.have.length(0)
-			expect(calls.executed).to.have.length(0)
-			expect(String(result)).to.include("Subagents are disabled")
+			expect(calls.ask, JSON.stringify(opts)).to.have.length(0)
+			expect(calls.executed, JSON.stringify(opts)).to.have.length(0)
+			expect(String(result)).to.include("was retired")
 		}
 	})
 

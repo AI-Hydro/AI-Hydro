@@ -2,14 +2,12 @@ import { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import { AiHydroRulesToggles } from "@shared/aihydro-rules"
 import { ApiProvider, ModelInfo, type OcaModelInfo } from "@shared/api"
 import { BrowserSettings } from "@shared/BrowserSettings"
-import { DictationSettings } from "@shared/DictationSettings"
 import { FocusChainSettings } from "@shared/FocusChainSettings"
 import { HistoryItem } from "@shared/HistoryItem"
 import { McpDisplayMode } from "@shared/McpDisplayMode"
 import { WorkspaceRoot } from "@shared/multi-root/types"
 import { Mode, OpenaiReasoningEffort } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
-import { UserInfo } from "@shared/UserInfo"
 import { LanguageModelChatSelector } from "vscode"
 export type SecretKey = keyof Secrets
 
@@ -26,7 +24,6 @@ export type GlobalStateAndSettings = GlobalState & Settings
 export interface GlobalState {
 	lastShownAnnouncementId: string | undefined
 	taskHistory: HistoryItem[]
-	userInfo: UserInfo | undefined
 	favoritedModelIds: string[]
 	mcpMarketplaceEnabled: boolean
 	mcpResponsesCollapsed: boolean
@@ -86,7 +83,6 @@ export interface Settings {
 	defaultTerminalProfile: string
 	terminalOutputLineLimit: number
 	maxConsecutiveMistakes: number
-	subagentTerminalOutputLineLimit: number
 	sapAiCoreTokenUrl: string | undefined
 	sapAiCoreBaseUrl: string | undefined
 	sapAiResourceGroup: string | undefined
@@ -99,7 +95,6 @@ export interface Settings {
 	preferredLanguage: string
 	openaiReasoningEffort: OpenaiReasoningEffort
 	mode: Mode
-	dictationSettings: DictationSettings
 	focusChainSettings: FocusChainSettings
 	customPrompt: "compact" | undefined
 	difyBaseUrl: string | undefined
@@ -204,8 +199,6 @@ export interface Settings {
 
 export interface Secrets {
 	apiKey: string | undefined
-	clineAccountId: string | undefined
-	"cline:clineAccountId": string | undefined // Auth_Provider:AccountId
 	openRouterApiKey: string | undefined
 	awsAccessKey: string | undefined
 	awsSecretKey: string | undefined

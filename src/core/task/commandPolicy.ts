@@ -163,38 +163,72 @@ export function matchProtectedCommand(raw: string): string | undefined {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// 1b. Subagent launches
+// 1b. The retired `aihydro` CLI subagent: every launch is denied
 // ---------------------------------------------------------------------------------------------------------------
 
-export const SUBAGENTS_DISABLED_MESSAGE =
-	"Subagents are disabled. Launching an `aihydro` subagent was refused. The user can enable subagents in AI-Hydro settings; do not retry this launch until they do."
+export const AIHYDRO_CLI_RETIRED_MESSAGE =
+	"The `aihydro` command-line subagent was retired and cannot be launched from a terminal command. Do not retry it; do the work in this chat with the available tools."
 
-export const SUBAGENT_LAUNCH_REFUSED_MESSAGE =
-	'Subagent launch refused: the model may not set YOLO, a profile environment variable or extra settings. Use exactly `aihydro "prompt"` with optional `--profile explorer|data-runner` and `--workdir <dir>`.'
-
-const SUBAGENT_PATTERN = /^aihydro\s+(['"])(.+?)\1(\s+.*)?$/
+/** Words that run the next word as a command: skipped, with their own flags, to find the command position. */
+const COMMAND_WRAPPERS = new Set([
+	"env",
+	"sudo",
+	"doas",
+	"command",
+	"exec",
+	"nohup",
+	"xargs",
+	"time",
+	"nice",
+	"builtin",
+	"timeout",
+	"setsid",
+	"stdbuf",
+	"ionice",
+	"watch",
+	"chronic",
+	"sh",
+	"bash",
+	"zsh",
+	"dash",
+])
+/** Shell keywords and `!` after which a command starts (`if true; then aihydro x; fi`, `! aihydro`). They take no flags. */
+const SHELL_KEYWORDS = new Set(["then", "do", "else", "elif", "!", "if", "while", "until"])
+/** Wrapper flags that take a separate value, which must not be mistaken for the command. */
+const WRAPPER_FLAGS_WITH_VALUE: Record<string, readonly string[]> = {
+	env: ["-u", "-c"],
+	sudo: ["-u", "-g", "-h", "-p", "-c", "-r", "-t"],
+	doas: ["-u"],
+	xargs: ["-i", "-l", "-n", "-p", "-s", "-d"],
+	nice: ["-n"],
+	exec: ["-a"],
+	stdbuf: ["-i", "-o", "-e"],
+	ionice: ["-c", "-n", "-p"],
+	watch: ["-n", "-d"],
+	timeout: ["-s", "-k"],
+}
+/** Wrappers whose first non-flag word is an argument of their own (`timeout 5 aihydro x`). */
+const WRAPPER_POSITIONAL_ARGS: Record<string, number> = { timeout: 1 }
 
 /**
- * Whether any word of the command is the `aihydro` CLI program, after quote/escape/case/path normalisation and
- * across chains, `env`/prefix wrappers and absolute paths: `cd . && aihydro "x"`, `env aihydro "x"`,
- * `/usr/local/bin/aihydro "x"`, `AIHYDRO "x"`, `aihydro -y "x"`. Deliberately broad: a word that merely equals
- * `aihydro` (`cat aihydro`) is also treated as a launch, which only means it asks (or is refused while subagents
- * are disabled). The indirection limits in the file header apply here too.
+ * Whether the `aihydro` CLI program is run by this command: the word in COMMAND POSITION of any segment (after
+ * `; && || | & ( ) { }`, a newline, a backtick or `$(`), after `NAME=value` prefixes, shell keywords (`then`, `do`,
+ * `!`, ...) and wrappers such as `env`, `sudo`, `command`, `exec`, `nohup`, `xargs`, `timeout` or `sh -c`. `eval` and
+ * `env -S` are looked into: their argument string is checked as a command. The word must have the exact basename
+ * `aihydro` with an optional `.exe`, `.cmd`, `.bat` or `.ps1` (the Windows shims) after quote, escape, case and path
+ * normalisation (`/usr/local/bin/aihydro`, `"AIHYDRO"`, `C:\\tools\\aihydro.exe`). No glob is expanded, and a path
+ * argument or variable that merely contains the word (`ls ~/code/aihydro`, `pytest tests/aihydro`,
+ * `export PROJ=aihydro`, `echo > aihydro.js`) is not a launch. The indirection limits in the file header apply here too.
  */
 export function mentionsAihydroProgram(raw: string): boolean {
 	const base = raw
 		.toLowerCase()
+		.replace(/[\t\r]/g, " ")
 		.replace(/['"]/g, "")
 		.replace(/[^\x20-\x7e\n]/g, "")
 	for (const text of [base.replace(/\\/g, ""), base.replace(/\\/g, "/")]) {
-		for (const token of text.split(/[\s;&|()<>`${}=,]+/)) {
-			const program = (token.split("/").pop() ?? "").replace(/\.(exe|cmd|bat|ps1|js|mjs)$/, "")
-			if (program === "aihydro") {
-				return true
-			}
-			// A glob that could expand to `aihydro` (`aihydr?`, `aihyd*`, `a*hydro`, `[a]ihydro`). Needs two literal
-			// characters outside bracket classes so a bare `*` or `[abc]*` is not a launch; over-matching only means it asks.
-			if (program.replace(/\[[^\]]*\]|[?*[\]]/g, "").length >= 2 && globCouldMatch(program, "aihydro")) {
+		for (const segment of text.split(/[;&|(){}`\n]|\$\(/)) {
+			if (segmentRunsAihydro(segment.trim().split(/\s+/).filter(Boolean))) {
 				return true
 			}
 		}
@@ -202,35 +236,40 @@ export function mentionsAihydroProgram(raw: string): boolean {
 	return false
 }
 
-/**
- * Why a launch must be refused regardless of approval, or undefined. The model may not choose the subagent's
- * approval policy: no YOLO (`-y`, `--yolo`, `yolo_mode_toggled`), no `AIHYDRO_PROFILE=` environment prefix, and for
- * the standard form `aihydro "prompt" <flags>` only `--profile` and `--workdir` after the prompt (anything else, such
- * as a later `-s yolo_mode_toggled=true`, would override the flags the host injects).
- */
-export function subagentLaunchRefusal(command: string): string | undefined {
-	if (/aihydro_profile\s*=/i.test(command)) {
-		return SUBAGENT_LAUNCH_REFUSED_MESSAGE
-	}
-	const match = command.trim().match(SUBAGENT_PATTERN)
-	if (match) {
-		const tokens = (match[3] ?? "").trim().split(/\s+/).filter(Boolean)
-		for (let i = 0; i < tokens.length; i++) {
+function segmentRunsAihydro(tokens: string[]): boolean {
+	for (let i = 0; i < tokens.length; i++) {
+		const token = tokens[i]
+		if (/^[a-z_][a-z0-9_]*=/.test(token) || SHELL_KEYWORDS.has(token)) {
+			continue // NAME=value prefix, or a keyword after which a command starts
+		}
+		const program = (token.split("/").pop() ?? "").replace(/\.(exe|cmd|bat|ps1)$/, "")
+		if (program === "aihydro") {
+			return true
+		}
+		if (program === "eval") {
+			return mentionsAihydroProgram(tokens.slice(i + 1).join(" "))
+		}
+		if (!COMMAND_WRAPPERS.has(program)) {
+			return false // some other command: its arguments are not a launch
+		}
+		// Skip the wrapper's own flags (and the value of those that take one).
+		while (i + 1 < tokens.length && tokens[i + 1].startsWith("-")) {
+			i += 1
 			const flag = tokens[i]
-			const value = tokens[i + 1]
-			if ((flag === "--workdir" || flag === "--profile") && value !== undefined && !value.startsWith("-")) {
+			if (program === "env" && (flag === "-s" || flag === "--split-string")) {
+				return mentionsAihydroProgram(tokens.slice(i + 1).join(" ")) // env -S 'aihydro x'
+			}
+			if (program === "env" && /^-s./.test(flag)) {
+				return mentionsAihydroProgram([flag.slice(2), ...tokens.slice(i + 1)].join(" ")) // env -Saihydro
+			}
+			if (WRAPPER_FLAGS_WITH_VALUE[program]?.includes(flag) && i + 1 < tokens.length) {
 				i += 1
-			} else {
-				return SUBAGENT_LAUNCH_REFUSED_MESSAGE
 			}
 		}
-		return undefined
+		// Positional arguments of the wrapper itself, such as the duration of `timeout`.
+		i += Math.min(WRAPPER_POSITIONAL_ARGS[program] ?? 0, Math.max(0, tokens.length - i - 2))
 	}
-	const words = command.toLowerCase().split(/[\s'"=;&|()]+/)
-	if (/yolo/i.test(command) || words.includes("-y") || words.includes("--yes")) {
-		return SUBAGENT_LAUNCH_REFUSED_MESSAGE
-	}
-	return undefined
+	return false
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -284,9 +323,6 @@ export interface CommandPolicyInput {
 	autoApproveSafe: boolean
 	/** "Execute all commands" (executeAllCommands); YOLO supplies true. */
 	autoApproveAll: boolean
-	/** Optional extra signal; launches are also detected from the command text itself (mentionsAihydroProgram). */
-	isSubagentLaunch?: boolean
-	subagentsEnabled: boolean
 	/** Result of commandPolicyMentionsProtectedPath for this command. */
 	touchesProtectedPath: boolean
 	/** Shell used for classification; defaults to this process's platform and $SHELL. Tests inject it. */
@@ -302,9 +338,7 @@ export type CommandPolicyResult =
  * The single ordered decision for a command. First match wins.
  *
  *  0a. protected command            -> deny   (YOLO and allow settings cannot change this)
- *  0b. subagent launch, disabled    -> deny
- *  0c. subagent launch with model-set YOLO/profile/extra flags -> deny
- *  0d. subagent launch              -> ask    (always; never auto-runs, whatever the model or settings say)
+ *  0b. `aihydro` CLI launch          -> deny   (the CLI subagent is retired; no setting re-enables it)
  *  0e. touches a protected path     -> ask    (YOLO and "Execute all commands" included)
  *  1.  "Run read-only commands" off -> ask
  *  2.  "Execute all commands" on    -> run    (the user's explicit choice; YOLO lands here)
@@ -334,15 +368,8 @@ export function decideCommand(input: CommandPolicyInput): CommandPolicyResult {
 			message: protectedCommandDenyMessage(protectedMatch),
 		}
 	}
-	if (input.isSubagentLaunch || texts.some(mentionsAihydroProgram)) {
-		if (!input.subagentsEnabled) {
-			return { action: "deny", reason: "subagents disabled", message: SUBAGENTS_DISABLED_MESSAGE }
-		}
-		const refusal = texts.map((t) => (t ? subagentLaunchRefusal(t) : undefined)).find((r) => r !== undefined)
-		if (refusal) {
-			return { action: "deny", reason: "subagent launch sets its own policy", message: refusal }
-		}
-		return { action: "ask", reason: "subagent launch always asks", policyClass: "subagent_launch" }
+	if (texts.some(mentionsAihydroProgram)) {
+		return { action: "deny", reason: "aihydro CLI subagent retired", message: AIHYDRO_CLI_RETIRED_MESSAGE }
 	}
 	if (input.touchesProtectedPath) {
 		return { action: "ask", reason: "touches a protected path", policyClass: "protected_path" }

@@ -39,7 +39,8 @@ export const starterInvestigations: StarterInvestigation[] = [
 		id: "model-vs-observed",
 		title: "Modelled vs observed streamflow",
 		description: "Compare a model's streamflow with the gauge record, keeping observed and modelled series clearly separate.",
-		fetches: "The observed record from USGS water data services (as configured) and the modelled series from the model run you choose.",
+		fetches:
+			"The observed record from USGS water data services (as configured) and the modelled series from the model run you choose.",
 		needsNetwork: true,
 		prompt: "Compare modelled and observed streamflow for a gauge. Ask me for the gauge_id and which model run to use if I have not said, and stop and ask if either is unclear. Label which series is observed and which is modelled, report agreement metrics with uncertainty intervals where the tools provide them, and say when a metric cannot be computed instead of estimating it.",
 	},

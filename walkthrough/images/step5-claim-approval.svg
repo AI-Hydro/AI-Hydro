@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" width="640" height="240" role="img" aria-labelledby="t d">
+	<title id="t">Record and approve a claim</title>
+	<desc id="d">A claim is recorded with its runs, appears on the Evidence Board as supported but not approved, and becomes approved only when you approve it in a terminal.</desc>
+	<rect width="640" height="240" rx="10" fill="#0f2a43"/>
+	<rect x="24" y="70" width="130" height="80" rx="8" fill="#17476e" stroke="#5fb3e6" stroke-width="1.5"/>
+	<text x="89.0" y="108.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff">Claim</text>
+	<text x="89.0" y="127.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">recorded with runs</text>
+	<path d="M154 110 L186 110" stroke="#5fb3e6" stroke-width="2" fill="none"/>
+	<path d="M186 105 L194 110 L186 115 Z" fill="#5fb3e6"/>
+	<rect x="194" y="70" width="140" height="80" rx="8" fill="#17476e" stroke="#5fb3e6" stroke-width="1.5"/>
+	<text x="264.0" y="108.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#ffffff">Evidence Board</text>
+	<text x="264.0" y="127.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">supported, not approved</text>
+	<path d="M334 110 L366 110" stroke="#5fb3e6" stroke-width="2" fill="none"/>
+	<path d="M366 105 L374 110 L366 115 Z" fill="#5fb3e6"/>
+	<rect x="374" y="70" width="110" height="80" rx="8" fill="#4a2a07" stroke="#fbbf24" stroke-width="1.5"/>
+	<text x="429.0" y="108.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff">You approve</text>
+	<text x="429.0" y="127.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#bfe3f7">in a terminal</text>
+	<path d="M484 110 L506 110" stroke="#5fb3e6" stroke-width="2" fill="none"/>
+	<path d="M506 105 L514 110 L506 115 Z" fill="#5fb3e6"/>
+	<rect x="514" y="70" width="100" height="80" rx="8" fill="#14532d" stroke="#4ade80" stroke-width="1.5"/>
+	<text x="564.0" y="115.0" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff">Approved</text>
+	<text x="320.0" y="222" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#8fc7ea">The model cannot approve a claim. Only you can.</text>
+
+</svg>

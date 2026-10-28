@@ -10,7 +10,6 @@ import {
 	fakeServerEntry,
 	LAUNCHER,
 } from "@/integrations/aihydro-session/__tests__/fakeBindingServer"
-import * as storageFetch from "../../storage/remote-config/fetch"
 import * as taskModule from "../../task"
 import * as lockUtils from "../../task/TaskLockUtils"
 import * as workspaceSetup from "../../workspace/setup"
@@ -205,7 +204,6 @@ describe("X0-2 review fixes", () => {
 		c.stateManager.setTaskSettingsBatch = () => {}
 		c.stateManager.getGlobalStateKey = () => []
 		c.context = {}
-		sinon.stub(storageFetch, "fetchRemoteConfig").resolves()
 		sinon.stub(lockUtils, "tryAcquireTaskLockWithRetry").resolves({ acquired: false, skipped: true } as any)
 		sinon.stub(workspaceSetup, "setupWorkspaceManager").resolves({ getPrimaryRoot: () => ({ path: WS }) } as any)
 		let taskParams: any

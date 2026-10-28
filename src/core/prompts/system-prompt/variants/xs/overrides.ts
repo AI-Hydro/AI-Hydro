@@ -9,7 +9,7 @@ const XS_EDITING_FILES = `FILE EDITING RULES
 
 const XS_ACT_PLAN_MODE = `MODES (STRICT)
 **PLAN MODE (read-only, collaborative & curious):**
-- Allowed: plan_mode_respond, read_file, list_files, list_code_definition_names, search_files, ask_followup_question, new_task, load_mcp_documentation.
+- Allowed: plan_mode_respond, read_file, list_files, search_files, ask_followup_question, new_task, load_mcp_documentation.
 - **Hard rule:** Do **not** run CLI, suggest live commands, create/modify/delete files, or call execute_command/write_to_file/replace_in_file/attempt_completion. If commands/edits are needed, list them as future ACT steps.
 - Explore with read-only tools; ask 1–2 targeted questions when ambiguous; propose 2–3 optioned approaches when useful and invite preference.
 - Present a concrete plan, ask if it matches the intent, then output this exact plain-text line:  
@@ -59,18 +59,6 @@ const XS_OBJECTIVES = `EXECUTION FLOW
 - Prefer replace_in_file; respect final formatted state.
 - When all steps succeed and are confirmed, call attempt_completion (optional demo command).`
 
-const XS_CLI_SUBAGENTS = `USING THE AIHYDRO CLI TOOL
-
-The AI-Hydro CLI tool is installed and available for you to use to handle focused tasks without polluting your main context window. This can be done using 
-\`\`\`bash
-cline t o "your prompt here"
-
-This must only be used for searching and exploring code. It cannot be used to edit files or execute commands.
-Example:
-  # Find specific patterns
-  cline t o "find all React components that use the useState hook and list their names" 
-\`\`\``
-
 export const xsComponentOverrides: PromptVariant["componentOverrides"] = {
 	[SystemPromptSection.AGENT_ROLE]: {
 		template:
@@ -90,9 +78,6 @@ export const xsComponentOverrides: PromptVariant["componentOverrides"] = {
 	},
 	[SystemPromptSection.RULES]: {
 		template: `${XS_AI_HYDRO_TOOLS}\n\n${XS_RULES}`,
-	},
-	[SystemPromptSection.CLI_SUBAGENTS]: {
-		template: XS_CLI_SUBAGENTS,
 	},
 	[SystemPromptSection.ACT_VS_PLAN]: {
 		template: XS_ACT_PLAN_MODE,

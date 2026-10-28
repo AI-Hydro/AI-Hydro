@@ -143,7 +143,7 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 	 * The Problem:
 	 * Doing: webview.onDidReceiveMessage(this.controller.handleWebviewMessage)
 	 * Would cause 'this' inside handleWebviewMessage to be undefined or wrong,
-	 * leading to "TypeError: this.setUserInfo is not a function"
+	 * leading to "TypeError: this.postStateToWebview is not a function"
 	 *
 	 * The Solution:
 	 * We wrap the method call in an arrow function, which:

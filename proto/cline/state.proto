@@ -24,7 +24,6 @@ service StateService {
   rpc setWelcomeViewCompleted(BooleanRequest) returns (Empty);
   rpc updateInfoBannerVersion(Int64Request) returns (Empty);
   rpc updateModelBannerVersion(Int64Request) returns (Empty);
-  rpc checkCliInstallation(EmptyRequest) returns (Boolean);
   rpc getProcessInfo(EmptyRequest) returns (ProcessInfo);
 }
 
@@ -89,6 +88,8 @@ message Secrets {
 }
 
 message Settings {
+  // Removed in the X0-6 clean-up (account/dictation/CLI-subagent stack); never reuse these numbers.
+  reserved 52, 126;
    optional string aws_region = 1;
    optional bool aws_use_cross_region_inference = 2;
    optional bool aws_bedrock_use_prompt_cache = 3;
@@ -138,7 +139,6 @@ message Settings {
    optional string preferred_language = 49;
    optional OpenaiReasoningEffort openai_reasoning_effort = 50;
    optional PlanActMode mode = 51;
-   optional DictationSettings dictation_settings = 52;
    optional FocusChainSettings focus_chain_settings = 53;
    optional string custom_prompt = 54;
    optional string dify_base_url = 55;
@@ -212,14 +212,8 @@ message Settings {
    optional OcaModelInfo act_mode_oca_model_info = 123;
    optional int32 max_consecutive_mistakes = 124;
    optional bool subagents_enabled = 125;
-   optional int32 subagent_terminal_output_line_limit = 126;
 }
 
-message DictationSettings {
-  bool feature_enabled = 1;
-  bool dictation_enabled = 2;
-  string dictation_language = 3;
-}
 message State {
   string state_json = 1;
 }
@@ -321,6 +315,8 @@ message UpdateTaskSettingsRequest {
 
 // Message for updating settings
 message UpdateSettingsRequest {
+  // Removed in the X0-6 clean-up (account/dictation/CLI-subagent stack); never reuse these numbers.
+  reserved 23, 30, 303;
   Metadata metadata = 1;
   optional ApiConfiguration api_configuration = 2;
   optional string telemetry_setting = 3;
@@ -342,14 +338,12 @@ message UpdateSettingsRequest {
   optional BrowserSettingsUpdate browser_settings = 20;
   optional string default_terminal_profile = 21;
   optional bool yolo_mode_toggled = 22;
-  optional DictationSettings dictation_settings = 23;
   optional double auto_condense_threshold = 24;
   optional bool multi_root_enabled = 25;
   optional bool hooks_enabled = 26;
   optional string vscode_terminal_execution_mode = 27;
   optional int32 max_consecutive_mistakes = 28;
   optional bool subagents_enabled = 29;
-  optional int32 subagent_terminal_output_line_limit = 30;
   optional string cline_env = 31;
   optional bool final_answer_audit_enabled = 32;
   optional string transcript_detail = 34;
@@ -490,7 +484,6 @@ message ApiConfiguration {
   optional string aws_authentication = 301;
   optional string aws_bedrock_api_key = 302;
 
-  optional string cline_account_id = 303;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

@@ -1,7 +1,7 @@
-# Unlock Specialized Capabilities with MCP
+# Compute hydrologic signatures
 
-**The Model Context Protocol (MCP) connects AI-Hydro to a world of powerful tools.**
+With the basin on the map, ask in chat: "Compute the hydrologic signatures for this basin." AI-Hydro fetches the streamflow record, runs the signature tool and records the run. Numbers in the answer carry a citation to the run that produced them, and answers with numbers that have no recorded run are flagged.
 
-Go beyond local code. With the Model Context Protocol (MCP), AI-Hydro accesses vital context from external datasources like databases, federal hydrology APIs, and geospatial services. It can interact with these platforms and leverage a growing marketplace of specialized, secure tools to tackle complex research and development tasks.
+![The basin feeds the signature tool, which records a run that the answer cites](images/step4-signatures.svg)
 
-![AI-Hydro MCP Servers Demo](https://storage.googleapis.com/cline_public_images/docs/assets/clines-mcp-servers-4_compress.webp)
+[Start a new task](command:aihydro.plusButtonClicked)

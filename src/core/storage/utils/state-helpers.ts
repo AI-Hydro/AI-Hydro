@@ -5,7 +5,6 @@ import { Controller } from "@/core/controller"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@/shared/AutoApprovalSettings"
 import { AiHydroRulesToggles } from "@/shared/aihydro-rules"
 import { DEFAULT_BROWSER_SETTINGS } from "@/shared/BrowserSettings"
-import { DEFAULT_DICTATION_SETTINGS, DictationSettings } from "@/shared/DictationSettings"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@/shared/FocusChainSettings"
 import { DEFAULT_MCP_DISPLAY_MODE } from "@/shared/McpDisplayMode"
 import { OpenaiReasoningEffort } from "@/shared/storage/types"
@@ -22,8 +21,6 @@ export async function readSecretsFromDisk(context: ExtensionContext): Promise<Se
 	const [
 		apiKey,
 		openRouterApiKey,
-		firebaseAiHydroAccountId,
-		clineAccountId,
 		awsAccessKey,
 		awsSecretKey,
 		awsSessionToken,
@@ -61,8 +58,6 @@ export async function readSecretsFromDisk(context: ExtensionContext): Promise<Se
 	] = await Promise.all([
 		context.secrets.get("apiKey") as Promise<Secrets["apiKey"]>,
 		context.secrets.get("openRouterApiKey") as Promise<Secrets["openRouterApiKey"]>,
-		context.secrets.get("clineAccountId") as Promise<Secrets["clineAccountId"]>,
-		context.secrets.get("cline:clineAccountId") as Promise<Secrets["cline:clineAccountId"]>,
 		context.secrets.get("awsAccessKey") as Promise<Secrets["awsAccessKey"]>,
 		context.secrets.get("awsSecretKey") as Promise<Secrets["awsSecretKey"]>,
 		context.secrets.get("awsSessionToken") as Promise<Secrets["awsSessionToken"]>,
@@ -103,8 +98,6 @@ export async function readSecretsFromDisk(context: ExtensionContext): Promise<Se
 		authNonce,
 		apiKey,
 		openRouterApiKey,
-		clineAccountId: firebaseAiHydroAccountId,
-		"cline:clineAccountId": clineAccountId,
 		huggingFaceApiKey,
 		huaweiCloudMaasApiKey,
 		basetenApiKey,
@@ -204,7 +197,6 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 		>("fireworksModelMaxCompletionTokens")
 		const fireworksModelMaxTokens =
 			context.globalState.get<GlobalStateAndSettings["fireworksModelMaxTokens"]>("fireworksModelMaxTokens")
-		const userInfo = context.globalState.get<GlobalStateAndSettings["userInfo"]>("userInfo")
 		const qwenApiLine = context.globalState.get<GlobalStateAndSettings["qwenApiLine"]>("qwenApiLine")
 		const moonshotApiLine = context.globalState.get<GlobalStateAndSettings["moonshotApiLine"]>("moonshotApiLine")
 		const zaiApiLine = context.globalState.get<GlobalStateAndSettings["zaiApiLine"]>("zaiApiLine")
@@ -235,9 +227,6 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			context.globalState.get<GlobalStateAndSettings["terminalOutputLineLimit"]>("terminalOutputLineLimit")
 		const maxConsecutiveMistakes =
 			context.globalState.get<GlobalStateAndSettings["maxConsecutiveMistakes"]>("maxConsecutiveMistakes")
-		const subagentTerminalOutputLineLimit = context.globalState.get<
-			GlobalStateAndSettings["subagentTerminalOutputLineLimit"]
-		>("subagentTerminalOutputLineLimit")
 		const defaultTerminalProfile =
 			context.globalState.get<GlobalStateAndSettings["defaultTerminalProfile"]>("defaultTerminalProfile")
 		const sapAiCoreBaseUrl = context.globalState.get<GlobalStateAndSettings["sapAiCoreBaseUrl"]>("sapAiCoreBaseUrl")
@@ -251,9 +240,6 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			context.globalState.get<GlobalStateAndSettings["openaiReasoningEffort"]>("openaiReasoningEffort")
 		const preferredLanguage = context.globalState.get<GlobalStateAndSettings["preferredLanguage"]>("preferredLanguage")
 		const focusChainSettings = context.globalState.get<GlobalStateAndSettings["focusChainSettings"]>("focusChainSettings")
-		const dictationSettings = context.globalState.get<GlobalStateAndSettings["dictationSettings"]>("dictationSettings") as
-			| DictationSettings
-			| undefined
 		const lastDismissedInfoBannerVersion =
 			context.globalState.get<GlobalStateAndSettings["lastDismissedInfoBannerVersion"]>("lastDismissedInfoBannerVersion")
 		const lastDismissedModelBannerVersion = context.globalState.get<
@@ -594,7 +580,6 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 
 			// Other global fields
 			focusChainSettings: focusChainSettings || DEFAULT_FOCUS_CHAIN_SETTINGS,
-			dictationSettings: { ...DEFAULT_DICTATION_SETTINGS, ...dictationSettings },
 			strictPlanModeEnabled: strictPlanModeEnabled ?? true,
 			yoloModeToggled: yoloModeToggled ?? false,
 			useAutoCondense: useAutoCondense ?? false,
@@ -608,7 +593,6 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			preferredLanguage: preferredLanguage || "English",
 			openaiReasoningEffort: (openaiReasoningEffort as OpenaiReasoningEffort) || "medium",
 			mode: mode || "act",
-			userInfo,
 			mcpMarketplaceEnabled: mcpMarketplaceEnabledRaw ?? true,
 			mcpDisplayMode: mcpDisplayMode ?? DEFAULT_MCP_DISPLAY_MODE,
 			mcpResponsesCollapsed: mcpResponsesCollapsed,
@@ -620,7 +604,6 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			vscodeTerminalExecutionMode: vscodeTerminalExecutionMode ?? "vscodeTerminal",
 			terminalOutputLineLimit: terminalOutputLineLimit ?? 500,
 			maxConsecutiveMistakes: maxConsecutiveMistakes ?? 3,
-			subagentTerminalOutputLineLimit: subagentTerminalOutputLineLimit ?? 2000,
 			defaultTerminalProfile: defaultTerminalProfile ?? "default",
 			globalWorkflowToggles: globalWorkflowToggles || {},
 			qwenCodeOauthPath,
@@ -700,7 +683,6 @@ export async function resetGlobalState(controller: Controller) {
 		"qwenApiKey",
 		"doubaoApiKey",
 		"mistralApiKey",
-		"clineAccountId",
 		"liteLlmApiKey",
 		"fireworksApiKey",
 		"asksageApiKey",

@@ -1,7 +1,7 @@
 import { AiHydroMessage } from "@shared/ExtensionMessage"
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useMemo } from "react"
-import { expect, userEvent, within } from "storybook/test"
+import { expect, within } from "storybook/test"
 import { createStorybookDecorator } from "@/config/StorybookDecorator"
 import ErrorRow from "./ErrorRow"
 
@@ -11,13 +11,6 @@ const createMockMessage = (overrides: Partial<AiHydroMessage> = {}): AiHydroMess
 	type: "say",
 	say: "error",
 	text: "An error occurred while processing your request.",
-	...overrides,
-})
-
-const createMockAuthState = (overrides: any = {}) => ({
-	aihydroUser: null,
-	activeOrganization: null,
-	isAuthenticated: false,
 	...overrides,
 })
 
@@ -31,17 +24,11 @@ const createMockExtensionState = (overrides: any = {}) => ({
 
 // Reusable decorators
 const createStoryDecorator =
-	(authOverrides: any = {}, extensionOverrides: any = {}) =>
+	(extensionOverrides: any = {}) =>
 	(Story: any) => {
-		const mockExtensionState = useMemo(
-			() => ({
-				state: { ...createMockExtensionState(extensionOverrides) },
-				auth: { ...createMockAuthState(authOverrides) },
-			}),
-			[],
-		)
+		const mockExtensionState = useMemo(() => ({ ...createMockExtensionState(extensionOverrides) }), [])
 
-		return createStorybookDecorator(mockExtensionState.state, "p-4", mockExtensionState.auth)(Story)
+		return createStorybookDecorator(mockExtensionState, "p-4")(Story)
 	}
 
 const meta: Meta<typeof ErrorRow> = {
@@ -51,7 +38,7 @@ const meta: Meta<typeof ErrorRow> = {
 		docs: {
 			description: {
 				component:
-					"Displays different types of error messages in the chat interface, including API errors, credit limit errors, diff errors, and aihydroignore errors. Handles special error parsing for AI-Hydro provider errors and provides appropriate user actions.",
+					"Displays different types of error messages in the chat interface, including API errors, diff errors, and aihydroignore errors. Handles special error parsing for AI-Hydro provider errors and provides appropriate user actions.",
 			},
 		},
 	},
@@ -120,27 +107,7 @@ export const ApiStreamingFailed: Story = {
 	},
 }
 
-// Cline-specific errors
-export const AiHydroBalanceError: Story = {
-	args: {
-		message: createMockMessage(),
-		errorType: "error",
-		apiRequestFailedMessage: JSON.stringify({
-			message: "Insufficient credits to complete this request.",
-			code: "insufficient_credits",
-			request_id: "req_123456789",
-			providerId: "cline",
-			details: {
-				current_balance: 0.5,
-				total_spent: 25.75,
-				total_promotions: 5.0,
-				message: "You have run out of credits. Please purchase more to continue.",
-				buy_credits_url: "https://app.example.bot/dashboard/account?tab=credits&redirect=true",
-			},
-		}),
-	},
-}
-
+// Rate-limit errors
 export const AiHydroRateLimitError: Story = {
 	args: {
 		message: createMockMessage(),
@@ -159,7 +126,7 @@ export const AuthenticationErrors: Story = {
 		message: createMockMessage(),
 		errorType: "error",
 		apiRequestFailedMessage: JSON.stringify({
-			message: "Authentication failed. Please sign in to continue.",
+			message: "Authentication failed. Check your API key and retry.",
 			code: "ERR_BAD_REQUEST",
 			request_id: "req_auth_123",
 			providerId: "cline",
@@ -174,56 +141,9 @@ export const AuthenticationErrors: Story = {
 	parameters: {
 		docs: {
 			description: {
-				story: "Interactive story for testing authentication-related errors. Configure the error message JSON to test different auth scenarios including signed in/out states.",
+				story: "Interactive story for testing authentication-related errors. Configure the error message JSON to test different auth scenarios.",
 			},
 		},
-	},
-}
-
-// Auth error when signed in (shows different UI)
-export const AuthErrorSignedIn: Story = {
-	...AuthenticationErrors,
-	decorators: [
-		createStoryDecorator({
-			aihydroUser: { id: "user123", email: "user@example.com" },
-			isAuthenticated: true,
-		}),
-	],
-	args: {
-		message: createMockMessage(),
-		errorType: "error",
-		apiRequestFailedMessage: JSON.stringify({
-			message: "Authentication failed. Please retry your request.",
-			request_id: "req_auth_456",
-			providerId: "anthropic",
-		}),
-	},
-}
-
-// Interactive tests
-export const InteractiveSignIn: Story = {
-	args: {
-		message: createMockMessage(),
-		errorType: "error",
-		apiRequestFailedMessage: JSON.stringify({
-			message: "Please sign in to access AI-Hydro services.",
-			code: "ERR_BAD_REQUEST",
-			request_id: "req_signin_test",
-			providerId: "cline",
-		}),
-	},
-	play: async ({ canvasElement }) => {
-		const canvas = within(canvasElement)
-
-		// Find the sign in button
-		const signInButton = canvas.getByRole("button", { name: /sign in to cline/i })
-		await expect(signInButton).toBeInTheDocument()
-
-		// Test button is clickable
-		await expect(signInButton).toBeEnabled()
-
-		// Click the button (this will trigger the mock handler)
-		await userEvent.click(signInButton)
 	},
 }
 

@@ -3,7 +3,6 @@ import { getActVsPlanModeSection } from "./act_vs_plan_mode"
 import { getAgentRoleSection } from "./agent_role"
 import { getTodoListSection } from "./auto_todo"
 import { getCapabilitiesSection } from "./capabilities"
-import { getCliSubagentsSection } from "./cli_subagents"
 import { getEditingFilesSection } from "./editing_files"
 import { getFeedbackSection } from "./feedback"
 import { getMcp } from "./mcp"
@@ -43,10 +42,6 @@ export function getSystemPromptComponents() {
 		{
 			id: SystemPromptSection.ACT_VS_PLAN,
 			fn: getActVsPlanModeSection,
-		},
-		{
-			id: SystemPromptSection.CLI_SUBAGENTS,
-			fn: getCliSubagentsSection,
 		},
 		{
 			id: SystemPromptSection.FEEDBACK,

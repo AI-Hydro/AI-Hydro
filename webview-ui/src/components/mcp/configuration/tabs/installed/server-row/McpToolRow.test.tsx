@@ -15,7 +15,13 @@ vi.mock("@/context/ExtensionStateContext", () => ({
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeCheckbox: ({ checked, disabled, onChange, title, children, ...rest }: any) => (
 		<label title={title}>
-			<input aria-describedby={rest["aria-describedby"]} checked={!!checked} disabled={disabled} onChange={onChange} type="checkbox" />
+			<input
+				aria-describedby={rest["aria-describedby"]}
+				checked={!!checked}
+				disabled={disabled}
+				onChange={onChange}
+				type="checkbox"
+			/>
 			{children}
 		</label>
 	),

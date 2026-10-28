@@ -46,7 +46,6 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 	try {
 		if (request.environment !== undefined) {
 			AiHydroEnv.setEnvironment(request.environment)
-			await controller.handleSignOut()
 		}
 
 		if (request.settings) {

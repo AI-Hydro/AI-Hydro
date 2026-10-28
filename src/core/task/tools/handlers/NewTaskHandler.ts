@@ -38,8 +38,8 @@ export class NewTaskHandler implements IToolHandler, IPartialBlockHandler {
 		// Show notification if auto-approval is enabled
 		if (config.autoApprovalSettings.enabled && config.autoApprovalSettings.enableNotifications) {
 			showSystemNotification({
-				subtitle: "AI Hydro wants to start a new task...",
-				message: `AI Hydro is suggesting to start a new task with: ${context}`,
+				subtitle: "AI-Hydro wants to start a new task...",
+				message: `AI-Hydro is suggesting to start a new task with: ${context}`,
 			})
 		}
 

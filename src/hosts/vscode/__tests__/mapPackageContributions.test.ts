@@ -88,6 +88,6 @@ describe("AI-Hydro map VS Code contributions", () => {
 		)
 
 		should.exist(galleryCommand)
-		galleryCommand.title.should.equal("AI-Hydro Map: Open Research Gallery")
+		galleryCommand.title.should.equal("Map: Open Research Gallery")
 	})
 })
