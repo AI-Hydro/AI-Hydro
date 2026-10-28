@@ -223,7 +223,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		setShowAccount(false)
 		setShowMap(false)
 		setShowConnectors(false)
-	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowMap, setShowConnectors])
+		setShowSkills(false)
+	}, [setShowSettings, closeMcpView, setShowHistory, setShowAccount, setShowMap, setShowConnectors, setShowSkills])
 
 	const [state, setState] = useState<ExtensionState>({
 		version: "",

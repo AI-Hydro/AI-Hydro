@@ -211,3 +211,29 @@ describe("answered row remounts: what the user needs survives", () => {
 		})
 	}
 })
+
+describe("grant note lifecycle", () => {
+	it("the status region is always mounted, empty until there is a note", () => {
+		setMessages(pending)
+		render(<Tree detail="normal" messages={pending} />)
+		const region = screen.getByTestId("grant-note-region")
+		expect(region.getAttribute("role")).toBe("status")
+		expect(region.textContent).toBe("")
+	})
+
+	it("a note from one task does not show in the next", async () => {
+		toggle.mockResolvedValue(grantedReply())
+		setMessages(pending)
+		const view = render(<Tree detail="normal" messages={pending} />)
+		fireEvent.click(screen.getByTestId("inline-approval-always"))
+		await waitFor(() => expect(executeButtonAction).toHaveBeenCalledTimes(1))
+		setMessages(answered)
+		view.rerender(<Tree detail="normal" messages={answered} />)
+		expect(screen.getByTestId("grant-note")).toBeTruthy()
+		const next: AiHydroMessage[] = [{ ...task, ts: 5000 }]
+		setMessages(next)
+		view.rerender(<Tree detail="normal" messages={next} />)
+		expect(screen.queryByTestId("grant-note")).toBeNull()
+		expect(screen.getByTestId("grant-note-region").textContent).toBe("")
+	})
+})

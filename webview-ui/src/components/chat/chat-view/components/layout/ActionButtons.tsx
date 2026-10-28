@@ -151,21 +151,25 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	)
 
 	// A saved "Always" says where to revoke it here: the card it came from is folded into a work group by then.
-	const grantNote = pendingAsk?.grantNote ? (
-		<div
-			className="flex items-center gap-[8px] px-[15px] pb-[6px] text-[12px] text-[var(--vscode-descriptionForeground)]"
-			data-testid="grant-note"
-			role="status">
-			<span>{pendingAsk.grantNote.text}</span>
-			<button
-				aria-label="Dismiss note"
-				className="inline-flex items-center justify-center min-h-[24px] min-w-[24px] cursor-pointer border-0 bg-transparent text-[var(--vscode-foreground)]"
-				onClick={pendingAsk.dismissGrantNote}
-				type="button">
-				<span aria-hidden="true" className="codicon codicon-close" />
-			</button>
+	// The status region is always mounted, empty when there is no note, so screen readers announce a change in it.
+	const grantNote = (
+		<div className={pendingAsk?.grantNote ? undefined : "sr-only"} data-testid="grant-note-region" role="status">
+			{pendingAsk?.grantNote && (
+				<div
+					className="flex items-center gap-[8px] px-[15px] pb-[6px] text-[12px] text-[var(--vscode-descriptionForeground)]"
+					data-testid="grant-note">
+					<span>{pendingAsk.grantNote.text}</span>
+					<button
+						aria-label="Dismiss note"
+						className="inline-flex items-center justify-center min-h-[24px] min-w-[24px] cursor-pointer border-0 bg-transparent text-[var(--vscode-foreground)]"
+						onClick={pendingAsk.dismissGrantNote}
+						type="button">
+						<span aria-hidden="true" className="codicon codicon-close" />
+					</button>
+				</div>
+			)}
 		</div>
-	) : null
+	)
 
 	if (!hasButtons) {
 		return (

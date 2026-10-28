@@ -96,3 +96,36 @@ describe("ExtensionStateContext hydration fallback", () => {
 		expect(screen.getByTestId("welcome").textContent).toBe("false")
 	})
 })
+
+describe("navigateToChat", () => {
+	function Nav() {
+		const { showSkills, navigateToSkills, navigateToChat } = useExtensionState()
+		return (
+			<>
+				<span data-testid="skills">{String(showSkills)}</span>
+				<button onClick={navigateToSkills} type="button">
+					skills
+				</button>
+				<button onClick={navigateToChat} type="button">
+					chat
+				</button>
+			</>
+		)
+	}
+
+	it("closes the Skills view (the focus-pending-prompt command relies on it to reach the chat)", async () => {
+		render(
+			<ExtensionStateContextProvider>
+				<Nav />
+			</ExtensionStateContextProvider>,
+		)
+		await act(async () => {
+			screen.getByText("skills").click()
+		})
+		expect(screen.getByTestId("skills").textContent).toBe("true")
+		await act(async () => {
+			screen.getByText("chat").click()
+		})
+		expect(screen.getByTestId("skills").textContent).toBe("false")
+	})
+})

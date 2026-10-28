@@ -141,6 +141,13 @@ export function PendingAskProvider({
 		setGrantNote(note)
 		grantTimer.current = setTimeout(() => setGrantNote(undefined), GRANT_NOTE_MS)
 	}, [])
+	// A note belongs to the task it was made in: a new task must not open with an old "Always" line.
+	const taskTs = aihydroMessages?.[0]?.ts
+	// biome-ignore lint/correctness/useExhaustiveDependencies: clears when the task changes
+	useEffect(() => {
+		clearTimeout(grantTimer.current)
+		setGrantNote(undefined)
+	}, [taskTs])
 	const dismissGrantNote = useCallback(() => {
 		clearTimeout(grantTimer.current)
 		setGrantNote(undefined)
