@@ -27,6 +27,22 @@ export interface AutoRunPolicy {
 	summary: string
 }
 
+/**
+ * Why a per-tool "always allow" grant cannot fire right now, or undefined when it can. The one wording shared by the
+ * composer chip (mcpLabel) and the inline approval's "Always" button. Core honours YOLO first, so a grant is never
+ * inactive under it.
+ */
+export function mcpGrantInactiveReason(settings: AutoApprovalSettings, yolo = false): string | undefined {
+	if (yolo) {
+		return undefined
+	}
+	const actions = (settings.actions ?? {}) as Record<string, boolean | undefined>
+	if (!settings.enabled) {
+		return "inactive while auto-run is off"
+	}
+	return actions.useMcp ? undefined : "inactive while MCP auto-run is off"
+}
+
 /** Meta toggles in ACTION_METADATA that are not actions themselves. */
 const META_IDS = new Set(["enableAutoApprove", "enableAll"])
 
@@ -98,13 +114,14 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 			riskReasons.push("runs any terminal command without asking")
 		}
 	}
-	const mcpDormant = mcpAlwaysAllowed > 0 && !yolo && (!enabled || !actions.useMcp)
+	const inactiveReason = mcpGrantInactiveReason(settings, yolo)
+	const mcpDormant = mcpAlwaysAllowed > 0 && inactiveReason !== undefined
 	const noun = mcpAlwaysAllowed === 1 ? "tool" : "tools"
 	const activeLabel =
 		mcpAlwaysAllowed === 0
 			? ""
 			: mcpDormant
-				? `${mcpAlwaysAllowed} MCP ${noun} set to always allow (inactive while ${!enabled ? "auto-run" : "MCP auto-run"} is off)`
+				? `${mcpAlwaysAllowed} MCP ${noun} set to always allow (${inactiveReason})`
 				: `${mcpAlwaysAllowed} MCP ${noun} always allowed`
 	if (activeLabel) {
 		riskReasons.push(activeLabel)

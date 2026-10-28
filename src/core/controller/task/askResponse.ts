@@ -1,6 +1,7 @@
 import { AskResponseRequest, AskResponseResult } from "@shared/proto/cline/task"
 import { AiHydroAskResponse } from "../../../shared/WebviewMessage"
 import { Controller } from ".."
+import { clearPending } from "../ui/pendingAskBadge"
 
 /**
  * Handles a response from the webview for a previous ask operation
@@ -32,6 +33,13 @@ export async function askResponse(controller: Controller, request: AskResponseRe
 			default:
 				console.warn(`askResponse: Unknown response type: ${request.responseType}`)
 				return AskResponseResult.create({ stale: false })
+		}
+
+		// The user answered: drop the "waiting for you" badge. Only for the ask that is pending, so a stale response
+		// (dropped below) cannot clear the badge of the ask that replaced it.
+		const pendingTs = controller.task.taskState?.lastMessageTs
+		if (pendingTs !== undefined && (request.askTs === 0 || request.askTs === pendingTs)) {
+			clearPending(pendingTs)
 		}
 
 		// Call the task's handler for webview responses

@@ -55,6 +55,7 @@ const AiHydroCommands = {
 	SessionReplayButton: prefix + ".sessionReplayButtonClicked",
 	EvidenceBoardButton: prefix + ".evidenceBoardButtonClicked",
 	CycleTranscriptDetail: prefix + ".cycleTranscriptDetail",
+	FocusPendingPrompt: prefix + ".focusPendingPrompt",
 }
 
 /**

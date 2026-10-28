@@ -1,14 +1,17 @@
+import { isInlineApprovalAsk } from "@shared/aihydro/pendingAsk"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/cline/common"
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useMount } from "react-use"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
+import { focusPendingPrompt } from "./approval/focusPendingPrompt"
+import { PendingAskProvider } from "./approval/PendingAskContext"
 // Import utilities and hooks from the new structure
 import {
 	ActionButtons,
@@ -55,6 +58,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		mcpServers,
 		protectedRoots,
 		transcriptDetail,
+		navigateToChat,
 	} = useExtensionState()
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
@@ -321,78 +325,114 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		setExpandedRows,
 	)
 
+	// While a run/deny ask is pending, a typed message denies it with that note (host: ToolResultUtils). Say so.
+	const approvalPending = isInlineApprovalAsk(chatState.lastMessage)
 	const placeholderText = useMemo(() => {
+		if (approvalPending) {
+			return "Reply to deny with a note…"
+		}
 		// The input hints (@ context, / commands) live in the placeholder, and only while there is no transcript yet.
 		return task ? "Type a message..." : "Type your task here... (@ for context, / for commands)"
-	}, [task])
+	}, [task, approvalPending])
+
+	// "Focus pending prompt" command: scroll to the tail and focus its approval group (never a button). When another
+	// view (History, Settings, ...) covers the chat, switch back to it first and focus once it is showing.
+	const scrollToTail = scrollBehavior.scrollToBottomSmooth
+	const focusAfterShow = useRef(false)
+	const focusPending = useCallback(() => {
+		scrollToTail()
+		focusPendingPrompt(() => textAreaRef.current?.focus())
+	}, [scrollToTail, textAreaRef])
+	useEffect(() => {
+		const handle = () => {
+			if (isHidden) {
+				focusAfterShow.current = true
+				navigateToChat()
+				return
+			}
+			focusPending()
+		}
+		window.addEventListener("focusPendingPrompt", handle)
+		return () => window.removeEventListener("focusPendingPrompt", handle)
+	}, [isHidden, navigateToChat, focusPending])
+	useEffect(() => {
+		if (!isHidden && focusAfterShow.current) {
+			focusAfterShow.current = false
+			focusPending()
+		}
+	}, [isHidden, focusPending])
 
 	return (
-		<ChatLayout isHidden={isHidden}>
-			<div className="flex flex-col flex-1 overflow-hidden">
-				{showNavbar && <Navbar />}
-				{task ? (
-					<TaskSection
-						apiMetrics={apiMetrics}
-						lastApiReqTotalTokens={lastApiReqTotalTokens}
-						lastProgressMessageText={lastProgressMessageText}
+		<PendingAskProvider chatState={chatState} messageHandlers={messageHandlers}>
+			<ChatLayout isHidden={isHidden}>
+				<div className="flex flex-col flex-1 overflow-hidden">
+					{showNavbar && <Navbar />}
+					{task ? (
+						<TaskSection
+							apiMetrics={apiMetrics}
+							lastApiReqTotalTokens={lastApiReqTotalTokens}
+							lastProgressMessageText={lastProgressMessageText}
+							messageHandlers={messageHandlers}
+							scrollBehavior={scrollBehavior}
+							selectedModelInfo={{
+								supportsPromptCache: selectedModelInfo.supportsPromptCache,
+								supportsImages: selectedModelInfo.supportsImages || false,
+							}}
+							task={task}
+						/>
+					) : (
+						<WelcomeSection
+							hideAnnouncement={hideAnnouncement}
+							showAnnouncement={showAnnouncement}
+							showHistoryView={showHistoryView}
+							taskHistory={taskHistory}
+							telemetrySetting={telemetrySetting}
+							version={version}
+						/>
+					)}
+					{task && (
+						<MessagesArea
+							chatState={chatState}
+							detail={detail}
+							groupedMessages={groupedMessages}
+							isRunning={isTaskRunning(messages.at(-1), backgroundCommandRunning)}
+							messageHandlers={messageHandlers}
+							modifiedMessages={modifiedMessages}
+							scrollBehavior={scrollBehavior}
+							task={task}
+							view={transcriptView}
+						/>
+					)}
+				</div>
+				<footer className="input-footer-glass" style={{ gridRow: "2" }}>
+					<ActionButtons
+						chatState={chatState}
 						messageHandlers={messageHandlers}
-						scrollBehavior={scrollBehavior}
-						selectedModelInfo={{
-							supportsPromptCache: selectedModelInfo.supportsPromptCache,
-							supportsImages: selectedModelInfo.supportsImages || false,
+						messages={messages}
+						mode={mode}
+						scrollBehavior={{
+							scrollToBottomSmooth: scrollBehavior.scrollToBottomSmooth,
+							disableAutoScrollRef: scrollBehavior.disableAutoScrollRef,
+							showScrollToBottom: scrollBehavior.showScrollToBottom,
+							isAtBottom: scrollBehavior.isAtBottom,
+							virtuosoRef: scrollBehavior.virtuosoRef,
 						}}
 						task={task}
 					/>
-				) : (
-					<WelcomeSection
-						hideAnnouncement={hideAnnouncement}
-						showAnnouncement={showAnnouncement}
-						showHistoryView={showHistoryView}
-						taskHistory={taskHistory}
-						telemetrySetting={telemetrySetting}
-						version={version}
-					/>
-				)}
-				{task && (
-					<MessagesArea
+					<InputSection
 						chatState={chatState}
-						detail={detail}
-						groupedMessages={groupedMessages}
-						isRunning={isTaskRunning(messages.at(-1), backgroundCommandRunning)}
+						isTaskRunning={isTaskRunning(messages.at(-1), backgroundCommandRunning)}
 						messageHandlers={messageHandlers}
-						modifiedMessages={modifiedMessages}
+						placeholderText={placeholderText}
 						scrollBehavior={scrollBehavior}
-						task={task}
-						view={transcriptView}
+						selectFilesAndImages={selectFilesAndImages}
+						sendTitle={approvalPending ? "Send (denies the pending call with your note)" : undefined}
+						shouldDisableFilesAndImages={shouldDisableFilesAndImages}
 					/>
-				)}
-			</div>
-			<footer className="input-footer-glass" style={{ gridRow: "2" }}>
-				<ActionButtons
-					chatState={chatState}
-					messageHandlers={messageHandlers}
-					messages={messages}
-					mode={mode}
-					scrollBehavior={{
-						scrollToBottomSmooth: scrollBehavior.scrollToBottomSmooth,
-						disableAutoScrollRef: scrollBehavior.disableAutoScrollRef,
-						showScrollToBottom: scrollBehavior.showScrollToBottom,
-						virtuosoRef: scrollBehavior.virtuosoRef,
-					}}
-					task={task}
-				/>
-				<InputSection
-					chatState={chatState}
-					isTaskRunning={isTaskRunning(messages.at(-1), backgroundCommandRunning)}
-					messageHandlers={messageHandlers}
-					placeholderText={placeholderText}
-					scrollBehavior={scrollBehavior}
-					selectFilesAndImages={selectFilesAndImages}
-					shouldDisableFilesAndImages={shouldDisableFilesAndImages}
-				/>
-				<ComposerStatus contextTokens={lastApiReqTotalTokens} contextWindow={selectedModelInfo?.contextWindow} />
-			</footer>
-		</ChatLayout>
+					<ComposerStatus contextTokens={lastApiReqTotalTokens} contextWindow={selectedModelInfo?.contextWindow} />
+				</footer>
+			</ChatLayout>
+		</PendingAskProvider>
 	)
 }
 

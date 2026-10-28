@@ -176,6 +176,11 @@
 				"category": "AI-Hydro"
 			},
 			{
+				"command": "aihydro.focusPendingPrompt",
+				"title": "Focus Pending Prompt",
+				"category": "AI-Hydro"
+			},
+			{
 				"command": "aihydro.historyButtonClicked",
 				"title": "Analysis History",
 				"icon": "$(history)"
@@ -485,6 +490,10 @@
 			],
 			"commandPalette": [
 				{
+					"command": "aihydro.focusPendingPrompt",
+					"when": "aihydro.hasPendingAsk"
+				},
+				{
 					"command": "aihydro.map.addLayerFromUrl"
 				},
 				{
@@ -720,6 +729,18 @@
 			"biome check --write --staged --no-errors-on-unmatched --files-ignore-unknown=true"
 		]
 	},
+	"//overrides": "These force openai (declares zod ^3), @sap-ai-sdk/prompt-registry 1.x (zod ^3) and chromium-bidi (zod 3.23.8) onto the root zod 4 to clear GHSA-mrhx-c7xc-m3w5, i.e. OUTSIDE their declared zod range. Remove each entry once that package declares zod 4. Runtime-tested on zod 4.6.7: MCP SDK 1.32.1 stdio round trip (src/services/mcp/__tests__/zodMcpRoundTrip.test.ts), mistral, SAP prompt-registry schema construction. openai zod helpers and the chromium-bidi parser are unused/unbundled and untested. See CHANGELOG 0.4.0.",
+	"overrides": {
+		"openai": {
+			"zod": "$zod"
+		},
+		"@sap-ai-sdk/prompt-registry": {
+			"zod": "$zod"
+		},
+		"chromium-bidi": {
+			"zod": "$zod"
+		}
+	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.1.4",
 		"@bufbuild/buf": "^1.54.0",
@@ -855,7 +876,7 @@
 		"vscode-uri": "^3.1.0",
 		"web-tree-sitter": "^0.22.6",
 		"yauzl": "^3.4.0",
-		"zod": "^3.24.2"
+		"zod": "^4.6.7"
 	},
 	"c8": {
 		"reporter": [

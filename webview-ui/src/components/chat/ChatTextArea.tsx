@@ -82,6 +82,8 @@ interface ChatTextAreaProps {
 	setInputValue: (value: string) => void
 	sendingDisabled: boolean
 	placeholderText: string
+	/** Tooltip for the send button; defaults to none. Set while a typed reply has a special meaning (denies a pending call). */
+	sendTitle?: string
 	selectedFiles: string[]
 	selectedImages: string[]
 	setSelectedImages: React.Dispatch<React.SetStateAction<string[]>>
@@ -233,6 +235,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			setInputValue,
 			sendingDisabled,
 			placeholderText,
+			sendTitle,
 			isTaskRunning = false,
 			isStopping = false,
 			onStop,
@@ -1684,7 +1687,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 											setIsTextAreaFocused(false)
 											onSend()
 										}
-									}}>
+									}}
+									title={sendTitle}>
 									<span className="codicon codicon-send text-sm" />
 								</button>
 							)}
