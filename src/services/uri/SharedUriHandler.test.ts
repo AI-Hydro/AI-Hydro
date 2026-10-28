@@ -9,7 +9,6 @@ import { SharedUriHandler } from "./SharedUriHandler"
 describe("SharedUriHandler", () => {
 	let sandbox: sinon.SinonSandbox
 	let handleOpenRouterCallbackStub: sinon.SinonStub
-	let handleAuthCallbackStub: sinon.SinonStub
 
 	beforeEach(async () => {
 		sandbox = sinon.createSandbox()
@@ -33,11 +32,9 @@ describe("SharedUriHandler", () => {
 		await ErrorService.initialize()
 
 		handleOpenRouterCallbackStub = sandbox.stub().resolves()
-		handleAuthCallbackStub = sandbox.stub().resolves()
 		const mockWebviewProvider = {
 			controller: {
 				handleOpenRouterCallback: handleOpenRouterCallbackStub,
-				handleAuthCallback: handleAuthCallbackStub,
 			},
 		} as any
 		sandbox.stub(WebviewProvider, "getVisibleInstance").returns(mockWebviewProvider)
@@ -72,26 +69,16 @@ describe("SharedUriHandler", () => {
 			})
 		})
 
-		describe("Auth callback handling", () => {
-			it("should successfully handle auth callback with idToken", async () => {
-				const result = await SharedUriHandler.handleUri("vscode://aihydro.ai-hydro/auth?idToken=jwt123&provider=google")
-
-				expect(result).to.be.true
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt123", "google")
-			})
-
-			it("should successfully handle auth callback without provider", async () => {
-				const result = await SharedUriHandler.handleUri("vscode://aihydro.ai-hydro/auth?idToken=jwt123")
-
-				expect(result).to.be.true
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt123", null)
-			})
-
-			it("should return false when idToken is missing", async () => {
-				const result = await SharedUriHandler.handleUri("vscode://aihydro.ai-hydro/auth?provider=google")
-
-				expect(result).to.be.false
-				expect(handleAuthCallbackStub.called).to.be.false
+		describe("Retired account sign-in route", () => {
+			it("does not handle /auth links: there is no account sign-in (X0-6)", async () => {
+				for (const uri of [
+					"vscode://aihydro.ai-hydro/auth?idToken=jwt123&provider=google",
+					"vscode://aihydro.ai-hydro/auth?refreshToken=r&provider=github",
+					"vscode://aihydro.ai-hydro/auth?code=c",
+				]) {
+					expect(await SharedUriHandler.handleUri(uri), uri).to.be.false
+				}
+				expect(handleOpenRouterCallbackStub.called).to.be.false
 			})
 		})
 
@@ -100,7 +87,6 @@ describe("SharedUriHandler", () => {
 				const result = await SharedUriHandler.handleUri("vscode://aihydro.ai-hydro/unknown?param=value")
 
 				expect(result).to.be.false
-				expect(handleAuthCallbackStub.called).to.be.false
 				expect(handleOpenRouterCallbackStub.called).to.be.false
 			})
 		})
@@ -118,7 +104,6 @@ describe("SharedUriHandler", () => {
 				const result = await SharedUriHandler.handleUri("invalid://uri")
 
 				expect(result).to.be.false
-				expect(handleAuthCallbackStub.called).to.be.false
 				expect(handleOpenRouterCallbackStub.called).to.be.false
 			})
 		})
@@ -126,28 +111,25 @@ describe("SharedUriHandler", () => {
 		describe("Query parameter parsing", () => {
 			it("should correctly parse multiple query parameters", async () => {
 				const result = await SharedUriHandler.handleUri(
-					"vscode://aihydro.ai-hydro/auth?idToken=jwt123&provider=github&extra=param",
+					"vscode://aihydro.ai-hydro/openrouter?code=test123&provider=github&extra=param",
 				)
 
 				expect(result).to.be.true
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt123", "github")
+				sinon.assert.calledOnceWithExactly(handleOpenRouterCallbackStub, "test123")
 			})
 
 			it("should handle URL-encoded parameters", async () => {
-				const result = await SharedUriHandler.handleUri(
-					"vscode://aihydro.ai-hydro/auth?idToken=jwt%20with%20spaces&provider=google",
-				)
+				const result = await SharedUriHandler.handleUri("vscode://aihydro.ai-hydro/openrouter?code=code%20with%20spaces")
 
 				expect(result).to.be.true
 				// URLSearchParams should decode %20 to spaces
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt with spaces", "google")
+				sinon.assert.calledOnceWithExactly(handleOpenRouterCallbackStub, "code with spaces")
 			})
 
 			it("should handle empty query string", async () => {
 				const result = await SharedUriHandler.handleUri("vscode://aihydro.ai-hydro/openrouter")
 
 				expect(result).to.be.false
-				expect(handleAuthCallbackStub.called).to.be.false
 				expect(handleOpenRouterCallbackStub.called).to.be.false
 			})
 		})
@@ -161,10 +143,10 @@ describe("SharedUriHandler", () => {
 			})
 
 			it("should handle HTTPS scheme URIs", async () => {
-				const result = await SharedUriHandler.handleUri("https://example.com/auth?idToken=jwt123&provider=github")
+				const result = await SharedUriHandler.handleUri("https://example.com/openrouter?code=test123")
 
 				expect(result).to.be.true
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt123", "github")
+				sinon.assert.calledOnceWithExactly(handleOpenRouterCallbackStub, "test123")
 			})
 		})
 	})
