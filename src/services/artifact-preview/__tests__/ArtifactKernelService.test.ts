@@ -62,7 +62,10 @@ describe("ArtifactKernelService (real kernel)", function () {
 		service.dispose()
 		sinon.restore()
 		delete vsc.workspace.workspaceFolders
-		await sleep(300) // let the killed kernel release its working directory (Windows holds it)
+		// Windows holds a process's working directory until the whole tree has exited: wait for that
+		// explicit signal (taskkill finished and the kernel exited), not for a fixed delay.
+		await service.whenTerminated()
+		// Backstop only: antivirus/indexers can still hold a handle for a moment after exit.
 		rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
 	})
 

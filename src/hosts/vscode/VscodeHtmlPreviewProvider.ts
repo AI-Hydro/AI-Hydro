@@ -28,6 +28,7 @@ import {
 	decideSaveDocument,
 	decideShellReady,
 } from "./previewMessageGuards"
+import { rootsKey, ShellReloadGate } from "./shellReloadGate"
 
 /**
  * Owns the single AI-Hydro HTML Preview webview panel.
@@ -75,6 +76,10 @@ export class VscodeHtmlPreviewProvider {
 	 * window that arrives with a null source).
 	 */
 	private static panelToken = ""
+	/** Resource-root identity the shell document was last loaded with (see refreshPanel). */
+	private static appliedRootsKey = ""
+	/** One shell reload in flight at a time (see ShellReloadGate). */
+	private static shellReloadGate: ShellReloadGate | undefined
 	/**
 	 * Maps VS Code internal file/artifact IDs (e.g. "file_0155f6f2094bdd2f") to
 	 * the canonical module ID from the HTML manifest (e.g. "dem-to-twi").
@@ -132,7 +137,7 @@ export class VscodeHtmlPreviewProvider {
 			localResourceRoots: VscodeHtmlPreviewProvider.computeLocalResourceRoots(),
 		})
 		VscodeHtmlPreviewProvider.currentPanel = panel
-		VscodeHtmlPreviewProvider.refreshPanel()
+		VscodeHtmlPreviewProvider.initializeShell(panel)
 		VscodeHtmlPreviewProvider.setupMessageHandler(panel)
 		VscodeHtmlPreviewProvider.setupNavIntentWatcher(panel)
 
@@ -146,6 +151,9 @@ export class VscodeHtmlPreviewProvider {
 		panel.onDidDispose(
 			() => {
 				VscodeHtmlPreviewProvider.currentPanel = undefined
+				VscodeHtmlPreviewProvider.shellReloadGate?.dispose()
+				VscodeHtmlPreviewProvider.shellReloadGate = undefined
+				VscodeHtmlPreviewProvider.appliedRootsKey = ""
 				while (VscodeHtmlPreviewProvider.disposables.length) {
 					const d = VscodeHtmlPreviewProvider.disposables.pop()
 					d?.dispose()
@@ -176,24 +184,50 @@ export class VscodeHtmlPreviewProvider {
 	}
 
 	/**
-	 * Rebuild the panel's HTML, CSP, and `localResourceRoots` so newly
-	 * registered artifacts (especially inline ones in globalStorageUri) can
-	 * be loaded by the inner iframe.
+	 * Load the shell document once. Its HTML (nonce, per-panel token, script URIs, CSP) does not
+	 * depend on which artifacts are open, so it is never rebuilt afterwards.
+	 */
+	private static initializeShell(panel: vscode.WebviewPanel): void {
+		const roots = VscodeHtmlPreviewProvider.computeLocalResourceRoots()
+		VscodeHtmlPreviewProvider.appliedRootsKey = rootsKey(roots)
+		VscodeHtmlPreviewProvider.currentNonce = generateNonce()
+		VscodeHtmlPreviewProvider.panelToken = randomBytes(24).toString("hex")
+		VscodeHtmlPreviewProvider.shellReloadGate?.dispose()
+		const gate = new ShellReloadGate(
+			() => {
+				// Only the resource roots can have changed; the HTML is deliberately left alone. Assigning
+				// `options` and `html` are two separate content updates, and stacking them replaced a shell
+				// that was still loading with one the host could never reach.
+				panel.webview.options = {
+					...panel.webview.options,
+					enableScripts: true,
+					localResourceRoots: VscodeHtmlPreviewProvider.computeLocalResourceRoots(),
+				}
+			},
+			(fn, ms) => {
+				const timer = setTimeout(fn, ms)
+				return () => clearTimeout(timer)
+			},
+		)
+		VscodeHtmlPreviewProvider.shellReloadGate = gate
+		// The first load is the one in flight: reloads requested before it reports are coalesced.
+		gate.markLoading()
+		panel.webview.html = VscodeHtmlPreviewProvider.buildShellHtml(panel.webview, VscodeHtmlPreviewProvider.currentNonce)
+	}
+
+	/**
+	 * Make newly registered artifacts (especially inline ones in globalStorageUri) loadable by the
+	 * inner iframe. The shell only needs a reload when the set of `localResourceRoots` actually
+	 * changed, and then exactly one, after the previous load has settled.
 	 */
 	private static refreshPanel(): void {
 		const panel = VscodeHtmlPreviewProvider.currentPanel
 		if (!panel) return
-		// Update accessible roots so asWebviewUri works for every artifact.
-		panel.webview.options = {
-			...panel.webview.options,
-			enableScripts: true,
-			localResourceRoots: VscodeHtmlPreviewProvider.computeLocalResourceRoots(),
+		const key = rootsKey(VscodeHtmlPreviewProvider.computeLocalResourceRoots())
+		if (key !== VscodeHtmlPreviewProvider.appliedRootsKey) {
+			VscodeHtmlPreviewProvider.appliedRootsKey = key
+			VscodeHtmlPreviewProvider.shellReloadGate?.request()
 		}
-		// Build the React shell HTML. We need a fresh nonce on every (re)load
-		// so the parent CSP can pin script execution.
-		VscodeHtmlPreviewProvider.currentNonce = generateNonce()
-		VscodeHtmlPreviewProvider.panelToken = randomBytes(24).toString("hex")
-		panel.webview.html = VscodeHtmlPreviewProvider.buildShellHtml(panel.webview, VscodeHtmlPreviewProvider.currentNonce)
 		// Push fresh state so the webview's React app gets the new webviewUris.
 		void VscodeHtmlPreviewProvider.controller?.postStateToWebview()
 	}
@@ -234,6 +268,10 @@ export class VscodeHtmlPreviewProvider {
 						}
 						break
 					case "aihydro-shell-ready": {
+						// A valid token proves the sender is the shell (a sandboxed document cannot read it).
+						if (decideShellReady(message, VscodeHtmlPreviewProvider.panelToken) !== "ignore") {
+							VscodeHtmlPreviewProvider.shellReloadGate?.shellReady(message.instance)
+						}
 						if (decideShellReady(message, VscodeHtmlPreviewProvider.panelToken) === "repush") {
 							console.log("[VscodeHtmlPreviewProvider] Shell ready: re-pushing state and previews")
 							mainWebview.controller?.republishHtmlPreviews()

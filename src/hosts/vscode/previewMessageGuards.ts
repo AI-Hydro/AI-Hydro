@@ -180,9 +180,9 @@ export function decideModuleState(
  * are lost, and the document it eventually settles on never learns of them; this message is
  * the live document's explicit request to catch up.
  *
- * It carries the per-document token the host embedded in the shell HTML. A stale document (an
- * older load that is being replaced) holds an older token and is ignored, so only the newest
- * mount is served; a sandboxed artifact cannot read the token, so it cannot trigger a re-push.
+ * It carries the per-panel token the host embedded in the shell HTML. A sandboxed artifact cannot
+ * read the token, so it cannot trigger a re-push. (Shell reloads are serialised by ShellReloadGate
+ * and never rebuild the HTML, so the token stays the same across reloads of one panel.)
  */
 export function decideShellReady(message: { token?: unknown }, currentToken: string): "repush" | "ignore" {
 	if (!currentToken || typeof message.token !== "string" || message.token !== currentToken) {
