@@ -10,7 +10,7 @@ import { courseNavigationKey, persistThenLoadCourseModule } from "./courseAgentN
 import HtmlPreviewView from "./HtmlPreviewView"
 import { learningPackScopeFromItem } from "./installedPackCsp"
 import ModulesMarketplaceView from "./marketplace/ModulesMarketplaceView"
-import { SHELL_INSTANCE_ID, startShellReadyHandshake } from "./shellReadyHandshake"
+import { SHELL_INSTANCE_ID, SHELL_LOADED_AT, startShellReadyHandshake } from "./shellReadyHandshake"
 import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
 
@@ -56,7 +56,8 @@ export const HtmlPreviewPanel: React.FC = () => {
 					const token = (window as { __aihydroPanelToken?: unknown }).__aihydroPanelToken
 					return typeof token === "string" ? token : undefined
 				},
-				post: (message) => PLATFORM_CONFIG.postMessage({ ...message, instance: SHELL_INSTANCE_ID }),
+				post: (message) =>
+					PLATFORM_CONFIG.postMessage({ ...message, instance: SHELL_INSTANCE_ID, loadedAt: SHELL_LOADED_AT }),
 				isReady: () => shellReadyRef.current,
 			}),
 		[],

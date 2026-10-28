@@ -269,10 +269,11 @@ export class VscodeHtmlPreviewProvider {
 						break
 					case "aihydro-shell-ready": {
 						// A valid token proves the sender is the shell (a sandboxed document cannot read it).
-						if (decideShellReady(message, VscodeHtmlPreviewProvider.panelToken) !== "ignore") {
-							VscodeHtmlPreviewProvider.shellReloadGate?.shellReady(message.instance)
+						const readyDecision = decideShellReady(message, VscodeHtmlPreviewProvider.panelToken)
+						if (readyDecision !== "ignore") {
+							VscodeHtmlPreviewProvider.shellReloadGate?.shellReady(message.instance, message.loadedAt)
 						}
-						if (decideShellReady(message, VscodeHtmlPreviewProvider.panelToken) === "repush") {
+						if (readyDecision === "repush") {
 							console.log("[VscodeHtmlPreviewProvider] Shell ready: re-pushing state and previews")
 							mainWebview.controller?.republishHtmlPreviews()
 						} else {

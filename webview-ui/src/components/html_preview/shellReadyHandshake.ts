@@ -26,6 +26,9 @@ export interface ShellReadyOptions {
  */
 export const SHELL_INSTANCE_ID = Math.random().toString(36).slice(2) + Date.now().toString(36)
 
+/** When this document's script started (ms since epoch). The host rejects a ready from a document that loaded before its latest reload began. */
+export const SHELL_LOADED_AT = Date.now()
+
 export const SHELL_READY_INTERVAL_MS = 1000
 export const SHELL_READY_MAX_ATTEMPTS = 30
 

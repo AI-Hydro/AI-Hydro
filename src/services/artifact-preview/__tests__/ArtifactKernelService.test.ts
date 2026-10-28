@@ -64,7 +64,7 @@ describe("ArtifactKernelService (real kernel)", function () {
 		delete vsc.workspace.workspaceFolders
 		// Windows holds a process's working directory until the whole tree has exited: wait for that
 		// explicit signal (taskkill finished and the kernel exited), not for a fixed delay.
-		await service.whenTerminated()
+		expect(await service.whenTerminated(), "kernel process tree still running at cleanup").to.equal(true)
 		// Backstop only: antivirus/indexers can still hold a handle for a moment after exit.
 		rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
 	})

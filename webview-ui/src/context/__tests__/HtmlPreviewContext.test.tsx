@@ -44,6 +44,17 @@ vi.mock("../../services/grpc-client", () => ({
 	},
 }))
 
+// In-memory stand-in for VS Code's per-webview state, which outlives a shell reload (unlike React state).
+const mockPersisted: Record<string, unknown> = {}
+vi.mock("../../config/platform.config", () => ({
+	webviewState: {
+		get: (key: string) => mockPersisted[key],
+		set: (key: string, value: unknown) => {
+			mockPersisted[key] = value
+		},
+	},
+}))
+
 // Stub useExtensionState — the context reads `htmlPreviewVersion` and the host's activation signal.
 let mockExtensionState: Record<string, unknown> = { htmlPreviewVersion: 0 }
 vi.mock("../ExtensionStateContext", () => ({
@@ -78,6 +89,30 @@ describe("HtmlPreviewContext", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mockExtensionState = { htmlPreviewVersion: 0 }
+		for (const key of Object.keys(mockPersisted)) delete mockPersisted[key]
+	})
+
+	it("does not re-apply an activation after a shell reload (the seq is persisted in webview state)", async () => {
+		const items: HtmlPreviewItem[] = [mk("html_1", "Preview 1"), mk("html_2", "Preview 2")]
+		mockGetHtmlPreviewState.mockResolvedValue({ items })
+		mockSubscribeToHtmlPreviews.mockReturnValue(() => {})
+		const tree = () => (
+			<HtmlPreviewContextProvider>
+				<TestConsumer />
+			</HtmlPreviewContextProvider>
+		)
+		// The host opened html_1 (activation 1) and the first shell applied it.
+		mockExtensionState = { htmlPreviewVersion: 1, htmlPreviewActiveId: "html_1", htmlPreviewActivationSeq: 1 }
+		const first = render(tree())
+		await waitFor(() => expect(screen.getByTestId("active-id").textContent).to.equal("html_1"))
+		expect(mockPersisted.studioLastActivationSeq).to.equal(1)
+		first.unmount()
+
+		// The shell reloads: fresh React state, same webview state, same host activation. It must not
+		// treat activation 1 as new and override whatever the user did after it.
+		render(tree())
+		await waitFor(() => expect(screen.getByTestId("item-count").textContent).to.equal("2"))
+		expect(screen.getByTestId("active-id").textContent).to.equal("html_2")
 	})
 
 	it("shows a document the host just opened without a shell reload, once per activation", async () => {
