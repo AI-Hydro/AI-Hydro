@@ -61,7 +61,7 @@ describe("brand spelling guard (F-NM1)", () => {
 		]
 		const hits: string[] = []
 		for (const file of files) {
-			const rel = path.relative(ROOT, file)
+			const rel = path.relative(ROOT, file).split(path.sep).join("/")
 			if (ALLOWED_FILES[rel]) {
 				continue
 			}
