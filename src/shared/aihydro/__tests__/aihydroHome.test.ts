@@ -1,9 +1,6 @@
 import * as fs from "node:fs"
-import * as os from "node:os"
 import * as path from "node:path"
 import { expect } from "chai"
-import { getBoundStudy } from "../../../integrations/aihydro-session/boundStudy"
-import { defaultAiHydroHome, listSessionIds, resolveSessionJsonPath } from "../../../integrations/aihydro-session/sessionSurfaces"
 import { AIHYDRO_HOME_ENV, aihydroHome, aihydroPath } from "../aihydroHome"
 
 describe("aihydroHome (WP-0: one AI-Hydro home)", () => {
@@ -43,34 +40,6 @@ describe("aihydroHome (WP-0: one AI-Hydro home)", () => {
 		expect(aihydroHome()).to.equal(path.join(path.sep, "elsewhere"))
 		expect(aihydroPath("sessions", "s.json")).to.equal(path.join(path.sep, "elsewhere", "sessions", "s.json"))
 		expect(before).to.not.equal(aihydroHome())
-	})
-
-	describe("consumers follow the home end to end", () => {
-		let scratch: string
-		beforeEach(() => {
-			scratch = fs.mkdtempSync(path.join(os.tmpdir(), "aihydro-home-"))
-			process.env[AIHYDRO_HOME_ENV] = scratch
-		})
-		afterEach(() => {
-			fs.rmSync(scratch, { recursive: true, force: true })
-		})
-
-		it("session surfaces list and resolve sessions under AIHYDRO_HOME", () => {
-			fs.mkdirSync(path.join(scratch, "sessions"), { recursive: true })
-			fs.writeFileSync(path.join(scratch, "sessions", "scratch-study.json"), "{}")
-			expect(defaultAiHydroHome()).to.equal(scratch)
-			expect(listSessionIds()).to.deep.equal(["scratch-study"])
-			expect(resolveSessionJsonPath("scratch-study")).to.equal(path.join(scratch, "sessions", "scratch-study.json"))
-		})
-
-		it("the bound-study reader reads chat_studies.json from AIHYDRO_HOME", () => {
-			fs.mkdirSync(path.join(scratch, "sessions"), { recursive: true })
-			fs.writeFileSync(
-				path.join(scratch, "chat_studies.json"),
-				JSON.stringify({ chat_to_study: { ulid1: "scratch-study" } }),
-			)
-			expect(getBoundStudy("ulid1")?.studyId).to.equal("scratch-study")
-		})
 	})
 
 	it("nothing under src hard-codes the home directory except the helper", () => {

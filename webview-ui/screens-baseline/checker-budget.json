@@ -10,6 +10,57 @@
 		}
 	},
 	"screens": {
+		"chat-study-bound": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-study-choose": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-study-none": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-approval-mcp-always": {
 			"ref": {
 				"noName": 0,
@@ -2637,6 +2688,36 @@
 					"cells": 6
 				},
 				"chat-approval-mcp-untrusted": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-study-bound": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-study-choose": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-study-none": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 24,

@@ -47,6 +47,7 @@ export async function deleteAllTaskHistory(controller: Controller): Promise<Dele
 
 			// If there are favorited tasks, update state
 			if (favoritedTasks.length > 0) {
+				controller.markTasksDeleted(taskHistory.filter((t) => t.isFavorited !== true).map((t) => t.id))
 				controller.stateManager.setGlobalState("taskHistory", favoritedTasks)
 
 				// Delete non-favorited task directories
@@ -87,6 +88,7 @@ export async function deleteAllTaskHistory(controller: Controller): Promise<Dele
 		}
 
 		// Delete everything (not preserving favorites)
+		controller.markTasksDeleted(taskHistory.map((t) => t.id))
 		controller.stateManager.setGlobalState("taskHistory", [])
 
 		try {

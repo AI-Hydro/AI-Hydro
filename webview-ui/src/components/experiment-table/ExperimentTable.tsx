@@ -174,6 +174,7 @@ export const ExperimentTable: React.FC = () => {
 	const [sortDir, setSortDir] = useState<SortDir>("asc")
 	const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null)
 	const [recentSessions, setRecentSessions] = useState<string[]>([])
+	const [sessionListNotice, setSessionListNotice] = useState<string | null>(null)
 	const [activeTab, setActiveTab] = useState<"table" | "plots">("table")
 	const [compareExperimentId, setCompareExperimentId] = useState<string>("")
 	const [compareData, setCompareData] = useState<ExperimentData | null>(null)
@@ -226,6 +227,7 @@ export const ExperimentTable: React.FC = () => {
 				setLoading(false)
 			} else if (msg.type === "session_list") {
 				setRecentSessions(Array.isArray(msg.sessions) ? msg.sessions.map(String) : [])
+				setSessionListNotice(typeof msg.notice === "string" && msg.notice ? msg.notice : null)
 			} else if (msg.type === "load_experiment") {
 				const sid = String(msg.session_id ?? "")
 				const eid = String(msg.experiment_id ?? "")
@@ -487,6 +489,12 @@ export const ExperimentTable: React.FC = () => {
 						a cross-basin/model metric matrix.
 					</p>
 				</div>
+			)}
+
+			{sessionListNotice && (
+				<p className="px-3 py-1 text-xs" data-testid="session-list-notice" role="status">
+					{sessionListNotice}
+				</p>
 			)}
 
 			{!data && !loading && !error && !emptyMessage && (

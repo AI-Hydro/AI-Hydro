@@ -290,6 +290,9 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 				config.services.mcpHub.connections?.find((conn: any) => conn.server.name === server_name)?.server,
 			)
 
+			// X0-2: a binding change or failed resolution reported by the server updates the study chip. Shape only.
+			config.services.controller?.observeStudyBindingSignal?.(server_name, toolResultText)
+
 			// webview extracts images from the text response to display in the UI
 			const toolResultToDisplay = toolResultText + toolResultImages?.map((image: any) => `\n\n${image}`).join("")
 			await config.callbacks.say("mcp_server_response", toolResultToDisplay)

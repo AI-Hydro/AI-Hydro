@@ -43,12 +43,37 @@ export const DEFAULT_PLATFORM = "unknown"
 
 export const COMMAND_CANCEL_TOKEN = "__aihydro_command_cancel__"
 
-/** The ai-hydro study (research session) a chat is bound to, for the header chip. */
-export interface BoundStudyInfo {
-	/** Session/study id, e.g. "01547700" or "swat-usgs-01547700". */
+/** A study offered for binding, labelled the way the server labels it (never a bare id). */
+export interface StudyCandidateView {
 	studyId: string
-	/** Human-readable site name, when the study file records one. */
-	siteName?: string
+	label: string
+	/** ISO timestamp of the study's last run, when the server reports one. */
+	lastRun?: string
+}
+
+/**
+ * Which study this chat is bound to, for the header chip and the picker. The host owns it: it is set at launch
+ * (before the first tool call), refreshed from `session_binding` on tool results, and changed only by the user's
+ * choice in the picker or by the agent's own explicit rebind. The extension never reads the server's files for it.
+ *
+ *  - `bound`        a study is bound; `studyId` and `label` are set.
+ *  - `choose`       several studies could be meant and none was chosen: `candidates` are offered, nothing is bound.
+ *  - `none`         no study is bound (a new study is created by the next delineation, or the user chose "No study").
+ *  - `unavailable`  the server could not be asked (not connected, not trusted, or too old to list studies).
+ */
+export interface StudyBindingState {
+	/** The chat id the state describes (the task ulid). A state for another chat is never shown. */
+	chatId: string
+	status: "bound" | "choose" | "none" | "unavailable"
+	studyId?: string
+	label?: string
+	candidates?: StudyCandidateView[]
+	/** Why this state: shown as the chip tooltip and the picker's lead-in. */
+	reason?: string
+	/** Where a bound study came from. */
+	by?: "map-layer" | "map-artifact" | "workspace" | "resume" | "user" | "agent" | "server"
+	/** Whether this server can list studies and rebind a chat (capability flags); gates the picker's choices. */
+	canChoose: boolean
 }
 
 export interface ExtensionState {
@@ -65,13 +90,8 @@ export interface ExtensionState {
 	aihydroMessages: AiHydroMessage[]
 	currentTaskItem?: HistoryItem
 	currentFocusChainChecklist?: string | null
-	/**
-	 * The ai-hydro study (session) this chat is currently bound to, if any.
-	 * Surfaced as a chip in the task header so the user always knows which
-	 * research session their conversation is operating on. Resolved from
-	 * ~/.aihydro/chat_studies.json keyed by the task ulid.
-	 */
-	boundStudy?: BoundStudyInfo
+	/** The study this chat is bound to, or the choice it is waiting on. See StudyBindingState. */
+	studyBinding?: StudyBindingState
 	mcpMarketplaceEnabled?: boolean
 	mcpDisplayMode: McpDisplayMode
 	planActSeparateModelsSetting: boolean

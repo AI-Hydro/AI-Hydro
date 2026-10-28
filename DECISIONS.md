@@ -4,6 +4,39 @@ Append-only. Newest first. One entry per non-obvious choice, with the **why**.
 
 ---
 
+## 2026-10-28 — HistoryItem has one writer and a field-owner table; each chat is bound to its study by the host
+
+Branch `vision2040/x0-binding-history` (UX program Wave 0, X0-1 and X0-2).
+
+- **Field owners (`src/core/storage/historyPatch.ts`).** Every write to a history item is a patch from a named writer.
+  Loop-owned: `ts`, `task`, tokens, cache counters, `totalCost`, `size`, `shadowGitConfigWorkTree`,
+  `conversationHistoryDeletedRange`, `checkpointManagerErrorMessage`. Creation (first value wins, any writer): `ulid`,
+  `cwdOnTaskInitialization`, `projectId`, `origin`, `userQuestion`. User-only: `isFavorited`, `pinned`, `description`,
+  `memoryMode`. Title: `title` and `titleSource` (user always; system only while `titleSource` is not "user"). Binding-only:
+  `activeStudyId`. Unknown stored fields are preserved; an unowned key from a non-system writer is dropped with a warning.
+  *Why:* the loop rebuilt the whole item on each save and `toggleTaskFavorite` was a second writer, so each lost the other's
+  fields; every later feature (titles, projects, study mirror) would have been wiped by the next message.
+- **`cwdOnTaskInitialization` is first-write-wins, not "the cwd at creation".** The first save that reaches the store sets
+  it, from the folder at that moment (resolved once per task handler). A chat created before this build keeps the value its
+  last save wrote (possibly a later folder). Nothing can reconstruct the true creation folder for those, so
+  `projectId` derivation from it (X1-P1) is lossy for moved chats; that migration must say so.
+- **Limits.** The merge is atomic within one extension host (synchronous read-modify-write). Two VS Code windows sharing the
+  same `taskHistory.json` still last-writer-win at the list level: window B's save of the whole list can overwrite window A's
+  patch to a different item. Not fixed here; a per-item store would be needed.
+- **Deleted chats stay deleted.** A save that was in flight when its chat was deleted is a no-op (a per-session tombstone in
+  `patchTaskHistory`), so the deleted chat is not recreated as an empty row. The tombstone does not survive a restart.
+- **Binding is the host's job, through the server only.** The extension binds at launch (resume, the layer's study id, the
+  artifact manifest, the only study in the folder), shows a picker when it is ambiguous, and never binds on a guess. Signals
+  that change the chip or the history mirror (`session_binding`, `session_binding_skipped`, a candidates error) are accepted
+  only from the trusted, connected first-party server, not from any server that carries its name. An unresolved result never
+  drops a known binding. Declining the picker says only what the host can guarantee ("not bound by you; the server may still
+  resolve a study") and re-reads the server's binding.
+- **Status of the owner failure (map-launched chat on `try`, `measure_feature`, `SESSION_RESOLUTION_FAILED`):** fixed in
+  tests (a fake server written from the tools 2.8.2 contract; no real 2.8.2 server and no installed build was used). Owner
+  checkpoint pending: it must be reproduced on the installed build against published tools 2.8.2 before it is called fixed.
+
+---
+
 ## 2026-10-20 — Studio catalogue: raw-origin policy, unsigned entries, installed is not trusted
 
 Branch `vision2040/studio-p1p2` (Studio P1/P2; implements ADR-004 step 1 for user-facing names).

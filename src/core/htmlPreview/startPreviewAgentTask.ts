@@ -1,31 +1,29 @@
 import type { Controller } from "@core/controller"
-import { sendChatButtonClickedEvent } from "@core/controller/ui/subscribeToChatButtonClicked"
-import { sendFocusChatInputEvent } from "@core/controller/ui/subscribeToFocusChatInput"
-import { WebviewProvider } from "@core/webview"
-import { VscodeWebviewProvider } from "@/hosts/vscode/VscodeWebviewProvider"
+import { isChatInProgress } from "@core/map/launchGuard"
+import { confirmReplaceChat, focusChat, type MapLaunchDeps } from "@core/map/startMapAgentTask"
 
 /**
  * Focus the chat sidebar and start a new agent task pre-seeded with the
  * preview batch-changes prompt. Mirrors `startMapAgentTask` from
  * `src/core/map/startMapAgentTask.ts` — only the function name differs.
  */
-export async function startPreviewAgentTask(controller: Controller, prompt: string): Promise<{ ok: boolean; error?: string }> {
+export async function startPreviewAgentTask(
+	controller: Controller,
+	prompt: string,
+	deps: MapLaunchDeps = { confirmReplace: confirmReplaceChat, focusChat },
+): Promise<{ ok: boolean; error?: string; cancelled?: boolean }> {
 	if (!prompt?.trim()) {
 		return { ok: false, error: "Empty prompt" }
 	}
 	try {
+		// Replacing the chat aborts running work and hides a pending ask: ask first (same guard as the map).
+		if (isChatInProgress(controller.task) && !(await deps.confirmReplace())) {
+			return { ok: false, cancelled: true, error: "Kept the current chat." }
+		}
 		await controller.clearTask()
 		await controller.postStateToWebview()
-		await sendChatButtonClickedEvent()
-
-		const webview = WebviewProvider.getInstance()
-		if (webview instanceof VscodeWebviewProvider) {
-			const view = webview.getWebview()
-			view?.show()
-		}
-
-		await sendFocusChatInputEvent()
-		await controller.initTask(prompt.trim(), [], [])
+		await deps.focusChat()
+		await controller.initTask(prompt.trim(), [], [], undefined, undefined, { origin: "preview" })
 		return { ok: true }
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err)
