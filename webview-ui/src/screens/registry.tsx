@@ -192,6 +192,43 @@ export const screens: ScreenDef[] = [
 
 	// ── Chat (sidebar) ──────────────────────────────────────────────
 	chatScreen("chat-welcome", "Welcome / first run", { state: { welcomeViewCompleted: false } }),
+	chatScreen("tools-status-ready", "Welcome with tools ready and trusted", {
+		state: { welcomeViewCompleted: false },
+		toolsEnv: {
+			phase: "ready",
+			healthy: true,
+			version: "2.8.2",
+			trust: "trusted",
+			trustReason: "Trusted: its launch line matches the launcher AI-Hydro recorded.",
+			venvPath: "/fixture/.aihydro/venvs/tools-2.8",
+			serverName: "ai-hydro",
+			serverCommand: "/fixture/.aihydro/venvs/tools-2.8/bin/aihydro-mcp",
+		},
+	}),
+	chatScreen("tools-status-installing", "Welcome while the tools install", {
+		state: { welcomeViewCompleted: false },
+		toolsEnv: { phase: "installing", message: "Installing AI-Hydro tools (this can take several minutes)" },
+	}),
+	chatScreen("tools-status-unhealthy", "Chat home with unhealthy tools", {
+		toolsEnv: {
+			phase: "unhealthy",
+			version: "2.8.1",
+			message: "aihydro-mcp did not complete the MCP handshake: the server exited (code 1)",
+			errorCode: "UNHEALTHY",
+		},
+	}),
+	chatScreen("tools-status-untrusted", "Chat home with an untrusted launcher", {
+		toolsEnv: {
+			phase: "ready",
+			healthy: true,
+			version: "2.8.2",
+			trust: "untrusted",
+			trustReason:
+				'The registered launcher differs from the one AI-Hydro recorded. Choose "Trust this launcher" to review the change.',
+			serverName: "ai-hydro",
+			serverCommand: "/fixture/.aihydro/venvs/tools-2.8/bin/aihydro-mcp",
+		},
+	}),
 	chatScreen("chat-home-history", "Chat home with history cards and composer status"),
 	// W2-D: the composer footer. One status line replaces the 3-line "Tool auto-run" bar, the hint line and the
 	// full-width Cancel.

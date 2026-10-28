@@ -5,6 +5,7 @@
  */
 import type { ExtensionState } from "@shared/ExtensionMessage"
 import { convertMcpServersToProtoMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
+import { emptyToolsEnvStatus, formatToolsDiagnostics } from "@shared/aihydro/toolsEnv"
 import { getActiveScreen } from "./active"
 import { buildBaseState } from "./fixtures/state"
 
@@ -88,6 +89,16 @@ export function hostSubscribe(service: string, method: string, _request: unknown
 			trustReason: servers[i].trust?.reason ?? p.trustReason,
 		}))
 		queueMicrotask(() => handlers.onResponse?.({ mcpServers: proto }))
+	}
+	if (service === "McpServiceClient" && method === "subscribeToToolsEnvStatus" && screen?.toolsEnv) {
+		const status = emptyToolsEnvStatus(screen.toolsEnv)
+		queueMicrotask(() =>
+			handlers.onResponse?.({
+				...status,
+				extensionVersion: "fixture",
+				diagnostics: formatToolsDiagnostics(status, "fixture"),
+			}),
+		)
 	}
 	return () => {}
 }

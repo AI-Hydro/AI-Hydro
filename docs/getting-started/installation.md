@@ -16,7 +16,17 @@ AI-Hydro has two components: the **VS Code extension** (the agent interface) and
 
 ---
 
-## Step 1 — Install the Python Backend
+## Step 0 — Let the extension manage the tools (default)
+
+The extension keeps its own Python environment for `aihydro-tools` and needs no terminal. On first start it finds Python 3.10 or newer (your `aihydro.tools.pythonPath` setting first, then `python3`), creates `~/.aihydro/venvs/tools-2.8` (or `$AIHYDRO_HOME/venvs/tools-2.8`; override with `aihydro.tools.venvPath`), installs `aihydro-tools[data,analysis,mcp,viz,gee,delineation]~=2.8.2` into it with that environment's own `python -m pip`, checks that the server answers an MCP handshake, and registers the environment's `aihydro-mcp` as the AI-Hydro server. It never installs into your system or base interpreter, and it adopts an existing healthy environment at that path instead of recreating it.
+
+The Welcome view and the chat home show one status row (installed version, healthy or not, trusted or not) with **Install**, **Repair**, **Retry** and **Show log**; the status bar shows the same state, and **Settings > About** lists the interpreter, venv path, version, server command and trust verdict. A failed install stays visible and can be retried; there is no "don't show again". If a launcher is already registered somewhere else, the extension asks once whether to switch to the managed environment; a changed launcher always needs your explicit "Trust this launcher" before it is treated as the first-party server.
+
+Skip Steps 1 and 2 unless you want to run the tools from your own environment.
+
+---
+
+## Step 1 — Install the Python Backend (optional, manual)
 
 The Python package provides all hydrological tools via an MCP server.
 

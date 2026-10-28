@@ -3,6 +3,7 @@
  * production entry (main.tsx / App.tsx); the build guard greps the bundle for
  * the fixture badge text to prove it.
  */
+import type { ToolsEnvStatus } from "@shared/aihydro/toolsEnv"
 import type { ExtensionState } from "@shared/ExtensionMessage"
 import type { McpServer } from "@shared/mcp"
 import type { HtmlPreviewItem } from "@shared/proto/cline/html_preview"
@@ -86,5 +87,10 @@ export interface ScreenDef {
 	 * card screens keep their measured rendering.
 	 */
 	mcpServers?: McpServer[]
+	/**
+	 * Managed tools-environment status the fixture host reports through the tools-status subscription. Unset leaves
+	 * the chip unrendered (the host has not reported), so existing screens keep their measured rendering.
+	 */
+	toolsEnv?: Partial<ToolsEnvStatus>
 	render: () => ReactNode
 }

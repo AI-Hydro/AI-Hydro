@@ -51,3 +51,6 @@
 	border-radius: var(--aih-radius-md);
 	background: var(--aih-surface-raised);
 }
+.welcome-tools .tools-chip {
+	margin: 0;
+}

@@ -1,5 +1,6 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
 import AiHydroLogoVariable from "@/assets/AiHydroLogoVariable"
+import ToolsStatusChip from "@/components/tools/ToolsStatusChip"
 import { Button, Disclosure, Text } from "@/design"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { UiServiceClient } from "@/services/grpc-client"
@@ -30,6 +31,7 @@ const HomeHeader = () => {
 					</Text>
 				</div>
 			</div>
+			<ToolsStatusChip />
 			<div style={{ padding: "0 var(--aih-space-5) var(--aih-space-2)" }}>
 				<Disclosure label="What can AI-Hydro do?">
 					<Text as="p" variant="label">

@@ -167,6 +167,32 @@
 				"category": "AI-Hydro"
 			},
 			{
+				"command": "aihydro.tools.showStatus",
+				"title": "Tools Status",
+				"icon": "$(tools)",
+				"category": "AI-Hydro"
+			},
+			{
+				"command": "aihydro.tools.install",
+				"title": "Install or Update Tools",
+				"category": "AI-Hydro"
+			},
+			{
+				"command": "aihydro.tools.repair",
+				"title": "Repair Tools",
+				"category": "AI-Hydro"
+			},
+			{
+				"command": "aihydro.tools.showLog",
+				"title": "Show Tools Log",
+				"category": "AI-Hydro"
+			},
+			{
+				"command": "aihydro.tools.copyDiagnostics",
+				"title": "Copy Tools Diagnostics",
+				"category": "AI-Hydro"
+			},
+			{
 				"command": "aihydro.learningPacks.install",
 				"title": "Install Learning Pack",
 				"category": "AI-Hydro"
@@ -621,6 +647,18 @@
 					"default": false,
 					"scope": "machine",
 					"description": "When true, all Studio documents in a workspace share one Python kernel namespace per profile. Default is false (one kernel per artifact). Machine scope: a repository's workspace settings cannot change it."
+				},
+				"aihydro.tools.venvPath": {
+					"type": "string",
+					"default": "",
+					"scope": "machine",
+					"description": "Directory of the managed AI-Hydro tools virtual environment. Leave empty to use <AIHYDRO_HOME or ~/.aihydro>/venvs/tools-2.8. An existing healthy environment there is adopted, not recreated. Machine scope: a repository's workspace settings cannot change it."
+				},
+				"aihydro.tools.pythonPath": {
+					"type": "string",
+					"default": "",
+					"scope": "machine",
+					"description": "Python 3.10 or newer used to create the managed tools environment. Leave empty to use python3 (or python) from PATH. AI-Hydro never installs packages into this interpreter; it only runs `-m venv` with it. Machine scope: a repository's workspace settings cannot change it."
 				},
 				"aihydro.gee.projectId": {
 					"type": "string",
