@@ -724,6 +724,9 @@
 		"openai": {
 			"zod": "$zod"
 		},
+		"@sap-ai-sdk/prompt-registry": {
+			"zod": "$zod"
+		},
 		"chromium-bidi": {
 			"zod": "$zod"
 		}
@@ -803,8 +806,8 @@
 		"@opentelemetry/sdk-metrics": "^1.30.1",
 		"@opentelemetry/semantic-conventions": "^1.37.0",
 		"@playwright/test": "^1.53.2",
-		"@sap-ai-sdk/ai-api": "^2.17.0",
-		"@sap-ai-sdk/orchestration": "^2.17.0",
+		"@sap-ai-sdk/ai-api": "^1.17.0",
+		"@sap-ai-sdk/orchestration": "^1.17.0",
 		"@streamparser/json": "^0.0.22",
 		"@types/uuid": "^10.0.0",
 		"@vscode/codicons": "^0.0.36",
