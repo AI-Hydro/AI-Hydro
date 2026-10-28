@@ -101,6 +101,9 @@ https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default
 https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
 */
 
+/** The longest the launch binding may hold a task back. */
+const LAUNCH_BINDING_BUDGET_MS = 10_000
+
 /** How a chat is launched: where from, the user's own words when the prompt is wrapped, and what is known of its study. */
 export interface ChatLaunch {
 	origin: HistoryOrigin
@@ -1449,14 +1452,31 @@ export class Controller {
 		launch: ChatLaunch | undefined,
 	) {
 		try {
-			const state = await resolveLaunchBinding({
-				hub: this.bindingHub,
-				chatId: chatUlid,
-				workspace: await this.bindingWorkspace(cwd),
-				hint: launch?.studyHint,
-				resumeStudyId: historyItem?.activeStudyId,
-				resuming: !!historyItem,
-			})
+			// A hung server must not hold the task back: after the budget the chip says so, and the next tool result
+			// re-reads the binding from the server (observeStudyBindingSignal).
+			let timer: ReturnType<typeof setTimeout> | undefined
+			const state = await Promise.race([
+				resolveLaunchBinding({
+					hub: this.bindingHub,
+					chatId: chatUlid,
+					workspace: await this.bindingWorkspace(cwd),
+					hint: launch?.studyHint,
+					resumeStudyId: historyItem?.activeStudyId,
+					resuming: !!historyItem,
+				}),
+				new Promise<StudyBindingState>((resolve) => {
+					timer = setTimeout(
+						() =>
+							resolve({
+								chatId: chatUlid,
+								status: "unavailable",
+								reason: "The AI-Hydro server did not answer in time, so the study was not bound.",
+								canChoose: false,
+							}),
+						LAUNCH_BINDING_BUDGET_MS,
+					)
+				}),
+			]).finally(() => timer && clearTimeout(timer))
 			this.setStudyBinding(state, historyItem?.id)
 		} catch (error) {
 			this.setStudyBinding(
