@@ -11,6 +11,17 @@ import {
 
 export type { MapAgentInspectContext, MapAnnotationContext, MapBatchAnnotationsContext }
 
+/** The study keys a layer carries: its catalogue study id and its source file (resolved host-side, never guessed). */
+export function mapLayerStudyHint(layer: { metadata?: Record<string, string> } | undefined): MapAgentInspectContext["studyHint"] {
+	const md = layer?.metadata
+	const sessionId = md?.session_id?.trim()
+	const artifactPath = (md?.source_path || md?.path || "").trim()
+	if (!sessionId && !artifactPath) {
+		return undefined
+	}
+	return { ...(sessionId ? { sessionId } : {}), ...(artifactPath ? { artifactPath } : {}) }
+}
+
 function newRequestId(): string {
 	return `map-agent-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
@@ -18,7 +29,18 @@ function newRequestId(): string {
 /**
  * Start an agent task from the map and focus the chat sidebar (host handles initTask).
  */
-export function startMapAgentTask(prompt: string): Promise<{ ok: boolean; error?: string }> {
+export interface MapLaunchHint {
+	/** The study id the clicked layer carries (layer catalogue). */
+	sessionId?: string
+	/** The clicked layer's source file (resolved to its study by the server's artifact manifest). */
+	artifactPath?: string
+	/** The user's own question when the prompt wraps it. */
+	userQuestion?: string
+}
+
+export type MapAgentStartResult = { ok: boolean; error?: string; cancelled?: boolean }
+
+export function startMapAgentTask(prompt: string, launch?: MapLaunchHint): Promise<MapAgentStartResult> {
 	const requestId = newRequestId()
 	return new Promise((resolve) => {
 		const timeout = window.setTimeout(() => {
@@ -33,28 +55,36 @@ export function startMapAgentTask(prompt: string): Promise<{ ok: boolean; error?
 			}
 			window.clearTimeout(timeout)
 			window.removeEventListener("message", onMessage)
-			resolve({ ok: Boolean(data.ok), error: data.error })
+			resolve({ ok: Boolean(data.ok), error: data.error, cancelled: Boolean(data.cancelled) })
 		}
 		window.addEventListener("message", onMessage)
 		PLATFORM_CONFIG.postMessage({
 			type: "aihydro-map-agent-task",
 			requestId,
 			prompt,
+			...(launch ? { launch } : {}),
 		})
 	})
 }
 
-export async function askAgentToDelineate(ctx: MapAgentInspectContext): Promise<{ ok: boolean; error?: string }> {
-	const prompt = buildDelineateAgentPrompt(ctx)
-	return startMapAgentTask(prompt)
+/** What the launch can say about the study the clicked layer belongs to (lookup keys only; the host resolves them). */
+function launchHint(ctx: MapAgentInspectContext, userQuestion?: string): MapLaunchHint | undefined {
+	const hint: MapLaunchHint = {
+		...(ctx.studyHint?.sessionId ? { sessionId: ctx.studyHint.sessionId } : {}),
+		...(ctx.studyHint?.artifactPath ? { artifactPath: ctx.studyHint.artifactPath } : {}),
+		...(userQuestion?.trim() ? { userQuestion: userQuestion.trim() } : {}),
+	}
+	return Object.keys(hint).length > 0 ? hint : undefined
 }
 
-export async function askAgentAboutMap(
-	ctx: MapAgentInspectContext,
-	userQuestion?: string,
-): Promise<{ ok: boolean; error?: string }> {
+export async function askAgentToDelineate(ctx: MapAgentInspectContext): Promise<MapAgentStartResult> {
+	const prompt = buildDelineateAgentPrompt(ctx)
+	return startMapAgentTask(prompt, launchHint(ctx))
+}
+
+export async function askAgentAboutMap(ctx: MapAgentInspectContext, userQuestion?: string): Promise<MapAgentStartResult> {
 	const prompt = buildAskAboutMapAgentPrompt({ ...ctx, userQuestion })
-	return startMapAgentTask(prompt)
+	return startMapAgentTask(prompt, launchHint(ctx, userQuestion))
 }
 
 export async function askAgentAboutTransect(

@@ -1,6 +1,7 @@
 import { setPendingAskSink } from "@core/controller/ui/pendingAskBadge"
 import { sendDidBecomeVisibleEvent } from "@core/controller/ui/subscribeToDidBecomeVisible"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
+import { handleStudyBindingMessage } from "@core/controller/studyBinding/handleStudyBindingMessage"
 import { WebviewProvider } from "@core/webview"
 import * as vscode from "vscode"
 import { handleGrpcRequest, handleGrpcRequestCancel } from "@/core/controller/grpc-handler"
@@ -216,6 +217,10 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				await handleMapAgentTaskMessage(this.controller, message, async (response) => {
 					await this.webview?.webview.postMessage(response)
 				})
+				break
+			}
+			case "aihydro-study-binding": {
+				await handleStudyBindingMessage(this.controller, message.payload)
 				break
 			}
 			case "open_replay": {

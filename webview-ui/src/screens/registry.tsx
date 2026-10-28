@@ -246,6 +246,68 @@ export const screens: ScreenDef[] = [
 		pixelDiffThreshold: STRUCTURAL_ONLY,
 		scrollPinned: PINNED,
 	}),
+	// X0-2: the study chip and its picker (host-owned state; the chat id is a fixture value).
+	chatScreen("chat-study-bound", "Study chip: bound by the map layer", {
+		state: {
+			...taskState(plainTextTask),
+			studyBinding: {
+				chatId: "01FIXTURECHAT000000000000",
+				status: "bound",
+				studyId: "fx-study-01",
+				label: "Fixture River near Example, XX (fixture 0000001)",
+				reason: "The map layer belongs to this study.",
+				by: "map-layer",
+				canChoose: true,
+			},
+		},
+		expectVisible: ["#bound-study"],
+		steps: SCROLL_TO_END,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
+	}),
+	chatScreen("chat-study-choose", "Study picker: several studies, none chosen", {
+		state: {
+			...taskState(plainTextTask),
+			studyBinding: {
+				chatId: "01FIXTURECHAT000000000000",
+				status: "choose",
+				candidates: [
+					{
+						studyId: "fx-study-01",
+						label: "Fixture River near Example, XX (fixture 0000001)",
+						lastRun: "2026-08-02T14:03:00Z",
+					},
+					{
+						studyId: "fx-study-02",
+						label: "Fixture Creek at Sample, YY (fixture 0000002)",
+						lastRun: "2026-07-19T09:30:00Z",
+					},
+					{ studyId: "fx-test-03", label: "fx-test-03 (unnamed study)" },
+				],
+				reason: "3 studies in this folder. Pick one before the first run.",
+				canChoose: true,
+			},
+		},
+		expectVisible: ["[data-testid=study-picker]", "text=Fixture Creek at Sample"],
+		steps: SCROLL_TO_END,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
+	}),
+	chatScreen("chat-study-none", "Study chip: no study in this folder", {
+		state: {
+			...taskState(plainTextTask),
+			studyBinding: {
+				chatId: "01FIXTURECHAT000000000000",
+				status: "none",
+				reason: "No study in this folder yet. Delineating a watershed creates one.",
+				canChoose: true,
+			},
+		},
+		expectVisible: ["#bound-study"],
+		steps: SCROLL_TO_END,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
+	}),
 	chatScreen("chat-task-mcp", "Task with ai-hydro MCP call and result", {
 		fixtureKind: "recorded-call",
 		// Measures the card itself, so it renders at Verbose (the card inline, as before W2-A2). The card inside a work

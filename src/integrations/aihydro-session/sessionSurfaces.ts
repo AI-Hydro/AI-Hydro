@@ -1,7 +1,6 @@
-import { aihydroHome } from "@shared/aihydro/aihydroHome"
-import * as fs from "fs"
 import * as path from "path"
 import type { ResearchSnapshot, SnapshotReader } from "./researchSnapshot"
+import { type BindingHub, findBindingServer, listStudies, readCapabilities, STUDY_LIST_NEEDS_282 } from "./studyBinding"
 
 export interface EvidenceSpanSurface {
 	sourceType: string
@@ -112,47 +111,31 @@ export interface ReplaySurface {
 	run_log_source: ResearchSnapshot["run_log_source"]
 }
 
-export function defaultAiHydroHome(): string {
-	return aihydroHome()
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
-export function resolveSessionJsonPath(sessionIdOrPath: string, home = defaultAiHydroHome()): string | undefined {
-	const value = sessionIdOrPath.trim()
-	if (!value) {
-		return undefined
+/**
+ * Session ids for the Replay and Experiment pickers, newest first, from the server's own study list. The extension
+ * reads none of the server's files. An empty list always comes with a `notice` saying why (not connected, server too
+ * old to list studies, a failed read), so "no studies" and "cannot list" are never confused.
+ */
+export async function listSessionIds(hub: BindingHub, limit = 20): Promise<{ sessions: string[]; notice?: string }> {
+	const server = findBindingServer(hub)
+	if (!server) {
+		return { sessions: [], notice: "The AI-Hydro server is not connected, so the study list cannot be read." }
 	}
-
-	const candidates: string[] = []
-	if (path.isAbsolute(value) || value.includes(path.sep)) {
-		candidates.push(value)
-		candidates.push(path.join(value, "session.json"))
+	if (!(await readCapabilities(hub, server)).has("study.list")) {
+		return { sessions: [], notice: STUDY_LIST_NEEDS_282 }
 	}
-	candidates.push(path.join(home, "sessions", `${value}.json`))
-	candidates.push(path.join(home, "exports", `capsule_${value}`, "session.json"))
-	candidates.push(path.join(home, "capsules", value, "session.json"))
-
-	return candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile())
-}
-
-export function listSessionIds(home = defaultAiHydroHome(), limit = 20): string[] {
-	const dir = path.join(home, "sessions")
-	if (!fs.existsSync(dir)) {
-		return []
+	try {
+		return { sessions: (await listStudies(hub, server)).slice(0, limit).map((s) => s.studyId) }
+	} catch (error) {
+		return {
+			sessions: [],
+			notice: `The study list could not be read: ${error instanceof Error ? error.message : String(error)}`,
+		}
 	}
-	return fs
-		.readdirSync(dir, { withFileTypes: true })
-		.filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-		.map((entry) => {
-			const filePath = path.join(dir, entry.name)
-			return { id: entry.name.replace(/\.json$/, ""), mtimeMs: fs.statSync(filePath).mtimeMs }
-		})
-		.sort((a, b) => b.mtimeMs - a.mtimeMs)
-		.slice(0, limit)
-		.map((entry) => entry.id)
 }
 
 function normalizeExperimentDefn(defn: unknown, fallbackId: string): ExperimentDefn {

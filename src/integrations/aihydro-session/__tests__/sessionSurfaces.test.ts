@@ -11,7 +11,7 @@ import {
 	readResearchSnapshot,
 	type SnapshotBackend,
 } from "../researchSnapshot"
-import { loadClaimSurface, loadExperimentSurface, loadReplaySurface, resolveSessionJsonPath } from "../sessionSurfaces"
+import { loadClaimSurface, loadExperimentSurface, loadReplaySurface } from "../sessionSurfaces"
 
 function snapshot(): ResearchSnapshot {
 	return {
@@ -246,7 +246,6 @@ print(json.dumps(read_research_snapshot("actual"), allow_nan=False))
 `
 		const text = execFileSync(python!, ["-c", script, home], { encoding: "utf8", timeout: 15000 })
 		const value = parseResearchSnapshot(text)
-		expect(resolveSessionJsonPath("actual", home)).to.equal(path.join(home, "sessions", "actual.json"))
 		const reader = async () => value
 		const replay = await loadReplaySurface("actual", reader)
 		expect(replay.entries.filter((entry) => entry.tool_name === "evaluate").map((entry) => entry.run_id)).to.deep.equal([

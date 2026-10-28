@@ -10,28 +10,13 @@ export async function toggleTaskFavorite(controller: Controller, request: TaskFa
 	}
 
 	try {
-		// Update in-memory state only
+		// One write path (historyPatch.ts): only the favourite field changes, everything else is kept.
 		try {
 			const history = controller.stateManager.getGlobalStateKey("taskHistory")
-
-			const taskIndex = history.findIndex((item) => item.id === request.taskId)
-
-			if (taskIndex === -1) {
+			if (!history.some((item) => item.id === request.taskId)) {
 				console.log(`[toggleTaskFavorite] Task not found in history array!`)
 			} else {
-				// Create a new array instead of modifying in place to ensure state change
-				const updatedHistory = [...history]
-				updatedHistory[taskIndex] = {
-					...updatedHistory[taskIndex],
-					isFavorited: request.isFavorited,
-				}
-
-				// Update global state and wait for it to complete
-				try {
-					controller.stateManager.setGlobalState("taskHistory", updatedHistory)
-				} catch (stateErr) {
-					console.error("Error updating global state:", stateErr)
-				}
+				controller.patchTaskHistory(request.taskId, { isFavorited: request.isFavorited }, "user")
 			}
 		} catch (historyErr) {
 			console.error("Error processing task history:", historyErr)

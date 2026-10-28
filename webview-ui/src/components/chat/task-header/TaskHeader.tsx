@@ -16,6 +16,7 @@ import { CheckpointError } from "./CheckpointError"
 import ContextWindow from "./ContextWindow"
 import { FocusChain } from "./FocusChain"
 import { highlightText } from "./Highlights"
+import StudyChip, { StudyPickerPanel } from "./StudyChip"
 import TaskTimeline from "./TaskTimeline"
 
 const IS_DEV = process.env.IS_DEV === '"true"'
@@ -60,7 +61,6 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		expandTaskHeader: isTaskExpanded,
 		setExpandTaskHeader: setIsTaskExpanded,
 		environment,
-		boundStudy,
 	} = useExtensionState()
 
 	// Simplified computed values
@@ -134,25 +134,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						)}
 					</div>
 					<div className="inline-flex items-center justify-end select-none flex-shrink-0">
-						{boundStudy && (
-							<div
-								className="task-header-chip mr-1 max-w-[220px]"
-								id="bound-study"
-								title={
-									boundStudy.siteName
-										? `Bound study: ${boundStudy.studyId} — ${boundStudy.siteName}`
-										: `Bound study: ${boundStudy.studyId}`
-								}>
-								<span className="codicon codicon-database text-[10px] opacity-70"></span>
-								{/* The gauge/study id is the identifier users look for: always first and never truncated. */}
-								<span className="shrink-0 font-medium">{boundStudy.studyId}</span>
-								{boundStudy.siteName && (
-									<span className="overflow-hidden text-ellipsis whitespace-nowrap min-w-0 opacity-80">
-										· {boundStudy.siteName}
-									</span>
-								)}
-							</div>
-						)}
+						<StudyChip />
 						{isCostAvailable && (
 							<div className="task-header-chip mr-1" id="price-tag">
 								<span className="codicon codicon-credit-card text-[10px] opacity-70"></span>
@@ -162,6 +144,8 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						<NewTaskButton className={BUTTON_CLASS} onClick={onClose} />
 					</div>
 				</div>
+
+				<StudyPickerPanel />
 
 				{/* Expand/Collapse Task Details */}
 				{isTaskExpanded && (
