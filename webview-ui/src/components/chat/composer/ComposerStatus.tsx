@@ -35,7 +35,7 @@ export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusP
 	)
 
 	// Count of MCP tools is part of the visible chip text so it is never colour- or tooltip-only.
-	const showMcpCount = policy.mcpAlwaysAllowed > 0
+	const showMcpCount = policy.mcpLabel !== ""
 	return (
 		<div className="px-[15px] pb-[6px] select-none" data-testid="composer-status">
 			<div className="flex flex-wrap items-center gap-x-2 gap-y-1" ref={rowRef}>

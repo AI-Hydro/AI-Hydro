@@ -1,10 +1,12 @@
 import { recordFirstPartyLauncher } from "@core/mcp/firstPartyLauncher"
-import { isMcpToolGrantedAutoApprove } from "@core/task/tools/mcpAutoApprove"
+import { UseMcpToolHandler } from "@core/task/tools/handlers/UseMcpToolHandler"
+import { isMcpToolGrantedAutoApprove, mcpAutoApproveDecision } from "@core/task/tools/mcpAutoApprove"
 import { formatAutoApproveRefusal, parseAutoApproveRefusal } from "@shared/aihydro/alwaysAllowPolicy"
-import { setRecordedFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
+import { getRecordedFirstPartyLauncher, setRecordedFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
 import { expect } from "chai"
 import * as fs from "fs/promises"
 import { afterEach, beforeEach, describe, it } from "mocha"
+import sinon from "sinon"
 import * as os from "os"
 import * as path from "path"
 import { HostProvider } from "@/hosts/host-provider"
@@ -306,6 +308,147 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 		it("an unknown server or tool never counts as granted", () => {
 			expect(isMcpToolGrantedAutoApprove(undefined, "s", "t")).to.equal(false)
 			expect(isMcpToolGrantedAutoApprove({ connections: [] }, "s", "t")).to.equal(false)
+		})
+	})
+
+	// M-3: a stored grant is rechecked against the live connection every time the tool runs. The decision is read
+	// through the real UseMcpToolHandler (not only the helper), against a real hub, a real stdio server and the real
+	// settings file. The grant is never deleted: only the auto-run is paused.
+	describe("M-3: Always is rechecked when the tool runs", () => {
+		const sdkDir = () => path.resolve(__dirname, "../../../../node_modules/@modelcontextprotocol/sdk/dist/cjs")
+		const NUKE = { destructiveHint: true }
+
+		/** Runs use_mcp_tool through the real handler with MCP auto-run switched on. */
+		async function runHandler(tool: string, server = "ai-hydro") {
+			const callbacks = {
+				say: sinon.stub().resolves(1),
+				ask: sinon.stub().resolves({ response: "noButtonClicked" }),
+				removeLastPartialMessageIfExistsWithType: sinon.stub().resolves(),
+				shouldAutoApproveTool: sinon.stub().returns(true),
+				sayAndCreateMissingParamError: sinon.stub().resolves("missing"),
+			}
+			const config: any = {
+				callbacks,
+				services: { mcpHub: hub },
+				taskState: { consecutiveMistakeCount: 0, consecutiveAutoApprovedRequestsCount: 0, userMessageContent: [] },
+				autoApprovalSettings: { enabled: true, enableNotifications: false },
+				yoloModeToggled: false,
+				cwd: dir,
+				api: { getModel: () => ({ id: "m", info: {} }) },
+			}
+			const out = await new UseMcpToolHandler().execute(config, {
+				name: "use_mcp_tool",
+				params: { server_name: server, tool_name: tool },
+			} as any)
+			const asked = callbacks.ask.called
+			const askPayload = asked ? JSON.parse(callbacks.ask.firstCall.args[1]) : undefined
+			const autoRan = callbacks.say.getCalls().some((c) => c.args[0] === "use_mcp_server")
+			return { out: String(out), asked, askPayload, autoRan }
+		}
+
+		/** Rewrites the stub's tool list and reconnects, as a server upgrade would. */
+		async function reconnectWith(tools: unknown) {
+			await fs.writeFile(script, SERVER_SCRIPT(sdkDir(), tools))
+			await hub.restartConnection("ai-hydro")
+			for (
+				let i = 0;
+				i < 400 && !(hub.connections[0]?.server.status === "connected" && hub.connections[0].server.tools?.length);
+				i++
+			) {
+				await new Promise((r) => setTimeout(r, 25))
+			}
+			expect(hub.connections[0].server.status).to.equal("connected")
+		}
+
+		beforeEach(async () => {
+			await start("ai-hydro", { trusted: true })
+			await hub.toggleToolAutoApproveRPC("ai-hydro", ["read_tool"], true)
+			expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"])
+		})
+
+		it("(a) a granted tool on a trusted server auto-runs through the handler without asking", async () => {
+			expect(mcpAutoApproveDecision(hub, "ai-hydro", "read_tool")).to.deep.equal({ auto: true })
+			const r = await runHandler("read_tool")
+			expect(r.asked).to.equal(false)
+			expect(r.autoRan).to.equal(true)
+		})
+
+		it("(b) the same grant asks once the launcher record changes, and says why; the grant stays in the file", async () => {
+			const recorded = getRecordedFirstPartyLauncher()!
+			setRecordedFirstPartyLauncher({ ...recorded, command: "/some/other/python" })
+			const decision = mcpAutoApproveDecision(hub, "ai-hydro", "read_tool")
+			expect(decision).to.include({ auto: false, granted: true, reason: "untrusted_server" })
+			const r = await runHandler("read_tool")
+			expect(r.asked).to.equal(true)
+			expect(r.autoRan).to.equal(false)
+			expect(r.askPayload.autoApprovePaused).to.equal(
+				"Always for read_tool is paused: the server's launch identity changed or it is no longer the registered first-party server.",
+			)
+			expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"]) // (e)
+
+			// Restoring the record resumes the grant by itself: nothing was deleted.
+			setRecordedFirstPartyLauncher(recorded)
+			expect((await runHandler("read_tool")).asked).to.equal(false)
+		})
+
+		it("(b) a changed launchHash (env/cwd) also loses trust", async () => {
+			const recorded = getRecordedFirstPartyLauncher()!
+			setRecordedFirstPartyLauncher({ ...recorded, launchHash: "0".repeat(64) })
+			const r = await runHandler("read_tool")
+			expect(r.asked).to.equal(true)
+			expect(r.askPayload.autoApprovePaused).to.include("launch identity changed")
+		})
+
+		it("(c) the same grant asks after a reconnect in which the tool is annotated destructive", async () => {
+			await reconnectWith(TOOLS.map((t) => (t.name === "read_tool" ? { ...t, annotations: NUKE } : t)))
+			expect(mcpAutoApproveDecision(hub, "ai-hydro", "read_tool")).to.include({ auto: false, reason: "destructive" })
+			const r = await runHandler("read_tool")
+			expect(r.asked).to.equal(true)
+			expect(r.autoRan).to.equal(false)
+			expect(r.askPayload.autoApprovePaused).to.equal("Always for read_tool is paused: the tool is now marked destructive.")
+			expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"]) // (e)
+		})
+
+		it("(c) and when the annotations are dropped altogether (effect no longer declared)", async () => {
+			await reconnectWith(TOOLS.map((t) => (t.name === "read_tool" ? { name: t.name } : t)))
+			const r = await runHandler("read_tool")
+			expect(r.asked).to.equal(true)
+			expect(r.askPayload.autoApprovePaused).to.include("no longer declares what it does")
+			expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"])
+		})
+
+		it("(d) a duplicated tool name asks; the grant stays", async () => {
+			const read = TOOLS[0]
+			await reconnectWith([...TOOLS, { ...read }])
+			expect(mcpAutoApproveDecision(hub, "ai-hydro", "read_tool")).to.include({ auto: false, reason: "unknown_tool" })
+			const r = await runHandler("read_tool")
+			expect(r.asked).to.equal(true)
+			expect(r.autoRan).to.equal(false)
+			expect(r.askPayload.autoApprovePaused).to.include(
+				"does not list this tool exactly once".replace("does not list", "no longer lists"),
+			)
+			expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"])
+		})
+
+		it("(d) a tool that disappeared never auto-runs (the helper says unknown_tool; the handler refuses before any ask)", async () => {
+			await reconnectWith(TOOLS.filter((t) => t.name !== "read_tool"))
+			expect(isMcpToolGrantedAutoApprove(hub, "ai-hydro", "read_tool")).to.equal(false)
+			const r = await runHandler("read_tool")
+			expect(r.autoRan).to.equal(false)
+			expect(r.out).to.include("does not exist")
+			expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"])
+		})
+
+		it("a disconnected server asks", async () => {
+			hub.connections[0].server.status = "disconnected"
+			expect(mcpAutoApproveDecision(hub, "ai-hydro", "read_tool")).to.include({ auto: false, reason: "server_unavailable" })
+		})
+
+		it("a tool with no grant is not reported as paused, only as not granted", async () => {
+			expect(mcpAutoApproveDecision(hub, "ai-hydro", "write_tool")).to.deep.equal({ auto: false, granted: false })
+			const r = await runHandler("write_tool")
+			expect(r.asked).to.equal(true)
+			expect(r.askPayload.autoApprovePaused).to.equal(undefined)
 		})
 	})
 })

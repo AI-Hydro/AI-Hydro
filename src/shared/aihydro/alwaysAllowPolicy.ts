@@ -85,6 +85,36 @@ export function alwaysAllowReasonText(reason: AlwaysAllowRefusalReason): string 
 	}
 }
 
+/**
+ * Why a stored "Always" grant is not honoured right now (M-3 run-time recheck). Shown in the ask that replaces the
+ * auto-run, so the user sees the call is being asked about on purpose. The grant itself is untouched.
+ */
+export function alwaysPausedText(toolName: string, reason: AlwaysAllowRefusalReason): string {
+	let why: string
+	switch (reason) {
+		case "untrusted_server":
+			why = "the server's launch identity changed or it is no longer the registered first-party server"
+			break
+		case "server_unavailable":
+			why = "the server is not connected"
+			break
+		case "unknown_tool":
+			why = "the server no longer lists this tool exactly once"
+			break
+		case "destructive":
+			why = "the tool is now marked destructive"
+			break
+		case "unknown_effect":
+			why = "the tool no longer declares what it does"
+			break
+		default: {
+			const unreachable: never = reason
+			why = String(unreachable)
+		}
+	}
+	return `Always for ${toolName} is paused: ${why}.`
+}
+
 // ── Refusal wire format (host throws, webview parses) ──────────────────────
 
 export const AUTO_APPROVE_REFUSED_PREFIX = "AIHYDRO_AUTO_APPROVE_REFUSED "

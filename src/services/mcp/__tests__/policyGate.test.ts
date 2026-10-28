@@ -56,9 +56,13 @@ describe("MCP settings policy loosening (T16, T17, B3)", () => {
 			expect(findLoosenings(prev, next)).to.deep.equal([])
 		})
 
-		it("does not flag unrelated edits (timeout, command, a server removed)", () => {
-			const prev = servers({ s: { timeout: 10, command: "a", autoApprove: ["a"] }, gone: { autoApprove: ["z"] } })
-			const next = servers({ s: { timeout: 99, command: "b", autoApprove: ["a"] } })
+		it("does not flag unrelated edits (timeout, a command change with no grants, a server removed)", () => {
+			const prev = servers({
+				s: { timeout: 10, command: "a", autoApprove: ["a"] },
+				plain: { command: "a" },
+				gone: { autoApprove: ["z"] },
+			})
+			const next = servers({ s: { timeout: 99, command: "a", autoApprove: ["a"] }, plain: { command: "b" } })
 			expect(findLoosenings(prev, next)).to.deep.equal([])
 		})
 
@@ -82,9 +86,40 @@ describe("MCP settings policy loosening (T16, T17, B3)", () => {
 			expect(out.s.autoApprove).to.deep.equal(["wanted"])
 		})
 
+		it("M-3 flags a launch-identity change only while a grant survives the edit", () => {
+			const base = { command: "py", args: ["-m", "x"], env: { A: "1" }, cwd: "/w", autoApprove: ["a"] }
+			const kinds = (next: Record<string, unknown>) =>
+				findLoosenings(policySnapshot(servers({ s: base })), servers({ s: next })).map((c) => c.kind)
+			expect(kinds({ ...base, command: "evil" })).to.deep.equal(["launch-changed"])
+			expect(kinds({ ...base, args: ["-m", "y"] })).to.deep.equal(["launch-changed"])
+			expect(kinds({ ...base, env: { A: "2" } })).to.deep.equal(["launch-changed"])
+			expect(kinds({ ...base, cwd: "/other" })).to.deep.equal(["launch-changed"])
+			expect(kinds({ ...base, url: "https://x.example/mcp" })).to.deep.equal(["launch-changed"])
+			// Same identity spelled differently, or a non-identity field: not a change.
+			expect(kinds({ ...base, env: { A: "1" }, timeout: 5, headers: { h: "1" } })).to.deep.equal([])
+			// Grants dropped in the same edit: nothing carries over, so no loosening.
+			expect(kinds({ ...base, command: "evil", autoApprove: [] })).to.deep.equal([])
+			// No grants before: the same change is not a loosening.
+			expect(
+				findLoosenings(
+					policySnapshot(servers({ s: { ...base, autoApprove: [] } })),
+					servers({ s: { ...base, command: "evil", autoApprove: [] } }),
+				),
+			).to.deep.equal([])
+		})
+
+		it("M-3 revertLoosenings restores the accepted launch identity and keeps other keys", () => {
+			const prev = policySnapshot(servers({ s: { command: "py", args: ["a"], env: { A: "1" }, autoApprove: ["t"] } }))
+			const out = revertLoosenings(
+				prev,
+				servers({ s: { command: "evil", args: ["b"], cwd: "/x", timeout: 9, autoApprove: ["t"] } }),
+			)
+			expect(out.s).to.deep.equal({ command: "py", args: ["a"], env: { A: "1" }, timeout: 9, autoApprove: ["t"] })
+		})
+
 		it("policySnapshot copies only policy fields", () => {
 			const snap = policySnapshot(servers({ s: { autoApprove: ["a"], command: "x", timeout: 3 } }))
-			expect(snap).to.deep.equal({ s: { autoApprove: ["a"] } })
+			expect(snap).to.deep.equal({ s: { launch: { command: "x" }, autoApprove: ["a"] } })
 		})
 	})
 
@@ -107,7 +142,7 @@ describe("MCP settings policy loosening (T16, T17, B3)", () => {
 				},
 				revertFile: (prev) => revertSettingsFile(file, prev),
 			})
-			gate.setBaseline(servers({ s: { autoApprove: ["describe_tool"], deny: ["bad"] } }))
+			gate.setBaseline(servers({ s: { command: "x", autoApprove: ["describe_tool"], deny: ["bad"] } }))
 			await fs.writeFile(
 				file,
 				JSON.stringify({ mcpServers: { s: { command: "x", autoApprove: ["describe_tool"], deny: ["bad"] } } }),

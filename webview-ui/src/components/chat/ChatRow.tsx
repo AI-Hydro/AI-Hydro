@@ -1366,6 +1366,15 @@ export const ChatRowContent = memo(
 						)}
 					</div>
 
+					{isPendingAsk && useMcpServer.autoApprovePaused && (
+						<div
+							className="mt-1 text-[12px]"
+							data-testid="mcp-always-paused"
+							style={{ color: "var(--vscode-editorWarning-foreground)" }}>
+							{useMcpServer.autoApprovePaused}
+						</div>
+					)}
+
 					{scienceCall ? (
 						<ScienceToolCard
 							annotations={scienceTool?.annotations}

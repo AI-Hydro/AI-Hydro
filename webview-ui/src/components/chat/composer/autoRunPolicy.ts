@@ -1,3 +1,4 @@
+import { alwaysAllowVerdict } from "@shared/aihydro/alwaysAllowPolicy"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { McpServer } from "@shared/mcp"
 import { ACTION_METADATA } from "../auto-approve-menu/constants"
@@ -7,8 +8,10 @@ export interface AutoRunPolicy {
 	enabled: boolean
 	/** Short names of what auto-runs, in menu order, e.g. ["Read", "Edit", "MCP"]. Sub-actions replace their parent. */
 	labels: string[]
-	/** MCP tools (on enabled servers) with a per-tool "always allow" grant. */
+	/** MCP tools (on enabled servers) with a per-tool "always allow" grant the host would honour when the tool runs. */
 	mcpAlwaysAllowed: number
+	/** Granted tools the host's run-time recheck (M-3) pauses: trust lost, destructive now, not listed once. They ask. */
+	mcpPaused: number
 	/** True when those grants cannot fire right now (auto-run or MCP auto-run is off). Still flagged: over-warning is safe. */
 	mcpDormant: boolean
 	/** Visible text for the MCP grants ("2 MCP tools always allowed"), or "" when none. */
@@ -50,9 +53,28 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 		labels.push(sub && actions[sub.id] ? sub.shortName : meta.shortName)
 	}
 
-	const mcpAlwaysAllowed = mcpServers
-		.filter((s) => !s.disabled)
-		.reduce((n, s) => n + (s.tools ?? []).filter((t) => t.autoApprove === true).length, 0)
+	// The host rechecks every grant when the tool runs (alwaysAllowVerdict, M-3). A grant it would pause asks instead
+	// of auto-running, so it is labelled "paused" and is not a risk. Only judged when the server's trust verdict
+	// reached the webview; without it the grant counts as active (over-warning is the safe side).
+	let mcpAlwaysAllowed = 0
+	let mcpPaused = 0
+	for (const s of mcpServers.filter((srv) => !srv.disabled)) {
+		for (const t of (s.tools ?? []).filter((tool) => tool.autoApprove === true)) {
+			const paused =
+				s.trust !== undefined &&
+				!alwaysAllowVerdict({
+					serverTrusted: s.trust.trusted,
+					serverConnected: s.status === "connected",
+					tools: s.tools,
+					toolName: t.name,
+				}).ok
+			if (paused) {
+				mcpPaused++
+			} else {
+				mcpAlwaysAllowed++
+			}
+		}
+	}
 
 	const riskReasons: string[] = []
 	if (yolo) {
@@ -76,15 +98,17 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 	}
 	const mcpDormant = mcpAlwaysAllowed > 0 && !yolo && (!enabled || !actions.useMcp)
 	const noun = mcpAlwaysAllowed === 1 ? "tool" : "tools"
-	const mcpLabel =
+	const activeLabel =
 		mcpAlwaysAllowed === 0
 			? ""
 			: mcpDormant
 				? `${mcpAlwaysAllowed} MCP ${noun} set to always allow (inactive while ${!enabled ? "auto-run" : "MCP auto-run"} is off)`
 				: `${mcpAlwaysAllowed} MCP ${noun} always allowed`
-	if (mcpLabel) {
-		riskReasons.push(mcpLabel)
+	if (activeLabel) {
+		riskReasons.push(activeLabel)
 	}
+	const pausedLabel = mcpPaused === 0 ? "" : `${mcpPaused} MCP ${mcpPaused === 1 ? "tool" : "tools"} paused (asks first)`
+	const mcpLabel = [activeLabel, pausedLabel].filter(Boolean).join(", ")
 
 	const chipText = yolo
 		? "YOLO: everything auto-runs"
@@ -95,5 +119,5 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 				: `Auto-run: ${labels.join(", ")}`
 	const risky = riskReasons.length > 0
 	const summary = `${chipText}${risky ? `. Risky: ${riskReasons.join("; ")}` : ""}`
-	return { enabled, labels, mcpAlwaysAllowed, mcpDormant, mcpLabel, yolo, riskReasons, risky, chipText, summary }
+	return { enabled, labels, mcpAlwaysAllowed, mcpPaused, mcpDormant, mcpLabel, yolo, riskReasons, risky, chipText, summary }
 }

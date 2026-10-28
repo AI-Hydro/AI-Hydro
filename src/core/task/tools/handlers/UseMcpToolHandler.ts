@@ -9,7 +9,7 @@ import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
-import { isMcpToolGrantedAutoApprove } from "../mcpAutoApprove"
+import { mcpAutoApproveDecision } from "../mcpAutoApprove"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import { repairMcpArgumentsString } from "../ToolInputRepair"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -118,15 +118,18 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// Handle approval flow
+		// Handle approval flow. A stored grant is rechecked against the live connection (M-3); a paused one asks,
+		// and the ask says why.
+		const autoDecision = mcpAutoApproveDecision(config.services.mcpHub, server_name, tool_name)
 		const completeMessage = JSON.stringify({
 			type: "use_mcp_tool",
 			serverName: server_name,
 			toolName: tool_name,
 			arguments: mcp_arguments,
+			...(autoDecision.auto === false && autoDecision.granted ? { autoApprovePaused: autoDecision.pausedText } : {}),
 		} satisfies AiHydroAskUseMcpServer)
 
-		const isToolAutoApproved = isMcpToolGrantedAutoApprove(config.services.mcpHub, server_name, tool_name)
+		const isToolAutoApproved = autoDecision.auto
 
 		if (config.callbacks.shouldAutoApproveTool(block.name) && isToolAutoApproved) {
 			// Auto-approval flow
