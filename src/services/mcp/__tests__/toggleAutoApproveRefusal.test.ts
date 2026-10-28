@@ -534,7 +534,7 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 		})
 
 		// N4: any throw while deciding means ask.
-		it("N4: a throw while deciding asks (fail closed), through the helper and the handler", async () => {
+		it("N4: a throw while deciding asks (fail closed)", async () => {
 			const throwing: any = {
 				get connections() {
 					throw new Error("boom")
