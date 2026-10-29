@@ -280,14 +280,6 @@ export async function deleteRuleFile(
 				const toggles = controller.stateManager.getWorkspaceStateKey("workflowToggles")
 				delete toggles[rulePath]
 				controller.stateManager.setWorkspaceState("workflowToggles", toggles)
-			} else if (type === "cursor") {
-				const toggles = controller.stateManager.getWorkspaceStateKey("localCursorRulesToggles")
-				delete toggles[rulePath]
-				controller.stateManager.setWorkspaceState("localCursorRulesToggles", toggles)
-			} else if (type === "windsurf") {
-				const toggles = controller.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
-				delete toggles[rulePath]
-				controller.stateManager.setWorkspaceState("localWindsurfRulesToggles", toggles)
 			} else {
 				const toggles = controller.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
 				delete toggles[rulePath]

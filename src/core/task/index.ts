@@ -20,11 +20,6 @@ import {
 	getLocalAiHydroRules,
 	refreshAiHydroRulesToggles,
 } from "@core/context/instructions/user-instructions/aihydro-rules"
-import {
-	getLocalCursorRules,
-	getLocalWindsurfRules,
-	refreshExternalRulesToggles,
-} from "@core/context/instructions/user-instructions/external-rules"
 import { getInstalledSkillsInstructions } from "@core/context/instructions/user-instructions/skills"
 import { clearPending, markPending } from "@core/controller/ui/pendingAskBadge"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
@@ -1823,17 +1818,11 @@ export class Task {
 				: ""
 
 		const { globalToggles, localToggles } = await refreshAiHydroRulesToggles(this.controller, this.cwd)
-		const { windsurfLocalToggles, cursorLocalToggles } = await refreshExternalRulesToggles(this.controller, this.cwd)
 
 		const globalAiHydroRulesFilePath = await ensureRulesDirectoryExists()
 		const globalAiHydroRulesFileInstructions = await getGlobalAiHydroRules(globalAiHydroRulesFilePath, globalToggles)
 
 		const localAiHydroRulesFileInstructions = await getLocalAiHydroRules(this.cwd, localToggles)
-		const [localCursorRulesFileInstructions, localCursorRulesDirInstructions] = await getLocalCursorRules(
-			this.cwd,
-			cursorLocalToggles,
-		)
-		const localWindsurfRulesFileInstructions = await getLocalWindsurfRules(this.cwd, windsurfLocalToggles)
 
 		const aihydroIgnoreContent = this.aihydroIgnoreController.aihydroIgnoreContent
 		let aihydroIgnoreInstructions: string | undefined
@@ -1864,9 +1853,6 @@ export class Task {
 			focusChainSettings: this.stateManager.getGlobalSettingsKey("focusChainSettings"),
 			globalAiHydroRulesFileInstructions,
 			localAiHydroRulesFileInstructions,
-			localCursorRulesFileInstructions,
-			localCursorRulesDirInstructions,
-			localWindsurfRulesFileInstructions,
 			aihydroIgnoreInstructions,
 			installedSkillsInstructions,
 			preferredLanguageInstructions,

@@ -244,7 +244,5 @@ export interface Secrets {
 
 export interface LocalState {
 	localAiHydroRulesToggles: AiHydroRulesToggles
-	localCursorRulesToggles: AiHydroRulesToggles
-	localWindsurfRulesToggles: AiHydroRulesToggles
 	workflowToggles: AiHydroRulesToggles
 }

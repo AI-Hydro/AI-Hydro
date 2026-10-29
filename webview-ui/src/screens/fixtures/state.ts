@@ -78,8 +78,6 @@ export function buildBaseState(overrides: Partial<ExtensionState> = {}): Extensi
 		protectedRoots: [],
 		globalAiHydroRulesToggles: {},
 		localAiHydroRulesToggles: {},
-		localCursorRulesToggles: {},
-		localWindsurfRulesToggles: {},
 		localWorkflowToggles: {},
 		globalWorkflowToggles: {},
 		shellIntegrationTimeout: 4000,

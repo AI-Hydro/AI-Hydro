@@ -3,9 +3,9 @@ import { ActionMetadata } from "./types"
 export const ACTION_METADATA: ActionMetadata[] = [
 	{
 		id: "enableAutoApprove",
-		label: "Enable auto-approve",
+		label: "Enable tool auto-run",
 		shortName: "Enabled",
-		description: "Toggle the auto-approve feature on or off.",
+		description: "Master switch for tool auto-run. While it is off, the grants below do not apply.",
 		icon: "codicon-play-circle",
 	},
 	{
@@ -54,19 +54,19 @@ export const ACTION_METADATA: ActionMetadata[] = [
 		icon: "codicon-terminal",
 		subAction: {
 			id: "executeAllCommands",
-			label: "Execute all commands",
+			label: "Run any command",
 			shortName: "All Commands",
 			description:
-				"Allows AI-Hydro to run any terminal command without asking, including ones the model marks as risky. Use at your own risk. Claim approval (aihydro-approve) and subagent launches are still blocked or asked.",
+				"Allows AI-Hydro to run any terminal command without asking, including ones the model marks as risky. Commands can change files, data and environments. Use at your own risk. Claim approval (aihydro-approve) and subagent launches are still blocked or asked.",
 			icon: "codicon-terminal-bash",
 			parentActionId: "executeSafeCommands",
 		},
 	},
 	{
 		id: "useBrowser",
-		label: "Use the browser",
+		label: "Browse websites",
 		shortName: "Browser",
-		description: "Allows AI-Hydro to launch and interact with any website in a browser.",
+		description: "Allows AI-Hydro to open a browser and interact with any website without asking each time.",
 		icon: "codicon-globe",
 	},
 	{

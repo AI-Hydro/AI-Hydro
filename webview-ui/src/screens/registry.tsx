@@ -307,10 +307,18 @@ export const screens: ScreenDef[] = [
 		steps: [{ wait: 600 }, { click: "[data-testid=auto-run-chip]" }, { wait: 400 }],
 		expectVisible: [
 			"text=Tool auto-run settings",
+			"text=Enable tool auto-run",
+			"text=Run any command",
+			"text=Browse websites",
 			"[data-testid=popover-disclaimer]",
 			"[data-testid=auto-run-chip][aria-expanded=true]",
 		],
-		expectAbsent: ["text=hold shift to drag"],
+		expectAbsent: [
+			"text=hold shift to drag",
+			"text=Enable auto-approve",
+			"text=Execute all commands",
+			"text=Use the browser",
+		],
 	}),
 	chatScreen("chat-home-empty-history", "Chat home, no history", { state: { taskHistory: [] } }),
 	chatScreen("chat-task-text", "Task with plain text", {
@@ -513,7 +521,7 @@ export const screens: ScreenDef[] = [
 		"The measurement could not resolve a study.",
 		ownerShape("focus"),
 	),
-	// Four commands that ran under "Execute all commands" (auto_run_all), one exiting non-zero.
+	// Four commands that ran under "Run any command" (auto_run_all), one exiting non-zero.
 	chatTx(
 		"chat-auto-run-all-commands",
 		"Four commands auto-ran under All Commands, one exited non-zero",
