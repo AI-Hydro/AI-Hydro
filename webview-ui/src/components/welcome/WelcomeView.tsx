@@ -3,6 +3,7 @@ import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { memo, useEffect, useState } from "react"
 import AiHydroLogoVariable from "@/assets/AiHydroLogoVariable"
 import ApiOptions from "@/components/settings/ApiOptions"
+import ToolsStatusChip from "@/components/tools/ToolsStatusChip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { Button, Text } from "@/design"
 import { StateServiceClient } from "@/services/grpc-client"
@@ -45,6 +46,9 @@ const WelcomeView = memo(() => {
 					</VSCodeLink>
 					. Tools that fetch data need network access.
 				</Text>
+				<div className="welcome-tools">
+					<ToolsStatusChip />
+				</div>
 				<section aria-labelledby="welcome-provider-title" className="welcome-panel">
 					<Text as="h2" id="welcome-provider-title" variant="title">
 						Choose a model provider

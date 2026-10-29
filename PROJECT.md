@@ -26,6 +26,12 @@ Active product hardening — last updated 2026-09-08.
   tool is off by default; "AI-Hydro" spelling and palette titles are guarded by
   `src/shared/__tests__/uiContract.test.ts` (words in `docs/ui-naming.md`). Running a program named
   `aihydro` is always denied. The two retired `clineAccountId` secrets are deleted once on start.
+- Managed tools environment (vision-2040 X0-3, PR #94, in review): the extension owns a venv
+  `<aihydro_home>/venvs/tools-2.8` with `aihydro-tools[...]~=2.8.2` (src/core/mcp/toolsEnv/). Install
+  is automatic only for a fresh, missing default venv after one consent that names PyPI; an unhealthy
+  or outdated venv is repaired only by the Repair action; pip runs only in a verified virtualenv. A
+  launcher differing from the recorded one, or a missing record, always needs the modal "Trust this
+  launcher". Status chip (Welcome, chat home), status bar item, Settings > About diagnostics.
 - Active phase: research-grade integration and scientific hardening.
 - Chat transcript (vision-2040 Wave 2, W2-A2, PR #81): the chat renders through
   `src/shared/aihydro/transcriptPresenter.ts` (work groups, lifted lines, Rewind,

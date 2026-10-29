@@ -54,6 +54,11 @@ const AiHydroCommands = {
 	EvidenceBoardButton: prefix + ".evidenceBoardButtonClicked",
 	CycleTranscriptDetail: prefix + ".cycleTranscriptDetail",
 	FocusPendingPrompt: prefix + ".focusPendingPrompt",
+	ToolsStatus: prefix + ".tools.showStatus",
+	ToolsInstall: prefix + ".tools.install",
+	ToolsRepair: prefix + ".tools.repair",
+	ToolsShowLog: prefix + ".tools.showLog",
+	ToolsCopyDiagnostics: prefix + ".tools.copyDiagnostics",
 }
 
 /**

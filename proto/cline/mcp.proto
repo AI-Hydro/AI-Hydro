@@ -24,6 +24,11 @@ service McpService {
   
   // Subscribe to MCP server updates
   rpc subscribeToMcpServers(EmptyRequest) returns (stream McpServers);
+
+  // Managed tools environment status (X0-3)
+  rpc getToolsEnvStatus(EmptyRequest) returns (ToolsEnvStatus);
+  rpc subscribeToToolsEnvStatus(EmptyRequest) returns (stream ToolsEnvStatus);
+  rpc runToolsEnvAction(ToolsEnvActionRequest) returns (ToolsEnvStatus);
 }
 
 message ToggleMcpServerRequest {
@@ -145,4 +150,28 @@ message McpDownloadResponse {
   string llms_installation_content = 7;
   bool requires_api_key = 8;
   optional string error = 9;
+}
+
+// Managed AI-Hydro tools environment (X0-3). One status for the Welcome/sidebar chip and About diagnostics.
+message ToolsEnvStatus {
+  string phase = 1;            // checking | ready | installing | missing | unhealthy | failed | custom
+  bool healthy = 2;
+  string version = 3;
+  string trust = 4;            // trusted | untrusted | unregistered
+  string trust_reason = 5;
+  string message = 6;
+  string error_code = 7;
+  string venv_path = 8;
+  string interpreter_path = 9;
+  string base_python = 10;
+  string server_name = 11;
+  string server_command = 12;
+  string requirement = 13;
+  string extension_version = 14;
+  string diagnostics = 15;     // preformatted plain text for Copy
+}
+
+message ToolsEnvActionRequest {
+  // install | repair | retry | cancel | showLog | trust | copyDiagnostics | useManaged
+  string action = 1;
 }

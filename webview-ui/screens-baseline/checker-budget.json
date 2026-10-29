@@ -10,142 +10,6 @@
 		}
 	},
 	"screens": {
-		"chat-study-bound": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-study-choose": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-study-none": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-approval-mcp-always": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-approval-mcp-destructive": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-approval-mcp-unannotated": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-approval-mcp-untrusted": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 4,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 24,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"composer-popover": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 3,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 18,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
 		"chat-annotated-first-party": {
 			"ref": {
 				"noName": 0,
@@ -334,6 +198,74 @@
 			"cells": 6
 		},
 		"chat-approval-mcp": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-approval-mcp-always": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-approval-mcp-destructive": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-approval-mcp-unannotated": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-approval-mcp-untrusted": {
 			"ref": {
 				"noName": 0,
 				"smallTarget": 4,
@@ -636,6 +568,57 @@
 			},
 			"cells": 6
 		},
+		"chat-study-bound": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-study-choose": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-study-none": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-task-answer": {
 			"ref": {
 				"noName": 0,
@@ -786,7 +769,7 @@
 			},
 			"cells": 6
 		},
-		"composer-running": {
+		"composer-popover": {
 			"ref": {
 				"noName": 0,
 				"smallTarget": 3,
@@ -803,90 +786,22 @@
 			},
 			"cells": 6
 		},
-		"toolcard-area-fail": {
+		"composer-running": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 0,
+				"smallTarget": 3,
 				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 0,
+				"smallTarget": 18,
 				"smallText": 0,
-				"contrast": 0,
+				"contrast": 3,
 				"contrastIndeterminate": 0
 			},
-			"cells": 40
-		},
-		"toolcard-provisional": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"toolcard-refusal": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"toolcard-success": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
-		},
-		"toolcard-unreported-class": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 40
+			"cells": 6
 		},
 		"design-primitives": {
 			"ref": {
@@ -1702,6 +1617,159 @@
 				"contrast": 180,
 				"contrastIndeterminate": 0
 			}
+		},
+		"toolcard-area-fail": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"toolcard-provisional": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"toolcard-refusal": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"toolcard-success": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"toolcard-unreported-class": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"tools-status-installing": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"tools-status-ready": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"tools-status-unhealthy": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"tools-status-untrusted": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
 		}
 	},
 	"subsets": {
@@ -2723,6 +2791,46 @@
 						"smallTarget": 24,
 						"smallText": 0,
 						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"tools-status-installing": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"tools-status-ready": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"tools-status-unhealthy": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"tools-status-untrusted": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6

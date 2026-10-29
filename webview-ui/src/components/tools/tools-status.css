@@ -1,0 +1,27 @@
+/* Tools status chip (Welcome and chat home). Tokens only. */
+.tools-chip {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-2);
+	padding: var(--aih-space-3);
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-md);
+	background: var(--aih-surface-raised);
+	margin: 0 var(--aih-space-5) var(--aih-space-3);
+}
+.tools-chip__line {
+	display: flex;
+	align-items: center;
+	gap: var(--aih-space-2);
+}
+.tools-chip__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--aih-space-2);
+}
+.tools-chip--warn {
+	border-style: dashed;
+}
+.tools-chip--error {
+	border-width: 2px;
+}

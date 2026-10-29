@@ -1,4 +1,7 @@
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import { runToolsAction } from "@/components/tools/ToolsStatusChip"
+import { useToolsEnvStatus } from "@/components/tools/useToolsEnvStatus"
+import { Button, KeyValue } from "@/design"
 import Section from "../Section"
 
 interface AboutSectionProps {
@@ -6,6 +9,7 @@ interface AboutSectionProps {
 	renderSectionHeader: (tabId: string) => JSX.Element | null
 }
 const AboutSection = ({ version, renderSectionHeader }: AboutSectionProps) => {
+	const tools = useToolsEnvStatus()
 	return (
 		<div>
 			{renderSectionHeader("about")}
@@ -17,6 +21,32 @@ const AboutSection = ({ version, renderSectionHeader }: AboutSectionProps) => {
 						can handle complex tasks step-by-step with tools that create and edit files, explore projects, use the
 						browser, and execute terminal commands (after you grant permission).
 					</p>
+
+					<h3>Tools diagnostics</h3>
+					<div data-testid="tools-diagnostics">
+						<KeyValue
+							items={[
+								{ label: "Tools version", value: tools ? tools.version || "not installed" : undefined },
+								{
+									label: "Status",
+									value: tools ? `${tools.phase}${tools.healthy ? " (healthy)" : ""}` : undefined,
+								},
+								{ label: "Interpreter", value: tools?.interpreterPath || tools?.basePython },
+								{ label: "Venv path", value: tools?.venvPath },
+								{ label: "Server command", value: tools ? tools.serverCommand || "not registered" : undefined },
+								{
+									label: "Trust",
+									value: tools
+										? `${tools.trust}${tools.trustReason ? `: ${tools.trustReason}` : ""}`
+										: undefined,
+								},
+								{ label: "Requirement", value: tools?.requirement },
+							]}
+						/>
+						<Button onClick={() => runToolsAction("copyDiagnostics")} variant="ghost">
+							Copy diagnostics
+						</Button>
+					</div>
 
 					<h3>Community & Support</h3>
 					<p>
