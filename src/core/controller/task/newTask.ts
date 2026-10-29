@@ -14,7 +14,7 @@ import { confirmAbortRunningTask } from "../abortGuard"
  * @returns Empty response
  */
 export async function newTask(controller: Controller, request: NewTaskRequest): Promise<String> {
-	if (!(await confirmAbortRunningTask(controller, "newTask"))) {
+	if (!(await confirmAbortRunningTask(controller, "newTask", { answeringAsk: "new_task" }))) {
 		return String.create({ value: "" }) // the user kept the running chat
 	}
 	const convertOpenaiReasoningEffort = (effort: ProtoOpenaiReasoningEffort): string => {

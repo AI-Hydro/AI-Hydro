@@ -21,6 +21,27 @@ export interface AbortGuardTarget {
 export interface AbortGuardDeps {
 	/** Replaces the modal (tests). */
 	confirm?: (reason: string) => Promise<boolean>
+	/** The user is answering this very pending ask (its button started the new chat), so it is not "running". */
+	answeringAsk?: string
+}
+
+function lastAsk(task: AbortGuardTarget["task"]): string | undefined {
+	const messages = task?.messageStateHandler?.getAiHydroMessages() ?? []
+	return messages[messages.length - 1]?.ask
+}
+
+/** Non-modal feedback so a declined or unavailable modal never leaves "New task" silently doing nothing. */
+function notifyKept(): void {
+	try {
+		void Promise.resolve(
+			HostProvider.window.showMessage({
+				type: ShowMessageType.INFORMATION,
+				message: "Kept the running chat; stop it first to start a new one.",
+			}),
+		).catch(() => {})
+	} catch {
+		// host without a window: the console.warn above is the record
+	}
 }
 
 /** The modal. Anything but the explicit button, or a host that cannot show one, keeps the chat. */
@@ -32,7 +53,10 @@ export async function showStopRunningChatModal(): Promise<boolean> {
 			options: { modal: true, items: [STOP_AND_CONTINUE_LABEL] },
 		})
 		return response?.selectedOption === STOP_AND_CONTINUE_LABEL
-	} catch {
+	} catch (err) {
+		// No modal available: keep the chat, but never silently.
+		console.warn("[abortGuard] could not show the stop-chat modal; kept the running chat:", err)
+		notifyKept()
 		return false
 	}
 }
@@ -48,6 +72,9 @@ export async function confirmAbortRunningTask(
 	deps: AbortGuardDeps = {},
 ): Promise<boolean> {
 	if (!isChatInProgress(controller.task)) {
+		return true
+	}
+	if (deps.answeringAsk && lastAsk(controller.task) === deps.answeringAsk) {
 		return true
 	}
 	return (deps.confirm ?? showStopRunningChatModal)(reason)

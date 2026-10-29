@@ -57,7 +57,7 @@ const PATHS: Path[] = [
 		touched: ["initTask"],
 	},
 	{
-		name: "newTask rpc (new_task ask, starter card)",
+		name: "newTask rpc (starter card)",
 		run: (c) => newTask(c, { text: "go", images: [], files: [] } as any),
 		touched: ["initTask"],
 	},
@@ -153,6 +153,39 @@ describe("Nav-1 abort guard", () => {
 			})
 			expect(await confirmAbortRunningTask({ task: task({ ask: "tool" }) as any }, "t")).to.equal(false)
 			expect(await confirmAbortRunningTask({ task: undefined }, "t")).to.equal(true)
+		})
+		it("the modal failing warns and posts a non-modal notice instead of failing silently", async () => {
+			sinon.restore()
+			const warn = sinon.stub(console, "warn")
+			const notices: string[] = []
+			let calls = 0
+			sinon.stub(HostProvider, "window").get(
+				() =>
+					({
+						showMessage: async (req: { message: string; options?: unknown }) => {
+							calls++
+							if (req.options) {
+								throw new Error("no modal")
+							}
+							notices.push(req.message)
+							return {}
+						},
+					}) as any,
+			)
+			expect(await confirmAbortRunningTask({ task: task({ ask: "tool" }) as any }, "t")).to.equal(false)
+			expect(calls).to.equal(2)
+			expect(warn.calledOnce).to.equal(true)
+			expect(notices).to.deep.equal(["Kept the running chat; stop it first to start a new one."])
+		})
+		it("a pending new_task ask is being answered by the user: newTask does not ask, other paths still do", async () => {
+			const { c, log } = fakeController(task({ ask: "new_task" }))
+			await newTask(c, { text: "ctx", images: [], files: [] } as any)
+			expect(asked).to.deep.equal([])
+			expect(log).to.include("initTask")
+			const other = fakeController(task({ ask: "new_task" }))
+			await clearTask(other.c, {} as any)
+			expect(asked).to.have.length(1)
+			expect(other.log).to.not.include("clearTask")
 		})
 		it("a pending ask counts as running and the injected confirm decides", async () => {
 			const t = task({ ask: "followup" }) as any
