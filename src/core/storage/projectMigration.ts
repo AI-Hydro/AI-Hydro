@@ -186,14 +186,15 @@ const BACKUP_PREFIX = "bak-pre-projects-"
 export async function backupHistoryOnce(
 	historyFile: string,
 	now: Date = new Date(),
+	prefix: string = BACKUP_PREFIX,
 ): Promise<{ created: boolean; backup?: string }> {
 	const dir = path.dirname(historyFile)
 	const base = path.basename(historyFile)
-	const existing = (await fs.readdir(dir).catch(() => [] as string[])).find((f) => f.startsWith(`${base}.${BACKUP_PREFIX}`))
+	const existing = (await fs.readdir(dir).catch(() => [] as string[])).find((f) => f.startsWith(`${base}.${prefix}`))
 	if (existing) {
 		return { created: false, backup: path.join(dir, existing) }
 	}
-	const backup = path.join(dir, `${base}.${BACKUP_PREFIX}${now.toISOString().replace(/[:.]/g, "-")}`)
+	const backup = path.join(dir, `${base}.${prefix}${now.toISOString().replace(/[:.]/g, "-")}`)
 	let bytes: Buffer
 	try {
 		bytes = await fs.readFile(historyFile)

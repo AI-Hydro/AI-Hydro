@@ -348,6 +348,9 @@ message UpdateSettingsRequest {
   optional bool final_answer_audit_enabled = 32;
   optional string transcript_detail = 34;
   optional bool final_answer_audit_gate = 33;
+  // X1-P2: chat titles. auto_title off means no model call for titles; title_model is a model id on the chat's provider.
+  optional bool auto_title = 35;
+  optional string title_model = 36;
 }
 
 // Complete API Configuration message

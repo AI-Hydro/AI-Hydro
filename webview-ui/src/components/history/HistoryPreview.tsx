@@ -1,11 +1,11 @@
 import { describeInvestigation, type InvestigationRecord } from "@shared/aihydro/investigationSummary"
+import { displayTitle } from "@shared/chatTitle"
 import { StringRequest } from "@shared/proto/cline/common"
 import { memo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { Badge, Button, Disclosure, KeyValue, Text } from "@/design"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { formatLargeNumber } from "@/utils/format"
-import { stripMarkdown } from "@/utils/stripMarkdown"
 import "./history.css"
 
 type HistoryPreviewProps = {
@@ -55,7 +55,7 @@ const HistoryPreview = ({ showHistoryView }: HistoryPreviewProps) => {
 								{item.isFavorited && <Badge icon="star-full">Favorited</Badge>}
 							</div>
 							<button className="history-card__title ph-no-capture" onClick={() => open(item.id)} type="button">
-								{stripMarkdown(item.task)}
+								{displayTitle(item)}
 							</button>
 							<Text as="p" muted variant="caption">
 								{describeInvestigation(investigationFor(item.id))}

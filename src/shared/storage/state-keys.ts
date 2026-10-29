@@ -107,6 +107,10 @@ export interface Settings {
 	/** Chat transcript detail level (Wave 2): "focus" | "normal" | "verbose". */
 	transcriptDetail: "focus" | "normal" | "verbose"
 	finalAnswerAuditGate: boolean
+	/** Chat titles (X1-P2): false means no model call is ever made for a title (the deterministic title is used). */
+	autoTitle: boolean
+	/** A model id on the chat's own provider for title calls; empty means the chat's model. */
+	titleModel: string
 
 	// Plan mode configurations
 	planModeApiProvider: ApiProvider

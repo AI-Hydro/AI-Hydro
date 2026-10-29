@@ -2889,6 +2889,11 @@ export class Task {
 			})
 			await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 			await this.postStateToWebview()
+			// The first reply of a chat is enough to name it (X1-P2). Fire and forget: it never delays the loop, and the
+			// title service ignores a chat that already has a user title or its automatic title.
+			if (assistantMessage.length > 0) {
+				this.controller.requestChatTitle?.("first_turn")
+			}
 
 			// now add to apiconversationhistory
 			// need to save assistant responses to file before proceeding to tool use since user can exit at any moment and we wouldn't be able to save the assistant's response

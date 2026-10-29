@@ -70,6 +70,29 @@ const MAX_ERROR_MESSAGE_LENGTH = 500
  * Uses an abstracted telemetry provider to support multiple analytics backends
  * Respects user privacy settings and VSCode's global telemetry configuration
  */
+/**
+ * Keys that carry chat titles or descriptions (or the text they are made from). The exclusion is enforced here, at the
+ * one place every event passes through, so no present or future `capture*` method can send them (PSMH §9, X1-P2).
+ * Nested objects are searched to a bounded depth.
+ */
+export const CHAT_TEXT_KEYS: ReadonlySet<string> = new Set(["title", "description", "titleSource", "titleRuns", "userQuestion"])
+
+export function withoutChatText<T>(value: T, depth = 0): T {
+	if (depth > 6 || value === null || typeof value !== "object") {
+		return value
+	}
+	if (Array.isArray(value)) {
+		return value.map((v) => withoutChatText(v, depth + 1)) as unknown as T
+	}
+	const out: Record<string, unknown> = {}
+	for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+		if (!CHAT_TEXT_KEYS.has(key)) {
+			out[key] = withoutChatText(v, depth + 1)
+		}
+	}
+	return out as T
+}
+
 export class TelemetryService {
 	// Map to control specific telemetry categories (event types)
 	private telemetryCategoryEnabled: Map<TelemetryCategory, boolean> = new Map([
@@ -301,7 +324,9 @@ export class TelemetryService {
 	 * @param properties Event properties (must be JSON-serializable)
 	 * @param required Whether this is a required event
 	 */
-	private captureToProviders(event: string, properties: TelemetryProperties, required: boolean): void {
+	private captureToProviders(event: string, rawProperties: TelemetryProperties, required: boolean): void {
+		// Chat titles and descriptions are the user's words about their work: never part of an event (X1-P2).
+		const properties = withoutChatText(rawProperties)
 		this.providers.forEach((provider) => {
 			try {
 				if (required) {

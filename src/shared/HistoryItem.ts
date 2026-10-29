@@ -21,10 +21,15 @@ export type HistoryItem = {
 
 	// Fields below are declared now so later PRs never reopen the merge rules. Each has exactly one owner
 	// (src/core/storage/historyPatch.ts). A build that predates them keeps them on disk and ignores them.
-	/** Display title. A "user" title is never overwritten by the loop or the system. */
+	/**
+	 * Display title (src/shared/chatTitle.ts). A "user" title is never overwritten by the loop or the system. "fallback" is
+	 * the deterministic title, "auto" one a model wrote; both may be replaced, a "user" one only by the user.
+	 */
 	title?: string
-	titleSource?: "auto" | "user"
+	titleSource?: "auto" | "fallback" | "user"
 	description?: string
+	/** How many times a model has been called to title this chat (at most two automatic runs). Written with the title. */
+	titleRuns?: number
 	pinned?: boolean
 	memoryMode?: string
 	/** Project the chat belongs to. Immutable once set. */
