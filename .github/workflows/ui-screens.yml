@@ -22,7 +22,8 @@ jobs:
   ui-screens:
     name: Screens, budget and bundle guard
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The matrix is 714 cells (about 31 min on a typical runner, up to about 45 min on a slow one).
+    timeout-minutes: 60
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
