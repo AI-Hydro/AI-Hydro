@@ -35,6 +35,8 @@ The chat panel is where you interact with the agent:
 - **Agent to-do (self-reported)** — the task header shows the agent's own checklist as `n/m` items checked. It is the model's bookkeeping, not a verified result; when every item is ticked it reads "All items checked". A repeated, unchanged list does not add a new row.
 - **New task** — the labelled **New task** button in the task header closes the current task view so you can start another (the title-bar **+** does the same).
 - **Study chip** — when the chat is bound to a study, the header shows the study / gauge id first and in full, then the site name.
+- **Projects on chats** — a project is a workspace folder; each new chat is placed in the project of the folder it starts in (the AI-Hydro server creates it, needs `aihydro-tools` 2.8.3 or newer). The chat's project is stored once on the chat and never changes, and is sent with every AI-Hydro tool call. The study chip's picker lists the studies of the chat's project, and its tooltip names the project. With an older or absent server the chat simply has no project and the tooltip says why.
+- **Earlier chats are grouped once, by folder** — on the first start with a 2.8.3 server, chats from before projects existed are placed in the project of the folder they were started in (the checkpoint folder if recorded, else the chat's recorded working folder). A chat with no recorded folder, or whose folder was moved or deleted, **stays in "Unsorted"**: it is not guessed into another project, so grouping is lossy for chats whose folder moved. The step is repeatable: a second run changes nothing, and nothing is deleted. A short notice states how many chats were grouped and how many stay in Unsorted.
 
 ---
 

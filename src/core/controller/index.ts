@@ -17,6 +17,8 @@ import {
 	type ChatStatus,
 	candidatesForPicker,
 	chatStatus,
+	type EnsureProjectResult,
+	ensureProject,
 	findBindingServer,
 	type LaunchStudyHint,
 	parseBindingSignal,
@@ -26,8 +28,6 @@ import {
 } from "@integrations/aihydro-session/studyBinding"
 import { cleanupLegacyCheckpoints } from "@integrations/checkpoints/CheckpointMigration"
 import { downloadTask } from "@integrations/misc/export-markdown"
-import { ulid } from "ulid"
-import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
 import { ArtifactKernelService } from "@services/artifact-preview/ArtifactKernelService"
 import type { ArtifactRef } from "@services/artifact-preview/ArtifactPreviewService"
 import { ArtifactPreviewService } from "@services/artifact-preview/ArtifactPreviewService"
@@ -40,8 +40,8 @@ import { ApiProvider, ModelInfo } from "@shared/api"
 import { ARTIFACT_TRUST_METADATA_KEYS } from "@shared/artifactTrust"
 import { ChatContent } from "@shared/ChatContent"
 import { MAX_REMOTE_CATALOG_BYTES, MAX_REMOTE_CONNECTORS } from "@shared/connectors"
-import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import type { StudyBindingState } from "@shared/ExtensionMessage"
+import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { HistoryItem, type HistoryOrigin } from "@shared/HistoryItem"
 import { McpMarketplaceCatalog } from "@shared/mcp"
 import { HtmlPreviewItem, HtmlPreviewMode, LearningModuleCatalog } from "@shared/proto/cline/html_preview"
@@ -56,8 +56,10 @@ import fs from "fs/promises"
 import pWaitFor from "p-wait-for"
 import * as path from "path"
 import type { FolderLockWithRetryResult } from "src/core/locks/types"
+import { ulid } from "ulid"
 import * as vscode from "vscode"
 import { AiHydroEnv } from "@/config"
+import { resolveWorkspaceRoot } from "@/core/mcp/workspaceRoot"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
@@ -81,6 +83,7 @@ import {
 	writeMcpMarketplaceCatalogToCache,
 } from "../storage/disk"
 import { type HistoryWriter, patchHistory, removeFromHistory } from "../storage/historyPatch"
+import { describeMigration, planProjectMigration, resolveProjects } from "../storage/projectMigration"
 import { PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
 import { getHostProtectedRoots } from "../task/protectedRoots"
@@ -98,6 +101,12 @@ https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/c
 
 /** The longest the launch binding may hold a task back. */
 export const LAUNCH_BINDING_BUDGET_MS = 10_000
+/** The longest a new chat waits for the server to make (or find) its project. A miss is retried in the background. */
+export const LAUNCH_PROJECT_BUDGET_MS = 5_000
+const PROJECT_RETRY_MAX = 5
+/** The migration waits for the AI-Hydro server to connect: this often, this many times, then gives up until the next activation. */
+const MIGRATION_POLL_MS = 5_000
+const MIGRATION_POLL_MAX = 24
 
 /** How a chat is launched: where from, the user's own words when the prompt is wrapped, and what is known of its study. */
 export interface ChatLaunch {
@@ -265,6 +274,8 @@ export class Controller {
 		cleanupLegacyCheckpoints().catch((error) => {
 			console.error("Failed to cleanup legacy checkpoints:", error)
 		})
+
+		this.startProjectMigration()
 	}
 
 	/*
@@ -392,6 +403,8 @@ export class Controller {
 		// X0-2: the chat id exists before the task does, so the chat is bound to its study BEFORE the task's first
 		// tool call. A failure to bind never stops the task; it is shown in the chip instead.
 		const chatUlid = historyItem?.ulid ?? ulid()
+		// X1-P1: the chat's project exists before its first tool call, so every call can carry `_meta.project_id`.
+		await this.resolveChatProject(chatUlid, cwd, historyItem)
 		await this.bindChatAtLaunch(chatUlid, cwd, historyItem, launch)
 
 		this.task = new Task({
@@ -1169,7 +1182,19 @@ export class Controller {
 		const checkpointManagerErrorMessage = this.task?.taskState.checkpointManagerErrorMessage
 		// The study chip's state is host-owned (launch binding, tool-result signals, the user's choice); a state
 		// for another chat is never shown.
-		const studyBinding = this.task && this.studyBinding?.chatId === this.task.ulid ? this.studyBinding : undefined
+		const boundState = this.task && this.studyBinding?.chatId === this.task.ulid ? this.studyBinding : undefined
+		const chatProject = this.task && this.chatProject?.chatId === this.task.ulid ? this.chatProject : undefined
+		const studyBinding =
+			boundState && chatProject && (chatProject.projectId || chatProject.note)
+				? {
+						...boundState,
+						project: {
+							...(chatProject.projectId ? { id: chatProject.projectId } : {}),
+							...(chatProject.title ? { title: chatProject.title } : {}),
+							...(chatProject.note ? { note: chatProject.note } : {}),
+						},
+					}
+				: boundState
 
 		const processedTaskHistory = (taskHistory || [])
 			.filter((item) => item.ts && item.task)
@@ -1269,6 +1294,7 @@ export class Controller {
 		clearPending() // cancel and new task: nothing is waiting on the user any more
 		this.task = undefined // removes reference to it, so once promises end it will be garbage collected
 		this.studyBinding = undefined
+		this.chatProject = undefined
 	}
 
 	// Caching mechanism to keep track of webview messages + API conversation history per provider instance
@@ -1294,7 +1320,12 @@ export class Controller {
 	 * fields written in between are kept. Other writers use `patchTaskHistory` with their own writer name.
 	 */
 	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
-		const history = this.patchTaskHistory(item.id, item, "loop")
+		// The project is a creation field: the first value stored wins, so a later save never moves the chat.
+		const withProject =
+			this.chatProject?.projectId && this.task?.taskId === item.id && this.chatProject.chatId === item.ulid
+				? { ...item, projectId: this.chatProject.projectId }
+				: item
+		const history = this.patchTaskHistory(item.id, withProject, "loop")
 		const pending = this.pendingStudyMirror
 		if (pending && (pending.taskId === item.id || (!pending.taskId && item.ulid === pending.ulid))) {
 			this.pendingStudyMirror = undefined
@@ -1321,6 +1352,169 @@ export class Controller {
 	/** A user rename: persists across every later save (`titleSource: "user"`). */
 	renameTaskHistory(id: string, title: string): HistoryItem[] {
 		return this.patchTaskHistory(id, { title, titleSource: "user" }, "user")
+	}
+
+	// ---- Projects on chats (X1-P1) --------------------------------------------------------------------------
+
+	/** The chat's project, once known. `note` says why there is none (shown on the chip; never blocks the chat). */
+	private chatProject: { chatId: string; projectId?: string; title?: string; note?: string } | undefined
+	/** Overridable in tests. */
+	projectBudgetMs = LAUNCH_PROJECT_BUDGET_MS
+	projectRetryMs = 3_000
+
+	/** The project id to send as `_meta.project_id` for this chat, or undefined (older server, not yet created). */
+	getChatProjectId(chatId: string): string | undefined {
+		return this.chatProject?.chatId === chatId ? this.chatProject.projectId : undefined
+	}
+
+	/**
+	 * Decide the chat's project. A resumed chat keeps the one stored on its history item (immutable); an item with none
+	 * stays without one rather than being guessed from today's folder (M1 places those). A new chat asks the server
+	 * for the project of its workspace folder, within a short budget. Never throws.
+	 */
+	private async resolveChatProject(chatUlid: string, cwd: string, historyItem: HistoryItem | undefined): Promise<void> {
+		if (historyItem) {
+			this.chatProject = { chatId: chatUlid, projectId: historyItem.projectId }
+			return
+		}
+		try {
+			const workspace = await this.bindingWorkspace(cwd)
+			if (!workspace) {
+				this.chatProject = { chatId: chatUlid, note: "No folder is open, so this chat has no project." }
+				return
+			}
+			let timer: ReturnType<typeof setTimeout> | undefined
+			const result = await Promise.race([
+				ensureProject(this.bindingHub, workspace, chatUlid),
+				new Promise<EnsureProjectResult>((resolve) => {
+					timer = setTimeout(
+						() =>
+							resolve({
+								ok: false,
+								code: "FAILED",
+								reason: "The AI-Hydro server did not answer in time, so this chat has no project yet. Retrying.",
+							}),
+						this.projectBudgetMs,
+					)
+				}),
+			]).finally(() => timer && clearTimeout(timer))
+			this.applyProjectResult(chatUlid, result)
+			if (!result.ok && result.code !== "OLD_SERVER") {
+				this.scheduleProjectRetry(chatUlid, workspace, 1)
+			}
+		} catch (error) {
+			this.chatProject = { chatId: chatUlid, note: error instanceof Error ? error.message : String(error) }
+		}
+	}
+
+	private applyProjectResult(chatUlid: string, result: EnsureProjectResult): void {
+		this.chatProject = result.ok
+			? { chatId: chatUlid, projectId: result.projectId, title: result.title }
+			: { chatId: chatUlid, note: result.reason }
+		if (!result.ok) {
+			console.warn(`[projects] chat ${chatUlid} has no project: ${result.reason}`)
+		}
+	}
+
+	/** The server was not ready at launch (still starting): try again a few times, then stay without a project. */
+	private scheduleProjectRetry(chatUlid: string, workspace: string, attempt: number): void {
+		if (attempt > PROJECT_RETRY_MAX) {
+			return
+		}
+		const timer = setTimeout(async () => {
+			if (this.task?.ulid !== chatUlid || this.chatProject?.projectId) {
+				return
+			}
+			const result = await ensureProject(this.bindingHub, workspace, chatUlid)
+			if (this.task?.ulid !== chatUlid) {
+				return
+			}
+			this.applyProjectResult(chatUlid, result)
+			if (result.ok) {
+				// Store it when the chat's item exists; otherwise the first save picks it up (updateTaskHistory).
+				const taskId = this.task.taskId
+				if ((this.stateManager.getGlobalStateKey("taskHistory") ?? []).some((h) => h.id === taskId)) {
+					this.patchTaskHistory(taskId, { projectId: result.projectId }, "loop")
+				}
+			} else if (result.code !== "OLD_SERVER") {
+				this.scheduleProjectRetry(chatUlid, workspace, attempt + 1)
+			}
+			void this.postStateToWebview().catch(() => {})
+		}, this.projectRetryMs)
+		timer.unref?.()
+	}
+
+	// ---- M1: assign a project to earlier chats ------------------------------------------------------------------
+
+	private static projectMigrationStarted = false
+
+	/**
+	 * Start the background migration once per extension host. The AI-Hydro server connects after activation, so this
+	 * waits for it (bounded); with the server absent or older than 2.8.3 it does nothing and the next activation
+	 * tries again. Idempotent: a second run finds nothing to assign and makes no server call.
+	 */
+	startProjectMigration(): void {
+		if (Controller.projectMigrationStarted) {
+			return
+		}
+		Controller.projectMigrationStarted = true
+		let polls = 0
+		const tick = async () => {
+			polls++
+			if (!findBindingServer(this.bindingHub)) {
+				if (polls < MIGRATION_POLL_MAX) {
+					const t = setTimeout(tick, MIGRATION_POLL_MS)
+					t.unref?.()
+				}
+				return
+			}
+			try {
+				await this.migrateHistoryToProjects()
+			} catch (error) {
+				console.error("[projects] migration failed:", error)
+			}
+		}
+		const first = setTimeout(tick, MIGRATION_POLL_MS)
+		first.unref?.()
+	}
+
+	/** Plan, ask the server for one project per folder, and store `projectId` on the chats it placed. */
+	async migrateHistoryToProjects(): Promise<{ assigned: number; unsorted: number; failedFolders: number }> {
+		const history = this.stateManager.getGlobalStateKey("taskHistory") ?? []
+		const plan = await planProjectMigration(history, (dir) =>
+			fs.stat(dir).then(
+				(st) => st.isDirectory(),
+				() => false,
+			),
+		)
+		const unsorted = plan.noDir.length + plan.missingDir.length
+		if (plan.byDir.length === 0) {
+			return { assigned: 0, unsorted, failedFolders: 0 }
+		}
+		const result = await resolveProjects(plan, async (dir) => {
+			const r = await ensureProject(this.bindingHub, dir)
+			return r.ok ? { ok: true, projectId: r.projectId } : r
+		})
+		for (const a of result.assignments) {
+			// Creation field, first value wins; a chat that was deleted meanwhile is not brought back.
+			this.patchTaskHistory(a.itemId, { projectId: a.projectId }, "system")
+		}
+		if (result.failed.length > 0) {
+			console.warn(
+				`[projects] M1: ${result.failed.length} folder(s) not placed this time: ${result.failed.map((f) => `${f.folder} (${f.code})`).join(", ")}`,
+			)
+		}
+		if (result.assignments.length > 0) {
+			try {
+				HostProvider.window
+					.showMessage({ type: ShowMessageType.INFORMATION, message: describeMigration(plan, result) })
+					.catch(() => {})
+			} catch {
+				// No host window (a headless run): the notice is a courtesy, the assignments are already stored.
+			}
+			void this.postStateToWebview().catch(() => {})
+		}
+		return { assigned: result.assignments.length, unsorted, failedFolders: result.failed.length }
 	}
 
 	// ---- Study binding (X0-2) -------------------------------------------------------------------------------
@@ -1363,6 +1557,7 @@ export class Controller {
 						hint: launch?.studyHint,
 						resumeStudyId: historyItem?.activeStudyId,
 						resuming: !!historyItem,
+						projectId: this.chatProject?.chatId === chatUlid ? this.chatProject.projectId : undefined,
 						abort,
 					}))(),
 				new Promise<StudyBindingState>((resolve) => {
@@ -1495,6 +1690,8 @@ export class Controller {
 				server,
 				task.ulid,
 				await this.bindingWorkspace(),
+				undefined,
+				this.getChatProjectId(task.ulid),
 			)
 			if (this.task !== task) {
 				return
@@ -1536,7 +1733,11 @@ export class Controller {
 				})
 				return
 			}
-			const candidates = await candidatesForPicker(this.bindingHub, await this.bindingWorkspace())
+			const candidates = await candidatesForPicker(
+				this.bindingHub,
+				await this.bindingWorkspace(),
+				this.getChatProjectId(task.ulid),
+			)
 			this.setStudyBinding({
 				chatId: task.ulid,
 				status: "choose",
@@ -1568,7 +1769,15 @@ export class Controller {
 		}
 		const server = findBindingServer(this.bindingHub)
 		const result = server
-			? await rebindChat(this.bindingHub, server, task.ulid, studyId, await this.bindingWorkspace())
+			? await rebindChat(
+					this.bindingHub,
+					server,
+					task.ulid,
+					studyId,
+					await this.bindingWorkspace(),
+					undefined,
+					this.getChatProjectId(task.ulid),
+				)
 			: ({ ok: false, code: "NO_SERVER", message: "The AI-Hydro server is not connected." } as const)
 		if (this.task !== task) {
 			return

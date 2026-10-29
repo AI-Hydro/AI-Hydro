@@ -132,6 +132,8 @@ export async function runFinalAnswerAudit(args: {
 	workspaceRoot: string | undefined
 	answer: string
 	modelIdReturned?: string
+	/** The chat's project (`_meta.project_id`, X1-P1), when it has one. */
+	projectId?: string
 	timeoutMs?: number
 	/**
 	 * Study already verified as bound to this chat by an earlier status call in this task (the W2-C gate's cache, so
@@ -171,7 +173,13 @@ export async function runFinalAnswerAudit(args: {
 					`cannot confirm a research session is bound to this chat (${CHAT_STATUS_TOOL_NAME} not exposed)`,
 				)
 			}
-			const statusCtx = buildAiHydroCallContext({ chat_id: ulid }, ulid, workspaceRoot, args.modelIdReturned)
+			const statusCtx = buildAiHydroCallContext(
+				{ chat_id: ulid },
+				ulid,
+				workspaceRoot,
+				args.modelIdReturned,
+				args.projectId,
+			)
 			const status = responseJson(
 				await withTimeout(
 					hub.callTool(server.name, CHAT_STATUS_TOOL_NAME, statusCtx.args, ulid, statusCtx.meta),
@@ -192,7 +200,13 @@ export async function runFinalAnswerAudit(args: {
 
 	let response: McpToolCallResponse
 	try {
-		const ctx = buildAiHydroCallContext({ prose: answer, session_id: boundStudy }, ulid, workspaceRoot, args.modelIdReturned)
+		const ctx = buildAiHydroCallContext(
+			{ prose: answer, session_id: boundStudy },
+			ulid,
+			workspaceRoot,
+			args.modelIdReturned,
+			args.projectId,
+		)
 		response = await withTimeout(
 			hub.callTool(server.name, AUDIT_TOOL_NAME, ctx.args, ulid, ctx.meta),
 			args.timeoutMs ?? DEFAULT_AUDIT_TIMEOUT_MS,
