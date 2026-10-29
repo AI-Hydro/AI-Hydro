@@ -32,6 +32,34 @@ const choose: StudyBindingState = {
 
 const handlers = () => ({ onOpen: vi.fn(), onChoose: vi.fn(), onDecline: vi.fn() })
 
+describe("StudyChip project line (X1-P1)", () => {
+	it("names the project in the tooltip, and never shows the prj_ id", () => {
+		render(
+			<StudyChipView
+				binding={{ ...bound, project: { id: "prj_01JPROJECT001000000000000", title: "maine" } }}
+				{...handlers()}
+			/>,
+		)
+		const chip = screen.getByRole("button", { name: /Study for this chat/ })
+		expect(chip.getAttribute("title")).toContain("Project: maine")
+		expect(chip.textContent).not.toContain("prj_")
+		expect(chip.getAttribute("title")).not.toContain("prj_")
+	})
+
+	it("says why there is no project when the server is older than 2.8.3", () => {
+		render(
+			<StudyChipView
+				binding={{
+					...bound,
+					project: { note: "Projects need AI-Hydro tools >= 2.8.3. This chat has no project; update aihydro-tools." },
+				}}
+				{...handlers()}
+			/>,
+		)
+		expect(screen.getByRole("button", { name: /Study for this chat/ }).getAttribute("title")).toContain("2.8.3")
+	})
+})
+
 describe("StudyChip (X0-2)", () => {
 	it("renders nothing without a binding state", () => {
 		const { container } = render(<StudyChipView binding={undefined} {...handlers()} />)

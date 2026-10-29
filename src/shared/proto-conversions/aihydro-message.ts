@@ -278,7 +278,11 @@ export function convertProtoToAiHydroMessage(protoMessage: ProtoClineMessage): A
 	if (protoMessage.askOutcome === "approved" || protoMessage.askOutcome === "denied") {
 		message.askOutcome = protoMessage.askOutcome
 	}
-	if (protoMessage.execOutcome === "completed" || protoMessage.execOutcome === "failed" || protoMessage.execOutcome === "unknown") {
+	if (
+		protoMessage.execOutcome === "completed" ||
+		protoMessage.execOutcome === "failed" ||
+		protoMessage.execOutcome === "unknown"
+	) {
 		message.execOutcome = protoMessage.execOutcome
 	}
 	if (protoMessage.commandCompleted) {

@@ -53,6 +53,9 @@ export const StudyChipView: React.FC<StudyChipViewProps> = ({ binding, onOpen, o
 	const title = [
 		binding.studyId ? `Study: ${binding.studyId}${binding.label ? ` - ${binding.label}` : ""}` : text,
 		binding.reason,
+		// X1-P1: which project the chat is in, or why it has none (server absent or older than 2.8.3). Tooltip only.
+		binding.project?.title ? `Project: ${binding.project.title}` : undefined,
+		binding.project?.note,
 		interactive ? "Click to change" : undefined,
 	]
 		.filter(Boolean)
@@ -118,9 +121,9 @@ export const StudyPickerPanelView: React.FC<Omit<StudyChipViewProps, "onOpen"> &
 	return (
 		<div data-testid="study-picker-slot">
 			<StudyPicker
-				candidates={binding.candidates ?? []}
 				autoFocus={autoFocus}
 				canChoose={binding.canChoose}
+				candidates={binding.candidates ?? []}
 				currentStudyId={binding.studyId}
 				onChoose={onChoose}
 				onDecline={onDecline}

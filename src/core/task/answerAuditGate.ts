@@ -181,6 +181,8 @@ export interface GateContext {
 	ulid: string
 	workspaceRoot: string | undefined
 	modelId?: string
+	/** The chat's project (`_meta.project_id`, X1-P1), when it has one. */
+	projectId?: string
 	/** The attempt_completion `result`. */
 	result: string
 	rows(): readonly GateRow[]
@@ -295,6 +297,7 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 			workspaceRoot: ctx.workspaceRoot,
 			answer: prose,
 			modelIdReturned: ctx.modelId,
+			projectId: ctx.projectId,
 			timeoutMs: Math.max(1, deadlineMs - (now() - started)),
 			boundStudy: state.boundStudyId,
 			serverName: ctx.serverName,

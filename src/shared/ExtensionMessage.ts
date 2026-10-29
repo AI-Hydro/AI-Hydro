@@ -74,6 +74,12 @@ export interface StudyBindingState {
 	by?: "map-layer" | "map-artifact" | "workspace" | "resume" | "user" | "agent" | "server"
 	/** Whether this server can list studies and rebind a chat (capability flags); gates the picker's choices. */
 	canChoose: boolean
+	/**
+	 * The chat's project (X1-P1), added by the host when it posts state. `id` is the immutable `prj_` id (never shown
+	 * on its own); `title` is the server's name for it; `note` says why the chat has no project (server absent or older
+	 * than 2.8.3). The picker lists this project's studies.
+	 */
+	project?: { id?: string; title?: string; note?: string }
 }
 
 export interface ExtensionState {

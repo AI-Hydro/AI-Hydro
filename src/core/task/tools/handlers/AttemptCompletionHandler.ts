@@ -126,6 +126,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				workspaceRoot: await resolveWorkspaceRoot(config.cwd),
 				answer,
 				modelIdReturned: config.taskState.lastResponseModelId,
+				projectId: config.services.controller?.getChatProjectId(config.ulid),
 			})
 			// Nothing to audit / no research session stays silent, as before: no row for chats outside a study.
 			if (outcome.status !== "skipped") {
@@ -202,6 +203,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				ulid: config.ulid,
 				workspaceRoot: await resolveWorkspaceRoot(config.cwd),
 				modelId: config.taskState.lastResponseModelId,
+				projectId: config.services.controller?.getChatProjectId(config.ulid),
 				result,
 				rows: () => config.messageState.getAiHydroMessages(),
 				emit: async (payload) => {

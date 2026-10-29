@@ -16,6 +16,7 @@ export function buildAiHydroCallContext(
 	chatId: string,
 	workspaceRoot: string | undefined,
 	modelIdReturned?: string,
+	projectId?: string,
 ): AiHydroCallContext {
 	return {
 		args: {
@@ -28,6 +29,9 @@ export function buildAiHydroCallContext(
 				chat_id: chatId,
 				...(workspaceRoot ? { workspace: workspaceRoot } : {}),
 				client: "vscode",
+				// The chat's project (`prj_...`, X1-P1). Meta only: the server reads it from `_meta` and there is no
+				// legacy argument for it. Omitted when the chat has no project (older server, or not yet created).
+				...(projectId ? { project_id: projectId } : {}),
 				// Model id the provider reported actually serving the turn that issued this call (may differ
 				// from the requested alias); omitted when the provider does not report one.
 				...(modelIdReturned ? { model_id_returned: modelIdReturned } : {}),
