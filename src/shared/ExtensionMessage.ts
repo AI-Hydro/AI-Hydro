@@ -122,8 +122,6 @@ export interface ExtensionState {
 	localAiHydroRulesToggles: AiHydroRulesToggles
 	localWorkflowToggles: AiHydroRulesToggles
 	globalWorkflowToggles: AiHydroRulesToggles
-	localCursorRulesToggles: AiHydroRulesToggles
-	localWindsurfRulesToggles: AiHydroRulesToggles
 	mcpResponsesCollapsed?: boolean
 	strictPlanModeEnabled?: boolean
 	yoloModeToggled?: boolean

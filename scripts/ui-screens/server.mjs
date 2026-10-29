@@ -8,10 +8,10 @@
  */
 import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
+import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { createRequire } from "node:module"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 const webview = resolve(root, "webview-ui")
@@ -46,9 +46,11 @@ function screenHtml(id, query) {
 <link rel="stylesheet" href="/__themes/${theme}.css">
 <style>html,body{background:${bg};color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);margin:0;height:100%}
 /* Reserve a 24px banner strip for the FIXTURE badge (a real flex row, see entry.tsx). #root is a containing block for
-   fixed descendants and viewport-height declarations are re-based to it, so the strip covers no control. */
+   fixed descendants and viewport-height declarations are re-based to it, so the strip covers no control. Only a
+   declared height of 100vh is re-based: an inline style that merely mentions 100vh (the popover arrows' bottom: calc(100vh - ...))
+   must not be stretched, which drew a long diagonal line across the auto-run popover (X0-4b). */
 #root{height:calc(100vh - 24px)!important;position:relative;contain:layout}
-#root .h-screen,#root [style*="100vh"]{height:calc(100vh - 24px)!important}
+#root .h-screen,#root [style*="height: 100vh"]{height:calc(100vh - 24px)!important}
 #root .min-h-screen{min-height:calc(100vh - 24px)!important}</style>
 <script>
   // Every load starts from empty storage: persisted UI state (expanded sections, map workspace) must not leak

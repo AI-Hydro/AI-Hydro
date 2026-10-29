@@ -681,3 +681,19 @@ export async function removeRetiredAccountSecrets(context: vscode.ExtensionConte
 		// Continue execution - cleanup failure shouldn't break extension startup
 	}
 }
+
+/**
+ * Drop the workspace-state toggles of the removed Cursor and Windsurf rule dialects (X0-6b). Nothing reads these keys
+ * any more. Clearing an already-absent key is a no-op, so no marker is needed and the function is idempotent.
+ */
+export async function removeRetiredRuleDialectState(context: vscode.ExtensionContext) {
+	for (const key of ["localCursorRulesToggles", "localWindsurfRulesToggles"]) {
+		try {
+			if (context.workspaceState.get(key) !== undefined) {
+				await context.workspaceState.update(key, undefined)
+			}
+		} catch (error) {
+			console.error(`Failed to clear retired workspace state key ${key}:`, error)
+		}
+	}
+}

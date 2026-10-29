@@ -1,12 +1,5 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
-import {
-	ClineRulesToggles,
-	RefreshedRules,
-	ToggleClineRuleRequest,
-	ToggleCursorRuleRequest,
-	ToggleWindsurfRuleRequest,
-	ToggleWorkflowRequest,
-} from "@shared/proto/cline/file"
+import { RefreshedRules, ToggleClineRuleRequest, ToggleWorkflowRequest } from "@shared/proto/cline/file"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import React, { useEffect, useRef, useState } from "react"
 import { useClickAway, useWindowSize } from "react-use"
@@ -21,14 +14,10 @@ const AiHydroRulesToggleModal: React.FC = () => {
 	const {
 		globalAiHydroRulesToggles = {},
 		localAiHydroRulesToggles = {},
-		localCursorRulesToggles = {},
-		localWindsurfRulesToggles = {},
 		localWorkflowToggles = {},
 		globalWorkflowToggles = {},
 		setGlobalAiHydroRulesToggles,
 		setLocalAiHydroRulesToggles,
-		setLocalCursorRulesToggles,
-		setLocalWindsurfRulesToggles,
 		setLocalWorkflowToggles,
 		setGlobalWorkflowToggles,
 	} = useExtensionState()
@@ -51,12 +40,6 @@ const AiHydroRulesToggleModal: React.FC = () => {
 					if (response.localAiHydroRulesToggles?.toggles) {
 						setLocalAiHydroRulesToggles(response.localAiHydroRulesToggles.toggles)
 					}
-					if (response.localCursorRulesToggles?.toggles) {
-						setLocalCursorRulesToggles(response.localCursorRulesToggles.toggles)
-					}
-					if (response.localWindsurfRulesToggles?.toggles) {
-						setLocalWindsurfRulesToggles(response.localWindsurfRulesToggles.toggles)
-					}
 					if (response.localWorkflowToggles?.toggles) {
 						setLocalWorkflowToggles(response.localWorkflowToggles.toggles)
 					}
@@ -77,14 +60,6 @@ const AiHydroRulesToggleModal: React.FC = () => {
 
 	// Format local rules for display with proper typing
 	const localRules = Object.entries(localAiHydroRulesToggles || {})
-		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
-		.sort(([a], [b]) => a.localeCompare(b))
-
-	const cursorRules = Object.entries(localCursorRulesToggles || {})
-		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
-		.sort(([a], [b]) => a.localeCompare(b))
-
-	const windsurfRules = Object.entries(localWindsurfRulesToggles || {})
 		.map(([path, enabled]): [string, boolean] => [path, enabled as boolean])
 		.sort(([a], [b]) => a.localeCompare(b))
 
@@ -116,41 +91,6 @@ const AiHydroRulesToggleModal: React.FC = () => {
 			})
 			.catch((error) => {
 				console.error("Error toggling AI-Hydro rule:", error)
-			})
-	}
-
-	const toggleCursorRule = (rulePath: string, enabled: boolean) => {
-		FileServiceClient.toggleCursorRule(
-			ToggleCursorRuleRequest.create({
-				rulePath,
-				enabled,
-			}),
-		)
-			.then((response) => {
-				// Update the local state with the response
-				if (response.toggles) {
-					setLocalCursorRulesToggles(response.toggles)
-				}
-			})
-			.catch((error) => {
-				console.error("Error toggling Cursor rule:", error)
-			})
-	}
-
-	const toggleWindsurfRule = (rulePath: string, enabled: boolean) => {
-		FileServiceClient.toggleWindsurfRule(
-			ToggleWindsurfRuleRequest.create({
-				rulePath,
-				enabled,
-			} as ToggleWindsurfRuleRequest),
-		)
-			.then((response: ClineRulesToggles) => {
-				if (response.toggles) {
-					setLocalWindsurfRulesToggles(response.toggles)
-				}
-			})
-			.catch((error) => {
-				console.error("Error toggling Windsurf rule:", error)
 			})
 	}
 
@@ -309,27 +249,9 @@ const AiHydroRulesToggleModal: React.FC = () => {
 									listGap="small"
 									rules={localRules}
 									ruleType={"aihydro"}
-									showNewRule={false}
-									showNoRules={false}
-									toggleRule={(rulePath, enabled) => toggleRule(false, rulePath, enabled)}
-								/>
-								<RulesToggleList
-									isGlobal={false}
-									listGap="small"
-									rules={cursorRules}
-									ruleType={"cursor"}
-									showNewRule={false}
-									showNoRules={false}
-									toggleRule={toggleCursorRule}
-								/>
-								<RulesToggleList
-									isGlobal={false}
-									listGap="small"
-									rules={windsurfRules}
-									ruleType={"windsurf"}
 									showNewRule={true}
 									showNoRules={false}
-									toggleRule={toggleWindsurfRule}
+									toggleRule={(rulePath, enabled) => toggleRule(false, rulePath, enabled)}
 								/>
 							</div>
 						</>
