@@ -341,7 +341,7 @@ export type CommandPolicyResult =
  *  0b. `aihydro` CLI launch          -> deny   (the CLI subagent is retired; no setting re-enables it)
  *  0e. touches a protected path     -> ask    (YOLO and "Run any command" included)
  *  1.  "Run read-only commands" off -> ask
- *  2.  "Run any command" on    -> run    (the user's explicit choice; YOLO lands here)
+ *  2.  "Run any command" on         -> run    (the user's explicit choice; YOLO lands here)
  *  3.  host says read-only and the model did not ask for approval -> run
  *  4.  everything else              -> ask
  */
