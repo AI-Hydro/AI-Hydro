@@ -157,6 +157,8 @@ export class ProjectContextSection {
 			this.retryNotBefore = now + Math.min(base * 2 ** (this.failures - 1), CONTEXT_RETRY_BACKOFF_MAX_MS)
 			// Keep what the previous key resolved only if it is the same key; a different key shows nothing stale.
 			this.section = undefined
+			// Forget the last resolved key too, so returning to it (A, B fails, A) reads again instead of hitting the fast path.
+			this.resolvedKey = undefined
 			return undefined
 		}
 		this.section = out

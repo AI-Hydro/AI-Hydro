@@ -203,6 +203,18 @@ describe("project context section (X1-P4)", () => {
 			expect(await sec.resolve({ projectId: PRJ, chatId: CHAT, studyId: "s1" })).to.equal(undefined)
 			expect(await sec.resolve({ projectId: PRJ, chatId: CHAT, studyId: "s2" })).to.be.a("string")
 		})
+
+		it("returning to a resolved key after another key's read failed reads it again (A, B fails, A)", async () => {
+			const read = sinon.stub()
+			read.onCall(0).resolves(resource(CONTEXT_TEXT))
+			read.onCall(1).rejects(new Error("boom"))
+			read.onCall(2).resolves(resource(CONTEXT_TEXT))
+			const sec = new ProjectContextSection(makeHub([server()], read), { now: () => 5 })
+			expect(await sec.resolve({ projectId: PRJ, chatId: CHAT, studyId: "s1" })).to.be.a("string")
+			expect(await sec.resolve({ projectId: PRJ, chatId: CHAT, studyId: "s2" })).to.equal(undefined)
+			expect(await sec.resolve({ projectId: PRJ, chatId: CHAT, studyId: "s1" })).to.be.a("string")
+			expect(read.callCount).to.equal(3)
+		})
 	})
 
 	describe("size and truncation", () => {
