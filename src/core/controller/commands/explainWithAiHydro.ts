@@ -3,6 +3,7 @@ import { HostProvider } from "@/hosts/host-provider"
 import { telemetryService } from "@/services/telemetry"
 import { CommandContext, Empty } from "@/shared/proto/index.cline"
 import { ShowMessageType } from "@/shared/proto/index.host"
+import { confirmAbortRunningTask } from "../abortGuard"
 import { Controller } from "../index"
 
 export async function explainWithAiHydro(controller: Controller, request: CommandContext): Promise<Empty> {
@@ -11,6 +12,9 @@ export async function explainWithAiHydro(controller: Controller, request: Comman
 			type: ShowMessageType.INFORMATION,
 			message: "Please select some code to explain.",
 		})
+		return {}
+	}
+	if (!(await confirmAbortRunningTask(controller, "explainWithAiHydro"))) {
 		return {}
 	}
 	const fileMention = await getFileMentionFromPath(request.filePath || "")

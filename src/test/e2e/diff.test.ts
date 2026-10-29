@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test"
 import { cleanChatView } from "./utils/common"
-import { E2E_WORKSPACE_TYPES, e2e } from "./utils/helpers"
+import { acceptStopRunningChatModal, E2E_WORKSPACE_TYPES, e2e } from "./utils/helpers"
 
 // This flow performs two independently bounded provider turns after VS Code
 // fixtures and provider stabilization; keep the outer budget larger than the
@@ -38,6 +38,7 @@ e2e.describe("Diff Editor", () => {
 
 			// Back to home page with history
 			await sidebar.getByRole("button", { name: "New task", exact: true }).click()
+			await acceptStopRunningChatModal(page)
 			await expect(sidebar.getByText("Recent Tasks")).toBeVisible()
 			await expect(sidebar.getByRole("button", { name: "Hello, AI-Hydro", exact: true })).toBeVisible() // History with the previous sent message
 			const historyCard = sidebar.getByRole("article").filter({ hasText: "Hello, AI-Hydro" })

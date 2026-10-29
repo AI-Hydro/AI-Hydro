@@ -1,5 +1,6 @@
 import { Empty } from "@shared/proto/cline/common"
 import { ExecuteQuickWinRequest } from "@shared/proto/cline/task"
+import { confirmAbortRunningTask } from "../abortGuard"
 import type { Controller } from "../index"
 
 /**
@@ -26,6 +27,9 @@ export async function executeQuickWin(controller: Controller, request: ExecuteQu
 	try {
 		const { command, title } = request
 		console.log(`Received executeQuickWin: command='${command}', title='${title}'`)
+		if (!(await confirmAbortRunningTask(controller, "executeQuickWin"))) {
+			return Empty.create({})
+		}
 		await controller.initTask(title)
 		return Empty.create({})
 	} catch (error) {

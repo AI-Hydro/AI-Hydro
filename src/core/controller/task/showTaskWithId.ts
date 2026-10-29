@@ -1,6 +1,7 @@
 import { StringRequest } from "@shared/proto/cline/common"
 import { TaskResponse } from "@shared/proto/cline/task"
 import { Controller } from ".."
+import { confirmAbortRunningTask } from "../abortGuard"
 import { sendChatButtonClickedEvent } from "../ui/subscribeToChatButtonClicked"
 
 /**
@@ -12,6 +13,12 @@ import { sendChatButtonClickedEvent } from "../ui/subscribeToChatButtonClicked"
 export async function showTaskWithId(controller: Controller, request: StringRequest): Promise<TaskResponse> {
 	try {
 		const id = request.value
+
+		// Opening another chat replaces the running one: ask first, and on "keep" just show the running chat.
+		if (!(await confirmAbortRunningTask(controller, "showTaskWithId"))) {
+			await sendChatButtonClickedEvent()
+			return TaskResponse.create({})
+		}
 
 		// First check if task exists in global state for faster access
 		const taskHistory = controller.stateManager.getGlobalStateKey("taskHistory")
