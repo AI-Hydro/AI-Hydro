@@ -194,11 +194,22 @@ export async function backupHistoryOnce(
 		return { created: false, backup: path.join(dir, existing) }
 	}
 	const backup = path.join(dir, `${base}.${BACKUP_PREFIX}${now.toISOString().replace(/[:.]/g, "-")}`)
+	let bytes: Buffer
 	try {
-		await fs.copyFile(historyFile, backup, fs.constants.COPYFILE_EXCL)
+		bytes = await fs.readFile(historyFile)
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 			return { created: false }
+		}
+		throw error
+	}
+	// Exclusive create ("wx") instead of copyFile(COPYFILE_EXCL): that fails with EPERM on Windows runners. A
+	// partial file from a failed write is removed so it cannot pass for a backup next time.
+	try {
+		await fs.writeFile(backup, bytes, { flag: "wx" })
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+			await fs.rm(backup, { force: true }).catch(() => {})
 		}
 		throw error
 	}
