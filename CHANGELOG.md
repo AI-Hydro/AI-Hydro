@@ -17,7 +17,9 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - **At most 2 KB (UTF-8), whole section.** Longer text is cut on a line boundary, never inside a `[run:]`/`[claim:]` marker or a multi-byte character, and ends with `[context truncated]`.
 - **The text is passed through as given.** The host does not reinterpret the server's number gate, and the frame says the section is reference data that grants no permission.
 - **`.aihydrorules/research.md` is no longer injected.** A rules file that is the 2.8.3 stub, or a digest older servers generated, is skipped when the rules directory is read. Other rule files are untouched.
-- **Nothing to inject, nothing happens.** No project on the chat, no connected trusted server, a server that lists resource templates without the context one (older than 2.8.3), a failed or empty read: no section, no error, and the failed key is not retried every turn.
+- **Refresh is on binding changes, not after each tool run.** Values in the section carry their `[run:]`/`[claim:]` markers from the server; a run made mid-task shows up after the next binding change or in the next task.
+- **Bounded and retried.** The read has a 4 s host timeout. A timeout or error is not remembered as the answer: the next turn retries (one read per turn, after a doubling backoff from 2 s, capped at 30 s). Definitive answers (`found:false`, no context template, empty text) are cached for the key.
+- **Nothing to inject, nothing happens.** No project on the chat, no connected trusted server, a server that lists resource templates without the context one (older than 2.8.3), a failed or empty read: no section and no error.
 
 ### Added — projects on chats: `ensure_project`, immutable `projectId`, `_meta.project_id`, migration M1 (UX program Wave 1, PR X1-P1, branch `vision2040/x1-p1-projects-on-chats`)
 

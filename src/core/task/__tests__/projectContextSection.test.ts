@@ -143,12 +143,10 @@ describe("project context section (X1-P4)", () => {
 			expect(await sec.resolve({ projectId: PRJ, chatId: CHAT })).to.be.a("string")
 		})
 
-		it("a failing read, found:false, bad JSON and empty text all yield undefined, once per key", async () => {
+		it("definitive answers (found:false, empty text, no contents) are cached: one read per key", async () => {
 			const cases: sinon.SinonStub[] = [
-				sinon.stub().rejects(new Error("Unknown resource")),
 				sinon.stub().resolves(resource("", true)),
 				sinon.stub().resolves(resource("x", false)),
-				sinon.stub().resolves({ contents: [{ uri: "x", text: "not json" }] }),
 				sinon.stub().resolves({ contents: [] }),
 			]
 			for (const read of cases) {
@@ -158,6 +156,52 @@ describe("project context section (X1-P4)", () => {
 				}
 				expect(read.callCount).to.equal(1)
 			}
+		})
+
+		it("a hung read times out, injects nothing and does not stall the turn", async () => {
+			const read = sinon.stub().returns(new Promise(() => {}))
+			const sec = new ProjectContextSection(makeHub([server()], read), { timeoutMs: 20 })
+			const t0 = Date.now()
+			expect(await sec.resolve({ projectId: PRJ, chatId: CHAT })).to.equal(undefined)
+			expect(Date.now() - t0).to.be.lessThan(1000)
+		})
+
+		it("a timeout or error is not cached: the next turn retries, once per turn, after the backoff", async () => {
+			let clock = 1_000
+			const read = sinon.stub()
+			read.onCall(0).returns(new Promise(() => {}))
+			read.onCall(1).rejects(new Error("connection closed"))
+			read.onCall(2).resolves(resource(CONTEXT_TEXT))
+			const sec = new ProjectContextSection(makeHub([server()], read), {
+				timeoutMs: 20,
+				backoffMs: 1_000,
+				now: () => clock,
+			})
+			const key = { projectId: PRJ, chatId: CHAT, studyId: "s1" }
+			expect(await sec.resolve(key)).to.equal(undefined) // call 0: timeout
+			expect(await sec.resolve(key)).to.equal(undefined) // inside backoff: no read
+			expect(read.callCount).to.equal(1)
+			clock += 1_000
+			expect(await sec.resolve(key)).to.equal(undefined) // call 1: error, backoff doubles
+			clock += 1_000
+			expect(await sec.resolve(key)).to.equal(undefined) // still inside the doubled backoff
+			expect(read.callCount).to.equal(2)
+			clock += 1_000
+			expect(await sec.resolve(key)).to.be.a("string") // call 2: success
+			expect(read.callCount).to.equal(3)
+			for (let i = 0; i < 5; i++) {
+				await sec.resolve(key)
+			}
+			expect(read.callCount).to.equal(3) // success is cached
+		})
+
+		it("a binding change is not held back by the previous key's backoff", async () => {
+			const read = sinon.stub()
+			read.onCall(0).rejects(new Error("boom"))
+			read.onCall(1).resolves(resource(CONTEXT_TEXT))
+			const sec = new ProjectContextSection(makeHub([server()], read), { backoffMs: 60_000, now: () => 5 })
+			expect(await sec.resolve({ projectId: PRJ, chatId: CHAT, studyId: "s1" })).to.equal(undefined)
+			expect(await sec.resolve({ projectId: PRJ, chatId: CHAT, studyId: "s2" })).to.be.a("string")
 		})
 	})
 
