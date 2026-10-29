@@ -11,6 +11,13 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.2] — unreleased
 
+### Changed — one confirm guard on every navigation path that can stop a running chat (UX program Nav-1, branch `vision2040/nav-1-abort-guard`)
+
+- **Navigation no longer silently aborts a running chat.** "New Task" in the view title, "New task" in the chat header, opening a chat from History, the standalone Navbar Chat tab, starting a task from a quick win, the Fix / Explain / Improve code actions, the MCP marketplace install, the `aihydro://` task link and "Delete all history" now ask "A chat is still running. Stop it and start a new one?" (Stop and continue / Cancel). Cancel leaves the chat exactly as it was and shows it.
+- **What counts as running.** A live task that is not aborted and whose last message is not `completion_result`, `resume_task` or `resume_completed_task`: streaming, running a tool, or waiting on an approval or follow-up ask. Finished, aborted, absent and just-reopened (resume) chats proceed without a prompt.
+- **One implementation.** `confirmAbortRunningTask` (`src/core/controller/abortGuard.ts`) replaces the map launcher's private modal; the map, ledger and preview launches use the same text and button. Pressing the agent's own "Start new task" button on its `new_task` ask does not prompt (the user is answering that question). A host that cannot show a modal keeps the chat, logs a warning and posts a non-modal notice.
+- **Deliberately not guarded:** extension shutdown (`Controller.dispose`), the webview re-resolve, cancel-and-resume, deleting a single history item, "Reset state" (an explicit destructive reset), the programmatic `startNewTask` extension API, and the test server.
+
 ### Added — chat titles: data layer, History rename, opt-in bulk titling (UX program Wave 1, PR X1-P2, branch `vision2040/x1-p2-titles`)
 
 - **A title is a short label, never an id or a result.** `src/shared/chatTitle.ts`: `checkTitle` refuses a bare gauge or site id (7 or more digits, bare or inside the text), a `basin_` key, `prj_`/`st_` ids, a chat ULID, any decimal number, a number with a unit (`%`, `mm`, `cfs`, `km2`, ...), a metric followed by a number (`NSE 80`), markup, line breaks, empty text and more than 60 characters (140 for a description). A name the user types (`checkUserTitle`) may carry a number but not be only an id, empty, long, multi-line or markup.

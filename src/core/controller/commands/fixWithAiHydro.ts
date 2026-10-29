@@ -2,9 +2,13 @@ import { getFileMentionFromPath } from "@/core/mentions"
 import { singleFileDiagnosticsToProblemsString } from "@/integrations/diagnostics"
 import { telemetryService } from "@/services/telemetry"
 import { CommandContext, Empty } from "@/shared/proto/index.cline"
+import { confirmAbortRunningTask } from "../abortGuard"
 import { Controller } from "../index"
 
 export async function fixWithAiHydro(controller: Controller, request: CommandContext): Promise<Empty> {
+	if (!(await confirmAbortRunningTask(controller, "fixWithAiHydro"))) {
+		return {}
+	}
 	const filePath = request.filePath || ""
 	const fileMention = await getFileMentionFromPath(filePath)
 	const problemsString = await singleFileDiagnosticsToProblemsString(filePath, request.diagnostics)

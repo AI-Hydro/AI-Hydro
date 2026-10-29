@@ -93,6 +93,7 @@ import { backupHistoryOnce, describeMigration, planProjectMigration, resolveProj
 import { PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
 import { getHostProtectedRoots } from "../task/protectedRoots"
+import { confirmAbortRunningTask } from "./abortGuard"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { appendAiHydroStealthModels } from "./models/refreshOpenRouterModels"
 import { sendStateUpdate } from "./state/subscribeToState"
@@ -627,6 +628,9 @@ export class Controller {
 
 	async handleTaskCreation(prompt: string) {
 		await sendChatButtonClickedEvent()
+		if (!(await confirmAbortRunningTask(this, "handleTaskCreation"))) {
+			return
+		}
 		await this.initTask(prompt)
 	}
 

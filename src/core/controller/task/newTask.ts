@@ -5,6 +5,7 @@ import { Settings } from "@shared/storage/state-keys"
 import { convertProtoToApiProvider } from "@/shared/proto-conversions/models/api-configuration-conversion"
 import { DEFAULT_BROWSER_SETTINGS } from "../../../shared/BrowserSettings"
 import { Controller } from ".."
+import { confirmAbortRunningTask } from "../abortGuard"
 
 /**
  * Creates a new task with the given text and optional images
@@ -13,6 +14,9 @@ import { Controller } from ".."
  * @returns Empty response
  */
 export async function newTask(controller: Controller, request: NewTaskRequest): Promise<String> {
+	if (!(await confirmAbortRunningTask(controller, "newTask", { answeringAsk: "new_task" }))) {
+		return String.create({ value: "" }) // the user kept the running chat
+	}
 	const convertOpenaiReasoningEffort = (effort: ProtoOpenaiReasoningEffort): string => {
 		switch (effort) {
 			case ProtoOpenaiReasoningEffort.LOW:

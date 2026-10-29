@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test"
-import { e2e } from "./utils/helpers"
+import { acceptStopRunningChatModal, e2e } from "./utils/helpers"
 
 // The outer bound includes VS Code fixtures and provider stabilization. The
 // request-arrival and rendered-response phases retain their tighter bounds.
@@ -32,6 +32,7 @@ e2e("Chat - can send messages and switch between modes", async ({ helper, sideba
 
 	// Starting a new task should clear the current chat view and show the recent tasks
 	await sidebar.getByRole("button", { name: "New task", exact: true }).click()
+	await acceptStopRunningChatModal(page)
 	await expect(sidebar.getByText("Recent Tasks")).toBeVisible()
 	await expect(sidebar.getByRole("button", { name: "Hello, AI-Hydro", exact: true })).toBeVisible()
 

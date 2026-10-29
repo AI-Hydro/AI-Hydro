@@ -1,10 +1,9 @@
 import type { Controller } from "@core/controller"
+import { confirmReplaceChat } from "@core/controller/abortGuard"
 import { sendChatButtonClickedEvent } from "@core/controller/ui/subscribeToChatButtonClicked"
 import { sendFocusChatInputEvent } from "@core/controller/ui/subscribeToFocusChatInput"
 import { WebviewProvider } from "@core/webview"
-import { HostProvider } from "@/hosts/host-provider"
 import { VscodeWebviewProvider } from "@/hosts/vscode/VscodeWebviewProvider"
-import { ShowMessageType } from "@/shared/proto/host/window"
 import type { LaunchStudyHint } from "@/integrations/aihydro-session/studyBinding"
 import { isChatInProgress } from "./launchGuard"
 
@@ -21,18 +20,7 @@ export interface MapLaunchResult {
 	cancelled?: boolean
 }
 
-const REPLACE_LABEL = "Stop and start new chat"
-
-/** Ask before replacing a chat that is still working or waiting for the user. True = go ahead. */
-export async function confirmReplaceChat(): Promise<boolean> {
-	const response = await HostProvider.window.showMessage({
-		type: ShowMessageType.WARNING,
-		message:
-			"A chat is still in progress. Starting this from the map stops it and opens a new chat (the old one stays in History).",
-		options: { modal: true, items: [REPLACE_LABEL] },
-	})
-	return response?.selectedOption === REPLACE_LABEL
-}
+export { confirmReplaceChat }
 
 /** Show the chat sidebar and focus its input. */
 export async function focusChat(): Promise<void> {
