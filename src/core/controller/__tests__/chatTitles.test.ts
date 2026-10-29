@@ -7,15 +7,22 @@ import { Controller } from "../index"
 function makeController(history: HistoryItem[] = [], settings: { autoTitle?: boolean; titleModel?: string } = {}) {
 	let taskHistory = history
 	const calls: string[] = []
+	const flags: Record<string, unknown> = {}
+	const flagWrites: string[] = []
 	const c: any = Object.create(Controller.prototype)
 	c.deletedTaskIds = new Set()
 	c.chatProject = undefined
 	c.studyBinding = undefined
 	c.task = { taskId: "task1", ulid: "01JCHAT", messageStateHandler: { getAiHydroMessages: () => [] } }
 	c.stateManager = {
-		getGlobalStateKey: () => taskHistory,
-		setGlobalState: (_k: string, v: HistoryItem[]) => {
-			taskHistory = v
+		getGlobalStateKey: (k: string) => (k === "taskHistory" ? taskHistory : flags[k]),
+		setGlobalState: (k: string, v: any) => {
+			if (k === "taskHistory") {
+				taskHistory = v
+			} else {
+				flags[k] = v
+				flagWrites.push(k)
+			}
 		},
 		getGlobalSettingsKey: (k: string) =>
 			k === "autoTitle" ? (settings.autoTitle ?? true) : k === "titleModel" ? (settings.titleModel ?? "") : "act",
@@ -27,7 +34,7 @@ function makeController(history: HistoryItem[] = [], settings: { autoTitle?: boo
 		calls.push(user)
 		return '{"title":"Baseflow in two synthetic basins","description":"Two synthetic basins."}'
 	}
-	return { c, history: () => taskHistory, calls }
+	return { c, history: () => taskHistory, calls, flagWrites }
 }
 
 const save = (c: any, over: Partial<HistoryItem> = {}) =>
@@ -72,6 +79,16 @@ describe("X1-P2 titles through the controller", () => {
 		await new Promise((r) => setTimeout(r, 20))
 		expect(history()[0]).to.deep.include({ title: "Renamed", titleSource: "user" })
 		expect(calls).to.have.length(1)
+	})
+
+	it("the first model-written title raises the one-time notice, and no later one does", async () => {
+		const { c, flagWrites } = makeController()
+		await save(c)
+		c.requestChatTitle("first_turn")
+		await new Promise((r) => setTimeout(r, 20))
+		c.requestChatTitle("completion")
+		await new Promise((r) => setTimeout(r, 20))
+		expect(flagWrites.filter((k) => k === "titleNoticeShown")).to.have.length(1)
 	})
 
 	it("(d) with autoTitle off no model call is made for any trigger or for a reset", async () => {

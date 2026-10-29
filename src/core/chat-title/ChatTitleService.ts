@@ -29,6 +29,8 @@ export interface ChatTitleDeps {
 	call: TitleModelCall
 	loadExchange(item: HistoryItem): Promise<ChatExchange | undefined>
 	studyLabelFor(item: HistoryItem): string | undefined
+	/** A model has just written a title (called each time; the host shows its one-time notice on the first). */
+	autoTitleWritten?(): void
 	/** Tell the webview the history changed. */
 	changed(): void
 	/** One backup of the history file before the first write of M2. Throws if it cannot be taken. */
@@ -81,8 +83,8 @@ export class ChatTitleService {
 		if (!item) {
 			return { ok: false, reason: "not_found" }
 		}
-		this.cancelFor(id)
 		if (title.trim() === "" && description === undefined) {
+			this.cancelFor(id)
 			this.deps.patch(id, { title: null, titleSource: null, description: null, titleRuns: null }, "user")
 			const fb = fallbackTitle(this.sourceFor(this.find(id) ?? item))
 			this.deps.patch(id, { title: fb, titleSource: "fallback" }, "system")
@@ -108,6 +110,12 @@ export class ChatTitleService {
 				patch.description = d.text
 			}
 		}
+		// A description alone keeps the title the chat has; a chat with none cannot be locked on nothing.
+		if (title.trim() === "" && !item.title) {
+			return { ok: false, reason: "invalid", detail: "empty" }
+		}
+		// Only now, with the change accepted, does an automatic title in flight for this chat stop.
+		this.cancelFor(id)
 		this.deps.patch(id, patch, "user")
 		this.deps.changed()
 		return { ok: true, item: this.find(id) ?? item }
@@ -202,6 +210,7 @@ export class ChatTitleService {
 			}
 			this.deps.patch(id, { title: result.title, titleSource: "fallback", ...runsPatch }, "system")
 		} else {
+			this.deps.autoTitleWritten?.()
 			this.deps.patch(
 				id,
 				{

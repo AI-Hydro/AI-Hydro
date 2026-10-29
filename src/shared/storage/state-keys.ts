@@ -39,6 +39,8 @@ export interface GlobalState {
 	hooksEnabled: boolean
 	lastDismissedInfoBannerVersion: number
 	lastDismissedModelBannerVersion: number
+	/** The one-time notice about automatic chat titles has been shown (X1-P2). */
+	titleNoticeShown: boolean
 }
 
 export interface Settings {

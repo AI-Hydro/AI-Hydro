@@ -60,6 +60,17 @@ describe("X1-P2 telemetry excludes chat titles and descriptions", () => {
 		expect([...CHAT_TEXT_KEYS]).to.include.members(["title", "description"])
 	})
 
+	it("fails closed past the search depth: a deep subtree is dropped, not passed through", () => {
+		let deep: Record<string, unknown> = { title: TITLE, kept: 1 }
+		for (let i = 0; i < 12; i++) {
+			deep = { next: deep }
+		}
+		const out = withoutChatText({ ulid: "u1", deep })
+		expect(JSON.stringify(out)).to.not.contain(TITLE)
+		expect(JSON.stringify(out)).to.not.contain("kept")
+		expect((out as Record<string, unknown>).ulid).to.equal("u1")
+	})
+
 	it("capture() and captureRequired() send no title or description, even when a caller passes them", () => {
 		const { provider, events } = recorder()
 		const service = new TelemetryService([provider], METADATA)

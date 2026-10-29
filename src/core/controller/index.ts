@@ -1395,6 +1395,7 @@ export class Controller {
 				this.studyBinding && this.studyBinding.chatId === item.ulid && this.studyBinding.status === "bound"
 					? this.studyBinding.label
 					: undefined,
+			autoTitleWritten: () => this.noticeAutoTitle(),
 			changed: () => {
 				void this.postStateToWebview().catch(() => {})
 			},
@@ -1404,6 +1405,35 @@ export class Controller {
 			log: (message) => console.warn(message),
 		})
 		return this._chatTitles
+	}
+
+	/**
+	 * The first time a model writes a title: one non-modal notice saying who wrote it and how to turn it off. Shown once
+	 * per profile (`titleNoticeShown`); "Turn off" sets `autoTitle` false.
+	 */
+	private noticeAutoTitle(): void {
+		try {
+			if (this.stateManager.getGlobalStateKey("titleNoticeShown")) {
+				return
+			}
+			this.stateManager.setGlobalState("titleNoticeShown", true)
+			HostProvider.window
+				.showMessage({
+					type: ShowMessageType.INFORMATION,
+					message:
+						'AI-Hydro named this chat using your chat model: the first message, the first reply (cut short) and tool names were sent to your model provider. Turn this off in Settings, Features, "Write chat titles with a model".',
+					options: { items: ["Turn off"] },
+				})
+				.then((response) => {
+					if (response?.selectedOption === "Turn off") {
+						this.stateManager.setGlobalState("autoTitle", false)
+						void this.postStateToWebview().catch(() => {})
+					}
+				})
+				.catch(() => {})
+		} catch {
+			// No host window (a headless run): the notice is a courtesy.
+		}
 	}
 
 	/** A user rename or reset (`RenameChat`). A reset starts one automatic title, because the user asked for it. */

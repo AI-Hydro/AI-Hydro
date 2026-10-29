@@ -73,13 +73,17 @@ const MAX_ERROR_MESSAGE_LENGTH = 500
 /**
  * Keys that carry chat titles or descriptions (or the text they are made from). The exclusion is enforced here, at the
  * one place every event passes through, so no present or future `capture*` method can send them (PSMH §9, X1-P2).
- * Nested objects are searched to a bounded depth.
+ * Nested objects are searched to a bounded depth; anything deeper is dropped.
  */
 export const CHAT_TEXT_KEYS: ReadonlySet<string> = new Set(["title", "description", "titleSource", "titleRuns", "userQuestion"])
 
 export function withoutChatText<T>(value: T, depth = 0): T {
-	if (depth > 6 || value === null || typeof value !== "object") {
+	if (value === null || typeof value !== "object") {
 		return value
+	}
+	if (depth > 6) {
+		// Fail closed: a subtree deeper than we search is dropped, not passed through unchecked.
+		return undefined as unknown as T
 	}
 	if (Array.isArray(value)) {
 		return value.map((v) => withoutChatText(v, depth + 1)) as unknown as T

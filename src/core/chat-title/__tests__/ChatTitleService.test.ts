@@ -171,6 +171,21 @@ describe("X1-P2 ChatTitleService: rename and reset", () => {
 		expect(h.get("a").titleRuns).to.equal(undefined)
 	})
 
+	it("a description with no title is refused on a chat that has none, and an invalid name leaves a title in flight running", async () => {
+		const h = harness([item("a")])
+		expect(h.service.rename("a", "", "A note")).to.deep.equal({ ok: false, reason: "invalid", detail: "empty" })
+		expect(h.get("a").titleSource).to.equal(undefined)
+		let release!: () => void
+		const delay = new Promise<void>((r) => (release = r))
+		const g = harness([item("b")], { delay })
+		const pending = g.service.request("b", "first_turn")
+		await new Promise((r) => setImmediate(r))
+		expect(g.service.rename("b", "x".repeat(61)).ok).to.equal(false)
+		release()
+		await pending
+		expect(g.get("b")).to.deep.include({ titleSource: "auto" })
+	})
+
 	it("a description alone locks too", () => {
 		const h = harness([item("a", { title: "Auto", titleSource: "auto" })])
 		expect(h.service.rename("a", "", "A note").ok).to.equal(true)

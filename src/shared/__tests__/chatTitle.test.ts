@@ -13,6 +13,12 @@ import {
 	UNTITLED,
 } from "../chatTitle"
 
+/** Independent of the code under test: fold the two digit sets the tests use to ASCII. */
+const fold = (s: string) =>
+	s
+		.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x660))
+		.replace(/[\uff10-\uff19]/g, (c) => String(c.charCodeAt(0) - 0xff10))
+
 /** Seeded generator: the same inputs on every platform, so a failure is reproducible. */
 function rng(seed: number) {
 	let s = seed >>> 0
@@ -94,6 +100,35 @@ describe("X1-P2 chat titles: the check", () => {
 	})
 })
 
+describe("X1-P2 chat titles: ids in other scripts and split ids", () => {
+	it("refuses Arabic-Indic, fullwidth and split-group ids in a title", () => {
+		for (const bad of [
+			"Basin \u0660\u0661\u0660\u0663\u0661\u0665\u0660\u0660",
+			"Basin \uff10\uff11\uff10\uff13\uff11\uff15\uff10\uff10",
+			"USGS 0103 1500",
+			"01 03 15 00",
+			"Site 0103-1500 flows",
+		]) {
+			const r = checkTitle(bad)
+			expect(r.ok, bad).to.equal(false)
+		}
+		expect(checkTitle("Two basins, 1980 to 2010").ok).to.equal(true)
+	})
+
+	it("the fallback drops them and keeps no id suffix", () => {
+		expect(fallbackTitle({ task: "Basin \u0660\u0661\u0660\u0663\u0661\u0665\u0660\u0660 flows" })).to.equal("Basin flows")
+		expect(fallbackTitle({ task: "Basin 0103 1500 flows" })).to.equal("Basin flows")
+		expect(fallbackTitle({ task: "what about st_abc99 here" })).to.equal("What about here")
+		expect(fallbackTitle({ task: "check prj_01M6ABCDEF now" })).to.equal("Check now")
+	})
+
+	it("a name the user types may not be only an id in any script", () => {
+		expect(checkUserTitle("\u0660\u0661\u0660\u0663\u0661\u0665\u0660\u0660").ok).to.equal(false)
+		expect(checkUserTitle("0103 1500").ok).to.equal(false)
+		expect(checkUserTitle("Run 2 0103").ok).to.equal(true)
+	})
+})
+
 describe("X1-P2 chat titles: the deterministic fallback", () => {
 	// Synthetic text only: no real gauge, site or person.
 	it("(c) a map launch is titled by its recorded question, never by the wrapped prompt", () => {
@@ -146,6 +181,11 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 			"of",
 			"to",
 			"01031500",
+			"\u0660\u0661\u0660\u0663\u0661\u0665\u0660\u0660",
+			"\uff10\uff11\uff10\uff13\uff11\uff15\uff10\uff10",
+			"0103",
+			"1500",
+			"01-03-15-00",
 			"basin_0103_p1",
 			"prj_01M6ABCDEF",
 			"st_abc99",
@@ -200,16 +240,19 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 			expect(checkTitle(t).ok, `${JSON.stringify(text)} -> ${JSON.stringify(t)}`).to.equal(true)
 			expect(t.length).to.be.at.most(TITLE_MAX)
 			// Independent of the check's own patterns:
-			expect(t).to.not.match(/\d[.,]\d/)
-			expect(t).to.not.match(/\d{7}/)
-			expect(t).to.not.match(/^\d+$/)
-			expect(t).to.not.match(/\b(prj|st)_|basin_/i)
+			const f = fold(t)
+			expect(f).to.not.match(/\d[.,]\d/)
+			expect(f).to.not.match(/\d(?:[ -]*\d){7}/)
+			expect(f).to.not.match(/^\d+$/)
+			expect(f).to.not.match(/\b(prj|st)[_ ]|basin[_ ]/i)
+			// the suffix of a dropped id token must not survive as plain words either
+			expect(t).to.not.match(/abc99|01M6ABCDEF/)
 		}
 	})
 
 	it("(b) property: nothing the check accepts contains a decimal or a long digit run", () => {
 		const rand = rng(7)
-		const alphabet = "ab 0123456789.,%_-°mkc"
+		const alphabet = "ab 0123456789.,%_-°mkc\u0660\u0663\u0665\uff10\uff13\uff15"
 		let accepted = 0
 		for (let i = 0; i < 20000; i++) {
 			let s = ""
@@ -220,8 +263,8 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 			const r = checkTitle(s)
 			if (r.ok) {
 				accepted++
-				expect(r.text).to.not.match(/\d[.,]\d/)
-				expect(r.text).to.not.match(/\d{7}/)
+				expect(fold(r.text)).to.not.match(/\d[.,]\d/)
+				expect(fold(r.text)).to.not.match(/\d(?:[ -]*\d){7}/)
 			}
 		}
 		expect(accepted).to.be.greaterThan(100)
