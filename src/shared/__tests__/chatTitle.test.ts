@@ -21,7 +21,7 @@ const fold = (s: string) =>
 
 /** Independent id test: 8+ digits across short non-letter separators, unless every group is a four-digit year. */
 const idLike = (f: string): boolean =>
-	(f.match(/\d(?:[^\p{L}\p{N}]{0,3}\d){7,}/gu) ?? []).some((m) => {
+	(f.match(/\d(?:[^\p{L}\p{N}]{0,3}\d){6,}/gu) ?? []).some((m) => {
 		const groups = m.split(/[^0-9]+/).filter(Boolean)
 		return !groups.every((g) => g.length === 4 && +g >= 1800 && +g <= 2100)
 	})
@@ -147,6 +147,35 @@ describe("X1-P2 chat titles: ids in other scripts and split ids", () => {
 		expect(fallbackTitle({ task: "Flow 20202023 trends" })).to.equal("Flow trends")
 	})
 
+	it("refuses 7-digit ids split into groups, and keeps year pairs", () => {
+		for (const bad of ["Site 123 4567", "Site 1234 567", "Site 12 34 567", "Site 1-234-567"]) {
+			expect(checkTitle(bad).ok, bad).to.equal(false)
+		}
+		expect(fallbackTitle({ task: "Analyse site 123 4567 flow" })).to.equal("Analyse site flow")
+		expect(fallbackTitle({ task: "Analyse site 12 34 567 flow" })).to.equal("Analyse site flow")
+		expect(checkTitle("Compare 2010 2015 trends").ok).to.equal(true)
+	})
+
+	it("bare numbers: strict check refuses 5 and 6 digits; the fallback keeps only 3 digits or fewer, or a year", () => {
+		expect(checkTitle("Analyse flow at site 123456").ok).to.equal(false)
+		expect(checkTitle("Analyse 12345 gauges").ok).to.equal(false)
+		expect(checkTitle("Analyse 123 gauges in 2019").ok).to.equal(true)
+		expect(checkTitle("Analyse 1234 gauges").ok).to.equal(true)
+		expect(fallbackTitle({ task: "Analyse flow at site 123456" })).to.equal("Analyse flow at site")
+		expect(fallbackTitle({ task: "Analyse 12345 gauges" })).to.equal("Analyse gauges")
+		expect(fallbackTitle({ task: "Analyse 123 gauges in 2019" })).to.equal("Analyse 123 gauges in 2019")
+		expect(fallbackTitle({ task: "Analyse 1234 gauges" })).to.equal("Analyse gauges")
+		expect(fallbackTitle({ task: "Analyse 1850 floods" })).to.equal("Analyse 1850 floods")
+	})
+
+	it("CJK numerals are read as digits by the checks but never rewritten in the stored text", () => {
+		const text = "\u4e09\u5ce1\u5927\u575d\u4e00\u4e5d\u4e5d\u516b\u5e74"
+		expect(checkTitle(text)).to.deep.equal({ ok: true, text })
+		expect(fallbackTitle({ task: text })).to.equal(text)
+		expect(checkUserTitle(text)).to.deep.equal({ ok: true, text })
+		expect(checkTitle("Site \u3007\u4e00\u3007\u4e09\u4e00\u4e94\u3007\u3007").ok).to.equal(false)
+	})
+
 	it("stripping an id leaves no empty brackets", () => {
 		expect(fallbackTitle({ task: "Creek (prj_01M6ABCDEF) near Town" })).to.equal("Creek near Town")
 		expect(fallbackTitle({ task: "Creek [st_abc99] near Town" })).to.equal("Creek near Town")
@@ -234,6 +263,11 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 			"(0103) (1500)",
 			"\u3007\u4e00\u3007\u4e09\u4e00\u4e94\u3007\u3007",
 			"2020-2023",
+			"123 4567",
+			"1234 567",
+			"12 34 567",
+			"12345",
+			"123456",
 			"(prj_01M6ABCDEF)",
 			"basin_0103_p1",
 			"prj_01M6ABCDEF",
@@ -292,6 +326,7 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 			const f = fold(t)
 			expect(f).to.not.match(/\d[.,]\d/)
 			expect(idLike(f), t).to.equal(false)
+			expect(f, t).to.not.match(/(?<![\d.,])\d{5,6}(?!\d)/)
 			expect(t).to.not.match(/[\p{Cf}]|[\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d]{4}/u)
 			expect(f).to.not.match(/^\d+$/)
 			expect(f).to.not.match(/\b(prj|st)[_ ]|basin[_ ]/i)
@@ -302,7 +337,7 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 
 	it("(b) property: nothing the check accepts contains a decimal or a long digit run", () => {
 		const rand = rng(7)
-		const alphabet = "ab 0123456789.,%_-°mkc\u0660\u0663\u0665\uff10\uff13\uff15/\u2013\u2014\u30fc\u200b\u00ad()"
+		const alphabet = "ab  0123456789.,%_-°mkc\u0660\u0663\u0665\uff10\uff13\uff15/\u2013\u2014\u30fc\u200b\u00ad()"
 		let accepted = 0
 		for (let i = 0; i < 20000; i++) {
 			let s = ""

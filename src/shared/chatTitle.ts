@@ -20,11 +20,13 @@ export type TitleCheck = { ok: true; text: string } | { ok: false; reason: Title
 
 /**
  * Text as the checks read it: NFKC (fullwidth forms become ASCII) and every Unicode decimal digit mapped to its ASCII
- * digit, so an id written in Arabic-Indic, Devanagari or fullwidth digits is the same id to the checks.
+ * digit, so an id written in Arabic-Indic, Devanagari or fullwidth digits is the same id to the checks. CJK numeral runs
+ * are read as digits too, but only for the checks (`cjk: true`, the default): a stored title keeps its own characters.
  */
 const CJK_DIGITS = "\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d"
 
-export function normalizeForChecks(text: string): string {
+export function normalizeForChecks(text: string, opts: { cjk?: boolean } = {}): string {
+	const cjk = opts.cjk !== false
 	const isNd = (cp: number) => cp > 0 && /^\p{Nd}$/u.test(String.fromCodePoint(cp))
 	return (
 		text
@@ -35,7 +37,7 @@ export function normalizeForChecks(text: string): string {
 			.replace(/(?<=\d)\u30fc(?=\d)/g, "-")
 			// CJK numerals only as a run of four or more, so ordinary Chinese text is untouched.
 			.replace(/[\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d]{4,}/g, (run) =>
-				Array.from(run, (c) => CJK_DIGITS.indexOf(c)).join(""),
+				cjk ? Array.from(run, (c) => CJK_DIGITS.indexOf(c)).join("") : run,
 			)
 			.replace(/\p{Nd}/gu, (c) => {
 				const cp = c.codePointAt(0)!
@@ -52,9 +54,21 @@ export function normalizeForChecks(text: string): string {
 	)
 }
 
+/** The text as stored: control and format characters removed, spaces collapsed. No digit is rewritten. */
+function tidy(raw: string): string {
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are exactly what is being removed
+	return raw
+		.replace(/[\u0000-\u001f\u007f]/g, " ")
+		.replace(/\p{Cf}/gu, "")
+		.replace(/\s+/g, " ")
+		.trim()
+}
+
 // Ids: a gauge or site id (7 to 15 digits, bare or inside the text), a `basin_` key, a `prj_`/`st_` id, a chat ULID.
 const ID_PATTERNS: readonly RegExp[] = [
 	/(?:^|[^\d])\d{7,}/,
+	// A bare 5 or 6 digit number is a station number in some networks.
+	/(?<![\d.,])\d{5,6}(?![\d]|[.,]\d)/,
 	/\bbasin_[\dp_]+/i,
 	/\b(?:prj|st)_[A-Za-z0-9]{3,}/i,
 	/\b[0-9A-HJKMNP-TV-Z]{26}\b/,
@@ -67,8 +81,8 @@ const MEASUREMENT =
 // Markup: tags, code, emphasis, a markdown link or heading, a table bar, braces.
 const MARKUP = /[<>`{}\\|]|\*\*|__|\]\(|^\s*#|^\s*[-*>]\s/
 
-// Eight or more digits across groups split by a short run of non-letters ("0103 1500", "01-03-15-00", "0103_1500", "0103 - 1500").
-const SPLIT_DIGITS = /\d(?:[^\p{L}\p{N}]{0,3}\d){7,}/gu
+// Seven or more digits across groups split by a short run of non-letters ("0103 1500", "01-03-15-00", "0103_1500", "0103 - 1500").
+const SPLIT_DIGITS = /\d(?:[^\p{L}\p{N}]{0,3}\d){6,}/gu
 
 /** A year range or list is not an id: every group is four digits between 1800 and 2100. */
 function onlyYears(match: string): boolean {
@@ -115,27 +129,24 @@ export function checkTitle(raw: unknown, max: number = TITLE_MAX): TitleCheck {
 	if (/[\r\n\u2028\u2029]/.test(raw.trim())) {
 		return { ok: false, reason: "newline" }
 	}
-	// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are exactly what is being removed
-	const text = normalizeForChecks(raw)
-		.replace(/[\u0000-\u001f\u007f]/g, " ")
-		.replace(/\s+/g, " ")
-		.trim()
+	const text = tidy(raw)
+	const read = normalizeForChecks(text)
 	if (!text) {
 		return { ok: false, reason: "empty" }
 	}
 	if (text.length > max) {
 		return { ok: false, reason: "too_long" }
 	}
-	if (MARKUP.test(text)) {
+	if (MARKUP.test(read)) {
 		return { ok: false, reason: "markup" }
 	}
-	if (containsId(text)) {
+	if (containsId(read)) {
 		return { ok: false, reason: "id" }
 	}
-	if (DECIMAL.test(text)) {
+	if (DECIMAL.test(read)) {
 		return { ok: false, reason: "decimal" }
 	}
-	if (MEASUREMENT.test(text)) {
+	if (MEASUREMENT.test(read)) {
 		return { ok: false, reason: "measurement" }
 	}
 	if (!/\p{L}/u.test(text)) {
@@ -156,21 +167,18 @@ export function checkUserTitle(raw: unknown, max: number = TITLE_MAX): TitleChec
 	if (/[\r\n\u2028\u2029]/.test(raw.trim())) {
 		return { ok: false, reason: "newline" }
 	}
-	// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are exactly what is being removed
-	const text = normalizeForChecks(raw)
-		.replace(/[\u0000-\u001f\u007f]/g, " ")
-		.replace(/\s+/g, " ")
-		.trim()
+	const text = tidy(raw)
+	const read = normalizeForChecks(text)
 	if (!text) {
 		return { ok: false, reason: "empty" }
 	}
 	if (text.length > max) {
 		return { ok: false, reason: "too_long" }
 	}
-	if (MARKUP.test(text)) {
+	if (MARKUP.test(read)) {
 		return { ok: false, reason: "markup" }
 	}
-	if (containsId(text) && (text.split(" ").length === 1 || /^[^\p{L}]+$/u.test(text))) {
+	if (containsId(read) && (text.split(" ").length === 1 || /^[^\p{L}]+$/u.test(read))) {
 		return { ok: false, reason: "id" }
 	}
 	return { ok: true, text }
@@ -207,7 +215,7 @@ const UNIT_WORD = /^(?:mm|cm|km|ft|mi|ha|cfs|cms|mg|kg|ac|acres?|m|m3\/s|m3|km2|
 
 /** Text with code, links, markdown and urls taken out. */
 function plainText(text: string): string {
-	return stripEmptyBrackets(stripSplitIds(stripIdTokens(normalizeForChecks(text))))
+	return stripEmptyBrackets(stripSplitIds(stripIdTokens(normalizeForChecks(text, { cjk: false }))))
 		.replace(/```[\s\S]*?```/g, " ")
 		.replace(/`([^`]*)`/g, "$1")
 		.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
@@ -218,13 +226,20 @@ function plainText(text: string): string {
 		.trim()
 }
 
-/** A word that carries a result or an id is dropped; a plain small number or a year stays. */
+/**
+ * A word that carries a result or an id is dropped. A bare number stays only when it has 3 digits or fewer or is a
+ * four-digit year from 1800 to 2100: 4 to 6 digit numbers are station numbers or results in some network.
+ */
 function keepWord(word: string): boolean {
-	if (!/\d/.test(word)) {
+	const read = normalizeForChecks(word)
+	if (!/\d/.test(read)) {
 		return true
 	}
-	// Not checkTitle: a bare year or year range has no letters and would fail its "says something" rule.
-	return !containsId(word) && !DECIMAL.test(word) && !MEASUREMENT.test(word)
+	if (/^\d+$/.test(read)) {
+		return read.length <= 3 || (read.length === 4 && Number(read) >= 1800 && Number(read) <= 2100)
+	}
+	// Not checkTitle: a year range has no letters and would fail its "says something" rule.
+	return !containsId(read) && !DECIMAL.test(read) && !MEASUREMENT.test(read)
 }
 
 function capFirst(text: string): string {
