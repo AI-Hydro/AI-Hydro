@@ -1,3 +1,5 @@
+import { describeInvestigation } from "@shared/aihydro/investigationSummary"
+import { displayTitle, estimateBulkTitleTokens, isBulkTitleCandidate } from "@shared/chatTitle"
 import { BooleanRequest, EmptyRequest, StringArrayRequest, StringRequest } from "@shared/proto/cline/common"
 import { GetTaskHistoryRequest, TaskFavoriteRequest } from "@shared/proto/cline/task"
 import { VSCodeButton, VSCodeCheckbox, VSCodeRadio, VSCodeRadioGroup, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
@@ -7,12 +9,13 @@ import { Virtuoso } from "react-virtuoso"
 import DangerButton from "@/components/common/DangerButton"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { Button, Disclosure, IconButton, KeyValue, Text } from "@/design"
-import { describeInvestigation } from "@shared/aihydro/investigationSummary"
-import { stripMarkdown } from "@/utils/stripMarkdown"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import { formatLargeNumber, formatSize } from "@/utils/format"
+import { stripMarkdown } from "@/utils/stripMarkdown"
 import { HighlightedText, withMatchRegions } from "./HighlightedText"
+import { RenameField } from "./RenameField"
+import { TitleBanner } from "./TitleBanner"
 import "./history.css"
 
 type HistoryViewProps = {
@@ -43,7 +46,7 @@ const CustomFilterRadio = ({ checked, onChange, icon, label }: CustomFilterRadio
 
 const HistoryView = ({ onDone }: HistoryViewProps) => {
 	const extensionStateContext = useExtensionState()
-	const { taskHistory, onRelinquishControl, environment } = extensionStateContext
+	const { taskHistory, onRelinquishControl, environment, autoTitle, titleModel } = extensionStateContext
 	const [searchQuery, setSearchQuery] = useState("")
 	const [sortOption, setSortOption] = useState<SortOption>("newest")
 	const [lastNonRelevantSort, setLastNonRelevantSort] = useState<SortOption | null>("newest")
@@ -51,6 +54,12 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 	const [selectedItems, setSelectedItems] = useState<string[]>([])
 	const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
 	const [showCurrentWorkspaceOnly, setShowCurrentWorkspaceOnly] = useState(false)
+
+	// Which chat is being renamed (one at a time), and whether the opt-in banner is running or dismissed.
+	const [renamingId, setRenamingId] = useState<string>()
+	const [bulkRunning, setBulkRunning] = useState(false)
+	const [bulkOutcome, setBulkOutcome] = useState<string>()
+	const [bannerDismissed, setBannerDismissed] = useState(() => readBannerDismissed())
 
 	// Keep track of pending favorite toggle operations
 	const [pendingFavoriteToggles, setPendingFavoriteToggles] = useState<Record<string, boolean>>({})
@@ -69,7 +78,14 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 					currentWorkspaceOnly: showCurrentWorkspaceOnly,
 				}),
 			)
-			setTasks((response.tasks || []).map((t) => ({ ...t, task: stripMarkdown(t.task ?? "") })))
+			// The host sends the checked display title; the raw prompt is only searched, never shown as the name.
+			setTasks(
+				(response.tasks || []).map((t) => ({
+					...t,
+					task: stripMarkdown(t.task ?? ""),
+					title: t.title || displayTitle({ task: t.task ?? "" }),
+				})),
+			)
 		} catch (error) {
 			console.error("Error loading task history:", error)
 		}
@@ -213,7 +229,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 
 	const fuse = useMemo(() => {
 		return new Fuse(tasks, {
-			keys: ["task"],
+			keys: ["title", "task"],
 			threshold: 0.6,
 			shouldSort: true,
 			isCaseSensitive: false,
@@ -224,7 +240,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 	}, [tasks])
 
 	const taskHistorySearchResults = useMemo(() => {
-		const results = searchQuery ? withMatchRegions(fuse.search(searchQuery)) : tasks
+		const results = searchQuery ? withMatchRegions(fuse.search(searchQuery), "title") : tasks
 
 		results.sort((a, b) => {
 			switch (sortOption) {
@@ -270,6 +286,52 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 			}
 		},
 		[taskHistorySearchResults],
+	)
+
+	const bulkCandidates = useMemo(
+		() => taskHistory.filter((item) => item.ts && item.task && isBulkTitleCandidate(item)).length,
+		[taskHistory],
+	)
+
+	const startBulk = useCallback(async () => {
+		setBulkRunning(true)
+		setBulkOutcome(undefined)
+		try {
+			const result = await TaskServiceClient.startBulkTitling(EmptyRequest.create({}))
+			setBulkOutcome(describeBulk(result.status, result.titled, result.failed))
+		} catch (error) {
+			console.error("Error titling chats:", error)
+			setBulkOutcome("Titling stopped before it finished. Chats keep the names they had.")
+		} finally {
+			setBulkRunning(false)
+		}
+	}, [])
+
+	const cancelBulk = useCallback(() => {
+		TaskServiceClient.cancelBulkTitling(EmptyRequest.create({})).catch((error) =>
+			console.error("Error cancelling titling:", error),
+		)
+	}, [])
+
+	const dismissBanner = useCallback(() => {
+		setBannerDismissed(true)
+		setBulkOutcome(undefined)
+		writeBannerDismissed()
+	}, [])
+
+	const finishRename = useCallback(
+		(saved: boolean) => {
+			const id = renamingId
+			setRenamingId(undefined)
+			if (saved) {
+				loadTaskHistory()
+			}
+			// The field is gone; focus goes back to the name it replaced.
+			if (id) {
+				setTimeout(() => document.getElementById(`history-title-${id}`)?.focus(), 0)
+			}
+		},
+		[renamingId, loadTaskHistory],
 	)
 
 	return (
@@ -354,6 +416,19 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 						</div>
 					</div>
 				</div>
+				{autoTitle !== false && !bannerDismissed && (
+					<TitleBanner
+						count={bulkCandidates}
+						estimatedTokens={estimateBulkTitleTokens(bulkCandidates)}
+						modelLabel={titleModel ? `the model ${titleModel}` : "your chat model"}
+						onCancel={cancelBulk}
+						onDismiss={dismissBanner}
+						onStart={startBulk}
+						outcome={bulkOutcome}
+						remaining={bulkCandidates}
+						running={bulkRunning}
+					/>
+				)}
 				<div className="history-list-container">
 					<Virtuoso
 						className="flex-grow overflow-y-scroll"
@@ -363,7 +438,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 							return (
 								<article className="history-item modern-card mx-3 my-2 flex" key={item.id}>
 									<VSCodeCheckbox
-										aria-label={`Select task: ${item.task}`}
+										aria-label={`Select chat: ${item.title}`}
 										checked={selectedItems.includes(item.id)}
 										className="pl-3 pr-1"
 										onClick={(e) => {
@@ -396,14 +471,46 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 												/>
 											</div>
 										</div>
-										<button
-											className="history-card__title"
-											onClick={() => handleShowTaskWithId(item.id)}
-											type="button">
-											<span className="ph-no-capture">
-												<HighlightedText regions={item.matchRegions} text={item.task} />
-											</span>
-										</button>
+										{renamingId === item.id ? (
+											<RenameField
+												initial={item.title}
+												locked={item.titleSource === "user"}
+												onDone={finishRename}
+												taskId={item.id}
+											/>
+										) : (
+											<div className="history-card__titlerow">
+												<button
+													className="history-card__title"
+													id={`history-title-${item.id}`}
+													onClick={() => handleShowTaskWithId(item.id)}
+													onKeyDown={(e) => {
+														if (e.key === "F2") {
+															e.preventDefault()
+															setRenamingId(item.id)
+														}
+													}}
+													type="button">
+													<span className="ph-no-capture">
+														<HighlightedText regions={item.matchRegions} text={item.title} />
+													</span>
+												</button>
+												<IconButton
+													icon="edit"
+													label={`Rename chat: ${item.title}`}
+													onClick={() => setRenamingId(item.id)}
+												/>
+											</div>
+										)}
+										{item.description && (
+											<Text
+												as="p"
+												className="history-card__description ph-no-capture"
+												muted
+												variant="caption">
+												{item.description}
+											</Text>
+										)}
 										<Text as="p" muted variant="caption">
 											{describeInvestigation(undefined)}
 										</Text>
@@ -465,6 +572,37 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 			</div>
 		</>
 	)
+}
+
+const BANNER_KEY = "aihydro.titleBannerDismissed"
+
+// A per-viewer convenience only: the banner is an offer, so a blocked or empty store just shows it again.
+function readBannerDismissed(): boolean {
+	try {
+		return window.localStorage.getItem(BANNER_KEY) === "1"
+	} catch {
+		return false
+	}
+}
+
+function writeBannerDismissed(): void {
+	try {
+		window.localStorage.setItem(BANNER_KEY, "1")
+	} catch {
+		// not stored; the banner will offer again next time
+	}
+}
+
+function describeBulk(status: string, titled: number, failed: number): string {
+	if (status === "disabled") {
+		return "Automatic titles are turned off in Settings, so nothing was sent."
+	}
+	if (status === "busy") {
+		return "Titling is already running."
+	}
+	const done = `${titled} chat${titled === 1 ? "" : "s"} titled.`
+	const kept = failed > 0 ? ` ${failed} kept their short name (the model gave no usable title).` : ""
+	return status === "cancelled" ? `Stopped. ${done}${kept}` : `${done}${kept}`
 }
 
 const ExportButton = ({ itemId }: { itemId: string }) => (

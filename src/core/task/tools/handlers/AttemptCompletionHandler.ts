@@ -322,6 +322,9 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			telemetryService.captureTaskCompleted(config.ulid)
 		}
 
+		// The chat has an answer: one more automatic title, from the whole exchange, unless the user named it (X1-P2).
+		config.services?.controller?.requestChatTitle?.("completion")
+
 		// we already sent completion_result says, an empty string asks relinquishes control over button and field
 		// in case last command was interactive and in partial state, the UI is expecting an ask response. This ends the command ask response, freeing up the UI to proceed with the completion ask.
 		if (config.messageState.getAiHydroMessages().at(-1)?.ask === "command_output") {
