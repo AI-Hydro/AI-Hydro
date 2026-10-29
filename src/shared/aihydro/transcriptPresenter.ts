@@ -181,6 +181,22 @@ export interface LiftedLine {
 	sourceTs: number
 	/** For call-level lines: the call row, so a result-level line for the same call can replace it. */
 	callTs?: number
+	/** How many source lines this line stands for (1 unless aggregated). */
+	count: number
+	/** The MCP server an effect line is about (set on effect lines only). */
+	server?: string
+	/**
+	 * Every source line folded into this one, in order. A line always has at least itself; every lifted source `ts`
+	 * of a group appears in exactly one line's `members` (across `lifted` and `absorbed`), so aggregation can shorten
+	 * the list but never drop a fact.
+	 */
+	members: LiftMember[]
+}
+
+export interface LiftMember {
+	text: string
+	sourceTs: number
+	callTs?: number
 }
 
 export type CostLabel =
@@ -236,6 +252,12 @@ export interface WorkGroup {
 	/** Everything folded into the group, in order (including the sources of lifted lines). */
 	members: AiHydroMessage[]
 	lifted: LiftedLine[]
+	/**
+	 * Focus only: missing-fact notices (an MCP call whose server declares no effect) that are counted in the header
+	 * instead of taking a row of their own. They are listed in full when the group is expanded and counted in
+	 * `facts.liftedCount`. Always empty at Normal; never holds an error, refusal, denial, exit code or security finding.
+	 */
+	absorbed: LiftedLine[]
 	facts: HeaderFacts
 	/** `ts` of the latest checkpoint in the group: where "Rewind" for this group's work points. No row of its own. */
 	rewindTs?: number
@@ -568,6 +590,114 @@ const newGroup = (): GroupBuilder => ({
 	reuseCount: 0,
 })
 
+// ── Aggregation (X1-C1) ─────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Why a lifted line may be merged with others. Only these families merge, and only with lines of the same family:
+ *  - an MCP call whose server declares no effect (`unknown:`), or declares one it is not trusted for (`unverified:`),
+ *    per server: a server fact, said once;
+ *  - a command run under a non-protected-path policy class (`policy:`), per class;
+ *  - an ask with no decision recorded.
+ * Everything else (errors, refusals, denials, non-zero exits, protected paths, outside-workspace and DESTRUCTIVE
+ * findings, limits, truncation, cancellations ...) has no entry and is one line per fact at every level.
+ */
+interface AggInfo {
+	family: string
+	/** What the call was, for the merged text. */
+	subject: string
+	server?: string
+	policyClass?: string
+}
+
+const MAX_NAMED = 3
+
+function serverOf(m: AiHydroMessage): string {
+	const name = parseObject(m.text)?.serverName
+	return typeof name === "string" && name.trim() ? name.trim() : "an MCP server"
+}
+function toolOf(m: AiHydroMessage, fallback: string): string {
+	const o = parseObject(m.text)
+	const t = o?.toolName ?? o?.uri
+	return typeof t === "string" && t ? t : fallback
+}
+
+function nameList(subjects: string[]): string {
+	const uniq = [...new Set(subjects)]
+	const named = uniq.slice(0, MAX_NAMED).join(", ")
+	return uniq.length > MAX_NAMED ? `${named}, +${uniq.length - MAX_NAMED}` : named
+}
+
+function mergedText(reason: LiftReason, infos: AggInfo[], verb: string): string {
+	const n = infos.length
+	const subjects = infos.map((i) => i.subject)
+	const names = nameList(subjects)
+	if (reason === "approved_security") {
+		const server = infos[0].server ?? "an MCP server"
+		return infos[0].family.startsWith("unverified:")
+			? `${server}: effect unverified, server not trusted (${n} calls: ${names})`
+			: `${server} declares no effect hints (${n} calls: ${names})`
+	}
+	if (reason === "policy_command") {
+		return `${verb} ${n} commands (${(infos[0].policyClass ?? "policy").replace(/_/g, " ")}): ${names}`
+	}
+	return `${n} asks with no decision recorded: ${names}`
+}
+
+/**
+ * Merge same-family lines (two or more) into one line with a count and every member listed. At Focus a lone or merged
+ * "effect not declared" notice leaves the row list and is counted in the header (`absorbed`) instead; it stays in
+ * `facts.liftedCount` and in the expansion. Order is the order of each family's first member.
+ */
+function aggregateLifts(
+	lifted: readonly LiftedLine[],
+	info: ReadonlyMap<string, AggInfo>,
+	detail: DetailLevel,
+): { shown: LiftedLine[]; absorbed: LiftedLine[] } {
+	const byFamily = new Map<string, LiftedLine[]>()
+	for (const l of lifted) {
+		const f = info.get(l.key)?.family
+		if (f !== undefined) {
+			byFamily.set(f, [...(byFamily.get(f) ?? []), l])
+		}
+	}
+	const shown: LiftedLine[] = []
+	const absorbed: LiftedLine[] = []
+	const done = new Set<string>()
+	for (const l of lifted) {
+		const a = info.get(l.key)
+		let out = l
+		if (a?.server !== undefined) {
+			out = { ...l, server: a.server }
+		}
+		if (a !== undefined) {
+			if (done.has(a.family)) {
+				continue
+			}
+			done.add(a.family)
+			const same = byFamily.get(a.family) ?? [l]
+			if (same.length >= 2) {
+				const infos = same.map((x) => info.get(x.key) as AggInfo)
+				out = {
+					key: `agg:${a.family}`,
+					reason: l.reason,
+					tone: l.tone,
+					text: mergedText(l.reason, infos, same[0].text.startsWith("You approved") ? "You approved" : "Ran"),
+					sourceTs: l.sourceTs,
+					...(a.server !== undefined ? { server: a.server } : {}),
+					count: same.length,
+					members: same.flatMap((x) => x.members),
+				}
+			}
+		}
+		if (detail === "focus" && a !== undefined && a.family.startsWith("unknown:")) {
+			absorbed.push(out)
+		} else {
+			shown.push(out)
+		}
+	}
+	return { shown, absorbed }
+}
+
 const READ_ONLY_NATIVE_TOOLS: ReadonlySet<string> = new Set([
 	"readFile",
 	"listFilesTopLevel",
@@ -639,7 +769,8 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 				.map((l) => l.callTs),
 		)
 		const lifted = g.lifted.filter((l) => !(l.reason === "call_failed" && resultCalls.has(l.callTs)))
-		const startTs = g.members[0]?.ts ?? lifted[0].sourceTs
+		const { shown, absorbed } = aggregateLifts(lifted, aggInfo, options.detail)
+		const startTs = g.members[0]?.ts ?? shown[0]?.sourceTs ?? absorbed[0].sourceTs
 		const endTs = g.members.length ? g.members[g.members.length - 1].ts : startTs
 		const span = Math.max(0, endTs - startTs)
 		const waitingMs = Math.min(g.waitingMs, span)
@@ -649,7 +780,8 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 			startTs,
 			endTs,
 			members: g.members,
-			lifted,
+			lifted: shown,
+			absorbed,
 			rewindTs: g.rewindTs,
 			open: false,
 			facts: {
@@ -663,7 +795,7 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 				failedRequestCount: g.failedRequestCount,
 				reuseCount: g.reuseCount,
 				revisionCount: 0,
-				liftedCount: lifted.length,
+				liftedCount: shown.reduce((n, l) => n + l.count, 0) + absorbed.reduce((n, l) => n + l.count, 0),
 			},
 		})
 		g = undefined
@@ -683,12 +815,27 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 		tone: LiftedLine["tone"],
 		text: string,
 		callTs?: number,
+		agg?: AggInfo,
 	) => {
 		const key = `${reason}:${m.ts}:${curIndex}`
 		if (!grp.lifted.some((l) => l.key === key)) {
-			grp.lifted.push({ key, reason, tone, text, sourceTs: m.ts, ...(callTs !== undefined ? { callTs } : {}) })
+			grp.lifted.push({
+				key,
+				reason,
+				tone,
+				text,
+				sourceTs: m.ts,
+				...(callTs !== undefined ? { callTs } : {}),
+				count: 1,
+				members: [{ text, sourceTs: m.ts, ...(callTs !== undefined ? { callTs } : {}) }],
+			})
+			if (agg) {
+				aggInfo.set(key, agg)
+			}
 		}
 	}
+	/** Why a line may be aggregated, by line key. A line with no entry is never merged. */
+	const aggInfo = new Map<string, AggInfo>()
 
 	let curIndex = 0
 	// Native tools known to only read. Anything else that names a path is treated as a possible write.
@@ -747,6 +894,24 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 		return effect === undefined && kindOf(m) === "use_mcp_server" ? "unknown_effect" : undefined
 	}
 	const securityMarked = (m: AiHydroMessage): boolean => securityReason(m) !== undefined
+	/**
+	 * A per-item risk flag. A line for such an item is never aggregated (one line per call, the risk named in its text),
+	 * whatever its family: merging would hide it behind a count or a "+N".
+	 */
+	const perItemRisk = (m: AiHydroMessage): string | undefined => {
+		const info = toolInfo(m)
+		if (m.isOperationOutsideWorkspace || info?.operationIsLocatedInWorkspace === false) {
+			return "outside the workspace"
+		}
+		if (effectOf(m) === "DESTRUCTIVE") {
+			return "destructive"
+		}
+		const path = typeof info?.path === "string" ? info.path : typeof info?.filePath === "string" ? info.filePath : undefined
+		if (info && path !== undefined && (options.isProtectedPath ? protectedPath(path) : !isReadOnlyTool(info))) {
+			return "touches a path"
+		}
+		return undefined
+	}
 
 	// Tasks from before the host recorded outcomes cannot say "no decision recorded": an ask without an outcome is
 	// just old data there, shown neutrally and counted as a call.
@@ -918,7 +1083,16 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 				grp.toolCount++
 			}
 			if (undecided) {
-				lift(grp, m, "no_decision", "notice", `Asked to ${what}; no decision recorded`, m.ts)
+				const risk = perItemRisk(m)
+				lift(
+					grp,
+					m,
+					"no_decision",
+					"notice",
+					`Asked to ${what}${risk ? ` (${risk})` : ""}; no decision recorded`,
+					m.ts,
+					risk ? undefined : { family: "no_decision", subject: what },
+				)
 			} else if (denied) {
 				lift(grp, m, "call_denied", "warning", `You denied: ${what}`, m.ts)
 			} else if (kind === "command" && typeof m.exitCode === "number" && m.exitCode !== 0) {
@@ -928,13 +1102,18 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 			} else if (m.execOutcome === "failed" || state === "failed") {
 				lift(grp, m, "call_failed", "error", `Failed: ${what}`, m.ts)
 			} else if (m.policyClass) {
+				const risk = perItemRisk(m)
 				lift(
 					grp,
 					m,
 					"policy_command",
 					"warning",
-					`${m.type === "ask" ? "You approved" : "Ran"} (${m.policyClass.replace(/_/g, " ")}): ${what}`,
+					`${m.type === "ask" ? "You approved" : "Ran"} (${m.policyClass.replace(/_/g, " ")}${risk ? `, ${risk}` : ""}): ${what}`,
 					m.ts,
+					// A protected path or any per-item risk is a finding in itself: one line per call, never merged.
+					m.policyClass === "protected_path" || risk
+						? undefined
+						: { family: `policy:${m.type}:${m.policyClass}`, subject: what, policyClass: m.policyClass },
 				)
 			} else if (securityReason(m) === "unverified_effect") {
 				lift(
@@ -944,6 +1123,7 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 					"notice",
 					`${m.type === "ask" ? "You approved" : "Ran"} (effect unverified: server not trusted): ${what}`,
 					m.ts,
+					{ family: `unverified:${m.type}:${serverOf(m)}`, subject: toolOf(m, what), server: serverOf(m) },
 				)
 			} else if (securityReason(m) === "unknown_effect") {
 				lift(
@@ -953,6 +1133,7 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 					"notice",
 					`${m.type === "ask" ? "You approved" : "Ran"} (effect not declared by the server): ${what}`,
 					m.ts,
+					{ family: `unknown:${m.type}:${serverOf(m)}`, subject: toolOf(m, what), server: serverOf(m) },
 				)
 			} else if (securityMarked(m)) {
 				lift(grp, m, "approved_security", "warning", `${m.type === "ask" ? "You approved" : "Ran"}: ${what}`, m.ts)

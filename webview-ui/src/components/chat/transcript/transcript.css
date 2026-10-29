@@ -77,6 +77,15 @@
 	min-height: 20px;
 	overflow-wrap: anywhere;
 }
+.transcript-lifted-line[data-count]:not([data-count="1"]) {
+	flex-wrap: wrap;
+}
+.transcript-lifted-members {
+	flex-basis: 100%;
+	list-style: none;
+	margin: 0;
+	padding: 0 0 0 18px;
+}
 .transcript-lifted-line[data-tone="error"] {
 	color: var(--vscode-errorForeground);
 }

@@ -158,8 +158,10 @@ const ownerShape = (detail: "normal" | "focus"): Partial<ScreenDef> => ({
 		"[data-testid=inline-approval]",
 		"[data-testid=auto-run-risk]",
 		"text=45 MCP tools always allowed",
+		// X1-C1: the two undeclared-effect calls are one server-level line at Normal and a header count at Focus.
+		detail === "normal" ? "text=declares no effect hints (2 calls" : "text=2 calls with no declared effect",
 	],
-	expectAbsent: ["text=API Request"],
+	expectAbsent: ["text=API Request", ...(detail === "focus" ? ["text=declares no effect hints"] : [])],
 })
 
 /** A synthetic transcript screen pinned to its end; `visible` is text that must be inside the viewport. */
@@ -488,15 +490,15 @@ export const screens: ScreenDef[] = [
 			expectVisible: [
 				"text=Eight recorded runs are listed above.",
 				"[data-testid=work-group] button[aria-expanded=false]",
-				"text=effect not declared by the server",
+				"text=declares no effect hints (8 calls",
 			],
 			expectAbsent: ["text=API Request"],
 		},
 	),
 	// ── X1-C0 (chat-polish P0): the "before" images X1-C1..C4 are measured against. No product change. ──────────
 	// The owner's reviewed session shape: two unannotated answered calls, a SESSION_RESOLUTION_FAILED refusal, a pending
-	// list_features ask, a risky auto-run policy, 45 always-allowed tools and a to-do 2/4. Normal and Focus must look
-	// different after X1-C1; today the lifted lines and the group header are identical (see chatDetailBaseline.test.ts).
+	// list_features ask, a risky auto-run policy, 45 always-allowed tools and a to-do 2/4. Normal and Focus differ since
+	// X1-C1 (see chatDetailBaseline.test.ts).
 	chatTx(
 		"chat-owner-approval-pending",
 		"Owner session shape at Normal: refusal, pending approval, risky policy, 45 granted tools, to-do 2/4",
@@ -543,9 +545,10 @@ export const screens: ScreenDef[] = [
 			expectVisible: [
 				"text=Twelve recorded runs are listed above.",
 				"[data-testid=work-group] button[aria-expanded=false]",
-				"text=effect not declared by the server",
+				"text=12 calls with no declared effect",
 			],
-			expectAbsent: ["text=API Request"],
+			// Focus: the notice is a header count, not a row.
+			expectAbsent: ["text=API Request", "text=declares no effect hints"],
 		},
 	),
 	// §2.2 C2: a chat started from the map; the first user turn is the whole wrapped template today.

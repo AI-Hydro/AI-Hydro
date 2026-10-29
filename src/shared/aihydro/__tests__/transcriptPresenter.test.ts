@@ -435,7 +435,7 @@ describe("transcript presenter: no lift is ever only folded (every enum value)",
 	const surfaced = (items: TranscriptItem[], ts: number) =>
 		items.some((it) =>
 			it.kind === "group"
-				? it.lifted.some((l) => l.sourceTs === ts)
+				? [...it.lifted, ...it.absorbed].some((l) => l.members.some((x) => x.sourceTs === ts))
 				: it.kind === "passthrough"
 					? it.messages.some((x) => x.ts === ts)
 					: "message" in it && it.message.ts === ts,
@@ -847,5 +847,179 @@ describe("transcript presenter: W2-A2 review fixes", () => {
 		expect(interrupted.map((i) => i.kind)).to.deep.equal(["group", "divider"])
 		expect(groups(interrupted)[0].facts.revisionCount).to.equal(0)
 		expect(groups(run("revision"))[0].facts.revisionCount).to.equal(1)
+	})
+})
+
+describe("transcript presenter: aggregation (X1-C1)", () => {
+	const NO_ANNOTATIONS = { effectClassFor: () => undefined, isProtectedPath: () => false }
+	const calls = (n: number, server = "srv") => {
+		const out: AiHydroMessage[] = [say("task", "x"), req()]
+		for (let i = 0; i < n; i++) {
+			out.push(mcpCall(server, `tool_${i}`), mcpResp({ ok: true }), req())
+		}
+		return out
+	}
+	const lastGroup = (m: AiHydroMessage[], detail: DetailLevel) => groups(presentTranscript(m, { detail, ...NO_ANNOTATIONS }))[0]
+	const allLines = (g: WorkGroup) => [...g.lifted, ...g.absorbed]
+
+	it("Normal: n calls to one server with no effect hints are one line with a count and every member", () => {
+		reset()
+		const g = lastGroup(calls(8), "normal")
+		expect(g.lifted).to.have.length(1)
+		expect(g.lifted[0].count).to.equal(8)
+		expect(g.lifted[0].members).to.have.length(8)
+		expect(g.lifted[0].text).to.contain("srv declares no effect hints (8 calls")
+		expect(g.facts.liftedCount).to.equal(8)
+		expect(g.facts.toolCount).to.equal(8)
+	})
+	it("a single call keeps its own line; two servers make two lines", () => {
+		reset()
+		expect(lastGroup(calls(1), "normal").lifted[0].count).to.equal(1)
+		reset()
+		const m = [
+			say("task", "x"),
+			mcpCall("a", "t1"),
+			mcpResp({}),
+			mcpCall("b", "t2"),
+			mcpResp({}),
+			mcpCall("a", "t3"),
+			mcpResp({}),
+		]
+		const g = lastGroup(m, "normal")
+		expect(g.lifted.map((l) => l.count)).to.deep.equal([2, 1])
+	})
+	it("an untrusted server with annotations (UNVERIFIED) is also said once, in its own words", () => {
+		reset()
+		const g = groups(
+			presentTranscript(calls(3), { detail: "normal", effectClassFor: () => "UNVERIFIED", isProtectedPath: () => false }),
+		)[0]
+		expect(g.lifted).to.have.length(1)
+		expect(g.lifted[0].text).to.contain("effect unverified, server not trusted (3 calls")
+	})
+	it("Focus counts the undeclared-effect notice in the header instead of a row, and still lists every member", () => {
+		reset()
+		const g = lastGroup(calls(8), "focus")
+		expect(g.lifted).to.have.length(0)
+		expect(g.absorbed).to.have.length(1)
+		expect(g.absorbed[0].members).to.have.length(8)
+		expect(g.facts.liftedCount).to.equal(8)
+		expect(g.open).to.equal(false)
+	})
+	it("Focus never absorbs anything but undeclared-effect notices", () => {
+		reset()
+		const m = [
+			say("task", "x"),
+			mcpCall("srv", "a"),
+			mcpResp({ error: true, code: "E1", message: "boom" }),
+			mcpCall("srv", "b"),
+			mcpResp({ ok: true }),
+			say("command", "rm -rf x\nOutput:\n", { policyClass: "protected_path", askOutcome: "approved", exitCode: 1 }),
+			say("command", "ls\nOutput:\n", { policyClass: "auto_run_all", askOutcome: "approved", exitCode: 0 }),
+			say("command", "pwd\nOutput:\n", { policyClass: "auto_run_all", askOutcome: "approved", exitCode: 0 }),
+		]
+		const g = lastGroup(m, "focus")
+		expect(g.absorbed.every((l) => l.reason === "approved_security" && l.tone === "notice")).to.equal(true)
+		expect(g.lifted.map((l) => l.reason)).to.include.members(["refusal", "exit_nonzero", "policy_command"])
+	})
+	it("never merges an error, refusal, denial, non-zero exit or protected path with anything", () => {
+		reset()
+		const m = [
+			say("task", "x"),
+			say("command", "a\nOutput:\n", { policyClass: "protected_path", askOutcome: "approved", exitCode: 0 }),
+			say("command", "b\nOutput:\n", { policyClass: "protected_path", askOutcome: "approved", exitCode: 0 }),
+			say("command", "c\nOutput:\n", { policyClass: "auto_run_all", askOutcome: "approved", exitCode: 2 }),
+			say("command", "d\nOutput:\n", { policyClass: "auto_run_all", askOutcome: "approved", exitCode: 2 }),
+			mcpCall(),
+			mcpResp({ error: true, code: "A", message: "x" }),
+			mcpCall(),
+			mcpResp({ error: true, code: "B", message: "y" }),
+		]
+		for (const detail of ["focus", "normal"] as const) {
+			for (const l of allLines(lastGroup(m, detail))) {
+				if (l.tone === "error") {
+					expect(l.count).to.equal(1)
+					continue
+				}
+				if (l.count === 1) continue
+				expect(["policy_command", "approved_security"], `${detail}:${l.text}`).to.include(l.reason)
+			}
+			const g = lastGroup(m, detail)
+			expect(g.lifted.filter((l) => l.reason === "exit_nonzero")).to.have.length(2)
+			expect(g.lifted.filter((l) => l.reason === "refusal" || l.reason === "mcp_error")).to.have.length(2)
+			expect(g.lifted.filter((l) => l.text.includes("protected path"))).to.have.length(2)
+		}
+	})
+	it("property: every lifted source is in exactly one line's members and liftedCount is their sum, at every level", () => {
+		const shapes: Array<() => AiHydroMessage[]> = [
+			() => calls(1),
+			() => calls(5),
+			() => [...calls(3, "a"), mcpCall("b", "x"), mcpResp({ error: true, code: "Z", message: "m" }), ...calls(2, "b")],
+			() => [say("task", "x"), say("command", "ls\nOutput:\n", { policyClass: "auto_run_all", exitCode: 0 }), req()],
+			() => [say("task", "x"), mcpCall(), mcpResp({ status: "failed" }), mcpCall(), mcpResp({ ok: 1 })],
+		]
+		for (const make of shapes) {
+			for (const detail of ["focus", "normal"] as const) {
+				reset()
+				const unaggregated = lastGroup(make(), detail)
+				const ts = allLines(unaggregated).flatMap((l) => l.members.map((x) => x.sourceTs))
+				expect(new Set(ts).size, "no source twice").to.equal(ts.length)
+				expect(unaggregated.facts.liftedCount).to.equal(allLines(unaggregated).reduce((n, l) => n + l.count, 0))
+				for (const l of allLines(unaggregated)) {
+					expect(l.members).to.have.length(l.count)
+				}
+			}
+		}
+	})
+	it("a pending ask is an item of its own at every level and no level collapses it", () => {
+		for (const detail of ["focus", "normal", "verbose"] as const) {
+			reset()
+			const m = [
+				...calls(3),
+				ask("use_mcp_server", JSON.stringify({ serverName: "srv", toolName: "q", type: "use_mcp_tool" })),
+			]
+			const items = presentTranscript(m, { detail, ...NO_ANNOTATIONS })
+			expect(
+				items.some((i) => i.kind === "pending" || (i.kind === "passthrough" && i.messages[0].ask === "use_mcp_server")),
+				detail,
+			).to.equal(true)
+		}
+	})
+
+	it("a mixed batch: an outside-workspace auto-run command is never merged and says so", () => {
+		const run = (cmd: string, extra: Partial<AiHydroMessage> = {}) =>
+			say("command", `${cmd}\nOutput:\n`, { policyClass: "auto_run_all", askOutcome: "approved", exitCode: 0, ...extra })
+		for (const n of [3, 8]) {
+			for (const detail of ["focus", "normal"] as const) {
+				reset()
+				const m = [say("task", "x"), run("ls")]
+				for (let i = 0; i < n - 2; i++) m.push(run(`echo ${i}`))
+				m.splice(2, 0, run("rm /etc/hosts", { isOperationOutsideWorkspace: true }))
+				const g = lastGroup(m, detail)
+				const risky = g.lifted.filter((l) => l.text.includes("rm /etc/hosts"))
+				expect(risky, `${detail}:${n}`).to.have.length(1)
+				expect(risky[0].count).to.equal(1)
+				expect(risky[0].text).to.contain("outside the workspace")
+				const others = g.lifted.filter((l) => !l.text.includes("rm /etc/hosts"))
+				expect(others.flatMap((l) => l.members).length).to.equal(n - 1)
+				expect(others.some((l) => l.members.some((x) => x.text.includes("rm /etc/hosts")))).to.equal(false)
+			}
+		}
+	})
+	it("an ask with no decision that is outside the workspace is not merged either", () => {
+		reset()
+		const undecided = (cmd: string, extra: Partial<AiHydroMessage> = {}) => ask("command", cmd, extra)
+		const m = [
+			say("task", "x"),
+			say("command", "ls\nOutput:\n", { askOutcome: "approved", exitCode: 0 }),
+			undecided("a"),
+			undecided("rm /etc/hosts", { isOperationOutsideWorkspace: true }),
+			undecided("b"),
+			say("text", "done"),
+		]
+		const g = lastGroup(m, "normal")
+		const risky = g.lifted.filter((l) => l.text.includes("rm /etc/hosts"))
+		expect(risky).to.have.length(1)
+		expect(risky[0].count).to.equal(1)
+		expect(risky[0].text).to.contain("outside the workspace")
 	})
 })

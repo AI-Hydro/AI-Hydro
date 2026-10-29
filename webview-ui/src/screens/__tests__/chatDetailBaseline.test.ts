@@ -7,9 +7,9 @@
  * No resolvers are passed, so every MCP call has an unknown effect and lifts: that is the unannotated-server world
  * the owner's session was in (the fail-safe documented on PresentOptions).
  *
- * X1-C1 changes these numbers on purpose. It regenerates the file with
+ * X1-C1 changed these numbers on purpose (aggregation, a real Focus). The file is regenerated with
  *   UPDATE_CHAT_DETAIL_BASELINE=1 npm run test -- chatDetailBaseline
- * and the diff of that file is the evidence of what Focus now hides.
+ * and its diff is the evidence of what Focus and Normal now fold.
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
@@ -101,17 +101,44 @@ describe("chat detail baseline (X1-C0)", () => {
 		expect(t.verbose.items).toBe(tx.ownerApprovalPendingTask.length)
 	})
 
-	it("the owner shape lifts the two unannotated answered calls and the refusal (3 call lines before any aggregation)", () => {
+	it("the owner shape aggregates the two unannotated answered calls into one server line and keeps the refusal", () => {
 		const n = table().ownerApprovalPendingTask.normal
-		expect(n.liftedLines).toBeGreaterThanOrEqual(3)
+		// Before aggregation this was 3 call lines (two unannotated answered calls and the refusal).
+		expect(n.liftedLines).toBe(2)
+		expect(n.liftedByReason.approved_security).toBe(1)
+		expect(n.liftedByReason.mcp_error).toBe(1)
+		expect(n.headerCalls).toBe(3)
 	})
 
-	// THE DEFECT, pinned. X1-C1 gives Focus its own rules and deletes this test (replacing it with "Focus differs from
-	// Normal"). Until then Focus is Normal: same items, same lifted lines, same header calls, on every P0 fixture.
-	it("baseline defect: Focus renders the same rows as Normal on every fixture", () => {
+	// X1-C1 replaces the pinned defect "Focus renders the same rows as Normal": Focus is never longer than Normal, it
+	// is strictly shorter on the clutter fixtures, and it never drops a line that needs the reader.
+	it("Focus shows strictly fewer rows than Normal on the clutter fixtures, and never more anywhere", () => {
 		const t = table()
 		for (const [name, levels] of Object.entries(t)) {
-			expect(levels.focus, name).toEqual(levels.normal)
+			expect(levels.focus.visibleRows, name).toBeLessThanOrEqual(levels.normal.visibleRows)
+		}
+		// failureLifted, autoRunAll and mapLaunched hold only errors, warnings or nothing: Focus has nothing it may fold
+		// there, so they are equal by design (never fewer), not by accident.
+		for (const name of ["ownerApprovalPendingTask", "manyUnannotatedTask", "run8ToolsTask", "turnMachineryTask"]) {
+			expect(t[name].focus.visibleRows, name).toBeLessThan(t[name].normal.visibleRows)
+		}
+	})
+
+	it("Focus keeps every refusal, error, exit code and pending ask on its own line", () => {
+		const t = table()
+		for (const [name, levels] of Object.entries(t)) {
+			for (const reason of ["mcp_error", "refusal", "call_failed", "exit_nonzero", "call_denied"]) {
+				expect(levels.focus.liftedByReason[reason] ?? 0, `${name}:${reason}`).toBe(
+					levels.normal.liftedByReason[reason] ?? 0,
+				)
+			}
+			expect(levels.focus.pending, name).toBe(levels.normal.pending)
+		}
+	})
+
+	it("the header counts every call whatever the level: aggregation changes rows, not facts", () => {
+		for (const [name, levels] of Object.entries(table())) {
+			expect(levels.focus.headerCalls, name).toBe(levels.normal.headerCalls)
 		}
 	})
 })
