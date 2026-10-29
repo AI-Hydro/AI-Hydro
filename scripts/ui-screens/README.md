@@ -10,6 +10,30 @@ Only the harness server's own origin (exact host and port, plus its `ws:` twin) 
 request is answered from fixtures. The run fails ("unrouted") on a non-local response that did not come from the
 harness, a non-local `requestfailed`, or any non-local WebSocket.
 
+## Map chrome coverage
+
+Every `map` screen that renders the map chrome (`[data-map-chrome-root]`) is checked against the coverage budget in
+`map-polish.md` §4.3: the union of the `[data-map-chrome]` boxes (rail, collapsed button, edge tab, panel), clipped to
+the canvas, divided by the canvas area. A docked panel and the rail own their own columns, so they cover 0%.
+
+| State | Limit |
+|---|---|
+| panel closed, map >= 800 px | 6% |
+| panel closed, map < 800 px | 3% |
+| panel open, docked | 0% (0.1% for rounding) |
+| panel open, overlay | 40% |
+| panel open, bottom sheet | 60% |
+
+Menus (`data-map-chrome="menu"`) and modal sheets (`data-map-chrome="modal"`) are transient and not counted.
+The rule measures the tool chrome only: in-canvas overlays (legend, feature identifier, bottom bar, claim chip,
+empty-state card, drag overlay) carry no `data-map-chrome` attribute and are not counted, so a screen can pass while
+one of them covers the map. The rule
+is in `coverage.mjs`; `coverage.selftest.mjs` runs it on synthetic boxes (`npm run ui:screens:selftest`). A run fails
+with `ASSERT chrome covers ...` and records the measured ratio per cell in `summary.json` (`chromeCoverage`).
+
+A step may be `{ click, optional: true }`: it is skipped when the control is absent. Map screens use it to open the same
+tool through a rail button (800 px and up) or the collapsed "Map tools" menu (below 600 px).
+
 ## `--check` and the budget
 
 `webview-ui/screens-baseline/checker-budget.json` holds per-screen counts that may only shrink

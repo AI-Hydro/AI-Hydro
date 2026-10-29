@@ -820,7 +820,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 										cursor: "default",
 									}}>
 									{/* ── Row: visibility + swatch + icons + name ── */}
-									<div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+									<div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
 										{/* Gripper */}
 										<span
 											style={{
@@ -1016,7 +1016,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 												style={{
 													fontSize: 12,
 													fontWeight: 500,
-													flex: 1,
+													flex: "1 1 90px",
+													minWidth: 0,
 													overflow: "hidden",
 													textOverflow: "ellipsis",
 													whiteSpace: "nowrap",
@@ -1096,7 +1097,15 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 									)}
 
 									{/* ── Icon toolbar ── */}
-									<div style={{ display: "flex", gap: 3, marginTop: 5, marginLeft: 50, alignItems: "center" }}>
+									<div
+										style={{
+											display: "flex",
+											flexWrap: "wrap",
+											gap: 3,
+											marginTop: 5,
+											marginLeft: 22,
+											alignItems: "center",
+										}}>
 										<IconBtn
 											border={border}
 											fg={fg}

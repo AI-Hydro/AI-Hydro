@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url"
 import { chromium } from "playwright"
 import { assertAbsent } from "./assertions.mjs"
 import { pageChecker } from "./checker.mjs"
+import { measureChromeCoverage } from "./coverage.mjs"
 import { startServer, THEMES } from "./server.mjs"
 import { basemapIdForUrl, isPlaceholderScreen, tileFaultStatus, tilePng } from "./tiles.mjs"
 
@@ -260,12 +261,15 @@ async function worker() {
 				trace("waited1")
 				const steps = await page.evaluate(() => window.__screenSteps ?? [])
 				for (const step of steps) {
-					if (step.click)
+					if (step.click) {
+						// `optional` steps open the same thing through different chrome at different widths (a rail
+						// button at 1280, a menu entry at 400): skip when the control is not there.
+						if (step.optional && (await page.locator(step.click).count()) === 0) continue
 						await page
 							.locator(step.click)
 							.nth(step.nth ?? 0)
 							.click({ timeout: 20000 })
-					else if (step.scrollEnd)
+					} else if (step.scrollEnd)
 						// Virtualised lists re-measure items after each scroll; iterate until scrollTop/scrollHeight stop moving.
 						await page
 							.locator(step.scrollEnd)
@@ -295,6 +299,23 @@ async function worker() {
 				}
 				// Things that must not be on screen at all (e.g. rows the redesign removed).
 				await assertAbsent(page, screen.expectAbsent)
+				// Map chrome never covers more of the canvas than its budget (map-polish.md §4.3).
+				if (screen.group === "map") {
+					const coverage = await measureChromeCoverage(page)
+					if (coverage) {
+						record.chromeCoverage = {
+							mode: coverage.mode,
+							state: coverage.state,
+							panelOpen: coverage.panelOpen,
+							ratio: Number(coverage.ratio.toFixed(4)),
+							limit: coverage.limit,
+						}
+						if (!coverage.ok)
+							throw new Error(
+								`ASSERT chrome covers ${(coverage.ratio * 100).toFixed(1)}% of the canvas (limit ${(coverage.limit * 100).toFixed(1)}%, ${coverage.mode}, panel ${coverage.panelOpen ? "open" : "closed"}, ${coverage.state})`,
+							)
+					}
+				}
 				if (screen.scrollPinned) {
 					const pinned = await page
 						.locator(screen.scrollPinned)

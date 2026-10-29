@@ -73,6 +73,7 @@ import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
 import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext, mapLayerStudyHint } from "./mapAgentBridge"
+import { useMapChrome } from "./mapChrome"
 import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapHydroGuards"
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
 import { type CursorRasterReading, getLayerBounds, isGeoJsonLayer, sampleTopRasterAtPoint } from "./mapLayerAdapters"
@@ -785,6 +786,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const pendingAutoFitLayerIdsRef = useRef<string[]>([])
 	const lastAutoFitKeyRef = useRef<string>("")
 	const containerRef = useRef<HTMLDivElement | null>(null)
+	const rootRef = useRef<HTMLDivElement | null>(null)
 
 	// Custom layer render order (user can drag-reorder in the panel).
 	// Layers later in the deck.gl array render on top of earlier ones.
@@ -836,6 +838,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			setActiveTool((current) => (open ? tool : current === tool ? null : current)),
 		[],
 	)
+	const chrome = useMapChrome(rootRef, activeTool !== null)
 	const searchOpen = activeTool === "search"
 	const exportOpen = activeTool === "export"
 	const setSearchOpen = useCallback((open: boolean) => setToolOpen("search", open), [setToolOpen])
@@ -3096,11 +3099,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	return (
 		<div
 			className="map-view-container"
-			onDragEnter={onDragEnter}
-			onDragLeave={onDragLeave}
-			onDragOver={onDragOver}
-			onDrop={onDrop}
-			ref={containerRef}
+			ref={rootRef}
 			style={{
 				width: "100%",
 				height: "100%",
@@ -3108,361 +3107,554 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				background: bgColor,
 				overflow: "hidden",
 			}}>
-			<MapConnectionStatus error={connectionError} onReconnect={reconnect} status={connectionStatus} />
-			<MapResourceStatus
-				layers={layers}
-				onReloadRenderer={reloadRenderer}
-				onRetry={retryResources}
-				rasterStates={displayStates}
-				rendererError={rendererError}
-				sourceLabels={TILE_SOURCE_LABELS}
-				tileErrors={tileErrors}
-				tileNotes={tileNotes}
-				visibleLayerIds={visibleLayerIds}
-			/>
-			<BasemapNotice
-				messages={basemapNotices}
-				onUseDefault={selectedBaseMap === DEFAULT_BASEMAP_ID ? undefined : resetBaseMap}
-			/>
-			{/* RIGHT MAP (or single map when not swiping) */}
-			<DeckGL
-				controller={{
-					doubleClickZoom: false,
-					dragRotate: flood3dEnabled,
-					touchRotate: flood3dEnabled,
-				}}
-				effects={flood3dLighting}
-				getCursor={({ isDragging }: { isDragging: boolean }) => {
-					if (isDragging) {
-						return "grabbing"
-					}
-					if (measureMode || drawMode) {
-						return "crosshair"
-					}
-					if (clickedFeatures.length > 0 || inspectPoint) {
-						return "pointer"
-					}
-					return "grab"
-				}}
-				getTooltip={layers.length > 0 && clickedFeatures.length === 0 ? getTooltip : undefined}
-				id="ai-hydro-research-map"
-				key={`deck-main-${glEpoch}-${resourceRetry}`}
-				layers={mainLayers}
-				onClick={handleMapClick}
-				onError={(error) => {
-					console.error("[MapView] deck.gl renderer error:", error)
-					setRendererError(error.message)
-				}}
-				onHover={({ coordinate }: any) => {
-					if (coordinate && Array.isArray(coordinate) && coordinate.length >= 2) {
-						const lon = coordinate[0]
-						const lat = coordinate[1]
-						setCursorCoord({ lon, lat })
-						if (measureMode || (drawMode && !pendingDraw)) {
-							setToolHoverCoord({ lon, lat })
+			{/* The stage is the canvas and everything drawn on it. It gives up the rail column (and a docked panel)
+			    on the right, so nothing in the chrome covers the map. */}
+			<div
+				className="map-stage"
+				onDragEnter={onDragEnter}
+				onDragLeave={onDragLeave}
+				onDragOver={onDragOver}
+				onDrop={onDrop}
+				ref={containerRef}
+				style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: chrome.stageInset, overflow: "hidden" }}>
+				<MapConnectionStatus error={connectionError} onReconnect={reconnect} status={connectionStatus} />
+				<MapResourceStatus
+					layers={layers}
+					onReloadRenderer={reloadRenderer}
+					onRetry={retryResources}
+					rasterStates={displayStates}
+					rendererError={rendererError}
+					sourceLabels={TILE_SOURCE_LABELS}
+					tileErrors={tileErrors}
+					tileNotes={tileNotes}
+					visibleLayerIds={visibleLayerIds}
+				/>
+				<BasemapNotice
+					messages={basemapNotices}
+					onUseDefault={selectedBaseMap === DEFAULT_BASEMAP_ID ? undefined : resetBaseMap}
+				/>
+				{/* RIGHT MAP (or single map when not swiping) */}
+				<DeckGL
+					controller={{
+						doubleClickZoom: false,
+						dragRotate: flood3dEnabled,
+						touchRotate: flood3dEnabled,
+					}}
+					effects={flood3dLighting}
+					getCursor={({ isDragging }: { isDragging: boolean }) => {
+						if (isDragging) {
+							return "grabbing"
+						}
+						if (measureMode || drawMode) {
+							return "crosshair"
+						}
+						if (clickedFeatures.length > 0 || inspectPoint) {
+							return "pointer"
+						}
+						return "grab"
+					}}
+					getTooltip={layers.length > 0 && clickedFeatures.length === 0 ? getTooltip : undefined}
+					id="ai-hydro-research-map"
+					key={`deck-main-${glEpoch}-${resourceRetry}`}
+					layers={mainLayers}
+					onClick={handleMapClick}
+					onError={(error) => {
+						console.error("[MapView] deck.gl renderer error:", error)
+						setRendererError(error.message)
+					}}
+					onHover={({ coordinate }: any) => {
+						if (coordinate && Array.isArray(coordinate) && coordinate.length >= 2) {
+							const lon = coordinate[0]
+							const lat = coordinate[1]
+							setCursorCoord({ lon, lat })
+							if (measureMode || (drawMode && !pendingDraw)) {
+								setToolHoverCoord({ lon, lat })
+							} else {
+								setToolHoverCoord(null)
+							}
 						} else {
+							setCursorCoord(null)
 							setToolHoverCoord(null)
 						}
-					} else {
-						setCursorCoord(null)
-						setToolHoverCoord(null)
-					}
-				}}
-				onViewStateChange={({ viewState: nextViewState }) => {
-					setViewState(sanitizeViewStateForDeck(nextViewState as MapViewState, deckViewState))
-					setContextMenu(null)
-				}}
-				pickingRadius={8}
-				style={{ position: "absolute", inset: "0" }}
-				viewState={deckViewState}
-			/>
+					}}
+					onViewStateChange={({ viewState: nextViewState }) => {
+						setViewState(sanitizeViewStateForDeck(nextViewState as MapViewState, deckViewState))
+						setContextMenu(null)
+					}}
+					pickingRadius={8}
+					style={{ position: "absolute", inset: "0" }}
+					viewState={deckViewState}
+				/>
 
-			{/* LEFT MAP (clipped) */}
-			{swipeMode && (
-				<div
-					style={{
-						position: "absolute",
-						inset: 0,
-						clipPath: `inset(0 ${100 - swipeX * 100}% 0 0)`,
-						pointerEvents: "none",
-					}}>
-					<DeckGL
-						controller={false}
-						key={`deck-swipe-${deckEpoch}`}
-						layers={swipeLayers}
-						onError={(error) => setRendererError(error.message)}
-						style={{ position: "absolute", inset: "0" }}
-						viewState={deckViewState}
-					/>
-				</div>
-			)}
+				{/* LEFT MAP (clipped) */}
+				{swipeMode && (
+					<div
+						style={{
+							position: "absolute",
+							inset: 0,
+							clipPath: `inset(0 ${100 - swipeX * 100}% 0 0)`,
+							pointerEvents: "none",
+						}}>
+						<DeckGL
+							controller={false}
+							key={`deck-swipe-${deckEpoch}`}
+							layers={swipeLayers}
+							onError={(error) => setRendererError(error.message)}
+							style={{ position: "absolute", inset: "0" }}
+							viewState={deckViewState}
+						/>
+					</div>
+				)}
 
-			{/* Swipe Slider overlay */}
-			{swipeMode &&
-				(() => {
-					const leftName = swipeLayerLeft
-						? (layers.find((l) => l.id === swipeLayerLeft)?.name ?? "Left Layer")
-						: "Basemap"
-					const rightName = swipeLayerRight
-						? (layers.find((l) => l.id === swipeLayerRight)?.name ?? "Right Layer")
-						: "Basemap"
-					const labelStyle: React.CSSProperties = {
-						background: "rgba(0,0,0,0.68)",
-						color: "#fff",
-						fontSize: 11,
-						padding: "3px 9px",
-						borderRadius: 12,
-						fontWeight: 600,
-						backdropFilter: "blur(4px)",
-						whiteSpace: "nowrap",
-						maxWidth: 160,
-						overflow: "hidden",
-						textOverflow: "ellipsis",
-					}
-					return (
-						<>
-							{/* Left label — floats to the left of the divider, bottom-anchored */}
-							<div
-								style={{
-									position: "absolute",
-									bottom: 38,
-									left: `calc(${swipeX * 100}% - 10px)`,
-									transform: "translateX(-100%)",
-									zIndex: MAP_Z.overlay,
-									pointerEvents: "none",
-								}}>
-								<div style={labelStyle}>◀ {leftName}</div>
-							</div>
-
-							{/* Right label — floats to the right of the divider, bottom-anchored */}
-							<div
-								style={{
-									position: "absolute",
-									bottom: 38,
-									left: `calc(${swipeX * 100}% + 10px)`,
-									zIndex: MAP_Z.overlay,
-									pointerEvents: "none",
-								}}>
-								<div style={labelStyle}>{rightName} ▶</div>
-							</div>
-
-							{/* Drag handle */}
-							<div
-								onDoubleClick={() => setSwipeX(0.5)}
-								onPointerDown={(e) => {
-									const el = e.currentTarget
-									el.setPointerCapture(e.pointerId)
-									const onMove = (me: PointerEvent) => {
-										const rect = containerRef.current?.getBoundingClientRect()
-										if (rect) {
-											let nx = (me.clientX - rect.left) / rect.width
-											nx = Math.max(0.05, Math.min(0.95, nx))
-											setSwipeX(nx)
-										}
-									}
-									const onUp = (ue: PointerEvent) => {
-										el.releasePointerCapture(ue.pointerId)
-										el.removeEventListener("pointermove", onMove)
-										el.removeEventListener("pointerup", onUp)
-									}
-									el.addEventListener("pointermove", onMove)
-									el.addEventListener("pointerup", onUp)
-								}}
-								style={{
-									position: "absolute",
-									top: 0,
-									bottom: 0,
-									left: `${swipeX * 100}%`,
-									width: 4,
-									marginLeft: -2,
-									background: "rgba(255,255,255,0.9)",
-									cursor: "ew-resize",
-									zIndex: MAP_Z.overlay,
-									boxShadow: "0 0 8px rgba(0,0,0,0.6)",
-								}}>
-								{/* Centre circle handle */}
+				{/* Swipe Slider overlay */}
+				{swipeMode &&
+					(() => {
+						const leftName = swipeLayerLeft
+							? (layers.find((l) => l.id === swipeLayerLeft)?.name ?? "Left Layer")
+							: "Basemap"
+						const rightName = swipeLayerRight
+							? (layers.find((l) => l.id === swipeLayerRight)?.name ?? "Right Layer")
+							: "Basemap"
+						const labelStyle: React.CSSProperties = {
+							background: "rgba(0,0,0,0.68)",
+							color: "#fff",
+							fontSize: 11,
+							padding: "3px 9px",
+							borderRadius: 12,
+							fontWeight: 600,
+							backdropFilter: "blur(4px)",
+							whiteSpace: "nowrap",
+							maxWidth: 160,
+							overflow: "hidden",
+							textOverflow: "ellipsis",
+						}
+						return (
+							<>
+								{/* Left label — floats to the left of the divider, bottom-anchored */}
 								<div
 									style={{
 										position: "absolute",
-										top: "50%",
-										left: "50%",
-										transform: "translate(-50%, -50%)",
-										width: 32,
-										height: 32,
-										borderRadius: "50%",
-										background: "rgba(255,255,255,0.97)",
-										boxShadow: "0 2px 10px rgba(0,0,0,0.5)",
-										display: "flex",
-										alignItems: "center",
-										justifyContent: "center",
-										fontSize: 14,
-										color: "#333",
-										userSelect: "none",
-										flexDirection: "column",
-										gap: 0,
+										bottom: 38,
+										left: `calc(${swipeX * 100}% - 10px)`,
+										transform: "translateX(-100%)",
+										zIndex: MAP_Z.overlay,
+										pointerEvents: "none",
 									}}>
-									<span>⇔</span>
+									<div style={labelStyle}>◀ {leftName}</div>
 								</div>
-							</div>
-						</>
-					)
-				})()}
 
-			{/* Only once the layer sync has finished (a loading or stale sync says nothing about emptiness) and
+								{/* Right label — floats to the right of the divider, bottom-anchored */}
+								<div
+									style={{
+										position: "absolute",
+										bottom: 38,
+										left: `calc(${swipeX * 100}% + 10px)`,
+										zIndex: MAP_Z.overlay,
+										pointerEvents: "none",
+									}}>
+									<div style={labelStyle}>{rightName} ▶</div>
+								</div>
+
+								{/* Drag handle */}
+								<div
+									onDoubleClick={() => setSwipeX(0.5)}
+									onPointerDown={(e) => {
+										const el = e.currentTarget
+										el.setPointerCapture(e.pointerId)
+										const onMove = (me: PointerEvent) => {
+											const rect = containerRef.current?.getBoundingClientRect()
+											if (rect) {
+												let nx = (me.clientX - rect.left) / rect.width
+												nx = Math.max(0.05, Math.min(0.95, nx))
+												setSwipeX(nx)
+											}
+										}
+										const onUp = (ue: PointerEvent) => {
+											el.releasePointerCapture(ue.pointerId)
+											el.removeEventListener("pointermove", onMove)
+											el.removeEventListener("pointerup", onUp)
+										}
+										el.addEventListener("pointermove", onMove)
+										el.addEventListener("pointerup", onUp)
+									}}
+									style={{
+										position: "absolute",
+										top: 0,
+										bottom: 0,
+										left: `${swipeX * 100}%`,
+										width: 4,
+										marginLeft: -2,
+										background: "rgba(255,255,255,0.9)",
+										cursor: "ew-resize",
+										zIndex: MAP_Z.overlay,
+										boxShadow: "0 0 8px rgba(0,0,0,0.6)",
+									}}>
+									{/* Centre circle handle */}
+									<div
+										style={{
+											position: "absolute",
+											top: "50%",
+											left: "50%",
+											transform: "translate(-50%, -50%)",
+											width: 32,
+											height: 32,
+											borderRadius: "50%",
+											background: "rgba(255,255,255,0.97)",
+											boxShadow: "0 2px 10px rgba(0,0,0,0.5)",
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "center",
+											fontSize: 14,
+											color: "#333",
+											userSelect: "none",
+											flexDirection: "column",
+											gap: 0,
+										}}>
+										<span>⇔</span>
+									</div>
+								</div>
+							</>
+						)
+					})()}
+
+				{/* Only once the layer sync has finished (a loading or stale sync says nothing about emptiness) and
 			    never behind or beside an open tool panel. */}
-			{shouldShowEmptyState({
-				connectionStatus,
-				layerCount: layers.length,
-				panelOpen: activeTool !== null,
-				hydrating: restoreState.hydrating,
-			}) && <MapEmptyState onFilesPicked={(files) => void ingestFiles(files)} onFindGauge={() => setSearchOpen(true)} />}
+				{shouldShowEmptyState({
+					connectionStatus,
+					layerCount: layers.length,
+					panelOpen: activeTool !== null && chrome.state !== "hidden",
+					hydrating: restoreState.hydrating,
+				}) && (
+					<MapEmptyState onFilesPicked={(files) => void ingestFiles(files)} onFindGauge={() => setSearchOpen(true)} />
+				)}
 
-			{/* Search pin clear button */}
-			{searchPin && (
-				<div className="map-search-pin-card">
-					<span className="map-search-pin-icon">📍</span>
-					<span className="map-search-pin-label">{searchPin.label}</span>
-					<button
-						aria-label="Clear search pin"
-						className="map-search-pin-clear"
-						onClick={() => setSearchPin(null)}
-						title="Clear pin"
-						type="button">
-						✕
-					</button>
-				</div>
-			)}
+				{/* Search pin clear button */}
+				{searchPin && (
+					<div className="map-search-pin-card">
+						<span className="map-search-pin-icon">📍</span>
+						<span className="map-search-pin-label">{searchPin.label}</span>
+						<button
+							aria-label="Clear search pin"
+							className="map-search-pin-clear"
+							onClick={() => setSearchPin(null)}
+							title="Clear pin"
+							type="button">
+							✕
+						</button>
+					</div>
+				)}
 
-			<MeasureTool
-				clickRef={measureClickRef}
-				hoverCoord={toolHoverCoord}
-				mapStyle={mapStyle === "dark" ? "dark" : "light"}
-				mode={measureMode}
-				onClose={() => {
-					setMeasureMode(null)
-					setMeasureGeometry(null)
-					setToolHoverCoord(null)
-				}}
-				onGeometryChange={setMeasureGeometry}
-			/>
+				<MeasureTool
+					clickRef={measureClickRef}
+					hoverCoord={toolHoverCoord}
+					mapStyle={mapStyle === "dark" ? "dark" : "light"}
+					mode={measureMode}
+					onClose={() => {
+						setMeasureMode(null)
+						setMeasureGeometry(null)
+						setToolHoverCoord(null)
+					}}
+					onGeometryChange={setMeasureGeometry}
+				/>
 
-			<VectorDrawTool
-				clickRef={drawClickRef}
-				hoverCoord={toolHoverCoord}
-				mapStyle={mapStyle === "dark" ? "dark" : "light"}
-				mode={pendingDraw ? null : drawMode}
-				onCancel={() => {
-					setDrawMode(null)
-					setDrawGeometry(null)
-					setToolHoverCoord(null)
-					setDrawPurpose("roi")
-				}}
-				onComplete={(result) => {
-					setDrawMode(null)
-					setToolHoverCoord(null)
-					if (drawPurpose === "annotation") {
-						try {
-							const geojson = JSON.parse(result.geojson)
-							const feature = geojson.type === "FeatureCollection" ? geojson.features[0] : geojson
-							const newAnn = newAnnotation(result.mode, feature.geometry, annotations.length)
-							const next = [...annotations, newAnn]
-							setAnnotations(next)
-							saveAnnotations(next)
-						} catch {
-							/* ignore */
-						}
+				<VectorDrawTool
+					clickRef={drawClickRef}
+					hoverCoord={toolHoverCoord}
+					mapStyle={mapStyle === "dark" ? "dark" : "light"}
+					mode={pendingDraw ? null : drawMode}
+					onCancel={() => {
+						setDrawMode(null)
+						setDrawGeometry(null)
+						setToolHoverCoord(null)
 						setDrawPurpose("roi")
-						return
-					}
-					if (drawPurpose === "transect") {
-						try {
-							const geojson = JSON.parse(result.geojson)
-							const feature = geojson.type === "FeatureCollection" ? geojson.features[0] : geojson
-							if (feature.geometry.type === "LineString") {
-								// Find the topmost visible raster layer to associate it with
-								let targetRasterId: string | undefined
-								const ordered = layerOrder
-									.map((id) => layers.find((l) => l.id === id))
-									.filter(Boolean) as MapLayer[]
-								for (let i = ordered.length - 1; i >= 0; i--) {
-									const layer = ordered[i]
-									if (
-										visibleLayerIds.has(layer.id) &&
-										(layer.layerType === "raster" || layer.layerType === "gee_tile")
-									) {
-										targetRasterId = layer.id
-										break
-									}
-								}
-
-								const newTrans = newTransect(feature.geometry, transects.length, targetRasterId)
-								const next = [...transects, newTrans]
-								setTransects(next)
-								saveTransects(next)
+					}}
+					onComplete={(result) => {
+						setDrawMode(null)
+						setToolHoverCoord(null)
+						if (drawPurpose === "annotation") {
+							try {
+								const geojson = JSON.parse(result.geojson)
+								const feature = geojson.type === "FeatureCollection" ? geojson.features[0] : geojson
+								const newAnn = newAnnotation(result.mode, feature.geometry, annotations.length)
+								const next = [...annotations, newAnn]
+								setAnnotations(next)
+								saveAnnotations(next)
+							} catch {
+								/* ignore */
 							}
-						} catch {
-							/* ignore */
+							setDrawPurpose("roi")
+							return
 						}
-						setDrawPurpose("roi")
-						setTransectActive(true) // Re-open transect panel if it was closed
-						return
-					}
-					setPendingDraw(result)
-					try {
-						setDrawGeometry(JSON.parse(result.geojson))
-					} catch {
-						setDrawGeometry(null)
-					}
-				}}
-				onGeometryChange={setDrawGeometry}
-			/>
+						if (drawPurpose === "transect") {
+							try {
+								const geojson = JSON.parse(result.geojson)
+								const feature = geojson.type === "FeatureCollection" ? geojson.features[0] : geojson
+								if (feature.geometry.type === "LineString") {
+									// Find the topmost visible raster layer to associate it with
+									let targetRasterId: string | undefined
+									const ordered = layerOrder
+										.map((id) => layers.find((l) => l.id === id))
+										.filter(Boolean) as MapLayer[]
+									for (let i = ordered.length - 1; i >= 0; i--) {
+										const layer = ordered[i]
+										if (
+											visibleLayerIds.has(layer.id) &&
+											(layer.layerType === "raster" || layer.layerType === "gee_tile")
+										) {
+											targetRasterId = layer.id
+											break
+										}
+									}
 
-			{pendingDraw && (
-				<VectorSavePanel
-					busy={saveVectorBusy}
-					draw={pendingDraw}
-					mapStyle={mapStyle}
-					onDiscard={() => {
-						setPendingDraw(null)
-						setDrawGeometry(null)
-					}}
-					onExport={() => {
-						const blob = new Blob([pendingDraw.geojson], { type: "application/geo+json" })
-						const url = URL.createObjectURL(blob)
-						const a = document.createElement("a")
-						a.href = url
-						a.download = `${pendingDraw.mode}.geojson`
-						a.click()
-						URL.revokeObjectURL(url)
-					}}
-					onSave={async (name) => {
-						setSaveVectorBusy(true)
+									const newTrans = newTransect(feature.geometry, transects.length, targetRasterId)
+									const next = [...transects, newTrans]
+									setTransects(next)
+									saveTransects(next)
+								}
+							} catch {
+								/* ignore */
+							}
+							setDrawPurpose("roi")
+							setTransectActive(true) // Re-open transect panel if it was closed
+							return
+						}
+						setPendingDraw(result)
 						try {
-							const { SaveRoiToWorkspaceRequest } = await import("@shared/proto/cline/map")
-							const { MapServiceClient } = await import("../../services/grpc-client")
-							const res = await MapServiceClient.saveRoiToWorkspace(
-								SaveRoiToWorkspaceRequest.create({
-									name,
-									roi: {
-										name,
-										source: "map_draw",
-										geojson: pendingDraw.geojson,
-										areaHa: (pendingDraw.areaKm2 ?? 0) * 100,
-									},
-								}),
-							)
-							reportMapEvent("user.file_saved", { path: res.workspacePath, mode: pendingDraw.mode })
+							setDrawGeometry(JSON.parse(result.geojson))
+						} catch {
+							setDrawGeometry(null)
+						}
+					}}
+					onGeometryChange={setDrawGeometry}
+				/>
+
+				{pendingDraw && (
+					<VectorSavePanel
+						busy={saveVectorBusy}
+						draw={pendingDraw}
+						mapStyle={mapStyle}
+						onDiscard={() => {
 							setPendingDraw(null)
 							setDrawGeometry(null)
-						} catch (err) {
-							console.error("[MapView] Save vector failed:", err)
-							window.alert(err instanceof Error ? err.message : "Failed to save vector")
-						} finally {
-							setSaveVectorBusy(false)
-						}
-					}}
+						}}
+						onExport={() => {
+							const blob = new Blob([pendingDraw.geojson], { type: "application/geo+json" })
+							const url = URL.createObjectURL(blob)
+							const a = document.createElement("a")
+							a.href = url
+							a.download = `${pendingDraw.mode}.geojson`
+							a.click()
+							URL.revokeObjectURL(url)
+						}}
+						onSave={async (name) => {
+							setSaveVectorBusy(true)
+							try {
+								const { SaveRoiToWorkspaceRequest } = await import("@shared/proto/cline/map")
+								const { MapServiceClient } = await import("../../services/grpc-client")
+								const res = await MapServiceClient.saveRoiToWorkspace(
+									SaveRoiToWorkspaceRequest.create({
+										name,
+										roi: {
+											name,
+											source: "map_draw",
+											geojson: pendingDraw.geojson,
+											areaHa: (pendingDraw.areaKm2 ?? 0) * 100,
+										},
+									}),
+								)
+								reportMapEvent("user.file_saved", { path: res.workspacePath, mode: pendingDraw.mode })
+								setPendingDraw(null)
+								setDrawGeometry(null)
+							} catch (err) {
+								console.error("[MapView] Save vector failed:", err)
+								window.alert(err instanceof Error ? err.message : "Failed to save vector")
+							} finally {
+								setSaveVectorBusy(false)
+							}
+						}}
+					/>
+				)}
+
+				<MapLegend
+					cursorReading={cursorRasterReading}
+					layers={sortedLayers}
+					mapStyle={mapStyle}
+					visibleLayerIds={visibleLayerIds}
 				/>
-			)}
+
+				<FeatureIdentifier
+					agentStarting={agentStarting}
+					agentStatus={agentStatus}
+					delineateStatus={delineateStatus}
+					delineating={delineating}
+					features={clickedFeatures}
+					inspectPoint={inspectPoint}
+					mapStyle={mapStyle}
+					onAddSelection={(features) => {
+						setSelectedFeatures((previous) => {
+							const selectedByKey = new Map(previous.map((feature) => [selectedFeatureKey(feature), feature]))
+							for (const feature of features.filter((item) => item.geometry)) {
+								selectedByKey.set(selectedFeatureKey(feature), feature)
+							}
+							const next = Array.from(selectedByKey.values())
+							reportMapEvent("selection.changed", selectedFeaturesPayload(next))
+							return next
+						})
+					}}
+					onAgentAsk={(pt) => void handleAgentAsk(pt, clickedFeatures)}
+					onAgentDelineate={(pt) => void handleAgentDelineate(pt, clickedFeatures)}
+					onClearSelection={() => setSelectedFeatures([])}
+					onClose={() => {
+						setClickedFeatures([])
+						setInspectPoint(null)
+						setInspectRasterReading(null)
+						setDelineateStatus(null)
+						setAgentStatus(null)
+					}}
+					onQuickDelineate={(pt) => void handleQuickDelineate(pt, clickedFeatures)}
+					onSaveFeatures={saveFeaturesToWorkspace}
+					rasterReading={inspectRasterReading}
+					selectedFeatures={selectedFeatures}
+				/>
+
+				{contextMenu && (
+					<MapContextMenu
+						agentStarting={agentStarting}
+						delineating={delineating}
+						features={contextMenu.features}
+						lat={contextMenu.lat}
+						lon={contextMenu.lon}
+						mapStyle={mapStyle}
+						onAddAnnotation={() => {
+							const ann = newAnnotation(
+								"point",
+								{ type: "Point", coordinates: [contextMenu.lon, contextMenu.lat] },
+								annotations.length,
+							)
+							const next = [...annotations, ann]
+							setAnnotations(next)
+							saveAnnotations(next)
+						}}
+						onAgentDelineate={() =>
+							void handleAgentDelineate({ lon: contextMenu.lon, lat: contextMenu.lat }, contextMenu.features)
+						}
+						onAskAiHydro={(question) =>
+							void handleAgentAsk({ lon: contextMenu.lon, lat: contextMenu.lat }, contextMenu.features, question)
+						}
+						onClose={() => setContextMenu(null)}
+						onCopyCoords={() => {}}
+						onInspect={() => {
+							setClickedFeatures(contextMenu.features)
+							setInspectPoint({ lon: contextMenu.lon, lat: contextMenu.lat })
+							setInspectRasterReading(
+								sampleTopRasterAtPoint(
+									sortedLayers,
+									visibleLayerIds,
+									layerOrder,
+									contextMenu.lon,
+									contextMenu.lat,
+									rasterCache,
+								),
+							)
+						}}
+						onMeasureFrom={() => {
+							setMeasureMode("distance")
+							setTimeout(() => measureClickRef.current?.([contextMenu.lon, contextMenu.lat]), 50)
+						}}
+						onQuickDelineate={() =>
+							void handleQuickDelineate({ lon: contextMenu.lon, lat: contextMenu.lat }, contextMenu.features)
+						}
+						onRemoveLayer={
+							contextMenu.features.length > 0
+								? async () => {
+										const layerId = contextMenu.features[0].layerId
+										try {
+											await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId }))
+										} catch (err) {
+											setAgentStatus(err instanceof Error ? err.message : "Could not remove layer")
+										}
+									}
+								: undefined
+						}
+						onSaveFeature={(format) => void saveFeaturesToWorkspace(contextMenu.features, format)}
+						x={contextMenu.x}
+						y={contextMenu.y}
+					/>
+				)}
+
+				<MapBottomBar
+					attribution={attributionFor(
+						resolvedBaseMap,
+						{ lon: viewState.longitude, lat: viewState.latitude },
+						loadedOverlayIds,
+					)}
+					bearing={viewState.bearing ?? 0}
+					cursorCoord={cursorCoord}
+					fitDisabled={layers.length === 0}
+					mapStyle={mapStyle}
+					onFit={handleFitExtent}
+					onResetNorth={() => setViewState((prev) => ({ ...prev, bearing: 0, pitch: 0 }))}
+					onZoomIn={() => setViewState((prev) => ({ ...prev, zoom: Math.min(20, prev.zoom + 1) }))}
+					onZoomOut={() => setViewState((prev) => ({ ...prev, zoom: Math.max(0, prev.zoom - 1) }))}
+					viewState={viewState}
+				/>
+
+				{/* Drop-zone overlay — shown while files are being dragged over the map */}
+				{isDragOver && (
+					<div
+						style={{
+							position: "absolute",
+							inset: 8,
+							zIndex: MAP_Z.overlay,
+							border: "2px dashed var(--vscode-focusBorder, #0e639c)",
+							borderRadius: 8,
+							background: mapStyle === "dark" ? "rgba(14, 99, 156, 0.18)" : "rgba(14, 99, 156, 0.10)",
+							display: "flex",
+							flexDirection: "column",
+							alignItems: "center",
+							justifyContent: "center",
+							gap: 12,
+							color: mapStyle === "dark" ? "#fff" : "#000",
+							pointerEvents: "none",
+							backdropFilter: "blur(2px)",
+						}}>
+						<div style={{ fontSize: 48 }}>📥</div>
+						<div style={{ fontSize: 16, fontWeight: 600 }}>Drop to add layer</div>
+						<div style={{ fontSize: 12, opacity: 0.85 }}>
+							GeoJSON · KML · KMZ · GPX · Shapefile (.zip) · GeoTIFF · CSV
+						</div>
+						<div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>
+							Drag from VS Code Explorer, or use + Add Layer
+						</div>
+					</div>
+				)}
+
+				{/* Toast — transient feedback after drop or picker action */}
+				{dropStatus && (
+					<div
+						style={{
+							position: "absolute",
+							bottom: 36,
+							left: "50%",
+							transform: "translateX(-50%)",
+							zIndex: MAP_Z.toast,
+							padding: "6px 12px",
+							background:
+								dropStatus.kind === "ok"
+									? "var(--vscode-notificationsInfoIcon-foreground, #0e639c)"
+									: "var(--vscode-errorForeground, #dc3545)",
+							color: "#fff",
+							borderRadius: 4,
+							fontSize: 12,
+							boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+						}}>
+						{dropStatus.msg}
+					</div>
+				)}
+
+				{/* Keyboard shortcut help */}
+				<KeyboardShortcutsHelp mapStyle={mapStyle} />
+			</div>
 
 			<MapToolRibbon
 				activeTool={activeTool}
@@ -3494,6 +3686,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					/>
 				}
 				basemapExplicit={basemapExplicit}
+				chrome={chrome}
 				clusterLayerIds={clusterLayerIds}
 				currentBasemap={selectedBaseMap}
 				drawMode={drawMode}
@@ -3643,7 +3836,6 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					setPendingDraw(null)
 					setDrawMode(m)
 				}}
-				onFitExtent={handleFitExtent}
 				onHideAllLayers={() => setVisibleLayerIds(new Set())}
 				onMeasureModeChange={(m) => {
 					setDrawMode(null)
@@ -3732,182 +3924,6 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				visibleLayerCount={layers.filter((layer) => visibleLayerIds.has(layer.id)).length}
 				visibleLayerIds={visibleLayerIds}
 			/>
-
-			<MapLegend
-				cursorReading={cursorRasterReading}
-				layers={sortedLayers}
-				mapStyle={mapStyle}
-				visibleLayerIds={visibleLayerIds}
-			/>
-
-			<FeatureIdentifier
-				agentStarting={agentStarting}
-				agentStatus={agentStatus}
-				delineateStatus={delineateStatus}
-				delineating={delineating}
-				features={clickedFeatures}
-				inspectPoint={inspectPoint}
-				mapStyle={mapStyle}
-				onAddSelection={(features) => {
-					setSelectedFeatures((previous) => {
-						const selectedByKey = new Map(previous.map((feature) => [selectedFeatureKey(feature), feature]))
-						for (const feature of features.filter((item) => item.geometry)) {
-							selectedByKey.set(selectedFeatureKey(feature), feature)
-						}
-						const next = Array.from(selectedByKey.values())
-						reportMapEvent("selection.changed", selectedFeaturesPayload(next))
-						return next
-					})
-				}}
-				onAgentAsk={(pt) => void handleAgentAsk(pt, clickedFeatures)}
-				onAgentDelineate={(pt) => void handleAgentDelineate(pt, clickedFeatures)}
-				onClearSelection={() => setSelectedFeatures([])}
-				onClose={() => {
-					setClickedFeatures([])
-					setInspectPoint(null)
-					setInspectRasterReading(null)
-					setDelineateStatus(null)
-					setAgentStatus(null)
-				}}
-				onQuickDelineate={(pt) => void handleQuickDelineate(pt, clickedFeatures)}
-				onSaveFeatures={saveFeaturesToWorkspace}
-				rasterReading={inspectRasterReading}
-				selectedFeatures={selectedFeatures}
-			/>
-
-			{contextMenu && (
-				<MapContextMenu
-					agentStarting={agentStarting}
-					delineating={delineating}
-					features={contextMenu.features}
-					lat={contextMenu.lat}
-					lon={contextMenu.lon}
-					mapStyle={mapStyle}
-					onAddAnnotation={() => {
-						const ann = newAnnotation(
-							"point",
-							{ type: "Point", coordinates: [contextMenu.lon, contextMenu.lat] },
-							annotations.length,
-						)
-						const next = [...annotations, ann]
-						setAnnotations(next)
-						saveAnnotations(next)
-					}}
-					onAgentDelineate={() =>
-						void handleAgentDelineate({ lon: contextMenu.lon, lat: contextMenu.lat }, contextMenu.features)
-					}
-					onAskAiHydro={(question) =>
-						void handleAgentAsk({ lon: contextMenu.lon, lat: contextMenu.lat }, contextMenu.features, question)
-					}
-					onClose={() => setContextMenu(null)}
-					onCopyCoords={() => {}}
-					onInspect={() => {
-						setClickedFeatures(contextMenu.features)
-						setInspectPoint({ lon: contextMenu.lon, lat: contextMenu.lat })
-						setInspectRasterReading(
-							sampleTopRasterAtPoint(
-								sortedLayers,
-								visibleLayerIds,
-								layerOrder,
-								contextMenu.lon,
-								contextMenu.lat,
-								rasterCache,
-							),
-						)
-					}}
-					onMeasureFrom={() => {
-						setMeasureMode("distance")
-						setTimeout(() => measureClickRef.current?.([contextMenu.lon, contextMenu.lat]), 50)
-					}}
-					onQuickDelineate={() =>
-						void handleQuickDelineate({ lon: contextMenu.lon, lat: contextMenu.lat }, contextMenu.features)
-					}
-					onRemoveLayer={
-						contextMenu.features.length > 0
-							? async () => {
-									const layerId = contextMenu.features[0].layerId
-									try {
-										await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId }))
-									} catch (err) {
-										setAgentStatus(err instanceof Error ? err.message : "Could not remove layer")
-									}
-								}
-							: undefined
-					}
-					onSaveFeature={(format) => void saveFeaturesToWorkspace(contextMenu.features, format)}
-					x={contextMenu.x}
-					y={contextMenu.y}
-				/>
-			)}
-
-			<MapBottomBar
-				attribution={attributionFor(
-					resolvedBaseMap,
-					{ lon: viewState.longitude, lat: viewState.latitude },
-					loadedOverlayIds,
-				)}
-				bearing={viewState.bearing ?? 0}
-				cursorCoord={cursorCoord}
-				mapStyle={mapStyle}
-				onResetNorth={() => setViewState((prev) => ({ ...prev, bearing: 0, pitch: 0 }))}
-				onZoomIn={() => setViewState((prev) => ({ ...prev, zoom: Math.min(20, prev.zoom + 1) }))}
-				onZoomOut={() => setViewState((prev) => ({ ...prev, zoom: Math.max(0, prev.zoom - 1) }))}
-				viewState={viewState}
-			/>
-
-			{/* Drop-zone overlay — shown while files are being dragged over the map */}
-			{isDragOver && (
-				<div
-					style={{
-						position: "absolute",
-						inset: 8,
-						zIndex: MAP_Z.overlay,
-						border: "2px dashed var(--vscode-focusBorder, #0e639c)",
-						borderRadius: 8,
-						background: mapStyle === "dark" ? "rgba(14, 99, 156, 0.18)" : "rgba(14, 99, 156, 0.10)",
-						display: "flex",
-						flexDirection: "column",
-						alignItems: "center",
-						justifyContent: "center",
-						gap: 12,
-						color: mapStyle === "dark" ? "#fff" : "#000",
-						pointerEvents: "none",
-						backdropFilter: "blur(2px)",
-					}}>
-					<div style={{ fontSize: 48 }}>📥</div>
-					<div style={{ fontSize: 16, fontWeight: 600 }}>Drop to add layer</div>
-					<div style={{ fontSize: 12, opacity: 0.85 }}>
-						GeoJSON · KML · KMZ · GPX · Shapefile (.zip) · GeoTIFF · CSV
-					</div>
-					<div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>Drag from VS Code Explorer, or use + Add Layer</div>
-				</div>
-			)}
-
-			{/* Toast — transient feedback after drop or picker action */}
-			{dropStatus && (
-				<div
-					style={{
-						position: "absolute",
-						bottom: 36,
-						left: "50%",
-						transform: "translateX(-50%)",
-						zIndex: MAP_Z.toast,
-						padding: "6px 12px",
-						background:
-							dropStatus.kind === "ok"
-								? "var(--vscode-notificationsInfoIcon-foreground, #0e639c)"
-								: "var(--vscode-errorForeground, #dc3545)",
-						color: "#fff",
-						borderRadius: 4,
-						fontSize: 12,
-						boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-					}}>
-					{dropStatus.msg}
-				</div>
-			)}
-
-			{/* Keyboard shortcut help */}
-			<KeyboardShortcutsHelp mapStyle={mapStyle} />
 		</div>
 	)
 }
@@ -3918,13 +3934,16 @@ const MapBottomBar: React.FC<{
 	bearing: number
 	cursorCoord: { lon: number; lat: number } | null
 	mapStyle: string
+	/** Fit the view to the layers: navigation, so it sits with the zoom controls. */
+	onFit: () => void
+	fitDisabled: boolean
 	onResetNorth: () => void
 	onZoomIn: () => void
 	onZoomOut: () => void
 	/** What the map actually draws here (base + any overlay covering the view), per basemaps.attributionFor. */
 	attribution: string
 	viewState: MapViewState
-}> = ({ bearing, cursorCoord, mapStyle, onResetNorth, onZoomIn, onZoomOut, attribution, viewState }) => {
+}> = ({ bearing, cursorCoord, mapStyle, onFit, fitDisabled, onResetNorth, onZoomIn, onZoomOut, attribution, viewState }) => {
 	const isDark = mapStyle === "dark"
 	const fg = isDark ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.85)"
 	const bg = isDark ? "rgba(20,20,28,0.70)" : "rgba(255,255,255,0.85)"
@@ -4023,6 +4042,15 @@ const MapBottomBar: React.FC<{
 				<button aria-label="Zoom out" className="map-zoom-btn" onClick={onZoomOut} title="Zoom out" type="button">
 					−
 				</button>
+				<button
+					aria-label="Fit to layers"
+					className="map-zoom-btn"
+					disabled={fitDisabled}
+					onClick={onFit}
+					title={fitDisabled ? "Fit to layers (no layers yet)" : "Fit to layers"}
+					type="button">
+					<span aria-hidden="true" className="codicon codicon-screen-full" style={{ fontSize: 14 }} />
+				</button>
 			</div>
 
 			{/* Compass */}
@@ -4061,7 +4089,11 @@ const MapBottomBar: React.FC<{
 			</button>
 
 			{/* Attribution */}
-			{attribution && <span className="map-attribution">{attribution}</span>}
+			{attribution && (
+				<span className="map-attribution" title={attribution}>
+					{attribution}
+				</span>
+			)}
 		</div>
 	)
 }
