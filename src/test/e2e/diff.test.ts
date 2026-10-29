@@ -40,8 +40,8 @@ e2e.describe("Diff Editor", () => {
 			await sidebar.getByRole("button", { name: "New task", exact: true }).click()
 			await acceptStopRunningChatModal(page)
 			await expect(sidebar.getByText("Recent Tasks")).toBeVisible()
-			await expect(sidebar.getByText("Hello, AI-Hydro!")).toBeVisible() // History with the previous sent message
-			const historyCard = sidebar.getByRole("article").filter({ hasText: "Hello, AI-Hydro!" })
+			await expect(sidebar.getByRole("button", { name: "Hello, AI-Hydro", exact: true })).toBeVisible() // History with the previous sent message
+			const historyCard = sidebar.getByRole("article").filter({ hasText: "Hello, AI-Hydro" })
 			await historyCard.getByRole("button", { name: "Usage" }).click()
 			const usage = historyCard.getByRole("region", { name: "Usage" })
 			await expect(usage.getByText("Tokens in", { exact: true })).toBeVisible() // Input and output token counts

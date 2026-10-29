@@ -10,11 +10,11 @@ import type { HistoryItem } from "@shared/HistoryItem"
  *  - `loop`     host-computed fields, overwritten on every save (tokens, cost, size, ts, ...).
  *  - `creation` fields written once when the chat is created and never changed after (cwd, origin, project, ulid).
  *               Any writer may supply them; the first value wins.
- *  - `user`     fields the user sets (favourite, pin, description, memory mode, a renamed title). Only the `user`
- *               writer touches them.
+ *  - `user`     fields the user sets (favourite, pin, memory mode). Only the `user` writer touches them.
  *  - `binding`  the study mirror (`activeStudyId`), written when a binding is confirmed.
- *  - `title`    `title`/`titleSource`: the `user` writer sets both; the `system` writer may set an automatic title
- *               only while the stored `titleSource` is not "user".
+ *  - `title`    `title`/`titleSource`/`description`: the `user` writer sets them (a rename locks with
+ *               `titleSource: "user"`); the `system` writer may set an automatic title or description only while the
+ *               stored `titleSource` is not "user".
  *
  * Fields the table does not know are preserved from the stored item and are rejected from a patch (with a warning)
  * unless the writer is `system` (migrations, imports, the dev task generator).
@@ -45,11 +45,13 @@ export const HISTORY_FIELD_OWNERS: Readonly<Record<string, HistoryOwner>> = {
 	// user
 	isFavorited: "user",
 	pinned: "user",
-	description: "user",
 	memoryMode: "user",
-	// title (user, or system while not user-titled)
+	// title (user, or system while not user-titled). The description is edited together with the title, so one lock
+	// covers both: a described chat the user has edited is never rewritten by the generator.
 	title: "title",
 	titleSource: "title",
+	description: "title",
+	titleRuns: "title",
 	// binding
 	activeStudyId: "binding",
 }

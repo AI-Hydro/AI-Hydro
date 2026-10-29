@@ -10,7 +10,7 @@ export interface AutoApprovalSettings {
 		editFiles: boolean // Edit files in the working directory
 		editFilesExternally?: boolean // Edit files outside of the working directory
 		executeSafeCommands?: boolean // Execute safe commands
-		executeAllCommands?: boolean // Execute all commands
+		executeAllCommands?: boolean // Run any command
 		useBrowser: boolean // Use browser
 		useMcp: boolean // Use MCP servers
 	}

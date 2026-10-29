@@ -16,7 +16,7 @@ export type CommandExit = number | "unknown"
 export type CommandPolicyClass =
 	| "subagent_launch" // an AI-Hydro CLI subagent launch: always asks
 	| "protected_path" // touches a protected root: asks even under YOLO / execute-all
-	| "auto_run_all" // ran under "Execute all commands" / YOLO (a danger grant)
+	| "auto_run_all" // ran under "Run any command" / YOLO (a danger grant)
 	| "model_requested_approval" // the model asked for approval
 	| "not_read_only" // the host could not classify the command read-only
 

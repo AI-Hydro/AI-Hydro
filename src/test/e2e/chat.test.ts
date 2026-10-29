@@ -34,7 +34,7 @@ e2e("Chat - can send messages and switch between modes", async ({ helper, sideba
 	await sidebar.getByRole("button", { name: "New task", exact: true }).click()
 	await acceptStopRunningChatModal(page)
 	await expect(sidebar.getByText("Recent Tasks")).toBeVisible()
-	await expect(sidebar.getByText("Hello, AI-Hydro!")).toBeVisible()
+	await expect(sidebar.getByRole("button", { name: "Hello, AI-Hydro", exact: true })).toBeVisible()
 
 	// Makes sure the Plan/Act radio group works: Act starts selected, and
 	// selecting Plan moves the selection (clicking the active option is a no-op).

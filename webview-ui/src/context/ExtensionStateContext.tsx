@@ -72,8 +72,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setVercelAiGatewayModels: (value: Record<string, ModelInfo>) => void
 	setGlobalAiHydroRulesToggles: (toggles: Record<string, boolean>) => void
 	setLocalAiHydroRulesToggles: (toggles: Record<string, boolean>) => void
-	setLocalCursorRulesToggles: (toggles: Record<string, boolean>) => void
-	setLocalWindsurfRulesToggles: (toggles: Record<string, boolean>) => void
 	setLocalWorkflowToggles: (toggles: Record<string, boolean>) => void
 	setGlobalWorkflowToggles: (toggles: Record<string, boolean>) => void
 	setMcpMarketplaceCatalog: (value: McpMarketplaceCatalog) => void
@@ -222,8 +220,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		mcpDisplayMode: DEFAULT_MCP_DISPLAY_MODE,
 		globalAiHydroRulesToggles: {},
 		localAiHydroRulesToggles: {},
-		localCursorRulesToggles: {},
-		localWindsurfRulesToggles: {},
 		localWorkflowToggles: {},
 		globalWorkflowToggles: {},
 		shellIntegrationTimeout: 4000,
@@ -251,6 +247,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		transcriptDetail: "normal",
 		protectedRoots: [],
 		finalAnswerAuditGate: true,
+		autoTitle: true,
+		titleModel: "",
 
 		// NEW: Add workspace information with defaults
 		workspaceRoots: [],
@@ -797,8 +795,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		showChatModelSelector,
 		globalAiHydroRulesToggles: state.globalAiHydroRulesToggles || {},
 		localAiHydroRulesToggles: state.localAiHydroRulesToggles || {},
-		localCursorRulesToggles: state.localCursorRulesToggles || {},
-		localWindsurfRulesToggles: state.localWindsurfRulesToggles || {},
 		localWorkflowToggles: state.localWorkflowToggles || {},
 		globalWorkflowToggles: state.globalWorkflowToggles || {},
 		enableCheckpointsSetting: state.enableCheckpointsSetting,
@@ -846,16 +842,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			setState((prevState) => ({
 				...prevState,
 				localAiHydroRulesToggles: toggles,
-			})),
-		setLocalCursorRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localCursorRulesToggles: toggles,
-			})),
-		setLocalWindsurfRulesToggles: (toggles) =>
-			setState((prevState) => ({
-				...prevState,
-				localWindsurfRulesToggles: toggles,
 			})),
 		setLocalWorkflowToggles: (toggles) =>
 			setState((prevState) => ({

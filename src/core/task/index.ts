@@ -20,11 +20,6 @@ import {
 	getLocalAiHydroRules,
 	refreshAiHydroRulesToggles,
 } from "@core/context/instructions/user-instructions/aihydro-rules"
-import {
-	getLocalCursorRules,
-	getLocalWindsurfRules,
-	refreshExternalRulesToggles,
-} from "@core/context/instructions/user-instructions/external-rules"
 import { getInstalledSkillsInstructions } from "@core/context/instructions/user-instructions/skills"
 import { clearPending, markPending } from "@core/controller/ui/pendingAskBadge"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
@@ -1823,17 +1818,11 @@ export class Task {
 				: ""
 
 		const { globalToggles, localToggles } = await refreshAiHydroRulesToggles(this.controller, this.cwd)
-		const { windsurfLocalToggles, cursorLocalToggles } = await refreshExternalRulesToggles(this.controller, this.cwd)
 
 		const globalAiHydroRulesFilePath = await ensureRulesDirectoryExists()
 		const globalAiHydroRulesFileInstructions = await getGlobalAiHydroRules(globalAiHydroRulesFilePath, globalToggles)
 
 		const localAiHydroRulesFileInstructions = await getLocalAiHydroRules(this.cwd, localToggles)
-		const [localCursorRulesFileInstructions, localCursorRulesDirInstructions] = await getLocalCursorRules(
-			this.cwd,
-			cursorLocalToggles,
-		)
-		const localWindsurfRulesFileInstructions = await getLocalWindsurfRules(this.cwd, windsurfLocalToggles)
 
 		const aihydroIgnoreContent = this.aihydroIgnoreController.aihydroIgnoreContent
 		let aihydroIgnoreInstructions: string | undefined
@@ -1864,9 +1853,6 @@ export class Task {
 			focusChainSettings: this.stateManager.getGlobalSettingsKey("focusChainSettings"),
 			globalAiHydroRulesFileInstructions,
 			localAiHydroRulesFileInstructions,
-			localCursorRulesFileInstructions,
-			localCursorRulesDirInstructions,
-			localWindsurfRulesFileInstructions,
 			aihydroIgnoreInstructions,
 			installedSkillsInstructions,
 			preferredLanguageInstructions,
@@ -2900,6 +2886,11 @@ export class Task {
 			})
 			await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()
 			await this.postStateToWebview()
+			// The first reply of a chat is enough to name it (X1-P2). Fire and forget: it never delays the loop, and the
+			// title service ignores a chat that already has a user title or its automatic title.
+			if (assistantMessage.length > 0) {
+				this.controller.requestChatTitle?.("first_turn")
+			}
 
 			// now add to apiconversationhistory
 			// need to save assistant responses to file before proceeding to tool use since user can exit at any moment and we wouldn't be able to save the assistant's response

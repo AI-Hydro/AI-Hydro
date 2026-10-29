@@ -22,6 +22,9 @@ export const fixtureHistory: HistoryItem[] = [
 		cacheReads: 120_000,
 		totalCost: 0.4812,
 		isFavorited: true,
+		title: "Catchment signatures for a synthetic gauge",
+		titleSource: "auto",
+		description: "Delineates a synthetic catchment and summarises its signatures.",
 	},
 	{
 		id: "fx-task-2",
@@ -38,6 +41,8 @@ export const fixtureHistory: HistoryItem[] = [
 		tokensIn: 9_800,
 		tokensOut: 1_240,
 		totalCost: 0.0231,
+		title: "Why the gauge lookup stopped",
+		titleSource: "user",
 	},
 ]
 
@@ -68,11 +73,11 @@ export function buildBaseState(overrides: Partial<ExtensionState> = {}): Extensi
 		enableCheckpointsSetting: false,
 		mcpDisplayMode: DEFAULT_MCP_DISPLAY_MODE,
 		transcriptDetail: "normal",
+		autoTitle: true,
+		titleModel: "",
 		protectedRoots: [],
 		globalAiHydroRulesToggles: {},
 		localAiHydroRulesToggles: {},
-		localCursorRulesToggles: {},
-		localWindsurfRulesToggles: {},
 		localWorkflowToggles: {},
 		globalWorkflowToggles: {},
 		shellIntegrationTimeout: 4000,
