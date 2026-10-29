@@ -1,7 +1,8 @@
 import type { McpResourceResponse, McpServer } from "@shared/mcp"
 import { createHash } from "crypto"
-import * as fs from "fs/promises"
+import { realpath } from "fs"
 import * as path from "path"
+import { promisify } from "util"
 import { findBindingServer } from "@/integrations/aihydro-session/studyBinding"
 
 /**
@@ -40,10 +41,15 @@ export interface ProjectKeyHub {
  * symlinks first, so `link/../x` can differ), and a dangling symlink at the tail is kept as written here but
  * followed by Python's non-strict `realpath`. Such paths get a different `dir:` key than the server computes.
  */
+// The native realpath (realpath(3) / GetFinalPathNameByHandle) is what Python's `os.path.realpath` uses, so
+// symlinks, junctions and the on-disk case of existing path parts agree. No case folding is applied here:
+// the server's `project_key` applies none either.
+const realpathNative = promisify(realpath.native)
+
 async function realpathLoose(p: string): Promise<string> {
 	const abs = path.resolve(p)
 	try {
-		return await fs.realpath(abs)
+		return await realpathNative(abs)
 	} catch {
 		const parent = path.dirname(abs)
 		if (parent === abs) {

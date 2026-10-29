@@ -9,10 +9,17 @@ import { dirProjectKey, getProjectKey, type ProjectKeyHub } from "../projectIden
 
 // Values computed with the tools server's own function:
 //   "dir:" + hashlib.sha256(os.path.realpath(p).encode("utf-8")).hexdigest()   (ai_hydro/session/project_key.py)
-const KNOWN = "/nonexistent-aihydro/known/path"
-const KNOWN_KEY = "dir:78aa90ec2cbea598c947449887c588d002e3edccae682a958a42273df2c66c47"
-const KNOWN_UNICODE = "/nonexistent-aihydro/ünï/proj/"
-const KNOWN_UNICODE_KEY = "dir:96ed8c89a37d30023f44cff8a757d7bf1b41a9f18a1861ae2946db7d5d5cbdc2"
+// Windows values: Python ntpath semantics (abspath/normpath of a drive-qualified path; no case folding,
+// which `project_key` does not do; `dir_key` in project_registry does, but it is a different function).
+const WIN = process.platform === "win32"
+const KNOWN = WIN ? "C:\\nonexistent-aihydro\\known\\path" : "/nonexistent-aihydro/known/path"
+const KNOWN_KEY = WIN
+	? "dir:b6668b69e18e15a0a48a9e28316114cc9b0673f1afe8200b19ba6767ceacf143"
+	: "dir:78aa90ec2cbea598c947449887c588d002e3edccae682a958a42273df2c66c47"
+const KNOWN_UNICODE = WIN ? "C:\\nonexistent-aihydro\\ünï\\proj\\" : "/nonexistent-aihydro/ünï/proj/"
+const KNOWN_UNICODE_KEY = WIN
+	? "dir:9393237825f14d758fe44a1435d8892288ef7b6fe1fc58dc0036249ba06ba206"
+	: "dir:96ed8c89a37d30023f44cff8a757d7bf1b41a9f18a1861ae2946db7d5d5cbdc2"
 
 function hubWith(body: unknown, opts: { connected?: boolean; reject?: boolean } = {}): ProjectKeyHub & { uris: string[] } {
 	const uris: string[] = []
@@ -39,7 +46,7 @@ describe("projectIdentity", () => {
 	})
 
 	it("ignores a trailing separator like realpath does", async () => {
-		expect(await dirProjectKey(KNOWN + "/")).to.equal(KNOWN_KEY)
+		expect(await dirProjectKey(KNOWN + path.sep)).to.equal(KNOWN_KEY)
 	})
 
 	it("resolves symlinks in the existing part of the path", async () => {
