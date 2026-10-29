@@ -5,6 +5,7 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageRequest, ShowMessageType } from "@/shared/proto/host/window"
 import { fileExistsAtPath } from "../../../utils/fs"
 import { Controller } from ".."
+import { confirmAbortRunningTask } from "../abortGuard"
 
 /**
  * Deletes all task history, with an option to preserve favorites
@@ -14,7 +15,10 @@ import { Controller } from ".."
  */
 export async function deleteAllTaskHistory(controller: Controller): Promise<DeleteAllTaskHistoryCount> {
 	try {
-		// Clear current task first
+		// Clear current task first (asks before stopping a running chat)
+		if (!(await confirmAbortRunningTask(controller, "deleteAllTaskHistory"))) {
+			return DeleteAllTaskHistoryCount.create({ tasksDeleted: 0 })
+		}
 		await controller.clearTask()
 
 		// Get existing task history

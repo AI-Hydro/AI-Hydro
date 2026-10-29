@@ -7,7 +7,7 @@ import { DIFF_VIEW_URI_SCHEME } from "@hosts/vscode/VscodeDiffViewProvider"
 import * as vscode from "vscode"
 import { previewHtml } from "./core/controller/htmlPreview/previewHtml"
 import { loadGeojsonCommand } from "./core/controller/map/loadGeojsonCommand"
-import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
+import { plusButtonClicked } from "./core/controller/ui/plusButton"
 import { sendConnectorsButtonClickedEvent } from "./core/controller/ui/subscribeToConnectorsButtonClicked"
 import { sendHistoryButtonClickedEvent } from "./core/controller/ui/subscribeToHistoryButtonClicked"
 import { sendMcpButtonClickedEvent } from "./core/controller/ui/subscribeToMcpButtonClicked"
@@ -271,10 +271,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand(commands.PlusButton, async () => {
 			console.log("[DEBUG] aihydro.plusButtonClicked")
 
-			const sidebarInstance = WebviewProvider.getInstance()
-			await sidebarInstance.controller.clearTask()
-			await sidebarInstance.controller.postStateToWebview()
-			await sendChatButtonClickedEvent()
+			await plusButtonClicked(WebviewProvider.getInstance().controller)
 		}),
 	)
 

@@ -5,6 +5,7 @@ import axios from "axios"
 import { AiHydroEnv } from "@/config"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
 import { Controller } from ".."
+import { confirmAbortRunningTask } from "../abortGuard"
 import { sendChatButtonClickedEvent } from "../ui/subscribeToChatButtonClicked"
 
 /**
@@ -62,6 +63,9 @@ export async function downloadMcp(controller: Controller, request: StringRequest
 - Once installed, demonstrate the server's capabilities by using one of its tools.
 Here is the project's README to help you get started:\n\n${mcpDetails.readmeContent}\n${mcpDetails.llmsInstallationContent}`
 
+		if (!(await confirmAbortRunningTask(controller, "downloadMcp"))) {
+			return McpDownloadResponse.create({ mcpId, error: "Kept the running chat." })
+		}
 		const { mode } = await controller.getStateToPostToWebview()
 		if (mode === "plan") {
 			await controller.togglePlanActMode("act")
