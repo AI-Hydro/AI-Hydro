@@ -1,6 +1,7 @@
 import type { HistoryItem } from "@shared/HistoryItem"
 import { expect } from "chai"
 import { describe, it } from "mocha"
+import { HostProvider } from "@/hosts/host-provider"
 import { Controller } from "../index"
 
 /** X1-P2 through the real controller write path (updateTaskHistory, patchTaskHistory, renameChat). In-memory state only. */
@@ -25,7 +26,13 @@ function makeController(history: HistoryItem[] = [], settings: { autoTitle?: boo
 			}
 		},
 		getGlobalSettingsKey: (k: string) =>
-			k === "autoTitle" ? (settings.autoTitle ?? true) : k === "titleModel" ? (settings.titleModel ?? "") : "act",
+			k in flags
+				? flags[k]
+				: k === "autoTitle"
+					? (settings.autoTitle ?? true)
+					: k === "titleModel"
+						? (settings.titleModel ?? "")
+						: "act",
 		getApiConfiguration: () => ({}),
 	}
 	c.postStateToWebview = async () => {}
@@ -89,6 +96,46 @@ describe("X1-P2 titles through the controller", () => {
 		c.requestChatTitle("completion")
 		await new Promise((r) => setTimeout(r, 20))
 		expect(flagWrites.filter((k) => k === "titleNoticeShown")).to.have.length(1)
+	})
+
+	it('"Turn off" in the notice sets autoTitle false through the state call, and later chats make no model call', async () => {
+		const shown: string[] = []
+		HostProvider.reset()
+		HostProvider.initialize(
+			(() => {}) as any,
+			(() => {}) as any,
+			{
+				windowClient: {
+					showMessage: async (req: { message: string; options?: { modal?: boolean; items?: string[] } }) => {
+						shown.push(req.message)
+						expect(req.options?.modal).to.not.equal(true)
+						expect(req.options?.items).to.deep.equal(["Turn off"])
+						return { selectedOption: "Turn off" }
+					},
+				},
+			} as any,
+			() => {},
+			async () => "",
+			async () => "",
+			"/mock/extension",
+			"/mock/globalstorage",
+		)
+		try {
+			const { c, flagWrites, calls } = makeController()
+			await save(c)
+			c.requestChatTitle("first_turn")
+			await new Promise((r) => setTimeout(r, 30))
+			expect(shown).to.have.length(1)
+			expect(shown[0]).to.contain("Settings")
+			expect(flagWrites).to.include("autoTitle")
+			expect(c.stateManager.getGlobalSettingsKey("autoTitle")).to.equal(false)
+			const before = calls.length
+			c.requestChatTitle("completion")
+			await new Promise((r) => setTimeout(r, 30))
+			expect(calls.length).to.equal(before)
+		} finally {
+			HostProvider.reset()
+		}
 	})
 
 	it("(d) with autoTitle off no model call is made for any trigger or for a reset", async () => {

@@ -19,6 +19,13 @@ const fold = (s: string) =>
 		.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x660))
 		.replace(/[\uff10-\uff19]/g, (c) => String(c.charCodeAt(0) - 0xff10))
 
+/** Independent id test: 8+ digits across short non-letter separators, unless every group is a four-digit year. */
+const idLike = (f: string): boolean =>
+	(f.match(/\d(?:[^\p{L}\p{N}]{0,3}\d){7,}/gu) ?? []).some((m) => {
+		const groups = m.split(/[^0-9]+/).filter(Boolean)
+		return !groups.every((g) => g.length === 4 && +g >= 1800 && +g <= 2100)
+	})
+
 /** Seeded generator: the same inputs on every platform, so a failure is reproducible. */
 function rng(seed: number) {
 	let s = seed >>> 0
@@ -115,6 +122,37 @@ describe("X1-P2 chat titles: ids in other scripts and split ids", () => {
 		expect(checkTitle("Two basins, 1980 to 2010").ok).to.equal(true)
 	})
 
+	it("refuses ids split by other separators, format characters and CJK numerals, and keeps year ranges", () => {
+		for (const bad of [
+			"Basin 0103_1500",
+			"Basin 0103/1500",
+			"Basin 0103\u20131500",
+			"Basin 0103\u30fc1500",
+			"Basin 0103 \u2014 1500",
+			"Basin 0103\u200b1500",
+			"Basin 0103\u00ad1500",
+			"Basin (0103) (1500)",
+			"Basin \u3007\u4e00\u3007\u4e09\u4e00\u4e94\u3007\u3007",
+			"Flow 20202023 trends",
+			"Basin 2020 2023 15",
+		]) {
+			expect(checkTitle(bad).ok, bad).to.equal(false)
+		}
+		expect(checkTitle("Flow 2020-2023 trends").ok).to.equal(true)
+		expect(checkTitle("Compare 2010 2015 2020").ok).to.equal(true)
+		// ordinary Chinese text with a short numeral run is not an id
+		expect(checkTitle("\u4e00\u4e8c\u4e09 basin").ok).to.equal(true)
+		expect(fallbackTitle({ task: "Flow 2020-2023 trends" })).to.equal("Flow 2020-2023 trends")
+		expect(fallbackTitle({ task: "Compare 2010 2015 2020" })).to.equal("Compare 2010 2015 2020")
+		expect(fallbackTitle({ task: "Flow 20202023 trends" })).to.equal("Flow trends")
+	})
+
+	it("stripping an id leaves no empty brackets", () => {
+		expect(fallbackTitle({ task: "Creek (prj_01M6ABCDEF) near Town" })).to.equal("Creek near Town")
+		expect(fallbackTitle({ task: "Creek [st_abc99] near Town" })).to.equal("Creek near Town")
+		expect(fallbackTitle({ task: "Creek (0103 1500) near Town" })).to.equal("Creek near Town")
+	})
+
 	it("the fallback drops them and keeps no id suffix", () => {
 		expect(fallbackTitle({ task: "Basin \u0660\u0661\u0660\u0663\u0661\u0665\u0660\u0660 flows" })).to.equal("Basin flows")
 		expect(fallbackTitle({ task: "Basin 0103 1500 flows" })).to.equal("Basin flows")
@@ -186,6 +224,17 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 			"0103",
 			"1500",
 			"01-03-15-00",
+			"0103_1500",
+			"0103/1500",
+			"0103\u20131500",
+			"0103\u30fc1500",
+			"0103 \u2014 1500",
+			"0103\u200b1500",
+			"0103\u00ad1500",
+			"(0103) (1500)",
+			"\u3007\u4e00\u3007\u4e09\u4e00\u4e94\u3007\u3007",
+			"2020-2023",
+			"(prj_01M6ABCDEF)",
 			"basin_0103_p1",
 			"prj_01M6ABCDEF",
 			"st_abc99",
@@ -242,7 +291,8 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 			// Independent of the check's own patterns:
 			const f = fold(t)
 			expect(f).to.not.match(/\d[.,]\d/)
-			expect(f).to.not.match(/\d(?:[ -]*\d){7}/)
+			expect(idLike(f), t).to.equal(false)
+			expect(t).to.not.match(/[\p{Cf}]|[\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d]{4}/u)
 			expect(f).to.not.match(/^\d+$/)
 			expect(f).to.not.match(/\b(prj|st)[_ ]|basin[_ ]/i)
 			// the suffix of a dropped id token must not survive as plain words either
@@ -252,7 +302,7 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 
 	it("(b) property: nothing the check accepts contains a decimal or a long digit run", () => {
 		const rand = rng(7)
-		const alphabet = "ab 0123456789.,%_-°mkc\u0660\u0663\u0665\uff10\uff13\uff15"
+		const alphabet = "ab 0123456789.,%_-°mkc\u0660\u0663\u0665\uff10\uff13\uff15/\u2013\u2014\u30fc\u200b\u00ad()"
 		let accepted = 0
 		for (let i = 0; i < 20000; i++) {
 			let s = ""
@@ -264,7 +314,7 @@ describe("X1-P2 chat titles: the deterministic fallback", () => {
 			if (r.ok) {
 				accepted++
 				expect(fold(r.text)).to.not.match(/\d[.,]\d/)
-				expect(fold(r.text)).to.not.match(/\d(?:[ -]*\d){7}/)
+				expect(idLike(fold(r.text)), r.text).to.equal(false)
 			}
 		}
 		expect(accepted).to.be.greaterThan(100)

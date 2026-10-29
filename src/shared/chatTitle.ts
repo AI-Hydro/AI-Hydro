@@ -22,27 +22,39 @@ export type TitleCheck = { ok: true; text: string } | { ok: false; reason: Title
  * Text as the checks read it: NFKC (fullwidth forms become ASCII) and every Unicode decimal digit mapped to its ASCII
  * digit, so an id written in Arabic-Indic, Devanagari or fullwidth digits is the same id to the checks.
  */
+const CJK_DIGITS = "\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d"
+
 export function normalizeForChecks(text: string): string {
 	const isNd = (cp: number) => cp > 0 && /^\p{Nd}$/u.test(String.fromCodePoint(cp))
-	return text.normalize("NFKC").replace(/\p{Nd}/gu, (c) => {
-		const cp = c.codePointAt(0)!
-		if (cp < 0x80) {
-			return c
-		}
-		// Decimal digits come in runs of ten starting at a zero: count back to the start of this one.
-		let back = 0
-		while (back < 9 && isNd(cp - back - 1)) {
-			back++
-		}
-		return String(back)
-	})
+	return (
+		text
+			.normalize("NFKC")
+			// Format characters (zero-width space, soft hyphen, ...) are invisible and can split an id.
+			.replace(/\p{Cf}/gu, "")
+			// The prolonged sound mark is a letter to Unicode but a dash between digits.
+			.replace(/(?<=\d)\u30fc(?=\d)/g, "-")
+			// CJK numerals only as a run of four or more, so ordinary Chinese text is untouched.
+			.replace(/[\u3007\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d]{4,}/g, (run) =>
+				Array.from(run, (c) => CJK_DIGITS.indexOf(c)).join(""),
+			)
+			.replace(/\p{Nd}/gu, (c) => {
+				const cp = c.codePointAt(0)!
+				if (cp < 0x80) {
+					return c
+				}
+				// Decimal digits come in runs of ten starting at a zero: count back to the start of this one.
+				let back = 0
+				while (back < 9 && isNd(cp - back - 1)) {
+					back++
+				}
+				return String(back)
+			})
+	)
 }
 
 // Ids: a gauge or site id (7 to 15 digits, bare or inside the text), a `basin_` key, a `prj_`/`st_` id, a chat ULID.
 const ID_PATTERNS: readonly RegExp[] = [
 	/(?:^|[^\d])\d{7,}/,
-	// Eight or more digits across groups split by spaces or hyphens ("0103 1500", "01-03-15-00").
-	/\d(?:[ -]*\d){7,}/,
 	/\bbasin_[\dp_]+/i,
 	/\b(?:prj|st)_[A-Za-z0-9]{3,}/i,
 	/\b[0-9A-HJKMNP-TV-Z]{26}\b/,
@@ -55,9 +67,41 @@ const MEASUREMENT =
 // Markup: tags, code, emphasis, a markdown link or heading, a table bar, braces.
 const MARKUP = /[<>`{}\\|]|\*\*|__|\]\(|^\s*#|^\s*[-*>]\s/
 
+// Eight or more digits across groups split by a short run of non-letters ("0103 1500", "01-03-15-00", "0103_1500", "0103 - 1500").
+const SPLIT_DIGITS = /\d(?:[^\p{L}\p{N}]{0,3}\d){7,}/gu
+
+/** A year range or list is not an id: every group is four digits between 1800 and 2100. */
+function onlyYears(match: string): boolean {
+	const groups = match.split(/[^\p{N}]+/u).filter(Boolean)
+	return groups.every((g) => g.length === 4 && Number(g) >= 1800 && Number(g) <= 2100)
+}
+
+function hasSplitId(text: string): boolean {
+	return (text.match(SPLIT_DIGITS) ?? []).some((m) => !onlyYears(m))
+}
+
+/** `text` with split ids taken out (year ranges stay). */
+function stripSplitIds(text: string): string {
+	return text.replace(SPLIT_DIGITS, (m) => (onlyYears(m) ? m : " "))
+}
+
+/** Whole id tokens go first: once punctuation is spaced out, "st_abc99" is two innocent words. */
+function stripIdTokens(text: string): string {
+	return text.replace(/\b(?:prj|st|basin)_[A-Za-z0-9_]*/gi, " ").replace(/\b[0-9A-HJKMNP-TV-Z]{26}\b/g, " ")
+}
+
+/** Brackets a stripped id left empty ("Creek ( ) near") go too. */
+function stripEmptyBrackets(text: string): string {
+	let out = text
+	for (let i = 0; i < 3; i++) {
+		out = out.replace(/[([{]\s*[)\]}]/g, " ")
+	}
+	return out
+}
+
 /** Whether `text` names an id anywhere in it. */
 export function containsId(text: string): boolean {
-	return ID_PATTERNS.some((p) => p.test(text))
+	return ID_PATTERNS.some((p) => p.test(text)) || hasSplitId(text)
 }
 
 /**
@@ -126,7 +170,7 @@ export function checkUserTitle(raw: unknown, max: number = TITLE_MAX): TitleChec
 	if (MARKUP.test(text)) {
 		return { ok: false, reason: "markup" }
 	}
-	if (ID_PATTERNS.some((p) => p.test(text)) && (text.split(" ").length === 1 || /^[\d\s-]+$/.test(text))) {
+	if (containsId(text) && (text.split(" ").length === 1 || /^[^\p{L}]+$/u.test(text))) {
 		return { ok: false, reason: "id" }
 	}
 	return { ok: true, text }
@@ -163,20 +207,15 @@ const UNIT_WORD = /^(?:mm|cm|km|ft|mi|ha|cfs|cms|mg|kg|ac|acres?|m|m3\/s|m3|km2|
 
 /** Text with code, links, markdown and urls taken out. */
 function plainText(text: string): string {
-	return (
-		normalizeForChecks(text)
-			// Whole id tokens go first: once punctuation is spaced out, "st_abc99" is two innocent words.
-			.replace(/\b(?:prj|st|basin)_\S*/gi, " ")
-			.replace(/\b[0-9A-HJKMNP-TV-Z]{26}\b/g, " ")
-			.replace(/```[\s\S]*?```/g, " ")
-			.replace(/`([^`]*)`/g, "$1")
-			.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-			.replace(/https?:\/\/\S+/g, " ")
-			.replace(/<[^>]*>/g, " ")
-			.replace(/[*_#>|{}\\~]+/g, " ")
-			.replace(/\s+/g, " ")
-			.trim()
-	)
+	return stripEmptyBrackets(stripSplitIds(stripIdTokens(normalizeForChecks(text))))
+		.replace(/```[\s\S]*?```/g, " ")
+		.replace(/`([^`]*)`/g, "$1")
+		.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+		.replace(/https?:\/\/\S+/g, " ")
+		.replace(/<[^>]*>/g, " ")
+		.replace(/[*_#>|{}\\~]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
 }
 
 /** A word that carries a result or an id is dropped; a plain small number or a year stays. */
@@ -184,7 +223,8 @@ function keepWord(word: string): boolean {
 	if (!/\d/.test(word)) {
 		return true
 	}
-	return checkTitle(word).ok
+	// Not checkTitle: a bare year or year range has no letters and would fail its "says something" rule.
+	return !containsId(word) && !DECIMAL.test(word) && !MEASUREMENT.test(word)
 }
 
 function capFirst(text: string): string {
@@ -226,12 +266,6 @@ export function leadingWords(text: string, words: number = FALLBACK_WORDS): stri
 			continue
 		}
 		afterDropped = false
-		// Digit groups side by side ("0103 1500") are an id split in two: both go.
-		if (/^\d+$/.test(w) && kept.length > 0 && /^\d+$/.test(kept[kept.length - 1])) {
-			kept.pop()
-			afterDropped = true
-			continue
-		}
 		kept.push(w)
 	}
 	kept.splice(words)
