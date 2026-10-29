@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import type { HistoryItem } from "@shared/HistoryItem"
 
@@ -5,12 +6,12 @@ import type { HistoryItem } from "@shared/HistoryItem"
  * M1: give existing chats a `projectId` (X1-P1).
  *
  * A project is a workspace folder, so a chat is placed by the folder it was started in. Two things on a stored item
- * name one, and the earlier one is used:
+ * name one, and they are used in this order:
  *
- *  1. `shadowGitConfigWorkTree`: written by the first checkpoint, i.e. at the start of the chat, and not changed
- *     after. Not every chat has one (checkpoints may be off).
- *  2. `cwdOnTaskInitialization`: despite its name, a build before X0-1 recomputed it from the current folder on every
- *     save, so on an old item it is the folder at the LAST save. Since X0-1 it is written once.
+ *  1. `cwdOnTaskInitialization`: a creation field, written once (first value wins) since X0-1. An item saved by an
+ *     older build may hold the folder at its last save instead; that is the lossy part for chats whose window moved.
+ *  2. `shadowGitConfigWorkTree`: only when the first is absent. It is a loop field, rewritten on every save, so it is
+ *     the LATEST checkpoint folder, not the earliest; it is a fallback, never preferred.
  *
  * What cannot be placed stays out of any project ("Unsorted", an item with no `projectId`): a chat with no folder
  * recorded, or whose folder no longer exists on disk. This is lossy by design. A chat started in a folder that was
@@ -25,13 +26,13 @@ import type { HistoryItem } from "@shared/HistoryItem"
  * `taskHistory.json` and report the counts without creating any project.
  */
 
-export type DirSource = "checkpoint" | "cwd"
+export type DirSource = "cwd" | "checkpoint"
 
-/** The folder an item was started in, and which field said so. Relative or empty values are not folders. */
+/** The folder an item was started in (`cwdOnTaskInitialization` first), and which field said so. Relative or empty values are not folders. */
 export function earliestKnownDir(item: HistoryItem): { dir: string; source: DirSource } | undefined {
 	const candidates: Array<[string | undefined, DirSource]> = [
-		[item.shadowGitConfigWorkTree, "checkpoint"],
 		[item.cwdOnTaskInitialization, "cwd"],
+		[item.shadowGitConfigWorkTree, "checkpoint"],
 	]
 	for (const [raw, source] of candidates) {
 		if (typeof raw === "string" && path.isAbsolute(raw.trim())) {
@@ -172,4 +173,34 @@ export function describeMigration(plan: ProjectMigrationPlan, result: ProjectMig
 			? ` ${unsorted} stay in Unsorted: their folder was not recorded or no longer exists (a chat whose folder was moved cannot be placed automatically).`
 			: ""
 	return placed + left
+}
+
+const BACKUP_PREFIX = "bak-pre-projects-"
+
+/**
+ * One backup of `taskHistory.json` before M1 writes anything: `taskHistory.json.bak-pre-projects-<UTC timestamp>`, beside
+ * the original. Written once and never overwritten: if any such file exists already, nothing is done. `created` tells
+ * the caller this run took it (the first run that writes). Throws if the copy fails, so M1 writes nothing it could not
+ * undo. A history file that does not exist yet has nothing to back up.
+ */
+export async function backupHistoryOnce(
+	historyFile: string,
+	now: Date = new Date(),
+): Promise<{ created: boolean; backup?: string }> {
+	const dir = path.dirname(historyFile)
+	const base = path.basename(historyFile)
+	const existing = (await fs.readdir(dir).catch(() => [] as string[])).find((f) => f.startsWith(`${base}.${BACKUP_PREFIX}`))
+	if (existing) {
+		return { created: false, backup: path.join(dir, existing) }
+	}
+	const backup = path.join(dir, `${base}.${BACKUP_PREFIX}${now.toISOString().replace(/[:.]/g, "-")}`)
+	try {
+		await fs.copyFile(historyFile, backup, fs.constants.COPYFILE_EXCL)
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			return { created: false }
+		}
+		throw error
+	}
+	return { created: true, backup }
 }

@@ -81,19 +81,23 @@ export type PackIntegrity = { ok: true } | { ok: false; reason: string }
  * installation directory (an unlisted script would load unsigned code under a signed name;
  * OS junk files are ignored, see isIgnoredOsJunk). A failure carries a human-readable reason.
  */
-export async function checkInstalledLearningPack(installation: string, recorded: InstalledLearningPackVersion): Promise<PackIntegrity> {
+export async function checkInstalledLearningPack(
+	installation: string,
+	recorded: InstalledLearningPackVersion,
+): Promise<PackIntegrity> {
 	try {
 		const present = await listFiles(installation)
 		const files = new Map<string, Uint8Array>()
 		for (const relative of present) {
-			if (relative.includes("\u0000")) return { ok: false, reason: `unexpected non-regular entry ${relative.split("\u0000")[0]}` }
+			if (relative.includes("\u0000"))
+				return { ok: false, reason: `unexpected non-regular entry ${relative.split("\u0000")[0]}` }
 			if (isIgnoredOsJunk(relative)) continue
 			files.set(relative, await fs.readFile(path.join(installation, ...relative.split("/"))))
 		}
 		const manifestBytes = files.get("pack.json")
 		if (!manifestBytes) return { ok: false, reason: "pack.json is missing" }
-		const range = (JSON.parse(Buffer.from(manifestBytes).toString("utf8")) as { compatibility?: { aiHydro?: string } }).compatibility
-			?.aiHydro
+		const range = (JSON.parse(Buffer.from(manifestBytes).toString("utf8")) as { compatibility?: { aiHydro?: string } })
+			.compatibility?.aiHydro
 		const version = range ? minVersion(range)?.version : undefined
 		if (!version) return { ok: false, reason: "pack compatibility range is unreadable" }
 		const verified = validateLearningPackFiles(files, { aiHydroVersion: version })
@@ -109,7 +113,10 @@ export async function checkInstalledLearningPack(installation: string, recorded:
 	}
 }
 
-export async function verifyInstalledLearningPack(installation: string, recorded: InstalledLearningPackVersion): Promise<boolean> {
+export async function verifyInstalledLearningPack(
+	installation: string,
+	recorded: InstalledLearningPackVersion,
+): Promise<boolean> {
 	return (await checkInstalledLearningPack(installation, recorded)).ok
 }
 

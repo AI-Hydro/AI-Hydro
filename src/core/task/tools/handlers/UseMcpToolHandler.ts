@@ -15,7 +15,7 @@ import { repairMcpArgumentsString } from "../ToolInputRepair"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
-import { isAiHydroServerName } from "./aiHydroServer"
+import { hostAudienceRefusal, isAiHydroServerName, isHostAudienceTool } from "./aiHydroServer"
 import { checkMcpToolName } from "./mcpToolNameValidation"
 
 export class UseMcpToolHandler implements IFullyManagedTool {
@@ -88,6 +88,17 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 				{ infoNotice: infoNoticeFor(targetCheck.reason === "unknown_tool" ? "unknown_tool" : "server_not_connected") },
 			)
 			return formatResponse.toolError(targetCheck.message)
+		}
+
+		// Host-audience tools (the project registry: confirm a default study, rename, link) are the extension's to call.
+		// The server hides them from discovery but does not enforce that, so a model that names one is refused here,
+		// before any approval ask and before the server is reached.
+		if (isHostAudienceTool(config.services.mcpHub.connections, server_name, tool_name)) {
+			config.taskState.consecutiveMistakeCount++
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "use_mcp_server")
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "use_mcp_server")
+			await config.callbacks.say("info", `Skipped: '${tool_name}' is a host operation, not an agent tool.`)
+			return formatResponse.toolError(hostAudienceRefusal(tool_name))
 		}
 
 		// Parse and validate arguments if provided. Weaker models often emit

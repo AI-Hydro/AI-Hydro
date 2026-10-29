@@ -37,6 +37,7 @@ function makeController(server: FakeBindingServer, history: HistoryItem[] = []) 
 		},
 	}
 	c.postStateToWebview = async () => {}
+	c.taskHistoryFile = async () => path.join(WS, "taskHistory.json")
 	return { c, history: () => taskHistory }
 }
 
@@ -181,6 +182,63 @@ describe("X1-P1 projects on chats (controller)", () => {
 			expect(second.assigned).to.equal(0)
 			expect(JSON.stringify(history())).to.equal(snapshot)
 			expect(server.calls.length).to.equal(callsBefore)
+		})
+
+		it("takes one backup before the first write, never overwrites it, and writes nothing if it cannot be taken", async () => {
+			const server = new FakeBindingServer([study()], CAPS_283)
+			const file = path.join(WS, "taskHistory.json")
+			fs.writeFileSync(file, '["original"]')
+			const { c, history } = makeController(server, [base("1", { cwdOnTaskInitialization: WS })])
+			await c.migrateHistoryToProjects()
+			const backups = () => fs.readdirSync(WS).filter((f) => f.startsWith("taskHistory.json.bak-pre-projects-"))
+			expect(backups()).to.have.length(1)
+			expect(fs.readFileSync(path.join(WS, backups()[0]), "utf8")).to.equal('["original"]')
+
+			// a later run (new chat to place) neither adds nor overwrites a backup
+			fs.writeFileSync(file, '["changed"]')
+			c.stateManager.setGlobalState("taskHistory", [...history(), base("2", { cwdOnTaskInitialization: WS })])
+			await c.migrateHistoryToProjects()
+			expect(backups()).to.have.length(1)
+			expect(fs.readFileSync(path.join(WS, backups()[0]), "utf8")).to.equal('["original"]')
+		})
+
+		it("a backup that cannot be taken aborts the run before any write", async () => {
+			const server = new FakeBindingServer([study()], CAPS_283)
+			const { c, history } = makeController(server, [base("1", { cwdOnTaskInitialization: WS })])
+			// a directory where the history file should be: copying it fails
+			fs.mkdirSync(path.join(WS, "taskHistory.json"))
+			const r = await c.migrateHistoryToProjects()
+			expect(r.assigned).to.equal(0)
+			expect(history()[0].projectId).to.equal(undefined)
+		})
+
+		it("a chat deleted since the plan was made is not brought back as a bare row", async () => {
+			const server = new FakeBindingServer([study()], CAPS_283)
+			const { c, history } = makeController(server, [
+				base("1", { cwdOnTaskInitialization: WS }),
+				base("2", { cwdOnTaskInitialization: WS }),
+			])
+			// the project call is the window in which another window deletes chat 2
+			const original = server.callTool.bind(server)
+			server.callTool = (async (...args: Parameters<typeof original>) => {
+				const res = await original(...args)
+				c.stateManager.setGlobalState(
+					"taskHistory",
+					history().filter((h) => h.id !== "2"),
+				)
+				return res
+			}) as typeof server.callTool
+			const r = await c.migrateHistoryToProjects()
+			expect(r.assigned).to.equal(1)
+			expect(history().map((h) => h.id)).to.deep.equal(["1"])
+		})
+
+		it("the open chat that M1 places mid-session starts sending its project", async () => {
+			const server = new FakeBindingServer([study()], CAPS_283)
+			const { c } = makeController(server, [base("task1", { cwdOnTaskInitialization: WS })])
+			c.chatProject = { chatId: CHAT }
+			await c.migrateHistoryToProjects()
+			expect(c.getChatProjectId(CHAT)).to.match(/^prj_/)
 		})
 
 		it("with an older server nothing is assigned or lost, and the next activation retries", async () => {

@@ -40,9 +40,7 @@ export function findQuartoSiteRoot(dirFsPath: string): string | null {
 
 function isQuartoSiteRoot(dir: string): boolean {
 	try {
-		return (
-			fs.statSync(path.join(dir, "site_libs")).isDirectory() && fs.statSync(path.join(dir, "search.json")).isFile()
-		)
+		return fs.statSync(path.join(dir, "site_libs")).isDirectory() && fs.statSync(path.join(dir, "search.json")).isFile()
 	} catch {
 		return false
 	}

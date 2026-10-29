@@ -10,7 +10,7 @@ import {
 	projectStudies,
 	resolveLaunchBinding,
 } from "../studyBinding"
-import { CAPS_282, CAPS_283, FakeBindingServer, type FakeStudy, LAUNCHER } from "./fakeBindingServer"
+import { CAPS_282, CAPS_283, FakeBindingServer, type FakeStudy, fakeServerEntry, LAUNCHER } from "./fakeBindingServer"
 
 const CHAT = "01JCHATULID0000000000000A"
 const WS = "/work/maine"
@@ -56,6 +56,27 @@ describe("X1-P1 projects on the host side", () => {
 			expect(server.calls.filter((c) => c.tool === "ensure_project")).to.have.length(0)
 		})
 
+		it("a transient capabilities failure is retried, not taken for an old server", async () => {
+			const server = new FakeBindingServer([TRY], CAPS_283)
+			const real = server.readResource.bind(server)
+			let failures = 2
+			server.readResource = async (name: string, uri: string) => {
+				if (uri.includes("capabilities") && failures-- > 0) {
+					throw new Error("Request timed out")
+				}
+				return real(name, uri)
+			}
+			expect(await ensureProject(server, WS, CHAT, [1, 1])).to.include({ ok: true })
+		})
+
+		it("a capabilities read that keeps failing is FAILED (retried later), never OLD_SERVER", async () => {
+			const server = new FakeBindingServer([TRY], CAPS_283)
+			server.readResource = async () => {
+				throw new Error("Connection closed")
+			}
+			expect(await ensureProject(server, WS, CHAT, [1, 1])).to.deep.include({ ok: false, code: "FAILED" })
+		})
+
 		it("a 2.8.1 server (no capabilities resource) is also OLD_SERVER", async () => {
 			const server = new FakeBindingServer([TRY], null)
 			expect(await ensureProject(server, WS)).to.deep.include({ ok: false, code: "OLD_SERVER" })
@@ -72,6 +93,13 @@ describe("X1-P1 projects on the host side", () => {
 			const r = await ensureProject(server, WS)
 			expect(r.ok).to.equal(false)
 			expect(!r.ok && r.reason).to.include("project.json is unreadable")
+		})
+
+		it("the host's own call still works when the server marks the tool host-audience (the guard is for the model)", async () => {
+			const server = new FakeBindingServer([TRY], CAPS_283, [
+				fakeServerEntry({ tools: [{ name: "ensure_project", _meta: { "aihydro/audience": "host" } } as any] }),
+			])
+			expect(await ensureProject(server, WS)).to.include({ ok: true })
 		})
 
 		it("calls the tool directly with root_dir only: no chat id argument, no model-visible indirection", async () => {

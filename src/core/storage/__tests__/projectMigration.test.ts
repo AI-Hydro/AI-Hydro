@@ -34,18 +34,15 @@ function fakeEnsure(existing: Record<string, string> = {}) {
 
 describe("M1 project migration (X1-P1)", () => {
 	describe("earliestKnownDir", () => {
-		it("prefers the checkpoint worktree (set at the chat's start) over the cwd (rewritten on every old save)", () => {
+		it("prefers cwdOnTaskInitialization (a creation field) over the checkpoint worktree (a loop field, rewritten on every save)", () => {
 			expect(
-				earliestKnownDir(item("a", { shadowGitConfigWorkTree: "/w/first", cwdOnTaskInitialization: "/w/last" })),
-			).to.deep.equal({
-				dir: "/w/first",
-				source: "checkpoint",
-			})
+				earliestKnownDir(item("a", { shadowGitConfigWorkTree: "/w/latest", cwdOnTaskInitialization: "/w/start" })),
+			).to.deep.equal({ dir: "/w/start", source: "cwd" })
 		})
-		it("falls back to the cwd, and ignores relative or empty values", () => {
-			expect(earliestKnownDir(item("a", { cwdOnTaskInitialization: "/w/only/" }))).to.deep.equal({
+		it("falls back to the checkpoint worktree only when the cwd is absent, and ignores relative or empty values", () => {
+			expect(earliestKnownDir(item("a", { shadowGitConfigWorkTree: "/w/only/" }))).to.deep.equal({
 				dir: "/w/only",
-				source: "cwd",
+				source: "checkpoint",
 			})
 			expect(
 				earliestKnownDir(item("b", { cwdOnTaskInitialization: "relative/dir", shadowGitConfigWorkTree: "" })),

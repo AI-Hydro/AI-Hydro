@@ -108,14 +108,34 @@ function toolJson(res: McpToolCallResponse): { json?: any; isError: boolean; tex
 	}
 }
 
-/** Capability flags the server advertises. An older server has no such resource: the answer is an empty set. */
-export async function readCapabilities(hub: BindingHub, server: McpServer): Promise<Set<string>> {
+/** A failed read that means "this server has no such resource" (an older server), as opposed to a transient failure. */
+const RESOURCE_ABSENT = /unknown resource|resource not found|not found|method not found|-32002|-32601/i
+
+/**
+ * Capability flags, and whether the read itself failed. An older server (2.8.1) has no capabilities resource: that is
+ * an empty set with `failed: false`. A timeout, a closed connection or any other error is `failed: true`, so a caller
+ * can retry instead of taking a hiccup for "the flag is absent".
+ */
+export async function readCapabilitiesChecked(
+	hub: BindingHub,
+	server: McpServer,
+): Promise<{ caps: Set<string>; failed: boolean }> {
 	try {
 		const body = resourceJson(await withTimeout(hub.readResource(server.name, CAPABILITIES_URI)), CAPABILITIES_URI)
-		return new Set(Array.isArray(body?.capabilities) ? body.capabilities.filter((c: unknown) => typeof c === "string") : [])
-	} catch {
-		return new Set()
+		return {
+			caps: new Set(
+				Array.isArray(body?.capabilities) ? body.capabilities.filter((c: unknown) => typeof c === "string") : [],
+			),
+			failed: false,
+		}
+	} catch (error) {
+		return { caps: new Set(), failed: !RESOURCE_ABSENT.test(error instanceof Error ? error.message : String(error)) }
 	}
+}
+
+/** Capability flags the server advertises. An older server has no such resource: the answer is an empty set. */
+export async function readCapabilities(hub: BindingHub, server: McpServer): Promise<Set<string>> {
+	return (await readCapabilitiesChecked(hub, server)).caps
 }
 
 function toCandidate(row: any): StudyCandidateView | undefined {
@@ -149,14 +169,35 @@ export type EnsureProjectResult =
  * never does). Idempotent on the server. Never throws: a server that is absent or older than 2.8.3 is a result with a
  * reason, and the caller carries on without a project.
  */
-export async function ensureProject(hub: BindingHub, rootDir: string, ulid = "host"): Promise<EnsureProjectResult> {
+export async function ensureProject(
+	hub: BindingHub,
+	rootDir: string,
+	ulid = "host",
+	/** Pauses between attempts to read the server's capabilities (a transient failure is retried; test seam). */
+	capabilityRetryDelaysMs: readonly number[] = [300, 900],
+): Promise<EnsureProjectResult> {
 	const server = findBindingServer(hub)
 	if (!server) {
 		return { ok: false, code: "NO_SERVER", reason: "The AI-Hydro server is not connected, so this chat has no project yet." }
 	}
 	try {
-		const caps = await readCapabilities(hub, server)
-		if (!caps.has(PROJECT_HOST_OPS_CAP)) {
+		let read = await readCapabilitiesChecked(hub, server)
+		for (const delay of capabilityRetryDelaysMs) {
+			if (!read.failed) {
+				break
+			}
+			await new Promise((resolve) => setTimeout(resolve, delay))
+			read = await readCapabilitiesChecked(hub, server)
+		}
+		if (read.failed) {
+			// Not "the server is old": the read did not work. The caller retries later and says so.
+			return {
+				ok: false,
+				code: "FAILED",
+				reason: "Could not read the AI-Hydro server's capabilities, so this chat has no project yet.",
+			}
+		}
+		if (!read.caps.has(PROJECT_HOST_OPS_CAP)) {
 			return { ok: false, code: "OLD_SERVER", reason: PROJECT_NEEDS_283 }
 		}
 		const { json, isError, text } = toolJson(

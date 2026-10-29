@@ -80,10 +80,11 @@ import {
 	ensureMcpServersDirectoryExists,
 	ensureSettingsDirectoryExists,
 	GlobalFileNames,
+	getTaskHistoryStateFilePath,
 	writeMcpMarketplaceCatalogToCache,
 } from "../storage/disk"
 import { type HistoryWriter, patchHistory, removeFromHistory } from "../storage/historyPatch"
-import { describeMigration, planProjectMigration, resolveProjects } from "../storage/projectMigration"
+import { backupHistoryOnce, describeMigration, planProjectMigration, resolveProjects } from "../storage/projectMigration"
 import { PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
 import { getHostProtectedRoots } from "../task/protectedRoots"
@@ -1495,26 +1496,61 @@ export class Controller {
 			const r = await ensureProject(this.bindingHub, dir)
 			return r.ok ? { ok: true, projectId: r.projectId } : r
 		})
-		for (const a of result.assignments) {
-			// Creation field, first value wins; a chat that was deleted meanwhile is not brought back.
-			this.patchTaskHistory(a.itemId, { projectId: a.projectId }, "system")
+		if (result.assignments.length === 0) {
+			this.logMigrationFailures(result)
+			return { assigned: 0, unsorted, failedFolders: result.failed.length }
 		}
+		// One backup before the first write, never overwritten. If it cannot be taken, nothing is written.
+		let firstWrite = false
+		try {
+			firstWrite = (await backupHistoryOnce(await this.taskHistoryFile())).created
+		} catch (error) {
+			console.error("[projects] M1: could not back up taskHistory.json, so nothing was assigned:", error)
+			return { assigned: 0, unsorted, failedFolders: result.failed.length }
+		}
+		// Only chats that still exist: a chat deleted in another window since the plan was made is not brought back
+		// as a bare {id, projectId} row.
+		const stillThere = new Set((this.stateManager.getGlobalStateKey("taskHistory") ?? []).map((h) => h.id))
+		const applied = result.assignments.filter((a) => stillThere.has(a.itemId))
+		for (const a of applied) {
+			// Creation field, first value wins.
+			this.patchTaskHistory(a.itemId, { projectId: a.projectId }, "system")
+			// The open chat was just placed: it sends the project from its next call on.
+			if (this.task?.taskId === a.itemId && !this.chatProject?.projectId) {
+				this.chatProject = { chatId: this.task.ulid, projectId: a.projectId }
+			}
+		}
+		this.logMigrationFailures(result)
+		// The notice is shown by the run that took the backup (the first that wrote), so a second window stays quiet.
+		if (applied.length > 0 && firstWrite) {
+			try {
+				HostProvider.window
+					.showMessage({
+						type: ShowMessageType.INFORMATION,
+						message: describeMigration(plan, { ...result, assignments: applied }),
+					})
+					.catch(() => {})
+			} catch {
+				// No host window (a headless run): the notice is a courtesy, the assignments are already stored.
+			}
+		}
+		if (applied.length > 0) {
+			void this.postStateToWebview().catch(() => {})
+		}
+		return { assigned: applied.length, unsorted, failedFolders: result.failed.length }
+	}
+
+	/** Where the history is persisted (overridable in tests). */
+	taskHistoryFile(): Promise<string> {
+		return getTaskHistoryStateFilePath()
+	}
+
+	private logMigrationFailures(result: { failed: Array<{ folder: string; code: string }> }): void {
 		if (result.failed.length > 0) {
 			console.warn(
 				`[projects] M1: ${result.failed.length} folder(s) not placed this time: ${result.failed.map((f) => `${f.folder} (${f.code})`).join(", ")}`,
 			)
 		}
-		if (result.assignments.length > 0) {
-			try {
-				HostProvider.window
-					.showMessage({ type: ShowMessageType.INFORMATION, message: describeMigration(plan, result) })
-					.catch(() => {})
-			} catch {
-				// No host window (a headless run): the notice is a courtesy, the assignments are already stored.
-			}
-			void this.postStateToWebview().catch(() => {})
-		}
-		return { assigned: result.assignments.length, unsorted, failedFolders: result.failed.length }
 	}
 
 	// ---- Study binding (X0-2) -------------------------------------------------------------------------------

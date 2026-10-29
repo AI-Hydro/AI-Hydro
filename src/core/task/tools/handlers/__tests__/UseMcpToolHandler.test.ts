@@ -1,6 +1,7 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import { isAiHydroServerName } from "../aiHydroServer"
+import { hostAudienceRefusal, isAiHydroServerName, isHostAudienceTool } from "../aiHydroServer"
+import { UseMcpToolHandler } from "../UseMcpToolHandler"
 
 describe("isAiHydroServerName", () => {
 	// Regression guard: a strict `=== "ai-hydro"` check silently disabled
@@ -45,5 +46,82 @@ describe("isAiHydroServerName", () => {
 		expect(isAiHydroServerName("aihydro-core", ["aihydro-core"])).to.equal(true)
 		expect(isAiHydroServerName("aihydro-core", [""])).to.equal(false)
 		expect(isAiHydroServerName("AIHYDRO-CORE", [" aihydro-core "])).to.equal(true)
+	})
+})
+
+describe("host-audience tools are refused to the model (X1-P1)", () => {
+	const HOST = { "aihydro/audience": "host" }
+	const connections = (serverName = "ai-hydro") => [
+		{
+			server: {
+				name: serverName,
+				status: "connected",
+				tools: [
+					{ name: "ensure_project", _meta: HOST },
+					{ name: "set_project_default_study", _meta: HOST },
+					{ name: "brand_new_host_op", _meta: HOST },
+					{ name: "delineate_watershed", _meta: { tier: 1 } },
+					{ name: "plain_tool" },
+				],
+			},
+		},
+	]
+
+	it("keys off the annotation: any tool the server marks host is refused, nothing else", () => {
+		for (const t of ["ensure_project", "set_project_default_study", "brand_new_host_op"]) {
+			expect(isHostAudienceTool(connections(), "ai-hydro", t), t).to.equal(true)
+		}
+		for (const t of ["delineate_watershed", "plain_tool", "not_listed"]) {
+			expect(isHostAudienceTool(connections(), "ai-hydro", t), t).to.equal(false)
+		}
+	})
+
+	it("applies to the first-party server family only", () => {
+		expect(isHostAudienceTool(connections("someone-else"), "someone-else", "ensure_project")).to.equal(false)
+	})
+
+	const run = async (toolName: string, args: Record<string, unknown>) => {
+		const calls: string[] = []
+		const said: string[] = []
+		const config: any = {
+			ulid: "01JCHAT",
+			cwd: "/w",
+			taskState: { consecutiveMistakeCount: 0 },
+			services: {
+				mcpHub: {
+					connections: connections(),
+					callTool: async (_s: string, t: string) => {
+						calls.push(t)
+						return { content: [{ type: "text", text: "{}" }] }
+					},
+				},
+			},
+			callbacks: {
+				removeLastPartialMessageIfExistsWithType: async () => {},
+				say: async (_k: string, text?: string) => {
+					said.push(String(text))
+				},
+				shouldAutoApproveTool: () => true,
+			},
+		}
+		const result = await new UseMcpToolHandler().execute(config, {
+			name: "use_mcp_tool",
+			params: { server_name: "ai-hydro", tool_name: toolName, arguments: JSON.stringify(args) },
+			partial: false,
+		} as any)
+		return { calls, said, result: JSON.stringify(result), mistakes: config.taskState.consecutiveMistakeCount }
+	}
+
+	it("a model-issued ensure_project never reaches the server", async () => {
+		const r = await run("ensure_project", { root_dir: "/w" })
+		expect(r.calls).to.deep.equal([])
+		expect(r.result).to.include(hostAudienceRefusal("ensure_project"))
+	})
+
+	it("a model-issued set_project_default_study (confirming its own default) never reaches the server", async () => {
+		const r = await run("set_project_default_study", { project_id: "prj_x", study_id: "s", confirmed_by: "user" })
+		expect(r.calls).to.deep.equal([])
+		expect(r.result).to.include("host operation")
+		expect(r.mistakes).to.equal(1)
 	})
 })

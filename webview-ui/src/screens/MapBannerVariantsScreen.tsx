@@ -33,7 +33,11 @@ export function MapBannerVariantsScreen() {
 				<MapResourceStatus {...common} rendererError={RENDERER} tileErrors={{}} />
 			</Variant>
 			<Variant title="Imagery and renderer both failed">
-				<MapResourceStatus {...common} rendererError={RENDERER} tileErrors={{ basemap: "Tile request failed (HTTP 403)" }} />
+				<MapResourceStatus
+					{...common}
+					rendererError={RENDERER}
+					tileErrors={{ basemap: "Tile request failed (HTTP 403)" }}
+				/>
 			</Variant>
 			<Variant title="A few tiles missing: quiet status note, not an alert">
 				<MapResourceStatus
