@@ -83,9 +83,11 @@ const table = () =>
 describe("chat detail baseline (X1-C0)", () => {
 	it("matches the committed per-level row counts", () => {
 		const now = table()
-		if (process.env.UPDATE_CHAT_DETAIL_BASELINE === "1" || !existsSync(FILE)) {
+		if (process.env.UPDATE_CHAT_DETAIL_BASELINE === "1") {
 			writeFileSync(FILE, JSON.stringify(now, null, "\t") + "\n")
 		}
+		// A missing baseline fails rather than regenerating itself, so a deleted file cannot pass in CI.
+		expect(existsSync(FILE), `${FILE} is missing; regenerate with UPDATE_CHAT_DETAIL_BASELINE=1`).toBe(true)
 		expect(now).toEqual(JSON.parse(readFileSync(FILE, "utf8")))
 	})
 
