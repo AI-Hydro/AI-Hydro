@@ -984,4 +984,42 @@ describe("transcript presenter: aggregation (X1-C1)", () => {
 			).to.equal(true)
 		}
 	})
+
+	it("a mixed batch: an outside-workspace auto-run command is never merged and says so", () => {
+		const run = (cmd: string, extra: Partial<AiHydroMessage> = {}) =>
+			say("command", `${cmd}\nOutput:\n`, { policyClass: "auto_run_all", askOutcome: "approved", exitCode: 0, ...extra })
+		for (const n of [3, 8]) {
+			for (const detail of ["focus", "normal"] as const) {
+				reset()
+				const m = [say("task", "x"), run("ls")]
+				for (let i = 0; i < n - 2; i++) m.push(run(`echo ${i}`))
+				m.splice(2, 0, run("rm /etc/hosts", { isOperationOutsideWorkspace: true }))
+				const g = lastGroup(m, detail)
+				const risky = g.lifted.filter((l) => l.text.includes("rm /etc/hosts"))
+				expect(risky, `${detail}:${n}`).to.have.length(1)
+				expect(risky[0].count).to.equal(1)
+				expect(risky[0].text).to.contain("outside the workspace")
+				const others = g.lifted.filter((l) => !l.text.includes("rm /etc/hosts"))
+				expect(others.flatMap((l) => l.members).length).to.equal(n - 1)
+				expect(others.some((l) => l.members.some((x) => x.text.includes("rm /etc/hosts")))).to.equal(false)
+			}
+		}
+	})
+	it("an ask with no decision that is outside the workspace is not merged either", () => {
+		reset()
+		const undecided = (cmd: string, extra: Partial<AiHydroMessage> = {}) => ask("command", cmd, extra)
+		const m = [
+			say("task", "x"),
+			say("command", "ls\nOutput:\n", { askOutcome: "approved", exitCode: 0 }),
+			undecided("a"),
+			undecided("rm /etc/hosts", { isOperationOutsideWorkspace: true }),
+			undecided("b"),
+			say("text", "done"),
+		]
+		const g = lastGroup(m, "normal")
+		const risky = g.lifted.filter((l) => l.text.includes("rm /etc/hosts"))
+		expect(risky).to.have.length(1)
+		expect(risky[0].count).to.equal(1)
+		expect(risky[0].text).to.contain("outside the workspace")
+	})
 })

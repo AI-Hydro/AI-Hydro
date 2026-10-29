@@ -183,6 +183,8 @@ export interface LiftedLine {
 	callTs?: number
 	/** How many source lines this line stands for (1 unless aggregated). */
 	count: number
+	/** The MCP server an effect line is about (set on effect lines only). */
+	server?: string
 	/**
 	 * Every source line folded into this one, in order. A line always has at least itself; every lifted source `ts`
 	 * of a group appears in exactly one line's `members` (across `lifted` and `absorbed`), so aggregation can shorten
@@ -664,6 +666,9 @@ function aggregateLifts(
 	for (const l of lifted) {
 		const a = info.get(l.key)
 		let out = l
+		if (a?.server !== undefined) {
+			out = { ...l, server: a.server }
+		}
 		if (a !== undefined) {
 			if (done.has(a.family)) {
 				continue
@@ -678,6 +683,7 @@ function aggregateLifts(
 					tone: l.tone,
 					text: mergedText(l.reason, infos, same[0].text.startsWith("You approved") ? "You approved" : "Ran"),
 					sourceTs: l.sourceTs,
+					...(a.server !== undefined ? { server: a.server } : {}),
 					count: same.length,
 					members: same.flatMap((x) => x.members),
 				}
@@ -888,6 +894,24 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 		return effect === undefined && kindOf(m) === "use_mcp_server" ? "unknown_effect" : undefined
 	}
 	const securityMarked = (m: AiHydroMessage): boolean => securityReason(m) !== undefined
+	/**
+	 * A per-item risk flag. A line for such an item is never aggregated (one line per call, the risk named in its text),
+	 * whatever its family: merging would hide it behind a count or a "+N".
+	 */
+	const perItemRisk = (m: AiHydroMessage): string | undefined => {
+		const info = toolInfo(m)
+		if (m.isOperationOutsideWorkspace || info?.operationIsLocatedInWorkspace === false) {
+			return "outside the workspace"
+		}
+		if (effectOf(m) === "DESTRUCTIVE") {
+			return "destructive"
+		}
+		const path = typeof info?.path === "string" ? info.path : typeof info?.filePath === "string" ? info.filePath : undefined
+		if (info && path !== undefined && (options.isProtectedPath ? protectedPath(path) : !isReadOnlyTool(info))) {
+			return "touches a path"
+		}
+		return undefined
+	}
 
 	// Tasks from before the host recorded outcomes cannot say "no decision recorded": an ask without an outcome is
 	// just old data there, shown neutrally and counted as a call.
@@ -1059,10 +1083,16 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 				grp.toolCount++
 			}
 			if (undecided) {
-				lift(grp, m, "no_decision", "notice", `Asked to ${what}; no decision recorded`, m.ts, {
-					family: "no_decision",
-					subject: what,
-				})
+				const risk = perItemRisk(m)
+				lift(
+					grp,
+					m,
+					"no_decision",
+					"notice",
+					`Asked to ${what}${risk ? ` (${risk})` : ""}; no decision recorded`,
+					m.ts,
+					risk ? undefined : { family: "no_decision", subject: what },
+				)
 			} else if (denied) {
 				lift(grp, m, "call_denied", "warning", `You denied: ${what}`, m.ts)
 			} else if (kind === "command" && typeof m.exitCode === "number" && m.exitCode !== 0) {
@@ -1072,15 +1102,16 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 			} else if (m.execOutcome === "failed" || state === "failed") {
 				lift(grp, m, "call_failed", "error", `Failed: ${what}`, m.ts)
 			} else if (m.policyClass) {
+				const risk = perItemRisk(m)
 				lift(
 					grp,
 					m,
 					"policy_command",
 					"warning",
-					`${m.type === "ask" ? "You approved" : "Ran"} (${m.policyClass.replace(/_/g, " ")}): ${what}`,
+					`${m.type === "ask" ? "You approved" : "Ran"} (${m.policyClass.replace(/_/g, " ")}${risk ? `, ${risk}` : ""}): ${what}`,
 					m.ts,
-					// A protected path is a finding in itself: one line per call, never merged.
-					m.policyClass === "protected_path"
+					// A protected path or any per-item risk is a finding in itself: one line per call, never merged.
+					m.policyClass === "protected_path" || risk
 						? undefined
 						: { family: `policy:${m.type}:${m.policyClass}`, subject: what, policyClass: m.policyClass },
 				)

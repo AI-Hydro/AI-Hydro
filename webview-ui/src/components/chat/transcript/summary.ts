@@ -71,7 +71,8 @@ export function summarizeGroup(
 	// Focus keeps missing-fact notices out of the row list; the header still says how many there are.
 	const absorbedCount = absorbed.reduce((n, l) => n + l.count, 0)
 	if (absorbedCount > 0) {
-		parts.push(`${plural(absorbedCount, "call")} with no declared effect`)
+		const servers = new Set(absorbed.map((l) => l.server).filter(Boolean)).size
+		parts.push(`${plural(absorbedCount, "call")} with no declared effect${servers > 1 ? ` (${servers} servers)` : ""}`)
 	}
 
 	const problems: string[] = []

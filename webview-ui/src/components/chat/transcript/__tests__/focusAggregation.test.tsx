@@ -61,10 +61,13 @@ describe("Focus and Normal render different DOM (X1-C1)", () => {
 		render(<Row group={normal} messages={msgs} />)
 		const disclosure = screen.getByTestId("lifted-disclosure")
 		expect(disclosure.getAttribute("aria-expanded")).toBe("false")
+		// aria-controls always points at a real element, hidden while closed.
+		expect((document.getElementById(disclosure.getAttribute("aria-controls") ?? "") as HTMLElement).hidden).toBe(true)
 		fireEvent.click(disclosure)
 		expect(disclosure.getAttribute("aria-expanded")).toBe("true")
 		const list = document.getElementById(disclosure.getAttribute("aria-controls") ?? "")
 		expect(list?.querySelectorAll("li")).toHaveLength(8)
+		expect((list as HTMLElement).hidden).toBe(false)
 	})
 
 	it("the owner shape keeps the refusal visible at both levels and the pending ask is its own item", () => {

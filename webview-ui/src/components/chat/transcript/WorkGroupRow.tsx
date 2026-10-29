@@ -171,15 +171,13 @@ function LiftedLineItem({ line }: { line: LiftedLine }) {
 						<i aria-hidden className={`codicon ${open ? "codicon-chevron-down" : "codicon-chevron-right"}`} />
 						<span>{line.text}</span>
 					</button>
-					{open && (
-						<ul className="transcript-lifted-members" id={listId}>
-							{line.members.map((m) => (
-								<li className="transcript-line" key={m.sourceTs}>
-									{m.text}
-								</li>
-							))}
-						</ul>
-					)}
+					<ul className="transcript-lifted-members" hidden={!open} id={listId}>
+						{line.members.map((m) => (
+							<li className="transcript-line" key={m.sourceTs}>
+								{m.text}
+							</li>
+						))}
+					</ul>
 				</>
 			) : (
 				<span>{line.text}</span>
