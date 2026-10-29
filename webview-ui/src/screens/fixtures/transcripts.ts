@@ -714,7 +714,7 @@ export const ownerTodoChecklist = [
 ].join("\n")
 
 /**
- * Four read-only commands that ran under "Execute all commands" (policyClass auto_run_all), the third one exiting
+ * Four read-only commands that ran under "Run any command" (policyClass auto_run_all), the third one exiting
  * non-zero. The host has not recorded that they were read-only; the presenter lifts each as a policy line.
  */
 export const autoRunAllCommandsTask: AiHydroMessage[] = (() => {

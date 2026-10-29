@@ -1173,8 +1173,6 @@ export class Controller {
 		const finalAnswerAuditGate = this.stateManager.getGlobalSettingsKey("finalAnswerAuditGate")
 
 		const localAiHydroRulesToggles = this.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
-		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
-		const localCursorRulesToggles = this.stateManager.getWorkspaceStateKey("localCursorRulesToggles")
 		const workflowToggles = this.stateManager.getWorkspaceStateKey("workflowToggles")
 		const autoCondenseThreshold = this.stateManager.getGlobalSettingsKey("autoCondenseThreshold")
 
@@ -1236,8 +1234,6 @@ export class Controller {
 			distinctId,
 			globalAiHydroRulesToggles: globalAiHydroRulesToggles || {},
 			localAiHydroRulesToggles: localAiHydroRulesToggles || {},
-			localWindsurfRulesToggles: localWindsurfRulesToggles || {},
-			localCursorRulesToggles: localCursorRulesToggles || {},
 			localWorkflowToggles: workflowToggles || {},
 			globalWorkflowToggles: globalWorkflowToggles || {},
 			shellIntegrationTimeout,

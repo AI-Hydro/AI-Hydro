@@ -12,9 +12,6 @@ export async function getUserInstructions(variant: PromptVariant, context: Syste
 	const customInstructions = buildUserInstructions(
 		context.globalAiHydroRulesFileInstructions,
 		context.localAiHydroRulesFileInstructions,
-		context.localCursorRulesFileInstructions,
-		context.localCursorRulesDirInstructions,
-		context.localWindsurfRulesFileInstructions,
 		context.aihydroIgnoreInstructions,
 		context.preferredLanguageInstructions,
 		context.installedSkillsInstructions,
@@ -35,9 +32,6 @@ export async function getUserInstructions(variant: PromptVariant, context: Syste
 function buildUserInstructions(
 	globalAiHydroRulesFileInstructions?: string,
 	localAiHydroRulesFileInstructions?: string,
-	localCursorRulesFileInstructions?: string,
-	localCursorRulesDirInstructions?: string,
-	localWindsurfRulesFileInstructions?: string,
 	aihydroIgnoreInstructions?: string,
 	preferredLanguageInstructions?: string,
 	installedSkillsInstructions?: string,
@@ -51,15 +45,6 @@ function buildUserInstructions(
 	}
 	if (localAiHydroRulesFileInstructions) {
 		customInstructions.push(localAiHydroRulesFileInstructions)
-	}
-	if (localCursorRulesFileInstructions) {
-		customInstructions.push(localCursorRulesFileInstructions)
-	}
-	if (localCursorRulesDirInstructions) {
-		customInstructions.push(localCursorRulesDirInstructions)
-	}
-	if (localWindsurfRulesFileInstructions) {
-		customInstructions.push(localWindsurfRulesFileInstructions)
 	}
 	if (aihydroIgnoreInstructions) {
 		customInstructions.push(aihydroIgnoreInstructions)

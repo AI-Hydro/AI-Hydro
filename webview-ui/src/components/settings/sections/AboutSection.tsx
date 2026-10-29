@@ -17,9 +17,9 @@ const AboutSection = ({ version, renderSectionHeader }: AboutSectionProps) => {
 				<div style={{ padding: "0 16px" }}>
 					<h2>AI-Hydro v{version}</h2>
 					<p>
-						An AI assistant for hydrological and computational workflows that can use your CLI and editor. AI-Hydro
-						can handle complex tasks step-by-step with tools that create and edit files, explore projects, use the
-						browser, and execute terminal commands (after you grant permission).
+						A hydrology research agent. It works step by step with hydrological tools, your project files and the
+						terminal, and records an evidence trail of runs and claims that you can review, replay and export. Actions
+						that edit files or run commands ask for your permission unless you turn on tool auto-run.
 					</p>
 
 					<h3>Tools diagnostics</h3>
