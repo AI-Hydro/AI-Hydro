@@ -44,13 +44,7 @@ service FileService {
   // Toggle an AI-Hydro rule (enable or disable)
   rpc toggleAiHydroRule(ToggleClineRuleRequest) returns (ToggleClineRules);
 
-  // Toggle a Cursor rule (enable or disable)
-  rpc toggleCursorRule(ToggleCursorRuleRequest) returns (ClineRulesToggles);
-  
-  // Toggle a Windsurf rule (enable or disable)
-  rpc toggleWindsurfRule(ToggleWindsurfRuleRequest) returns (ClineRulesToggles);
-  
-  // Refreshes all rule toggles (Cline, External, and Workflows)
+  // Refreshes all rule toggles (AI-Hydro and Workflows)
   rpc refreshRules(EmptyRequest) returns (RefreshedRules);
 
   // Opens a task's conversation history file on disk
@@ -73,19 +67,11 @@ service FileService {
 message RefreshedRules {
   ClineRulesToggles global_cline_rules_toggles = 1;
   ClineRulesToggles local_cline_rules_toggles = 2;
-  ClineRulesToggles local_cursor_rules_toggles = 3;
-  ClineRulesToggles local_windsurf_rules_toggles = 4;
+  reserved 3, 4; // local_cursor_rules_toggles, local_windsurf_rules_toggles (dialects removed)
   ClineRulesToggles local_workflow_toggles = 5;
   ClineRulesToggles global_workflow_toggles = 6;
   ClineRulesToggles global_ai_hydro_rules_toggles = 7;
   ClineRulesToggles local_ai_hydro_rules_toggles = 8;
-}
-
-// Request to toggle a Windsurf rule
-message ToggleWindsurfRuleRequest {
-  Metadata metadata = 1;
-  string rule_path = 2;   // Path to the rule file
-  bool enabled = 3;       // Whether to enable or disable the rule
 }
 
 // Request to convert a list of URIs to relative paths
@@ -182,13 +168,6 @@ message ToggleClineRules {
   ClineRulesToggles local_cline_rules_toggles = 2;
   ClineRulesToggles global_ai_hydro_rules_toggles = 3;
   ClineRulesToggles local_ai_hydro_rules_toggles = 4;
-}
-
-// Request to toggle a Cursor rule
-message ToggleCursorRuleRequest {
-  Metadata metadata = 1;
-  string rule_path = 2;   // Path to the rule file
-  bool enabled = 3;       // Whether to enable or disable the rule
 }
 
 // Request to toggle a workflow on or off

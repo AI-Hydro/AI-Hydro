@@ -1698,7 +1698,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					<Tooltip
 						hintText={`Toggle w/ ${togglePlanActKeys}`}
 						style={{ zIndex: 1000 }}
-						tipText={`In ${shownTooltipMode === "act" ? "Act" : "Plan"}  mode, AI-Hydro will ${shownTooltipMode === "act" ? "complete the task immediately" : "gather information to architect a plan"}`}
+						tipText={
+							shownTooltipMode === "act"
+								? "Act mode: AI-Hydro carries out the task and asks before any action your auto-run settings do not allow"
+								: "Plan mode: AI-Hydro gathers information and drafts a plan for you to review"
+						}
 						visible={shownTooltipMode !== null}>
 						<PlanActSwitch mode={mode} onHover={setShownTooltipMode} onToggle={onModeToggle} />
 					</Tooltip>

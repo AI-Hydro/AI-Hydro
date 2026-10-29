@@ -97,9 +97,6 @@ export interface SystemPromptContext {
 	readonly focusChainSettings?: FocusChainSettings
 	readonly globalAiHydroRulesFileInstructions?: string
 	readonly localAiHydroRulesFileInstructions?: string
-	readonly localCursorRulesFileInstructions?: string
-	readonly localCursorRulesDirInstructions?: string
-	readonly localWindsurfRulesFileInstructions?: string
 	readonly aihydroIgnoreInstructions?: string
 	readonly preferredLanguageInstructions?: string
 	readonly installedSkillsInstructions?: string

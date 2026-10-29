@@ -136,14 +136,10 @@ export async function readSecretsFromDisk(context: ExtensionContext): Promise<Se
 
 export async function readWorkspaceStateFromDisk(context: ExtensionContext): Promise<LocalState> {
 	const localAiHydroRulesToggles = context.workspaceState.get("localAiHydroRulesToggles") as AiHydroRulesToggles | undefined
-	const localWindsurfRulesToggles = context.workspaceState.get("localWindsurfRulesToggles") as AiHydroRulesToggles | undefined
-	const localCursorRulesToggles = context.workspaceState.get("localCursorRulesToggles") as AiHydroRulesToggles | undefined
 	const localWorkflowToggles = context.workspaceState.get("workflowToggles") as AiHydroRulesToggles | undefined
 
 	return {
 		localAiHydroRulesToggles: localAiHydroRulesToggles || {},
-		localWindsurfRulesToggles: localWindsurfRulesToggles || {},
-		localCursorRulesToggles: localCursorRulesToggles || {},
 		workflowToggles: localWorkflowToggles || {},
 	}
 }

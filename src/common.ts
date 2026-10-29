@@ -6,6 +6,7 @@ import {
 	migrateWelcomeViewCompleted,
 	migrateWorkspaceToGlobalStorage,
 	removeRetiredAccountSecrets,
+	removeRetiredRuleDialectState,
 } from "./core/storage/state-migrations"
 import { WebviewProvider } from "./core/webview"
 import { Logger } from "./services/logging/Logger"
@@ -58,6 +59,9 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 
 	// Delete the retired cloud-account secrets once (X0-6)
 	await removeRetiredAccountSecrets(context)
+
+	// Clear the toggles of the removed Cursor/Windsurf rule dialects (X0-6b)
+	await removeRetiredRuleDialectState(context)
 
 	// Migrate workspace storage values back to global storage (reverting previous migration)
 	await migrateWorkspaceToGlobalStorage(context)

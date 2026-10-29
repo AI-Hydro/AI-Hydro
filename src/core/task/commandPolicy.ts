@@ -321,7 +321,7 @@ export interface CommandPolicyInput {
 	modelRequiresApproval: boolean
 	/** "Run read-only commands" (executeSafeCommands); YOLO supplies true. */
 	autoApproveSafe: boolean
-	/** "Execute all commands" (executeAllCommands); YOLO supplies true. */
+	/** "Run any command" (executeAllCommands); YOLO supplies true. */
 	autoApproveAll: boolean
 	/** Result of commandPolicyMentionsProtectedPath for this command. */
 	touchesProtectedPath: boolean
@@ -339,9 +339,9 @@ export type CommandPolicyResult =
  *
  *  0a. protected command            -> deny   (YOLO and allow settings cannot change this)
  *  0b. `aihydro` CLI launch          -> deny   (the CLI subagent is retired; no setting re-enables it)
- *  0e. touches a protected path     -> ask    (YOLO and "Execute all commands" included)
+ *  0e. touches a protected path     -> ask    (YOLO and "Run any command" included)
  *  1.  "Run read-only commands" off -> ask
- *  2.  "Execute all commands" on    -> run    (the user's explicit choice; YOLO lands here)
+ *  2.  "Run any command" on    -> run    (the user's explicit choice; YOLO lands here)
  *  3.  host says read-only and the model did not ask for approval -> run
  *  4.  everything else              -> ask
  */
