@@ -1,5 +1,6 @@
 import { setRecordedFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
 import { expect } from "chai"
+import { createHash } from "crypto"
 import * as fs from "fs"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import * as os from "os"
@@ -57,6 +58,25 @@ describe("projectIdentity", () => {
 			expect(await dirProjectKey(path.join(base, "link", "sub"))).to.equal(
 				await dirProjectKey(path.join(base, "real", "sub")),
 			)
+		} finally {
+			fs.rmSync(base, { recursive: true, force: true })
+		}
+	})
+
+	it("keeps the input case of an existing directory (Python realpath does not canonicalise case)", async () => {
+		const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pidcase-")))
+		try {
+			const dir = path.join(base, "MixedCase")
+			fs.mkdirSync(dir)
+			const flipped = path.join(base, "mixedcase")
+			// Only meaningful on a case-insensitive filesystem (default macOS, Windows); a case-sensitive one has no such dir.
+			if (!fs.existsSync(flipped)) {
+				return
+			}
+			if (process.platform === "win32") {
+				return // Windows canonicalises through GetFinalPathName, exactly as Python's ntpath.realpath does
+			}
+			expect(await dirProjectKey(flipped)).to.equal("dir:" + createHash("sha256").update(flipped, "utf8").digest("hex"))
 		} finally {
 			fs.rmSync(base, { recursive: true, force: true })
 		}

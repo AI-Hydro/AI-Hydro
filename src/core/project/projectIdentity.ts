@@ -41,15 +41,19 @@ export interface ProjectKeyHub {
  * symlinks first, so `link/../x` can differ), and a dangling symlink at the tail is kept as written here but
  * followed by Python's non-strict `realpath`. Such paths get a different `dir:` key than the server computes.
  */
-// The native realpath (realpath(3) / GetFinalPathNameByHandle) is what Python's `os.path.realpath` uses, so
-// symlinks, junctions and the on-disk case of existing path parts agree. No case folding is applied here:
-// the server's `project_key` applies none either.
+// Windows only: the native realpath (GetFinalPathNameByHandle) is what Python's `ntpath.realpath` uses, so
+// junctions and on-disk case agree there. On POSIX Python's realpath is pure lstat/readlink and keeps the
+// input's case, while the native call (realpath(3)) canonicalises case on macOS (`/users` -> `/Users`), so
+// POSIX uses the plain JS realpath, which also keeps the input case. No case folding anywhere: the server's
+// `project_key` applies none.
 const realpathNative = promisify(realpath.native)
+const realpathPlain = promisify(realpath)
+const realpathOs = process.platform === "win32" ? realpathNative : realpathPlain
 
 async function realpathLoose(p: string): Promise<string> {
 	const abs = path.resolve(p)
 	try {
-		return await realpathNative(abs)
+		return await realpathOs(abs)
 	} catch {
 		const parent = path.dirname(abs)
 		if (parent === abs) {
