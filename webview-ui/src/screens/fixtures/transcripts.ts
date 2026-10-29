@@ -7,6 +7,7 @@
  */
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
+import { buildAskAboutMapAgentPrompt } from "../../components/map/mapAgentPrompts"
 import { apiReq, completion, mcpCall, mcpResult, step, t0, task, text } from "./chat"
 
 /** Sequential timestamps so every row is unique and ordered. */
@@ -659,5 +660,140 @@ export const runningTaskIdle: AiHydroMessage[] = (() => {
 		mcpResult(c(), { _run_id: "fx-run-0402", note: "synthetic" }),
 		completion(c(), "Fixture answer, not a result."),
 		ask(c(), "completion_result"),
+	]
+})()
+
+// ── X1-C0: chat-polish P0 "before" fixtures. They pin today's rendering so X1-C1 (aggregation, a real Focus) is
+// measured against them. All values are invented layout data; nothing here is a result. ─────────────────────────
+
+/**
+ * The owner's reviewed session shape (81a596a0f): two answered calls to a server that declares no effects, one call
+ * refused with SESSION_RESOLUTION_FAILED, and a pending `list_features` approval at the tail. The state half of the
+ * shape (risky policy, 45 always-allowed tools, a to-do 2/4) lives in the screen definition.
+ */
+export const ownerApprovalPendingTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	return [
+		task("What features are near the layer I selected on the map? Layout fixture."),
+		apiReq(c(), 0.0187),
+		reasoning(c(), "I should check the session first, then measure the selected feature."),
+		checkpoint(c()),
+		mcpCall(c(), "get_session_summary", {}),
+		mcpResult(c(), { _run_id: "fx-run-0501", note: "synthetic" }),
+		apiReq(c(), 0.0204),
+		mcpCall(c(), "measure_feature", { feature_id: "fx-feature-1" }),
+		mcpResult(c(), { _run_id: "fx-run-0502", note: "synthetic" }),
+		checkpoint(c()),
+		apiReq(c(), 0.0219),
+		mcpCall(c(), "measure_feature", { feature_id: "fx-feature-2" }),
+		mcpResult(
+			c(),
+			`Error:\n${JSON.stringify({ error: true, code: "SESSION_RESOLUTION_FAILED", message: "no study for this call (synthetic)" })}`,
+		),
+		apiReq(c(), 0.0233),
+		text(c(), "The measurement could not resolve a study. I will list the features instead."),
+		ask(
+			c(),
+			"use_mcp_server",
+			toolJson({
+				serverName: "ai-hydro",
+				type: "use_mcp_tool",
+				toolName: "list_features",
+				arguments: JSON.stringify({ layer: "fx-layer" }, null, 2),
+			}),
+		),
+	]
+})()
+
+/** To-do text for the owner shape: 2 of 4 done (the focus-chain checklist the host keeps in state). */
+export const ownerTodoChecklist = [
+	"- [x] Check the session",
+	"- [x] Measure the first feature",
+	"- [ ] List the features near the layer",
+	"- [ ] Summarise what was found",
+].join("\n")
+
+/**
+ * Four read-only commands that ran under "Execute all commands" (policyClass auto_run_all), the third one exiting
+ * non-zero. The host has not recorded that they were read-only; the presenter lifts each as a policy line.
+ */
+export const autoRunAllCommandsTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const run = (cmd: string, extra: Partial<AiHydroMessage> = {}) =>
+		say(c(), "command", `${cmd}\nOutput:\n(synthetic output)`, {
+			commandCompleted: true,
+			askOutcome: "approved",
+			policyClass: "auto_run_all",
+			exitCode: 0,
+			execOutcome: "completed",
+			...extra,
+		})
+	return [
+		task("Look around the synthetic project before changing anything. Layout fixture."),
+		apiReq(c()),
+		run("ls -la"),
+		apiReq(c()),
+		run("cat README.md"),
+		apiReq(c()),
+		run("git status --short", { exitCode: 128, execOutcome: "failed" }),
+		apiReq(c()),
+		run("grep -rn TODO src"),
+		apiReq(c()),
+		text(c(), "Three commands ran cleanly; git status exited non-zero. Fixture prose only."),
+	]
+})()
+
+/** Twelve first-party calls to a server without annotations: the clutter case at Focus (names are synthetic). */
+export const MANY_UNANNOTATED_TOOLS = [
+	"data_fetch",
+	"delineate_basin",
+	"compute_signatures",
+	"extract_hydrologic_signatures",
+	"get_forcing",
+	"baseflow_separation",
+	"flow_duration_curve",
+	"trend_analysis",
+] as const
+export const manyUnannotatedTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const rows: AiHydroMessage[] = [task("Run the long synthetic workup for SYN-00000001. Layout fixture."), apiReq(c())]
+	for (let i = 0; i < 12; i++) {
+		rows.push(mcpCall(c(), MANY_UNANNOTATED_TOOLS[i % MANY_UNANNOTATED_TOOLS.length], { gauge_id: "SYN-00000001" }))
+		rows.push(mcpResult(c(), { _run_id: `fx-run-06${String(i).padStart(2, "0")}`, note: "synthetic" }))
+		rows.push(apiReq(c(), 0.011 + i / 1000))
+	}
+	rows.push(completion(c(), "Twelve recorded runs are listed above. Fixture answer, not a result."))
+	return rows
+})()
+
+/** The user's own words in the map-launched fixture. */
+export const MAP_LAUNCH_QUESTION = "Which of these features drains to the outlet? Layout fixture."
+
+/**
+ * A chat started from the map (history origin "map"). Today the first user turn is the whole wrapped prompt, built by
+ * the real `buildAskAboutMapAgentPrompt` over invented coordinates, layers and properties (UX program §2.2 C2). X1-C2
+ * collapses it to a "From the map" chip that shows `MAP_LAUNCH_QUESTION`; this fixture is the "before".
+ */
+export const mapLaunchedFirstTurnTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const prompt = buildAskAboutMapAgentPrompt({
+		lat: 40.12345,
+		lon: -100.54321,
+		layerName: "Fixture river segments",
+		featureProperties: { COMID: 1234567, uparea: 812.4, name: "Fixture Creek", stream_order: 4, source: "synthetic" },
+		visibleLayerNames: ["Fixture river segments", "Fixture basins", "Fixture gauges"],
+		selectedFeatureCount: 3,
+		selectedFeatureSummaries: [
+			{ layerName: "Fixture river segments", properties: { COMID: 1234567, uparea: 812.4 } },
+			{ layerName: "Fixture river segments", properties: { COMID: 1234568, uparea: 640.1 } },
+			{ layerName: "Fixture basins", properties: { id: "fx-basin-1", area: 95.2 } },
+		],
+		userQuestion: MAP_LAUNCH_QUESTION,
+	})
+	return [
+		task(prompt),
+		apiReq(c(), 0.0162),
+		text(c(), "I will check which selected segments are upstream of the outlet. Fixture prose only."),
+		completion(c(), "The answer would go here. Fixture answer, not a result."),
 	]
 })()

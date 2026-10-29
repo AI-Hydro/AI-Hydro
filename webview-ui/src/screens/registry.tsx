@@ -14,6 +14,7 @@ import {
 	fixtureAlwaysAllowServers,
 	fixtureAnnotatedServers,
 	fixtureMcpServers,
+	fixtureOwnerServers,
 	fixtureUnannotatedServers,
 	provisionalCall,
 	type RecordedCall,
@@ -125,6 +126,40 @@ const taskState = (aihydroMessages: NonNullable<ScreenDef["state"]>["aihydroMess
 	currentTaskItem: taskItem,
 	aihydroMessages,
 	...(withScienceServer ? { mcpServers: fixtureMcpServers } : {}),
+})
+
+/** The owner's risky policy: every command and every file edit runs without asking (needs a higher version to apply). */
+const ownerAutoRunSettings = {
+	...DEFAULT_AUTO_APPROVAL_SETTINGS,
+	version: DEFAULT_AUTO_APPROVAL_SETTINGS.version + 1,
+	actions: {
+		...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
+		readFiles: true,
+		editFiles: true,
+		editFilesExternally: true,
+		executeSafeCommands: true,
+		executeAllCommands: true,
+		useMcp: true,
+	},
+}
+
+/** Screen options for the owner-session fixture at one detail level (the only difference between the two screens). */
+const ownerShape = (detail: "normal" | "focus"): Partial<ScreenDef> => ({
+	mcpServers: fixtureOwnerServers,
+	state: {
+		...taskState(tx.ownerApprovalPendingTask),
+		transcriptDetail: detail,
+		autoApprovalSettings: ownerAutoRunSettings,
+		currentFocusChainChecklist: tx.ownerTodoChecklist,
+	},
+	expectVisible: [
+		"text=The measurement could not resolve a study.",
+		"text=SESSION_RESOLUTION_FAILED",
+		"[data-testid=inline-approval]",
+		"[data-testid=auto-run-risk]",
+		"text=45 MCP tools always allowed",
+	],
+	expectAbsent: ["text=API Request"],
 })
 
 /** A synthetic transcript screen pinned to its end; `visible` is text that must be inside the viewport. */
@@ -456,6 +491,75 @@ export const screens: ScreenDef[] = [
 				"text=effect not declared by the server",
 			],
 			expectAbsent: ["text=API Request"],
+		},
+	),
+	// ── X1-C0 (chat-polish P0): the "before" images X1-C1..C4 are measured against. No product change. ──────────
+	// The owner's reviewed session shape: two unannotated answered calls, a SESSION_RESOLUTION_FAILED refusal, a pending
+	// list_features ask, a risky auto-run policy, 45 always-allowed tools and a to-do 2/4. Normal and Focus must look
+	// different after X1-C1; today the lifted lines and the group header are identical (see chatDetailBaseline.test.ts).
+	chatTx(
+		"chat-owner-approval-pending",
+		"Owner session shape at Normal: refusal, pending approval, risky policy, 45 granted tools, to-do 2/4",
+		tx.ownerApprovalPendingTask,
+		"The measurement could not resolve a study.",
+		ownerShape("normal"),
+	),
+	chatTx(
+		"chat-owner-approval-pending-focus",
+		"Owner session shape at Focus (same transcript and state)",
+		tx.ownerApprovalPendingTask,
+		"The measurement could not resolve a study.",
+		ownerShape("focus"),
+	),
+	// Four commands that ran under "Execute all commands" (auto_run_all), one exiting non-zero.
+	chatTx(
+		"chat-auto-run-all-commands",
+		"Four commands auto-ran under All Commands, one exited non-zero",
+		tx.autoRunAllCommandsTask,
+		"Three commands ran cleanly; git status exited non-zero.",
+		{
+			state: {
+				...taskState(tx.autoRunAllCommandsTask, true),
+				autoApprovalSettings: ownerAutoRunSettings,
+			},
+			expectVisible: [
+				"text=Three commands ran cleanly; git status exited non-zero.",
+				"[data-testid=work-group] button[aria-expanded=false]",
+				"text=Exited with code 128",
+				"text=auto run all",
+			],
+			expectAbsent: ["text=API Request"],
+		},
+	),
+	// Twelve calls to a server with no annotations, at Focus: the clutter case.
+	chatTx(
+		"chat-many-unannotated",
+		"Twelve first-party calls, old server without annotations, at Focus",
+		tx.manyUnannotatedTask,
+		"Twelve recorded runs are listed above.",
+		{
+			mcpServers: fixtureUnannotatedServers,
+			state: { ...taskState(tx.manyUnannotatedTask, true), transcriptDetail: "focus" },
+			expectVisible: [
+				"text=Twelve recorded runs are listed above.",
+				"[data-testid=work-group] button[aria-expanded=false]",
+				"text=effect not declared by the server",
+			],
+			expectAbsent: ["text=API Request"],
+		},
+	),
+	// §2.2 C2: a chat started from the map; the first user turn is the whole wrapped template today.
+	chatTx(
+		"chat-map-launched-first-turn",
+		"Map-launched chat: the first turn is the long wrapped template",
+		tx.mapLaunchedFirstTurnTask,
+		"The answer would go here. Fixture answer, not a result.",
+		{
+			state: {
+				...taskState(tx.mapLaunchedFirstTurnTask, true),
+				currentTaskItem: { ...taskItem, origin: "map", userQuestion: tx.MAP_LAUNCH_QUESTION },
+			},
+			expectVisible: ["text=The answer would go here. Fixture answer, not a result."],
 		},
 	),
 	// Approvals are answered on their own card (W2-E2): the footer carries no Run/Deny for these asks.

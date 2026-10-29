@@ -1,0 +1,239 @@
+{
+	"ownerApprovalPendingTask": {
+		"focus": {
+			"items": 4,
+			"groups": 1,
+			"liftedLines": 3,
+			"liftedByReason": {
+				"approved_security": 2,
+				"mcp_error": 1
+			},
+			"headerCalls": 3,
+			"pending": 1,
+			"visibleRows": 7
+		},
+		"normal": {
+			"items": 4,
+			"groups": 1,
+			"liftedLines": 3,
+			"liftedByReason": {
+				"approved_security": 2,
+				"mcp_error": 1
+			},
+			"headerCalls": 3,
+			"pending": 1,
+			"visibleRows": 7
+		},
+		"verbose": {
+			"items": 16,
+			"groups": 0,
+			"liftedLines": 0,
+			"liftedByReason": {},
+			"headerCalls": 0,
+			"pending": 0,
+			"visibleRows": 16
+		}
+	},
+	"autoRunAllCommandsTask": {
+		"focus": {
+			"items": 3,
+			"groups": 1,
+			"liftedLines": 4,
+			"liftedByReason": {
+				"policy_command": 3,
+				"exit_nonzero": 1
+			},
+			"headerCalls": 4,
+			"pending": 0,
+			"visibleRows": 7
+		},
+		"normal": {
+			"items": 3,
+			"groups": 1,
+			"liftedLines": 4,
+			"liftedByReason": {
+				"policy_command": 3,
+				"exit_nonzero": 1
+			},
+			"headerCalls": 4,
+			"pending": 0,
+			"visibleRows": 7
+		},
+		"verbose": {
+			"items": 11,
+			"groups": 0,
+			"liftedLines": 0,
+			"liftedByReason": {},
+			"headerCalls": 0,
+			"pending": 0,
+			"visibleRows": 11
+		}
+	},
+	"manyUnannotatedTask": {
+		"focus": {
+			"items": 3,
+			"groups": 1,
+			"liftedLines": 12,
+			"liftedByReason": {
+				"approved_security": 12
+			},
+			"headerCalls": 12,
+			"pending": 0,
+			"visibleRows": 15
+		},
+		"normal": {
+			"items": 3,
+			"groups": 1,
+			"liftedLines": 12,
+			"liftedByReason": {
+				"approved_security": 12
+			},
+			"headerCalls": 12,
+			"pending": 0,
+			"visibleRows": 15
+		},
+		"verbose": {
+			"items": 39,
+			"groups": 0,
+			"liftedLines": 0,
+			"liftedByReason": {},
+			"headerCalls": 0,
+			"pending": 0,
+			"visibleRows": 39
+		}
+	},
+	"mapLaunchedFirstTurnTask": {
+		"focus": {
+			"items": 4,
+			"groups": 1,
+			"liftedLines": 0,
+			"liftedByReason": {},
+			"headerCalls": 0,
+			"pending": 0,
+			"visibleRows": 4
+		},
+		"normal": {
+			"items": 4,
+			"groups": 1,
+			"liftedLines": 0,
+			"liftedByReason": {},
+			"headerCalls": 0,
+			"pending": 0,
+			"visibleRows": 4
+		},
+		"verbose": {
+			"items": 4,
+			"groups": 0,
+			"liftedLines": 0,
+			"liftedByReason": {},
+			"headerCalls": 0,
+			"pending": 0,
+			"visibleRows": 4
+		}
+	},
+	"run8ToolsTask": {
+		"focus": {
+			"items": 3,
+			"groups": 1,
+			"liftedLines": 8,
+			"liftedByReason": {
+				"approved_security": 8
+			},
+			"headerCalls": 8,
+			"pending": 0,
+			"visibleRows": 11
+		},
+		"normal": {
+			"items": 3,
+			"groups": 1,
+			"liftedLines": 8,
+			"liftedByReason": {
+				"approved_security": 8
+			},
+			"headerCalls": 8,
+			"pending": 0,
+			"visibleRows": 11
+		},
+		"verbose": {
+			"items": 27,
+			"groups": 0,
+			"liftedLines": 0,
+			"liftedByReason": {},
+			"headerCalls": 0,
+			"pending": 0,
+			"visibleRows": 27
+		}
+	},
+	"turnMachineryTask": {
+		"focus": {
+			"items": 4,
+			"groups": 1,
+			"liftedLines": 3,
+			"liftedByReason": {
+				"info_notice": 1,
+				"approved_security": 2
+			},
+			"headerCalls": 2,
+			"pending": 0,
+			"visibleRows": 7
+		},
+		"normal": {
+			"items": 4,
+			"groups": 1,
+			"liftedLines": 3,
+			"liftedByReason": {
+				"info_notice": 1,
+				"approved_security": 2
+			},
+			"headerCalls": 2,
+			"pending": 0,
+			"visibleRows": 7
+		},
+		"verbose": {
+			"items": 17,
+			"groups": 0,
+			"liftedLines": 0,
+			"liftedByReason": {},
+			"headerCalls": 0,
+			"pending": 0,
+			"visibleRows": 17
+		}
+	},
+	"failureLiftedTask": {
+		"focus": {
+			"items": 5,
+			"groups": 2,
+			"liftedLines": 3,
+			"liftedByReason": {
+				"mcp_error": 1,
+				"info_notice": 1,
+				"diff_error": 1
+			},
+			"headerCalls": 1,
+			"pending": 0,
+			"visibleRows": 8
+		},
+		"normal": {
+			"items": 5,
+			"groups": 2,
+			"liftedLines": 3,
+			"liftedByReason": {
+				"mcp_error": 1,
+				"info_notice": 1,
+				"diff_error": 1
+			},
+			"headerCalls": 1,
+			"pending": 0,
+			"visibleRows": 8
+		},
+		"verbose": {
+			"items": 11,
+			"groups": 0,
+			"liftedLines": 0,
+			"liftedByReason": {},
+			"headerCalls": 0,
+			"pending": 0,
+			"visibleRows": 11
+		}
+	}
+}
