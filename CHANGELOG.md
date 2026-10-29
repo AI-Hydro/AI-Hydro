@@ -9,6 +9,13 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.2] — unreleased
+
+### Added — chat-polish P0 fixtures: the "before" images and row counts (UX program Wave 1, PR X1-C0, branch `vision2040/x1-c0-chat-fixtures`)
+
+- **Dev-only; no product change.** Five new harness screens render today's chat so X1-C1 (aggregation, a real Focus, level reset) is measured against them: `chat-owner-approval-pending` and `chat-owner-approval-pending-focus` (the reviewed session's shape: two answered calls to a server without annotations, a `SESSION_RESOLUTION_FAILED` refusal, a pending `list_features` approval, a risky auto-run policy, 45 always-allowed tools, a to-do 2/4), `chat-auto-run-all-commands` (four commands under All Commands, one exiting non-zero), `chat-many-unannotated` (twelve unannotated calls at Focus) and `chat-map-launched-first-turn` (a map-launched chat whose first turn is the whole wrapped template). All data is invented layout data.
+- **Focus equals Normal, now measurable.** `chatDetailBaseline.test.ts` runs the real presenter at every detail level over these and three older fixtures and compares the row counts with `webview-ui/screens-baseline/chat-detail-rows.json`. On every fixture Focus and Normal produce identical rows; a test pins that defect and X1-C1 is expected to replace it. Checker budgets exist for the new screens only; no existing entry changed.
+
 ## [0.4.1] — unreleased (Wave 0. Version 0.4.0 was set on 2026-10-17 and never published; by owner decision on 2026-10-29 the extension stays on the 0.4.x line, so Wave 0 ships as 0.4.1 instead of 0.5.0)
 
 ### Added — managed AI-Hydro tools environment and tools status (UX program Wave 0, PR X0-3, branch `vision2040/x0-tools-env`)

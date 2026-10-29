@@ -171,3 +171,34 @@ export const fixtureAlwaysAllowServers: McpServer[] = [
 		],
 	},
 ]
+
+/**
+ * The owner-session shape (X1-C0): the first-party server publishes no annotations (every call has an undeclared
+ * effect), and a second trusted server carries 45 per-tool "always allow" grants whose effects are declared, so the
+ * composer chip counts all 45. Tool names are synthetic; this reproduces the SHAPE of the reviewed session, not its data.
+ */
+export const OWNER_ALWAYS_ALLOWED_TOOLS = 45
+export const fixtureOwnerServers: McpServer[] = [
+	{
+		name: "ai-hydro",
+		config: "{}",
+		status: "connected",
+		trust: { trusted: true, reason: "fixture: first-party launcher matches the recorded launch" },
+		tools: ["get_session_summary", "measure_feature", "list_features"].map((name) => ({
+			name,
+			description: "Synthetic fixture tool, no annotations.",
+		})),
+	},
+	{
+		name: "fixture-granted",
+		config: "{}",
+		status: "connected",
+		trust: { trusted: true, reason: "Fixture: trusted." },
+		tools: Array.from({ length: OWNER_ALWAYS_ALLOWED_TOOLS }, (_, i) => ({
+			name: `granted_tool_${String(i + 1).padStart(2, "0")}`,
+			description: "Synthetic fixture tool.",
+			autoApprove: true,
+			annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+		})),
+	},
+]
