@@ -141,7 +141,11 @@ describe("historyPatch (X0-1: single writer for HistoryItem)", () => {
 
 	it("does not mutate its inputs, and appends an unknown id", () => {
 		const history = Object.freeze([Object.freeze(base())]) as HistoryItem[]
-		const { history: next } = patchHistory(history, { id: "t2", ts: 5, task: "x", tokensIn: 0, tokensOut: 0, totalCost: 0 }, "loop")
+		const { history: next } = patchHistory(
+			history,
+			{ id: "t2", ts: 5, task: "x", tokensIn: 0, tokensOut: 0, totalCost: 0 },
+			"loop",
+		)
 		expect(history).to.have.length(1)
 		expect(next.map((h) => h.id)).to.deep.equal(["t1", "t2"])
 	})
