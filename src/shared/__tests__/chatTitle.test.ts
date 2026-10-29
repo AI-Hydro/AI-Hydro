@@ -176,6 +176,12 @@ describe("X1-P2 chat titles: ids in other scripts and split ids", () => {
 		expect(checkTitle("Site \u3007\u4e00\u3007\u4e09\u4e00\u4e94\u3007\u3007").ok).to.equal(false)
 	})
 
+	it("a short greeting keeps its words rather than losing them to the opener rule", () => {
+		expect(fallbackTitle({ task: "Hello, AI-Hydro!" })).to.equal("Hello, AI-Hydro")
+		expect(fallbackTitle({ task: "Hi there" })).to.equal("Hi there")
+		expect(fallbackTitle({ task: "Please compare baseflow in two basins" })).to.equal("Compare baseflow in two basins")
+	})
+
 	it("stripping an id leaves no empty brackets", () => {
 		expect(fallbackTitle({ task: "Creek (prj_01M6ABCDEF) near Town" })).to.equal("Creek near Town")
 		expect(fallbackTitle({ task: "Creek [st_abc99] near Town" })).to.equal("Creek near Town")

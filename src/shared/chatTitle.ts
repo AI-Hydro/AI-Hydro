@@ -263,7 +263,10 @@ function cutAtWord(text: string, max: number): string {
 
 /** The first meaningful words of `text`: fillers trimmed, ids and results dropped, at most `words` words. */
 export function leadingWords(text: string, words: number = FALLBACK_WORDS): string {
-	const cleaned = plainText(text).replace(LEADING_FILLER, "")
+	const plain = plainText(text)
+	// An opener is dropped only when enough is left to name the chat: "Hello, AI-Hydro!" stays whole.
+	const trimmed = plain.replace(LEADING_FILLER, "")
+	const cleaned = trimmed.split(" ").filter(Boolean).length >= 3 ? trimmed : plain
 	const kept: string[] = []
 	let afterDropped = false
 	for (const raw of cleaned.split(" ")) {
