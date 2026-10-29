@@ -156,8 +156,10 @@ try {
 	// Every external request is logged (to assert zoom/extent limits) and answered locally; no real provider
 	// requests or credentials.
 	const requested = []
+	const requestedAt = []
 	await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => {
 		requested.push(route.request().url())
+		requestedAt.push(Date.now())
 		return route.fulfill(
 			failing
 				? { status: 403, body: "intentional smoke failure" }
@@ -195,7 +197,12 @@ try {
 		.evaluate((canvas) => canvas.dispatchEvent(new Event("webglcontextrestored")))
 	await page.locator("canvas#ai-hydro-research-map").waitFor({ timeout: 30000 })
 	await noRendererError("context restore")
-	await page.getByRole("button", { name: /^Swipe/ }).click()
+	// Rare tools live in the More menu on the 40 px rail (map-polish MP1).
+	const openFromMore = async (name) => {
+		await page.getByRole("button", { name: "More tools", exact: true }).click()
+		await page.getByRole("menuitem", { name }).click()
+	}
+	await openFromMore(/^Swipe/)
 	await page.getByLabel("Enable Swipe Tool").check()
 	await page.locator("canvas").nth(1).waitFor({ timeout: 30000 })
 	await noRendererError("swipe mode")
@@ -203,16 +210,21 @@ try {
 	await noRendererError("retry in swipe mode")
 	await page.getByLabel("Enable Swipe Tool").uncheck({ timeout: 90000 })
 	await page.getByRole("button", { name: "Close panel", exact: true }).click()
-	await page.getByRole("button", { name: "Export snapshot", exact: true }).click()
+	await openFromMore("Export snapshot")
 	assert.equal(await page.getByRole("button", { name: "Research Plate Export", exact: true }).isDisabled(), true)
-	// Keep export readiness visible while retrying the underlying map.
+	// Export is a modal sheet now: close it (Escape) to reach the map, then reopen it to check readiness.
+	await page.keyboard.press("Escape")
+	await page.getByRole("dialog").waitFor({ state: "detached", timeout: 10000 })
 	failing = false
 	await page.getByRole("button", { name: "Retry imagery", exact: true }).click()
 	await page.getByRole("alert").waitFor({ state: "hidden", timeout: 30000 })
 	await page.waitForLoadState("networkidle")
 	await page.waitForTimeout(1000)
 	assert.equal(await page.getByRole("alert").count(), 0)
+	await openFromMore("Export snapshot")
 	assert.equal(await page.getByRole("button", { name: "Research Plate Export", exact: true }).isEnabled(), true)
+	await page.keyboard.press("Escape")
+	await page.getByRole("dialog").waitFor({ state: "detached", timeout: 10000 })
 	assert.deepEqual(errors, [])
 	// Basemap limits: the default is the muted Esri Gray Canvas base; the USGS hydrography overlay is US-only and
 	// the station is in India, so it must not be requested at all (extent); and zooming far past the source's
@@ -247,6 +259,91 @@ try {
 	})
 	assert.ok(canvas.redPixels > 0, "Synthetic red station must actually render")
 	assert.ok(canvas.width > 0 && canvas.height > 0 && canvas.capture.length > 100)
+	// Falsifier for docking (map-polish §12): a docked panel resizes the deck canvas on every toggle. A frame over
+	// 100 ms, or a burst of tile requests, right after a toggle means the plan falls back to overlay. requestAnimationFrame
+	// timestamps are recorded in the page, aligned to wall-clock time, and compared with idle windows of the same length.
+	await page.evaluate(() => {
+		window.__frames = []
+		let last = performance.now()
+		const tick = (t) => {
+			window.__frames.push([performance.timeOrigin + t, t - last])
+			last = t
+			requestAnimationFrame(tick)
+		}
+		requestAnimationFrame(tick)
+	})
+	const WINDOW_MS = 700
+	const wallClock = () => page.evaluate(() => performance.timeOrigin + performance.now())
+	const sum = (xs) => xs.reduce((a, b) => a + b, 0)
+	// One run = 12 Layers-panel toggles and 12 idle windows at the given map width. 1100 px docks the panel (the canvas
+	// resizes); 900 px floats it over the canvas (same panel render, no canvas resize), which is the control.
+	const probeRun = async (mapWidth) => {
+		await page.evaluate((w) => {
+			document.getElementById("root").style.width = `${w}px`
+		}, mapWidth)
+		await page.waitForTimeout(800)
+		const mode = await page.evaluate(() =>
+			document.querySelector("[data-map-chrome-root]")?.getAttribute("data-map-chrome-mode"),
+		)
+		const toggle = []
+		const idle = []
+		for (let i = 0; i < 12; i++) {
+			await page.waitForTimeout(400)
+			const idleStart = await wallClock()
+			await page.waitForTimeout(WINDOW_MS)
+			idle.push([idleStart, idleStart + WINDOW_MS])
+			const start = await wallClock()
+			await page.getByRole("button", { name: /^Layer manager/ }).click()
+			await page.waitForTimeout(WINDOW_MS)
+			toggle.push([start, start + WINDOW_MS])
+		}
+		const frames = await page.evaluate(() => window.__frames)
+		const worst = (list) =>
+			Math.max(
+				0,
+				...list.map(([from, to]) =>
+					Math.max(0, ...frames.filter(([end]) => end > from && end <= to).map(([, dt]) => dt)),
+				),
+			)
+		const per = (list) => list.map((w) => Number(worst([w]).toFixed(0)))
+		const requestsIn = (list) => sum(list.map(([from, to]) => requestedAt.filter((t) => t > from && t <= to).length))
+		const sorted = per(toggle).sort((a, b) => a - b)
+		return {
+			mapWidth,
+			panelMode: mode,
+			worstFrameMsAfterToggle: Math.max(...sorted),
+			medianWorstFrameMsAfterToggle: sorted[Math.floor(sorted.length / 2)],
+			worstFrameMsIdle: Number(worst(idle).toFixed(1)),
+			tileRequestsAfterToggles: requestsIn(toggle),
+			tileRequestsIdle: requestsIn(idle),
+		}
+	}
+	const docked = await probeRun(1100)
+	const overlay = await probeRun(900)
+	const frameProbe = {
+		method: "requestAnimationFrame deltas in headless Chromium with SwiftShader (software) GL; 12 toggles per mode, 700 ms windows, idle windows for scale",
+		docked,
+		overlayControl: overlay,
+	}
+	await page.evaluate(() => {
+		document.getElementById("root").style.width = "1100px"
+	})
+	assert.equal(docked.panelMode, "docked")
+	assert.equal(overlay.panelMode, "overlay")
+	assert.ok((await page.evaluate(() => window.__frames.length)) > 100, "rAF should be running")
+	console.log(JSON.stringify({ frameProbe }))
+	// Software GL redraws a full-size deck canvas in tens of ms, so the plan's absolute 100 ms line cannot be judged here
+	// (the overlay control that never resizes the canvas is over it too). What this gate can show is that docking is not
+	// worse than floating, and that a resize does not trigger a tile request burst.
+	assert.ok(
+		docked.medianWorstFrameMsAfterToggle <= overlay.medianWorstFrameMsAfterToggle + 50,
+		`docking is slower than floating: median worst frame ${docked.medianWorstFrameMsAfterToggle} ms vs ${overlay.medianWorstFrameMsAfterToggle} ms`,
+	)
+	assert.ok(
+		docked.tileRequestsAfterToggles <= 12,
+		`tile request burst after docked toggles: ${docked.tileRequestsAfterToggles}`,
+	)
+	await openFromMore("Export snapshot")
 	await page.getByRole("button", { name: "Quick Export", exact: true }).click()
 	await page.waitForFunction(() => Boolean(window.__savedMapExport), { timeout: 30000 })
 	const saved = await page.evaluate(() => window.__savedMapExport)

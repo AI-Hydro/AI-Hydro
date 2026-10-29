@@ -31,7 +31,7 @@ import { catalogueModules, courseManifest, courseModule, courseProgress, executa
 import * as tx from "./fixtures/transcripts"
 import { MapBannerVariantsScreen } from "./MapBannerVariantsScreen"
 import { PrimitivesScreen } from "./PrimitivesScreen"
-import type { ScreenDef } from "./types"
+import type { ScreenDef, ScreenStep } from "./types"
 
 const app = () => <App />
 
@@ -91,6 +91,17 @@ const mapScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): S
 	render: app,
 	...extra,
 })
+
+/**
+ * Steps that open a tool whichever chrome the width gives: the rail (800 and up), or the collapsed "Map tools" button
+ * and its menu (a bottom sheet, below 600). `more` goes through the More menu where there is a rail.
+ */
+const openTool = (label: string, more = false): ScreenStep[] => [
+	{ click: 'button[aria-label^="Map tools"]', optional: true },
+	...(more ? ([{ click: 'button[aria-label="More tools"]', optional: true }] as const) : []),
+	{ click: `button[aria-label^="${label}"]` },
+	{ wait: 500 },
+]
 
 const chatScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): ScreenDef => ({
 	id,
@@ -885,7 +896,7 @@ export const screens: ScreenDef[] = [
 	}),
 	mapScreen("map-basemap-panel", "Basemap panel with Reset to hydrology default", {
 		layers: [basinPolygon],
-		steps: [{ click: 'button[aria-label="Basemap"]' }, { wait: 500 }],
+		steps: [...openTool("Layer manager"), { click: "#map-chrome-tab-basemap" }, { wait: 500 }],
 	}),
 	{
 		id: "map-banner-variants",
@@ -897,7 +908,7 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-error-imagery", "Map with every basemap tile failing (alert, Retry imagery)", { layers: [basinPolygon] }),
 	mapScreen("map-error-partial-tiles", "Map with one basemap tile missing (quiet note, no alert)", { layers: [basinPolygon] }),
 	mapScreen("map-empty-panel-open", "No layers with a tool panel open (no empty-state card)", {
-		steps: [{ click: 'button[aria-label="Basemap"]' }, { wait: 500 }],
+		steps: [...openTool("Layer manager"), { click: "#map-chrome-tab-basemap" }, { wait: 500 }],
 	}),
 	mapScreen("map-sync-hydrating", "Saved layers still restoring (no empty-state card)", { mapHydrating: true }),
 	mapScreen("map-sync-loading", "Layer sync still loading (no empty-state card)", { mapConnection: "loading" }),
@@ -908,13 +919,12 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-features", "Map with basin, gauge, rivers and raster (toolbar visible)", { layers: featureLayers() }),
 	mapScreen("map-layer-manager", "Map layer manager open", {
 		layers: featureLayers(),
-		steps: [{ click: 'button[aria-label^="Layer manager"]' }, { wait: 500 }],
+		steps: openTool("Layer manager"),
 	}),
 	mapScreen("map-layer-provenance", "Layer provenance tab with MISSING_PROVENANCE", {
 		layers: featureLayers(),
 		steps: [
-			{ click: 'button[aria-label^="Layer manager"]' },
-			{ wait: 500 },
+			...openTool("Layer manager"),
 			{ click: 'button[title="Show details"]', nth: 2 },
 			{ wait: 300 },
 			{ click: 'button:text-is("Provenance")' },
@@ -924,18 +934,18 @@ export const screens: ScreenDef[] = [
 	}),
 	mapScreen("map-time-slider", "Map time slider", {
 		layers: featureLayers(),
-		steps: [{ click: 'button[aria-label^="Time slider"]' }, { wait: 500 }],
+		steps: openTool("Time slider", true),
 	}),
 	mapScreen("map-swipe", "Map swipe compare", {
 		layers: [basinPolygon, ...featureLayers().slice(0, 1)],
-		steps: [{ click: 'button[aria-label^="Swipe"]' }, { wait: 500 }],
+		steps: openTool("Swipe", true),
 	}),
 	mapScreen("map-export-success", "Map export panel, artifacts written", {
 		layers: featureLayers(),
 		exportOutputs: 2,
 		steps: [
-			{ click: 'button[aria-label="Export snapshot"]' },
-			{ wait: 800 },
+			...openTool("Export snapshot", true),
+			{ wait: 300 },
 			{ click: 'button:has-text("Quick Export")' },
 			{ wait: 1200 },
 		],
@@ -944,11 +954,53 @@ export const screens: ScreenDef[] = [
 		layers: featureLayers(),
 		exportOutputs: 0,
 		steps: [
-			{ click: 'button[aria-label="Export snapshot"]' },
-			{ wait: 800 },
+			...openTool("Export snapshot", true),
+			{ wait: 300 },
 			{ click: 'button:has-text("Quick Export")' },
 			{ wait: 1200 },
 		],
+	}),
+
+	// Map chrome (X1-M1, map-polish MP1). The three chrome states, and the panel in the placement the width gives
+	// it: docked at 960 and up (the canvas shrinks), floating at 600-959, a bottom sheet below 600 where the rail
+	// is forced to the collapsed button. The harness checks each against the coverage budget.
+	mapScreen("map-chrome-collapsed", "Map chrome collapsed: one 32 px Map tools button", {
+		layers: featureLayers(),
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, undefined, undefined, "collapsed") },
+	}),
+	mapScreen("map-chrome-rail", "Map chrome as a 40 px icon rail (5 tools and More)", {
+		layers: featureLayers(),
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, undefined, undefined, "rail") },
+	}),
+	mapScreen("map-chrome-hidden", "Map chrome hidden: only the edge tab remains", {
+		layers: featureLayers(),
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, undefined, undefined, "hidden") },
+	}),
+	mapScreen("map-panel-docked-layers", "Layers panel: docked beside the canvas at 960 and up", {
+		layers: featureLayers(),
+		steps: openTool("Layer manager"),
+	}),
+	mapScreen("map-panel-overlay-pins", "Pins panel: floats over the map at 600-959", {
+		layers: featureLayers(),
+		steps: openTool("Pins"),
+	}),
+	mapScreen("map-panel-sheet-400", "Measure panel: a bottom sheet below 600", {
+		layers: featureLayers(),
+		steps: openTool("Measure"),
+	}),
+	// No layers: Swipe, Time and Flood are listed but disabled, each with its reason.
+	mapScreen("map-more-flyout", "More menu with Swipe, Time and Flood disabled and why", {
+		steps: [
+			{ click: 'button[aria-label^="Map tools"]', optional: true },
+			{ click: 'button[aria-label="More tools"]', optional: true },
+			{ wait: 400 },
+		],
+		expectVisible: ['[role="menuitem"][aria-label^="Swipe"]'],
+	}),
+	mapScreen("map-export-sheet", "Export as a centred sheet over a scrim", {
+		layers: featureLayers(),
+		steps: openTool("Export snapshot", true),
+		expectVisible: ['[role="dialog"]'],
 	}),
 
 	// ── Studio / HTML preview (editor) ──────────────────────────────

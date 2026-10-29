@@ -59,10 +59,15 @@ export interface MapWorkspace {
 	}
 	/** User-facing display names keyed by layer id (does not change server layer name). */
 	layerAliases?: Record<string, string>
+	/** @deprecated The panel has one width now (mapChrome.ts). Read and carried through, never written. */
 	ribbonPanel?: {
 		width?: number
 		height?: number
 	}
+	/** The user's chosen chrome state. Absent until they choose, so the map width picks the default. */
+	chrome?: "collapsed" | "rail" | "hidden"
+	/** What Ctrl/Cmd+. restores from hidden. */
+	chromeRestore?: "collapsed" | "rail"
 	/** Named saved view bookmarks. */
 	bookmarks?: MapBookmark[]
 }
@@ -276,6 +281,12 @@ export function loadMapWorkspace(): MapWorkspace {
 			activeRoi: sanitizeActiveRoi(parsed.activeRoi),
 			layerAliases: sanitizeAliases(parsed.layerAliases),
 			ribbonPanel: sanitizeRibbonPanel(parsed.ribbonPanel),
+			chrome:
+				parsed.chrome === "collapsed" || parsed.chrome === "rail" || parsed.chrome === "hidden"
+					? parsed.chrome
+					: undefined,
+			chromeRestore:
+				parsed.chromeRestore === "collapsed" || parsed.chromeRestore === "rail" ? parsed.chromeRestore : undefined,
 			bookmarks: sanitizeBookmarks(parsed.bookmarks),
 			layerPanel: {
 				...DEFAULT_WORKSPACE.layerPanel!,

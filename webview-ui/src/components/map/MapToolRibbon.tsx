@@ -1,32 +1,28 @@
 /**
- * MapToolRibbon — single docked column of icons on the right edge of the map,
- * with a slide-out panel area. Replaces the previous pair of floating widgets
- * (basemap dropdown + collapsed layer button) with a unified surface.
+ * MapToolRibbon — the map's tool chrome: a 40 px icon rail, the panel it opens, and the states around them.
  *
- *      ┌─────────┬───┐
- *      │         │ ▦ │  ← active panel (basemap / layers / future tools)
- *      │ active  │ 📑│
- *      │ panel   │ ⛶ │
- *      │         │   │
- *      └─────────┴───┘
+ *   rail       5 tools + More, and a chevron that collapses it
+ *   collapsed  one 32 px "Map tools" button (the default below 800 px, and the only state in a bottom sheet)
+ *   hidden     only a 24 px edge tab; Ctrl/Cmd+. toggles it
  *
- * The ribbon is *always* visible. Clicking an icon toggles its panel; clicking
- * an already-active icon collapses it. Only one panel is open at a time. When
- * everything is collapsed, only the icon strip is shown — the map gets the
- * full canvas.
+ * The panel docks beside the canvas (>= 960 px, the canvas shrinks), floats over it (600-959 px) or becomes a bottom
+ * sheet (< 600 px). Export and Gallery are centred modal sheets. Layout decisions live in mapChrome.ts; this file
+ * renders them. MapView owns `activeTool` (one source of truth for which panel is open) and the chrome controller.
  *
- * Tools today: Basemap, Layers. Future: Measure, Tools/Plugins, Settings.
+ * Every rail item is a toggle (`aria-pressed`) and exactly one is pressed: the one that owns the open panel. The
+ * rarely used tools sit in More as a labelled menu, and a tool that cannot act (Swipe with no layer, Time with no
+ * time-tagged layer, Flood with no flood layer) stays in the menu, disabled, with the reason as visible text.
  */
 
 import type { MapViewState } from "@deck.gl/core"
 import type { MapLayer } from "@shared/proto/cline/map"
-import React, { useEffect, useState } from "react"
+import React, { useCallback, useEffect, useId, useRef, useState } from "react"
 import { BasemapList } from "./BaseMapSelector"
 import HydrographyPanel from "./HydrographyPanel"
 import { LayerPanelContent } from "./LayerPanel"
 import MapExport from "./MapExport"
+import { COLLAPSED_SIZE, EDGE_TAB_WIDTH, type MapChromeController, SHEET_HEIGHT, toolDisabledReason } from "./mapChrome"
 import { MAP_Z } from "./mapZ"
-import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import ResearchGalleryPanel from "./ResearchGalleryPanel"
 
 export type RibbonTool =
@@ -45,26 +41,53 @@ export type RibbonTool =
 	| "export"
 	| null
 
-const TOOL_PANEL_SIZE: Record<
-	Exclude<RibbonTool, null>,
-	{ width: number; height: number; minWidth: number; minHeight: number; maxWidth: number; maxHeightRatio: number }
-> = {
-	basemap: { width: 300, height: 420, minWidth: 240, minHeight: 240, maxWidth: 420, maxHeightRatio: 0.78 },
-	layers: { width: 340, height: 500, minWidth: 280, minHeight: 280, maxWidth: 520, maxHeightRatio: 0.85 },
-	gallery: { width: 620, height: 560, minWidth: 420, minHeight: 360, maxWidth: 820, maxHeightRatio: 0.86 },
-	hydrography: { width: 380, height: 560, minWidth: 320, minHeight: 340, maxWidth: 560, maxHeightRatio: 0.85 },
-	search: { width: 360, height: 340, minWidth: 300, minHeight: 200, maxWidth: 480, maxHeightRatio: 0.7 },
-	measure: { width: 280, height: 250, minWidth: 240, minHeight: 180, maxWidth: 380, maxHeightRatio: 0.55 },
-	draw: { width: 300, height: 310, minWidth: 250, minHeight: 220, maxWidth: 420, maxHeightRatio: 0.62 },
-	transect: { width: 320, height: 160, minWidth: 260, minHeight: 120, maxWidth: 420, maxHeightRatio: 0.45 },
-	annotations: { width: 360, height: 420, minWidth: 300, minHeight: 250, maxWidth: 480, maxHeightRatio: 0.8 },
-	swipe: { width: 300, height: 200, minWidth: 260, minHeight: 160, maxWidth: 400, maxHeightRatio: 0.5 },
-	flood: { width: 320, height: 280, minWidth: 280, minHeight: 200, maxWidth: 420, maxHeightRatio: 0.55 },
-	time: { width: 320, height: 180, minWidth: 260, minHeight: 140, maxWidth: 480, maxHeightRatio: 0.45 },
-	export: { width: 620, height: 540, minWidth: 460, minHeight: 360, maxWidth: 980, maxHeightRatio: 0.88 },
+type ToolId = Exclude<RibbonTool, null>
+/** What a rail button stands for. Basemap and Reference are tabs of the Layers panel; the rest live in More. */
+type RailId = "layers" | "search" | "annotations" | "measure" | "draw" | "more"
+
+const TOOL_META: Record<ToolId, { icon: string; title: string }> = {
+	layers: { icon: "layers", title: "Layers" },
+	basemap: { icon: "globe", title: "Layers" },
+	hydrography: { icon: "type-hierarchy", title: "Layers" },
+	search: { icon: "search", title: "Search" },
+	annotations: { icon: "pin", title: "Pins" },
+	measure: { icon: "symbol-ruler", title: "Measure" },
+	draw: { icon: "edit", title: "Create vector" },
+	transect: { icon: "graph-line", title: "Transect profile" },
+	swipe: { icon: "split-horizontal", title: "Swipe" },
+	time: { icon: "clock", title: "Time slider" },
+	flood: { icon: "pulse", title: "Flood inundation" },
+	export: { icon: "export", title: "Export" },
+	gallery: { icon: "compass", title: "Research Gallery" },
+}
+
+const RAIL_TOOLS: Exclude<RailId, "more">[] = ["layers", "search", "annotations", "measure", "draw"]
+type MoreId = "transect" | "swipe" | "time" | "flood" | "export" | "gallery"
+const MORE_TOOLS: MoreId[] = ["transect", "swipe", "time", "flood", "export", "gallery"]
+/** Panels that are dialogs rather than sidebars: centred, with a scrim. */
+const MODAL_TOOLS: ToolId[] = ["export", "gallery"]
+
+const railOf = (tool: ToolId): RailId =>
+	tool === "basemap" || tool === "hydrography" ? "layers" : (MORE_TOOLS as ToolId[]).includes(tool) ? "more" : (tool as RailId)
+
+const LAYER_TABS: { tool: "layers" | "basemap" | "hydrography"; label: string; hint: string }[] = [
+	{ tool: "layers", label: "Layers", hint: "Layers on the map" },
+	{ tool: "basemap", label: "Basemap", hint: "Basemap" },
+	{ tool: "hydrography", label: "Reference", hint: "Reference vectors (MERIT rivers, WBD HUCs)" },
+]
+
+const MORE_LABEL: Record<MoreId, { text: string; label: string }> = {
+	transect: { text: "Transect", label: "Transect profile" },
+	swipe: { text: "Swipe", label: "Swipe / Compare layers" },
+	time: { text: "Time", label: "Time slider — filter layers by date range" },
+	flood: { text: "Flood", label: "Flood inundation — stage scrubber & 3D view" },
+	export: { text: "Export", label: "Export snapshot" },
+	gallery: { text: "Gallery", label: "Research Gallery" },
 }
 
 interface MapToolRibbonProps {
+	/** The chrome layout and state (mapChrome.ts `useMapChrome`). */
+	chrome: MapChromeController
 	rasterRevision?: number
 	getMapCanvas?: () => HTMLCanvasElement | null
 	renderIssues?: string[]
@@ -95,7 +118,6 @@ interface MapToolRibbonProps {
 	onMeasureModeChange?: (mode: "distance" | "area" | null) => void
 	drawMode?: "polygon" | "line" | "point" | null
 	onDrawModeChange?: (mode: "polygon" | "line" | "point" | null) => void
-	onFitExtent?: () => void
 	layerOpacities?: Record<string, number>
 	onOpacityChange?: (layerId: string, opacity: number) => void
 	clusterLayerIds?: Set<string>
@@ -104,75 +126,165 @@ interface MapToolRibbonProps {
 	onHideAllLayers?: () => void
 	viewState?: MapViewState
 	layers?: MapLayer[]
-	/** Search UI rendered inside the Search ribbon panel */
+	/** Search UI rendered inside the Search panel */
 	searchPanel?: React.ReactNode
-	/** Annotations UI rendered inside the Annotations ribbon panel */
+	/** Pins UI rendered inside the Pins panel (today the Annotations panel; MP2 replaces it) */
 	annotationsPanel?: React.ReactNode
-	/** Swipe UI rendered inside the Swipe ribbon panel */
+	/** Swipe UI rendered inside the Swipe panel */
 	swipePanel?: React.ReactNode
-	/** Transect UI rendered inside the Transect ribbon panel */
+	/** Transect UI rendered inside the Transect panel */
 	transectsPanel?: React.ReactNode
-	/** Gallery UI rendered inside the Gallery ribbon panel */
+	/** Gallery UI rendered inside the Gallery sheet */
 	galleryPanel?: React.ReactNode
-	/** Time slider UI rendered inside the Time ribbon panel */
+	/** Time slider UI rendered inside the Time panel */
 	timeSliderPanel?: React.ReactNode
 	/** Flood inundation stage scrubber */
 	floodPanel?: React.ReactNode
-	/** Claim ID this map state is bound to — shows a chip in the ribbon */
+	/** Claim ID this map state is bound to — shows a chip beside the chrome */
 	boundClaimId?: string
 }
 
-interface RibbonButtonProps {
+// ── menu ────────────────────────────────────────────────────────────────────
+
+type MenuEntry =
+	| {
+			key: string
+			icon: string
+			text: string
+			/** Accessible name; contains the visible text. */
+			label: string
+			/** Why the item cannot act right now. Shown as text and wired to aria-describedby. */
+			reason?: string
+			shortcut?: string
+			current?: boolean
+			onSelect: () => void
+	  }
+	| { key: string; divider: true }
+
+/**
+ * A labelled menu (More, and the tools list when the chrome is collapsed in a bottom sheet). Arrow keys, Home and
+ * End move between items, Escape returns focus to the button that opened it, Tab or a click elsewhere closes it.
+ * Disabled items stay focusable (`aria-disabled`) so a keyboard user can read the reason.
+ */
+const ToolMenu: React.FC<{
+	label: string
+	entries: MenuEntry[]
+	triggerRef: React.RefObject<HTMLElement | null>
+	onClose: (returnFocus: boolean) => void
+	style?: React.CSSProperties
+}> = ({ label, entries, triggerRef, onClose, style }) => {
+	const menuRef = useRef<HTMLDivElement>(null)
+	const baseId = useId()
+
+	useEffect(() => {
+		menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+	}, [])
+
+	useEffect(() => {
+		const onPointerDown = (e: PointerEvent) => {
+			const target = e.target as Node
+			if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return
+			onClose(false)
+		}
+		document.addEventListener("pointerdown", onPointerDown, true)
+		return () => document.removeEventListener("pointerdown", onPointerDown, true)
+	}, [onClose, triggerRef])
+
+	const onKeyDown = (e: React.KeyboardEvent) => {
+		const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+		const at = items.indexOf(document.activeElement as HTMLElement)
+		const go = (i: number) => {
+			e.preventDefault()
+			items[(i + items.length) % items.length]?.focus()
+		}
+		if (e.key === "ArrowDown") go(at + 1)
+		else if (e.key === "ArrowUp") go(at <= 0 ? items.length - 1 : at - 1)
+		else if (e.key === "Home") go(0)
+		else if (e.key === "End") go(items.length - 1)
+		else if (e.key === "Escape") {
+			e.preventDefault()
+			e.stopPropagation()
+			onClose(true)
+		} else if (e.key === "Tab") onClose(false)
+	}
+
+	return (
+		<div
+			aria-label={label}
+			className="map-chrome-menu"
+			data-map-chrome="menu"
+			onKeyDown={onKeyDown}
+			ref={menuRef}
+			role="menu"
+			style={{ zIndex: MAP_Z.menu, ...style }}>
+			{entries.map((entry) =>
+				"divider" in entry ? (
+					<div className="map-chrome-menu__divider" key={entry.key} role="separator" />
+				) : (
+					<button
+						aria-current={entry.current ? "true" : undefined}
+						aria-describedby={entry.reason ? `${baseId}-${entry.key}` : undefined}
+						aria-disabled={entry.reason ? true : undefined}
+						aria-label={entry.label}
+						className={`map-chrome-menu__item${entry.current ? " map-chrome-menu__item--current" : ""}`}
+						key={entry.key}
+						onClick={() => {
+							if (!entry.reason) entry.onSelect()
+						}}
+						role="menuitem"
+						tabIndex={-1}
+						title={entry.reason ? `${entry.label} — ${entry.reason}` : entry.label}
+						type="button">
+						<span aria-hidden="true" className={`codicon codicon-${entry.icon}`} />
+						<span className="map-chrome-menu__text">
+							<span>{entry.text}</span>
+							{entry.reason && (
+								<span className="map-chrome-menu__reason" id={`${baseId}-${entry.key}`}>
+									{entry.reason}
+								</span>
+							)}
+						</span>
+						{entry.shortcut && <kbd className="map-chrome-menu__kbd">{entry.shortcut}</kbd>}
+					</button>
+				),
+			)}
+		</div>
+	)
+}
+
+// ── buttons ────────────────────────────────────────────────────────────────
+
+interface RailButtonProps {
 	/** Codicon name without prefix. */
 	icon: string
 	/** Accessible name and tooltip; always present. */
 	label: string
-	/** Visible text beside the icon when the ribbon is wide enough. */
-	text?: string
 	active: boolean
-	accent: string
 	onClick: () => void
 	badge?: number
-	disabled?: boolean
+	tool: string
+	buttonRef?: React.Ref<HTMLButtonElement>
 }
 
-const RibbonButton: React.FC<RibbonButtonProps> = ({ icon, label, text, active, onClick, badge, disabled }) => (
+const RailButton: React.FC<RailButtonProps> = ({ icon, label, active, onClick, badge, tool, buttonRef }) => (
 	<button
 		aria-label={label}
 		aria-pressed={active}
-		className={`map-ribbon-button${active ? " map-ribbon-button--active" : ""}${text ? " map-ribbon-button--labelled" : ""}`}
-		disabled={disabled}
+		className={`map-ribbon-button${active ? " map-ribbon-button--active" : ""}`}
+		data-tool={tool}
 		onClick={onClick}
+		ref={buttonRef}
 		title={label}
 		type="button">
 		<span aria-hidden="true" className={`codicon codicon-${icon}`} />
-		{text && <span className="map-ribbon-button__text">{text}</span>}
 		{badge !== undefined && <span className="map-ribbon-badge">{badge > 99 ? "99+" : badge}</span>}
 	</button>
 )
 
-/** Wide enough to show text labels beside the ribbon icons (labels from 800 px). */
-function useWideViewport(minWidth = 800): boolean {
-	const [wide, setWide] = React.useState(() => typeof window !== "undefined" && window.innerWidth >= minWidth)
-	React.useEffect(() => {
-		const onResize = () => setWide(window.innerWidth >= minWidth)
-		window.addEventListener("resize", onResize)
-		return () => window.removeEventListener("resize", onResize)
-	}, [minWidth])
-	return wide
-}
-
-interface RibbonItem extends Omit<RibbonButtonProps, "accent" | "text"> {
-	key: string
-	/** Short visible label. */
-	text: string
-}
-interface RibbonGroup {
-	title: string
-	items: RibbonItem[]
-}
+// ── component ──────────────────────────────────────────────────────────────
 
 export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
+	chrome,
 	rasterRevision,
 	getMapCanvas,
 	renderIssues,
@@ -194,7 +306,6 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	onMeasureModeChange,
 	drawMode,
 	onDrawModeChange,
-	onFitExtent,
 	layerOpacities,
 	onOpacityChange,
 	clusterLayerIds,
@@ -212,61 +323,24 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	floodPanel,
 	boundClaimId,
 }) => {
-	const persisted = loadMapWorkspace()
 	const [internalActive, setInternalActive] = useState<RibbonTool>(null)
 	const active: RibbonTool = activeTool !== undefined ? activeTool : internalActive
-	const [panelWidth, setPanelWidth] = useState<number>(persisted.ribbonPanel?.width ?? 280)
-	const [panelHeight, setPanelHeight] = useState<number>(persisted.ribbonPanel?.height ?? 380)
 	const visibleCount = visibleLayerCount ?? layerCount
 	const hiddenCount = Math.max(0, layerCount - visibleCount)
 	const layerSummary = `${visibleCount} visible · ${hiddenCount} hidden`
+	const allLayers = layers ?? []
 
-	useEffect(() => {
-		saveMapWorkspace({ ribbonPanel: { width: panelWidth, height: panelHeight } })
-	}, [panelWidth, panelHeight])
+	const { state, mode } = chrome
+	const modal = active !== null && MODAL_TOOLS.includes(active)
+	const panelVisible = active !== null && state !== "hidden"
 
-	const isDark = mapStyle === "dark"
-	const fg = isDark ? "var(--vscode-foreground, #ddd)" : "var(--vscode-foreground, #222)"
-	// Chrome follows the VS Code theme (not the basemap style): text uses --vscode-foreground, so the surface must too.
 	const bg = "var(--vscode-editorWidget-background, var(--vscode-editor-background, #1f1f1f))"
 	const border = "var(--vscode-contrastBorder, var(--vscode-editorWidget-border, rgba(128,128,128,0.35)))"
-	const subtle = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"
-	const accent = "var(--vscode-button-background, #0e639c)"
-
-	const clampPanelWidth = (width: number, tool: RibbonTool = active) => {
-		const size = tool ? TOOL_PANEL_SIZE[tool] : TOOL_PANEL_SIZE.layers
-		const max = Math.min(size.maxWidth, Math.max(size.minWidth, window.innerWidth - 120))
-		const min = Math.min(size.minWidth, max)
-		return Math.max(min, Math.min(max, width))
-	}
-
-	const clampPanelHeight = (height: number, tool: RibbonTool = active) => {
-		const size = tool ? TOOL_PANEL_SIZE[tool] : TOOL_PANEL_SIZE.layers
-		const max = Math.min(
-			Math.round(window.innerHeight * size.maxHeightRatio),
-			Math.max(size.minHeight, window.innerHeight - 48),
-		)
-		const min = Math.min(size.minHeight, max)
-		return Math.max(min, Math.min(max, height))
-	}
-
-	const applyToolSize = (tool: Exclude<RibbonTool, null>) => {
-		const size = TOOL_PANEL_SIZE[tool]
-		setPanelWidth(clampPanelWidth(size.width, tool))
-		setPanelHeight(clampPanelHeight(size.height, tool))
-	}
-
-	// Size the panel for whichever tool opens, however it was opened (ribbon click or MapView, e.g. the empty
-	// state's "Find a gauge").
-	useEffect(() => {
-		if (active) {
-			applyToolSize(active)
-		}
-	}, [active])
+	const fg = "var(--vscode-foreground, #ddd)"
 
 	/**
 	 * The one way a panel opens or closes. Leaving a tool ends its map mode (measure / draw), so a tool is never
-	 * left running behind another panel and two ribbon items are never lit at once.
+	 * left running behind another panel and two rail items are never lit at once.
 	 */
 	const changeTool = (next: RibbonTool) => {
 		if (next === active) {
@@ -283,339 +357,244 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 		}
 		onActiveToolChange?.(next)
 	}
+	const toggle = (tool: ToolId) => changeTool(active === tool ? null : tool)
 
-	const toggle = (tool: Exclude<RibbonTool, null>) => changeTool(active === tool ? null : tool)
+	// ── focus management ──
+	const navRef = useRef<HTMLElement>(null)
+	const mapToolsRef = useRef<HTMLButtonElement>(null)
+	const moreRef = useRef<HTMLButtonElement>(null)
+	const edgeTabRef = useRef<HTMLButtonElement>(null)
+	const pendingFocus = useRef<"button" | "rail" | null>(null)
+	useEffect(() => {
+		const want = pendingFocus.current
+		pendingFocus.current = null
+		if (want === "button") mapToolsRef.current?.focus()
+		else if (want === "rail") navRef.current?.querySelector<HTMLElement>("[data-tool]")?.focus()
+	}, [state])
+	const focusLater = (el: () => HTMLElement | null | undefined) => setTimeout(() => el()?.focus(), 0)
+	const focusRailTool = (tool: ToolId) =>
+		focusLater(() => navRef.current?.querySelector<HTMLElement>(`[data-tool="${railOf(tool)}"]`) ?? mapToolsRef.current)
 
-	const onResizeWidthStart = (e: React.MouseEvent) => {
-		e.preventDefault()
-		const startX = e.clientX
-		const startW = panelWidth
-		const onMove = (ev: MouseEvent) => {
-			const next = clampPanelWidth(startW + (startX - ev.clientX))
-			setPanelWidth(next)
-		}
-		const onUp = () => {
-			window.removeEventListener("mousemove", onMove)
-			window.removeEventListener("mouseup", onUp)
-		}
-		window.addEventListener("mousemove", onMove)
-		window.addEventListener("mouseup", onUp)
+	const closePanel = (returnFocus = false) => {
+		const was = active
+		changeTool(null)
+		if (returnFocus && was) focusRailTool(was)
 	}
 
-	const onResizeHeightStart = (e: React.MouseEvent) => {
-		e.preventDefault()
-		const startY = e.clientY
-		const startH = panelHeight
-		const onMove = (ev: MouseEvent) => {
-			const next = clampPanelHeight(startH + (ev.clientY - startY))
-			setPanelHeight(next)
-		}
-		const onUp = () => {
-			window.removeEventListener("mousemove", onMove)
-			window.removeEventListener("mouseup", onUp)
-		}
-		window.addEventListener("mousemove", onMove)
-		window.addEventListener("mouseup", onUp)
-	}
+	const [moreOpen, setMoreOpen] = useState(false)
+	const [toolsMenuOpen, setToolsMenuOpen] = useState(false)
+	const closeMore = useCallback((returnFocus: boolean) => {
+		setMoreOpen(false)
+		if (returnFocus) focusLater(() => moreRef.current)
+	}, [])
+	const closeToolsMenu = useCallback((returnFocus: boolean) => {
+		setToolsMenuOpen(false)
+		if (returnFocus) focusLater(() => mapToolsRef.current)
+	}, [])
+	// A menu belongs to the chrome that opened it.
+	useEffect(() => {
+		setMoreOpen(false)
+		setToolsMenuOpen(false)
+	}, [state, mode])
 
-	const showLabels = useWideViewport()
-	const ribbonWidth = showLabels ? 188 : 44
+	const moreActive = active !== null && railOf(active) === "more"
+	const reasonFor = (tool: ToolId) =>
+		tool === "swipe" || tool === "time" || tool === "flood" ? toolDisabledReason(tool, allLayers) : undefined
 
-	const closePanel = () => changeTool(null)
-
-	const ribbonGroups: RibbonGroup[] = [
-		{
-			title: "Layers & basemap",
-			items: [
-				{
-					key: "basemap",
-					icon: "globe",
-					text: "Basemap",
-					label: "Basemap",
-					active: active === "basemap",
-					onClick: () => toggle("basemap"),
+	const moreEntries = (afterSelect: () => void, withHide: boolean): MenuEntry[] => [
+		...MORE_TOOLS.map((tool): MenuEntry => {
+			const meta = MORE_LABEL[tool]
+			return {
+				key: tool,
+				icon: TOOL_META[tool].icon,
+				text: meta.text,
+				label: meta.label,
+				reason: reasonFor(tool),
+				current: active === tool,
+				onSelect: () => {
+					afterSelect()
+					toggle(tool)
 				},
-				{
-					key: "layers",
-					icon: "layers",
-					text: "Layers",
-					label: layerCount > 0 ? `Layer manager (${layerSummary})` : "Layer manager",
-					active: active === "layers",
-					badge: layerCount > 0 ? visibleCount : undefined,
-					onClick: () => toggle("layers"),
-				},
-				{
-					key: "gallery",
-					icon: "compass",
-					text: "Gallery",
-					label: "Research Gallery",
-					active: active === "gallery",
-					onClick: () => toggle("gallery"),
-				},
-				{
-					key: "hydrography",
-					icon: "type-hierarchy",
-					text: "Reference vectors",
-					label: "Reference vectors (MERIT rivers, WBD HUCs)",
-					active: active === "hydrography",
-					onClick: () => toggle("hydrography"),
-				},
-			],
-		},
-		{
-			title: "Navigate & search",
-			items: [
-				{
-					key: "fit",
-					icon: "screen-full",
-					text: "Fit to layers",
-					label: "Fit to layers",
-					active: false,
-					disabled: layerCount === 0,
-					onClick: () => onFitExtent?.(),
-				},
-				{
-					key: "search",
-					icon: "search",
-					text: "Search",
-					label: "Search",
-					active: active === "search",
-					onClick: () => toggle("search"),
-				},
-			],
-		},
-		{
-			title: "Measure & analyse",
-			items: [
-				{
-					key: "draw",
-					icon: "edit",
-					text: "Draw",
-					label: "Draw geometry",
-					active: active === "draw",
-					onClick: () => toggle("draw"),
-				},
-				{
-					key: "annotations",
-					icon: "tag",
-					text: "Annotations",
-					label: "Smart annotations",
-					active: active === "annotations",
-					onClick: () => toggle("annotations"),
-				},
-				{
-					key: "measure",
-					icon: "symbol-ruler",
-					text: "Measure",
-					label: "Measure",
-					active: active === "measure",
-					onClick: () => toggle("measure"),
-				},
-				{
-					key: "transect",
-					icon: "graph-line",
-					text: "Transect",
-					label: "Transect profile",
-					active: active === "transect",
-					onClick: () => toggle("transect"),
-				},
-				{
-					key: "flood",
-					icon: "pulse",
-					text: "Flood",
-					label: "Flood inundation — stage scrubber & 3D view",
-					active: active === "flood",
-					badge:
-						layers?.filter(
-							(l) =>
-								l.metadata?.tool === "map_flood_inundation" ||
-								l.metadata?.source === "HAND+SRC" ||
-								l.metadata?.stage_lookup_json,
-						).length || undefined,
-					onClick: () => toggle("flood"),
-				},
-			],
-		},
-		{
-			title: "Time & compare",
-			items: [
-				{
-					key: "swipe",
-					icon: "split-horizontal",
-					text: "Swipe",
-					label: "Swipe / Compare layers",
-					active: active === "swipe",
-					onClick: () => toggle("swipe"),
-				},
-				{
-					key: "time",
-					icon: "clock",
-					text: "Time",
-					label: "Time slider — filter layers by date range",
-					active: active === "time",
-					onClick: () => toggle("time"),
-				},
-			],
-		},
-		{
-			title: "Export",
-			items: [
-				{
-					key: "export",
-					icon: "export",
-					text: "Export",
-					label: "Export snapshot",
-					active: active === "export",
-					onClick: () => toggle("export"),
-				},
-			],
-		},
+			}
+		}),
+		...(withHide
+			? ([
+					{ key: "div-hide", divider: true },
+					{
+						key: "hide",
+						icon: "layout-sidebar-right-off",
+						text: "Hide map tools",
+						label: "Hide map tools",
+						shortcut: "Ctrl+.",
+						onSelect: () => {
+							afterSelect()
+							chrome.setState("hidden")
+						},
+					},
+				] as MenuEntry[])
+			: []),
 	]
 
-	return (
+	/** Every tool, for the collapsed button's menu where there is no room for a rail (bottom sheet). */
+	const allToolEntries = (): MenuEntry[] => [
+		...RAIL_TOOLS.map((id): MenuEntry => {
+			const label =
+				id === "layers"
+					? "Layer manager"
+					: id === "annotations"
+						? "Pins"
+						: id === "draw"
+							? "Draw ROI"
+							: TOOL_META[id].title
+			return {
+				key: id,
+				icon: TOOL_META[id].icon,
+				text: TOOL_META[id].title === "Create vector" ? "Draw ROI" : TOOL_META[id].title,
+				label,
+				current: active !== null && railOf(active) === id,
+				onSelect: () => {
+					setToolsMenuOpen(false)
+					toggle(id)
+				},
+			}
+		}),
+		{ key: "div", divider: true },
+		...moreEntries(() => setToolsMenuOpen(false), true),
+	]
+
+	// ── sheet drag handle ──
+	const sheetRef = useRef<HTMLElement>(null)
+	const onHandlePointerDown = (e: React.PointerEvent) => {
+		e.preventDefault()
+		const parent = sheetRef.current?.parentElement
+		if (!parent) return
+		const rect = parent.getBoundingClientRect()
+		const onMove = (ev: PointerEvent) => chrome.setSheetHeightPct(((rect.bottom - ev.clientY) / rect.height) * 100)
+		const onUp = () => {
+			window.removeEventListener("pointermove", onMove)
+			window.removeEventListener("pointerup", onUp)
+		}
+		window.addEventListener("pointermove", onMove)
+		window.addEventListener("pointerup", onUp)
+	}
+	const onHandleKeyDown = (e: React.KeyboardEvent) => {
+		const step = e.key === "ArrowUp" ? 5 : e.key === "ArrowDown" ? -5 : 0
+		if (step) {
+			e.preventDefault()
+			chrome.setSheetHeightPct(chrome.sheetHeightPct + step)
+		} else if (e.key === "Home") {
+			e.preventDefault()
+			chrome.setSheetHeightPct(SHEET_HEIGHT.maxPct)
+		} else if (e.key === "End") {
+			e.preventDefault()
+			chrome.setSheetHeightPct(SHEET_HEIGHT.minPct)
+		}
+	}
+
+	// ── panel pieces ──
+	const family: ToolId | null = active === "basemap" || active === "hydrography" ? "layers" : active
+	const title = family === null ? "" : family === "layers" ? `Layers (${layerSummary})` : TOOL_META[family].title
+
+	const toggleBtn = (pressed: boolean, activeColor: string): React.CSSProperties => ({
+		padding: "6px 10px",
+		fontSize: 12,
+		background: pressed ? activeColor : "transparent",
+		color: pressed ? "var(--vscode-button-foreground, #fff)" : fg,
+		border: `1px solid ${border}`,
+		borderRadius: 3,
+		cursor: "pointer",
+		display: "flex",
+		alignItems: "center",
+		gap: 6,
+		textAlign: "left",
+	})
+	const modeButton = (icon: string, text: string, pressed: boolean, activeColor: string, onClick: () => void) => (
+		<button aria-pressed={pressed} onClick={onClick} style={toggleBtn(pressed, activeColor)} type="button">
+			<span aria-hidden="true" className={`codicon codicon-${icon}`} />
+			{text}
+		</button>
+	)
+
+	const layerTabs = (
+		<div aria-label="Layer tools" className="map-chrome-tabs" role="tablist" style={{ borderBottom: `1px solid ${border}` }}>
+			{LAYER_TABS.map((tab, index) => {
+				const selected = (active ?? "layers") === tab.tool
+				return (
+					<button
+						aria-controls="map-chrome-layers-tabpanel"
+						aria-selected={selected}
+						className={`map-chrome-tab${selected ? " map-chrome-tab--selected" : ""}`}
+						id={`map-chrome-tab-${tab.tool}`}
+						key={tab.tool}
+						onClick={() => changeTool(tab.tool)}
+						onKeyDown={(e) => {
+							const delta = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0
+							if (!delta) return
+							e.preventDefault()
+							const next = LAYER_TABS[(index + delta + LAYER_TABS.length) % LAYER_TABS.length]
+							changeTool(next.tool)
+							focusLater(() => document.getElementById(`map-chrome-tab-${next.tool}`))
+						}}
+						role="tab"
+						tabIndex={selected ? 0 : -1}
+						title={tab.hint}
+						type="button">
+						{tab.label}
+					</button>
+				)
+			})}
+		</div>
+	)
+
+	const exportBody = (
+		<div style={{ padding: 10 }}>
+			<MapExport
+				currentBasemap={currentBasemap}
+				getMapCanvas={getMapCanvas}
+				layerOpacities={layerOpacities}
+				layers={layers}
+				mapStyle={mapStyle}
+				onClose={() => closePanel(true)}
+				rasterRevision={rasterRevision}
+				renderIssues={renderIssues}
+				viewState={viewState}
+				visibleLayerIds={visibleLayerIds}
+			/>
+		</div>
+	)
+
+	const galleryBody = (
+		<div style={{ padding: 8 }}>
+			{galleryPanel ?? (
+				<ResearchGalleryPanel
+					bookmarkedIds={[]}
+					importCallbacks={{
+						onImportScene: () => "Import unavailable here.",
+						onImportTransects: () => "Import unavailable here.",
+						onImportAnnotations: () => "Import unavailable here.",
+					}}
+					mapStyle={mapStyle}
+					myItems={[]}
+					onDeleteMyItem={() => {}}
+					onOpenExport={() => changeTool("export")}
+					onSaveScene={() => {}}
+					onToggleBookmark={() => {}}
+					onUpdateMyItem={() => {}}
+				/>
+			)}
+		</div>
+	)
+
+	const panelBody = (
 		<>
-			{/* Tool panels — top-right, left of icon strip; kept narrow to avoid covering inspector */}
-			{active && (
-				<div
-					className="map-ribbon-panel"
-					style={{
-						position: "absolute",
-						top: 10,
-						right: ribbonWidth + 8,
-						zIndex: MAP_Z.panel,
-						width: clampPanelWidth(panelWidth, active),
-						height: clampPanelHeight(panelHeight, active),
-						minWidth: active ? TOOL_PANEL_SIZE[active].minWidth : 220,
-						maxWidth: active ? TOOL_PANEL_SIZE[active].maxWidth : 520,
-						maxHeight: active ? `${Math.round(TOOL_PANEL_SIZE[active].maxHeightRatio * 100)}vh` : "85vh",
-						background: bg,
-						color: fg,
-						border: `1px solid ${border}`,
-						borderRadius: 6,
-						boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
-						display: "flex",
-						flexDirection: "column",
-						overflow: "hidden",
-						pointerEvents: "auto",
-						fontFamily: "var(--vscode-font-family, system-ui, sans-serif)",
-					}}>
-					{/* Resize gripper on the left edge */}
+			{(active === "layers" || active === "basemap" || active === "hydrography") && (
+				<>
+					{layerTabs}
 					<div
-						aria-label="Resize panel"
-						onMouseDown={onResizeWidthStart}
-						role="separator"
-						style={{
-							position: "absolute",
-							left: 0,
-							top: 0,
-							bottom: 0,
-							width: active === "export" ? 9 : 4,
-							cursor: "ew-resize",
-							zIndex: MAP_Z.local,
-							background: active === "export" ? "rgba(255,255,255,0.08)" : "transparent",
-						}}
-						title="Drag left edge to resize"
-					/>
-
-					{/* Panel header */}
-					<div
-						style={{
-							padding: "8px 10px 8px 12px",
-							borderBottom: `1px solid ${border}`,
-							display: "flex",
-							alignItems: "center",
-							gap: 8,
-							background: subtle,
-							flexShrink: 0,
-						}}>
-						<span style={{ fontSize: 14 }}>
-							{active === "basemap"
-								? "🗺️"
-								: active === "layers"
-									? "📑"
-									: active === "gallery"
-										? "🧭"
-										: active === "search"
-											? "🔍"
-											: active === "measure"
-												? "📏"
-												: active === "draw"
-													? "✏️"
-													: active === "hydrography"
-														? "🌊"
-														: active === "flood"
-															? "💧"
-															: active === "export"
-																? "🖼️"
-																: ""}
-						</span>
-						<span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>
-							{active === "basemap"
-								? "Basemap"
-								: active === "layers"
-									? `Layers (${layerSummary})`
-									: active === "gallery"
-										? "Research Gallery"
-										: active === "search"
-											? "Search"
-											: active === "measure"
-												? "Measure"
-												: active === "draw"
-													? "Create vector"
-													: active === "hydrography"
-														? "Reference vectors"
-														: active === "flood"
-															? "Flood inundation"
-															: active === "export"
-																? "Export"
-																: ""}
-						</span>
-						{active === "export" && (
-							<span style={{ fontSize: 10, opacity: 0.68, marginRight: 8 }}>
-								Drag left or bottom edge to resize
-							</span>
-						)}
-						<button
-							aria-label="Close panel"
-							onClick={closePanel}
-							style={{
-								background: "transparent",
-								color: fg,
-								border: "none",
-								borderRadius: 3,
-								padding: "2px 6px",
-								minWidth: 24,
-								minHeight: 24,
-								cursor: "pointer",
-								fontSize: 13,
-								lineHeight: 1,
-							}}
-							title="Close"
-							type="button">
-							✕
-						</button>
-					</div>
-
-					{/* Bottom edge — vertical resize */}
-					<div
-						aria-label="Resize panel height"
-						onMouseDown={onResizeHeightStart}
-						role="separator"
-						style={{
-							position: "absolute",
-							left: 0,
-							right: 0,
-							bottom: 0,
-							height: active === "export" ? 9 : 5,
-							cursor: "ns-resize",
-							zIndex: MAP_Z.local,
-							background: active === "export" ? "rgba(255,255,255,0.08)" : "transparent",
-						}}
-						title="Drag bottom edge to resize height"
-					/>
-
-					{/* Panel content — scrollable */}
-					<div className="map-ribbon-panel-content" style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
+						aria-labelledby={`map-chrome-tab-${active}`}
+						id="map-chrome-layers-tabpanel"
+						role="tabpanel"
+						tabIndex={-1}>
 						{active === "basemap" && (
 							<BasemapList
 								currentStyle={currentBasemap}
@@ -641,237 +620,421 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 								visibleLayerIds={visibleLayerIds}
 							/>
 						)}
-						{active === "search" && <div style={{ padding: 8 }}>{searchPanel}</div>}
-						{active === "annotations" && <div style={{ padding: 8 }}>{annotationsPanel}</div>}
-						{active === "swipe" && <div style={{ padding: 12 }}>{swipePanel}</div>}
-						{active === "flood" && <div style={{ padding: 12 }}>{floodPanel}</div>}
-						{active === "time" && <div style={{ padding: 12 }}>{timeSliderPanel}</div>}
-						{active === "gallery" && (
-							<div style={{ padding: 8 }}>
-								{galleryPanel ?? (
-									<ResearchGalleryPanel
-										bookmarkedIds={[]}
-										importCallbacks={{
-											onImportScene: () => "Import unavailable here.",
-											onImportTransects: () => "Import unavailable here.",
-											onImportAnnotations: () => "Import unavailable here.",
-										}}
-										mapStyle={mapStyle}
-										myItems={[]}
-										onDeleteMyItem={() => {}}
-										onOpenExport={() => toggle("export")}
-										onSaveScene={() => {}}
-										onToggleBookmark={() => {}}
-										onUpdateMyItem={() => {}}
-									/>
-								)}
-							</div>
-						)}
-						{active === "transect" && <div style={{ padding: 8 }}>{transectsPanel}</div>}
-						{active === "measure" && (
-							<div style={{ padding: 10 }}>
-								<div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
-									Temporary distance or area measurements — not saved to the workspace.
-								</div>
-								<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-									<button
-										onClick={() => onMeasureModeChange?.(measureMode === "distance" ? null : "distance")}
-										style={{
-											padding: "6px 10px",
-											fontSize: 12,
-											background:
-												measureMode === "distance"
-													? "var(--vscode-button-background, #0e639c)"
-													: "transparent",
-											color: fg,
-											border: `1px solid ${border}`,
-											borderRadius: 3,
-											cursor: "pointer",
-										}}>
-										📏 Distance
-									</button>
-									<button
-										onClick={() => onMeasureModeChange?.(measureMode === "area" ? null : "area")}
-										style={{
-											padding: "6px 10px",
-											fontSize: 12,
-											background:
-												measureMode === "area"
-													? "var(--vscode-button-background, #0e639c)"
-													: "transparent",
-											color: fg,
-											border: `1px solid ${border}`,
-											borderRadius: 3,
-											cursor: "pointer",
-										}}>
-										📐 Area
-									</button>
-									{measureMode && (
-										<div style={{ fontSize: 10, opacity: 0.7, marginTop: 4 }}>
-											Click points on map. Double-click or Enter to finish. ESC to cancel.
-										</div>
-									)}
-								</div>
-							</div>
-						)}
-						{active === "draw" && (
-							<div style={{ padding: 10 }}>
-								<div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
-									Create vectors saved to <code style={{ fontSize: 10 }}>vectors/</code> in your workspace.
-									After finishing, use Save or Export — geometry stays on screen until you choose.
-								</div>
-								<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-									<button
-										onClick={() => {
-											onMeasureModeChange?.(null)
-											onDrawModeChange?.(drawMode === "polygon" ? null : "polygon")
-										}}
-										style={{
-											padding: "6px 10px",
-											fontSize: 12,
-											background:
-												drawMode === "polygon"
-													? "var(--vscode-button-background, #2d9f6f)"
-													: "transparent",
-											color: fg,
-											border: `1px solid ${border}`,
-											borderRadius: 3,
-											cursor: "pointer",
-										}}
-										type="button">
-										⬡ Polygon
-									</button>
-									<button
-										onClick={() => {
-											onMeasureModeChange?.(null)
-											onDrawModeChange?.(drawMode === "line" ? null : "line")
-										}}
-										style={{
-											padding: "6px 10px",
-											fontSize: 12,
-											background:
-												drawMode === "line" ? "var(--vscode-button-background, #2d9f6f)" : "transparent",
-											color: fg,
-											border: `1px solid ${border}`,
-											borderRadius: 3,
-											cursor: "pointer",
-										}}
-										type="button">
-										〰 Line
-									</button>
-									<button
-										onClick={() => {
-											onMeasureModeChange?.(null)
-											onDrawModeChange?.(drawMode === "point" ? null : "point")
-										}}
-										style={{
-											padding: "6px 10px",
-											fontSize: 12,
-											background:
-												drawMode === "point" ? "var(--vscode-button-background, #2d9f6f)" : "transparent",
-											color: fg,
-											border: `1px solid ${border}`,
-											borderRadius: 3,
-											cursor: "pointer",
-										}}
-										type="button">
-										● Point
-									</button>
-								</div>
-							</div>
-						)}
 						{active === "hydrography" && viewState && <HydrographyPanel mapStyle={mapStyle} viewState={viewState} />}
-						{active === "export" && (
-							<div style={{ padding: 10 }}>
-								<MapExport
-									currentBasemap={currentBasemap}
-									getMapCanvas={getMapCanvas}
-									layerOpacities={layerOpacities}
-									layers={layers}
-									mapStyle={mapStyle}
-									onClose={() => toggle("export")}
-									rasterRevision={rasterRevision}
-									renderIssues={renderIssues}
-									viewState={viewState}
-									visibleLayerIds={visibleLayerIds}
-								/>
+					</div>
+				</>
+			)}
+			{active === "search" && <div style={{ padding: 8 }}>{searchPanel}</div>}
+			{active === "annotations" && <div style={{ padding: 8 }}>{annotationsPanel}</div>}
+			{active === "swipe" && <div style={{ padding: 12 }}>{swipePanel}</div>}
+			{active === "flood" && <div style={{ padding: 12 }}>{floodPanel}</div>}
+			{active === "time" && <div style={{ padding: 12 }}>{timeSliderPanel}</div>}
+			{active === "transect" && <div style={{ padding: 8 }}>{transectsPanel}</div>}
+			{active === "measure" && (
+				<div style={{ padding: 10 }}>
+					<div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
+						Temporary distance or area measurements — not saved to the workspace.
+					</div>
+					<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+						{modeButton(
+							"symbol-ruler",
+							"Distance",
+							measureMode === "distance",
+							"var(--vscode-button-background, #0e639c)",
+							() => onMeasureModeChange?.(measureMode === "distance" ? null : "distance"),
+						)}
+						{modeButton(
+							"symbol-array",
+							"Area",
+							measureMode === "area",
+							"var(--vscode-button-background, #0e639c)",
+							() => onMeasureModeChange?.(measureMode === "area" ? null : "area"),
+						)}
+						{measureMode && (
+							<div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>
+								Click points on map. Double-click or Enter to finish. ESC to cancel.
 							</div>
 						)}
 					</div>
 				</div>
 			)}
-
-			{/* Bound-claim chip — floats above ribbon when set */}
-			{boundClaimId && (
-				<div
-					style={{
-						position: "absolute",
-						top: 10,
-						right: ribbonWidth + 14,
-						zIndex: MAP_Z.panel,
-						background: "rgba(80,200,120,0.18)",
-						border: "1px solid rgba(80,200,120,0.45)",
-						borderRadius: 12,
-						padding: "3px 9px",
-						fontSize: 10,
-						color: "var(--vscode-charts-green, #89d185)",
-						pointerEvents: "none",
-						whiteSpace: "nowrap",
-					}}
-					title={`Map state is linked to claim ${boundClaimId}`}>
-					📎 {boundClaimId}
-				</div>
-			)}
-
-			{/* Grouped ribbon: labelled at 800px and wider, icon-only (with aria-labels and tooltips) below */}
-			<nav
-				aria-label="Map tools"
-				style={{
-					position: "absolute",
-					top: 10,
-					right: 10,
-					zIndex: MAP_Z.panel,
-					width: ribbonWidth,
-					maxHeight: "calc(100% - 20px)",
-					overflowY: "auto",
-					background: bg,
-					color: fg,
-					border: `1px solid ${border}`,
-					borderRadius: 6,
-					boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-					display: "flex",
-					flexDirection: "column",
-					alignItems: "stretch",
-					padding: "6px 0",
-					gap: 4,
-					pointerEvents: "auto",
-					boxSizing: "border-box",
-				}}>
-				{ribbonGroups.map((group, index) => (
-					<div
-						aria-label={group.title}
-						className="map-ribbon-group"
-						key={group.title}
-						role="group"
-						style={{ borderTop: index === 0 ? "none" : `1px solid ${border}` }}>
-						{showLabels && <div className="map-ribbon-group__title">{group.title}</div>}
-						{group.items.map((item) => (
-							<RibbonButton
-								accent={accent}
-								active={item.active}
-								badge={item.badge}
-								disabled={item.disabled}
-								icon={item.icon}
-								key={item.key}
-								label={item.label}
-								onClick={item.onClick}
-								text={showLabels ? item.text : undefined}
-							/>
+			{active === "draw" && (
+				<div style={{ padding: 10 }}>
+					<div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
+						Create vectors saved to <code style={{ fontSize: 11 }}>vectors/</code> in your workspace. After finishing,
+						use Save or Export — geometry stays on screen until you choose.
+					</div>
+					<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+						{(
+							[
+								["polygon", "symbol-field", "Polygon"],
+								["line", "graph-line", "Line"],
+								["point", "circle-filled", "Point"],
+							] as const
+						).map(([kind, icon, text]) => (
+							<React.Fragment key={kind}>
+								{modeButton(icon, text, drawMode === kind, "var(--vscode-button-background, #2d9f6f)", () => {
+									onMeasureModeChange?.(null)
+									onDrawModeChange?.(drawMode === kind ? null : kind)
+								})}
+							</React.Fragment>
 						))}
 					</div>
-				))}
-			</nav>
+				</div>
+			)}
 		</>
+	)
+
+	const header = (id: string, icon: string, text: string) => (
+		<div
+			style={{
+				padding: "6px 8px 6px 12px",
+				borderBottom: `1px solid ${border}`,
+				display: "flex",
+				alignItems: "center",
+				gap: 8,
+				flexShrink: 0,
+			}}>
+			<span aria-hidden="true" className={`codicon codicon-${icon}`} />
+			<h2
+				id={id}
+				style={{
+					fontWeight: 600,
+					fontSize: 13,
+					flex: 1,
+					margin: 0,
+					overflow: "hidden",
+					textOverflow: "ellipsis",
+					whiteSpace: "nowrap",
+				}}>
+				{text}
+			</h2>
+			<button
+				aria-label="Close panel"
+				className="map-chrome-close"
+				onClick={() => closePanel(true)}
+				title="Close"
+				type="button">
+				<span aria-hidden="true" className="codicon codicon-close" />
+			</button>
+		</div>
+	)
+
+	// ── modal sheet (Export, Gallery) ──
+	const dialogRef = useRef<HTMLDivElement>(null)
+	const modalOpen = modal && panelVisible
+	useEffect(() => {
+		if (!modalOpen) return
+		const returnTo = (document.activeElement as HTMLElement | null) ?? null
+		dialogRef.current?.querySelector<HTMLElement>("button, [href], input, select, textarea, [tabindex]")?.focus()
+		return () => {
+			// Focus goes back to what opened the dialog; if that was a menu item that is gone, to the More button.
+			const target = returnTo && document.contains(returnTo) && returnTo !== document.body ? returnTo : moreRef.current
+			setTimeout(() => (target ?? mapToolsRef.current)?.focus(), 0)
+		}
+	}, [modalOpen])
+	const onDialogKeyDown = (e: React.KeyboardEvent) => {
+		if (e.key === "Escape") {
+			e.preventDefault()
+			e.stopPropagation()
+			changeTool(null)
+			return
+		}
+		if (e.key !== "Tab") return
+		const focusable = Array.from(
+			dialogRef.current?.querySelectorAll<HTMLElement>(
+				'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+			) ?? [],
+		).filter((el) => el.getClientRects().length > 0)
+		if (focusable.length === 0) return
+		const first = focusable[0]
+		const last = focusable[focusable.length - 1]
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault()
+			last.focus()
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault()
+			first.focus()
+		}
+	}
+
+	// ── placement ──
+	const panelShell: React.CSSProperties = {
+		position: "absolute",
+		zIndex: MAP_Z.panel,
+		background: bg,
+		color: fg,
+		display: "flex",
+		flexDirection: "column",
+		overflow: "hidden",
+		pointerEvents: "auto",
+		fontFamily: "var(--vscode-font-family, system-ui, sans-serif)",
+		boxSizing: "border-box",
+	}
+	const panelStyle: React.CSSProperties =
+		mode === "docked"
+			? {
+					...panelShell,
+					top: 0,
+					bottom: 0,
+					right: chrome.railReserve,
+					width: chrome.panelWidth,
+					borderLeft: `1px solid ${border}`,
+				}
+			: mode === "overlay"
+				? {
+						...panelShell,
+						top: 8,
+						right: chrome.railReserve + 8,
+						width: chrome.panelWidth,
+						maxHeight: "min(560px, calc(100% - 16px))",
+						border: `1px solid ${border}`,
+						borderRadius: 6,
+						boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
+					}
+				: {
+						...panelShell,
+						left: 0,
+						right: 0,
+						bottom: 0,
+						height: `${chrome.sheetHeightPct}%`,
+						borderTop: `1px solid ${border}`,
+						borderRadius: "10px 10px 0 0",
+						boxShadow: "0 -4px 20px rgba(0,0,0,0.35)",
+					}
+
+	// The collapsed button and edge tab sit at the canvas corner, clear of a docked or floating panel.
+	const cornerRight = chrome.stageInset + (mode === "overlay" && panelVisible && !modal ? chrome.panelWidth + 8 : 0) + 8
+	const activeMeta = active ? TOOL_META[active] : null
+	const activeName = active
+		? active === "layers" || active === "basemap" || active === "hydrography"
+			? "Layers"
+			: TOOL_META[active].title
+		: null
+
+	return (
+		<div
+			data-map-chrome-mode={mode}
+			data-map-chrome-root=""
+			data-map-chrome-state={state}
+			data-map-panel-open={panelVisible && !modal ? "true" : "false"}
+			style={{ display: "contents" }}>
+			{/* Tool panel: docked column, floating panel or bottom sheet */}
+			{panelVisible && !modal && active && (
+				<section
+					aria-labelledby="map-chrome-panel-title"
+					className="map-ribbon-panel"
+					data-map-chrome="panel"
+					data-map-panel={family ?? ""}
+					onKeyDown={(e) => {
+						const tag = (e.target as HTMLElement).tagName
+						if (e.key === "Escape" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+							e.stopPropagation()
+							closePanel(true)
+						}
+					}}
+					ref={sheetRef}
+					style={panelStyle}>
+					{mode === "sheet" && (
+						<div
+							aria-label="Resize sheet"
+							aria-orientation="horizontal"
+							aria-valuemax={SHEET_HEIGHT.maxPct}
+							aria-valuemin={SHEET_HEIGHT.minPct}
+							aria-valuenow={chrome.sheetHeightPct}
+							aria-valuetext={`${chrome.sheetHeightPct}% of the map`}
+							className="map-chrome-handle"
+							onKeyDown={onHandleKeyDown}
+							onPointerDown={onHandlePointerDown}
+							role="separator"
+							tabIndex={0}>
+							<span className="map-chrome-handle__grip" />
+						</div>
+					)}
+					{header("map-chrome-panel-title", activeMeta?.icon ?? "layers", title)}
+					<div className="map-ribbon-panel-content" style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
+						{panelBody}
+					</div>
+				</section>
+			)}
+
+			{/* Export and Gallery: a centred dialog over a scrim */}
+			{modalOpen && active && (
+				<div
+					className="map-chrome-scrim"
+					data-map-chrome="modal"
+					onMouseDown={(e) => {
+						if (e.target === e.currentTarget) changeTool(null)
+					}}
+					style={{ zIndex: MAP_Z.modal }}>
+					<div
+						aria-labelledby="map-chrome-dialog-title"
+						aria-modal="true"
+						className="map-chrome-dialog"
+						onKeyDown={onDialogKeyDown}
+						ref={dialogRef}
+						role="dialog"
+						style={{ background: bg, color: fg, border: `1px solid ${border}` }}>
+						{header("map-chrome-dialog-title", TOOL_META[active].icon, TOOL_META[active].title)}
+						<div style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
+							{active === "export" ? exportBody : galleryBody}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Bound-claim chip */}
+			{boundClaimId && state !== "hidden" && (
+				<div
+					className="map-chrome-claim"
+					style={{
+						top: 12,
+						right: cornerRight + (state === "collapsed" ? COLLAPSED_SIZE + 6 : 6),
+						zIndex: MAP_Z.panel,
+					}}
+					title={`Map state is linked to claim ${boundClaimId}`}>
+					<span aria-hidden="true" className="codicon codicon-link" /> {boundClaimId}
+				</div>
+			)}
+
+			{/* Rail */}
+			{state === "rail" && (
+				<nav
+					aria-label="Map tools"
+					className="map-chrome-rail"
+					data-map-chrome="rail"
+					ref={navRef}
+					style={{ zIndex: MAP_Z.panel, background: bg, color: fg, borderLeft: `1px solid ${border}` }}>
+					<div aria-label="View tools" className="map-chrome-rail__group" role="group">
+						<RailButton
+							active={!!active && railOf(active) === "layers"}
+							badge={layerCount > 0 ? visibleCount : undefined}
+							icon="layers"
+							label={layerCount > 0 ? `Layer manager (${layerSummary})` : "Layer manager"}
+							onClick={() => toggle(active === "basemap" || active === "hydrography" ? active : "layers")}
+							tool="layers"
+						/>
+						<RailButton
+							active={active === "search"}
+							icon="search"
+							label="Search"
+							onClick={() => toggle("search")}
+							tool="search"
+						/>
+					</div>
+					<div aria-label="Work tools" className="map-chrome-rail__group" role="group">
+						<RailButton
+							active={active === "annotations"}
+							icon="pin"
+							label="Pins"
+							onClick={() => toggle("annotations")}
+							tool="annotations"
+						/>
+						<RailButton
+							active={active === "measure"}
+							icon="symbol-ruler"
+							label="Measure"
+							onClick={() => toggle("measure")}
+							tool="measure"
+						/>
+						<RailButton
+							active={active === "draw"}
+							icon="edit"
+							label="Draw ROI"
+							onClick={() => toggle("draw")}
+							tool="draw"
+						/>
+					</div>
+					<div aria-label="More tools" className="map-chrome-rail__group" role="group" style={{ position: "relative" }}>
+						<RailButton
+							active={moreActive}
+							buttonRef={moreRef}
+							icon="ellipsis"
+							label="More tools"
+							onClick={() => setMoreOpen((v) => !v)}
+							tool="more"
+						/>
+						{moreOpen && (
+							<ToolMenu
+								entries={moreEntries(() => setMoreOpen(false), true)}
+								label="More tools"
+								onClose={closeMore}
+								style={{ position: "absolute", right: "calc(100% + 4px)", top: 0 }}
+								triggerRef={moreRef}
+							/>
+						)}
+					</div>
+					<button
+						aria-expanded={true}
+						aria-label="Collapse map tools"
+						className="map-ribbon-button map-chrome-rail__collapse"
+						onClick={() => {
+							pendingFocus.current = "button"
+							chrome.setState("collapsed")
+						}}
+						title="Collapse map tools"
+						type="button">
+						<span aria-hidden="true" className="codicon codicon-chevron-right" />
+					</button>
+				</nav>
+			)}
+
+			{/* Collapsed: one button. In a bottom sheet there is no room for a rail, so it opens a tools menu. */}
+			{state === "collapsed" && (
+				<div className="map-chrome-corner" style={{ top: 8, right: cornerRight, zIndex: MAP_Z.panel }}>
+					<button
+						aria-expanded={mode === "sheet" ? toolsMenuOpen : false}
+						aria-haspopup={mode === "sheet" ? "menu" : undefined}
+						aria-label={activeName ? `Map tools, ${activeName} open` : "Map tools"}
+						className={`map-ribbon-button map-chrome-collapsed${activeName ? " map-ribbon-button--active" : ""}`}
+						data-map-chrome="button"
+						onClick={() => {
+							if (mode === "sheet") {
+								setToolsMenuOpen((v) => !v)
+							} else {
+								pendingFocus.current = "rail"
+								chrome.setState("rail")
+							}
+						}}
+						ref={mapToolsRef}
+						style={{ background: bg, borderColor: border, width: COLLAPSED_SIZE, height: COLLAPSED_SIZE }}
+						title="Map tools"
+						type="button">
+						<span aria-hidden="true" className="codicon codicon-tools" />
+						{activeMeta && (
+							<span aria-hidden="true" className={`map-chrome-activebadge codicon codicon-${activeMeta.icon}`} />
+						)}
+					</button>
+					{toolsMenuOpen && (
+						<ToolMenu
+							entries={allToolEntries()}
+							label="Map tools"
+							onClose={closeToolsMenu}
+							style={{ position: "absolute", right: 0, top: COLLAPSED_SIZE + 4 }}
+							triggerRef={mapToolsRef}
+						/>
+					)}
+				</div>
+			)}
+
+			{/* Hidden: an edge tab brings the chrome back (one click lands on Collapsed) */}
+			{state === "hidden" && (
+				<button
+					aria-label="Show map tools (Ctrl+.)"
+					className="map-chrome-edgetab"
+					data-map-chrome="tab"
+					onClick={() => {
+						pendingFocus.current = "button"
+						chrome.setState("collapsed")
+					}}
+					ref={edgeTabRef}
+					style={{ zIndex: MAP_Z.panel, width: EDGE_TAB_WIDTH, background: bg, color: fg, borderColor: border }}
+					title="Show map tools (Ctrl+.)"
+					type="button">
+					<span aria-hidden="true" className="codicon codicon-chevron-left" />
+				</button>
+			)}
+		</div>
 	)
 }
 

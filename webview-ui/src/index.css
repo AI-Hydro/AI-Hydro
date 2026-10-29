@@ -2218,7 +2218,18 @@ vscode-dropdown::part(listbox) {
 	font-size: 11px;
 	opacity: 0.85;
 	margin-left: auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* The zoom, scale and coordinate readouts never shrink; the attribution gives way (ellipsis, full text in its title). */
+.map-bottom-bar-group,
+.map-scale-bar,
+.map-coords-btn,
+.map-compass-btn {
+	flex-shrink: 0;
 }
 
 /* ===== Search Pin Card ===== */
@@ -2325,38 +2336,227 @@ vscode-dropdown::part(listbox) {
 		border-color 0.15s ease-out;
 }
 
-.map-ribbon-button--labelled {
-	width: 100%;
-	height: 28px;
-	min-height: 28px;
-	padding: 0 8px;
-	gap: 8px;
-	justify-content: flex-start;
-	font-size: var(--aih-text-label, 12px);
-}
-.map-ribbon-button--labelled .codicon {
-	font-size: 16px;
-	flex: none;
-}
-.map-ribbon-button:not(.map-ribbon-button--labelled) .codicon {
-	font-size: 18px;
-}
-.map-ribbon-button__text {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.map-ribbon-group {
+/* Chrome: a 40 px rail column, a 32 px collapsed button, a 24 px edge tab, menus and modal sheets. */
+.map-chrome-rail {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 0;
+	width: 40px;
+	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
-	align-items: stretch;
-	gap: 2px;
-	padding: 4px 4px 2px;
+	align-items: center;
+	padding: 6px 0;
+	gap: 4px;
+	pointer-events: auto;
 }
-.map-ribbon-group__title {
-	padding: 0 8px 2px;
+.map-chrome-rail__group {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	padding: 4px 0;
+	width: 100%;
+	border-bottom: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35));
+}
+.map-chrome-rail__collapse {
+	margin-top: auto;
+}
+.map-chrome-corner {
+	position: absolute;
+	pointer-events: auto;
+}
+.map-chrome-collapsed {
+	border: 1px solid;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.map-chrome-activebadge {
+	position: absolute;
+	top: -5px;
+	right: -5px;
+	width: 16px;
+	height: 16px;
+	border-radius: 8px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground, #fff);
+	font-size: 11px !important;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.map-chrome-edgetab {
+	position: absolute;
+	top: 12px;
+	right: 0;
+	height: 56px;
+	padding: 0;
+	border: 1px solid;
+	border-right: none;
+	border-radius: 6px 0 0 6px;
+	cursor: pointer;
+	pointer-events: auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.map-chrome-claim {
+	position: absolute;
+	padding: 3px 9px;
+	font-size: 11px;
+	border-radius: 12px;
+	white-space: nowrap;
+	pointer-events: none;
+	background: color-mix(in srgb, var(--vscode-button-background) 18%, var(--vscode-editor-background));
+	border: 1px solid color-mix(in srgb, var(--vscode-button-background) 45%, transparent);
+	color: var(--vscode-foreground);
+}
+.map-chrome-close {
+	min-width: 24px;
+	min-height: 24px;
+	padding: 0;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.map-chrome-close:hover {
+	background: color-mix(in srgb, var(--vscode-button-background) 14%, transparent);
+}
+.map-chrome-tabs {
+	display: flex;
+	gap: 2px;
+	padding: 4px 8px 0;
+}
+.map-chrome-tab {
+	min-height: 28px;
+	padding: 0 10px;
+	border: none;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--vscode-descriptionForeground);
+	font-family: inherit;
+	font-size: var(--aih-text-label, 12px);
+	cursor: pointer;
+}
+.map-chrome-tab--selected {
+	color: var(--vscode-foreground);
+	border-bottom-color: var(--vscode-button-background);
+}
+.map-chrome-handle {
+	flex: none;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: ns-resize;
+	touch-action: none;
+}
+.map-chrome-handle__grip {
+	width: 40px;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--vscode-descriptionForeground);
+	opacity: 0.6;
+}
+.map-chrome-menu {
+	min-width: 200px;
+	padding: 4px;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+	color: var(--vscode-menu-foreground, var(--vscode-foreground));
+	border: 1px solid var(--vscode-menu-border, var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35)));
+	border-radius: 6px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+	font-size: var(--aih-text-label, 12px);
+}
+.map-chrome-menu__item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 28px;
+	padding: 3px 8px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font-family: inherit;
+	font-size: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.map-chrome-menu__item:hover,
+.map-chrome-menu__item:focus-visible {
+	background: var(--vscode-menu-selectionBackground, color-mix(in srgb, var(--vscode-button-background) 18%, transparent));
+	color: var(--vscode-menu-selectionForeground, inherit);
+}
+.map-chrome-menu__item--current {
+	font-weight: 600;
+}
+.map-chrome-menu__item[aria-disabled="true"] {
+	cursor: default;
+}
+.map-chrome-menu__item[aria-disabled="true"] .codicon,
+.map-chrome-menu__item[aria-disabled="true"] .map-chrome-menu__text > span:first-child {
+	opacity: 0.6;
+}
+.map-chrome-menu__text {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+.map-chrome-menu__reason {
 	font-size: var(--aih-text-caption, 11px);
 	color: var(--vscode-descriptionForeground);
+}
+.map-chrome-menu__kbd {
+	font-family: inherit;
+	font-size: var(--aih-text-caption, 11px);
+	color: var(--vscode-descriptionForeground);
+}
+.map-chrome-menu__divider {
+	height: 1px;
+	margin: 3px 4px;
+	background: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35));
+}
+.map-chrome-scrim {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 12px;
+	background: rgba(0, 0, 0, 0.45);
+}
+.map-chrome-dialog {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: 720px;
+	max-height: 80vh;
+	border-radius: 8px;
+	overflow: hidden;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+	font-family: var(--vscode-font-family, system-ui, sans-serif);
+}
+.map-ribbon-button:focus-visible,
+.map-chrome-tab:focus-visible,
+.map-chrome-close:focus-visible,
+.map-chrome-edgetab:focus-visible,
+.map-chrome-handle:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+.map-ribbon-button .codicon {
+	font-size: 18px;
 }
 
 .map-ribbon-button:hover {

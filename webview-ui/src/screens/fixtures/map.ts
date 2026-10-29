@@ -169,9 +169,17 @@ export const featureLayers = (): MapLayer[] => [rasterLayer(), basinPolygon, riv
 /** localStorage payload so the camera frames the synthetic geometry deterministically. */
 export const MAP_STORAGE_KEY = "aihydro.map.workspace.v1"
 /** Schema v2: a basemap is only honoured when `basemapExplicit` is true (the user picked it). */
-export const framedWorkspace = (basemap?: string, showDetails = false, center: [number, number] = CENTER, zoom = 8.5): string =>
+export const framedWorkspace = (
+	basemap?: string,
+	showDetails = false,
+	center: [number, number] = CENTER,
+	zoom = 8.5,
+	/** The user's saved chrome state; omitted, the map width picks the default. */
+	chrome?: "collapsed" | "rail" | "hidden",
+): string =>
 	JSON.stringify({
 		version: 2,
+		...(chrome ? { chrome } : {}),
 		...(basemap ? { basemap, basemapExplicit: true } : {}),
 		viewState: { longitude: center[0], latitude: center[1], zoom, pitch: 0, bearing: 0 },
 		layerPanel: { showDetails },

@@ -1262,6 +1262,57 @@
 			},
 			"cells": 40
 		},
+		"map-chrome-collapsed": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-chrome-hidden": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-chrome-rail": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"map-empty-default": {
 			"ref": {
 				"noName": 0,
@@ -1345,11 +1396,28 @@
 			},
 			"cells": 6
 		},
+		"map-export-sheet": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 31,
+				"smallText": 0,
+				"contrast": 1,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 186,
+				"smallText": 0,
+				"contrast": 144,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"map-export-success": {
 			"ref": {
 				"noName": 0,
 				"smallTarget": 31,
-				"smallText": 1,
+				"smallText": 0,
 				"contrast": 1,
 				"contrastIndeterminate": 0
 			},
@@ -1365,7 +1433,7 @@
 			"ref": {
 				"noName": 0,
 				"smallTarget": 31,
-				"smallText": 1,
+				"smallText": 0,
 				"contrast": 1,
 				"contrastIndeterminate": 0
 			},
@@ -1441,6 +1509,74 @@
 				"contrast": 3870,
 				"contrastIndeterminate": 0
 			}
+		},
+		"map-more-flyout": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-panel-docked-layers": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 13,
+				"smallText": 0,
+				"contrast": 26,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 78,
+				"smallText": 0,
+				"contrast": 168,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-panel-overlay-pins": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 9,
+				"smallText": 9,
+				"contrast": 1,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 54,
+				"smallText": 54,
+				"contrast": 12,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-panel-sheet-400": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
 		},
 		"map-swipe": {
 			"ref": {
@@ -2134,7 +2270,7 @@
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 186,
-						"smallText": 6,
+						"smallText": 0,
 						"contrast": 147,
 						"contrastIndeterminate": 0
 					},
@@ -2144,7 +2280,7 @@
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 186,
-						"smallText": 6,
+						"smallText": 0,
 						"contrast": 147,
 						"contrastIndeterminate": 0
 					},
@@ -2966,6 +3102,86 @@
 						"smallTarget": 24,
 						"smallText": 0,
 						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-chrome-collapsed": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-chrome-hidden": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-chrome-rail": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-export-sheet": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 186,
+						"smallText": 0,
+						"contrast": 144,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-more-flyout": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-panel-docked-layers": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 78,
+						"smallText": 0,
+						"contrast": 168,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-panel-overlay-pins": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 54,
+						"smallText": 54,
+						"contrast": 12,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-panel-sheet-400": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6

@@ -743,7 +743,7 @@
 		"build:webview": "cd webview-ui && npm run build",
 		"test:webview": "cd webview-ui && npm run test",
 		"ui:screens": "node scripts/ui-screens/run.mjs",
-		"ui:screens:selftest": "node scripts/ui-screens/assertions.selftest.mjs",
+		"ui:screens:selftest": "node scripts/ui-screens/assertions.selftest.mjs && node scripts/ui-screens/coverage.selftest.mjs",
 		"ui:screens:verify-bundle": "node scripts/ui-screens/verify-no-fixtures.mjs",
 		"publish:marketplace": "vsce publish --allow-package-secrets sendgrid && ovsx publish",
 		"publish:marketplace:prerelease": "vsce publish --allow-package-secrets sendgrid --pre-release && ovsx publish --pre-release",
