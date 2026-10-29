@@ -17,6 +17,9 @@ Active product hardening — last updated 2026-09-08.
 
 ## Current State
 
+- Wave 0 X0-8 (PR #93, stop-gap until the MAP digest MP3): the map block in `environment_details` is gated to the
+  chat's own workspace, a map-launched chat or a user map mention, capped at 600 characters and sent only when changed.
+  The deleted range is changed only via `TaskState.setConversationHistoryDeletedRange`, which resets that dedup.
 - Wave 0 clean-up (vision-2040 X0-4 to X0-7, PR #92): the inherited Cline account/credits/Firebase
   stack, voice dictation, "Generate Commit Message", the code-definition tool, the `aihydro` CLI
   subagent path and the coding walkthrough are removed; the walkthrough is hydrology; the browser

@@ -15,6 +15,18 @@ export class TaskState {
 	userMessageContent: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
 	userMessageContentReady = false
 
+	/** The map-context block last sent in this task; undefined when none was sent or compaction dropped it. */
+	lastInjectedMapContext?: string
+
+	/**
+	 * Every change to the deleted range goes through here: whatever the model was sent earlier may now be cut from
+	 * its view, so the map-context block is forgotten and the next turn sends it again.
+	 */
+	setConversationHistoryDeletedRange(range: [number, number] | undefined): void {
+		this._conversationHistoryDeletedRange = range
+		this.lastInjectedMapContext = undefined
+	}
+
 	// Presentation locks
 	presentAssistantMessageLocked = false
 	presentAssistantMessageHasPendingUpdates = false
@@ -39,7 +51,11 @@ export class TaskState {
 	didRespondToPlanAskBySwitchingMode = false
 
 	// Context and history
-	conversationHistoryDeletedRange?: [number, number]
+	private _conversationHistoryDeletedRange?: [number, number]
+	/** Read-only on purpose: assign through setConversationHistoryDeletedRange so dependent per-turn state is reset. */
+	get conversationHistoryDeletedRange(): [number, number] | undefined {
+		return this._conversationHistoryDeletedRange
+	}
 
 	// Tool execution flags
 	didRejectTool = false

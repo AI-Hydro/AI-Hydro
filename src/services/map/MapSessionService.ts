@@ -150,6 +150,11 @@ export class MapSessionService {
 		return result
 	}
 
+	/** The workspace this map session belongs to ("" when it carries none yet). */
+	getWorkspaceRoot(): string {
+		return this.workspaceRoot
+	}
+
 	getActiveRoi(): MapRoi | undefined {
 		return this.activeRoi
 	}
