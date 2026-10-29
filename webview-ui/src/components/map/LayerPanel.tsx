@@ -14,6 +14,7 @@
  * Positioning is the parent's responsibility (see MapToolRibbon).
  */
 
+import { layerRetrievedAt, layerRunId, layerTool, NO_RUN_RECORD } from "@shared/map/provenanceEnvelope"
 import { StringRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
@@ -27,9 +28,9 @@ import GraduatedSymbologyEditor from "./GraduatedSymbologyEditor"
 import { deriveLayerIntelligence, type LayerIntelligence, layerResearchDetails, warningText } from "./layerIntelligence"
 import { geeDisplayLines } from "./mapLayerAdapters"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
+import { MAP_Z } from "./mapZ"
 import { SymbologyEditor } from "./SymbologyEditor"
 import { restoredLayersNote, WorkspaceFilesSection } from "./WorkspaceFilesSection"
-import { MAP_Z } from "./mapZ"
 
 interface LayerPanelContentProps {
 	onZoomToLayer?: (layer: MapLayer) => void
@@ -954,7 +955,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 												simplified
 											</span>
 										)}
-										{(layer.metadata?._run_id || layer.metadata?.tool_name) && (
+										{(layerRunId(layer.metadata) || layerTool(layer.metadata)) && (
 											<span
 												style={{
 													fontSize: 11,
@@ -966,14 +967,14 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 													fontFamily: "var(--vscode-editor-font-family, monospace)",
 												}}
 												title={[
-													layer.metadata?.tool_name && `Tool: ${layer.metadata.tool_name}`,
-													layer.metadata?._run_id && `Run: ${layer.metadata._run_id}`,
+													layerTool(layer.metadata) && `Tool: ${layerTool(layer.metadata)}`,
+													`Run: ${layerRunId(layer.metadata) ?? NO_RUN_RECORD}`,
 													layer.metadata?.agent_step && `Step: ${layer.metadata.agent_step}`,
-													layer.metadata?.timestamp && `At: ${layer.metadata.timestamp}`,
+													layerRetrievedAt(layer.metadata) && `At: ${layerRetrievedAt(layer.metadata)}`,
 												]
 													.filter(Boolean)
 													.join("\n")}>
-												🐍 {layer.metadata._run_id?.split(".")[0] ?? layer.metadata.tool_name}
+												🐍 {layerRunId(layer.metadata)?.split(".")[0] ?? layerTool(layer.metadata)}
 											</span>
 										)}
 
@@ -1728,10 +1729,10 @@ const LayerInspector: React.FC<{
 							["Citation", intelligence.citation ?? "No citation recorded"],
 							["License", intelligence.license ?? "No license recorded"],
 							["Path", meta.path ?? meta.raster_source_path ?? meta.raster_path ?? "No local source path recorded"],
-							["MCP tool", meta.tool_name ?? "Not created by a tool"],
-							["Run ID", meta._run_id ?? "No run ID"],
+							["MCP tool", layerTool(meta) ?? "Not created by a tool"],
+							["Run ID", layerRunId(meta) ?? NO_RUN_RECORD],
 							["Agent step", meta.agent_step ?? "—"],
-							["Computed at", meta.timestamp ?? "—"],
+							["Computed at", layerRetrievedAt(meta) ?? "—"],
 							["Time range", meta.time_start ? `${meta.time_start} – ${meta.time_end ?? "present"}` : "—"],
 							["Linked claim", meta.claim_id ?? "—"],
 							["Metadata fields", String(all.length)],
