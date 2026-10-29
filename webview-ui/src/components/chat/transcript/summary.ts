@@ -30,10 +30,18 @@ export interface GroupSummary {
  * $0.0214"), never a made-up zero; agent time and waiting time are separate; retries, reuse, calls that did not run
  * and revisions are counted rather than folded away.
  */
-export function summarizeGroup(facts: HeaderFacts, lifted: readonly LiftedLine[], live: boolean): GroupSummary {
-	const errors = lifted.filter((l) => l.tone === "error").length
-	const warnings = lifted.filter((l) => l.tone === "warning").length
-	const notices = lifted.filter((l) => l.tone === "notice").length
+export function summarizeGroup(
+	facts: HeaderFacts,
+	lifted: readonly LiftedLine[],
+	live: boolean,
+	absorbed: readonly LiftedLine[] = [],
+): GroupSummary {
+	// An aggregated line stands for `count` source lines, so the problem counts do not change when lines merge.
+	const sum = (tone: LiftedLine["tone"]) =>
+		[...lifted, ...absorbed].filter((l) => l.tone === tone).reduce((n, l) => n + l.count, 0)
+	const errors = sum("error")
+	const warnings = sum("warning")
+	const notices = sum("notice")
 
 	const parts: string[] = [`${live ? "Working" : "Worked"} ${formatDuration(facts.agentMs)}`]
 	if (facts.waitingMs >= 1000) {
@@ -59,6 +67,11 @@ export function summarizeGroup(facts: HeaderFacts, lifted: readonly LiftedLine[]
 	}
 	if (facts.revisionCount > 0) {
 		parts.push(plural(facts.revisionCount, "revision"))
+	}
+	// Focus keeps missing-fact notices out of the row list; the header still says how many there are.
+	const absorbedCount = absorbed.reduce((n, l) => n + l.count, 0)
+	if (absorbedCount > 0) {
+		parts.push(`${plural(absorbedCount, "call")} with no declared effect`)
 	}
 
 	const problems: string[] = []

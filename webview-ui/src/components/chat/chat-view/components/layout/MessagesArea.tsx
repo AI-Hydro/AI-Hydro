@@ -2,7 +2,7 @@ import { deriveCallState } from "@shared/aihydro/askOutcome"
 import { isInlineApprovalAsk } from "@shared/aihydro/pendingAsk"
 import type { DetailLevel } from "@shared/aihydro/transcriptPresenter"
 import { AiHydroMessage } from "@shared/ExtensionMessage"
-import React, { useCallback, useMemo, useRef, useState } from "react"
+import React, { useCallback, useMemo, useRef } from "react"
 import { Virtuoso } from "react-virtuoso"
 import TypingIndicator from "@/components/chat/TypingIndicator"
 import { updateSetting } from "@/components/settings/utils/settingsHandlers"
@@ -11,6 +11,7 @@ import { describeCall } from "../../../transcript/ToolSummaryLine"
 import { TranscriptDetailToggle } from "../../../transcript/TranscriptDetailToggle"
 import { TranscriptItemRenderer, type TranscriptRenderContext } from "../../../transcript/TranscriptItemRenderer"
 import { TranscriptStatus } from "../../../transcript/TranscriptStatus"
+import { useGroupExpansion } from "../../../transcript/useGroupExpansion"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 import { type TranscriptView } from "../../utils/messageUtils"
 import { createMessageRenderer } from "../messages/MessageRenderer"
@@ -84,10 +85,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 
 	// Group expansion is the user's choice, keyed by the group's stable key, so it survives streaming appends and
 	// Virtuoso unmounting the row. Absent = the presenter's default (the live tail is open at Normal).
-	const [groupExpanded, setGroupExpanded] = useState<Record<string, boolean>>({})
-	const onToggleGroup = useCallback((key: string, current: boolean) => {
-		setGroupExpanded((prev) => ({ ...prev, [key]: !current }))
-	}, [])
+	// It is cleared when the detail level changes (see useGroupExpansion).
+	const { groupExpanded, onToggleGroup } = useGroupExpansion(detail)
 
 	const legacyContent = useCallback(
 		createMessageRenderer(

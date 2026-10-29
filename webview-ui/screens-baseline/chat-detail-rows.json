@@ -3,26 +3,25 @@
 		"focus": {
 			"items": 4,
 			"groups": 1,
-			"liftedLines": 3,
+			"liftedLines": 1,
 			"liftedByReason": {
-				"approved_security": 2,
 				"mcp_error": 1
 			},
 			"headerCalls": 3,
 			"pending": 1,
-			"visibleRows": 7
+			"visibleRows": 5
 		},
 		"normal": {
 			"items": 4,
 			"groups": 1,
-			"liftedLines": 3,
+			"liftedLines": 2,
 			"liftedByReason": {
-				"approved_security": 2,
+				"approved_security": 1,
 				"mcp_error": 1
 			},
 			"headerCalls": 3,
 			"pending": 1,
-			"visibleRows": 7
+			"visibleRows": 6
 		},
 		"verbose": {
 			"items": 16,
@@ -38,26 +37,26 @@
 		"focus": {
 			"items": 3,
 			"groups": 1,
-			"liftedLines": 4,
+			"liftedLines": 2,
 			"liftedByReason": {
-				"policy_command": 3,
+				"policy_command": 1,
 				"exit_nonzero": 1
 			},
 			"headerCalls": 4,
 			"pending": 0,
-			"visibleRows": 7
+			"visibleRows": 5
 		},
 		"normal": {
 			"items": 3,
 			"groups": 1,
-			"liftedLines": 4,
+			"liftedLines": 2,
 			"liftedByReason": {
-				"policy_command": 3,
+				"policy_command": 1,
 				"exit_nonzero": 1
 			},
 			"headerCalls": 4,
 			"pending": 0,
-			"visibleRows": 7
+			"visibleRows": 5
 		},
 		"verbose": {
 			"items": 11,
@@ -73,24 +72,22 @@
 		"focus": {
 			"items": 3,
 			"groups": 1,
-			"liftedLines": 12,
-			"liftedByReason": {
-				"approved_security": 12
-			},
+			"liftedLines": 0,
+			"liftedByReason": {},
 			"headerCalls": 12,
 			"pending": 0,
-			"visibleRows": 15
+			"visibleRows": 3
 		},
 		"normal": {
 			"items": 3,
 			"groups": 1,
-			"liftedLines": 12,
+			"liftedLines": 1,
 			"liftedByReason": {
-				"approved_security": 12
+				"approved_security": 1
 			},
 			"headerCalls": 12,
 			"pending": 0,
-			"visibleRows": 15
+			"visibleRows": 4
 		},
 		"verbose": {
 			"items": 39,
@@ -135,24 +132,22 @@
 		"focus": {
 			"items": 3,
 			"groups": 1,
-			"liftedLines": 8,
-			"liftedByReason": {
-				"approved_security": 8
-			},
+			"liftedLines": 0,
+			"liftedByReason": {},
 			"headerCalls": 8,
 			"pending": 0,
-			"visibleRows": 11
+			"visibleRows": 3
 		},
 		"normal": {
 			"items": 3,
 			"groups": 1,
-			"liftedLines": 8,
+			"liftedLines": 1,
 			"liftedByReason": {
-				"approved_security": 8
+				"approved_security": 1
 			},
 			"headerCalls": 8,
 			"pending": 0,
-			"visibleRows": 11
+			"visibleRows": 4
 		},
 		"verbose": {
 			"items": 27,
@@ -168,26 +163,25 @@
 		"focus": {
 			"items": 4,
 			"groups": 1,
-			"liftedLines": 3,
+			"liftedLines": 1,
 			"liftedByReason": {
-				"info_notice": 1,
-				"approved_security": 2
+				"info_notice": 1
 			},
 			"headerCalls": 2,
 			"pending": 0,
-			"visibleRows": 7
+			"visibleRows": 5
 		},
 		"normal": {
 			"items": 4,
 			"groups": 1,
-			"liftedLines": 3,
+			"liftedLines": 2,
 			"liftedByReason": {
 				"info_notice": 1,
-				"approved_security": 2
+				"approved_security": 1
 			},
 			"headerCalls": 2,
 			"pending": 0,
-			"visibleRows": 7
+			"visibleRows": 6
 		},
 		"verbose": {
 			"items": 17,

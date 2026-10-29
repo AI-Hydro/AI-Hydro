@@ -200,7 +200,9 @@ describe("summary honesty", () => {
 		expect(s.text).toContain("1 revision")
 	})
 	it("the accessible name leads with what went wrong", () => {
-		const lifted = [{ key: "a", reason: "call_failed", tone: "error", text: "Failed", sourceTs: 1 }] as never
+		const lifted = [
+			{ key: "a", reason: "call_failed", tone: "error", text: "Failed", sourceTs: 1, count: 1, members: [] },
+		] as never
 		expect(summarizeGroup(facts(), lifted, false).label.startsWith("Ran 8 tools, 1 failed.")).toBe(true)
 	})
 	it("a measured sub-second span is not shown as zero", () => {
@@ -380,7 +382,13 @@ describe("W2-A2 review notes", () => {
 		const [group] = groups(presentTranscript(msgs, { detail: "normal", ...unannotated }))
 		expect(group.lifted.length).toBeGreaterThan(0)
 		expect(new Set(group.lifted.map((l) => l.tone))).toEqual(new Set(["notice"]))
-		expect(group.lifted[0].text).toContain("effect not declared by the server")
+		// Eight calls to one server that declares nothing are one server-level fact with a count, not eight findings.
+		expect(group.lifted).toHaveLength(1)
+		expect(group.lifted[0].text).toContain("declares no effect hints (8 calls")
+		expect(group.lifted[0].count).toBe(8)
+		expect(group.lifted[0].members.map((m) => m.text).every((t) => t.includes("effect not declared by the server"))).toBe(
+			true,
+		)
 	})
 
 	it("B1: an interrupted audit does not make the header say revision", () => {
@@ -440,9 +448,9 @@ describe("W2-A2 review notes", () => {
 			],
 		})
 		expect(unverified).toContain("effect unverified")
-		expect(unverified).not.toContain("not declared")
+		expect(unverified).not.toContain("no effect hints")
 		expect(textFor({ ...base, tools: [{ name: "delineate_basin" }, { name: "compute_signatures" }] })).toContain(
-			"not declared",
+			"no effect hints",
 		)
 	})
 })
