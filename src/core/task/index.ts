@@ -118,6 +118,7 @@ import {
 } from "./commandPolicy"
 import { FocusChainManager } from "./focus-chain"
 import { MessageStateHandler } from "./message-state"
+import { appendProjectContext, ProjectContextSection } from "./projectContextSection"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
 import { detectAvailableCliTools, updateApiReqMsg } from "./utils"
@@ -172,6 +173,7 @@ export class Task {
 	// Core dependencies
 	private controller: Controller
 	private mcpHub: McpHub
+	private readonly projectContextSection: ProjectContextSection
 
 	// Service handlers
 	api: ApiHandler
@@ -251,6 +253,7 @@ export class Task {
 		this.taskState = new TaskState()
 		this.controller = controller
 		this.mcpHub = mcpHub
+		this.projectContextSection = new ProjectContextSection(mcpHub)
 		this.updateTaskHistory = updateTaskHistory
 		this.postStateToWebview = postStateToWebview
 		this.reinitExistingTaskFromId = reinitExistingTaskFromId
@@ -1873,7 +1876,15 @@ export class Task {
 			workspaceRoots,
 		}
 
-		const systemPrompt = await getSystemPrompt(promptContext)
+		// X1-P4: the project/study context from the server, part of the stable prefix. Read at task start and when the
+		// (project, study) key changes; an unchanged key returns the same string with no read. Failure injects nothing.
+		const bindingState = this.controller.studyBinding
+		const projectContext = await this.projectContextSection.resolve({
+			projectId: this.controller.getChatProjectId(this.ulid),
+			chatId: this.ulid,
+			studyId: bindingState?.chatId === this.ulid ? bindingState.studyId : undefined,
+		})
+		const systemPrompt = appendProjectContext(await getSystemPrompt(promptContext), projectContext)
 
 		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(
 			this.messageStateHandler.getApiConversationHistory(),

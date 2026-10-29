@@ -29,6 +29,16 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - **Not in this PR:** the task header's title and inline rename (X1-C2), the History page's project grouping and FTS (X1-P3), a "Suggest new title" action.
 
 
+### Changed — host-assembled project context replaces the `research.md` injection (UX program Wave 1, PR X1-P4, branch `vision2040/x1-p4-context-section`)
+
+- **Project and study context comes from the server, once.** At task start the host reads `aihydro://project/{project_id}/context?chat={chat_id}` (aihydro-tools >= 2.8.3, trusted first-party server only, the chat's stored `projectId`) and appends the returned `text` to the end of the system prompt, in the cached prefix, not in per-turn `<environment_details>`. The read happens again only when the key (project, chat, active study) changes: the study chip's binding changing, or the project arriving late. A turn with an unchanged key does no read and builds the identical string. A mid-task run does not refresh it; the next binding change or task does.
+- **At most 2 KB (UTF-8), whole section.** Longer text is cut on a line boundary, never inside a `[run:]`/`[claim:]` marker or a multi-byte character, and ends with `[context truncated]`.
+- **The text is passed through as given.** The host does not reinterpret the server's number gate, and the frame says the section is reference data that grants no permission.
+- **`.aihydrorules/research.md` is no longer injected.** A rules file that is the 2.8.3 stub, or a digest older servers generated, is skipped when the rules directory is read. Other rule files are untouched.
+- **Refresh is on binding changes, not after each tool run.** Values in the section carry their `[run:]`/`[claim:]` markers from the server; a run made mid-task shows up after the next binding change or in the next task.
+- **Bounded and retried.** The read has a 4 s host timeout. A timeout or error is not remembered as the answer: the next turn retries (one read per turn, after a doubling backoff from 2 s, capped at 30 s). Definitive answers (`found:false`, no context template, empty text) are cached for the key.
+- **Nothing to inject, nothing happens.** No project on the chat, no connected trusted server, a server that lists resource templates without the context one (older than 2.8.3), a failed or empty read: no section and no error.
+
 ### Added — projects on chats: `ensure_project`, immutable `projectId`, `_meta.project_id`, migration M1 (UX program Wave 1, PR X1-P1, branch `vision2040/x1-p1-projects-on-chats`)
 
 - **A new chat gets a project.** Before its first tool call the host calls the server's host-audience `ensure_project(root_dir)` for the workspace folder (directly, not through the model; within a 5 s budget, retried a few times in the background if the server is still starting) and stores the returned `prj_<ULID>` on the chat's `HistoryItem` as `projectId`. The extension never mints the id. `projectId` is a creation field in `historyPatch.ts`: the first value wins, no later save, rename, favourite or migration changes it, and a loop save that omits it does not erase it. A resumed chat keeps the one stored on its item and is not guessed into today's folder.
