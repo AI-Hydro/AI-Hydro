@@ -37,7 +37,22 @@ function getVSCodeExecutablePath(channel: "stable" | "insiders"): Promise<string
 export function writeUserSettings(userDataDir: string, settings: Record<string, unknown>): void {
 	const dir = path.join(userDataDir, "User")
 	mkdirSync(dir, { recursive: true })
-	writeFileSync(path.join(dir, "settings.json"), JSON.stringify(settings, null, 2))
+	writeFileSync(path.join(dir, "settings.json"), JSON.stringify({ ...E2E_DEFAULT_USER_SETTINGS, ...settings }, null, 2))
+}
+
+/**
+ * Test-profile default: render modals inside the workbench so Playwright can see and click them. With the native
+ * dialogs (macOS, Windows) a modal such as the "stop the running chat" confirmation is invisible to the page and
+ * would hang the test. This is a test-environment setting only; the product always shows a modal.
+ */
+export const E2E_DEFAULT_USER_SETTINGS = { "window.dialogStyle": "custom" } as const
+
+/** Accept the "A chat is still running" modal that "New task" raises while a chat is running. */
+export async function acceptStopRunningChatModal(page: Page): Promise<void> {
+	const dialog = page.locator(".monaco-dialog-box").filter({ hasText: "A chat is still running. Stop it and start a new one?" })
+	await expect(dialog).toBeVisible({ timeout: 30_000 })
+	await dialog.getByRole("button", { name: "Stop and continue" }).click()
+	await expect(dialog).toBeHidden({ timeout: 30_000 })
 }
 
 /**
@@ -465,7 +480,10 @@ export const e2e = test
 			await use(path.join(E2ETestHelper.E2E_TESTS_DIR, "fixtures", "multiroots.code-workspace"))
 		},
 		userDataDir: async ({}, use) => {
-			await E2ETestHelper.useTemporaryDirectory("vsce", use)
+			await E2ETestHelper.useTemporaryDirectory("vsce", async (dir: string) => {
+				writeUserSettings(dir, {})
+				await use(dir)
+			})
 		},
 		extensionsDir: async ({}, use) => {
 			await E2ETestHelper.useTemporaryDirectory("vsce", use)
