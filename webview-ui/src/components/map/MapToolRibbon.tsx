@@ -371,6 +371,19 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 		if (want === "button") mapToolsRef.current?.focus()
 		else if (want === "rail") navRef.current?.querySelector<HTMLElement>("[data-tool]")?.focus()
 	}, [state])
+	// Hiding unmounts the rail and panel; if focus was in them it would fall to the body, so it moves to the edge tab.
+	const prevState = useRef(state)
+	useEffect(() => {
+		const was = prevState.current
+		prevState.current = state
+		if (state !== "hidden" || was === "hidden") {
+			return
+		}
+		const el = document.activeElement
+		if (!el || el === document.body) {
+			edgeTabRef.current?.focus()
+		}
+	}, [state])
 	const focusLater = (el: () => HTMLElement | null | undefined) => setTimeout(() => el()?.focus(), 0)
 	const focusRailTool = (tool: ToolId) =>
 		focusLater(() => navRef.current?.querySelector<HTMLElement>(`[data-tool="${railOf(tool)}"]`) ?? mapToolsRef.current)

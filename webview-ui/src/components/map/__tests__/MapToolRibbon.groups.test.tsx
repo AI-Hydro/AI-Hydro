@@ -264,6 +264,18 @@ describe("MapToolRibbon chrome states", () => {
 		expect(screen.queryByText("pins-body")).toBeNull()
 	})
 
+	it("Ctrl+. from a field inside the open panel hides the chrome and moves focus to the edge tab, not the body", () => {
+		setWidth(1280)
+		render(<Host annotationsPanel={<input aria-label="pin note" />} />)
+		fireEvent.click(rail().getByRole("button", { name: "Pins" }))
+		const field = screen.getByRole("textbox", { name: "pin note" })
+		field.focus()
+		expect(document.activeElement).toBe(field)
+		fireEvent.keyDown(field, { key: ".", ctrlKey: true })
+		expect(screen.queryByRole("textbox", { name: "pin note" })).toBeNull()
+		expect(document.activeElement).toBe(screen.getByRole("button", { name: /^Show map tools/ }))
+	})
+
 	it("collapsed shows which tool is open and a bottom sheet lists every tool in a menu", () => {
 		setWidth(400)
 		render(<Host activeTool="measure" />)

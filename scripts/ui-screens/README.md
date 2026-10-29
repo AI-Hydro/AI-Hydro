@@ -24,7 +24,10 @@ the canvas, divided by the canvas area. A docked panel and the rail own their ow
 | panel open, overlay | 40% |
 | panel open, bottom sheet | 60% |
 
-Menus (`data-map-chrome="menu"`) and modal sheets (`data-map-chrome="modal"`) are transient and not counted. The rule
+Menus (`data-map-chrome="menu"`) and modal sheets (`data-map-chrome="modal"`) are transient and not counted.
+The rule measures the tool chrome only: in-canvas overlays (legend, feature identifier, bottom bar, claim chip,
+empty-state card, drag overlay) carry no `data-map-chrome` attribute and are not counted, so a screen can pass while
+one of them covers the map. The rule
 is in `coverage.mjs`; `coverage.selftest.mjs` runs it on synthetic boxes (`npm run ui:screens:selftest`). A run fails
 with `ASSERT chrome covers ...` and records the measured ratio per cell in `summary.json` (`chromeCoverage`).
 
