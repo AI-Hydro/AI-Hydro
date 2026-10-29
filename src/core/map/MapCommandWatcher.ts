@@ -5,6 +5,7 @@
 import type { Controller } from "@core/controller"
 import type { MapLayerPatch } from "@core/map/mergeMapLayerPatch"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
+import { runLayerMetadata } from "@shared/map/provenanceEnvelope"
 import { MapLayer, MapRoi } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -221,11 +222,7 @@ export class MapCommandWatcher {
 					geojson: cmd.geojson,
 					layerType: sniffGeometryType(cmd.geojson),
 					visible: true,
-					metadata: {
-						run_id: cmd.run_id || "",
-						session_id: cmd.session_id || "",
-						source: "run_output",
-					},
+					metadata: runLayerMetadata(cmd.provenance, { run_id: cmd.run_id, session_id: cmd.session_id }),
 				})
 				this.controller.addMapLayer(layer)
 				if (cmd.auto_zoom !== false) {

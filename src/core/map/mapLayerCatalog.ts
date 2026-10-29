@@ -1,4 +1,5 @@
 import { aihydroHome, aihydroPath } from "@shared/aihydro/aihydroHome"
+import { layerRunId } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { createHash } from "crypto"
 import { constants as fsConstants } from "fs"
@@ -150,7 +151,7 @@ function resolveLayerSource(layer: MapLayer): string {
 	if (meta.path) {
 		return "workspace"
 	}
-	if (meta._run_id || meta.tool) {
+	if (layerRunId(meta) || meta.tool) {
 		return "tool"
 	}
 	return "map"
@@ -252,7 +253,7 @@ export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = "", disp
 
 function isToolPushedLayer(layer: MapLayer): boolean {
 	const meta = layer.metadata ?? {}
-	return !!(meta.tool || meta._run_id || meta.source === "HAND+SRC")
+	return !!(meta.tool || layerRunId(meta) || meta.source === "HAND+SRC")
 }
 
 function isUsableAbsolutePath(filePath: string | undefined): boolean {

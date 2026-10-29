@@ -54,6 +54,17 @@ const mapCommandObject = z.object({
 	geojson: z.string().max(MAX_RUN_GEOJSON_LENGTH).optional(),
 	run_id: z.string().max(MAX_ID_LENGTH).optional(),
 	session_id: z.string().max(MAX_ID_LENGTH).optional(),
+	/** The provenance envelope (tools >= 2.8.3). Only the envelope keys survive parsing. */
+	provenance: z
+		.object({
+			chat_id: z.string().max(MAX_ID_LENGTH).optional(),
+			study_id: z.string().max(MAX_ID_LENGTH).optional(),
+			_run_id: z.string().max(MAX_ID_LENGTH).optional(),
+			tool: z.string().max(MAX_NAME_LENGTH).optional(),
+			retrieved_at: z.string().max(64).optional(),
+			source: z.string().max(MAX_NAME_LENGTH).optional(),
+		})
+		.optional(),
 	auto_zoom: z.boolean().optional(),
 	// set_time_range
 	start_iso: isoTimestamp.optional(),
