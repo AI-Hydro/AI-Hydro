@@ -33,7 +33,7 @@ e2e("Chat - can send messages and switch between modes", async ({ helper, sideba
 	// Starting a new task should clear the current chat view and show the recent tasks
 	await sidebar.getByRole("button", { name: "New task", exact: true }).click()
 	await expect(sidebar.getByText("Recent Tasks")).toBeVisible()
-	await expect(sidebar.getByText("Hello, AI-Hydro!")).toBeVisible()
+	await expect(sidebar.getByRole("button", { name: "Hello, AI-Hydro", exact: true })).toBeVisible()
 
 	// Makes sure the Plan/Act radio group works: Act starts selected, and
 	// selecting Plan moves the selection (clicking the active option is a no-op).

@@ -145,6 +145,10 @@ export interface ExtensionState {
 	/** Roots whose files the agent may not write without approval (host-computed; the webview only displays). */
 	protectedRoots?: string[]
 	finalAnswerAuditGate?: boolean
+	/** Chat titles: false means no model call for a title. */
+	autoTitle?: boolean
+	/** A model id on the chat's provider for title calls; empty means the chat's model. */
+	titleModel?: string
 	/** Discovered workspace HTML files (path + name) for the HTML Preview file browser */
 	workspaceHtmlFiles: Array<{ path: string; name: string }>
 	/** Incremented whenever HTML preview items change — used as a reliable signal for the webview to refresh */

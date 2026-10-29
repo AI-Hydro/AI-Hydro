@@ -315,6 +315,19 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("finalAnswerAuditGate", !!request.finalAnswerAuditGate)
 		}
 
+		if (request.autoTitle !== undefined) {
+			controller.stateManager.setGlobalState("autoTitle", !!request.autoTitle)
+		}
+
+		if (request.titleModel !== undefined) {
+			// A model id: one line, bounded, no markup. Empty means the chat's own model.
+			const model = String(request.titleModel).trim()
+			if (model.length > 200 || /[\r\n<>]/.test(model)) {
+				throw new Error("Invalid title model")
+			}
+			controller.stateManager.setGlobalState("titleModel", model)
+		}
+
 		if (request.hooksEnabled !== undefined) {
 			controller.stateManager.setGlobalState("hooksEnabled", !!request.hooksEnabled)
 		}

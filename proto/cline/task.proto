@@ -38,6 +38,41 @@ service TaskService {
   rpc executeQuickWin(ExecuteQuickWinRequest) returns (Empty);
   // Deletes all task history
   rpc deleteAllTaskHistory(EmptyRequest) returns (DeleteAllTaskHistoryCount);
+
+  // X1-P2: rename a chat (locks the title); an empty title resets it to automatic
+  rpc renameChat(RenameChatRequest) returns (RenameChatResult);
+
+  // X1-P2: title earlier chats with the configured model, only when the user asks
+  rpc startBulkTitling(EmptyRequest) returns (BulkTitlingResult);
+
+  // X1-P2: stop a bulk titling run
+  rpc cancelBulkTitling(EmptyRequest) returns (Empty);
+}
+
+// Request message for renaming a chat
+message RenameChatRequest {
+  Metadata metadata = 1;
+  string task_id = 2;
+  // Empty (with no description) resets the chat to an automatic title.
+  string title = 3;
+  // Present: sets the description, and locks it with the title.
+  optional string description = 4;
+}
+
+message RenameChatResult {
+  bool ok = 1;
+  // "not_found" | "invalid" | "" when ok
+  string reason = 2;
+  // Why the title was refused, for the message under the field.
+  string detail = 3;
+}
+
+message BulkTitlingResult {
+  // "done" | "cancelled" | "disabled" | "busy"
+  string status = 1;
+  int32 titled = 2;
+  int32 failed = 3;
+  int32 skipped = 4;
 }
 
 // Request message for creating a new task
@@ -97,6 +132,10 @@ message TaskItem {
   int32 tokens_out = 8;
   int32 cache_writes = 9;
   int32 cache_reads = 10;
+  // X1-P2: the display title (already checked), and where it came from ("auto" | "fallback" | "user")
+  string title = 11;
+  string title_source = 12;
+  string description = 13;
 }
 
 // Request for ask response operation

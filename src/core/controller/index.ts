@@ -74,12 +74,17 @@ import { telemetryService } from "@/services/telemetry"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { getLatestAnnouncementId } from "@/utils/announcements"
 import { getCwd, getDesktopDir } from "@/utils/path"
+import { ChatTitleService } from "../chat-title/ChatTitleService"
+import { exchangeFromMessages } from "../chat-title/chatExchange"
+import { TITLE_REPLY_CHAR_CAP } from "../chat-title/titleGenerator"
+import { withTitleModel } from "../chat-title/titleModelConfig"
 import { PromptRegistry } from "../prompts/system-prompt"
 import {
 	ensureCacheDirectoryExists,
 	ensureMcpServersDirectoryExists,
 	ensureSettingsDirectoryExists,
 	GlobalFileNames,
+	getSavedAiHydroMessages,
 	getTaskHistoryStateFilePath,
 	writeMcpMarketplaceCatalogToCache,
 } from "../storage/disk"
@@ -105,6 +110,9 @@ export const LAUNCH_BINDING_BUDGET_MS = 10_000
 /** The longest a new chat waits for the server to make (or find) its project. A miss is retried in the background. */
 export const LAUNCH_PROJECT_BUDGET_MS = 5_000
 const PROJECT_RETRY_MAX = 5
+/** M2 (fallback titles) starts this long after activation. */
+const TITLE_MIGRATION_DELAY_MS = 3_000
+
 /** The migration waits for the AI-Hydro server to connect: this often, this many times, then gives up until the next activation. */
 const MIGRATION_POLL_MS = 5_000
 const MIGRATION_POLL_MAX = 24
@@ -277,6 +285,7 @@ export class Controller {
 		})
 
 		this.startProjectMigration()
+		this.startTitleMigration()
 	}
 
 	/*
@@ -1117,6 +1126,7 @@ export class Controller {
 
 	async deleteTaskFromState(id: string) {
 		this.deletedTaskIds.add(id)
+		this._chatTitles?.cancelFor(id)
 		// Remove the task from history
 		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
 		const updatedTaskHistory = removeFromHistory(taskHistory, id)
@@ -1171,6 +1181,8 @@ export class Controller {
 		const finalAnswerAuditEnabled = this.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled")
 		const transcriptDetail = this.stateManager.getGlobalSettingsKey("transcriptDetail")
 		const finalAnswerAuditGate = this.stateManager.getGlobalSettingsKey("finalAnswerAuditGate")
+		const autoTitle = this.stateManager.getGlobalSettingsKey("autoTitle")
+		const titleModel = this.stateManager.getGlobalSettingsKey("titleModel")
 
 		const localAiHydroRulesToggles = this.stateManager.getWorkspaceStateKey("localAiHydroRulesToggles")
 		const workflowToggles = this.stateManager.getWorkspaceStateKey("workflowToggles")
@@ -1272,6 +1284,8 @@ export class Controller {
 			transcriptDetail,
 			protectedRoots: getHostProtectedRoots(),
 			finalAnswerAuditGate,
+			autoTitle,
+			titleModel,
 			workspaceHtmlFiles: this.workspaceHtmlFiles.map((f) => ({
 				path: f.relativePath,
 				name: f.name,
@@ -1349,6 +1363,143 @@ export class Controller {
 	/** A user rename: persists across every later save (`titleSource: "user"`). */
 	renameTaskHistory(id: string, title: string): HistoryItem[] {
 		return this.patchTaskHistory(id, { title, titleSource: "user" }, "user")
+	}
+
+	// ---- Chat titles (X1-P2) ------------------------------------------------------------------------------------
+
+	private _chatTitles: ChatTitleService | undefined
+
+	/** The title service. Created on first use so a controller built without a window (tests) never needs it. */
+	get chatTitles(): ChatTitleService {
+		this._chatTitles ??= new ChatTitleService({
+			getHistory: () => this.stateManager.getGlobalStateKey("taskHistory") ?? [],
+			patch: (id, patch, writer) => {
+				this.patchTaskHistory(id, patch as Partial<HistoryItem>, writer)
+			},
+			settings: () => ({
+				autoTitle: this.stateManager.getGlobalSettingsKey("autoTitle") !== false,
+				titleModel: this.stateManager.getGlobalSettingsKey("titleModel") ?? "",
+			}),
+			call: (system, user, signal) => this.callTitleModel(system, user, signal),
+			loadExchange: async (item) =>
+				exchangeFromMessages(
+					this.task?.taskId === item.id
+						? this.task.messageStateHandler.getAiHydroMessages()
+						: await getSavedAiHydroMessages(item.id),
+				),
+			studyLabelFor: (item) =>
+				this.studyBinding && this.studyBinding.chatId === item.ulid && this.studyBinding.status === "bound"
+					? this.studyBinding.label
+					: undefined,
+			autoTitleWritten: () => this.noticeAutoTitle(),
+			changed: () => {
+				void this.postStateToWebview().catch(() => {})
+			},
+			backup: async () => {
+				await backupHistoryOnce(await this.taskHistoryFile(), new Date(), "bak-pre-titles-")
+			},
+			log: (message) => console.warn(message),
+		})
+		return this._chatTitles
+	}
+
+	/**
+	 * The first time a model writes a title: one non-modal notice saying who wrote it and how to turn it off. Shown once
+	 * per profile (`titleNoticeShown`); "Turn off" sets `autoTitle` false.
+	 */
+	private noticeAutoTitle(): void {
+		try {
+			if (this.stateManager.getGlobalStateKey("titleNoticeShown")) {
+				return
+			}
+			this.stateManager.setGlobalState("titleNoticeShown", true)
+			HostProvider.window
+				.showMessage({
+					type: ShowMessageType.INFORMATION,
+					message:
+						'AI-Hydro named this chat using your chat model: the first message, the first reply (cut short) and tool names were sent to your model provider. Turn this off in Settings, Features, "Write chat titles with a model".',
+					options: { items: ["Turn off"] },
+				})
+				.then((response) => {
+					if (response?.selectedOption === "Turn off") {
+						this.stateManager.setGlobalState("autoTitle", false)
+						void this.postStateToWebview().catch(() => {})
+					}
+				})
+				.catch(() => {})
+		} catch {
+			// No host window (a headless run): the notice is a courtesy.
+		}
+	}
+
+	/** A user rename or reset (`RenameChat`). A reset starts one automatic title, because the user asked for it. */
+	renameChat(id: string, title: string, description?: string) {
+		const result = this.chatTitles.rename(id, title, description)
+		if (result.ok && result.reset) {
+			void this.chatTitles.request(id, "reset")
+		}
+		return result
+	}
+
+	/** The live chat asks for its automatic title (after the first turn, and at the first completion). Never blocks. */
+	requestChatTitle(trigger: "first_turn" | "completion"): void {
+		const id = this.task?.taskId
+		if (id) {
+			void this.chatTitles.request(id, trigger)
+		}
+	}
+
+	/** M2, once per extension host: a deterministic title for every earlier chat that has none. No model, no network. */
+	private static titleMigrationStarted = false
+	startTitleMigration(): void {
+		if (Controller.titleMigrationStarted) {
+			return
+		}
+		Controller.titleMigrationStarted = true
+		// A moment after activation, so it never competes with startup.
+		const timer = setTimeout(() => {
+			void this.chatTitles.ensureFallbackTitles().catch((error) => console.error("[titles] M2 failed:", error))
+		}, TITLE_MIGRATION_DELAY_MS)
+		timer.unref?.()
+	}
+
+	/**
+	 * One cheap model call for a title: the chat's provider, the configured `titleModel` if any, no tools, the reply
+	 * read only as far as a title needs. Stops at once when `signal` aborts. Throws on any error (the caller falls back).
+	 */
+	private async callTitleModel(system: string, user: string, signal: AbortSignal): Promise<string> {
+		const mode = this.stateManager.getGlobalSettingsKey("mode")
+		const config = withTitleModel(
+			this.stateManager.getApiConfiguration(),
+			mode,
+			this.stateManager.getGlobalSettingsKey("titleModel"),
+		)
+		const handler = buildApiHandler(config, mode)
+		const iterator = handler.createMessage(system, [{ role: "user", content: user }])[Symbol.asyncIterator]()
+		const aborted = new Promise<never>((_, reject) => {
+			const stop = () => reject(new Error("title call cancelled"))
+			if (signal.aborted) {
+				stop()
+			}
+			signal.addEventListener("abort", stop, { once: true })
+		})
+		aborted.catch(() => {})
+		let text = ""
+		try {
+			while (text.length < TITLE_REPLY_CHAR_CAP) {
+				const next = await Promise.race([iterator.next(), aborted])
+				if (next.done) {
+					break
+				}
+				if (next.value.type === "text") {
+					text += next.value.text
+				}
+			}
+		} finally {
+			// Closes the stream, which ends the request for the providers that tie it to the generator.
+			void Promise.resolve(iterator.return?.(undefined)).catch(() => {})
+		}
+		return text
 	}
 
 	// ---- Projects on chats (X1-P1) --------------------------------------------------------------------------

@@ -247,6 +247,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		transcriptDetail: "normal",
 		protectedRoots: [],
 		finalAnswerAuditGate: true,
+		autoTitle: true,
+		titleModel: "",
 
 		// NEW: Add workspace information with defaults
 		workspaceRoots: [],

@@ -22,6 +22,8 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		strictPlanModeEnabled,
 		finalAnswerAuditEnabled,
 		finalAnswerAuditGate,
+		autoTitle,
+		titleModel,
 		yoloModeToggled,
 		useAutoCondense,
 		focusChainSettings,
@@ -193,6 +195,38 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 								Each revision costs one extra model request and delays the answer. If findings remain, the answer
 								is shown with that stated. It checks that numbers are traced to recorded runs; it does not check
 								that the science is correct.
+							</p>
+						</div>
+						<div className="mt-2">
+							<VSCodeCheckbox
+								checked={autoTitle !== false}
+								onChange={(e: any) => {
+									const checked = e.target.checked === true
+									updateSetting("autoTitle", checked)
+								}}>
+								Write chat titles with a model
+							</VSCodeCheckbox>
+							<p className="toggle-description">
+								On by default. After a chat's first reply, and again when it first finishes, one short request
+								asks your chat provider for a name of at most 60 characters. The request carries the first
+								message, the first reply (cut short), the study name and tool names, never tool results, and it
+								goes to the provider you already use. Off means no model is ever called for a title: chats get a
+								plain name built from your first words. A name you type yourself is never replaced either way.
+							</p>
+							<label className="settings-label" htmlFor="title-model">
+								Title model (optional)
+							</label>
+							<VSCodeTextField
+								className="w-full"
+								disabled={autoTitle === false}
+								id="title-model"
+								onChange={(e: any) => updateSetting("titleModel", String(e.target.value ?? "").trim())}
+								placeholder="Empty uses the chat's own model"
+								value={titleModel ?? ""}
+							/>
+							<p className="toggle-description">
+								A model id on the same provider as the chat, for example a smaller one. Titles are not counted in
+								the chat's token total.
 							</p>
 						</div>
 						<div className="mt-2">

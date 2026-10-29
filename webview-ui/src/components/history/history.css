@@ -45,3 +45,70 @@
 	outline: var(--aih-focus-ring);
 	outline-offset: var(--aih-focus-offset);
 }
+
+/* Chat names (X1-P2): inline rename and the opt-in banner. Tokens only. */
+.history-card__description {
+	margin: 0;
+}
+.history-card__titlerow {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--aih-space-1);
+}
+.history-card__titlerow .history-card__title {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.history-rename {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-2);
+}
+.history-rename__input {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: var(--aih-target-min);
+	padding: var(--aih-space-1) var(--aih-space-2);
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-sm);
+	background: var(--vscode-input-background, var(--aih-surface));
+	color: var(--vscode-input-foreground, var(--aih-fg));
+	font: inherit;
+	font-size: var(--aih-text-body);
+}
+.history-rename__input:focus-visible {
+	outline: var(--aih-focus-ring);
+	outline-offset: var(--aih-focus-offset);
+}
+.history-rename__input[aria-invalid="true"] {
+	border-color: var(--vscode-inputValidation-errorBorder, var(--aih-border-active));
+}
+.history-rename__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--aih-space-1);
+}
+.history-rename__error {
+	margin: 0;
+	font-size: var(--aih-text-caption);
+	color: var(--vscode-errorForeground, var(--aih-fg));
+}
+.history-banner {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-2);
+	margin: var(--aih-space-2) var(--aih-space-3);
+	padding: var(--aih-space-3);
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-md);
+	background: var(--aih-surface-raised);
+	box-sizing: border-box;
+}
+.history-banner p {
+	margin: 0;
+}
+.history-banner__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--aih-space-1);
+}

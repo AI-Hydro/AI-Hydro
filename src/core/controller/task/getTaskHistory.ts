@@ -1,3 +1,4 @@
+import { displayTitle } from "@shared/chatTitle"
 import { GetTaskHistoryRequest, TaskHistoryArray } from "@shared/proto/cline/task"
 import { arePathsEqual, getWorkspacePath } from "../../../utils/path"
 import { Controller } from ".."
@@ -59,7 +60,9 @@ export async function getTaskHistory(controller: Controller, request: GetTaskHis
 		if (searchQuery) {
 			// Simple search implementation
 			const query = searchQuery.toLowerCase()
-			filteredTasks = filteredTasks.filter((item) => item.task.toLowerCase().includes(query))
+			filteredTasks = filteredTasks.filter(
+				(item) => item.task.toLowerCase().includes(query) || displayTitle(item).toLowerCase().includes(query),
+			)
 		}
 
 		// Calculate total count before sorting
@@ -103,6 +106,10 @@ export async function getTaskHistory(controller: Controller, request: GetTaskHis
 			tokensOut: item.tokensOut || 0,
 			cacheWrites: item.cacheWrites || 0,
 			cacheReads: item.cacheReads || 0,
+			// X1-P2: the checked display title; the webview never derives one from `task`.
+			title: displayTitle(item),
+			titleSource: item.titleSource ?? "",
+			description: item.description ?? "",
 		}))
 
 		return TaskHistoryArray.create({

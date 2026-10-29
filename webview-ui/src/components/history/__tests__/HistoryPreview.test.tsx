@@ -16,7 +16,7 @@ const mock = vi.hoisted(() => ({
 				totalCost: 0.4812,
 				isFavorited: true,
 			},
-		],
+		] as Array<Record<string, unknown>>,
 	},
 }))
 vi.mock("@/services/grpc-client", () => ({ TaskServiceClient: { showTaskWithId: mock.show } }))
@@ -28,13 +28,22 @@ afterEach(() => {
 })
 
 describe("HistoryPreview", () => {
-	it("shows a plain-text title with markdown stripped, as a real button that opens the task", () => {
+	it("names a chat that has no title from its prompt in plain text, as a real button that opens the task", () => {
 		render(<HistoryPreview showHistoryView={() => {}} />)
 		const title = screen.getByRole("button", { name: "Delineate the catchment for SYN-1 and signatures" })
 		fireEvent.click(title)
 		expect(mock.show).toHaveBeenCalledOnce()
 		expect(document.body.textContent).not.toContain("**")
 		expect(document.body.textContent).not.toContain("](")
+	})
+
+	it("shows the chat's stored title, never the raw prompt", () => {
+		mock.state.taskHistory[0] = { ...mock.state.taskHistory[0], title: "Catchment signatures", titleSource: "auto" }
+		render(<HistoryPreview showHistoryView={() => {}} />)
+		expect(screen.getByRole("button", { name: "Catchment signatures" })).toBeInTheDocument()
+		expect(document.body.textContent).not.toContain("Delineate")
+		delete mock.state.taskHistory[0].title
+		delete mock.state.taskHistory[0].titleSource
 	})
 
 	it("moves tokens and cost into a collapsed Usage disclosure", () => {
