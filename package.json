@@ -2,7 +2,7 @@
 	"name": "ai-hydro",
 	"displayName": "AI-Hydro",
 	"description": "An open platform for AI-driven hydrological research. Describe your intent — the agent delineates watersheds, retrieves streamflow, calibrates models, and builds reproducible provenance. Community-extensible via MCP.",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0",
@@ -761,7 +761,7 @@
 			"biome check --write --staged --no-errors-on-unmatched --files-ignore-unknown=true"
 		]
 	},
-	"//overrides": "These force openai (declares zod ^3), @sap-ai-sdk/prompt-registry 1.x (zod ^3) and chromium-bidi (zod 3.23.8) onto the root zod 4 to clear GHSA-mrhx-c7xc-m3w5, i.e. OUTSIDE their declared zod range. Remove each entry once that package declares zod 4. Runtime-tested on zod 4.6.7: MCP SDK 1.32.1 stdio round trip (src/services/mcp/__tests__/zodMcpRoundTrip.test.ts), mistral, SAP prompt-registry schema construction. openai zod helpers and the chromium-bidi parser are unused/unbundled and untested. See CHANGELOG 0.4.0.",
+	"//overrides": "These force openai (declares zod ^3), @sap-ai-sdk/prompt-registry 1.x (zod ^3) and chromium-bidi (zod 3.23.8) onto the root zod 4 to clear GHSA-mrhx-c7xc-m3w5, i.e. OUTSIDE their declared zod range. Remove each entry once that package declares zod 4. Runtime-tested on zod 4.6.7: MCP SDK 1.32.1 stdio round trip (src/services/mcp/__tests__/zodMcpRoundTrip.test.ts), mistral, SAP prompt-registry schema construction. openai zod helpers and the chromium-bidi parser are unused/unbundled and untested. See CHANGELOG 0.4.1.",
 	"overrides": {
 		"openai": {
 			"zod": "$zod"

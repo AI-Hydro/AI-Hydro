@@ -9,7 +9,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [0.4.0] — unreleased (version set 2026-10-17; not published)
+## [0.4.1] — unreleased (Wave 0. Version 0.4.0 was set on 2026-10-17 and never published; by owner decision on 2026-10-29 the extension stays on the 0.4.x line, so Wave 0 ships as 0.4.1 instead of 0.5.0)
 
 ### Added — managed AI-Hydro tools environment and tools status (UX program Wave 0, PR X0-3, branch `vision2040/x0-tools-env`)
 
