@@ -69,15 +69,26 @@ export function layerRetrievedAt(meta: MetadataLike): string | undefined {
  */
 export function runLayerMetadata(
 	provenance: MapProvenanceEnvelope | undefined,
-	legacy: { run_id?: string; session_id?: string },
+	legacy: { runId?: string; sessionId?: string },
 ): Record<string, string> {
 	const env = readEnvelope(provenance)
-	const runId = env[RUN_ID_KEY] ?? nonEmpty(legacy.run_id)
-	const studyId = env.study_id ?? nonEmpty(legacy.session_id)
+	const runId = env[RUN_ID_KEY] ?? nonEmpty(legacy.runId)
+	const studyId = env.study_id ?? nonEmpty(legacy.sessionId)
 	return {
 		...env,
 		...(runId ? { [RUN_ID_KEY]: runId } : {}),
 		...(studyId ? { study_id: studyId, session_id: studyId } : {}),
 		source: env.source ?? "run_output",
 	}
+}
+
+/**
+ * Metadata keys an `update_layer` command may not set, change or erase: the envelope, the host-stamped keys
+ * and the `session_id` alias of `study_id`. Provenance is written once, by the pushing call and the host.
+ */
+export const PROTECTED_METADATA_KEYS: ReadonlySet<string> = new Set([...ENVELOPE_KEYS, "project_id", "item_id", "session_id"])
+
+/** `metadata` without the protected keys. */
+export function withoutProtectedKeys(metadata: Record<string, string>): Record<string, string> {
+	return Object.fromEntries(Object.entries(metadata).filter(([k]) => !PROTECTED_METADATA_KEYS.has(k)))
 }

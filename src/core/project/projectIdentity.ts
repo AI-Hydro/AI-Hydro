@@ -35,6 +35,10 @@ export interface ProjectKeyHub {
 /**
  * `os.path.realpath` semantics: symlinks in the part of the path that exists are resolved, the rest is kept
  * as written, and the result is absolute with no trailing separator.
+ *
+ * Parity limits with Python: `path.resolve` normalises `..` before any symlink is resolved (Python resolves
+ * symlinks first, so `link/../x` can differ), and a dangling symlink at the tail is kept as written here but
+ * followed by Python's non-strict `realpath`. Such paths get a different `dir:` key than the server computes.
  */
 async function realpathLoose(p: string): Promise<string> {
 	const abs = path.resolve(p)

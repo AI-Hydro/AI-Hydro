@@ -44,19 +44,66 @@ describe("MapCommandWatcher add_layer_from_run provenance", () => {
 	})
 })
 
+describe("update_layer cannot forge or erase provenance", () => {
+	it("skips envelope, host-stamped and alias keys, and applies the rest", () => {
+		const patches: any[] = []
+		const controller = { updateMapLayer: (_id: string, p: any) => (patches.push(p), true), mapSessionService: {} }
+		const watcher = new MapCommandWatcher(controller as any)
+		const cmd = mapCommandSchema.parse({
+			type: "update_layer",
+			layer_id: "l1",
+			metadata: {
+				_run_id: "forged",
+				chat_id: "",
+				study_id: "x",
+				tool: "t",
+				retrieved_at: "r",
+				source: "s",
+				project_id: "p",
+				item_id: "i",
+				session_id: "x",
+				note: "kept",
+			},
+		})
+		return (watcher as any).applyCommand(cmd).then(() => {
+			expect(patches[0].metadata).to.deep.equal({ note: "kept" })
+		})
+	})
+})
+
+/** Lines that spell a layer metadata key `run_id`, once the command-field reads and the schema field are removed. */
+export function legacyRunIdOffenders(text: string): string[] {
+	return text
+		.split("\n")
+		.map((line) => line.replace(/\bcmd\.run_id\b/g, "").replace(/\brun_id\??: z\./g, ""))
+		.filter((line) => /(?<![_\w])run_id/.test(line))
+}
+
 describe("no legacy run_id metadata key in src/core/map", () => {
-	it("only the command field (cmd.run_id / schema) spells run_id; layer metadata uses _run_id", () => {
-		const dir = path.resolve(__dirname, "..")
-		const offenders: string[] = []
-		for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".ts"))) {
-			fs.readFileSync(path.join(dir, file), "utf8")
-				.split("\n")
-				.forEach((line, i) => {
-					if (/(?<![_\w])run_id/.test(line) && !/cmd\.run_id|run_id: z\./.test(line)) {
-						offenders.push(`${file}:${i + 1}: ${line.trim()}`)
-					}
-				})
+	it("the check flags the original bug line and lets command reads through", () => {
+		expect(legacyRunIdOffenders('run_id: cmd.run_id || "",')).to.have.length(1)
+		expect(legacyRunIdOffenders("meta.run_id")).to.have.length(1)
+		expect(legacyRunIdOffenders("const r = cmd.run_id")).to.have.length(0)
+		expect(legacyRunIdOffenders("run_id: z.string().optional(),")).to.have.length(0)
+		expect(legacyRunIdOffenders("_run_id: z.string()")).to.have.length(0)
+	})
+
+	it("layer metadata is spelled _run_id in every source file under src/core/map", () => {
+		const root = path.resolve(__dirname, "..")
+		const files: string[] = []
+		const walk = (dir: string) => {
+			for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+				if (e.name === "__tests__") continue
+				const full = path.join(dir, e.name)
+				if (e.isDirectory()) walk(full)
+				else if (/\.tsx?$/.test(e.name)) files.push(full)
+			}
 		}
+		walk(root)
+		expect(files.length).to.be.greaterThan(5)
+		const offenders = files.flatMap((f) =>
+			legacyRunIdOffenders(fs.readFileSync(f, "utf8")).map((l) => `${path.basename(f)}: ${l.trim()}`),
+		)
 		expect(offenders, offenders.join("\n")).to.deep.equal([])
 	})
 })

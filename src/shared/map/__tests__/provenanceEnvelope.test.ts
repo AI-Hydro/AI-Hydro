@@ -28,7 +28,7 @@ describe("provenanceEnvelope", () => {
 	it("runLayerMetadata copies the envelope under _run_id", () => {
 		const meta = runLayerMetadata(
 			{ _run_id: "run-9", study_id: "st_1", chat_id: "c1", tool: "delineate_watershed", retrieved_at: "t" },
-			{ run_id: "ignored-because-envelope-wins", session_id: "st_other" },
+			{ runId: "ignored-because-envelope-wins", sessionId: "st_other" },
 		)
 		expect(meta._run_id).to.equal("run-9")
 		expect(meta.study_id).to.equal("st_1")
@@ -38,11 +38,11 @@ describe("provenanceEnvelope", () => {
 	})
 
 	it("runLayerMetadata falls back to the command's own run_id, and omits _run_id when there is none", () => {
-		const withRun = runLayerMetadata(undefined, { run_id: "run-3", session_id: "st_2" })
+		const withRun = runLayerMetadata(undefined, { runId: "run-3", sessionId: "st_2" })
 		expect(withRun._run_id).to.equal("run-3")
 		expect(withRun.study_id).to.equal("st_2")
 		expect(withRun).to.not.have.property("run_id")
-		const none = runLayerMetadata(undefined, { run_id: "", session_id: "" })
+		const none = runLayerMetadata(undefined, { runId: "", sessionId: "" })
 		expect(none).to.not.have.property("_run_id")
 		expect(none).to.not.have.property("run_id")
 	})
