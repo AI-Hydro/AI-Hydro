@@ -944,6 +944,8 @@ export class VscodeMapPanelProvider {
 								await postMessageToWebview({
 									type: "aihydro-map-save-ack",
 									projectKey: String(message.projectKey),
+									// Echoed so the pin card can tell that THIS save, not an earlier one, reached the host.
+									saveSeq: typeof message.saveSeq === "number" ? message.saveSeq : undefined,
 									ids: (Array.isArray(message.annotations) ? message.annotations : [])
 										.map((a: { id?: unknown }) => a?.id)
 										.filter((id: unknown) => typeof id === "string"),

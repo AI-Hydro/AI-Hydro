@@ -95,6 +95,7 @@ import { MAP_Z } from "./mapZ"
 import PinCard from "./PinCard"
 import PinsPanel from "./PinsPanel"
 import { DASH_EXTENSION } from "./pathStyle"
+import { currentSaveToken, failOutstandingSaves, usePinSaveStatus } from "./pinSaveStatus"
 import {
 	ANNOTATIONS_LAYER_ID,
 	addPin,
@@ -866,6 +867,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		[],
 	)
 	const chrome = useMapChrome(rootRef, activeTool !== null, panelFamily(activeTool))
+	const pinSaveStatus = usePinSaveStatus()
 	const searchOpen = activeTool === "search"
 	const exportOpen = activeTool === "export"
 	const setSearchOpen = useCallback((open: boolean) => setToolOpen("search", open), [setToolOpen])
@@ -988,11 +990,13 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		unmountedRef.current = false
 		loadPinsFromHost()
 		const onMessage = (event: MessageEvent) => {
-			const data = event.data as { type?: string; projectKey?: unknown; ids?: unknown } | undefined
+			const data = event.data as { type?: string; projectKey?: unknown; ids?: unknown; saveSeq?: unknown } | undefined
 			if (data?.type === "aihydro-map-pins-reload") {
+				// A refused save also asks for a reload: whatever was still waiting for an answer will not get one.
+				failOutstandingSaves()
 				loadPinsFromHost(true)
 			} else if (data?.type === "aihydro-map-save-ack") {
-				acknowledgeSaved(data.projectKey, data.ids)
+				acknowledgeSaved(data.projectKey, data.ids, data.saveSeq)
 			}
 		}
 		window.addEventListener("message", onMessage)
@@ -3841,13 +3845,21 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							const [pinLon, pinLat] = pinCoords(selectedPin)
 							void handleAgentDelineate({ lon: pinLon, lat: pinLat }, [])
 						}}
-						onNote={(notes) =>
-							applyPinEdit(patchPin(annotationsRef.current, selectedPin.id, { notes }), "Note saved")
-						}
-						onRename={(name) =>
-							applyPinEdit(patchPin(annotationsRef.current, selectedPin.id, { name }), "Pin renamed")
-						}
+						onRetry={() => {
+							saveAnnotations(annotationsRef.current)
+							return currentSaveToken()
+						}}
+						onSave={(patch) => {
+							const result = patchPin(annotationsRef.current, selectedPin.id, patch)
+							if (!result.edit) {
+								return null
+							}
+							applyPinEdit(result, "Pin updated")
+							// saveAnnotations numbered the save (or marked it waiting for the project) synchronously.
+							return currentSaveToken()
+						}}
 						pin={selectedPin}
+						saveStatus={pinSaveStatus}
 					/>
 				)}
 
@@ -3886,7 +3898,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							gap: 10,
 							padding: "5px 6px 5px 12px",
 							background: "var(--vscode-editorWidget-background, #252526)",
-							color: "var(--vscode-editorWidget-foreground, #ccc)",
+							color: "var(--vscode-foreground, #ccc)",
 							border: "1px solid var(--vscode-editorWidget-border, #454545)",
 							borderRadius: 4,
 							fontSize: 12,

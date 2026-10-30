@@ -47,6 +47,16 @@ Reported on the installed 0.4.4 build: every row carried a drag handle, a checkb
 - **Toolbar**: `Add` (file, URL), the summary, one show or hide all toggle, and a menu (Save scene, Open scene, Show all, Hide all, Remove all layers). The global "show all details" toggle is gone (details are per layer, on demand). The footer line "N restored from earlier sessions" is now a tooltip on the summary; the older-layers notice stays, with Restore.
 - New harness screens: `map-layers-selected`, `map-layers-menu-open`, `map-layers-long-names`, `map-layers-many`, `map-layers-restored`, `map-layers-confirm-undo`, `map-layers-collapsed-group`.
 
+### Changed — the pin card has an explicit Save, a dirty state and a "Saved" that means the host acknowledged it (branch `vision2040/polish-map-pins`)
+
+The owner's report: the pin card has an editable name and note and no way to confirm them. Edits did autosave, invisibly (the name on Enter or blur, the note on blur).
+
+- **Edits are a draft until saved.** The footer reads "Unsaved changes" with a Save button. Enter in the name saves, Ctrl or Cmd+Enter in the note saves (a plain Enter is a new line), Escape throws a field's draft away. Name and note are saved together as one undoable edit. The toast after it says "Pin updated", not "saved": it is the local edit with Undo, and only the card's own line says Saved, after the host has. (The toast also used a colour that was 1.6:1 on a light theme; it now follows the theme foreground.)
+- **Nothing is lost.** Moving focus out of the card, closing it, or selecting another pin commits the draft first.
+- **"Saved" means the host said so.** Every save sent to the host now carries a sequence number (`saveSeq`), and the host echoes it in `aihydro-map-save-ack` (host change in `VscodeMapPanelProvider.ts`: one extra field). The card reads "Saving" until the ack for that save or a later one arrives, then "Saved". A save with no answer in 10 s reads "Not saved to the project" with Retry. A save made before the project is known (nothing can be sent) reads "Saved on this device only", never "Saved". The same `pendingSync` and per-project ack rules from the data-safety work apply unchanged.
+- The footer "Your note. Not a measurement." stays: it says what a pin is.
+- New harness screens `map-pin-dirty`, `map-pin-saved`, `map-pin-saving`, `map-pin-save-failed`.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)

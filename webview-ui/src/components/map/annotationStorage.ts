@@ -15,6 +15,7 @@
  */
 
 import { extractPhotoPaths } from "./photoPaths"
+import { ackHostSave, beginHostSave, markUnscoped } from "./pinSaveStatus"
 import { nextDefaultName, sanitizeAnnotations } from "./pins"
 
 // ─── Storage keys ────────────────────────────────────────────────────────────
@@ -236,10 +237,11 @@ function releaseFromUnscoped(ids: ReadonlySet<string>): void {
 }
 
 /** The host says it has persisted these pins for `projectKey`: the unscoped copies (and their marks) can go. */
-export function acknowledgeSaved(projectKey: unknown, ids: unknown): void {
+export function acknowledgeSaved(projectKey: unknown, ids: unknown, saveSeq?: unknown): void {
 	if (projectKey !== activeProjectKey || !Array.isArray(ids)) {
 		return
 	}
+	ackHostSave(saveSeq)
 	const acked = new Set(ids.filter((id): id is string => typeof id === "string"))
 	for (const id of acked) {
 		unsyncedIds.delete(id)
@@ -621,13 +623,17 @@ export async function saveAnnotationsToHost(annotations: MapAnnotation[], collec
 	const projectKey = activeProjectKey
 	if (!projectKey) {
 		pendingHostSave = true
+		markUnscoped()
 		return
 	}
+	// Numbered here, before the first await, so saves are numbered in the order they were made.
+	const saveSeq = beginHostSave()
 	try {
 		const { PLATFORM_CONFIG } = await import("../../config/platform.config")
 		PLATFORM_CONFIG.postMessage({
 			type: HOST_SAVE_TYPE,
 			projectKey,
+			saveSeq,
 			annotations,
 			collections,
 		})

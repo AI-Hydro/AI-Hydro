@@ -104,10 +104,24 @@ const mapScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): S
 	...extra,
 })
 
-/** The extension host's answer to "which pins does this project have": the fixture pins, optionally as imported. */
+/**
+ * The extension host's answer to "which pins does this project have": the fixture pins, optionally as imported. It also
+ * answers saves the way the host does: `save` is "ack" (acknowledges the numbered save), "refuse" (asks the map to
+ * reload, as it does for a project that is not open; the map reloads the pins and closes the card) or "silent" (never
+ * answers: the card reads Saving, and Not saved once ten seconds have passed).
+ */
 const pinsHost =
-	(imported = false): ScreenDef["onMessage"] =>
+	(imported = false, save: "ack" | "refuse" | "silent" = "ack"): ScreenDef["onMessage"] =>
 	(msg, reply) => {
+		if (msg.type === "aihydro-map-save-annotations") {
+			if (save === "ack") {
+				const ids = (Array.isArray(msg.annotations) ? msg.annotations : []).map((a: { id?: string }) => a?.id)
+				reply({ type: "aihydro-map-save-ack", projectKey: msg.projectKey, saveSeq: msg.saveSeq, ids })
+			} else if (save === "refuse") {
+				reply({ type: "aihydro-map-pins-reload" })
+			}
+			return
+		}
 		if (msg.type !== "aihydro-map-load-annotations") return
 		const annotations = fixturePins().map((pin) => (imported ? { ...pin, imported: true } : pin))
 		reply({
@@ -1153,6 +1167,65 @@ export const screens: ScreenDef[] = [
 		steps: [...openTool("Pins"), { click: 'button[aria-label="Open pin Outlet candidate"]' }, { wait: 400 }],
 		expectVisible: ['[data-testid="pin-card"]'],
 		expectAbsent: ["text=__annotations-overlay", "text=#f97316"],
+	}),
+	// The pin card's save states: a draft, a save the host acknowledged, one it refused, and one still waiting.
+	mapScreen("map-pin-dirty", "Pin card with an edited note: Unsaved changes and a Save button", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: [
+			...openTool("Pins"),
+			{ click: 'button[aria-label="Open pin Outlet candidate"]' },
+			{
+				fill: [
+					'textarea[aria-label="Pin note"]',
+					"Upstream of the bridge. Snap to the NLDI flowline, then check the area.",
+				],
+			},
+			{ wait: 300 },
+		],
+		expectVisible: ['[data-save-state="dirty"]', 'button:text-is("Save")'],
+	}),
+	mapScreen("map-pin-saved", "Pin card after Save: Saved appears once the host acknowledged it", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: [
+			...openTool("Pins"),
+			{ click: 'button[aria-label="Open pin Outlet candidate"]' },
+			{
+				fill: [
+					'textarea[aria-label="Pin note"]',
+					"Upstream of the bridge. Snap to the NLDI flowline, then check the area.",
+				],
+			},
+			{ click: 'button:text-is("Save")' },
+			{ wait: 500 },
+		],
+		expectVisible: ['[data-save-state="saved"]'],
+	}),
+	mapScreen("map-pin-saving", "Pin card after Save while the host has not answered yet: Saving, never Saved", {
+		layers: featureLayers(),
+		onMessage: pinsHost(false, "silent"),
+		steps: [
+			...openTool("Pins"),
+			{ click: 'button[aria-label="Open pin Outlet candidate"]' },
+			{ fill: ['textarea[aria-label="Pin note"]', "Upstream of the bridge."] },
+			{ click: 'button:text-is("Save")' },
+			{ wait: 500 },
+		],
+		expectVisible: ['[data-save-state="saving"]'],
+		expectAbsent: ['[data-save-state="saved"]'],
+	}),
+	mapScreen("map-pin-save-failed", "Pin card when the host never answered the save within 10 s: Not saved, Retry", {
+		layers: featureLayers(),
+		onMessage: pinsHost(false, "silent"),
+		steps: [
+			...openTool("Pins"),
+			{ click: 'button[aria-label="Open pin Outlet candidate"]' },
+			{ fill: ['textarea[aria-label="Pin note"]', "Upstream of the bridge."] },
+			{ click: 'button:text-is("Save")' },
+			{ wait: 10600 },
+		],
+		expectVisible: ['[data-save-state="failed"]', 'button:text-is("Retry")'],
 	}),
 	mapScreen("map-pins-imported-banner", "Pins from before projects, with the one-time Keep / Clear banner", {
 		layers: featureLayers(),
