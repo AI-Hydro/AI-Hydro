@@ -128,8 +128,10 @@ interface MapToolRibbonProps {
 	layers?: MapLayer[]
 	/** Search UI rendered inside the Search panel */
 	searchPanel?: React.ReactNode
-	/** Pins UI rendered inside the Pins panel (today the Annotations panel; MP2 replaces it) */
+	/** Pins UI rendered inside the Pins panel */
 	annotationsPanel?: React.ReactNode
+	/** Sketched lines and areas (and the tracker tools for them), rendered under the Draw buttons */
+	sketchesPanel?: React.ReactNode
 	/** Swipe UI rendered inside the Swipe panel */
 	swipePanel?: React.ReactNode
 	/** Transect UI rendered inside the Transect panel */
@@ -316,6 +318,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	layers,
 	searchPanel,
 	annotationsPanel,
+	sketchesPanel,
 	swipePanel,
 	transectsPanel,
 	galleryPanel,
@@ -693,6 +696,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 							</React.Fragment>
 						))}
 					</div>
+					{sketchesPanel}
 				</div>
 			)}
 		</>

@@ -18,6 +18,7 @@ export type ScreenSurface = "sidebar" | "panel" | "editor"
 /** Declarative interaction run after mount (Playwright selector engine strings). */
 export type ScreenStep =
 	| { click: string; nth?: number; optional?: boolean }
+	| { contextClick: string; at?: [number, number] }
 	| { fill: [string, string] }
 	| { scroll: string }
 	| { scrollEnd: string }

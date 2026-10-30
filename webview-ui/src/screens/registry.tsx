@@ -25,7 +25,7 @@ import {
 import { finalAnswerTask, mcpCallTask, plainTextTask, refusalTask, taskItem } from "./fixtures/chat"
 import { approvalClaims, claim, driftClaims, FIXTURE_SESSION, statusClaims } from "./fixtures/claims"
 import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/experiments"
-import { basinPolygon, featureLayers, framedWorkspace, gaugePoint, MAP_STORAGE_KEY } from "./fixtures/map"
+import { basinPolygon, featureLayers, fixturePins, framedWorkspace, gaugePoint, MAP_STORAGE_KEY } from "./fixtures/map"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
 import * as tx from "./fixtures/transcripts"
@@ -91,6 +91,23 @@ const mapScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): S
 	render: app,
 	...extra,
 })
+
+/** The extension host's answer to "which pins does this project have": the fixture pins, optionally as imported. */
+const pinsHost =
+	(imported = false): ScreenDef["onMessage"] =>
+	(msg, reply) => {
+		if (msg.type !== "aihydro-map-load-annotations") return
+		const annotations = fixturePins().map((pin) => (imported ? { ...pin, imported: true } : pin))
+		reply({
+			type: "aihydro-map-load-annotations-result",
+			requestId: msg.requestId,
+			ok: true,
+			projectKey: "prj_FIXTURE",
+			importedCount: imported ? annotations.length : 0,
+			annotations,
+			collections: [],
+		})
+	}
 
 /**
  * Steps that open a tool whichever chrome the width gives: the rail (800 and up), or the collapsed "Map tools" button
@@ -967,6 +984,37 @@ export const screens: ScreenDef[] = [
 			{ click: 'button:has-text("Quick Export")' },
 			{ wait: 1200 },
 		],
+	}),
+
+	// Pins (X1-M2, map-polish MP2): the Pins panel, the pin card, and the context menu on empty map and on a pin.
+	mapScreen("map-pins-list", "Pins panel: list with rename, zoom to, delete and Clear all", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: openTool("Pins"),
+	}),
+	mapScreen("map-pin-card", "Pin card after clicking a pin: name, note, coordinates, actions", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: [...openTool("Pins"), { click: 'button[aria-label="Open pin Outlet candidate"]' }, { wait: 400 }],
+		expectVisible: ['[data-testid="pin-card"]'],
+		expectAbsent: ["text=__annotations-overlay", "text=#f97316"],
+	}),
+	mapScreen("map-pins-imported-banner", "Pins from before projects, with the one-time Keep / Clear banner", {
+		layers: featureLayers(),
+		onMessage: pinsHost(true),
+		steps: openTool("Pins"),
+	}),
+	mapScreen("map-context-menu-empty", "Map context menu on empty map: grouped, codicons, one Add pin", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: [{ wait: 800 }, { contextClick: "canvas#ai-hydro-research-map", at: [80, 60] }, { wait: 500 }],
+		expectVisible: ['[role="menu"]'],
+	}),
+	mapScreen("map-context-menu-pin", "Map context menu on a pin: Rename pin, Ask about this pin, Remove pin", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: [{ wait: 800 }, { contextClick: "canvas#ai-hydro-research-map" }, { wait: 500 }],
+		expectVisible: ['[role="menu"]'],
 	}),
 
 	// Map chrome (X1-M1, map-polish MP1). The three chrome states, and the panel in the placement the width gives

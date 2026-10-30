@@ -4,17 +4,19 @@ description: Mark features with Smart Annotations, record field notes, organize 
 
 # Smart Annotations
 
+!!! note "Pins moved"
+    Single points are now **[Pins](pins.md)**, with their own panel in the rail, a pin card and undo. This page covers the tracker fields and the lines and areas you sketch, which are under **Draw** in the rail ("Sketches & tracker").
+
 Click the **💬** icon in the Tool Ribbon to open the Smart Annotations panel. Annotations let you flag locations and features on the map, record field observations, organize work into named collections, and dispatch each annotation — or a whole batch — to the AI-Hydro agent for analysis.
 
 ---
 
 ## Drawing an Annotation
 
-Three geometry types are available:
+Two geometry types are sketched here (points are [Pins](pins.md)):
 
 | Button | Geometry |
 |---|---|
-| **📍 Pin** | Single point — gauges, outlets, sample sites |
 | **⬠ Poly** | Polygon — catchment outlines, flood extents |
 | **〰 Line** | Polyline — reach segments, roads, transects |
 
@@ -30,7 +32,7 @@ Each annotation shows a **collapsed card** with its colour swatch, geometry type
 
 | Field | Purpose |
 |---|---|
-| **Name** | Editable inline label (default: `Annotation N`) |
+| **Name** | Editable inline label (default: `Line N` or `Area N`) |
 | **📓 My Notes** | Your field observations — sent to the agent as background context |
 | **🤖 AI Prompt** | An explicit instruction for the agent (e.g. "Delineate the watershed at this point"). Leave blank to use the smart default based on your notes. |
 | **Tags** | Comma-separated keywords for filtering |

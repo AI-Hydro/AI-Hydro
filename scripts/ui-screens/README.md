@@ -31,6 +31,9 @@ one of them covers the map. The rule
 is in `coverage.mjs`; `coverage.selftest.mjs` runs it on synthetic boxes (`npm run ui:screens:selftest`). A run fails
 with `ASSERT chrome covers ...` and records the measured ratio per cell in `summary.json` (`chromeCoverage`).
 
+A step may be `{ contextClick: selector, at?: [x, y] }`: a right-click, optionally at an offset inside the element (the map's
+context menu).
+
 A step may be `{ click, optional: true }`: it is skipped when the control is absent. Map screens use it to open the same
 tool through a rail button (800 px and up) or the collapsed "Map tools" menu (below 600 px).
 

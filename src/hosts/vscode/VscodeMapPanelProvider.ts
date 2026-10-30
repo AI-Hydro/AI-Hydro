@@ -3,6 +3,8 @@ import * as os from "node:os"
 import * as path from "node:path"
 import type { Controller } from "@core/controller"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
+import { loadPinsForProject, savePinsForProject } from "@core/project/pinStore"
+import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import axios from "axios"
 import * as vscode from "vscode"
@@ -248,6 +250,29 @@ export class VscodeMapPanelProvider {
 	public static initialize(context: vscode.ExtensionContext, controller: Controller) {
 		VscodeMapPanelProvider.context = context
 		VscodeMapPanelProvider.controller = controller
+	}
+
+	/** Pin bucket keys per workspace root. A lookup that fell back to `dir:` is retried, so a project that gets an id later is picked up. */
+	private static pinKeys = new Map<string, ProjectKey>()
+
+	/**
+	 * Which project's pins the map shows: the first workspace folder's project key (`prj_...` when the tools server knows
+	 * it, `dir:` otherwise), plus the folder's `dir:` key so a bucket saved before the project had an id can follow it.
+	 * With no folder open there is one shared "no folder" bucket.
+	 */
+	private static async pinProjectKeys(): Promise<{ key: ProjectKey; dirKey?: string }> {
+		const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+		if (!root) {
+			return { key: { key: "dir:none", kind: "dir" } }
+		}
+		const cached = VscodeMapPanelProvider.pinKeys.get(root)
+		if (cached?.kind === "prj") {
+			return { key: cached, dirKey: await dirProjectKey(root) }
+		}
+		const hub = VscodeMapPanelProvider.controller?.mcpHub as unknown as ProjectKeyHub | undefined
+		const key = await getProjectKey(root, hub)
+		VscodeMapPanelProvider.pinKeys.set(root, key)
+		return { key, dirKey: await dirProjectKey(root) }
 	}
 
 	/** Returns true if the map panel is currently open (even if not visible). */
@@ -905,34 +930,34 @@ export class VscodeMapPanelProvider {
 					}
 					case "aihydro-map-save-annotations": {
 						try {
-							await VscodeMapPanelProvider.context.globalState.update(
-								"aihydro.map.annotations.v2",
-								message.annotations ?? [],
-							)
-							await VscodeMapPanelProvider.context.globalState.update(
-								"aihydro.map.annotation.collections.v1",
-								message.collections ?? [],
+							const { key } = await VscodeMapPanelProvider.pinProjectKeys()
+							await savePinsForProject(
+								VscodeMapPanelProvider.context.globalState,
+								key,
+								message.annotations,
+								message.collections,
 							)
 						} catch (err) {
-							console.error("[Map] Failed to persist annotations to globalState:", err)
+							console.error("[Map] Failed to persist pins to globalState:", err)
 						}
 						break
 					}
 					case "aihydro-map-load-annotations": {
 						const requestId = message.requestId ?? ""
 						try {
-							const annotations =
-								VscodeMapPanelProvider.context.globalState.get<unknown[]>("aihydro.map.annotations.v2") ?? []
-							const collections =
-								VscodeMapPanelProvider.context.globalState.get<unknown[]>(
-									"aihydro.map.annotation.collections.v1",
-								) ?? []
+							const { key, dirKey } = await VscodeMapPanelProvider.pinProjectKeys()
+							const loaded = await loadPinsForProject(VscodeMapPanelProvider.context.globalState, key, {
+								dirKey,
+								legacyLocal: message.legacyLocal,
+							})
 							await postMessageToWebview({
 								type: "aihydro-map-load-annotations-result",
 								requestId,
 								ok: true,
-								annotations,
-								collections,
+								projectKey: loaded.projectKey,
+								importedCount: loaded.importedCount,
+								annotations: loaded.annotations,
+								collections: loaded.collections,
 							})
 						} catch (err) {
 							await postMessageToWebview({

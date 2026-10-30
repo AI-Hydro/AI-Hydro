@@ -9,6 +9,21 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.3] — unreleased (UX program Wave 1, owner-reported map fixes)
+
+### Changed — map pins: one concept, a pin card, a clean context menu, and double-click zooms again (UX program Wave 1, PR X1-M2, branch `vision2040/x1-m2-pins`)
+
+Reported on the installed 0.4.2 build: the right-click menu offered "Drop pin here" and "Add annotation here" (the same action twice), double-click dropped a pin instead of zooming, and clicking a pin showed the raw feature inspector with the internal layer name `__annotations-overlay`, `color: #f97316` and no way to rename or remove it.
+
+- **One concept: Pin.** A pin is a saved point with an editable name and an optional note. Every "annotation" string in the pin path is now "pin" (the default name is `Pin N`; pins saved as `Annotation N` are renamed `Pin N` on load). Lines and areas are no longer in the Pins panel: they are "Sketches", under the Draw tool.
+- **Double-click zooms.** The capture-phase double-click pin is deleted and deck's `doubleClickZoom` is on (it is off only while Measure or Draw is active, where double-click finishes the shape). Pins are added from the right-click menu ("Add pin"), the pin tool (press `P`, click the map; it stays armed until `Esc`) or the Pins panel ("Add pin"). The menu footer tip is gone.
+- **Clicking a pin opens a pin card**, not the inspector: name (inline editable), note, coordinates, and Ask AI-Hydro / Delineate here / Copy coordinates / Delete. It never shows the layer id or a colour field. Hovering a pin shows its name, not the layer id.
+- **Delete is undoable.** Delete from the card, a Pins panel row, the menu, or `Delete`/`Backspace` on the selected pin; a toast offers Undo, and `Ctrl/Cmd+Z` undoes the last pin change (add, rename, note, delete, clear all).
+- **Context menu.** `role="menu"` with groups (AI-Hydro, then the object under the pointer, then Map), codicons instead of emoji, arrow-key navigation, and the coordinates as the header. "Drop pin here" and "Add annotation here" are one "Add pin". On a pin there is a pin section (Rename pin, Ask about this pin, Remove pin); on a layer feature the layer section keeps Inspect, Export and "Remove layer". The two delineate actions are labelled for what they do: **"Delineate with AI-Hydro"** opens a chat and the agent runs `delineate_watershed_from_point` (so the run is recorded); **"Quick delineate (no chat)"** runs the interactive MERIT delineation directly (`delineate-point` CLI, method `auto`), refuses outside CONUS without MERIT rivers on the map and above the interactive size limit, and adds the basin to the map without a chat.
+- **Pins panel (rail).** List with name and coordinates, rename, zoom to, delete, "Clear all" with a confirm (undoable), Export (GeoJSON), "From layer", and the pin tool toggle.
+- **Pins belong to the project.** The host keeps one bucket per project key (`prj_...`, or `dir:<hash>` until the tools server knows the folder; a `dir:` bucket moves to the `prj_` bucket the first time the project has an id). Pins from project A are absent in project B. The pins saved before projects existed (one global list) are handed to the first project that opens the map and marked imported; the Pins panel shows a one-time "Keep / Clear them" banner. The old list is never deleted from the host, so a downgrade still finds it. A stored pin with no usable geometry is dropped with a console warning instead of failing the render.
+- **Harness.** Five screens (`map-pins-list`, `map-pin-card`, `map-pins-imported-banner`, `map-context-menu-empty`, `map-context-menu-pin`); steps may be `{ contextClick }`. The smoke test (`scripts/map-browser-smoke.mjs`) now double-clicks the real map and checks it zooms and creates no pin, then drives P, click, card, Delete, Undo.
+
 ## [0.4.2] — unreleased (UX program Wave 1: projects on chats, chat titles, real Focus, project context, map provenance and map chrome; plus the abort-confirm guard and the Wave 0 leftovers)
 
 ### Changed — map chrome: a 40 px rail, three states, one panel width (UX program Wave 1, PR X1-M1, branch `vision2040/x1-m1-map-chrome`)

@@ -11,12 +11,15 @@ import { useMapContext } from "../../context/MapContext"
 import { MapServiceClient } from "../../services/grpc-client"
 import AnnotationsPanel from "./AnnotationsPanel"
 import { claimAgentCommand, escapeHtml } from "./agentCommandDedupe"
+import { exportAnnotationsGeoJson } from "./annotationExport"
 import {
 	type AnnotationCollection,
-	loadAnnotations,
+	adoptHostPins,
 	loadAnnotationsFromHost,
+	loadAnnotationsReport,
 	type MapAnnotation,
 	newAnnotation,
+	readLegacyLocal,
 	saveAnnotations,
 	seedAnnotationsFromGeoJson,
 } from "./annotationStorage"
@@ -86,7 +89,26 @@ import {
 	saveMapWorkspace,
 } from "./mapWorkspace"
 import { MAP_Z } from "./mapZ"
+import PinCard from "./PinCard"
+import PinsPanel from "./PinsPanel"
 import { DASH_EXTENSION } from "./pathStyle"
+import {
+	ANNOTATIONS_LAYER_ID,
+	addPin,
+	createPin,
+	type Edited,
+	formatPinCoords,
+	isPin,
+	type PinEdit,
+	patchPin,
+	pinAtPoint,
+	pinCoords,
+	pinLabel,
+	pinsOf,
+	removePins,
+	shapesOf,
+	undoEdit,
+} from "./pins"
 import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGalleryPanel"
 import { resolveFileUri } from "./resolveFileUri"
 import SearchBar from "./SearchBar"
@@ -876,24 +898,122 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const [transectHoverCoord, setTransectHoverCoord] = useState<{ lon: number; lat: number } | null>(null)
 	const [requestExpandTransectId, setRequestExpandTransectId] = useState<string | null>(null)
 
-	// Annotations
-	const [annotations, setAnnotations] = useState<MapAnnotation[]>(() => loadAnnotations())
+	// Pins (points) and sketches (lines, areas) share one list. It is the project's: the host scopes it (X1-M2).
+	const [annotations, setAnnotations] = useState<MapAnnotation[]>(() => loadAnnotationsReport().annotations)
 	const [transects, setTransects] = useState<MapTransect[]>(() => loadTransects())
 	const [drawPurpose, setDrawPurpose] = useState<"roi" | "annotation" | "transect">("roi")
+	const annotationsRef = useRef(annotations)
+	annotationsRef.current = annotations
+	const [selectedPinId, setSelectedPinId] = useState<string | null>(null)
+	/** Put the cursor in the pin card's name field (a pin just placed, or "Rename pin"). */
+	const [pinFocusName, setPinFocusName] = useState(false)
+	const [pinToolArmed, setPinToolArmed] = useState(false)
+	const [pinToast, setPinToast] = useState<{ id: number; message: string; undoable: boolean } | null>(null)
+	const pinUndoStackRef = useRef<PinEdit[]>([])
+	const lastPinPlacedAtRef = useRef(0)
+	/** What deck's click handler (memoised, so it would close over stale state) needs from the pin code. */
+	const pinApiRef = useRef({
+		list: [] as MapAnnotation[],
+		armed: false,
+		select: (_id: string | null) => {},
+		place: (_lon: number, _lat: number) => {},
+		lastPlacedAt: (): number => 0,
+	})
 
-	// On mount, sync annotations from the durable host backup (recovers after localStorage eviction).
-	// Only applied when localStorage appears empty to avoid overwriting live edits.
+	// On mount, ask the host for this project's pins. It answers with the project's own list (and, once, the pins that
+	// predate projects); without a host the local list loaded above stays.
 	useEffect(() => {
-		if (loadAnnotations().length > 0) {
-			return // localStorage has data; host sync not needed
+		let cancelled = false
+		const local = loadAnnotationsReport()
+		if (local.dropped > 0) {
+			console.warn(`[MapView] ${local.dropped} stored pin(s) were malformed and skipped`)
 		}
-		void loadAnnotationsFromHost().then((result) => {
-			if (result && result.annotations.length > 0) {
-				setAnnotations(result.annotations)
-				saveAnnotations(result.annotations)
+		void loadAnnotationsFromHost(readLegacyLocal()).then((result) => {
+			if (cancelled || !result) {
+				return
 			}
+			if (result.dropped > 0) {
+				console.warn(`[MapView] ${result.dropped} stored pin(s) were malformed and skipped`)
+			}
+			adoptHostPins(result.projectKey, result.annotations)
+			setAnnotations(result.annotations)
 		})
+		return () => {
+			cancelled = true
+		}
 	}, [])
+
+	/** One way to change the list: keep the ref, React state and storage in step. */
+	const commitAnnotations = useCallback((next: MapAnnotation[]) => {
+		annotationsRef.current = next
+		setAnnotations(next)
+		saveAnnotations(next)
+	}, [])
+
+	/** Apply an edit, remember how to undo it, and say so (with Undo) in a toast. */
+	const applyPinEdit = useCallback(
+		(result: Edited, message: string) => {
+			if (!result.edit) {
+				return
+			}
+			commitAnnotations(result.next)
+			pinUndoStackRef.current = [...pinUndoStackRef.current.slice(-49), result.edit]
+			setPinToast({ id: Date.now(), message, undoable: true })
+		},
+		[commitAnnotations],
+	)
+
+	const undoLastPinEdit = useCallback(() => {
+		const edit = pinUndoStackRef.current.pop()
+		if (!edit) {
+			return
+		}
+		commitAnnotations(undoEdit(annotationsRef.current, edit))
+		setPinToast({ id: Date.now(), message: "Undone", undoable: pinUndoStackRef.current.length > 0 })
+	}, [commitAnnotations])
+
+	const placePin = useCallback(
+		(lon: number, lat: number) => {
+			lastPinPlacedAtRef.current = Date.now()
+			const pin = createPin(annotationsRef.current, lon, lat)
+			applyPinEdit(addPin(annotationsRef.current, pin), "Pin added")
+			setSelectedPinId(pin.id)
+			setPinFocusName(true)
+			setClickedFeatures([])
+			setInspectPoint(null)
+			setContextMenu(null)
+		},
+		[applyPinEdit],
+	)
+
+	const deletePins = useCallback(
+		(ids: string[]) => {
+			const list = annotationsRef.current
+			const first = list.find((a) => a.id === ids[0])
+			const result = removePins(list, ids)
+			applyPinEdit(result, ids.length === 1 && first ? `Deleted ${pinLabel(first)}` : `Deleted ${ids.length} pins`)
+			setSelectedPinId((current) => (current && ids.includes(current) ? null : current))
+		},
+		[applyPinEdit],
+	)
+
+	const selectPin = useCallback((id: string | null, focusName = false) => {
+		setSelectedPinId(id)
+		setPinFocusName(focusName)
+		if (id) {
+			setClickedFeatures([])
+			setInspectPoint(null)
+			setInspectRasterReading(null)
+		}
+	}, [])
+
+	useEffect(() => {
+		if (!pinToast) {
+			return
+		}
+		const timer = window.setTimeout(() => setPinToast(null), 8000)
+		return () => window.clearTimeout(timer)
+	}, [pinToast])
 
 	// Swipe Tool
 	const [swipeMode, _setSwipeMode] = useState(false)
@@ -1096,6 +1216,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		lon: number
 		lat: number
 		features: ClickedFeature[]
+		/** The pin under the pointer, when the right-click landed on one. */
+		pinId?: string
 	} | null>(null)
 
 	// Stable ref for values needed in native event handlers (avoids stale closures)
@@ -1115,7 +1237,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	/** Shared logic: compute menu position + features and open the context menu */
 	const openContextMenuAt = (e: MouseEvent, container: HTMLElement) => {
 		e.preventDefault()
-		const { measureMode, drawMode, viewState, sortedLayers, visibleLayerIds } = nativeHandlersRef.current
+		const { measureMode, drawMode, viewState, sortedLayers, visibleLayerIds, annotations } = nativeHandlersRef.current
 		if (measureMode || drawMode) return
 		if (!viewState) return
 		const rect = container.getBoundingClientRect()
@@ -1132,13 +1254,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				pitch: viewState.pitch ?? 0,
 			})
 			const [lon, lat] = vp.unproject([rawX, rawY])
-			const menuW = 220
-			const menuH = 380
-			const x = Math.max(4, Math.min(rawX, rect.width - menuW - 4))
-			const y = Math.max(4, Math.min(rawY, rect.height - menuH - 4))
+			// The menu measures itself and slides back inside the map, so it is given the raw pointer position.
 			const features = collectFeaturesAtPoint(sortedLayers, visibleLayerIds, isGeoJsonLayer, lon, lat)
+			const pin = pinAtPoint(annotations, (pinLon, pinLat) => vp.project([pinLon, pinLat]) as [number, number], rawX, rawY)
 			contextMenuOpenTimeRef.current = Date.now()
-			setContextMenu({ x, y, lon, lat, features })
+			setContextMenu({ x: rawX, y: rawY, lon, lat, features, pinId: pin?.id })
 		} catch {
 			// viewport unproject failed (e.g. extreme pitch), skip
 		}
@@ -1168,45 +1288,48 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		return () => container.removeEventListener("pointerdown", handler, true)
 	}, []) // register once; reads latest values via ref
 
-	// Double-click anywhere on the map drops a location pin
+	// Pin keys: P arms the pin tool, Esc leaves it, Delete/Backspace removes the selected pin, Ctrl/Cmd+Z undoes the last
+	// pin edit. Double-click is the map's own zoom gesture and never creates anything.
+	const pinKeysRef = useRef({ armed: false, selected: null as string | null })
+	pinKeysRef.current = { armed: pinToolArmed, selected: selectedPinId }
 	useEffect(() => {
-		const container = containerRef.current
-		if (!container) return
-		const handler = (e: MouseEvent) => {
-			const { measureMode, drawMode, viewState, annotations } = nativeHandlersRef.current
-			if (measureMode || drawMode) return
-			if (!viewState) return
-			const rect = container.getBoundingClientRect()
-			const rawX = e.clientX - rect.left
-			const rawY = e.clientY - rect.top
-			try {
-				const vp = new WebMercatorViewport({
-					width: rect.width,
-					height: rect.height,
-					longitude: viewState.longitude,
-					latitude: viewState.latitude,
-					zoom: viewState.zoom,
-					bearing: viewState.bearing ?? 0,
-					pitch: viewState.pitch ?? 0,
-				})
-				const [lon, lat] = vp.unproject([rawX, rawY])
-				const ann = newAnnotation("point", { type: "Point", coordinates: [lon, lat] }, annotations.length)
-				const next = [...annotations, ann]
-				setAnnotations(next)
-				saveAnnotations(next)
-				setClickedFeatures([])
-				setInspectPoint(null)
-				setContextMenu(null)
-				const latStr = `${Math.abs(lat).toFixed(5)}°${lat >= 0 ? "N" : "S"}`
-				const lonStr = `${Math.abs(lon).toFixed(5)}°${lon >= 0 ? "E" : "W"}`
-				setAgentStatus(`Pin dropped at ${latStr}, ${lonStr}`)
-			} catch {
-				// ignore
+		const handler = (e: KeyboardEvent) => {
+			if (e.defaultPrevented) {
+				return
+			}
+			const target = e.target as HTMLElement | null
+			if (target?.closest?.("input, textarea, select, [contenteditable='true'], [role='menu']")) {
+				return
+			}
+			const { armed, selected } = pinKeysRef.current
+			const plain = !e.ctrlKey && !e.metaKey && !e.altKey
+			if (plain && (e.key === "p" || e.key === "P")) {
+				e.preventDefault()
+				setMeasureMode(null)
+				setDrawMode(null)
+				setPinToolArmed(!armed)
+			} else if (e.key === "Escape") {
+				if (armed) {
+					setPinToolArmed(false)
+				} else if (selected) {
+					setSelectedPinId(null)
+				}
+			} else if (plain && (e.key === "Delete" || e.key === "Backspace") && selected) {
+				e.preventDefault()
+				deletePins([selected])
+			} else if (
+				(e.ctrlKey || e.metaKey) &&
+				!e.shiftKey &&
+				(e.key === "z" || e.key === "Z") &&
+				pinUndoStackRef.current.length > 0
+			) {
+				e.preventDefault()
+				undoLastPinEdit()
 			}
 		}
-		container.addEventListener("dblclick", handler, true)
-		return () => container.removeEventListener("dblclick", handler, true)
-	}, []) // register once; reads latest values via ref
+		window.addEventListener("keydown", handler)
+		return () => window.removeEventListener("keydown", handler)
+	}, [deletePins, undoLastPinEdit])
 
 	useEffect(() => {
 		reportMapEvent("selection.changed", selectedFeaturesPayload(selectedFeatures))
@@ -1874,9 +1997,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			if (!object) {
 				return null
 			}
-			const matched = layers.find((l) => l.id === deckLayer?.id)
-			const name = matched?.name || deckLayer?.id || ""
 			const props = (object.properties || {}) as Record<string, unknown>
+			if (deckLayer?.id === ANNOTATIONS_LAYER_ID) {
+				// A pin or sketch of the user's: its name and a hint, never the layer id or the colour field.
+				const label = escapeHtml(String(props.name || (props.kind === "point" ? "Pin" : "Sketch")))
+				return {
+					html: `<div style="font-size:12px;line-height:1.5;max-width:240px"><strong style="font-size:13px">${label}</strong>${
+						props.kind === "point" ? '<div style="opacity:0.75">Click for details</div>' : ""
+					}</div>`,
+					style: { padding: "8px 10px", borderRadius: "4px" },
+				}
+			}
+			const matched = layers.find((l) => l.id === deckLayer?.id)
+			// Internal overlay ids start with "__"; they are not names.
+			const name = matched?.name || (String(deckLayer?.id ?? "").startsWith("__") ? "" : (deckLayer?.id ?? ""))
 			const entries = Object.entries(props).filter(([k]) => !k.startsWith("_"))
 			if (!name && entries.length === 0) {
 				return null
@@ -1948,12 +2082,14 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 
 	const handleMapClick = useCallback(
 		(info: any) => {
-			// Only dismiss the context menu on a genuine left-click, and only if the menu
-			// wasn't opened within the last 400 ms (macOS fires contextmenu on mousedown
-			// and click on mouseup — without this guard the menu flickers closed instantly).
-			if (Date.now() - contextMenuOpenTimeRef.current > 400) {
-				setContextMenu(null)
+			// A right-click opens the context menu in its own handler, and deck also reports the button release as a
+			// click. That click (the button, or anything within 400 ms of the menu opening: macOS fires contextmenu on
+			// mousedown and click on mouseup) must not inspect, select or place anything, and must not close the menu.
+			const source = info.srcEvent as { rightButton?: boolean; srcEvent?: { button?: number } } | undefined
+			if (source?.rightButton || source?.srcEvent?.button === 2 || Date.now() - contextMenuOpenTimeRef.current < 400) {
+				return
 			}
+			setContextMenu(null)
 			// If measure mode is active, feed the coordinate to the measure tool
 			// and skip feature identification entirely.
 			if ((measureMode || drawMode) && info.coordinate) {
@@ -1964,6 +2100,26 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				}
 				return
 			}
+
+			// A click on a pin selects it and opens its card (never the generic inspector). While the pin tool is armed a
+			// click on empty map places one pin; a click anywhere else closes the card.
+			const pinApi = pinApiRef.current
+			if (info.layer?.id === ANNOTATIONS_LAYER_ID) {
+				const hitId = (info.object as { properties?: { id?: unknown } } | undefined)?.properties?.id
+				const hit = typeof hitId === "string" ? pinApi.list.find((a) => a.id === hitId && isPin(a)) : undefined
+				if (hit) {
+					pinApi.select(hit.id)
+					return
+				}
+			}
+			if (pinApi.armed && typeof info.coordinate?.[0] === "number" && typeof info.coordinate?.[1] === "number") {
+				// A double-click on the armed tool must not place two pins.
+				if (Date.now() - pinApi.lastPlacedAt() > 400) {
+					pinApi.place(info.coordinate[0], info.coordinate[1])
+				}
+				return
+			}
+			pinApi.select(null)
 
 			// Clicking a saved transect line — expand that card and open the panel.
 			// info.object is now a MapTransect directly (PathLayer, not GeoJsonLayer).
@@ -2753,7 +2909,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		})
 	}, [transectGeometry])
 
-	// Smart Annotations overlay — updateTriggers force function-accessor re-evaluation
+	// Pins and sketches overlay — updateTriggers force function-accessor re-evaluation
 	// on webview reload (prevents colors from being cached stale after refresh).
 	const annotationsLayer = useMemo(() => {
 		if (annotations.length === 0) {
@@ -2761,13 +2917,13 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		}
 		const colorTrigger = annotations.map((a) => a.color).join(",")
 		return new GeoJsonLayer({
-			id: "__annotations-overlay",
+			id: ANNOTATIONS_LAYER_ID,
 			data: {
 				type: "FeatureCollection" as const,
 				features: annotations.map((a) => ({
 					type: "Feature" as const,
 					geometry: a.geometry,
-					properties: { color: a.color, name: a.name },
+					properties: { id: a.id, color: a.color, name: a.name, kind: a.type },
 				})),
 			} as unknown as GeoJSON.FeatureCollection,
 			stroked: true,
@@ -2790,17 +2946,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					number,
 				]
 			},
-			getPointRadius: 7,
-			getLineWidth: 2,
+			// The selected pin is drawn larger so the card and the map agree on which one it is.
+			getPointRadius: (f: any) => (f.properties.id === selectedPinId ? 10 : 7),
+			getLineWidth: (f: any) => (f.properties.id === selectedPinId ? 4 : 2),
 			lineWidthUnits: "pixels" as const,
 			pointRadiusUnits: "pixels" as const,
 			pickable: true,
 			updateTriggers: {
 				getFillColor: colorTrigger,
 				getLineColor: colorTrigger,
+				getPointRadius: selectedPinId,
+				getLineWidth: selectedPinId,
 			},
 		})
-	}, [annotations])
+	}, [annotations, selectedPinId])
 
 	// Saved transect lines — PathLayer with static colors avoids function-accessor
 	// caching issues that caused lines to disappear after a webview refresh.
@@ -3084,6 +3243,22 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		[sortedLayers, visibleLayerIds],
 	)
 
+	const selectedPin = useMemo(
+		() => annotations.find((a) => a.id === selectedPinId && isPin(a)) ?? null,
+		[annotations, selectedPinId],
+	)
+	const menuPin = contextMenu?.pinId ? (annotations.find((a) => a.id === contextMenu.pinId && isPin(a)) ?? null) : null
+	const pinQuestion = (pin: MapAnnotation) =>
+		`This is my pin "${pinLabel(pin)}"${pin.notes.trim() ? ` (my note: ${pin.notes.trim()})` : ""}. What should I know about this location?`
+
+	pinApiRef.current = {
+		list: annotations,
+		armed: pinToolArmed,
+		select: selectPin,
+		place: placePin,
+		lastPlacedAt: () => lastPinPlacedAtRef.current,
+	}
+
 	// Keep native handler ref up-to-date every render
 	nativeHandlersRef.current = {
 		measureMode,
@@ -3136,7 +3311,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				{/* RIGHT MAP (or single map when not swiping) */}
 				<DeckGL
 					controller={{
-						doubleClickZoom: false,
+						// Double-click zooms, as on every map. It is off only while a tool uses double-click to finish.
+						doubleClickZoom: !(measureMode || drawMode),
 						dragRotate: flood3dEnabled,
 						touchRotate: flood3dEnabled,
 					}}
@@ -3145,7 +3321,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						if (isDragging) {
 							return "grabbing"
 						}
-						if (measureMode || drawMode) {
+						if (measureMode || drawMode || pinToolArmed) {
 							return "crosshair"
 						}
 						if (clickedFeatures.length > 0 || inspectPoint) {
@@ -3153,7 +3329,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						}
 						return "grab"
 					}}
-					getTooltip={layers.length > 0 && clickedFeatures.length === 0 ? getTooltip : undefined}
+					getTooltip={
+						(layers.length > 0 || annotations.length > 0) && clickedFeatures.length === 0 ? getTooltip : undefined
+					}
 					id="ai-hydro-research-map"
 					key={`deck-main-${glEpoch}-${resourceRetry}`}
 					layers={mainLayers}
@@ -3375,10 +3553,10 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							try {
 								const geojson = JSON.parse(result.geojson)
 								const feature = geojson.type === "FeatureCollection" ? geojson.features[0] : geojson
-								const newAnn = newAnnotation(result.mode, feature.geometry, annotations.length)
-								const next = [...annotations, newAnn]
-								setAnnotations(next)
-								saveAnnotations(next)
+								commitAnnotations([
+									...annotationsRef.current,
+									newAnnotation(result.mode, feature.geometry, annotationsRef.current),
+								])
 							} catch {
 								/* ignore */
 							}
@@ -3525,18 +3703,17 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						lat={contextMenu.lat}
 						lon={contextMenu.lon}
 						mapStyle={mapStyle}
-						onAddAnnotation={() => {
-							const ann = newAnnotation(
-								"point",
-								{ type: "Point", coordinates: [contextMenu.lon, contextMenu.lat] },
-								annotations.length,
-							)
-							const next = [...annotations, ann]
-							setAnnotations(next)
-							saveAnnotations(next)
-						}}
+						onAddPin={() => placePin(contextMenu.lon, contextMenu.lat)}
 						onAgentDelineate={() =>
 							void handleAgentDelineate({ lon: contextMenu.lon, lat: contextMenu.lat }, contextMenu.features)
+						}
+						onAskAboutPin={
+							menuPin
+								? () => {
+										const [pinLon, pinLat] = pinCoords(menuPin)
+										void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(menuPin))
+									}
+								: undefined
 						}
 						onAskAiHydro={(question) =>
 							void handleAgentAsk({ lon: contextMenu.lon, lat: contextMenu.lat }, contextMenu.features, question)
@@ -3544,6 +3721,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						onClose={() => setContextMenu(null)}
 						onCopyCoords={() => {}}
 						onInspect={() => {
+							setSelectedPinId(null)
 							setClickedFeatures(contextMenu.features)
 							setInspectPoint({ lon: contextMenu.lon, lat: contextMenu.lat })
 							setInspectRasterReading(
@@ -3558,6 +3736,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							)
 						}}
 						onMeasureFrom={() => {
+							setPinToolArmed(false)
 							setMeasureMode("distance")
 							setTimeout(() => measureClickRef.current?.([contextMenu.lon, contextMenu.lat]), 50)
 						}}
@@ -3576,10 +3755,103 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 									}
 								: undefined
 						}
+						onRemovePin={menuPin ? () => deletePins([menuPin.id]) : undefined}
+						onRenamePin={menuPin ? () => selectPin(menuPin.id, true) : undefined}
 						onSaveFeature={(format) => void saveFeaturesToWorkspace(contextMenu.features, format)}
+						pin={menuPin ? { id: menuPin.id, name: menuPin.name } : undefined}
 						x={contextMenu.x}
 						y={contextMenu.y}
 					/>
+				)}
+
+				{selectedPin && (
+					<PinCard
+						focusName={pinFocusName}
+						mapStyle={mapStyle === "dark" ? "dark" : "light"}
+						onAsk={() => {
+							const [pinLon, pinLat] = pinCoords(selectedPin)
+							void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(selectedPin))
+						}}
+						onClose={() => selectPin(null)}
+						onCopy={() => {
+							const [pinLon, pinLat] = pinCoords(selectedPin)
+							void navigator.clipboard?.writeText(formatPinCoords(pinLon, pinLat))
+						}}
+						onDelete={() => deletePins([selectedPin.id])}
+						onDelineate={() => {
+							const [pinLon, pinLat] = pinCoords(selectedPin)
+							void handleAgentDelineate({ lon: pinLon, lat: pinLat }, [])
+						}}
+						onNote={(notes) =>
+							applyPinEdit(patchPin(annotationsRef.current, selectedPin.id, { notes }), "Note saved")
+						}
+						onRename={(name) =>
+							applyPinEdit(patchPin(annotationsRef.current, selectedPin.id, { name }), "Pin renamed")
+						}
+						pin={selectedPin}
+					/>
+				)}
+
+				{pinToolArmed && (
+					<div
+						role="status"
+						style={{
+							position: "absolute",
+							top: 12,
+							left: "50%",
+							transform: "translateX(-50%)",
+							zIndex: MAP_Z.overlay,
+							padding: "4px 10px",
+							fontSize: 12,
+							borderRadius: 4,
+							background: "var(--vscode-editorWidget-background, #252526)",
+							color: "var(--vscode-editorWidget-foreground, #ccc)",
+							border: "1px solid var(--vscode-editorWidget-border, #454545)",
+							pointerEvents: "none",
+						}}>
+						Pin tool: click the map to place a pin. Esc to stop.
+					</div>
+				)}
+
+				{pinToast && (
+					<div
+						role="status"
+						style={{
+							position: "absolute",
+							bottom: 64,
+							left: "50%",
+							transform: "translateX(-50%)",
+							zIndex: MAP_Z.toast,
+							display: "flex",
+							alignItems: "center",
+							gap: 10,
+							padding: "5px 6px 5px 12px",
+							background: "var(--vscode-editorWidget-background, #252526)",
+							color: "var(--vscode-editorWidget-foreground, #ccc)",
+							border: "1px solid var(--vscode-editorWidget-border, #454545)",
+							borderRadius: 4,
+							fontSize: 12,
+							boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+						}}>
+						<span>{pinToast.message}</span>
+						{pinToast.undoable && (
+							<button
+								onClick={undoLastPinEdit}
+								style={{
+									minHeight: 24,
+									padding: "0 8px",
+									background: "transparent",
+									color: "var(--vscode-textLink-foreground, #3794ff)",
+									border: "1px solid var(--vscode-editorWidget-border, #454545)",
+									borderRadius: 3,
+									cursor: "pointer",
+									fontSize: 12,
+								}}
+								type="button">
+								Undo
+							</button>
+						)}
+					</div>
 				)}
 
 				<MapBottomBar
@@ -3659,13 +3931,17 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			<MapToolRibbon
 				activeTool={activeTool}
 				annotationsPanel={
-					<AnnotationsPanel
-						annotations={annotations}
+					<PinsPanel
+						importedCount={annotations.filter((a) => a.imported && isPin(a)).length}
 						mapStyle={mapStyle === "dark" ? "dark" : "light"}
-						onFlyTo={(lon, lat) => {
-							setViewState((prev) => ({ ...prev, longitude: lon, latitude: lat, zoom: Math.max(12, prev.zoom) }))
-						}}
-						onSaveToGallery={(item) => setMyGallery((prev) => [item, ...prev.filter((i) => i.id !== item.id)])}
+						onClearAll={() => deletePins(pinsOf(annotations).map((a) => a.id))}
+						onClearImported={() => deletePins(annotations.filter((a) => a.imported && isPin(a)).map((a) => a.id))}
+						onDelete={(id) => deletePins([id])}
+						onExport={() => exportAnnotationsGeoJson(pinsOf(annotations), "aihydro_pins.geojson")}
+						onKeepImported={() =>
+							commitAnnotations(annotations.map((a) => (a.imported ? { ...a, imported: undefined } : a)))
+						}
+						onRename={(id, name) => applyPinEdit(patchPin(annotationsRef.current, id, { name }), "Pin renamed")}
 						onSeedFromLayer={() => {
 							const target = layers.find((l) => visibleLayerIds.has(l.id) && isGeoJsonLayer(l) && l.geojson?.trim())
 							if (!target?.geojson) {
@@ -3673,16 +3949,26 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							}
 							const { created, skipped } = seedAnnotationsFromGeoJson(target.geojson, annotations)
 							if (created.length > 0) {
-								setAnnotations((prev) => [...prev, ...created])
+								commitAnnotations([...annotations, ...created])
 							}
-							return `Seeded ${created.length} from "${target.name}"${skipped ? `, skipped ${skipped} existing` : ""}.`
+							return `Added ${created.length} from "${target.name}"${skipped ? `, skipped ${skipped} existing` : ""}.`
 						}}
-						onStartDrawing={(type) => {
-							setDrawPurpose("annotation")
-							setDrawMode(type)
+						onSelect={(id) => selectPin(id)}
+						onToggleTool={() => {
+							setMeasureMode(null)
+							setDrawMode(null)
+							setPinToolArmed((armed) => !armed)
 						}}
-						setAnnotations={setAnnotations}
-						visibleLayerNames={Array.from(visibleLayerIds).map((id) => layers.find((l) => l.id === id)?.name || id)}
+						onZoomTo={(id) => {
+							const pin = annotations.find((a) => a.id === id)
+							if (!pin) return
+							const [lon, lat] = pinCoords(pin)
+							selectPin(id)
+							setViewState((prev) => ({ ...prev, longitude: lon, latitude: lat, zoom: Math.max(12, prev.zoom) }))
+						}}
+						pins={pinsOf(annotations)}
+						selectedId={selectedPinId}
+						toolArmed={pinToolArmed}
 					/>
 				}
 				basemapExplicit={basemapExplicit}
@@ -3754,10 +4040,10 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 								setAnnotations(merged)
 								saveAnnotations(merged)
 							}
-							if (incoming.length === 0) return `"${item.title}" has no annotations`
+							if (incoming.length === 0) return `"${item.title}" has no pins or sketches`
 							if (fresh.length === 0)
-								return `All ${incoming.length} annotation${incoming.length !== 1 ? "s" : ""} from "${item.title}" already on map`
-							return `Added ${fresh.length} annotation${fresh.length !== 1 ? "s" : ""}${skipped > 0 ? ` · ${skipped} already existed` : ""}`
+								return `All ${incoming.length} pin/sketch item${incoming.length !== 1 ? "s" : ""} from "${item.title}" already on map`
+							return `Added ${fresh.length} pin/sketch item${fresh.length !== 1 ? "s" : ""}${skipped > 0 ? ` · ${skipped} already existed` : ""}`
 						},
 					}
 					return (
@@ -3871,6 +4157,29 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							setSearchPin({ lon: result.lon, lat: result.lat, label: result.label })
 						}}
 						viewBbox={mapViewBbox()}
+					/>
+				}
+				sketchesPanel={
+					<AnnotationsPanel
+						annotations={shapesOf(annotations)}
+						mapStyle={mapStyle === "dark" ? "dark" : "light"}
+						onFlyTo={(lon, lat) => {
+							setViewState((prev) => ({ ...prev, longitude: lon, latitude: lat, zoom: Math.max(12, prev.zoom) }))
+						}}
+						onSaveToGallery={(item) => setMyGallery((prev) => [item, ...prev.filter((i) => i.id !== item.id)])}
+						onStartDrawing={(type) => {
+							setPinToolArmed(false)
+							setDrawPurpose("annotation")
+							setDrawMode(type)
+						}}
+						setAnnotations={(update) => {
+							// The panel edits sketches only; the pins in the list are kept as they are.
+							const current = annotationsRef.current
+							const sketches = shapesOf(current)
+							const nextSketches = typeof update === "function" ? update(sketches) : update
+							commitAnnotations([...pinsOf(current), ...nextSketches])
+						}}
+						visibleLayerNames={Array.from(visibleLayerIds).map((id) => layers.find((l) => l.id === id)?.name || id)}
 					/>
 				}
 				swipePanel={
@@ -4127,6 +4436,10 @@ const KeyboardShortcutsHelp: React.FC<{ mapStyle: string }> = ({ mapStyle }) => 
 		{ key: "?", desc: "Toggle this help" },
 		{ key: "ESC", desc: "Close panel / cancel measure" },
 		{ key: "Enter", desc: "Finish measurement" },
+		{ key: "P", desc: "Pin tool: click the map to place a pin" },
+		{ key: "Delete", desc: "Delete the selected pin" },
+		{ key: "Ctrl + Z", desc: "Undo the last pin change" },
+		{ key: "Double-click", desc: "Zoom in" },
 		{ key: "Ctrl + scroll", desc: "Zoom map" },
 	]
 	return (

@@ -184,3 +184,30 @@ export const framedWorkspace = (
 		viewState: { longitude: center[0], latitude: center[1], zoom, pitch: 0, bearing: 0 },
 		layerPanel: { showDetails },
 	})
+
+/**
+ * Pins as the host would return them for the open project. The first sits at the centre of the fitted view (the
+ * extent centre of `featureLayers()`), so a right-click on the canvas centre lands on it at every width.
+ */
+const VIEW_CENTER: [number, number] = [-89.95, 39.0]
+export const fixturePins = (): Record<string, unknown>[] =>
+	[
+		{ id: "fx-pin-1", name: "Outlet candidate", notes: "Upstream of the bridge. Check the NLDI snap.", at: VIEW_CENTER },
+		{ id: "fx-pin-2", name: "Pin 2", notes: "", at: [-89.82, 39.12] },
+		{ id: "fx-pin-3", name: "Low-water crossing", notes: "", at: [-90.12, 38.92] },
+	].map(({ id, name, notes, at }) => ({
+		id,
+		name,
+		notes,
+		aiPrompt: "",
+		color: "#f97316",
+		type: "point",
+		geometry: { type: "Point", coordinates: at },
+		tags: [],
+		images: [],
+		collectionIds: [],
+		status: "open",
+		priority: null,
+		createdAt: "2026-01-01T00:00:00.000Z",
+		updatedAt: "2026-01-01T00:00:00.000Z",
+	}))
