@@ -147,6 +147,7 @@
 				"command": "aihydro.mcpButtonClicked",
 				"title": "Hydro Tools & Data Sources",
 				"icon": "$(server)",
+				"toggled": "aihydro.sidebarView == mcp",
 				"category": "AI-Hydro"
 			},
 			{
@@ -226,18 +227,21 @@
 				"command": "aihydro.historyButtonClicked",
 				"title": "Analysis History",
 				"icon": "$(history)",
+				"toggled": "aihydro.sidebarView == history",
 				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.connectorsButtonClicked",
 				"title": "External Connectors",
 				"icon": "$(plug)",
+				"toggled": "aihydro.sidebarView == connectors",
 				"category": "AI-Hydro"
 			},
 			{
 				"command": "aihydro.skillsButtonClicked",
 				"title": "Skills",
 				"icon": "$(book)",
+				"toggled": "aihydro.sidebarView == skills",
 				"category": "AI-Hydro"
 			},
 			{
@@ -262,6 +266,7 @@
 				"command": "aihydro.settingsButtonClicked",
 				"title": "Settings",
 				"icon": "$(settings-gear)",
+				"toggled": "aihydro.sidebarView == settings",
 				"category": "AI-Hydro"
 			},
 			{

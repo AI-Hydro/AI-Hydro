@@ -108,6 +108,7 @@ describe("screen harness registry", () => {
 				"settings-features",
 				"settings-general",
 				"settings-about",
+				"settings-keyboard",
 				"mcp-configure",
 				"mcp-marketplace",
 				"connectors",

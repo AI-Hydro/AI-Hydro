@@ -2,10 +2,10 @@ import { McpViewTab } from "@shared/mcp"
 import { EmptyRequest } from "@shared/proto/cline/common"
 import { McpServers } from "@shared/proto/cline/mcp"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useEffect, useState } from "react"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { SubviewHeader } from "@/design"
 import { McpServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import AddRemoteServerForm from "./tabs/add-server/AddRemoteServerForm"
@@ -69,22 +69,7 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 				display: "flex",
 				flexDirection: "column",
 			}}>
-			<div
-				style={{
-					display: "flex",
-					justifyContent: "space-between",
-					alignItems: "center",
-					padding: "10px 17px 5px 20px",
-				}}>
-				<h3
-					style={{
-						color: getEnvironmentColor(environment),
-						margin: 0,
-					}}>
-					MCP Servers
-				</h3>
-				<VSCodeButton onClick={onDone}>Done</VSCodeButton>
-			</div>
+			<SubviewHeader onClose={onDone} title="MCP Servers" titleColor={getEnvironmentColor(environment)} />
 
 			<div style={{ flex: 1, overflow: "auto" }}>
 				{/* Tabs container */}

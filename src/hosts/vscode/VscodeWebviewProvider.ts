@@ -1,7 +1,8 @@
+import { handleStudyBindingMessage } from "@core/controller/studyBinding/handleStudyBindingMessage"
 import { setPendingAskSink } from "@core/controller/ui/pendingAskBadge"
+import { resetSidebarView, setSidebarViewSink } from "@core/controller/ui/sidebarView"
 import { sendDidBecomeVisibleEvent } from "@core/controller/ui/subscribeToDidBecomeVisible"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
-import { handleStudyBindingMessage } from "@core/controller/studyBinding/handleStudyBindingMessage"
 import { WebviewProvider } from "@core/webview"
 import * as vscode from "vscode"
 import { handleGrpcRequest, handleGrpcRequestCancel } from "@/core/controller/grpc-handler"
@@ -11,6 +12,7 @@ import { handleHydroMapCommand } from "@/services/hydrology/handleHydroMapComman
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { WebviewMessage } from "@/shared/WebviewMessage"
 import { applyPendingAsk } from "./pendingAskSink"
+import { applySidebarView } from "./sidebarViewSink"
 
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
@@ -100,10 +102,18 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 			applyPendingAsk(webviewView, pending, (key, value) => vscode.commands.executeCommand("setContext", key, value)),
 		)
 
+		// Which sidebar view is showing, as the `aihydro.sidebarView` context key (the view-title buttons read it).
+		setSidebarViewSink((view) =>
+			applySidebarView(view, (key, value) => vscode.commands.executeCommand("setContext", key, value)),
+		)
+
 		// Listen for when the view is disposed
 		// This happens when the user closes the view or when the view is closed programmatically
 		webviewView.onDidDispose(
 			async () => {
+				setSidebarViewSink(undefined)
+				resetSidebarView()
+				applySidebarView("chat", (key, value) => vscode.commands.executeCommand("setContext", key, value))
 				setPendingAskSink(undefined)
 				applyPendingAsk(undefined, undefined, (key, value) => vscode.commands.executeCommand("setContext", key, value))
 				await this.dispose()

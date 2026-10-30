@@ -1,5 +1,5 @@
-import type { Boolean, EmptyRequest } from "@shared/proto/cline/common"
-import { Component, lazy, type ReactNode, Suspense, useEffect } from "react"
+import { type Boolean, type EmptyRequest, StringRequest } from "@shared/proto/cline/common"
+import { Component, lazy, type ReactNode, Suspense, useEffect, useRef } from "react"
 import ChatView from "./components/chat/ChatView"
 import ConnectorsView from "./components/connectors/ConnectorsView"
 import HistoryView from "./components/history/HistoryView"
@@ -133,6 +133,30 @@ const AppContent = () => {
 				})
 		}
 	}, [shouldShowAnnouncement, setShouldShowAnnouncement, setShowAnnouncement])
+
+	// Tell the host which view is showing (the view-title buttons toggle on it), and when a sub-view closes, put the
+	// keyboard back in the composer instead of dropping it on the page.
+	const sidebarView = showSettings
+		? "settings"
+		: showHistory
+			? "history"
+			: showMcp
+				? "mcp"
+				: showConnectors
+					? "connectors"
+					: showSkills
+						? "skills"
+						: showMap
+							? "map"
+							: "chat"
+	const previousView = useRef("chat")
+	useEffect(() => {
+		UiServiceClient.setSidebarView(StringRequest.create({ value: sidebarView })).catch(() => {})
+		if (sidebarView === "chat" && previousView.current !== "chat") {
+			requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("focusChatInput")))
+		}
+		previousView.current = sidebarView
+	}, [sidebarView])
 
 	// Show loading screen with spinner
 	if (!didHydrateState) {

@@ -1,24 +1,13 @@
 import { ExtensionMessage } from "@shared/ExtensionMessage"
 import { ResetStateRequest } from "@shared/proto/cline/state"
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import debounce from "debounce"
-import {
-	CheckCheck,
-	FlaskConical,
-	Info,
-	LucideIcon,
-	SlidersHorizontal,
-	SquareMousePointer,
-	SquareTerminal,
-	Wrench,
-} from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
-import HeroTooltip from "@/components/common/HeroTooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { SubviewHeader, TabPanel, Tabs } from "@/design"
 import { StateServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
-import { Tab, TabContent, TabHeader, TabList, TabTrigger } from "../common/Tab"
+import { Tab, TabContent } from "../common/Tab"
 import SectionHeader from "./SectionHeader"
 import AboutSection from "./sections/AboutSection"
 import ApiConfigurationSection from "./sections/ApiConfigurationSection"
@@ -30,14 +19,10 @@ import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 
 const IS_DEV = process.env.IS_DEV
 
-// Styles for the tab system
-const settingsTabsContainer = "flex flex-1 overflow-hidden [&.narrow_.tab-label]:hidden"
+// The section list: a vertical tab list, icon-only (names stay as aria-label and tooltip) when the view is narrow.
+const settingsTabsContainer = "flex flex-1 overflow-hidden"
 const settingsTabList =
-	"w-48 data-[compact=true]:w-12 flex-shrink-0 flex flex-col overflow-y-auto overflow-x-hidden border-r border-[var(--vscode-sideBar-background)]"
-const settingsTabTrigger =
-	"whitespace-nowrap overflow-hidden min-w-0 h-12 px-4 py-3 box-border flex items-center border-l-2 border-transparent text-[var(--vscode-foreground)] opacity-70 bg-transparent hover:bg-[var(--vscode-list-hoverBackground)] data-[compact=true]:w-12 data-[compact=true]:p-4 cursor-pointer"
-const settingsTabTriggerActive =
-	"opacity-100 border-l-2 border-l-[var(--vscode-focusBorder)] border-t-0 border-r-0 border-b-0 bg-[var(--vscode-list-activeSelectionBackground)]"
+	"flex-shrink-0 overflow-y-auto overflow-x-hidden [&_.aih-tab]:h-12 [&_.aih-tab]:px-4 [&_.aih-tab]:border-l-2"
 
 // Tab definitions
 interface SettingsTab {
@@ -45,7 +30,8 @@ interface SettingsTab {
 	name: string
 	tooltipText: string
 	headerText: string
-	icon: LucideIcon
+	/** Codicon name without prefix. */
+	icon: string
 	hidden?: boolean
 }
 
@@ -55,28 +41,28 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		name: "API Configuration",
 		tooltipText: "API Configuration",
 		headerText: "API Configuration",
-		icon: SlidersHorizontal,
+		icon: "settings",
 	},
 	{
 		id: "features",
 		name: "Features",
 		tooltipText: "Feature Settings",
 		headerText: "Feature Settings",
-		icon: CheckCheck,
+		icon: "checklist",
 	},
 	{
 		id: "browser",
 		name: "Browser",
 		tooltipText: "Browser Settings",
 		headerText: "Browser Settings",
-		icon: SquareMousePointer,
+		icon: "browser",
 	},
 	{
 		id: "terminal",
 		name: "Terminal",
 		tooltipText: "Terminal Settings",
 		headerText: "Terminal Settings",
-		icon: SquareTerminal,
+		icon: "terminal",
 	},
 	// Only show in dev mode
 	{
@@ -84,7 +70,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		name: "Debug",
 		tooltipText: "Debug Tools",
 		headerText: "Debug",
-		icon: FlaskConical,
+		icon: "beaker",
 		hidden: !IS_DEV,
 	},
 	{
@@ -92,14 +78,14 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		name: "General",
 		tooltipText: "General Settings",
 		headerText: "General Settings",
-		icon: Wrench,
+		icon: "tools",
 	},
 	{
 		id: "about",
 		name: "About",
 		tooltipText: "About AI-Hydro",
 		headerText: "About",
-		icon: Info,
+		icon: "info",
 	},
 ]
 
@@ -118,7 +104,7 @@ const renderSectionHeader = (tabId: string) => {
 	return (
 		<SectionHeader>
 			<div className="flex items-center gap-2">
-				<tab.icon className="w-4" />
+				<span aria-hidden="true" className={`codicon codicon-${tab.icon}`} />
 				<div>{tab.headerText}</div>
 			</div>
 		</SectionHeader>
@@ -234,50 +220,6 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 		return () => observer.disconnect()
 	}, [])
 
-	// Memoized tab item renderer
-	const renderTabItem = useCallback(
-		(tab: (typeof SETTINGS_TABS)[0]) => {
-			const isActive = activeTab === tab.id
-			const tabClassName = `${isActive ? `${settingsTabTrigger} ${settingsTabTriggerActive}` : settingsTabTrigger} focus:ring-0`
-			const iconContainerClassName = `flex items-center gap-2 ${isCompactMode ? "justify-center" : ""}`
-
-			const TabIcon = tab.icon
-			const tabContent = (
-				<div className={iconContainerClassName}>
-					<TabIcon className="w-4 h-4" />
-					<span className="tab-label">{tab.name}</span>
-				</div>
-			)
-
-			if (isCompactMode) {
-				return (
-					<HeroTooltip content={tab.tooltipText} key={tab.id} placement="right">
-						<div
-							className={tabClassName}
-							data-compact={isCompactMode}
-							data-testid={`tab-${tab.id}`}
-							data-value={tab.id}
-							onClick={() => handleTabChange(tab.id)}>
-							{tabContent}
-						</div>
-					</HeroTooltip>
-				)
-			}
-
-			return (
-				<TabTrigger
-					className={tabClassName}
-					data-compact={isCompactMode}
-					data-testid={`tab-${tab.id}`}
-					key={tab.id}
-					value={tab.id}>
-					{tabContent}
-				</TabTrigger>
-			)
-		},
-		[activeTab, isCompactMode, handleTabChange],
-	)
-
 	// Memoized active content component
 	const ActiveContent = useMemo(() => {
 		const Component = TAB_CONTENT_MAP[activeTab as keyof typeof TAB_CONTENT_MAP]
@@ -298,29 +240,33 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 
 	const titleColor = getEnvironmentColor(environment)
 
+	const visibleTabs = SETTINGS_TABS.filter((tab) => !tab.hidden).map((tab) => ({
+		id: tab.id,
+		label: tab.name,
+		icon: tab.icon,
+		iconOnly: isCompactMode,
+	}))
+
 	return (
 		<Tab>
-			<TabHeader className="flex justify-between items-center gap-2">
-				<div className="flex items-center gap-1">
-					<h3 className="m-0" style={{ color: titleColor }}>
-						Settings
-					</h3>
-				</div>
-				<div className="flex gap-2">
-					<VSCodeButton onClick={onDone}>Done</VSCodeButton>
-				</div>
-			</TabHeader>
+			<SubviewHeader onClose={onDone} title="Settings" titleColor={titleColor} />
 
-			<div className={`${settingsTabsContainer} ${isCompactMode ? "narrow" : ""}`} ref={containerRef}>
-				<TabList
-					className={settingsTabList}
-					data-compact={isCompactMode}
+			<div className={settingsTabsContainer} ref={containerRef}>
+				<Tabs
+					className={`${settingsTabList} ${isCompactMode ? "w-12" : "w-48"}`}
+					idBase="settings"
+					items={visibleTabs}
+					label="Settings sections"
 					onValueChange={handleTabChange}
-					value={activeTab}>
-					{SETTINGS_TABS.filter((tab) => !tab.hidden).map(renderTabItem)}
-				</TabList>
+					orientation="vertical"
+					value={activeTab}
+				/>
 
-				<TabContent className="flex-1 overflow-auto">{ActiveContent}</TabContent>
+				<TabContent className="flex-1 overflow-auto">
+					<TabPanel idBase="settings" selected tab={activeTab}>
+						{ActiveContent}
+					</TabPanel>
+				</TabContent>
 			</div>
 		</Tab>
 	)

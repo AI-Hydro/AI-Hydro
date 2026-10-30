@@ -18,10 +18,14 @@ export interface SubviewHeaderProps {
 	titleColor?: string
 }
 
+const TEXT_ENTRY =
+	"input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], vscode-text-field, vscode-text-area, vscode-dropdown, vscode-combobox"
+
 /** True while something that owns Escape is open: a menu, a dialog, a listbox, or a text field is being edited. */
 function escapeIsTaken(target: EventTarget | null): boolean {
 	const el = target instanceof HTMLElement ? target : null
-	if (el?.closest("input, textarea, select, [contenteditable='true']")) {
+	// The VS Code toolkit's fields are custom elements: the event target is the host element, not the inner input.
+	if (el?.closest(TEXT_ENTRY)) {
 		return true
 	}
 	return document.querySelector('[role="menu"], [role="dialog"], [role="listbox"], [aria-modal="true"]') !== null

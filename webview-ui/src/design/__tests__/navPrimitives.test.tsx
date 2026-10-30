@@ -322,6 +322,12 @@ describe("SubviewHeader", () => {
 		fireEvent.keyDown(screen.getByRole("textbox", { name: "Search" }), { key: "Escape" })
 		expect(onClose).not.toHaveBeenCalled()
 
+		const field = document.createElement("vscode-text-field")
+		document.body.appendChild(field)
+		fireEvent.keyDown(field, { key: "Escape" })
+		field.remove()
+		expect(onClose).not.toHaveBeenCalled()
+
 		const stop = (e: KeyboardEvent) => e.preventDefault()
 		window.addEventListener("keydown", stop, true)
 		fireEvent.keyDown(document.body, { key: "Escape" })

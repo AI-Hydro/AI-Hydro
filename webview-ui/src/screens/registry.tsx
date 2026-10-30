@@ -248,6 +248,10 @@ const toolCardScreen = (
 	...extra,
 })
 
+const SETTINGS_TABS_VISIBLE: Partial<ScreenDef> = {
+	expectVisible: ["[role=tablist][aria-label='Settings sections']", "[role=tab][aria-selected=true]", "[role=tabpanel]"],
+}
+
 /** A sidebar sub-view (Settings, MCP, Connectors, Skills) drawn full-bleed under the real providers. */
 const navView = (id: string, title: string, view: () => ReactNode, extra: Partial<ScreenDef> = {}): ScreenDef => ({
 	id,
@@ -901,10 +905,42 @@ export const screens: ScreenDef[] = [
 
 	// ── Navigation surfaces (Nav-0): sub-views the sidebar opens in place of the chat ──
 	// Each renders the real view component full-bleed, the way App.tsx does when the view-title command opens it.
-	navView("settings-api", "Settings: API Configuration", () => <SettingsView onDone={() => {}} targetSection="api-config" />),
-	navView("settings-features", "Settings: Features", () => <SettingsView onDone={() => {}} targetSection="features" />),
-	navView("settings-general", "Settings: General", () => <SettingsView onDone={() => {}} targetSection="general" />),
-	navView("settings-about", "Settings: About", () => <SettingsView onDone={() => {}} targetSection="about" />),
+	// N3: the section list is a named tablist whose tabs have names at any width (icon-only below 500 px).
+	navView(
+		"settings-api",
+		"Settings: API Configuration",
+		() => <SettingsView onDone={() => {}} targetSection="api-config" />,
+		SETTINGS_TABS_VISIBLE,
+	),
+	navView(
+		"settings-features",
+		"Settings: Features",
+		() => <SettingsView onDone={() => {}} targetSection="features" />,
+		SETTINGS_TABS_VISIBLE,
+	),
+	navView(
+		"settings-general",
+		"Settings: General",
+		() => <SettingsView onDone={() => {}} targetSection="general" />,
+		SETTINGS_TABS_VISIBLE,
+	),
+	navView(
+		"settings-about",
+		"Settings: About",
+		() => <SettingsView onDone={() => {}} targetSection="about" />,
+		SETTINGS_TABS_VISIBLE,
+	),
+	// Keyboard only: the arrows walk the sections (Features, then Browser) and select as they go.
+	navView("settings-keyboard", "Settings: arrow keys walk the section list", () => <SettingsView onDone={() => {}} />, {
+		steps: [
+			{ wait: 300 },
+			{ click: "[data-testid=tab-api-config]" },
+			{ press: "ArrowDown" },
+			{ press: "ArrowDown" },
+			{ wait: 200 },
+		],
+		expectVisible: ["[data-testid=tab-browser][aria-selected=true]", "[role=tabpanel]"],
+	}),
 	navView(
 		"mcp-configure",
 		"MCP servers: Configure tab with servers",
