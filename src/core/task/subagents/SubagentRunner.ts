@@ -35,6 +35,8 @@ import { allowlistSha256, type SubagentRecord, type SubagentRecordWriter, sha256
 const MAX_RESULT_CHARS = 40_000
 /** A model that answers without a tool this many times in a row is stopped (partial). */
 const MAX_TOOL_LESS_TURNS = 3
+/** Calls listed in the expanded status row (the record has them all). */
+const MAX_CALL_LINES = 30
 /** Refused or denied calls in a row before the child is marked blocked. */
 const MAX_BLOCKED_IN_A_ROW = 3
 /** Handlers' own failures in a row (bad arguments, missing files) before the child gives up as partial. */
@@ -161,9 +163,17 @@ export class SubagentRunner {
 			toolCalls: this.usage.toolCalls,
 			tokensIn: this.usage.tokensIn,
 			tokensOut: this.usage.tokensOut,
+			cacheWrites: this.usage.cacheWrites,
+			cacheReads: this.usage.cacheReads,
 			...(this.usage.cost !== undefined ? { cost: this.usage.cost } : {}),
 			...(this.budgetStop ? { budgetStop: this.budgetStop } : {}),
 			...(this.recordPath ? { recordPath: this.recordPath } : {}),
+			calls: this.toolCalls.slice(-MAX_CALL_LINES).map((call) => ({
+				name: call.name,
+				...(call.tool ? { tool: call.tool } : {}),
+				approval: call.approval,
+				result: call.result,
+			})),
 		}
 	}
 

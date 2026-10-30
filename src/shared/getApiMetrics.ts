@@ -1,3 +1,4 @@
+import { subagentStatusUsage } from "./aihydro/subagents"
 import { AiHydroMessage } from "./ExtensionMessage"
 
 interface ApiMetrics {
@@ -163,6 +164,20 @@ export function getApiMetrics(messages: AiHydroMessage[]): ApiMetrics {
 	}
 
 	messages.forEach((message) => {
+		// Subagent children are billed requests too: a spawn call's status row carries their running totals.
+		if (message.type === "say" && message.say === "subagent_status") {
+			const usage = subagentStatusUsage(message.text)
+			result.totalTokensIn += usage.tokensIn
+			result.totalTokensOut += usage.tokensOut
+			if (usage.cacheWrites > 0) {
+				result.totalCacheWrites = (result.totalCacheWrites ?? 0) + usage.cacheWrites
+			}
+			if (usage.cacheReads > 0) {
+				result.totalCacheReads = (result.totalCacheReads ?? 0) + usage.cacheReads
+			}
+			result.totalCost += usage.cost
+			return
+		}
 		if (message.type === "say" && (message.say === "api_req_started" || message.say === "deleted_api_reqs") && message.text) {
 			try {
 				const parsedData = JSON.parse(message.text)

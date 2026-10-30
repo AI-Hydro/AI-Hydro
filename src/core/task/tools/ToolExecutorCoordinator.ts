@@ -55,6 +55,11 @@ export class ToolExecutorCoordinator {
 		this.handlers.set(handler.name, handler)
 	}
 
+	/** Remove a handler (a tool that is only available while a setting is on). */
+	unregister(toolName: string): void {
+		this.handlers.delete(toolName)
+	}
+
 	/**
 	 * Check if a handler is registered for the given tool
 	 */

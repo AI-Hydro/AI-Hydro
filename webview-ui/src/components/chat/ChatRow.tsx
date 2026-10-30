@@ -49,6 +49,9 @@ import QuoteButton from "./QuoteButton"
 import ReportBugPreview from "./ReportBugPreview"
 import ScienceToolCard from "./ScienceToolCard"
 import SearchResultsDisplay from "./SearchResultsDisplay"
+import { SubagentLaunchCard } from "./subagents/SubagentLaunchCard"
+import { SubagentOriginChip } from "./subagents/SubagentOriginChip"
+import { SubagentStatusRow } from "./subagents/SubagentStatusRow"
 import UserMessage from "./UserMessage"
 
 const normalColor = "var(--vscode-foreground)"
@@ -322,6 +325,7 @@ const ChatRow = memo(
 
 		const [chatrow, { height }] = useSize(
 			<ChatRowContainer>
+				<SubagentOriginChip message={message} />
 				<ChatRowContent {...props} />
 				<InlineApproval message={message} />
 				<TimestampLabel>{formatMessageTime(message.ts)}</TimestampLabel>
@@ -940,6 +944,8 @@ export const ChatRowContent = memo(
 							</div>
 						</ToolMessageCard>
 					)
+				case "spawnSubagents":
+					return <SubagentLaunchCard state={askOutcome} tool={tool} />
 				case "webFetch":
 					return (
 						<ToolMessageCard toolName="webFetch">
@@ -1739,6 +1745,8 @@ export const ChatRowContent = memo(
 						)
 					case "task_progress":
 						return null // task_progress messages should be displayed in TaskHeader only, not in chat
+					case "subagent_status":
+						return <SubagentStatusRow message={message} />
 					case "html_preview":
 						// Parse metadata from message text: { title, filePath, mode, size }
 						const previewMeta = (() => {

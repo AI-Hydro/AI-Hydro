@@ -22,6 +22,8 @@ export enum AiHydroDefaultTool {
 	REPORT_BUG = "report_bug",
 	NEW_RULE = "new_rule",
 	PREVIEW_HTML = "preview_html",
+	// Starts read-only explorer subagents (only when the setting is on; never registered for a child).
+	SPAWN_SUBAGENTS = "spawn_subagents",
 	// Child-only: the single exit of an in-process subagent. Never registered for a top-level task.
 	REPORT_FINDINGS = "report_findings",
 }

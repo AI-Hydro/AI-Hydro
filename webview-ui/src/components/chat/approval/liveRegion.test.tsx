@@ -80,3 +80,20 @@ describe("live region announces a pending approval once per ask", () => {
 		expect(status()).toBe("")
 	})
 })
+
+describe("live region names the explorer that is waiting (AC5)", () => {
+	const origin = { childId: "sa_2", label: "Explorer 2", profile: "explorer" as const, promptHead: "Survey" }
+	const childRead = (ts: number): AiHydroMessage => ({
+		ts,
+		type: "ask",
+		ask: "tool",
+		text: JSON.stringify({ tool: "readFile", path: "src/model.py" }),
+		subagentOrigin: origin,
+	})
+	for (const detail of ["focus", "normal", "verbose"] as const) {
+		it(`${detail}: says which explorer is waiting and that it is read-only`, () => {
+			render(area([task, childRead(100)], detail))
+			expect(status()).toBe("Explorer 2 (read-only) is waiting for your approval: read file src/model.py")
+		})
+	}
+})

@@ -75,6 +75,34 @@ export interface SubagentToolCallRecord {
 	result: "ok" | "error" | "refused" | "denied"
 }
 
+/** An origin from a stored or transmitted ask; anything that is not exactly the expected shape is no origin at all. */
+export function parseSubagentOrigin(json: string): SubagentOrigin | undefined {
+	try {
+		const v = JSON.parse(json)
+		if (
+			v &&
+			typeof v.childId === "string" &&
+			typeof v.label === "string" &&
+			v.profile === "explorer" &&
+			typeof v.promptHead === "string"
+		) {
+			return { childId: v.childId, label: v.label, profile: v.profile, promptHead: v.promptHead }
+		}
+	} catch {
+		// not an origin
+	}
+	return undefined
+}
+
+/** A tool call in the expanded status row: the name and how it ended. No arguments, no results. */
+export interface SubagentCallLine {
+	name: string
+	/** The MCP tool, when the call was an MCP call. */
+	tool?: string
+	approval: SubagentToolCallRecord["approval"]
+	result: SubagentToolCallRecord["result"]
+}
+
 /** The part of a child the status row shows. Everything here is a summary the host computed, never raw model output. */
 export interface SubagentChildSummary {
 	childId: string
@@ -87,10 +115,64 @@ export interface SubagentChildSummary {
 	toolCalls: number
 	tokensIn: number
 	tokensOut: number
+	cacheWrites: number
+	cacheReads: number
 	cost?: number
 	budgetStop?: SubagentBudgetStop
 	/** Path of the child record under the task directory (relative), once written. */
 	recordPath?: string
+	/** The most recent calls (capped), for the expanded row. */
+	calls: SubagentCallLine[]
+}
+
+/** What the launch ask shows the user before anything runs. */
+export interface SubagentLaunch {
+	profile: SubagentProfileId
+	prompts: string[]
+	budget: SubagentBudget
+	/** The model every child will use (the parent's). */
+	model: string
+	/** One sentence on what the profile cannot do, from the profile, so the card never overstates. */
+	limits: string
+}
+
+/** The text of a `subagent_status` row. One per spawn call, rewritten in place as the children progress. */
+export interface SubagentStatusPayload {
+	profile: SubagentProfileId
+	children: SubagentChildSummary[]
+	/** True once every child has ended. */
+	done: boolean
+}
+
+export function parseSubagentStatus(text: string | undefined): SubagentStatusPayload | undefined {
+	try {
+		const value = JSON.parse(text ?? "")
+		if (value && typeof value === "object" && Array.isArray(value.children) && typeof value.done === "boolean") {
+			return value as SubagentStatusPayload
+		}
+	} catch {
+		// a malformed row is shown as nothing rather than guessed at
+	}
+	return undefined
+}
+
+/** Whole-call usage from a status row, for the task totals. */
+export function subagentStatusUsage(text: string | undefined): {
+	tokensIn: number
+	tokensOut: number
+	cacheWrites: number
+	cacheReads: number
+	cost: number
+} {
+	const total = { tokensIn: 0, tokensOut: 0, cacheWrites: 0, cacheReads: 0, cost: 0 }
+	for (const child of parseSubagentStatus(text)?.children ?? []) {
+		total.tokensIn += child.tokensIn || 0
+		total.tokensOut += child.tokensOut || 0
+		total.cacheWrites += child.cacheWrites || 0
+		total.cacheReads += child.cacheReads || 0
+		total.cost += child.cost || 0
+	}
+	return total
 }
 
 /** Constants shared by the host and the transcript so a label can be rebuilt from an index. */

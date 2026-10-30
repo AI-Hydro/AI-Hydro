@@ -64,6 +64,9 @@ const SAY_CLASS: Record<AiHydroSay, MessageClass> = {
 	info: "lift",
 	task_progress: "fold",
 	answer_audit: "answer",
+	// One row per spawn call, rewritten in place as its children progress. Passthrough, not fold: it is the only place
+	// the user sees what the children are doing, so it is never collapsed into a group.
+	subagent_status: "passthrough",
 }
 
 const ASK_CLASS: Record<AiHydroAsk, MessageClass> = {
@@ -172,6 +175,7 @@ export type LiftReason =
 	| "no_decision"
 	| "result_uninspected"
 	| "policy_command"
+	| "subagent_approval"
 
 export interface LiftedLine {
 	key: string
@@ -1087,6 +1091,8 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 			} else {
 				grp.toolCount++
 			}
+			// A call a subagent asked for: named after the child, so it is never read as the main agent's own call.
+			const via = m.subagentOrigin ? ` (${m.subagentOrigin.label})` : ""
 			if (undecided) {
 				const risk = perItemRisk(m)
 				lift(
@@ -1094,18 +1100,32 @@ export function presentTranscript(messages: readonly AiHydroMessage[], options: 
 					m,
 					"no_decision",
 					"notice",
-					`Asked to ${what}${risk ? ` (${risk})` : ""}; no decision recorded`,
+					`${m.subagentOrigin ? `${m.subagentOrigin.label} asked to` : "Asked to"} ${what}${risk ? ` (${risk})` : ""}; no decision recorded`,
 					m.ts,
 					risk ? undefined : { family: "no_decision", subject: what },
 				)
 			} else if (denied) {
-				lift(grp, m, "call_denied", "warning", `You denied: ${what}`, m.ts)
+				lift(grp, m, "call_denied", "warning", `You denied${via}: ${what}`, m.ts)
 			} else if (kind === "command" && typeof m.exitCode === "number" && m.exitCode !== 0) {
 				lift(grp, m, "exit_nonzero", "error", `Exited with code ${m.exitCode}: ${what}`, m.ts)
 			} else if (kind === "command" && (m.exitCode === "unknown" || m.execOutcome === "unknown")) {
 				lift(grp, m, "exit_unknown", "warning", `Exit code unknown: ${what}`, m.ts)
 			} else if (m.execOutcome === "failed" || state === "failed") {
-				lift(grp, m, "call_failed", "error", `Failed: ${what}`, m.ts)
+				lift(grp, m, "call_failed", "error", `Failed${via}: ${what}`, m.ts)
+			} else if (m.subagentOrigin) {
+				// Answered, and lifted at every detail level: an approval you gave for a subagent is always visible.
+				const risk = perItemRisk(m)
+				const origin = m.subagentOrigin
+				lift(
+					grp,
+					m,
+					"subagent_approval",
+					risk || m.policyClass ? "warning" : "notice",
+					`${m.type === "ask" ? "You approved" : "Ran"} for ${origin.label}${risk ? ` (${risk})` : ""}: ${what}`,
+					m.ts,
+					// Never merged with another child's line or with the main agent's: one line per approval.
+					undefined,
+				)
 			} else if (m.policyClass) {
 				const risk = perItemRisk(m)
 				lift(

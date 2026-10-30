@@ -41,11 +41,13 @@ function publish(): void {
 }
 
 /** The agent is now blocked on `ask`. Asks that are not a mid-task block never mark. */
-export function markPending(ts: number, ask: AiHydroAsk): void {
-	const tooltip = badgeForAsk(ask)
-	if (tooltip === undefined) {
+export function markPending(ts: number, ask: AiHydroAsk, from?: string): void {
+	const base = badgeForAsk(ask)
+	if (base === undefined) {
 		return
 	}
+	// A subagent's ask names the child, so the badge never reads as the main agent asking.
+	const tooltip = from ? base.replace(/^AI-Hydro/, `${from} (read-only subagent)`) : base
 	current = { ts, ask, tooltip }
 	publish()
 }

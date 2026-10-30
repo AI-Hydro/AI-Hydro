@@ -350,6 +350,27 @@ describe("Prompt System Integration Tests", () => {
 			}
 		})
 
+		it("offers spawn_subagents only when subagents are turned on, and never the child-only exit (AC1)", async function () {
+			this.timeout(30000)
+
+			for (const [modelId, providerId] of [
+				["gpt-3", "openai"],
+				["claude-sonnet-4", "anthropic"],
+				["gpt-5", "openai-native"],
+			]) {
+				const base = makeMockContext(modelId, providerId)
+				for (const subagentsEnabled of [undefined, false]) {
+					const off = await getSystemPrompt({ ...base, subagentsEnabled })
+					expect(off, `${providerId}/${modelId} off`).to.not.include("spawn_subagents")
+					expect(off, `${providerId}/${modelId} off`).to.not.include("subagent_reports")
+				}
+				const on = await getSystemPrompt({ ...base, subagentsEnabled: true })
+				expect(on, `${providerId}/${modelId} on`).to.include("spawn_subagents")
+				expect(on, `${providerId}/${modelId} on`).to.include('untrusted="true"')
+				expect(on, `${providerId}/${modelId} on`).to.not.include("report_findings")
+			}
+		})
+
 		it("should include MCP content when MCP servers are present", async function () {
 			this.timeout(30000)
 

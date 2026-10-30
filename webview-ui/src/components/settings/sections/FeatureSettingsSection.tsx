@@ -30,6 +30,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		maxConsecutiveMistakes,
 		multiRootSetting,
 		hooksEnabled,
+		subagentsEnabled,
 		remoteConfigSettings,
 	} = useExtensionState()
 
@@ -122,6 +123,27 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							</VSCodeCheckbox>
 							<p className="toggle-description">Sets the default display mode for MCP response panels</p>
 						</div>
+					</div>
+
+					<div className="settings-card">
+						<div className="settings-section-header">
+							<span className="codicon codicon-organization" />
+							Subagents
+						</div>
+						<VSCodeCheckbox
+							checked={subagentsEnabled === true}
+							data-testid="subagents-toggle"
+							onChange={(e: any) => {
+								const checked = e.target.checked === true
+								updateSetting("subagentsEnabled", checked)
+							}}>
+							Allow read-only explorers
+						</VSCodeCheckbox>
+						<p className="toggle-description">
+							Read-only explorers. Each one asks before it starts and is shown in the chat. An explorer can read
+							this workspace and call read-only tools on the AI-Hydro server; it cannot write files, run commands,
+							fetch from the web or touch a claim. It cannot fetch data in parallel yet.
+						</p>
 					</div>
 
 					<div className="settings-card">

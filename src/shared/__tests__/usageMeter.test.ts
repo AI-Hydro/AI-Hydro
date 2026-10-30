@@ -3,9 +3,16 @@
  * (docs/vision-2040/findings/audit-agent-harness-2026-10-19.md §5A.1), expressed in the meter convention
  * (tokensIn = uncached input, cacheReads = hits, cacheWrites = 0 because DeepSeek has no write charge).
  */
+import { expect } from "chai"
 import "should"
 import type { AiHydroMessage } from "../ExtensionMessage"
-import { formatCompactTokens, formatUsageHeadline, getLastApiReqTotalTokens, summarizeTaskUsage } from "../getApiMetrics"
+import {
+	formatCompactTokens,
+	formatUsageHeadline,
+	getApiMetrics,
+	getLastApiReqTotalTokens,
+	summarizeTaskUsage,
+} from "../getApiMetrics"
 
 function req(tokensIn: number, cacheReads: number, tokensOut: number, cost: number, cacheWrites = 0): AiHydroMessage {
 	return {
@@ -77,5 +84,52 @@ describe("task usage meter", () => {
 		u.totalInputTokens.should.equal(48_012)
 		u.cachedPercent!.should.equal(83)
 		u.contextNow.should.equal(48_512)
+	})
+})
+
+describe("task totals include subagent children (AC8)", () => {
+	const child = (tokensIn: number, tokensOut: number, cost?: number) => ({
+		childId: "sa_1",
+		label: "Explorer 1",
+		profile: "explorer",
+		promptHead: "x",
+		status: "completed",
+		toolCalls: 2,
+		tokensIn,
+		tokensOut,
+		cacheWrites: 5,
+		cacheReads: 7,
+		...(cost !== undefined ? { cost } : {}),
+		calls: [],
+	})
+	const status = (children: unknown[]): AiHydroMessage => ({
+		ts: 3,
+		type: "say",
+		say: "subagent_status",
+		text: JSON.stringify({ profile: "explorer", done: true, children }),
+	})
+	const apiReq: AiHydroMessage = {
+		ts: 2,
+		type: "say",
+		say: "api_req_started",
+		text: JSON.stringify({ tokensIn: 100, tokensOut: 10, cost: 0.5 }),
+	}
+
+	it("adds each child's tokens, cache use and reported cost to the parent's", () => {
+		const m = getApiMetrics([apiReq, status([child(10, 2, 0.25), child(20, 4)])])
+		expect(m.totalTokensIn).to.equal(130)
+		expect(m.totalTokensOut).to.equal(16)
+		expect(m.totalCacheWrites).to.equal(10)
+		expect(m.totalCacheReads).to.equal(14)
+		expect(m.totalCost).to.be.closeTo(0.75, 1e-9)
+	})
+
+	it("leaves the context-now figure alone: children's requests are not the parent's context", () => {
+		expect(getLastApiReqTotalTokens([apiReq, status([child(90_000, 2)])])).to.equal(110)
+	})
+
+	it("a malformed status row adds nothing and does not throw", () => {
+		const bad: AiHydroMessage = { ts: 4, type: "say", say: "subagent_status", text: "{not json" }
+		expect(getApiMetrics([apiReq, bad]).totalTokensIn).to.equal(100)
 	})
 })

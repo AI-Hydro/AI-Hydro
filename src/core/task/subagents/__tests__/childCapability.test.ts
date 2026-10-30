@@ -43,6 +43,7 @@ const PROBES: Record<string, Record<string, string>> = {
 	focus_chain: { task_progress: "- [ ] x" },
 	report_bug: { title: "t", what_happened: "w", steps_to_reproduce: "s", api_request_output: "a", additional_context: "c" },
 	preview_html: { path: "p.html", content: "<h1>x</h1>" },
+	spawn_subagents: { prompts: '["nested"]' },
 }
 
 describe("child capability (AC2, AC7)", () => {

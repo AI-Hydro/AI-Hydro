@@ -21,7 +21,7 @@ Code identifiers (`AiHydroError`, `aihydro.settingsButtonClicked`, `AiHydroEnv`)
 | A directory-bound container | **Project** | Planned; see the program plan. |
 | One conversation | **Task** today, **Chat** after the chat-polish wave | The sidebar button and the command palette both say "New Task" now, so they agree. The rename to "Chat" is made once, with the chat-polish work, to avoid changing the chat transcript strings twice. |
 | A basin or place research record | **Study** | The tool argument `session_id` stays as an accepted alias. |
-| A delegated read-only helper | **Explorer** (generic: subagent) | Not shipped yet. |
+| A delegated read-only helper | **Explorer** (generic: subagent) | Settings > Features > Subagents, off by default. "Read-only explorer" on cards, "Explorer 2" for one of several in a call. |
 | One recorded tool execution | **Run** | Numbers in answers cite runs. |
 
 Never say "session" in new interface text: it means both a chat and a study in different places.

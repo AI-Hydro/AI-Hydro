@@ -42,6 +42,8 @@ export const toolParamNames = [
 	"timeout",
 	"start_line",
 	"end_line",
+	"prompts",
+	"profile",
 	"summary",
 	"key_findings",
 	"files_read",

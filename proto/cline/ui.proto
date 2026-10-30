@@ -71,6 +71,7 @@ enum ClineSay {
   HTML_PREVIEW = 1000;
   ANSWER_AUDIT = 1001; // reserved for the structured answer-audit row (W2-B); not emitted yet
   SHELL_INTEGRATION_WARNING_WITH_SUGGESTION = 1002;
+  SUBAGENT_STATUS = 1003; // one row per spawn_subagents call; text is JSON (SubagentStatusPayload)
 }
 
 // Enum for ClineSayTool tool types
@@ -225,6 +226,7 @@ message ClineMessage {
   string exit_code_state = 1008;     // command rows: "" = not recorded, "known", "unknown"
   int32 exit_code = 1009;            // meaningful only when exit_code_state == "known"
   string policy_class = 1010;        // command rows the host policy flagged
+  string subagent_origin_json = 1011; // asks raised by a subagent: JSON {childId,label,profile,promptHead}; "" = not a subagent ask
 
   // AI-Hydro-only fields (high numbers: upstream Cline additions never collide).
   // Empty string = absent. Values: "approved" | "denied".

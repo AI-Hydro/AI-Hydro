@@ -52,6 +52,7 @@ import { ReadFileToolHandler } from "./tools/handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./tools/handlers/ReportBugHandler"
 import { ReportFindingsHandler } from "./tools/handlers/ReportFindingsHandler"
 import { SearchFilesToolHandler } from "./tools/handlers/SearchFilesToolHandler"
+import { SpawnSubagentsToolHandler } from "./tools/handlers/SpawnSubagentsToolHandler"
 import { SummarizeTaskHandler } from "./tools/handlers/SummarizeTaskHandler"
 import { UseMcpToolHandler } from "./tools/handlers/UseMcpToolHandler"
 import { WebFetchToolHandler } from "./tools/handlers/WebFetchToolHandler"
@@ -301,6 +302,21 @@ export class ToolExecutor {
 		this.coordinator.register(new ReportFindingsHandler(this.reportSink!))
 	}
 
+	/**
+	 * `spawn_subagents` exists in a top-level executor's registry only while the setting is on, and never in a child's
+	 * (AC1, S4). Synced on every call because the setting can change mid-task. When it is off, a call from a model that
+	 * still remembers the tool gets an explicit result instead of silence.
+	 */
+	private syncSubagentHandler(): void {
+		const wanted = !this.profile && this.stateManager.getGlobalSettingsKey("subagentsEnabled") === true
+		const has = this.coordinator.has(AiHydroDefaultTool.SPAWN_SUBAGENTS)
+		if (wanted && !has) {
+			this.coordinator.register(new SpawnSubagentsToolHandler())
+		} else if (!wanted && has) {
+			this.coordinator.unregister(AiHydroDefaultTool.SPAWN_SUBAGENTS)
+		}
+	}
+
 	/** The tool names a subagent may call: its effective built-ins plus the exit tool. */
 	private profileAllowlist(): readonly string[] {
 		return [...this.profile!.builtinAllow, this.profile!.reportTool]
@@ -437,6 +453,13 @@ export class ToolExecutor {
 				this.pushToolResult(formatResponse.toolError(message), block)
 				return true
 			}
+		}
+		this.syncSubagentHandler()
+		if (block.name === AiHydroDefaultTool.SPAWN_SUBAGENTS && !this.coordinator.has(block.name) && !block.partial) {
+			const message = "Subagents are turned off. Do the work yourself with your own tools."
+			await this.say("error", message)
+			this.pushToolResult(formatResponse.toolError(message), block)
+			return true
 		}
 		if (!this.coordinator.has(block.name)) {
 			return false // Tool not handled by coordinator

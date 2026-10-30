@@ -194,7 +194,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 			const call = describeCall(last, [])
 			approvalAnnounced.current = {
 				ts: last.ts,
-				text: `Waiting for your approval: ${call.name}${call.target ? ` ${call.target}` : ""}`,
+				text: `${last.subagentOrigin ? `${last.subagentOrigin.label} (read-only) is waiting for your approval` : "Waiting for your approval"}: ${call.name}${call.target ? ` ${call.target}` : ""}`,
 			}
 		}
 		return approvalAnnounced.current.text

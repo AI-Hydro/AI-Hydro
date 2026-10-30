@@ -57,7 +57,9 @@ export function InlineApproval({ message }: { message: AiHydroMessage }) {
 	const config = useMemo(() => getButtonConfig(message), [message])
 	const mcp = useMemo(() => mcpToolOf(message), [message])
 	const eligibleAlways = useMemo(() => {
-		if (!mcp || message.policyClass || message.isOperationOutsideWorkspace) {
+		// No "Always" on an approval a subagent asked for: a standing grant is the user's own decision about a tool,
+		// made on the main agent's card, and a child must not be the occasion for widening it.
+		if (!mcp || message.policyClass || message.isOperationOutsideWorkspace || message.subagentOrigin) {
 			return false
 		}
 		const server = (mcpServers ?? []).find((s) => s.name === mcp.serverName)
@@ -75,7 +77,7 @@ export function InlineApproval({ message }: { message: AiHydroMessage }) {
 			tools: server.tools,
 			toolName: mcp.toolName,
 		}).ok
-	}, [mcp, message.policyClass, message.isOperationOutsideWorkspace, mcpServers])
+	}, [mcp, message.policyClass, message.isOperationOutsideWorkspace, message.subagentOrigin, mcpServers])
 
 	const noteEl = note && (
 		<div

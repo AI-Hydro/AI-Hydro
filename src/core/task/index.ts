@@ -648,7 +648,7 @@ export class Task {
 		// The agent is blocked on the user from here: badge the view. Cleared when the answer arrives (askResponse.ts),
 		// and here whatever ends the wait (superseded, aborted), so a badge can never outlive its ask. A clear for an
 		// older ts is a no-op, so a superseded ask cannot wipe the badge of the ask that replaced it.
-		markPending(askTs, type)
+		markPending(askTs, type, meta?.subagentOrigin?.label)
 		try {
 			await pWaitFor(() => this.taskState.askResponse !== undefined || this.taskState.lastMessageTs !== askTs, {
 				interval: 100,
@@ -1862,6 +1862,7 @@ export class Task {
 			preferredLanguageInstructions,
 			browserSettings: this.stateManager.getGlobalSettingsKey("browserSettings"),
 			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
+			subagentsEnabled: this.stateManager.getGlobalSettingsKey("subagentsEnabled") === true,
 			isMultiRootEnabled: multiRootEnabled,
 			workspaceRoots,
 		}

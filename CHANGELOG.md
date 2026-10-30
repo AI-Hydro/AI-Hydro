@@ -19,6 +19,19 @@ Owner decision H1 (2026-10-28) approved in-process, explorer-only subagents (`do
 - **Guard tests.** New source-level checks (`subagentCliRetired.test.ts`) fail if anything reads `AIHYDRO_PROFILE` (only the approval terminal's environment scrub may name it), probes `aihydro version`, or brings back the deleted CLI modules. `aihydro "..."` stays denied by `commandPolicy` in every setting.
 - **Tests.** The old `updateSettings.test.ts` sat outside the mocha glob and could not compile, so it never ran; it is replaced by `__tests__/updateSettings.subagents.test.ts`, which does.
 
+### Added — explorer subagents, PR-2: `spawn_subagents`, the status row and the approval chip (branch `vision2040/subagents-pr2`)
+
+The feature the user can now turn on (Settings > Features > Subagents, off by default, all platforms). It rests on PR-1; PR-3 adds `_meta` identity, export and docs.
+
+- **`spawn_subagents`** takes 1 to 4 self-contained prompts. It is in the prompt and the tool registry only while the setting is on (a call while it is off gets an explicit result), never in a child's. **Every launch asks** (a `tool` ask showing the prompts, the model, the budget and what an explorer cannot do), never auto-approved, not even in YOLO. No "Always".
+- **One status row per call** (`subagent_status`, a new say kind and proto enum 1003), never folded at any detail level: each explorer's state (queued, running, waiting for you, done, stopped early with the cause, blocked, failed, cancelled), last tool, calls, tokens and cost; expand for its calls and record path. The host rewrites it in place at most four times a second without moving `lastMessageTs`, so a pending approval is never superseded.
+- **A child's approval is the parent's pending card**, with a chip "From Explorer 2 · read-only" and the first line of its prompt (`subagent_origin_json`, proto field 1011, host-stamped). It is never folded while pending; once answered it is lifted by name ("You approved for Explorer 2: ..."). **No "Always"** on a subagent's ask. The sidebar badge, the "Approval waiting" pill and the live region all name the explorer.
+- **Stop cancels everything**: the trailing status row counts as a running task, so Stop and Escape are offered; every child reaches `cancelled` within one poll interval.
+- **Task totals include the children's tokens and cost** (the status row is summed in `getApiMetrics`); the context-now figure does not.
+- **What the parent gets back** is one `<subagent_reports untrusted="true">` result: status, a validated summary and findings capped at 4,000 characters each, usage and the record path. The tool description tells the model to treat it as unverified text and to open the source a report names before relying on it.
+- Not included: a `general` or `data-runner` profile (PR-4, needs its own owner decision), parallel data fetches, and the compact local-model prompt variant (it has no MCP tools).
+- **Screens**: `chat-subagents-running` and `chat-subagent-ask`.
+
 ### Added — explorer subagents, PR-1: the host core, not yet exposed (branch `vision2040/subagents-pr1`)
 
 The engine for in-process, read-only subagents (plan `docs/vision-2040/plans/subagents.md`, PR-1). Nothing calls it yet: there is no `spawn_subagents` tool, no setting in the UI and no prompt text, so behaviour for users is unchanged. PR-2 exposes it.
