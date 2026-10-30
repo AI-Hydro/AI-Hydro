@@ -1,5 +1,5 @@
 /** Design-system primitives gallery for the UI harness (dev-only). */
-import { useState } from "react"
+import { useRef, useState } from "react"
 import {
 	Badge,
 	Button,
@@ -11,14 +11,20 @@ import {
 	IconButton,
 	KeyValue,
 	LINE_DASH,
+	Menu,
 	PanelHeader,
 	ProvenanceStrip,
+	RailButton,
+	SubviewHeader,
+	TabPanel,
+	Tabs,
 	Text,
+	Toolbar,
 } from "../design"
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
 	<section aria-label={title} style={{ padding: "var(--aih-space-3)", borderBottom: "1px solid var(--aih-border)" }}>
-		<Text as="h2" variant="label" muted>
+		<Text as="h2" muted variant="label">
 			{title}
 		</Text>
 		<div
@@ -51,8 +57,23 @@ const Series = ({ id }: { id: "observed" | "modelled" }) => {
 	)
 }
 
+const NAV_TABS = [
+	{ id: "installed", label: "Installed", icon: "check" },
+	{ id: "browse", label: "Browse", icon: "search" },
+	{ id: "remote", label: "Remote", icon: "cloud", disabled: true },
+]
+const RAIL_TABS = [
+	{ id: "api", label: "API configuration", icon: "settings", iconOnly: true },
+	{ id: "features", label: "Features", icon: "checklist", iconOnly: true },
+	{ id: "about", label: "About", icon: "info", iconOnly: true },
+]
+
 export function PrimitivesScreen() {
 	const [clicks, setClicks] = useState(0)
+	const [tab, setTab] = useState("installed")
+	const [railTab, setRailTab] = useState("api")
+	const [layersOn, setLayersOn] = useState(true)
+	const menuTrigger = useRef<HTMLButtonElement>(null)
 	return (
 		<div style={{ background: "var(--aih-surface)", color: "var(--aih-fg)", minHeight: "100%", overflow: "auto" }}>
 			<PanelHeader
@@ -78,6 +99,65 @@ export function PrimitivesScreen() {
 				<Button icon="folder-opened">With icon</Button>
 				<IconButton icon="close" label="Close panel" />
 				<IconButton active icon="eye" label="Toggle visibility" />
+			</Section>
+			<SubviewHeader closeOnEscape={false} onClose={() => setClicks(clicks + 1)} title="Sub-view header" />
+			<Section title="Tabs: horizontal with a panel, a disabled tab and visible labels">
+				<div style={{ width: "100%" }}>
+					<Tabs idBase="demo-h" items={NAV_TABS} label="Demo sections" onValueChange={setTab} value={tab} />
+					<TabPanel idBase="demo-h" selected={tab === "installed"} tab="installed">
+						<Text variant="body">Installed panel</Text>
+					</TabPanel>
+					<TabPanel idBase="demo-h" selected={tab === "browse"} tab="browse">
+						<Text variant="body">Browse panel</Text>
+					</TabPanel>
+				</div>
+			</Section>
+			<Section title="Tabs: vertical, icon only (the name stays on the tab)">
+				<Tabs
+					idBase="demo-v"
+					items={RAIL_TABS}
+					label="Demo icon sections"
+					onValueChange={setRailTab}
+					orientation="vertical"
+					value={railTab}
+				/>
+				<TabPanel idBase="demo-v" selected tab={railTab}>
+					<Text variant="body">{RAIL_TABS.find((t) => t.id === railTab)?.label}</Text>
+				</TabPanel>
+			</Section>
+			<Section title="Toolbar of rail buttons: a toggle, a counted action, a disabled one with its reason">
+				<Toolbar label="Demo tools">
+					<RailButton active={layersOn} icon="layers" label="Layers" onClick={() => setLayersOn(!layersOn)} />
+					<RailButton badge={3} icon="bell" label="Alerts" onClick={() => setClicks(clicks + 1)} />
+					<RailButton icon="graph" label="Charts" reason="Add a layer first" />
+					<RailButton expanded={false} icon="ellipsis" label="More tools" ref={menuTrigger} />
+				</Toolbar>
+			</Section>
+			<Section title="Menu (shown open)">
+				<Menu
+					entries={[
+						{
+							key: "fit",
+							icon: "screen-full",
+							text: "Fit to layers",
+							label: "Fit to layers",
+							shortcut: "F",
+							onSelect: () => {},
+						},
+						{ key: "div", divider: true },
+						{
+							key: "export",
+							icon: "export",
+							text: "Export",
+							label: "Export map",
+							reason: "Add a layer first",
+							onSelect: () => {},
+						},
+					]}
+					label="Demo menu"
+					onClose={() => {}}
+					triggerRef={menuTrigger}
+				/>
 			</Section>
 			<Section title="Evidence states">
 				{EVIDENCE_STATE_IDS.map((id) => (
