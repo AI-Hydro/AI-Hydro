@@ -51,6 +51,8 @@ The menu is grouped: **AI-Hydro**, then the object under the pointer (a pin, or 
 
 Each project has its own pins; pins from one project do not appear in another. Pins saved before projects existed were one global list. The first project that opens the map after the upgrade receives them, and the Pins panel shows a one-time notice: **Keep** them or **Clear them** (undoable). A pin stored with a damaged location is skipped so the map still loads, but it is kept aside (not deleted) on the host.
 
+Pins you add before AI-Hydro knows which project is open (for example while the tools server is still starting) are kept on this machine until the project confirms it has saved them, so they are not lost if the window closes or the folder changes first. A pin that was never confirmed is shown in the next project that opens the map. In one rare case (the project saved it but its confirmation was lost, and a different project opens next) the same pin can appear in both projects; delete the extra copy.
+
 ## Lines and areas
 
 Sketched lines and areas are not pins. They live under **Draw** in the rail ("Sketches & tracker"), with the tracker fields (status, priority, collections, photos) described in [Smart Annotations](annotations.md).
