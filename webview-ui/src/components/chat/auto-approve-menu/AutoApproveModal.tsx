@@ -38,6 +38,9 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 }) => {
 	const { autoApprovalSettings } = useExtensionState()
 	const { isChecked, updateAction, updateMaxRequests } = useAutoApproveActions()
+	// "Toggle all" is a bulk command, not a setting: it is a button under "Actions", not one more checkbox in the list.
+	const bulkAction = ACTION_METADATA.find((a) => a.id === "enableAll")
+	const allOn = bulkAction ? isChecked(bulkAction) : false
 
 	const modalRef = useRef<HTMLDivElement>(null)
 	const dialogRef = useRef<HTMLDivElement>(null)
@@ -191,8 +194,18 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 
 					{header}
 
-					<div className="mb-2.5">
+					<div className="mb-2.5 flex items-center justify-between gap-2">
 						<span className="text-[color:var(--vscode-foreground)] font-medium">Actions:</span>
+						{bulkAction && (
+							<HeroTooltip content={bulkAction.description} placement="top">
+								<VSCodeButton
+									appearance="secondary"
+									data-testid="auto-run-toggle-all"
+									onClick={() => updateAction(bulkAction, !allOn)}>
+									{allOn ? "Turn all off" : "Turn all on"}
+								</VSCodeButton>
+							</HeroTooltip>
+						)}
 					</div>
 
 					<div
@@ -214,7 +227,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({
 						)}
 
 						{/* All items in a single list - CSS Grid will handle the column distribution */}
-						{ACTION_METADATA.map((action) => (
+						{ACTION_METADATA.filter((action) => action.id !== "enableAll").map((action) => (
 							<AutoApproveMenuItem action={action} isChecked={isChecked} key={action.id} onToggle={updateAction} />
 						))}
 					</div>

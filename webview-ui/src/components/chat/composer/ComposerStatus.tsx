@@ -1,11 +1,10 @@
-import type { AlwaysAllowRefusalReason } from "@shared/aihydro/alwaysAllowPolicy"
 import { useMemo, useRef, useState } from "react"
 import { TrustLauncherButton } from "@/components/tools/TrustLauncherButton"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { Text } from "@/design"
 import AutoApproveModal from "../auto-approve-menu/AutoApproveModal"
 import { ACTION_METADATA, NOTIFICATIONS_SETTING } from "../auto-approve-menu/constants"
-import { deriveAutoRunPolicy } from "./autoRunPolicy"
+import { deriveAutoRunPolicy, pausedGroupText } from "./autoRunPolicy"
 import { ComposerPopover } from "./ComposerPopover"
 import { ContextRing } from "./ContextRing"
 import "./composer.css"
@@ -18,12 +17,13 @@ import "./composer.css"
 export const CLAIM_DISCLAIMER =
 	"Does not approve claims. Claim approval is a signed step you perform in a terminal (aihydro-approve)."
 
-const PAUSED_REASON_TEXT: Record<AlwaysAllowRefusalReason, string> = {
-	untrusted_server: "the server is not trusted (its launcher changed or is not registered)",
-	server_unavailable: "the server is not connected",
-	unknown_tool: "the server does not list the tool exactly once",
-	destructive: "the server declares the tool may be destructive",
-	unknown_effect: "the server does not declare what the tool does",
+/** Tool names listed per group before "and N more" (the full list is the group's title). */
+const MAX_NAMES = 8
+
+function namesText(tools: string[]): string {
+	return tools.length <= MAX_NAMES
+		? tools.join(", ")
+		: `${tools.slice(0, MAX_NAMES).join(", ")} and ${tools.length - MAX_NAMES} more`
 }
 
 interface ComposerStatusProps {
@@ -34,7 +34,7 @@ interface ComposerStatusProps {
 
 /**
  * The composer's single status row (one line, 24 px chips): the auto-run chip, a count chip for paused MCP grants
- * (only when there are any), and the context ring. Each chip opens a popover. A risky setting stays visible at rest as
+ * (only when there are any; "N ask first" when they all ask by design, "N paused" when something can be fixed), and the context ring. Each chip opens a popover. A risky setting stays visible at rest as
  * a warning icon plus the word "risky" on the chip, and is named in its accessible name.
  */
 export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusProps) {
@@ -49,7 +49,13 @@ export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusP
 		[autoApprovalSettings, mcpServers, yoloModeToggled],
 	)
 	const toolNoun = (n: number) => (n === 1 ? "tool" : "tools")
-	const pausedName = `${policy.mcpPaused} MCP ${toolNoun(policy.mcpPaused)} paused, asks first`
+	// "Paused" says something stopped that you can restart. When every tool asks by design (destructive, third-party)
+	// nothing is wrong and nothing is stopped, so the chip says what happens: they ask first.
+	const needsAction = policy.mcpPausedNeedsAction
+	const pausedChipText = needsAction ? `${policy.mcpPaused} paused` : `${policy.mcpPaused} ask first`
+	const pausedName = needsAction
+		? `${policy.mcpPaused} MCP ${toolNoun(policy.mcpPaused)} paused, asks first`
+		: `${policy.mcpPaused} MCP ${toolNoun(policy.mcpPaused)} ${policy.mcpPaused === 1 ? "asks" : "ask"} first`
 
 	return (
 		<div className="aih-composer-status" data-testid="composer-status" ref={rowRef}>
@@ -79,7 +85,7 @@ export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusP
 					aria-expanded={pausedOpen}
 					aria-haspopup="dialog"
 					aria-label={`${pausedName}. Opens details.`}
-					className="aih-chip"
+					className={`aih-chip${needsAction ? " aih-chip--warn" : ""}`}
 					data-testid="paused-chip"
 					onClick={() => {
 						setOpen(false)
@@ -88,7 +94,7 @@ export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusP
 					ref={pausedRef}
 					title={pausedName}
 					type="button">
-					<span className="aih-chip__label">{policy.mcpPaused} paused</span>
+					<span className="aih-chip__label">{pausedChipText}</span>
 				</button>
 			)}
 			<span className="aih-composer-status__ring">
@@ -102,29 +108,39 @@ export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusP
 				testId="paused-popover">
 				<p className="aih-popover__title">{pausedName}</p>
 				<p className="aih-popover__body">
-					These tools have an Always allow grant that the host will not honour right now, so each one asks before it
-					runs. Nothing here runs without you.
+					{needsAction
+						? "These tools have an Always allow grant that is not in effect right now, so each one asks before it runs. Nothing here runs without you."
+						: "These tools have an Always allow grant, but AI-Hydro keeps them on ask by design. Nothing here runs without you, and there is nothing to fix."}
 				</p>
-				<ul className="aih-popover__list" data-testid="paused-reasons">
-					{(Object.entries(policy.mcpPausedReasons) as [AlwaysAllowRefusalReason, number][]).map(([reason, n]) => (
-						<li key={reason}>
-							{n} {toolNoun(n)}: {PAUSED_REASON_TEXT[reason]}
+				<ul className="aih-popover__list" data-testid="paused-groups">
+					{policy.mcpPausedGroups.map((g) => (
+						<li data-testid="paused-group" key={`${g.server}\u0000${g.reason}`}>
+							<strong>{g.server}</strong>: <span title={g.tools.join(", ")}>{namesText(g.tools)}</span>
+							{" \u2014 "}
+							{pausedGroupText(g)}
+							{/* The host-owned action: a modal showing the exact command; it records trust only if you confirm there. */}
+							{g.trustFixable && (
+								<div className="mt-1">
+									<p className="aih-popover__body" data-testid="trust-launcher-explain">
+										Opens a confirmation showing the exact command that starts {g.server}. Nothing is trusted
+										unless you confirm it there.
+									</p>
+									<TrustLauncherButton
+										ariaLabel={`Trust this launcher for ${g.server}`}
+										className="aih-menu-item"
+										serverName={g.server}
+										testId="trust-launcher-action"
+									/>
+								</div>
+							)}
 						</li>
 					))}
 				</ul>
-				<p className="aih-popover__body">
-					To fix it, check that the server is connected and shows Trusted in Hydro Tools &amp; Data Sources. Tools the
-					server does not declare as read-only or non-destructive stay on ask.
-				</p>
-				{/* The host-owned action (modal confirmation of the exact command); the popover never records trust itself. */}
-				{policy.mcpPausedUntrustedServers.map((serverName) => (
-					<TrustLauncherButton
-						className="aih-menu-item"
-						key={serverName}
-						serverName={serverName}
-						testId="trust-launcher-action"
-					/>
-				))}
+				{needsAction && (
+					<p className="aih-popover__body">
+						To lift a pause, check that the server is connected and shows Trusted in Hydro Tools &amp; Data Sources.
+					</p>
+				)}
 				<button
 					className="aih-menu-item"
 					data-testid="open-mcp-view"
@@ -157,9 +173,10 @@ export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusP
 								))}
 							</ul>
 						)}
-						{policy.mcpLabel !== "" && (
+						{/* The active MCP grants are already a "Risky:" line above; only the paused part is new here. */}
+						{policy.mcpPausedLabel !== "" && (
 							<Text as="p" className="mb-2" muted variant="caption">
-								{policy.mcpLabel}
+								{policy.mcpPausedLabel}
 							</Text>
 						)}
 						<div data-testid="popover-disclaimer">

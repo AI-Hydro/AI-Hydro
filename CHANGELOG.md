@@ -9,6 +9,19 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.4] — unreleased (owner feedback on 0.4.3: the "5 paused" chip)
+
+### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)
+
+Reported on the installed 0.4.3 build: the chip read "5 paused" and its popover said "5 MCP tools paused... 3 tools: the server declares the tool may be destructive; 2 tools: the server is not trusted (its launcher changed or is not registered). To fix it, ..." with a "Trust this launcher..." action. It named no tool and no server. The real causes, from the owner's settings: `aihydro-tools` (launcher already confirmed) holds 3 grants on tools it declares destructive, and `swatplus-builder` (a third-party server, `swat mcp`) holds 2. Both are paused by design. A third-party server is never trusted (`not_first_party_name`), and for an untrusted server the tool annotations are never read, so a third-party tool is paused as "not trusted" whatever it declares. The first-party launcher was fine, so there was nothing to fix and the Trust action did not apply (the host would only have said "not an enabled AI-Hydro Tools launcher").
+
+- **The popover lists the paused tools by name, grouped by server and cause**, each with a plain reason: "swatplus-builder: run_workflow, workflow_status: third-party server, so each run asks you"; "aihydro-tools: ...: may change or delete data, so each run asks you". More than 8 names show "and N more" (all names are in the hover title).
+- **"Trust this launcher..." appears only when it can fix the cause**: the server has a first-party name, is enabled, and is launched the first-party way (`trustActionFixesServer`, mirroring the host's `firstPartyCandidates`). It sits under that server's group, names it (also in its accessible name) and says what a click does: it opens a confirmation showing the exact command, and nothing is trusted unless you confirm it there. A third-party server never gets it. The host still re-validates and records trust only on your confirmation; no new path records trust.
+- **By design is not a warning.** When every paused tool is paused on purpose (destructive declaration, undeclared effect, third-party server) the chip reads "N ask first" without the warning border, the popover says "there is nothing to fix", and "To lift a pause..." is gone. When something can be fixed (a first-party launcher not confirmed, a server not connected) the chip still reads "N paused" with the warning border. "Paused" suggests something stopped that you can restart; for a tool that was never going to auto-run, "ask first" says what actually happens.
+- **No per-tool control was added.** The only safe per-tool change is removing a grant, which is already in Hydro Tools & Data Sources (linked from the popover). Nothing here grants, widens or auto-approves anything; destructive and third-party tools stay on ask.
+- **Tool auto-run settings popover.** "Toggle all" was a checkbox row inside the list of settings; it is now a "Turn all on" / "Turn all off" button above the list (same action, same defaults). The header no longer repeats the always-allowed MCP count that the "Risky:" line already states; only the paused part is added there ("5 MCP tools ask first").
+- **Harness.** New screen `composer-paused-by-design` (the owner's mixed-cause session with synthetic tool names); `composer-paused-grants` now also asserts the Trust action.
+
 ## [0.4.3] — unreleased (owner feedback on 0.4.2: trust this launcher, map pins, composer footer, audit findings; sharded screens CI)
 
 ### Changed — map pins: one concept, a pin card, a clean context menu, and double-click zooms again (UX program Wave 1, PR X1-M2, branch `vision2040/x1-m2-pins`)

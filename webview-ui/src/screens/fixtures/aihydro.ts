@@ -210,7 +210,7 @@ export const fixtureOwnerServers: McpServer[] = [
 export const fixturePausedServers: McpServer[] = [
 	{
 		name: "ai-hydro",
-		config: "{}",
+		config: JSON.stringify({ type: "stdio", command: "/fixture/.aihydro/venvs/tools-2.8/bin/aihydro-mcp", args: [] }),
 		status: "connected",
 		trust: { trusted: false, reason: "fixture: the registered launcher differs from the recorded one" },
 		tools: Array.from({ length: OWNER_ALWAYS_ALLOWED_TOOLS }, (_, i) => ({
@@ -218,6 +218,41 @@ export const fixturePausedServers: McpServer[] = [
 			description: "Synthetic fixture tool.",
 			autoApprove: true,
 			annotations: { readOnlyHint: true },
+		})),
+	},
+]
+
+/**
+ * The owner's installed 0.4.3 session, with synthetic tool names: a trusted first-party server with 43 grants (40 in
+ * effect, 3 on tools it declares destructive) and a third-party server with 2 grants. 5 tools ask first and every one
+ * is paused by design, so there is nothing to fix and no "Trust this launcher" action.
+ */
+export const fixturePausedMixedServers: McpServer[] = [
+	{
+		name: "aihydro-tools",
+		config: JSON.stringify({ type: "stdio", command: "/fixture/.aihydro/venvs/tools-2.8/bin/aihydro-mcp", args: [] }),
+		status: "connected",
+		trust: { trusted: true, reason: "Fixture: trusted." },
+		tools: Array.from({ length: 43 }, (_, i) => ({
+			name:
+				i < 3
+					? `fixture_destructive_${String(i + 1).padStart(2, "0")}`
+					: `fixture_tool_${String(i - 2).padStart(2, "0")}`,
+			description: "Synthetic fixture tool.",
+			autoApprove: true,
+			annotations: i < 3 ? { destructiveHint: true } : { readOnlyHint: true },
+		})),
+	},
+	{
+		name: "swatplus-builder",
+		config: JSON.stringify({ type: "stdio", command: "/fixture/bin/swat", args: ["mcp"] }),
+		status: "connected",
+		trust: { trusted: false, reason: "Not trusted: third-party server. It gets no first-party privileges." },
+		tools: ["run_workflow", "workflow_status"].map((name) => ({
+			name,
+			description: "Synthetic fixture tool.",
+			autoApprove: true,
+			annotations: { readOnlyHint: false },
 		})),
 	},
 ]
