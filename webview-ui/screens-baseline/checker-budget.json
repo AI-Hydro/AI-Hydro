@@ -2178,6 +2178,57 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
+		},
+		"map-panel-docked-resized": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 13,
+				"smallText": 0,
+				"contrast": 26,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 78,
+				"smallText": 0,
+				"contrast": 168,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-panel-overlay-resized": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-panel-resize-keyboard": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
 		}
 	},
 	"subsets": {
@@ -3479,6 +3530,36 @@
 						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-panel-docked-resized": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 78,
+						"smallText": 0,
+						"contrast": 168,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-panel-overlay-resized": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-panel-resize-keyboard": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6

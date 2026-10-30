@@ -79,7 +79,7 @@ import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
 import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext, mapLayerStudyHint } from "./mapAgentBridge"
-import { useMapChrome } from "./mapChrome"
+import { panelFamily, useMapChrome } from "./mapChrome"
 import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapHydroGuards"
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
 import { type CursorRasterReading, getLayerBounds, isGeoJsonLayer, sampleTopRasterAtPoint } from "./mapLayerAdapters"
@@ -865,7 +865,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			setActiveTool((current) => (open ? tool : current === tool ? null : current)),
 		[],
 	)
-	const chrome = useMapChrome(rootRef, activeTool !== null)
+	const chrome = useMapChrome(rootRef, activeTool !== null, panelFamily(activeTool))
 	const searchOpen = activeTool === "search"
 	const exportOpen = activeTool === "export"
 	const setSearchOpen = useCallback((open: boolean) => setToolOpen("search", open), [setToolOpen])

@@ -23,6 +23,16 @@ Five navigation surfaces each hand-rolled their own tabs, icon buttons, menus an
 - Labels are required by the types (`@ts-expect-error` tests), and 25 new tests cover the keyboard paths. The gallery screen `design-primitives` shows all five and stays at 0/0/0/0.
 - The harness themes gain `--vscode-menu-selectionForeground` (VS Code always defines it; the approximation lacked it, which made a focused menu item read as dark text on blue).
 
+### Added — every map tool panel resizes, in every direction, from one shared primitive (branch `vision2040/polish-map`)
+
+The Layers, Search, Pins, Draw, Measure and other panels opened from the map rail were a fixed 300 px. They now resize, and a size is remembered per panel and per window state.
+
+- **Docked** (map 960 px and up): drag the panel's left edge to change the column width (260 to 640 px, and the canvas always keeps 360 px). **Floating** (600 to 959 px): drag any edge or corner; the opposite edge stays put. **Bottom sheet** (below 600 px): the existing top handle, now remembered.
+- **Keyboard**: the width and height separators take the arrow keys (16 px, 64 px with Shift), Home and End go to the smallest and largest size, and a double-click (or Home) restores the default. Top, right and corner handles are pointer-only so the tab order stays short.
+- **Stays usable**: the stored size is clamped to the current map on every use and never rewritten, so a panel squeezed by a small window gets its size back when the window grows. A floating panel keeps the whole panel on screen and covers at most 40% of the canvas (the map-polish coverage rule still holds; `coverage.mjs` is unchanged). Sizes are saved once on release, not per pixel.
+- **Smooth**: while the pointer is down the panel element is resized directly, so React and the map do not re-render per pixel. The canvas gives up or takes back a docked panel's width once, on release.
+- New harness screens `map-panel-docked-resized`, `map-panel-overlay-resized` and `map-panel-resize-keyboard`.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)

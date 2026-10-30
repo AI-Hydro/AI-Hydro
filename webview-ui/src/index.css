@@ -2893,3 +2893,90 @@ vscode-dropdown::part(listbox) {
 		scroll-behavior: auto !important;
 	}
 }
+
+/* Shared panel resize handles (PanelResizer.tsx). Thin hit areas on the panel's edges; a line shows on hover, focus and drag. */
+.map-panel-resizer {
+	position: absolute;
+	touch-action: none;
+	background: transparent;
+}
+.map-panel-resizer--w,
+.map-panel-resizer--e {
+	top: 0;
+	bottom: 0;
+	width: 6px;
+}
+.map-panel-resizer--n,
+.map-panel-resizer--s {
+	left: 0;
+	right: 0;
+	height: 6px;
+}
+.map-panel-resizer--w {
+	left: 0;
+}
+.map-panel-resizer--e {
+	right: 0;
+}
+.map-panel-resizer--n {
+	top: 0;
+}
+.map-panel-resizer--s {
+	bottom: 0;
+}
+.map-panel-resizer--ne,
+.map-panel-resizer--nw,
+.map-panel-resizer--se,
+.map-panel-resizer--sw {
+	width: 12px;
+	height: 12px;
+}
+.map-panel-resizer--ne {
+	top: 0;
+	right: 0;
+}
+.map-panel-resizer--nw {
+	top: 0;
+	left: 0;
+}
+.map-panel-resizer--se {
+	bottom: 0;
+	right: 0;
+}
+.map-panel-resizer--sw {
+	bottom: 0;
+	left: 0;
+}
+.map-panel-resizer--w:hover,
+.map-panel-resizer--w:focus-visible,
+.map-panel-resizer--w[data-dragging] {
+	box-shadow: inset 2px 0 0 var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+	outline: none;
+}
+.map-panel-resizer--e:hover,
+.map-panel-resizer--e[data-dragging] {
+	box-shadow: inset -2px 0 0 var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+}
+.map-panel-resizer--n:hover,
+.map-panel-resizer--n[data-dragging] {
+	box-shadow: inset 0 2px 0 var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+}
+.map-panel-resizer--s:hover,
+.map-panel-resizer--s:focus-visible,
+.map-panel-resizer--s[data-dragging] {
+	box-shadow: inset 0 -2px 0 var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+	outline: none;
+}
+.map-panel-resizer--ne:hover,
+.map-panel-resizer--nw:hover,
+.map-panel-resizer--se:hover,
+.map-panel-resizer--sw:hover {
+	background: color-mix(in srgb, var(--vscode-sash-hoverBorder, var(--vscode-focusBorder)) 35%, transparent);
+}
+@media (forced-colors: active) {
+	.map-panel-resizer--w:hover,
+	.map-panel-resizer--s:hover {
+		box-shadow: none;
+		background: Highlight;
+	}
+}

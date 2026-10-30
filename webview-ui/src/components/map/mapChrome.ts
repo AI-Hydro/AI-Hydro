@@ -19,6 +19,18 @@ import { mapLayerToLiveLayer } from "@shared/map/liveLayer"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
+import {
+	type Area,
+	clampDockedWidth,
+	clampSheetPct,
+	type OverlayRect,
+	overlayRectFor,
+	type PanelSizeRecord,
+	type PanelSizes,
+	SHEET_DEFAULT_PCT,
+	SHEET_MAX_PCT,
+	SHEET_MIN_PCT,
+} from "./panelSizes"
 
 export type ChromeState = "collapsed" | "rail" | "hidden"
 export type PanelMode = "docked" | "overlay" | "sheet"
@@ -33,10 +45,10 @@ export const OVERLAY_MIN_WIDTH = 600
 /** At this width and above the rail is the default state. */
 export const RAIL_DEFAULT_MIN_WIDTH = 800
 
-/** One panel width for every tool (per-tool sizes are gone). */
+/** The default panel width. The user can resize each panel per window state (panelSizes.ts); this is where it starts. */
 export const PANEL_WIDTH = { default: 300, min: 260, max: 380, maxShareOfMap: 0.4 } as const
 
-export const SHEET_HEIGHT = { defaultPct: 55, minPct: 30, maxPct: 85 } as const
+export const SHEET_HEIGHT = { defaultPct: SHEET_DEFAULT_PCT, minPct: SHEET_MIN_PCT, maxPct: SHEET_MAX_PCT } as const
 
 export function panelModeFor(mapWidth: number): PanelMode {
 	if (mapWidth >= DOCKED_MIN_WIDTH) return "docked"
@@ -57,11 +69,20 @@ export function panelWidthFor(mapWidth: number): number {
 	return Math.max(0, Math.min(clamped, Math.floor(mapWidth * PANEL_WIDTH.maxShareOfMap)))
 }
 
+/** Panels that are tabs of one panel share its size: Basemap and Reference are the Layers panel. */
+export function panelFamily(tool: string | null): string | null {
+	return tool === "basemap" || tool === "hydrography" ? "layers" : tool
+}
+
 export interface ChromeLayout {
 	state: ChromeState
 	mode: PanelMode
 	/** Width of the open panel in docked/overlay modes (0 for the sheet). */
 	panelWidth: number
+	/** The floating panel's rectangle (overlay mode only). */
+	overlay: OverlayRect | null
+	/** Sheet height as a share of the map for this panel (sheet mode only). */
+	sheetPct: number
 	/** Pixels the canvas gives up to the rail column (every mode, rail state only). */
 	railReserve: number
 	/** Pixels the canvas gives up to a docked panel. */
@@ -75,15 +96,36 @@ export interface ChromeLayout {
  * forces the rail to collapsed, because a 40 px rail plus a full-width sheet leaves no room for either.
  * `panelOpen` is whether a tool panel is open; a hidden chrome shows no panel.
  */
-export function layoutFor(mapWidth: number, preference: ChromeState | null, panelOpen: boolean): ChromeLayout {
+export function layoutFor(
+	mapWidth: number,
+	preference: ChromeState | null,
+	panelOpen: boolean,
+	size: { record?: PanelSizeRecord; mapHeight?: number } = {},
+): ChromeLayout {
 	const mode = panelModeFor(mapWidth)
 	let state = preference ?? defaultChromeState(mapWidth)
 	if (state === "rail" && mode === "sheet") state = "collapsed"
 	const showsPanel = panelOpen && state !== "hidden"
 	const railReserve = state === "rail" ? RAIL_WIDTH : 0
-	const panelWidth = mode === "sheet" ? 0 : panelWidthFor(mapWidth)
+	const area: Area = { width: mapWidth - railReserve, height: size.mapHeight ?? 600 }
+	const overlay = mode === "overlay" ? overlayRectFor(size.record, area) : null
+	const panelWidth =
+		mode === "sheet"
+			? 0
+			: mode === "overlay"
+				? (overlay?.width ?? 0)
+				: clampDockedWidth(size.record?.docked?.width, mapWidth, railReserve)
 	const dockReserve = showsPanel && mode === "docked" ? panelWidth : 0
-	return { state, mode, panelWidth, railReserve, dockReserve, stageInset: railReserve + dockReserve }
+	return {
+		state,
+		mode,
+		panelWidth,
+		overlay,
+		sheetPct: clampSheetPct(size.record?.sheet?.heightPct),
+		railReserve,
+		dockReserve,
+		stageInset: railReserve + dockReserve,
+	}
 }
 
 // ── conditional tools ───────────────────────────────────────────────────────
@@ -124,25 +166,34 @@ export const isChromeState = (v: unknown): v is ChromeState => isVisibleState(v)
 export interface MapChromeController extends ChromeLayout {
 	/** Measured map width (the whole map, not the shrunken canvas). */
 	width: number
-	/** Sheet height as a share of the map, adjustable with the drag handle. */
+	height: number
+	/** Sheet height as a share of the map, adjustable with the drag handle and remembered per panel. */
 	sheetHeightPct: number
 	setSheetHeightPct: (pct: number) => void
+	/** Remember the open panel's size for this window state. */
+	setPanelSize: (patch: Partial<PanelSizeRecord>) => void
+	resetPanelSize: () => void
 	/** A user choice: persisted. */
 	setState: (next: ChromeState) => void
 	/** Ctrl/Cmd+. : hide, or restore what was showing before. */
 	toggleHidden: () => void
 }
 
-/** The map's width, falling back to the window when nothing is laid out yet (tests, first paint). */
-function useElementWidth(ref: RefObject<HTMLElement | null>): number {
+/** The map's size, falling back to the window when nothing is laid out yet (tests, first paint). */
+function useElementSize(ref: RefObject<HTMLElement | null>): { width: number; height: number } {
 	const read = () => {
-		const measured = ref.current?.getBoundingClientRect().width ?? 0
-		return measured > 0 ? measured : typeof window !== "undefined" ? window.innerWidth : 1024
+		const rect = ref.current?.getBoundingClientRect()
+		const w = rect && rect.width > 0 ? rect.width : typeof window !== "undefined" ? window.innerWidth : 1024
+		const h = rect && rect.height > 0 ? rect.height : typeof window !== "undefined" ? window.innerHeight : 768
+		return { width: w, height: h }
 	}
-	const [width, setWidth] = useState<number>(read)
+	const [size, setSize] = useState(read)
 	useEffect(() => {
 		const node = ref.current
-		const update = () => setWidth(read())
+		const update = () => {
+			const next = read()
+			setSize((prev) => (prev.width === next.width && prev.height === next.height ? prev : next))
+		}
 		update()
 		if (typeof ResizeObserver !== "undefined" && node) {
 			const observer = new ResizeObserver(update)
@@ -153,11 +204,16 @@ function useElementWidth(ref: RefObject<HTMLElement | null>): number {
 		return () => window.removeEventListener("resize", update)
 		// biome-ignore lint/correctness/useExhaustiveDependencies: read() only closes over the ref
 	}, [])
-	return width
+	return size
 }
 
-export function useMapChrome(containerRef: RefObject<HTMLElement | null>, panelOpen: boolean): MapChromeController {
-	const width = useElementWidth(containerRef)
+export function useMapChrome(
+	containerRef: RefObject<HTMLElement | null>,
+	panelOpen: boolean,
+	/** The open panel's family (`panelFamily(tool)`): sizes are remembered per panel. */
+	panelKey: string | null = null,
+): MapChromeController {
+	const { width, height } = useElementSize(containerRef)
 	const [preference, setPreference] = useState<ChromeState | null>(() => {
 		const saved = loadMapWorkspace().chrome
 		return isChromeState(saved) ? saved : null
@@ -169,15 +225,38 @@ export function useMapChrome(containerRef: RefObject<HTMLElement | null>, panelO
 			return isVisibleState(saved) ? saved : null
 		})(),
 	)
-	const [sheetHeightPct, setSheetHeightPctRaw] = useState<number>(SHEET_HEIGHT.defaultPct)
-	const setSheetHeightPct = useCallback(
-		(pct: number) => setSheetHeightPctRaw(Math.round(Math.max(SHEET_HEIGHT.minPct, Math.min(SHEET_HEIGHT.maxPct, pct)))),
-		[],
-	)
+	const [sizes, setSizes] = useState<PanelSizes>(() => loadMapWorkspace().panelSizes ?? {})
+	const key = panelKey ?? "layers"
+	const record = sizes[key]
 
-	const layout = useMemo(() => layoutFor(width, preference, panelOpen), [width, preference, panelOpen])
+	const layout = useMemo(
+		() => layoutFor(width, preference, panelOpen, { record, mapHeight: height }),
+		[width, height, preference, panelOpen, record],
+	)
 	const layoutRef = useRef(layout)
 	layoutRef.current = layout
+
+	const sizesRef = useRef(sizes)
+	sizesRef.current = sizes
+	const writeSizes = useCallback((next: PanelSizes) => {
+		sizesRef.current = next
+		setSizes(next)
+		saveMapWorkspace({ panelSizes: next })
+	}, [])
+	/** Remember a size for the open panel in the current window state. Called once when a drag ends or a key is pressed. */
+	const setPanelSize = useCallback(
+		(patch: Partial<PanelSizeRecord>) => {
+			const prev = sizesRef.current
+			writeSizes({ ...prev, [key]: { ...prev[key], ...patch } })
+		},
+		[key, writeSizes],
+	)
+	/** Forget the open panel's size in the current window state (double-click a handle): it returns to the default. */
+	const resetPanelSize = useCallback(() => {
+		const prev = sizesRef.current
+		const { [layoutRef.current.mode]: _dropped, ...rest } = prev[key] ?? {}
+		writeSizes({ ...prev, [key]: rest })
+	}, [key, writeSizes])
 
 	const setState = useCallback((next: ChromeState) => {
 		const current = layoutRef.current.state
@@ -210,5 +289,20 @@ export function useMapChrome(containerRef: RefObject<HTMLElement | null>, panelO
 		return () => window.removeEventListener("keydown", onKey)
 	}, [])
 
-	return { ...layout, width, sheetHeightPct, setSheetHeightPct, setState, toggleHidden }
+	const setSheetHeightPct = useCallback(
+		(pct: number) => setPanelSize({ sheet: { heightPct: clampSheetPct(pct) } }),
+		[setPanelSize],
+	)
+
+	return {
+		...layout,
+		width,
+		height,
+		sheetHeightPct: layout.sheetPct,
+		setSheetHeightPct,
+		setPanelSize,
+		resetPanelSize,
+		setState,
+		toggleHidden,
+	}
 }

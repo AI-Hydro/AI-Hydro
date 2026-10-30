@@ -1142,6 +1142,36 @@ export const screens: ScreenDef[] = [
 		layers: featureLayers(),
 		steps: openTool("Measure"),
 	}),
+	// Resizable panels (X1-M3 / polish-map): a size the user chose is remembered per panel and per window state.
+	mapScreen("map-panel-docked-resized", "Layers panel docked, widened to 460 px (canvas gives up the width)", {
+		layers: featureLayers(),
+		storage: {
+			[MAP_STORAGE_KEY]: framedWorkspace(undefined, false, undefined, undefined, undefined, {
+				panelSizes: { layers: { docked: { width: 460 } } },
+			}),
+		},
+		steps: openTool("Layer manager"),
+	}),
+	mapScreen("map-panel-overlay-resized", "Pins panel floating, resized and moved by its edges", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		storage: {
+			[MAP_STORAGE_KEY]: framedWorkspace(undefined, false, undefined, undefined, undefined, {
+				panelSizes: { annotations: { overlay: { width: 360, height: 300, right: 40, top: 56 } } },
+			}),
+		},
+		steps: openTool("Pins"),
+	}),
+	mapScreen("map-panel-resize-keyboard", "Panel widened from the keyboard: arrow keys on the focused separator", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: [
+			...openTool("Pins"),
+			{ click: '[role="separator"][aria-label^="Resize pins panel"]' },
+			{ press: "Shift+ArrowLeft" },
+			{ wait: 300 },
+		],
+	}),
 	// No layers: Swipe, Time and Flood are listed but disabled, each with its reason.
 	mapScreen("map-more-flyout", "More menu with Swipe, Time and Flood disabled and why", {
 		steps: [

@@ -176,9 +176,12 @@ export const framedWorkspace = (
 	zoom = 8.5,
 	/** The user's saved chrome state; omitted, the map width picks the default. */
 	chrome?: "collapsed" | "rail" | "hidden",
+	/** Extra saved workspace fields, e.g. `panelSizes` for a panel the user already resized. */
+	extra: Record<string, unknown> = {},
 ): string =>
 	JSON.stringify({
 		version: 2,
+		...extra,
 		...(chrome ? { chrome } : {}),
 		...(basemap ? { basemap, basemapExplicit: true } : {}),
 		viewState: { longitude: center[0], latitude: center[1], zoom, pitch: 0, bearing: 0 },

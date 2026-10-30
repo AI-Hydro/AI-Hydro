@@ -21,8 +21,9 @@ import { BasemapList } from "./BaseMapSelector"
 import HydrographyPanel from "./HydrographyPanel"
 import { LayerPanelContent } from "./LayerPanel"
 import MapExport from "./MapExport"
-import { COLLAPSED_SIZE, EDGE_TAB_WIDTH, type MapChromeController, SHEET_HEIGHT, toolDisabledReason } from "./mapChrome"
+import { COLLAPSED_SIZE, EDGE_TAB_WIDTH, type MapChromeController, toolDisabledReason } from "./mapChrome"
 import { MAP_Z } from "./mapZ"
+import { PanelResizer } from "./PanelResizer"
 import ResearchGalleryPanel from "./ResearchGalleryPanel"
 
 export type RibbonTool =
@@ -478,34 +479,8 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 		...moreEntries(() => setToolsMenuOpen(false), true),
 	]
 
-	// ── sheet drag handle ──
+	// The panel element, for the shared resizer (PanelResizer.tsx).
 	const sheetRef = useRef<HTMLElement>(null)
-	const onHandlePointerDown = (e: React.PointerEvent) => {
-		e.preventDefault()
-		const parent = sheetRef.current?.parentElement
-		if (!parent) return
-		const rect = parent.getBoundingClientRect()
-		const onMove = (ev: PointerEvent) => chrome.setSheetHeightPct(((rect.bottom - ev.clientY) / rect.height) * 100)
-		const onUp = () => {
-			window.removeEventListener("pointermove", onMove)
-			window.removeEventListener("pointerup", onUp)
-		}
-		window.addEventListener("pointermove", onMove)
-		window.addEventListener("pointerup", onUp)
-	}
-	const onHandleKeyDown = (e: React.KeyboardEvent) => {
-		const step = e.key === "ArrowUp" ? 5 : e.key === "ArrowDown" ? -5 : 0
-		if (step) {
-			e.preventDefault()
-			chrome.setSheetHeightPct(chrome.sheetHeightPct + step)
-		} else if (e.key === "Home") {
-			e.preventDefault()
-			chrome.setSheetHeightPct(SHEET_HEIGHT.maxPct)
-		} else if (e.key === "End") {
-			e.preventDefault()
-			chrome.setSheetHeightPct(SHEET_HEIGHT.minPct)
-		}
-	}
 
 	// ── panel pieces ──
 	const family: ToolId | null = active === "basemap" || active === "hydrography" ? "layers" : active
@@ -801,10 +776,12 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 			: mode === "overlay"
 				? {
 						...panelShell,
-						top: 8,
-						right: chrome.railReserve + 8,
+						top: chrome.overlay?.top ?? 8,
+						right: chrome.railReserve + (chrome.overlay?.right ?? 8),
 						width: chrome.panelWidth,
-						maxHeight: "min(560px, calc(100% - 16px))",
+						...(chrome.overlay?.height != null
+							? { height: chrome.overlay.height }
+							: { maxHeight: "min(560px, calc(100% - 16px))" }),
 						border: `1px solid ${border}`,
 						borderRadius: 6,
 						boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
@@ -821,7 +798,10 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					}
 
 	// The collapsed button and edge tab sit at the canvas corner, clear of a docked or floating panel.
-	const cornerRight = chrome.stageInset + (mode === "overlay" && panelVisible && !modal ? chrome.panelWidth + 8 : 0) + 8
+	const cornerRight =
+		chrome.stageInset +
+		(mode === "overlay" && panelVisible && !modal ? chrome.panelWidth + (chrome.overlay?.right ?? 8) : 0) +
+		8
 	const activeMeta = active ? TOOL_META[active] : null
 	const activeName = active
 		? active === "layers" || active === "basemap" || active === "hydrography"
@@ -852,22 +832,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					}}
 					ref={sheetRef}
 					style={panelStyle}>
-					{mode === "sheet" && (
-						<div
-							aria-label="Resize sheet"
-							aria-orientation="horizontal"
-							aria-valuemax={SHEET_HEIGHT.maxPct}
-							aria-valuemin={SHEET_HEIGHT.minPct}
-							aria-valuenow={chrome.sheetHeightPct}
-							aria-valuetext={`${chrome.sheetHeightPct}% of the map`}
-							className="map-chrome-handle"
-							onKeyDown={onHandleKeyDown}
-							onPointerDown={onHandlePointerDown}
-							role="separator"
-							tabIndex={0}>
-							<span className="map-chrome-handle__grip" />
-						</div>
-					)}
+					<PanelResizer chrome={chrome} name={(activeName ?? "tool").toLowerCase()} panelRef={sheetRef} />
 					{header("map-chrome-panel-title", activeMeta?.icon ?? "layers", title)}
 					<div className="map-ribbon-panel-content" style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
 						{panelBody}
