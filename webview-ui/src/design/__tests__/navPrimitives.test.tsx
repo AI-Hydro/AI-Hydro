@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { createRef, useState } from "react"
 import { describe, expect, it, vi } from "vitest"
 import { Menu, type MenuEntry, nextIndex, RailButton, SubviewHeader, type TabItem, TabPanel, Tabs, Toolbar } from "../index"
@@ -86,6 +86,14 @@ describe("Tabs", () => {
 		expect(tabs()[1]).toHaveAttribute("aria-selected", "true")
 	})
 
+	it("when the selection is a disabled tab, the first enabled tab is the one tab stop", () => {
+		render(<Tabs idBase="d" items={ITEMS} label="S" onValueChange={() => {}} value="c" />)
+		expect(screen.getAllByRole("tab").map((t) => t.tabIndex)).toEqual([0, -1, -1, -1])
+		cleanup()
+		render(<Tabs idBase="d" items={ITEMS} label="S" onValueChange={() => {}} value="nope" />)
+		expect(screen.getAllByRole("tab").map((t) => t.tabIndex)).toEqual([0, -1, -1, -1])
+	})
+
 	it("an icon-only tab keeps its name as aria-label and tooltip, and draws no text", () => {
 		render(<TabsHarness iconOnly />)
 		const tab = screen.getByRole("tab", { name: "Alpha" })
@@ -143,6 +151,33 @@ describe("Toolbar", () => {
 		expect(document.activeElement).toBe(buttons()[0])
 	})
 
+	it("a current button that becomes disabled hands the tab stop on", async () => {
+		function Flip() {
+			const [off, setOff] = useState(false)
+			return (
+				<>
+					<button onClick={() => setOff(true)} type="button">
+						flip
+					</button>
+					<Toolbar label="Flip">
+						<button disabled={off} type="button">
+							A
+						</button>
+						<button type="button">B</button>
+					</Toolbar>
+				</>
+			)
+		}
+		render(<Flip />)
+		const tools = () => [screen.getByRole("button", { name: "A" }), screen.getByRole("button", { name: "B" })]
+		expect(tools().map((b) => b.tabIndex)).toEqual([0, -1])
+		fireEvent.click(screen.getByRole("button", { name: "flip" }))
+		await act(async () => {
+			await Promise.resolve()
+		})
+		expect(tools()[1].tabIndex).toBe(0)
+	})
+
 	it("a vertical toolbar answers Up and Down only", () => {
 		renderBar("vertical")
 		buttons()[0].focus()
@@ -193,13 +228,15 @@ describe("RailButton", () => {
 		render(
 			<>
 				<RailButton icon="gear" label="Plain" />
-				<RailButton expanded={false} icon="ellipsis" label="More" />
+				<RailButton expanded={false} icon="ellipsis" label="More" popup="menu" />
+				<RailButton expanded icon="gear" label="Disclosure" />
 			</>,
 		)
 		expect(screen.getByRole("button", { name: "Plain" })).not.toHaveAttribute("aria-pressed")
 		const more = screen.getByRole("button", { name: "More" })
 		expect(more).toHaveAttribute("aria-expanded", "false")
 		expect(more).toHaveAttribute("aria-haspopup", "menu")
+		expect(screen.getByRole("button", { name: "Disclosure" })).not.toHaveAttribute("aria-haspopup")
 	})
 
 	it("a button with a reason stays focusable, does not act, and states why", () => {
@@ -212,6 +249,17 @@ describe("RailButton", () => {
 		expect(btn).toHaveAttribute("title", "Charts: Add a layer first")
 		fireEvent.click(btn)
 		expect(onClick).not.toHaveBeenCalled()
+	})
+
+	it("puts the count in the accessible name, and can show the reason as visible text", () => {
+		render(
+			<>
+				<RailButton badge={3} icon="bell" label="Alerts" />
+				<RailButton icon="graph" label="Charts" reason="Add a layer first" showReason />
+			</>,
+		)
+		expect(screen.getByRole("button", { name: "Alerts, 3" })).toBeInTheDocument()
+		expect(screen.getByText("Add a layer first")).not.toHaveClass("aih-visually-hidden")
 	})
 
 	it("caps the badge and requires a label at the type level", () => {

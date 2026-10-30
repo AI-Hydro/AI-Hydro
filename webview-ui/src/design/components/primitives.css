@@ -353,6 +353,15 @@
 	cursor: default;
 	opacity: 0.6;
 }
+.aih-rail-btn--reason {
+	width: auto;
+	gap: var(--aih-space-2);
+	padding: 0 var(--aih-space-2);
+}
+.aih-rail-btn__reason {
+	font-size: var(--aih-text-caption);
+	color: var(--aih-fg-muted);
+}
 .aih-rail-btn__badge {
 	position: absolute;
 	top: -4px;

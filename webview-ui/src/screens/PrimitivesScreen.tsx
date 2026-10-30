@@ -130,7 +130,7 @@ export function PrimitivesScreen() {
 					<RailButton active={layersOn} icon="layers" label="Layers" onClick={() => setLayersOn(!layersOn)} />
 					<RailButton badge={3} icon="bell" label="Alerts" onClick={() => setClicks(clicks + 1)} />
 					<RailButton icon="graph" label="Charts" reason="Add a layer first" />
-					<RailButton expanded={false} icon="ellipsis" label="More tools" ref={menuTrigger} />
+					<RailButton expanded={false} icon="ellipsis" label="More tools" popup="menu" ref={menuTrigger} />
 				</Toolbar>
 			</Section>
 			<Section title="Menu (shown open)">
