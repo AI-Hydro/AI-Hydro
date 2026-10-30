@@ -356,4 +356,41 @@ describe("a host that is slow to answer (data-loss path)", () => {
 		expect(merged.map((a) => a.id)).toEqual(["host", "mine"]) // the old global pin is the host's to hand out, not carried
 		expect("pendingSync" in merged[1]).toBe(false)
 	})
+
+	it("(c) every pin added while no project was known is carried next session, across several saves and a rename", async () => {
+		const legacy = { ...pin(5, 6), id: "legacy" }
+		localStorage.setItem("aihydro.map.annotations.v2", JSON.stringify([legacy]))
+		// Session 1, no answer from the host. In-memory pins never carry the mark, as in the real map.
+		const p1 = { ...pin(1, 1), id: "p1" }
+		const p2 = { ...pin(2, 2), id: "p2" }
+		const p3 = { ...pin(3, 3), id: "p3" }
+		saveAnnotations([legacy, p1])
+		saveAnnotations([legacy, p1, p2])
+		saveAnnotations([legacy, { ...p1, name: "Renamed" }, p2, p3])
+		saveAnnotations([legacy, { ...p1, name: "Renamed" }, p2, p3]) // and once more, nothing changed
+		const stored = JSON.parse(localStorage.getItem("aihydro.map.annotations.v2") ?? "[]") as MapAnnotation[]
+		expect(stored.filter((a) => a.pendingSync).map((a) => a.id)).toEqual(["p1", "p2", "p3"])
+		expect(stored.find((a) => a.id === "legacy")?.pendingSync).toBeUndefined()
+
+		// Session 2 (a fresh module: the session-level set is gone, the stored marks are all that is left).
+		vi.resetModules()
+		const storage = await import("../annotationStorage")
+		const model = await import("../pins")
+		const started = storage.loadAnnotationsReport().annotations
+		const merged = model.mergeAdopted([], started, new Set(started.map((a) => a.id)))
+		expect(merged.map((a) => a.id)).toEqual(["p1", "p2", "p3"]) // the old global pin is not double-imported
+		expect(merged[0].name).toBe("Renamed")
+		expect(merged.some((a) => "pendingSync" in a)).toBe(false)
+	})
+
+	it("(c) the mark goes once the host has the pins", () => {
+		saveAnnotations([{ ...pin(1, 1), id: "p1" }])
+		adoptHostPins("prj_A", [{ ...pin(1, 1), id: "p1" }])
+		saveAnnotations([
+			{ ...pin(1, 1), id: "p1" },
+			{ ...pin(2, 2), id: "p2" },
+		])
+		const cached = JSON.parse(localStorage.getItem("aihydro.map.pins.v3:prj_A") ?? "[]") as MapAnnotation[]
+		expect(cached.some((a) => a.pendingSync)).toBe(false)
+	})
 })

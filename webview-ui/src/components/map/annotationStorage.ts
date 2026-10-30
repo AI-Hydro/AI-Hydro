@@ -202,6 +202,7 @@ export function readLegacyLocal(): unknown {
  */
 export function adoptHostPins(projectKey: string, annotations: MapAnnotation[], collections: AnnotationCollection[] = []): void {
 	activeProjectKey = projectKey
+	unsyncedIds.clear() // the caller saves the merged list to the host next, which is what hands these pins over
 	try {
 		localStorage.setItem(PINS_CACHE_PREFIX + projectKey, JSON.stringify(annotations))
 		localStorage.setItem(COLLECTIONS_CACHE_PREFIX + projectKey, JSON.stringify(collections))
@@ -218,6 +219,9 @@ export function adoptHostPins(projectKey: string, annotations: MapAnnotation[], 
 	}
 }
 
+/** Ids this session first saved without a project key: they stay marked `pendingSync` until the host has them. */
+const unsyncedIds = new Set<string>()
+
 /** True when a save was made while no project was known; it is sent once the key is. */
 let pendingHostSave = false
 
@@ -231,14 +235,25 @@ export function takePendingHostSave(): boolean {
 export function saveAnnotations(annotations: MapAnnotation[], collections?: AnnotationCollection[]): void {
 	if (!activeProjectKey) {
 		// Unscoped: mark what the host has never seen, so a later session can still tell it from the old global list.
-		let known = new Set<string>()
+		// A pin stays marked on every later unscoped save (a rename, a second pin): by its stored mark, or because this
+		// session first saved it without a key. The mark goes only when the host has taken the pin (adoptHostPins).
+		let stored = new Map<string, boolean>()
 		try {
-			const stored = readList(ANNOTATIONS_KEY)
-			known = new Set(Array.isArray(stored) ? stored.map((e) => (e as { id?: string })?.id as string) : [])
+			const list = readList(ANNOTATIONS_KEY)
+			if (Array.isArray(list)) {
+				stored = new Map(
+					list.map((e) => [(e as { id?: string })?.id as string, Boolean((e as MapAnnotation)?.pendingSync)]),
+				)
+			}
 		} catch {
 			/* start from nothing */
 		}
-		annotations = annotations.map((a) => (known.has(a.id) || a.pendingSync ? a : { ...a, pendingSync: true }))
+		annotations = annotations.map((a) => {
+			if (!stored.has(a.id)) {
+				unsyncedIds.add(a.id)
+			}
+			return a.pendingSync || stored.get(a.id) || unsyncedIds.has(a.id) ? { ...a, pendingSync: true } : a
+		})
 	}
 	try {
 		localStorage.setItem(

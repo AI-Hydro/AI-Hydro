@@ -932,7 +932,16 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const startedWithRef = useRef<Set<string>>(new Set(annotations.map((a) => a.id)))
 	const pinsAdoptedRef = useRef(false)
 	const unmountedRef = useRef(false)
+	const loadInFlightRef = useRef(false)
+	const reloadToastRef = useRef(false)
 	const loadPinsFromHost = useCallback((reloaded = false) => {
+		// A reload that arrives while a load is still retrying reuses that loop (each try asks the host for the folder
+		// that is open now) instead of starting a second one.
+		reloadToastRef.current ||= reloaded
+		if (loadInFlightRef.current) {
+			return
+		}
+		loadInFlightRef.current = true
 		const first = !pinsAdoptedRef.current
 		const startedWith = first ? startedWithRef.current : new Set(annotationsRef.current.map((a) => a.id))
 		// The host may be slow to answer (its project lookup can take seconds), so keep asking, with backoff. Saves made
@@ -940,6 +949,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		void loadWithRetry(() => loadAnnotationsFromHost(first ? readLegacyLocal() : undefined), {
 			cancelled: () => unmountedRef.current,
 		}).then((result) => {
+			loadInFlightRef.current = false
+			const showToast = reloadToastRef.current
+			reloadToastRef.current = false
 			if (!result) {
 				return
 			}
@@ -955,7 +967,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			if (resend || merged.length !== result.annotations.length) {
 				saveAnnotations(merged, result.collections) // pins added before the reply
 			}
-			if (reloaded) {
+			if (showToast) {
 				setPinToast({
 					id: Date.now(),
 					message: "Map reloaded for the open folder; your last change was not saved",
