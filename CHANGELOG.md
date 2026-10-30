@@ -9,7 +9,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [0.4.3] — unreleased (owner-reported map fixes, trust UX)
+## [0.4.3] — unreleased (owner feedback on 0.4.2: trust this launcher, map pins, composer footer, audit findings; sharded screens CI)
 
 ### Changed — map pins: one concept, a pin card, a clean context menu, and double-click zooms again (UX program Wave 1, PR X1-M2, branch `vision2040/x1-m2-pins`)
 
