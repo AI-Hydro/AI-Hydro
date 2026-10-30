@@ -21,6 +21,7 @@ import { nextDefaultName, sanitizeAnnotations } from "./pins"
 const ANNOTATIONS_KEY = "aihydro.map.annotations.v2"
 const ANNOTATIONS_V1_KEY = "aihydro.map.annotations.v1"
 const PINS_CACHE_PREFIX = "aihydro.map.pins.v3:"
+const COLLECTIONS_CACHE_PREFIX = "aihydro.map.collections.v2:"
 const COLLECTIONS_KEY = "aihydro.map.annotation.collections.v1"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -150,6 +151,8 @@ function readList(key: string): unknown {
 export interface LoadedAnnotations {
 	annotations: MapAnnotation[]
 	dropped: number
+	/** The dropped entries, verbatim (see `postQuarantine`). */
+	quarantined: unknown[]
 	renamed: number
 }
 
@@ -169,9 +172,9 @@ export function loadAnnotationsReport(projectKey: string | null = activeProjectK
 			saveAnnotations(migrated.annotations)
 			return migrated
 		}
-		return { annotations: [], dropped: 0, renamed: 0 }
+		return { annotations: [], dropped: 0, quarantined: [], renamed: 0 }
 	} catch {
-		return { annotations: [], dropped: 0, renamed: 0 }
+		return { annotations: [], dropped: 0, quarantined: [], renamed: 0 }
 	}
 }
 
@@ -189,15 +192,24 @@ export function readLegacyLocal(): unknown {
 }
 
 /**
- * The host has said which project this is. From now on the cache is that project's, and the old unscoped list is
- * removed locally so the next map to open does not flash another project's pins before the host answers (the host
- * kept its own copy and handed it to the first project).
+ * The host has said which project this is. From now on the cache is that project's. The old unscoped list is removed
+ * locally (so the next map does not flash another project's pins before the host answers) ONLY when the host's list
+ * holds every one of its ids: if the host did not take them (another project already claimed the list, or the host has
+ * an older copy), the local copy is the only one and stays.
  */
-export function adoptHostPins(projectKey: string, annotations: MapAnnotation[]): void {
+export function adoptHostPins(projectKey: string, annotations: MapAnnotation[], collections: AnnotationCollection[] = []): void {
 	activeProjectKey = projectKey
 	try {
 		localStorage.setItem(PINS_CACHE_PREFIX + projectKey, JSON.stringify(annotations))
-		localStorage.removeItem(ANNOTATIONS_KEY)
+		localStorage.setItem(COLLECTIONS_CACHE_PREFIX + projectKey, JSON.stringify(collections))
+		const legacy = readList(ANNOTATIONS_KEY)
+		if (Array.isArray(legacy)) {
+			const have = new Set(annotations.map((a) => a.id))
+			const covered = legacy.every((e) => e && typeof e === "object" && have.has((e as { id?: string }).id as string))
+			if (covered) {
+				localStorage.removeItem(ANNOTATIONS_KEY)
+			}
+		}
 	} catch {
 		/* ignore */
 	}
@@ -309,7 +321,8 @@ export function seedAnnotationsFromGeoJson(
 
 export function loadCollections(): AnnotationCollection[] {
 	try {
-		const raw = localStorage.getItem(COLLECTIONS_KEY)
+		// Collections belong to the project, like the pins they group.
+		const raw = localStorage.getItem(activeProjectKey ? COLLECTIONS_CACHE_PREFIX + activeProjectKey : COLLECTIONS_KEY)
 		return raw ? (JSON.parse(raw) as AnnotationCollection[]) : []
 	} catch {
 		return []
@@ -318,7 +331,10 @@ export function loadCollections(): AnnotationCollection[] {
 
 export function saveCollections(collections: AnnotationCollection[]): void {
 	try {
-		localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections))
+		localStorage.setItem(
+			activeProjectKey ? COLLECTIONS_CACHE_PREFIX + activeProjectKey : COLLECTIONS_KEY,
+			JSON.stringify(collections),
+		)
 	} catch {
 		/* ignore */
 	}
@@ -523,13 +539,34 @@ const HOST_LOAD_RESULT_TYPE = "aihydro-map-load-annotations-result"
 
 /** Fire-and-forget: persist annotations + collections to the extension host. */
 export async function saveAnnotationsToHost(annotations: MapAnnotation[], collections: AnnotationCollection[]): Promise<void> {
+	// Until the host has said which project this is there is nothing to save to: the host writes only to the key the
+	// webview loaded, so an unscoped save would be refused. The list is merged and saved when the host answers.
+	const projectKey = activeProjectKey
+	if (!projectKey) {
+		return
+	}
 	try {
 		const { PLATFORM_CONFIG } = await import("../../config/platform.config")
 		PLATFORM_CONFIG.postMessage({
 			type: HOST_SAVE_TYPE,
+			projectKey,
 			annotations,
 			collections,
 		})
+	} catch {
+		/* no-op outside VS Code */
+	}
+}
+
+/** Hand entries that could not be read to the host to keep (it never deletes them), and say so in the console. */
+export async function postQuarantine(projectKey: string | null, entries: unknown[]): Promise<void> {
+	if (entries.length === 0) {
+		return
+	}
+	console.warn(`[map] ${entries.length} stored pin(s) could not be read; they were set aside, not deleted`)
+	try {
+		const { PLATFORM_CONFIG } = await import("../../config/platform.config")
+		PLATFORM_CONFIG.postMessage({ type: "aihydro-map-quarantine-pins", projectKey, entries })
 	} catch {
 		/* no-op outside VS Code */
 	}
@@ -544,6 +581,8 @@ export interface HostPins {
 	importedCount: number
 	/** Entries dropped as malformed, and default names migrated. */
 	dropped: number
+	/** The dropped entries, verbatim. */
+	quarantined: unknown[]
 	renamed: number
 }
 
@@ -581,6 +620,7 @@ export async function loadAnnotationsFromHost(legacyLocal?: unknown): Promise<Ho
 						collections: Array.isArray(data.collections) ? (data.collections as AnnotationCollection[]) : [],
 						importedCount: typeof data.importedCount === "number" ? data.importedCount : 0,
 						dropped: clean.dropped,
+						quarantined: clean.quarantined,
 						renamed: clean.renamed,
 					})
 				} else {

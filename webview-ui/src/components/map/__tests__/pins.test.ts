@@ -2,15 +2,19 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	adoptHostPins,
 	loadAnnotationsReport,
+	loadCollections,
 	type MapAnnotation,
 	newAnnotation,
 	saveAnnotations,
+	saveCollections,
 	setActiveProjectKey,
 } from "../annotationStorage"
 import {
 	addPin,
 	createPin,
+	mergeAdopted,
 	nextDefaultName,
+	PinHistory,
 	patchPin,
 	pinAtPoint,
 	pinsOf,
@@ -193,22 +197,96 @@ describe("pin storage migration", () => {
 		expect(JSON.parse(localStorage.getItem("aihydro.map.annotations.v2") ?? "[]")).toHaveLength(1)
 	})
 
-	it("once the host names the project, the cache is that project's and the unscoped list is gone", () => {
-		localStorage.setItem(
-			"aihydro.map.annotations.v2",
-			JSON.stringify([
-				{ id: "g", name: "Greenville", type: "point", geometry: { type: "Point", coordinates: [-69.5, 45.4] } },
-			]),
-		)
+	it("once the host names the project, the cache is that project's; the unscoped list goes only if the host holds all of it", () => {
+		const greenville = { id: "g", name: "Greenville", type: "point", geometry: { type: "Point", coordinates: [-69.5, 45.4] } }
+		localStorage.setItem("aihydro.map.annotations.v2", JSON.stringify([greenville]))
 		const mine = sanitizeAnnotations([{ ...pin(1, 2), id: "mine" }]).annotations
+		// The host did not take the local pin (another project holds the legacy list): the local copy stays.
 		adoptHostPins("prj_A", mine)
-		expect(localStorage.getItem("aihydro.map.annotations.v2")).toBeNull()
+		expect(localStorage.getItem("aihydro.map.annotations.v2")).not.toBeNull()
 		expect(loadAnnotationsReport().annotations.map((a) => a.id)).toEqual(["mine"])
+		// The host's list holds every local id: the unscoped copy is removed.
+		adoptHostPins("prj_A", sanitizeAnnotations([greenville, ...mine]).annotations)
+		expect(localStorage.getItem("aihydro.map.annotations.v2")).toBeNull()
 		// Saving now writes the project's cache, never the unscoped key.
 		saveAnnotations([])
 		expect(localStorage.getItem("aihydro.map.annotations.v2")).toBeNull()
 		expect(loadAnnotationsReport("prj_A").annotations).toEqual([])
 		// Another project sees nothing of project A's pins.
 		expect(loadAnnotationsReport("prj_B").annotations).toEqual([])
+	})
+
+	it("scopes collections per project", () => {
+		adoptHostPins("prj_A", [], [{ id: "c_a", name: "A's" } as any])
+		expect(loadCollections().map((c) => c.id)).toEqual(["c_a"])
+		saveCollections([{ id: "c_a2", name: "more" } as any])
+		adoptHostPins("prj_B", [], [])
+		expect(loadCollections()).toEqual([])
+		adoptHostPins("prj_A", [], [{ id: "c_a", name: "A's" } as any])
+		expect(loadCollections().map((c) => c.id)).toEqual(["c_a"])
+		// Project B's collections come from the host's answer for B, not from a global key.
+		adoptHostPins("prj_B", [], [{ id: "c_b", name: "B's" } as any])
+		expect(loadCollections().map((c) => c.id)).toEqual(["c_b"])
+	})
+})
+
+describe("sanitizer repairs and quarantine", () => {
+	it("coerces numeric-string coordinates instead of dropping the pin", () => {
+		const out = sanitizeAnnotations([
+			{ id: "s", name: "From CSV", geometry: { type: "Point", coordinates: ["-69.5931", " 45.4612 "] } },
+			{
+				id: "l",
+				geometry: {
+					type: "LineString",
+					coordinates: [
+						["0", "0"],
+						[1, "2"],
+					],
+				},
+			},
+		])
+		expect(out.annotations.map((a) => a.geometry.coordinates)).toEqual([
+			[-69.5931, 45.4612],
+			[
+				[0, 0],
+				[1, 2],
+			],
+		])
+		expect(out.quarantined).toEqual([])
+	})
+
+	it("keeps every dropped entry verbatim in quarantined", () => {
+		const bad = { id: "x", geometry: { type: "Point", coordinates: ["north", 1] } }
+		const out = sanitizeAnnotations([bad, "junk", null, { ...pin(1, 2), id: "ok" }])
+		expect(out.annotations.map((a) => a.id)).toEqual(["ok"])
+		expect(out.quarantined).toEqual([bad, "junk", null])
+		expect(out.dropped).toBe(3)
+		expect(sanitizeAnnotations([{ id: "e", geometry: { type: "Point", coordinates: ["", ""] } }]).quarantined).toHaveLength(1)
+	})
+})
+
+describe("adopting the host's list", () => {
+	const mk = (id: string) => ({ ...pin(0, 0), id })
+	it("keeps pins added before the reply, drops the local cache's own, and prefers the host's copy", () => {
+		const host = [mk("h1"), { ...mk("both"), name: "host name" }]
+		const current = [mk("local-cache"), { ...mk("both"), name: "stale" }, mk("added-early")]
+		const merged = mergeAdopted(host, current, new Set(["local-cache", "both"]))
+		expect(merged.map((a) => a.id)).toEqual(["h1", "both", "added-early"])
+		expect(merged[1].name).toBe("host name")
+	})
+
+	it("on a project switch nothing of the old project is carried over", () => {
+		const current = [mk("a1"), mk("a2")]
+		expect(mergeAdopted([mk("b1")], current, new Set(current.map((a) => a.id))).map((a) => a.id)).toEqual(["b1"])
+	})
+
+	it("resets the undo history", () => {
+		const h = new PinHistory()
+		h.push({ kind: "add", id: "x" })
+		h.push({ kind: "add", id: "y" })
+		expect(h.size).toBe(2)
+		h.clear()
+		expect(h.size).toBe(0)
+		expect(h.pop()).toBeUndefined()
 	})
 })

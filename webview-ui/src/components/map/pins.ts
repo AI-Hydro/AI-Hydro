@@ -173,37 +173,45 @@ export interface Sanitized {
 	annotations: MapAnnotation[]
 	/** Entries that could not be used (not an object, no geometry, non-finite coordinates). */
 	dropped: number
+	/** The dropped entries, verbatim. Callers keep them (the host quarantines them) so the next save cannot lose them. */
+	quarantined: unknown[]
 	/** Default names renamed from "Annotation N" to "Pin N". */
 	renamed: number
 }
 
 const finite = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n)
 
-function validGeometry(g: unknown): g is MapAnnotation["geometry"] {
+/** A coordinate pair as numbers, or null. Numeric strings ("-69.5") are accepted: a CSV import or hand edit may have produced them. */
+function coercePair(c: unknown): [number, number] | null {
+	if (!Array.isArray(c) || c.length < 2) {
+		return null
+	}
+	const lon = typeof c[0] === "string" && c[0].trim() !== "" ? Number(c[0]) : c[0]
+	const lat = typeof c[1] === "string" && c[1].trim() !== "" ? Number(c[1]) : c[1]
+	return finite(lon) && finite(lat) ? [lon, lat] : null
+}
+
+/** The geometry with every coordinate a number, or null when it cannot be repaired. */
+function coerceGeometry(g: unknown): MapAnnotation["geometry"] | null {
 	if (!g || typeof g !== "object") {
-		return false
+		return null
 	}
 	const { type, coordinates } = g as { type?: unknown; coordinates?: unknown }
 	if (type === "Point") {
-		return Array.isArray(coordinates) && coordinates.length >= 2 && finite(coordinates[0]) && finite(coordinates[1])
+		const p = coercePair(coordinates)
+		return p ? { type: "Point", coordinates: p } : null
 	}
 	if (type === "LineString") {
-		return (
-			Array.isArray(coordinates) &&
-			coordinates.length >= 2 &&
-			coordinates.every((c) => Array.isArray(c) && finite(c[0]) && finite(c[1]))
-		)
+		const pts = Array.isArray(coordinates) ? coordinates.map(coercePair) : []
+		return pts.length >= 2 && pts.every(Boolean) ? { type: "LineString", coordinates: pts as [number, number][] } : null
 	}
 	if (type === "Polygon") {
-		return (
-			Array.isArray(coordinates) &&
-			coordinates.length >= 1 &&
-			coordinates.every(
-				(r) => Array.isArray(r) && r.length >= 3 && r.every((c) => Array.isArray(c) && finite(c[0]) && finite(c[1])),
-			)
-		)
+		const rings = Array.isArray(coordinates) ? coordinates.map((r) => (Array.isArray(r) ? r.map(coercePair) : [])) : []
+		return rings.length >= 1 && rings.every((r) => r.length >= 3 && r.every(Boolean))
+			? { type: "Polygon", coordinates: rings as [number, number][][] }
+			: null
 	}
-	return false
+	return null
 }
 
 const TYPE_OF_GEOMETRY = { Point: "point", LineString: "line", Polygon: "polygon" } as const
@@ -215,19 +223,20 @@ const TYPE_OF_GEOMETRY = { Point: "point", LineString: "line", Polygon: "polygon
  */
 export function sanitizeAnnotations(raw: unknown): Sanitized {
 	if (!Array.isArray(raw)) {
-		return { annotations: [], dropped: 0, renamed: 0 }
+		return { annotations: [], dropped: 0, quarantined: [], renamed: 0 }
 	}
 	const seen = new Set<string>()
 	const out: MapAnnotation[] = []
-	let dropped = 0
+	const quarantined: unknown[] = []
 	let renamed = 0
 	for (const entry of raw) {
-		if (!entry || typeof entry !== "object" || !validGeometry((entry as MapAnnotation).geometry)) {
-			dropped++
+		const geometry = entry && typeof entry === "object" ? coerceGeometry((entry as MapAnnotation).geometry) : null
+		if (!geometry) {
+			quarantined.push(entry)
 			continue
 		}
-		const a = entry as Partial<MapAnnotation> & { geometry: MapAnnotation["geometry"] }
-		const type = TYPE_OF_GEOMETRY[a.geometry.type]
+		const a = { ...(entry as Partial<MapAnnotation>), geometry }
+		const type = TYPE_OF_GEOMETRY[geometry.type]
 		let id = typeof a.id === "string" && a.id ? a.id : `pin_${Date.now()}_${out.length}`
 		while (seen.has(id)) {
 			id = `${id}_${out.length}`
@@ -257,5 +266,36 @@ export function sanitizeAnnotations(raw: unknown): Sanitized {
 			updatedAt: typeof a.updatedAt === "string" ? a.updatedAt : now,
 		})
 	}
-	return { annotations: out, dropped, renamed }
+	return { annotations: out, dropped: quarantined.length, quarantined, renamed }
+}
+
+// ── adopting the host's list ────────────────────────────────────────────────
+
+/**
+ * The list to show once the host has answered. The host's list wins; pins the user added before the reply (ids that were
+ * not in the list the map started with) are kept too, so a fast first click is not lost. The pins the map started with
+ * come from the unscoped local cache, and are the host's to hand out, never kept from here.
+ */
+export function mergeAdopted(host: MapAnnotation[], current: MapAnnotation[], startedWith: ReadonlySet<string>): MapAnnotation[] {
+	const have = new Set(host.map((a) => a.id))
+	return [...host, ...current.filter((a) => !have.has(a.id) && !startedWith.has(a.id))]
+}
+
+// ── undo history ────────────────────────────────────────────────────────────
+
+/** The undo stack. It belongs to one project's list: `clear` it when the list is replaced. */
+export class PinHistory {
+	private edits: PinEdit[] = []
+	push(edit: PinEdit): void {
+		this.edits = [...this.edits.slice(-49), edit]
+	}
+	pop(): PinEdit | undefined {
+		return this.edits.pop()
+	}
+	clear(): void {
+		this.edits = []
+	}
+	get size(): number {
+		return this.edits.length
+	}
 }

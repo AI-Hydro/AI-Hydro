@@ -1,32 +1,40 @@
 import type { ProjectKey } from "./projectIdentity"
 
 /**
- * Where the map keeps a project's pins (UX program 2026-11, X1-M2).
+ * Where the map keeps a project's pins (UX program 2026-11, X1-M2). These are the owner's own data, so the rules are
+ * about never writing to the wrong place and never losing an entry.
  *
- * Pins used to live in one global list, so a pin dropped in one project showed up in every other. They are now
- * keyed by the project: `prj_...` once the tools server knows the directory, otherwise `dir:<hash>` (see
- * `projectIdentity.ts`). The map webview stays ignorant of keys; it asks the host for "my pins" and sends "these are
- * my pins", and the host picks the bucket.
+ * Layout (one Memento key per project, so a window only ever rewrites its own project):
+ *   `aihydro.map.pins.v1:<projectKey>`   { annotations, collections, tombstones }
+ *   `aihydro.map.pins.legacyClaimedBy.v1`  the project that took over the pre-project list
+ *   `aihydro.map.pins.quarantine.v1`       entries the webview could not read, kept verbatim
+ *   `aihydro.map.annotations.v2`           the pre-project global list: never written, never deleted
  *
- * Three things happen on load, in this order, and each is idempotent:
- *   1. a `dir:` bucket is renamed to the `prj_` bucket the first time the project has a real id;
- *   2. the pre-project global list is handed, once, to the first project that opens the map. Its pins are marked
- *      `imported` so the UI can offer "Keep / Clear all" (map-polish decision D3). Nothing is deleted from the legacy
- *      key, so a downgrade still finds its pins;
- *   3. a bucket is read.
+ * The bucket is chosen when the map LOADS and then travels with every save (`checkSaveTarget`): the host writes only to
+ * the key the webview loaded, and refuses (asks for a reload) when that key no longer belongs to the open folder. So a
+ * folder reorder or a `dir:` -> `prj_` flip mid-session can never write one project's pins over another's.
+ *
+ * Loading does three things, each idempotent: (1) when the project now has a `prj_` id, an older `dir:` bucket is
+ * merged into it, honouring deletions through tombstones, and removed; (2) the pre-project list is offered to the
+ * first REAL project (never "no folder"), marked `imported`; (3) the bucket is read.
  */
 
-/** The pre-project global list (webview `aihydro.map.annotations.v2`) and its collections. */
 export const LEGACY_ANNOTATIONS_KEY = "aihydro.map.annotations.v2"
 export const LEGACY_COLLECTIONS_KEY = "aihydro.map.annotation.collections.v1"
-/** `Record<projectKey, PinBucket>`. */
-export const PINS_BY_PROJECT_KEY = "aihydro.map.pins.byProject.v1"
-/** The project key that took over the legacy list. Written once, never cleared. */
+export const PINS_KEY_PREFIX = "aihydro.map.pins.v1:"
 export const LEGACY_CLAIMED_BY_KEY = "aihydro.map.pins.legacyClaimedBy.v1"
+export const QUARANTINE_KEY = "aihydro.map.pins.quarantine.v1"
+/** The key used when no folder is open. It never claims the legacy list. */
+export const NO_FOLDER_KEY = "dir:none"
+
+const TOMBSTONE_CAP = 500
+const QUARANTINE_CAP = 500
 
 export interface PinBucket {
 	annotations: unknown[]
 	collections: unknown[]
+	/** Ids deleted in this bucket, so a merge does not bring them back. */
+	tombstones?: string[]
 }
 
 /** The slice of `vscode.Memento` this needs, so it can be tested with a Map. */
@@ -36,24 +44,53 @@ export interface PinStateStore {
 }
 
 const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
+const idOf = (e: unknown): string | undefined =>
+	e && typeof e === "object" && typeof (e as { id?: unknown }).id === "string" ? (e as { id: string }).id : undefined
 
-/** Mark a legacy entry as imported. Entries that are not objects are dropped here, the webview validates the rest. */
+export const bucketKey = (projectKey: string): string => PINS_KEY_PREFIX + projectKey
+
+function readBucket(store: PinStateStore, projectKey: string): PinBucket | undefined {
+	const raw = store.get<PinBucket>(bucketKey(projectKey))
+	return raw && typeof raw === "object"
+		? {
+				annotations: asList(raw.annotations),
+				collections: asList(raw.collections),
+				tombstones: asList(raw.tombstones) as string[],
+			}
+		: undefined
+}
+
+/** `primary` first, then the entries of `extra` that are not already there and not in `dropIds`. */
+function mergeById(primary: unknown[], extra: unknown[], dropExtra: Set<string>, dropPrimary: Set<string>): unknown[] {
+	const kept = primary.filter((e) => {
+		const id = idOf(e)
+		return id === undefined || !dropPrimary.has(id)
+	})
+	const seen = new Set(kept.map(idOf).filter((v): v is string => v !== undefined))
+	return [
+		...kept,
+		...extra.filter((e) => {
+			const id = idOf(e)
+			return id === undefined || (!seen.has(id) && !dropExtra.has(id))
+		}),
+	]
+}
+
 const markImported = (entry: unknown): unknown =>
 	entry && typeof entry === "object" && !Array.isArray(entry)
 		? { ...(entry as Record<string, unknown>), imported: true }
 		: undefined
 
-/** `primary` first, then the entries of `extra` whose id is not already there (the same pin saved under both keys). */
-function mergeById(primary: unknown[], extra: unknown[]): unknown[] {
-	const id = (e: unknown) => (e && typeof e === "object" ? (e as { id?: unknown }).id : undefined)
-	const seen = new Set<unknown>(primary.map(id).filter((v) => v !== undefined))
-	return [...primary, ...extra.filter((e) => id(e) === undefined || !seen.has(id(e)))]
-}
-
 export interface LoadedPins extends PinBucket {
 	projectKey: string
 	/** How many entries came from the pre-project list on this call (0 on every call after the first). */
 	importedCount: number
+}
+
+/** The legacy list belongs to nobody yet, or only to the "no folder" bucket (which is not a project). */
+const legacyUnclaimed = (store: PinStateStore): boolean => {
+	const claimed = store.get<string>(LEGACY_CLAIMED_BY_KEY)
+	return claimed === undefined || claimed === NO_FOLDER_KEY
 }
 
 /**
@@ -66,54 +103,98 @@ export async function loadPinsForProject(
 	key: ProjectKey,
 	options: { dirKey?: string; legacyLocal?: unknown } = {},
 ): Promise<LoadedPins> {
-	const all: Record<string, PinBucket> = { ...(store.get<Record<string, PinBucket>>(PINS_BY_PROJECT_KEY) ?? {}) }
-	let changed = false
-
-	if (key.kind === "prj" && options.dirKey && options.dirKey !== key.key && all[options.dirKey]) {
-		const old = all[options.dirKey]
-		const current = all[key.key]
-		all[key.key] = current
-			? {
-					annotations: mergeById(asList(current.annotations), asList(old.annotations)),
-					collections: asList(current.collections),
-				}
-			: old
-		delete all[options.dirKey]
-		changed = true
-	}
-
-	let importedCount = 0
-	if (!all[key.key] && store.get<string>(LEGACY_CLAIMED_BY_KEY) === undefined) {
-		const hostLegacy = asList(store.get<unknown[]>(LEGACY_ANNOTATIONS_KEY))
-		const legacy = (hostLegacy.length > 0 ? hostLegacy : asList(options.legacyLocal)).map(markImported).filter(Boolean)
-		if (legacy.length > 0) {
-			all[key.key] = { annotations: legacy, collections: asList(store.get<unknown[]>(LEGACY_COLLECTIONS_KEY)) }
-			importedCount = legacy.length
-			changed = true
-			await store.update(LEGACY_CLAIMED_BY_KEY, key.key)
+	// 1. dir: -> prj_, as an explicit step.
+	if (key.kind === "prj" && options.dirKey && options.dirKey !== key.key) {
+		const old = readBucket(store, options.dirKey)
+		if (old) {
+			const current = readBucket(store, key.key)
+			const oldGone = new Set(old.tombstones)
+			const curGone = new Set(current?.tombstones)
+			const merged: PinBucket = current
+				? {
+						annotations: mergeById(current.annotations, old.annotations, curGone, oldGone),
+						collections: mergeById(current.collections, old.collections, new Set(), new Set()),
+						tombstones: [...new Set([...curGone, ...oldGone])].slice(-TOMBSTONE_CAP),
+					}
+				: old
+			await store.update(bucketKey(key.key), merged)
+			await store.update(bucketKey(options.dirKey), undefined)
 		}
 	}
 
-	if (changed) {
-		await store.update(PINS_BY_PROJECT_KEY, all)
+	// 2. The pre-project list goes to the first real project, once. The claim marker is written first and read back, so
+	//    two windows racing for it cannot both import.
+	let importedCount = 0
+	if (key.key !== NO_FOLDER_KEY && !readBucket(store, key.key) && legacyUnclaimed(store)) {
+		const hostLegacy = asList(store.get<unknown[]>(LEGACY_ANNOTATIONS_KEY))
+		const legacy = (hostLegacy.length > 0 ? hostLegacy : asList(options.legacyLocal)).map(markImported).filter(Boolean)
+		if (legacy.length > 0) {
+			await store.update(LEGACY_CLAIMED_BY_KEY, key.key)
+			if (store.get<string>(LEGACY_CLAIMED_BY_KEY) === key.key) {
+				await store.update(bucketKey(key.key), {
+					annotations: legacy,
+					collections: asList(store.get<unknown[]>(LEGACY_COLLECTIONS_KEY)),
+					tombstones: [],
+				})
+				importedCount = legacy.length
+			}
+		}
 	}
-	const bucket = all[key.key]
+
+	// 3. Read.
+	const bucket = readBucket(store, key.key)
 	return {
 		projectKey: key.key,
-		annotations: asList(bucket?.annotations),
-		collections: asList(bucket?.collections),
+		annotations: bucket?.annotations ?? [],
+		collections: bucket?.collections ?? [],
 		importedCount,
 	}
 }
 
-/** Replace one project's bucket. Other projects are never touched. */
+/**
+ * Can this save be written? `given` is the key the webview loaded. It may be written only when it still belongs to the
+ * open folder: its current key, or the `dir:` key of the same folder (a `dir:` bucket stays a `dir:` bucket until the
+ * next load migrates it). Anything else means the open folder changed under the webview: it must reload, not write.
+ */
+export function checkSaveTarget(given: unknown, current: { key: ProjectKey; dirKey?: string }): "write" | "reload" {
+	if (typeof given !== "string" || given === "") {
+		return "reload"
+	}
+	return given === current.key.key || given === current.dirKey ? "write" : "reload"
+}
+
+/** Replace one project's bucket and remember which ids were deleted. Other projects are never touched. */
 export async function savePinsForProject(
 	store: PinStateStore,
-	key: ProjectKey,
+	projectKey: string,
 	annotations: unknown,
 	collections: unknown,
 ): Promise<void> {
-	const all = { ...(store.get<Record<string, PinBucket>>(PINS_BY_PROJECT_KEY) ?? {}) }
-	all[key.key] = { annotations: asList(annotations), collections: asList(collections) }
-	await store.update(PINS_BY_PROJECT_KEY, all)
+	const prev = readBucket(store, projectKey)
+	const next = asList(annotations)
+	const nextIds = new Set(next.map(idOf).filter((v): v is string => v !== undefined))
+	const deleted = (prev?.annotations ?? []).map(idOf).filter((v): v is string => v !== undefined && !nextIds.has(v))
+	const tombstones = [...(prev?.tombstones ?? []), ...deleted].filter((id) => !nextIds.has(id))
+	await store.update(bucketKey(projectKey), {
+		annotations: next,
+		collections: asList(collections),
+		tombstones: [...new Set(tombstones)].slice(-TOMBSTONE_CAP),
+	})
+}
+
+/** Keep entries the webview could not read, verbatim, so the next save cannot lose them. */
+export async function quarantinePins(store: PinStateStore, projectKey: string, entries: unknown): Promise<number> {
+	const incoming = asList(entries)
+	if (incoming.length === 0) {
+		return 0
+	}
+	const existing = asList(store.get<unknown[]>(QUARANTINE_KEY))
+	const stamp = new Date().toISOString()
+	const additions = incoming.map((entry) => ({ projectKey, quarantinedAt: stamp, entry }))
+	const seen = new Set(existing.map((e) => JSON.stringify((e as { entry?: unknown })?.entry)))
+	const fresh = additions.filter((a) => !seen.has(JSON.stringify(a.entry)))
+	if (fresh.length > 0) {
+		await store.update(QUARANTINE_KEY, [...existing, ...fresh].slice(-QUARANTINE_CAP))
+	}
+	return fresh.length
 }

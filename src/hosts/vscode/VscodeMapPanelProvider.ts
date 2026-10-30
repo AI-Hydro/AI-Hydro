@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import type { Controller } from "@core/controller"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
-import { loadPinsForProject, savePinsForProject } from "@core/project/pinStore"
+import { checkSaveTarget, loadPinsForProject, NO_FOLDER_KEY, quarantinePins, savePinsForProject } from "@core/project/pinStore"
 import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import axios from "axios"
@@ -263,7 +263,7 @@ export class VscodeMapPanelProvider {
 	private static async pinProjectKeys(): Promise<{ key: ProjectKey; dirKey?: string }> {
 		const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
 		if (!root) {
-			return { key: { key: "dir:none", kind: "dir" } }
+			return { key: { key: NO_FOLDER_KEY, kind: "dir" } }
 		}
 		const cached = VscodeMapPanelProvider.pinKeys.get(root)
 		if (cached?.kind === "prj") {
@@ -930,15 +930,39 @@ export class VscodeMapPanelProvider {
 					}
 					case "aihydro-map-save-annotations": {
 						try {
-							const { key } = await VscodeMapPanelProvider.pinProjectKeys()
-							await savePinsForProject(
-								VscodeMapPanelProvider.context.globalState,
-								key,
-								message.annotations,
-								message.collections,
-							)
+							// The webview says which project it loaded. Write only there, and only while that key still
+							// belongs to the open folder; otherwise the folder changed under it, so it reloads instead.
+							const current = await VscodeMapPanelProvider.pinProjectKeys()
+							if (checkSaveTarget(message.projectKey, current) === "write") {
+								await savePinsForProject(
+									VscodeMapPanelProvider.context.globalState,
+									String(message.projectKey),
+									message.annotations,
+									message.collections,
+								)
+							} else {
+								console.warn("[Map] Refused a pin save for a project that is not open; asking the map to reload")
+								await postMessageToWebview({ type: "aihydro-map-pins-reload" })
+							}
 						} catch (err) {
 							console.error("[Map] Failed to persist pins to globalState:", err)
+						}
+						break
+					}
+					case "aihydro-map-quarantine-pins": {
+						try {
+							const kept = await quarantinePins(
+								VscodeMapPanelProvider.context.globalState,
+								String(message.projectKey ?? ""),
+								message.entries,
+							)
+							if (kept > 0) {
+								console.warn(
+									`[Map] ${kept} unreadable pin(s) were set aside, not deleted (aihydro.map.pins.quarantine.v1)`,
+								)
+							}
+						} catch (err) {
+							console.error("[Map] Failed to quarantine pins:", err)
 						}
 						break
 					}

@@ -383,8 +383,14 @@ try {
 	const zoomBefore = await mapZoom()
 	const inspectBefore = (await page.evaluate(() => window.__mapEvents ?? [])).filter((t) => t === "inspect.click").length
 	await page.mouse.dblclick(centre.x, centre.y)
-	await page.waitForTimeout(1200)
-	const zoomAfter = await mapZoom()
+	// The zoom animates; on a slow machine it takes longer, so wait for it to settle instead of for a fixed time.
+	let zoomAfter = await mapZoom()
+	for (let i = 0; i < 40 && zoomAfter - zoomBefore <= 0.5; i++) {
+		await page.waitForTimeout(250)
+		zoomAfter = await mapZoom()
+	}
+	await page.waitForTimeout(500)
+	zoomAfter = await mapZoom()
 	const inspectAfter = (await page.evaluate(() => window.__mapEvents ?? [])).filter((t) => t === "inspect.click").length
 	assert.equal(await pointCount(), pinsBefore, "double-click must not create a pin")
 	assert.ok(zoomAfter - zoomBefore > 0.5, `double-click should zoom in: ${zoomBefore} -> ${zoomAfter}`)

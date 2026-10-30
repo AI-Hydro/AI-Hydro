@@ -19,6 +19,7 @@ import {
 	loadAnnotationsReport,
 	type MapAnnotation,
 	newAnnotation,
+	postQuarantine,
 	readLegacyLocal,
 	saveAnnotations,
 	seedAnnotationsFromGeoJson,
@@ -99,7 +100,8 @@ import {
 	type Edited,
 	formatPinCoords,
 	isPin,
-	type PinEdit,
+	mergeAdopted,
+	PinHistory,
 	patchPin,
 	pinAtPoint,
 	pinCoords,
@@ -909,7 +911,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const [pinFocusName, setPinFocusName] = useState(false)
 	const [pinToolArmed, setPinToolArmed] = useState(false)
 	const [pinToast, setPinToast] = useState<{ id: number; message: string; undoable: boolean } | null>(null)
-	const pinUndoStackRef = useRef<PinEdit[]>([])
+	const pinUndoStackRef = useRef(new PinHistory())
 	const lastPinPlacedAtRef = useRef(0)
 	/** What deck's click handler (memoised, so it would close over stale state) needs from the pin code. */
 	const pinApiRef = useRef({
@@ -920,28 +922,45 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		lastPlacedAt: (): number => 0,
 	})
 
-	// On mount, ask the host for this project's pins. It answers with the project's own list (and, once, the pins that
-	// predate projects); without a host the local list loaded above stays.
-	useEffect(() => {
-		let cancelled = false
-		const local = loadAnnotationsReport()
-		if (local.dropped > 0) {
-			console.warn(`[MapView] ${local.dropped} stored pin(s) were malformed and skipped`)
-		}
-		void loadAnnotationsFromHost(readLegacyLocal()).then((result) => {
-			if (cancelled || !result) {
+	// Ask the host for this project's pins: on mount, and again whenever it says the open folder changed ("reload"; it
+	// refuses to save for a project that is no longer open). The host's list is the project's. Pins the user added
+	// before the first reply are kept; the pins the map started with came from the unscoped local cache and are the
+	// host's to hand out. Whatever the host answers replaces the old list, so the undo history (which belongs to the old
+	// list) and the selection are reset.
+	const startedWithRef = useRef<Set<string>>(new Set(annotations.map((a) => a.id)))
+	const pinsAdoptedRef = useRef(false)
+	const loadPinsFromHost = useCallback(() => {
+		const first = !pinsAdoptedRef.current
+		const startedWith = first ? startedWithRef.current : new Set(annotationsRef.current.map((a) => a.id))
+		void loadAnnotationsFromHost(first ? readLegacyLocal() : undefined).then((result) => {
+			if (!result) {
 				return
 			}
-			if (result.dropped > 0) {
-				console.warn(`[MapView] ${result.dropped} stored pin(s) were malformed and skipped`)
+			void postQuarantine(result.projectKey, result.quarantined)
+			const merged = mergeAdopted(result.annotations, annotationsRef.current, startedWith)
+			pinsAdoptedRef.current = true
+			adoptHostPins(result.projectKey, merged, result.collections)
+			annotationsRef.current = merged
+			setAnnotations(merged)
+			pinUndoStackRef.current.clear()
+			setSelectedPinId(null)
+			if (merged.length !== result.annotations.length) {
+				saveAnnotations(merged, result.collections) // pins added before the reply
 			}
-			adoptHostPins(result.projectKey, result.annotations)
-			setAnnotations(result.annotations)
 		})
-		return () => {
-			cancelled = true
-		}
 	}, [])
+	useEffect(() => {
+		const local = loadAnnotationsReport()
+		void postQuarantine(null, local.quarantined)
+		loadPinsFromHost()
+		const onMessage = (event: MessageEvent) => {
+			if ((event.data as { type?: string } | undefined)?.type === "aihydro-map-pins-reload") {
+				loadPinsFromHost()
+			}
+		}
+		window.addEventListener("message", onMessage)
+		return () => window.removeEventListener("message", onMessage)
+	}, [loadPinsFromHost])
 
 	/** One way to change the list: keep the ref, React state and storage in step. */
 	const commitAnnotations = useCallback((next: MapAnnotation[]) => {
@@ -957,7 +976,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				return
 			}
 			commitAnnotations(result.next)
-			pinUndoStackRef.current = [...pinUndoStackRef.current.slice(-49), result.edit]
+			pinUndoStackRef.current.push(result.edit)
 			setPinToast({ id: Date.now(), message, undoable: true })
 		},
 		[commitAnnotations],
@@ -969,7 +988,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			return
 		}
 		commitAnnotations(undoEdit(annotationsRef.current, edit))
-		setPinToast({ id: Date.now(), message: "Undone", undoable: pinUndoStackRef.current.length > 0 })
+		setPinToast({ id: Date.now(), message: "Undone", undoable: pinUndoStackRef.current.size > 0 })
 	}, [commitAnnotations])
 
 	const placePin = useCallback(
@@ -1321,7 +1340,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				(e.ctrlKey || e.metaKey) &&
 				!e.shiftKey &&
 				(e.key === "z" || e.key === "Z") &&
-				pinUndoStackRef.current.length > 0
+				pinUndoStackRef.current.size > 0
 			) {
 				e.preventDefault()
 				undoLastPinEdit()

@@ -43,6 +43,7 @@ const PinsPanel: React.FC<PinsPanelProps> = ({
 	const [editingId, setEditingId] = useState<string | null>(null)
 	const [draft, setDraft] = useState("")
 	const [confirmClear, setConfirmClear] = useState(false)
+	const [confirmImported, setConfirmImported] = useState(false)
 	const [seedMessage, setSeedMessage] = useState<string | null>(null)
 
 	// The panel sits on the VS Code panel background, so it takes its colours from the theme (hc-light included), not
@@ -146,10 +147,29 @@ const PinsPanel: React.FC<PinsPanelProps> = ({
 						{importedCount} {importedCount === 1 ? "pin" : "pins"} from before projects{" "}
 						{importedCount === 1 ? "was" : "were"} moved into this project.
 					</div>
-					<div style={{ display: "flex", gap: 6 }}>
-						{textBtn("check", "Keep", onKeepImported)}
-						{textBtn("trash", "Clear them", onClearImported)}
-					</div>
+					{confirmImported ? (
+						<div
+							aria-label="Clear imported pins"
+							role="alertdialog"
+							style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+							<div>
+								Clear {importedCount === 1 ? "this pin" : `these ${importedCount} pins`}? They were your only copy
+								from before projects. Undo works until you close the map.
+							</div>
+							<div style={{ display: "flex", gap: 6 }}>
+								{textBtn("trash", "Yes, clear", () => {
+									setConfirmImported(false)
+									onClearImported()
+								})}
+								{textBtn("close", "Cancel", () => setConfirmImported(false))}
+							</div>
+						</div>
+					) : (
+						<div style={{ display: "flex", gap: 6 }}>
+							{textBtn("check", "Keep", onKeepImported)}
+							{textBtn("trash", "Clear them", () => setConfirmImported(true))}
+						</div>
+					)}
 				</div>
 			)}
 

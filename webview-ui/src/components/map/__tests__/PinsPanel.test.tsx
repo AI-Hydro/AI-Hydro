@@ -78,8 +78,16 @@ describe("pins panel", () => {
 		expect(screen.getByText(/2 pins from before projects were moved into this project/)).toBeTruthy()
 		fireEvent.click(screen.getByRole("button", { name: "Keep" }))
 		fireEvent.click(screen.getByRole("button", { name: "Clear them" }))
+		// Clearing the imported pins asks first: the pre-project list cannot be claimed again.
+		expect(p.onClearImported).not.toHaveBeenCalled()
+		fireEvent.click(
+			within(screen.getByRole("alertdialog", { name: "Clear imported pins" })).getByRole("button", { name: "Cancel" }),
+		)
+		expect(p.onClearImported).not.toHaveBeenCalled()
+		fireEvent.click(screen.getByRole("button", { name: "Clear them" }))
+		fireEvent.click(screen.getByRole("button", { name: "Yes, clear" }))
 		expect(p.onKeepImported).toHaveBeenCalled()
-		expect(p.onClearImported).toHaveBeenCalled()
+		expect(p.onClearImported).toHaveBeenCalledTimes(1)
 	})
 
 	it("shows an empty state", () => {

@@ -49,7 +49,7 @@ The menu is grouped: **AI-Hydro**, then the object under the pointer (a pin, or 
 
 ## Pins belong to the project
 
-Each project has its own pins; pins from one project do not appear in another. Pins saved before projects existed were one global list. The first project that opens the map after the upgrade receives them, and the Pins panel shows a one-time notice: **Keep** them or **Clear them** (undoable). A pin stored with a damaged location is skipped, and the map still loads.
+Each project has its own pins; pins from one project do not appear in another. Pins saved before projects existed were one global list. The first project that opens the map after the upgrade receives them, and the Pins panel shows a one-time notice: **Keep** them or **Clear them** (undoable). A pin stored with a damaged location is skipped so the map still loads, but it is kept aside (not deleted) on the host.
 
 ## Lines and areas
 
