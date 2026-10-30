@@ -16,6 +16,7 @@ import WelcomeView from "./components/welcome/WelcomeView"
 import { useExtensionState } from "./context/ExtensionStateContext"
 import { Providers } from "./Providers"
 import { UiServiceClient } from "./services/grpc-client"
+import { isChatRunning, nothingHasFocus } from "./utils/chatRunning"
 
 // Lazy-loaded: a crash while rendering one of these reproducibility panels
 // must not blank the rest of the webview (chat, map, etc. share this bundle).
@@ -117,6 +118,7 @@ const AppContent = () => {
 		hideConnectors,
 		hideSkills,
 		hideAnnouncement,
+		aihydroMessages,
 	} = useExtensionState()
 
 	useEffect(() => {
@@ -152,8 +154,14 @@ const AppContent = () => {
 	const previousView = useRef("chat")
 	useEffect(() => {
 		UiServiceClient.setSidebarView(StringRequest.create({ value: sidebarView })).catch(() => {})
-		if (sidebarView === "chat" && previousView.current !== "chat") {
-			requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("focusChatInput")))
+		// Not while a run is in progress (Escape in the composer stops it, and a double tap would end a long task),
+		// and not if something else already took the focus (the "Focus pending prompt" command lands on the approval).
+		if (sidebarView === "chat" && previousView.current !== "chat" && !isChatRunning(aihydroMessages)) {
+			requestAnimationFrame(() => {
+				if (nothingHasFocus()) {
+					window.dispatchEvent(new CustomEvent("focusChatInput"))
+				}
+			})
 		}
 		previousView.current = sidebarView
 	}, [sidebarView])
