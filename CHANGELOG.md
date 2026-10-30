@@ -9,6 +9,18 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.3] — unreleased
+
+### Changed — answer audit: one human summary line, underlined numbers, plain-language review list (branch `vision2040/audit-findings-ux`)
+
+- **One collapsed line, written for a reader.** The footer under a final answer now reads "3 numbers aren't linked to a recorded run · Review" (neutral note tone for advisory-only: "2 notes to review") instead of "Audit: 0/13 numbers traced · 13 hard · 0 advisory" plus an inline findings list. It is a button with `aria-expanded`; the review list stays closed until opened, and the traced count ("10 of 13 are traced") appears only inside it. The counts are the audit's own (`hardCount`, `advisoryCount`), unchanged.
+- **Numbers are marked in the answer.** An untraced number in the prose gets a subtle dotted underline. Hover or keyboard focus shows "Not linked to a run" and, when the audit named a likely run, "Likely from run watershed.0b12… (area_km2)" with the existing run-reference chip. Each marked number has an accessible description. Only the first N occurrences of a number that N findings name are marked, and a number directly followed by a citation chip is never marked.
+- **Review list in plain language.** One row per finding: the number, what is wrong ("Not linked to a run", "Link points to a run that is not recorded", "Value differs from the run"), and the text around it. The auditor's repair instructions ("Fix: Add [run:…] immediately after …"), the raw marker and the kind name show only at Verbose.
+- **Primary action.** "Ask AI-Hydro to link these" (was "Ask agent to cite", in the action row) sits beside the summary and sends the same fixed follow-up as before. The gate's revision loop is not changed: this is the existing reply path.
+- **Clean answers.** "All N numbers traced" as a tiny check line at Normal and Verbose; nothing at Focus. It still appears only when the audit ran and found nothing.
+- **Unchanged:** what the gate blocks or allows, every disclosure line (silent revisions, findings that remain, removed values, unavailable audit, held-back drafts).
+- **Harness.** New screens `chat-answer-audit-hard`, `chat-answer-audit-advisory`, `chat-answer-audit-clean`; `chat-answer-audit-graded` now expects the new line.
+
 ## [0.4.2] — unreleased (UX program Wave 1: projects on chats, chat titles, real Focus, project context, map provenance and map chrome; plus the abort-confirm guard and the Wave 0 leftovers)
 
 ### Changed — map chrome: a 40 px rail, three states, one panel width (UX program Wave 1, PR X1-M1, branch `vision2040/x1-m1-map-chrome`)

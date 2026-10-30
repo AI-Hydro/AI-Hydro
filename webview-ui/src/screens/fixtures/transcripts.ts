@@ -332,6 +332,95 @@ export const answerClaimsAuditTask: AiHydroMessage[] = (() => {
 	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
 })()
 
+const AUDIT_UX_MARKER = marker("run", "fx-run-0007#key_outputs.area_km2")
+const AUDIT_UX_ANSWER = (area: string, q: string, relief: string) =>
+	`The synthetic basin (drainage area ${area} km², runoff ratio ${q}, relief ${relief} m) is a layout fixture. Fixture answer, not a result.`
+
+const auditUxTask = (answer: string, payload: (ts: number) => AnswerAuditPayload): AiHydroMessage[] => {
+	const c = clock()
+	const messages = [task("Summarise the synthetic basin. Layout fixture."), apiReq(c()), completion(c(), answer)]
+	return [...messages, say(c(), "answer_audit", JSON.stringify(payload(messages[2].ts)))]
+}
+
+const untracedFinding = (q: string, context: string, withRun: boolean) => ({
+	kind: "uncited_number",
+	severity: "hard" as const,
+	excerpt: context,
+	message: `The quantity '${q}' has no [run:...] or [lit:...] marker.`,
+	fixHint: `Add ${AUDIT_UX_MARKER} immediately after '${q}'.`,
+	...(withRun ? { suggestedMarker: AUDIT_UX_MARKER } : {}),
+})
+
+/** Audit UX: three hard findings (all numbers untraced), one advisory; the first number has a likely run. */
+export const answerAuditHardUxTask: AiHydroMessage[] = auditUxTask(AUDIT_UX_ANSWER("123.45", "0.42", "310"), (ts) => ({
+	v: 1,
+	stage: "final",
+	status: "violations",
+	sessionId: "fx-session-0001",
+	cited: 0,
+	total: 3,
+	hardCount: 3,
+	advisoryCount: 1,
+	schema: "graded",
+	attempt: 0,
+	answerTs: ts,
+	draftHash: FIXTURE_DRAFT_HASH,
+	violations: [
+		untracedFinding("123.45", "The synthetic basin (drainage area 123.45 km², runoff ratio 0.42", true),
+		untracedFinding("0.42", "drainage area 123.45 km², runoff ratio 0.42, relief 310 m)", false),
+		untracedFinding("310", "runoff ratio 0.42, relief 310 m) is a layout fixture", false),
+		{ kind: "stale_claim", severity: "advisory", excerpt: "baseflow index", message: "claim predates the latest run" },
+	],
+}))
+
+/** Audit UX: advisory findings only (no hard finding, no action). */
+export const answerAuditAdvisoryUxTask: AiHydroMessage[] = auditUxTask(
+	"The synthetic basin is a layout fixture. Fixture answer, not a result.",
+	(ts) => ({
+		v: 1,
+		stage: "final",
+		status: "violations",
+		sessionId: "fx-session-0001",
+		cited: 2,
+		total: 2,
+		hardCount: 0,
+		advisoryCount: 2,
+		schema: "graded",
+		attempt: 0,
+		answerTs: ts,
+		draftHash: FIXTURE_DRAFT_HASH,
+		violations: [
+			{ kind: "stale_claim", severity: "advisory", excerpt: "baseflow index", message: "claim predates the latest run" },
+			{
+				kind: "lit_unresolvable",
+				severity: "advisory",
+				excerpt: "design flow of the reach",
+				message: "passage not indexed",
+			},
+		],
+	}),
+)
+
+/** Audit UX: every number traced. */
+export const answerAuditCleanUxTask: AiHydroMessage[] = auditUxTask(
+	`The synthetic basin has a drainage area of 123.45 km² ${marker("run", "fx-run-0007#key_outputs.area_km2")}. Fixture answer, not a result.`,
+	(ts) => ({
+		v: 1,
+		stage: "final",
+		status: "passed",
+		sessionId: "fx-session-0001",
+		cited: 4,
+		total: 4,
+		hardCount: 0,
+		advisoryCount: 0,
+		schema: "graded",
+		attempt: 0,
+		answerTs: ts,
+		draftHash: FIXTURE_DRAFT_HASH,
+		violations: [],
+	}),
+)
+
 const gateHardFinding = {
 	kind: "untraced_number",
 	severity: "hard" as const,

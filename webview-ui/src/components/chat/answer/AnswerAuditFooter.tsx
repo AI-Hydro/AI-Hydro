@@ -1,15 +1,19 @@
 import { droppedEvidenceLines } from "@shared/aihydro/answerAuditGate"
-import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
-import React from "react"
+import { type AnswerAuditPayload, isCleanAudit } from "@shared/aihydro/transcriptContracts"
+import React, { useId, useState } from "react"
 import { DraftText, FindingsList, Icon, Unrevisable } from "../AnswerAuditSummary"
+import { auditSummaryView } from "./auditFindings"
+import { useTranscriptDetail } from "./useTranscriptDetail"
 
 /**
- * The audit footer of an answer card. One quiet line by default, with every disclosure the audit made kept visible
- * even when the findings list is collapsed. It states what the audit did, never that the answer is correct:
- *  - "passed" appears only when the audit ran and found nothing (`status === "passed"`); otherwise it says
- *    "numbers traced" (n of m figures matched to a recorded run);
+ * The audit footer of an answer card. One quiet line a reader can act on ("3 numbers aren't linked to a recorded
+ * run · Review"), collapsed, with every disclosure the audit made kept visible even then. It states what the audit
+ * did, never that the answer is correct:
+ *  - "All n numbers traced" / "Audit passed" appear only when the audit ran and found nothing (`status === "passed"`);
  *  - never coloured as a success: a finding or a non-run gets the warning icon, everything else stays muted;
+ *  - the expanded list is human-readable; the auditor's repair instructions and raw markers show only at Verbose;
  *  - held-back drafts are plain text (never markdown), so a draft's markers cannot become chips here.
+ * `auditFooterLine` is the technical form of the same line (Verbose, tests).
  */
 export function auditFooterLine(p: AnswerAuditPayload): string | undefined {
 	if (p.status === "skipped") {
@@ -36,8 +40,21 @@ export function auditHasViolations(p: AnswerAuditPayload | undefined): boolean {
 	return p.hardCount > 0 || (p.schema === "legacy" && p.violations.length > 0)
 }
 
-export const AnswerAuditFooter: React.FC<{ audit: AnswerAuditPayload }> = ({ audit }) => {
-	const line = auditFooterLine(audit)
+interface FooterProps {
+	audit: AnswerAuditPayload
+	/** Sends the follow-up that asks the agent to link the untraced numbers. Absent: the answer cannot be replied to. */
+	onAskToLink?: () => void
+	askSent?: boolean
+}
+
+const MUTED_BUTTON = "inline-flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0 text-xs text-left"
+
+export const AnswerAuditFooter: React.FC<FooterProps> = ({ audit, onAskToLink, askSent }) => {
+	const detail = useTranscriptDetail()
+	const verbose = detail === "verbose"
+	const [open, setOpen] = useState(false)
+	const bodyId = useId()
+	const summary = auditSummaryView(audit)
 	const draftHadHard = (audit.history ?? []).some((e) => e.hardCount > 0)
 	const disclosures = droppedEvidenceLines({
 		attempt: audit.attempt,
@@ -48,41 +65,98 @@ export const AnswerAuditFooter: React.FC<{ audit: AnswerAuditPayload }> = ({ aud
 	})
 	const findingsRemain = audit.disclosure?.kind === "findings_remain" && audit.disclosure.reason
 	const heldDrafts = (audit.history ?? []).filter((e) => e.draftText !== undefined)
-	const attention = audit.status === "unavailable" || audit.violations.length > 0 || disclosures.length > 0 || !!findingsRemain
 	const unrevisable = audit.unrevisableFindings ?? []
-	if (!line && audit.attempt === 0 && !findingsRemain && disclosures.length === 0 && unrevisable.length === 0) {
+	const notRun = audit.status === "unavailable" ? auditFooterLine(audit) : undefined
+	const clean = isCleanAudit(audit)
+	const cleanLine =
+		clean && detail !== "focus"
+			? audit.total !== undefined && audit.total > 0
+				? `All ${audit.total} ${audit.total === 1 ? "number" : "numbers"} traced`
+				: "Audit passed"
+			: undefined
+	if (
+		!summary &&
+		!notRun &&
+		!cleanLine &&
+		audit.attempt === 0 &&
+		!findingsRemain &&
+		disclosures.length === 0 &&
+		unrevisable.length === 0
+	) {
 		return null
 	}
+	const canAsk = !!onAskToLink && auditHasViolations(audit)
 	return (
 		<div
-			className="text-xs opacity-80 pt-1.5"
+			className="text-xs opacity-90 pt-1.5"
 			data-status={audit.status}
 			data-testid="answer-audit-footer"
 			style={{ borderTop: "1px solid var(--vscode-widget-border, var(--vscode-panel-border))" }}>
-			{line && (
+			{summary && (
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+					<button
+						aria-controls={bodyId}
+						aria-expanded={open}
+						className={MUTED_BUTTON}
+						data-tone={summary.tone}
+						onClick={() => setOpen((o) => !o)}
+						style={{ color: "var(--vscode-foreground)", minHeight: 24 }}
+						type="button">
+						<Icon attention={summary.tone === "warn"} />
+						<span className="ph-no-capture">{summary.text}</span>
+						<span aria-hidden="true">·</span>
+						<span className="underline">{open ? "Hide" : "Review"}</span>
+						<i aria-hidden="true" className={`codicon ${open ? "codicon-chevron-up" : "codicon-chevron-down"}`} />
+					</button>
+					{canAsk && (
+						<button
+							className={`${MUTED_BUTTON} underline`}
+							disabled={askSent}
+							onClick={onAskToLink}
+							style={{ color: "var(--vscode-textLink-foreground)", minHeight: 24 }}
+							title="Sends a follow-up asking AI-Hydro to cite each of these numbers with a recorded run, or remove it"
+							type="button">
+							{askSent ? "Asked AI-Hydro to link these" : "Ask AI-Hydro to link these"}
+						</button>
+					)}
+				</div>
+			)}
+			{cleanLine && (
+				<div className="opacity-80">
+					<span aria-hidden="true" className="codicon codicon-check mr-1 align-middle" />
+					<span className="ph-no-capture">{cleanLine}</span>
+				</div>
+			)}
+			{notRun && (
 				<div>
-					<Icon attention={attention} />
-					<span className="ph-no-capture">{line}</span>
+					<Icon attention />
+					<span className="ph-no-capture">{notRun}</span>
 				</div>
 			)}
 			{audit.attempt > 0 && (
-				<div className="ph-no-capture">
+				<div className="ph-no-capture opacity-80">
 					Shown after {audit.attempt} silent {audit.attempt === 1 ? "revision" : "revisions"} · audit revisions:{" "}
 					{audit.attempt} {audit.attempt === 1 ? "request" : "requests"}
 				</div>
 			)}
-			{findingsRemain && <div className="ph-no-capture">{audit.disclosure?.reason}</div>}
+			{findingsRemain && <div className="ph-no-capture opacity-80">{audit.disclosure?.reason}</div>}
 			{disclosures.map((l) => (
-				<div className="ph-no-capture" key={l}>
+				<div className="ph-no-capture opacity-80" key={l}>
 					{l}
 				</div>
 			))}
 			<Unrevisable findings={unrevisable} />
-			{audit.violations.length > 0 && (
-				<details className="mt-1">
-					<summary className="cursor-pointer select-none py-1.5">Show findings ({audit.violations.length})</summary>
-					<FindingsList label="Audit findings" violations={audit.violations} />
-				</details>
+			{summary && open && (
+				<div id={bodyId}>
+					<p className="mt-1 mb-0 opacity-80">
+						Numbers in an answer should trace to a recorded run so each can be checked.
+						{audit.total !== undefined && audit.cited !== undefined && audit.total > 0
+							? ` ${audit.cited} of ${audit.total} are traced.`
+							: ""}
+					</p>
+					<FindingsList label="Numbers to review" violations={audit.violations} />
+					{verbose && <div className="mt-1 opacity-70 ph-no-capture">{auditFooterLine(audit)}</div>}
+				</div>
 			)}
 			{heldDrafts.length > 0 && (
 				<details className="mt-1">
