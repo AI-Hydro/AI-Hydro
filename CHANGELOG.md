@@ -9,6 +9,18 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.5] — unreleased (owner feedback on 0.4.4: chat polish)
+
+### Fixed — file chips for images, PDFs and data files open instead of "Could not open file!" (branch `vision2040/polish-open-file`)
+
+Reported on the installed 0.4.4 build: clicking `hydrograph_01013500.png` or `watershed_01031500_map.png` in an answer showed "Could not open file!". Cause: `openFile` (`src/integrations/misc/open-file.ts`) sent every path to the text-document API, which rejects binary files, and its catch block discarded the reason.
+
+- Files are classified first. Images, PDF, audio and video open in VS Code's own viewer (`vscode.open`) in the editor. Text files still use the text-document API with the caller's `preserveFocus`/`preview`. Unknown extensions are sniffed (`isbinaryfile`).
+- GeoTIFF, netCDF, Parquet, HDF5, GeoPackage, NumPy, archives and office files have no VS Code viewer: they are selected in the Explorer and a message names the format ("dem.tif is a GeoTIFF raster, which VS Code cannot display...") instead of an error.
+- A missing file says `File not found: <path>`; any other failure says `Could not open <path>: <reason>`. Directories are revealed in the Explorer.
+- `file://` URIs and quoted paths are accepted. Chips now also match absolute paths, Windows drive paths and names with spaces (the host still checks that the file exists before showing a chip).
+- 15 unit tests (`src/integrations/misc/__tests__/open-file.test.ts`).
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)
