@@ -58,7 +58,7 @@ describe("tools status chip", () => {
 	it("untrusted: says so and asks the host to show the trust confirmation (the webview cannot trust by itself)", () => {
 		row({ phase: "ready", healthy: true, version: "2.8.2", trust: "untrusted" })
 		expect(screen.getByText("Tools 2.8.2 · healthy · not trusted")).toBeInTheDocument()
-		fireEvent.click(screen.getByRole("button", { name: "Trust this launcher" }))
+		fireEvent.click(screen.getByRole("button", { name: "Trust this launcher…" }))
 		expect(mock.run).toHaveBeenCalledWith(expect.objectContaining({ action: "trust" }))
 	})
 

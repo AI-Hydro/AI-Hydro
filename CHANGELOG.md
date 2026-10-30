@@ -9,6 +9,17 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.3] — unreleased (Trust UX: a way out of "paused: not the registered first-party server")
+
+### Fixed — AI-Hydro tools untrusted after the launcher moved, with no visible way to fix it (branch `vision2040/trust-ux`)
+
+- **One action, where trust is the reason.** "Trust this launcher…" now sits on the paused-grant card ("Always for X is paused"), under the transcript's "server not trusted" line, and under the header when the study is unavailable because the launcher is not confirmed. It only asks the host to show its modal confirmation (exact command and path); trust is recorded only after that confirmation, and nothing is trusted automatically. Fail-closed semantics are unchanged.
+- **Plain wording.** "AI-Hydro Tools is running from a new location (`<command>`). Your auto-run settings are paused until you confirm it." replaces "not the registered first-party server, or its launch identity changed". The study chip's tooltip says the same instead of "not connected".
+- **Stale record.** When the recorded launcher belongs to a disabled or removed server entry and exactly one enabled first-party entry exists, the tools status chip and the confirmation say "Previously trusted: ai-hydro (disabled)." The click is still required.
+- **The right entry.** The tools status and "Trust this launcher…" now look at the enabled first-party entry first. A disabled legacy `ai-hydro` entry no longer shadows the running `aihydro-tools` (the chip could read "trusted" while the real server was not).
+- **No silent pick between launchers.** The buttons send the server they are about; the host re-validates it (enabled, first-party name and shape) and ignores anything else. With no name and two or more enabled first-party launchers, you choose by exact command, and the dialog says another enabled launcher is registered. The dialog says "AI-Hydro previously recorded" (the first record is written at registration, not by a confirmation).
+- **Immediate.** After you confirm, auto-run grants apply to the next call, the servers list refreshes, and the study chip re-resolves, with no reload.
+
 ## [0.4.2] — unreleased (UX program Wave 1: projects on chats, chat titles, real Focus, project context, map provenance and map chrome; plus the abort-confirm guard and the Wave 0 leftovers)
 
 ### Changed — map chrome: a 40 px rail, three states, one panel width (UX program Wave 1, PR X1-M1, branch `vision2040/x1-m1-map-chrome`)

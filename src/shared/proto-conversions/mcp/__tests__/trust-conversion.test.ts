@@ -24,7 +24,7 @@ describe("MCP server trust state crosses to the webview", () => {
 			]
 			const back = convertProtoMcpServersToMcpServers(convertMcpServersToProtoMcpServers(servers))
 			expect(back.map((s) => s.trust?.trusted)).to.deep.equal([true, false, false])
-			expect(back[1].trust?.reason).to.include("'ai-hydro'")
+			expect(back[1].trust?.reason).to.include("running from a new location")
 			expect(back[2].trust?.reason).to.include("third-party")
 		} finally {
 			setRecordedFirstPartyLauncher(saved)

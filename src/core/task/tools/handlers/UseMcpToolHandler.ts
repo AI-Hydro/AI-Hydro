@@ -9,7 +9,7 @@ import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
-import { mcpAutoApproveDecision, mcpConnectionIdentity } from "../mcpAutoApprove"
+import { mcpAutoApproveDecision, mcpConnectionIdentity, pausedFixFor } from "../mcpAutoApprove"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import { repairMcpArgumentsString } from "../ToolInputRepair"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -141,7 +141,14 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			serverName: server_name,
 			toolName: tool_name,
 			arguments: mcp_arguments,
-			...(autoDecision.auto === false && autoDecision.granted ? { autoApprovePaused: autoDecision.pausedText } : {}),
+			...(autoDecision.auto === false && autoDecision.granted
+				? {
+						autoApprovePaused: autoDecision.pausedText,
+						...(pausedFixFor(server_name, autoDecision.reason)
+							? { autoApprovePausedFix: "trust_launcher" as const }
+							: {}),
+					}
+				: {}),
 		} satisfies AiHydroAskUseMcpServer)
 
 		const isToolAutoApproved = autoDecision.auto

@@ -7,9 +7,9 @@ import { getRecordedFirstPartyLauncher, setRecordedFirstPartyLauncher } from "@s
 import { expect } from "chai"
 import * as fs from "fs/promises"
 import { afterEach, beforeEach, describe, it } from "mocha"
-import sinon from "sinon"
 import * as os from "os"
 import * as path from "path"
+import sinon from "sinon"
 import { HostProvider } from "@/hosts/host-provider"
 
 /**
@@ -382,9 +382,10 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 			const r = await runHandler("read_tool")
 			expect(r.asked).to.equal(true)
 			expect(r.autoRan).to.equal(false)
-			expect(r.askPayload.autoApprovePaused).to.equal(
-				"Always for read_tool is paused: this server is not the registered first-party server, or its launch identity changed.",
+			expect(r.askPayload.autoApprovePaused).to.match(
+				/^Always for read_tool is paused\. AI-Hydro Tools is running from a new location \(`.+`\)\. Your auto-run settings are paused until you confirm it\.$/,
 			)
+			expect(r.askPayload.autoApprovePausedFix).to.equal("trust_launcher") // the card offers "Trust this launcher..."
 			expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"]) // (e)
 
 			// Restoring the record resumes the grant by itself: nothing was deleted.
@@ -392,12 +393,25 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 			expect((await runHandler("read_tool")).asked).to.equal(false)
 		})
 
+		it("(b) once the user confirms the launcher (record written), the paused grant auto-runs at once, no reload", async () => {
+			const recorded = getRecordedFirstPartyLauncher()!
+			setRecordedFirstPartyLauncher({ ...recorded, command: "/old/launcher/aihydro-mcp" })
+			expect((await runHandler("read_tool")).asked).to.equal(true)
+			// The confirmation path: recordFirstPartyLauncher persists AND installs the anchor in memory.
+			await recordFirstPartyLauncher(dir, recorded)
+			expect(mcpAutoApproveDecision(hub, "ai-hydro", "read_tool")).to.deep.equal({ auto: true })
+			const r = await runHandler("read_tool")
+			expect(r.asked).to.equal(false)
+			expect(r.autoRan).to.equal(true)
+		})
+
 		it("(b) a changed launchHash (env/cwd) also loses trust", async () => {
 			const recorded = getRecordedFirstPartyLauncher()!
 			setRecordedFirstPartyLauncher({ ...recorded, launchHash: "0".repeat(64) })
 			const r = await runHandler("read_tool")
 			expect(r.asked).to.equal(true)
-			expect(r.askPayload.autoApprovePaused).to.include("or its launch identity changed")
+			expect(r.askPayload.autoApprovePaused).to.include("Your auto-run settings are paused until you confirm it")
+			expect(r.askPayload.autoApprovePausedFix).to.equal("trust_launcher")
 		})
 
 		it("(c) the same grant asks after a reconnect in which the tool is annotated destructive", async () => {
@@ -407,6 +421,7 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 			expect(r.asked).to.equal(true)
 			expect(r.autoRan).to.equal(false)
 			expect(r.askPayload.autoApprovePaused).to.equal("Always for read_tool is paused: the tool is now marked destructive.")
+			expect(r.askPayload.autoApprovePausedFix).to.equal(undefined) // not a trust problem: no trust action
 			expect(await onDisk("ai-hydro")).to.deep.equal(["read_tool"]) // (e)
 		})
 
@@ -622,9 +637,11 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 				setRecordedFirstPartyLauncher({ ...getRecordedFirstPartyLauncher()!, command: "/some/other/python" })
 				const { callbacks, readResource } = await runResource("ai-hydro")
 				expect(callbacks.ask.calledOnce).to.equal(true)
-				expect(JSON.parse(callbacks.ask.firstCall.args[1]).autoApprovePaused).to.equal(
-					"Auto-run is off for this server: it is not the registered first-party server, or its launch identity changed.",
+				const payload = JSON.parse(callbacks.ask.firstCall.args[1])
+				expect(payload.autoApprovePaused).to.equal(
+					"Auto-run is off for this server because AI-Hydro has not confirmed where it runs from.",
 				)
+				expect(payload.autoApprovePausedFix).to.equal("trust_launcher")
 				expect(readResource.called).to.equal(false)
 			})
 		})

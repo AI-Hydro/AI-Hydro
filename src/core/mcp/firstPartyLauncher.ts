@@ -15,8 +15,8 @@ import {
 	setRecordedFirstPartyLauncher,
 } from "@shared/aihydro/firstPartyServers"
 import * as fs from "fs/promises"
-import { atomicWriteFile } from "./toolsEnv/atomicWrite"
 import * as path from "path"
+import { atomicWriteFile } from "./toolsEnv/atomicWrite"
 
 export const FIRST_PARTY_LAUNCHER_FILE = "aihydro_first_party_launcher.json"
 
@@ -65,6 +65,14 @@ export async function recordFirstPartyLauncher(settingsDir: string, launcher: Fi
 	setRecordedFirstPartyLauncher(launcher)
 }
 
+/** The `mcpServers` object of the settings file as the entries trust cares about. */
+export function settingsEntries(servers: Record<string, unknown>): SettingsServerEntry[] {
+	return Object.entries(servers ?? {}).map(([name, raw]) => {
+		const e = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
+		return { name, type: e.type, command: e.command, args: e.args, disabled: e.disabled, env: e.env, cwd: e.cwd }
+	})
+}
+
 export type FirstPartyAnchorMigrationOutcome = "none" | "renamed" | "confirmed" | "declined" | "ambiguous"
 
 /**
@@ -84,10 +92,7 @@ export async function migrateFirstPartyAnchor(
 		recorded: FirstPartyLauncher | undefined,
 	) => Promise<boolean>,
 ): Promise<FirstPartyAnchorMigrationOutcome> {
-	const entries: SettingsServerEntry[] = Object.entries(servers ?? {}).map(([name, raw]) => {
-		const e = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
-		return { name, type: e.type, command: e.command, args: e.args, disabled: e.disabled, env: e.env, cwd: e.cwd }
-	})
+	const entries = settingsEntries(servers)
 	const recorded = (await readFirstPartyLauncher(settingsDir)) ?? undefined
 	const plan = planFirstPartyAnchor(entries, recorded)
 	switch (plan.action) {
