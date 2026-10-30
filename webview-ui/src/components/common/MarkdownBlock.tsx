@@ -2,12 +2,14 @@ import { AIHYDRO_MARKER_SOURCE, markerChipProperties, markerFromMatch } from "@s
 import { StringRequest } from "@shared/proto/cline/common"
 import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/cline/state"
 import type { ComponentProps } from "react"
-import React, { memo, useEffect, useRef } from "react"
+import React, { memo, useContext, useEffect, useRef } from "react"
 import { useRemark } from "react-remark"
 import rehypeHighlight, { Options } from "rehype-highlight"
 import styled from "styled-components"
 import type { Node } from "unist"
 import { visit } from "unist-util-visit"
+import { markUntracedNumbers } from "@/components/chat/answer/auditFindings"
+import { planKey, UntracedNumber, UntracedPlanContext } from "@/components/chat/answer/UntracedNumber"
 import { ClaimChip } from "@/components/chat/ClaimChip"
 import { LitChip, RunChip } from "@/components/chat/RunChip"
 import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
@@ -424,6 +426,12 @@ const remarkFilePathDetection = () => {
 }
 
 const MarkdownBlock = memo(({ markdown, compact }: MarkdownBlockProps) => {
+	// Numbers the answer audit could not trace (provided by the answer card; absent everywhere else). useRemark keeps the
+	// options of its first render, so the plugin reads the current plan through a ref and a change re-processes the text.
+	const untraced = useContext(UntracedPlanContext)
+	const untracedRef = useRef(untraced)
+	untracedRef.current = untraced
+	const untracedKey = planKey(untraced)
 	const [reactContent, setMarkdown] = useRemark({
 		remarkPlugins: [
 			remarkAiHydroMarkers,
@@ -431,6 +439,11 @@ const MarkdownBlock = memo(({ markdown, compact }: MarkdownBlockProps) => {
 			remarkUrlToLink,
 			remarkHighlightActMode,
 			remarkFilePathDetection,
+			() => (tree: Node) => {
+				if (untracedRef.current) {
+					markUntracedNumbers(tree as any, untracedRef.current)
+				}
+			},
 			() => {
 				return (tree) => {
 					visit(tree, "code", (node: any) => {
@@ -488,6 +501,16 @@ const MarkdownBlock = memo(({ markdown, compact }: MarkdownBlockProps) => {
 					return <code {...props} />
 				},
 				strong: (props: ComponentProps<"strong"> & { [key: string]: any }) => {
+					if (props["data-untraced"]) {
+						return (
+							<UntracedNumber
+								jsonPath={props["data-untraced-path"]}
+								runId={props["data-untraced-run"]}
+								status={props["data-untraced-status"] ?? "Not linked to a run"}>
+								{props.children}
+							</UntracedNumber>
+						)
+					}
 					// AI-Hydro chip types (from remarkAiHydroMarkers plugin via data.hProperties)
 					const chipType = props["data-chip-type"]
 					if (chipType === "run") {
@@ -535,7 +558,7 @@ const MarkdownBlock = memo(({ markdown, compact }: MarkdownBlockProps) => {
 
 	useEffect(() => {
 		setMarkdown(markdown || "")
-	}, [markdown, setMarkdown])
+	}, [markdown, setMarkdown, untracedKey])
 
 	return (
 		<div>

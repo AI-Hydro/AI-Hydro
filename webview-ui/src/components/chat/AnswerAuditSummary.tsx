@@ -6,6 +6,8 @@ import {
 	parseAnswerAuditPayload,
 } from "@shared/aihydro/transcriptContracts"
 import React, { useState } from "react"
+import { runHintText, viewFinding } from "./answer/auditFindings"
+import { useTranscriptDetail } from "./answer/useTranscriptDetail"
 
 /**
  * Interim renderer for the structured `answer_audit` say (W2-B-host). One quiet summary line with an expandable
@@ -58,36 +60,62 @@ export const bySeverity = (violations: readonly AnswerAuditViolation[]): AnswerA
 		.sort((a, b) => SEVERITY_RANK[a.v.severity] - SEVERITY_RANK[b.v.severity] || a.i - b.i)
 		.map((x) => x.v)
 
-export const FindingsList: React.FC<{ violations: AnswerAuditViolation[]; label: string }> = ({ violations, label }) => (
-	<ol aria-label={label} className="mt-1 pl-5 list-decimal space-y-1 max-h-64 overflow-auto" tabIndex={0}>
-		{bySeverity(violations).map((v, i) => (
-			<li className="ph-no-capture" key={`${v.kind}-${i}`}>
-				<code>{v.kind}</code>
-				{v.severity !== "unknown" && <span> [{v.severity}]</span>}
-				{v.excerpt && <span> "{v.excerpt.replace(/\s+/g, " ").slice(0, 120)}"</span>}
-				{v.message && (
-					<span>
-						{" "}
-						<Capped text={v.message} />
-					</span>
-				)}
-				{v.fixHint && (
+/**
+ * One finding for a reader: the number, what is wrong with its link, and the text around it. The auditor's text is
+ * addressed to the agent, so its fix hint and raw marker appear only at Verbose.
+ */
+export const FindingRow: React.FC<{ violation: AnswerAuditViolation; verbose: boolean }> = ({ violation: v, verbose }) => {
+	const f = viewFinding(v)
+	return (
+		<li className="ph-no-capture" data-testid="audit-finding">
+			{f.quantity && <strong className="font-mono">{f.quantity}</strong>}
+			{f.quantity && " "}
+			<span>{f.quantity ? `· ${f.status}` : f.status}</span>
+			{v.severity === "advisory" && <span className="opacity-70"> (note)</span>}
+			{f.context && <div className="opacity-70">{f.context}</div>}
+			{f.runHint && <div className="opacity-70">{runHintText(f.runHint)}</div>}
+			{verbose && (
+				<>
 					<div>
-						Fix:{" "}
-						<code>
-							<Capped text={v.fixHint} />
-						</code>
+						<code>{v.kind}</code>
+						{v.severity !== "unknown" && <span> [{v.severity}]</span>}
+						{v.excerpt && <span> "{v.excerpt.replace(/\s+/g, " ").slice(0, 120)}"</span>}
+						{v.message && (
+							<span>
+								{" "}
+								<Capped text={v.message} />
+							</span>
+						)}
 					</div>
-				)}
-				{v.suggestedMarker && (
-					<div>
-						Marker: <code>{v.suggestedMarker}</code>
-					</div>
-				)}
-			</li>
-		))}
-	</ol>
-)
+					{v.fixHint && (
+						<div>
+							Fix:{" "}
+							<code>
+								<Capped text={v.fixHint} />
+							</code>
+						</div>
+					)}
+					{v.suggestedMarker && (
+						<div>
+							Marker: <code>{v.suggestedMarker}</code>
+						</div>
+					)}
+				</>
+			)}
+		</li>
+	)
+}
+
+export const FindingsList: React.FC<{ violations: AnswerAuditViolation[]; label: string }> = ({ violations, label }) => {
+	const verbose = useTranscriptDetail() === "verbose"
+	return (
+		<ol aria-label={label} className="mt-1 pl-5 list-decimal space-y-1.5 max-h-64 overflow-auto" tabIndex={0}>
+			{bySeverity(violations).map((v, i) => (
+				<FindingRow key={`${v.kind}-${i}`} verbose={verbose} violation={v} />
+			))}
+		</ol>
+	)
+}
 
 /** A held-back draft: plain text, never rendered as markdown (so a draft's markers cannot become chips here). */
 export const DraftText: React.FC<{ text: string; truncated?: boolean; label: string }> = ({ text, truncated, label }) => (
