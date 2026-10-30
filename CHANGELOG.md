@@ -9,6 +9,17 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.5] — unreleased (navigation polish: every sidebar sub-view in the harness, shared nav primitives, accessible Settings)
+
+### Changed — fewer lightbulb actions, a status bar that names the product, and a study item (Nav-6, branch `vision2040/nav-6`)
+
+From the navigation audit (N15, N16). AI-Hydro's code-action provider was registered for every file (`"*"`), so the editor lightbulb offered "Add to AI-Hydro", "Explain with AI-Hydro" and "Improve with AI-Hydro" on every line of every file type, and the status bar said only `Tools 2.8.1` beside other extensions' items.
+
+- **The lightbulb appears in Python, R and Jupyter documents only** (notebook cells are Python or R documents). It offers "Add to AI-Hydro" and "Explain with AI-Hydro"; "Fix with AI-Hydro" appears only when the editor reports a problem on the range, in Python and R. **"Improve with AI-Hydro" is gone from the lightbulb** (it offered to rewrite a researcher's analysis on any selection). The commands stay in the command palette, and "Add to AI-Hydro" stays on its keybinding and the editor context menu, so nothing is unreachable. Data files (CSV, JSON) no longer get a lightbulb; use the context menu or the keybinding there.
+- **The tools status item reads `AI-Hydro tools 2.8.1`** (the version is the tools package's, so it says "tools"; the icon still carries ok, busy, warning or error, and the warning background is unchanged).
+- **A study item** appears beside it, only while the current chat is bound to a study: `$(location) <study name>`, with an accessible name and a tooltip. It hides when the chat has no study or is cleared. Clicking it takes you to the chat input; it does not open the study picker (that lives in the chat header chip). Needs the installed build to see.
+- 11 new tests (languages and the selector, Fix gating, no "Improve" string, status text in every phase, the study item's show, hide, no-repaint and throwing-sink cases).
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)

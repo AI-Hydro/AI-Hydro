@@ -7,12 +7,15 @@ import { describeToolsStatus, TOOLS_ACTION_LABEL, type ToolsEnvAction, type Tool
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as vscode from "vscode"
+import { setStudyStatusSink } from "@/core/controller/ui/studyStatus"
 import { atomicWriteFile } from "@/core/mcp/toolsEnv/atomicWrite"
 import { setToolsEnvController } from "@/core/mcp/toolsEnv/instance"
 import { createNodeToolsEnvDeps } from "@/core/mcp/toolsEnv/nodeDeps"
 import type { ToolsEnvConfig, ToolsEnvHost } from "@/core/mcp/toolsEnv/ToolsEnvController"
 import { ToolsEnvController } from "@/core/mcp/toolsEnv/ToolsEnvController"
 import { ExtensionRegistryInfo } from "@/registry"
+import { studyStatusText } from "./studyStatusText"
+import { statusBarText } from "./toolsStatusText"
 
 const commands = ExtensionRegistryInfo.commands
 const TOOLS_COMMANDS = {
@@ -34,40 +37,6 @@ function readConfig(): ToolsEnvConfig {
 		venvPath: (cfg.get<string>("venvPath") ?? "").trim(),
 		pythonPaths: python ? [python] : [],
 		autoInstall: cfg.get<boolean>("autoInstall") ?? true,
-	}
-}
-
-export function statusBarText(s: ToolsEnvStatus): { text: string; tooltip: string; warn: boolean } {
-	const model = describeToolsStatus(s)
-	const icon =
-		model.tone === "busy"
-			? "$(sync~spin)"
-			: model.tone === "ok"
-				? "$(check)"
-				: model.tone === "warn"
-					? "$(warning)"
-					: "$(error)"
-	const v = s.version ? ` ${s.version}` : ""
-	const short =
-		s.phase === "ready" && s.trust === "trusted"
-			? `Tools${v}`
-			: s.phase === "ready"
-				? `Tools${v} untrusted`
-				: s.phase === "installing"
-					? "Tools installing"
-					: s.phase === "checking"
-						? "Tools checking"
-						: s.phase === "failed"
-							? "Tools failed"
-							: s.phase === "unhealthy"
-								? "Tools unhealthy"
-								: s.phase === "custom"
-									? "Tools custom"
-									: "Tools missing"
-	return {
-		text: `${icon} ${short}`,
-		tooltip: `${model.label}\n${model.detail}`.trim(),
-		warn: model.tone === "warn" || model.tone === "error",
 	}
 }
 
@@ -204,10 +173,28 @@ export function createVscodeToolsEnv(
 	paint(controller.getStatus())
 	item.show()
 
+	// The chat's bound study, beside the tools item. Hidden unless the current chat is bound; a click goes to the chat.
+	const studyItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -1)
+	studyItem.command = commands.FocusChatInput
+	studyItem.name = "AI-Hydro study"
+	setStudyStatusSink((study) => {
+		if (!study) {
+			studyItem.hide()
+			return
+		}
+		const t = studyStatusText(study)
+		studyItem.text = t.text
+		studyItem.tooltip = t.tooltip
+		studyItem.accessibilityInformation = { label: t.accessibility, role: "button" }
+		studyItem.show()
+	})
+
 	const run = (action: ToolsEnvAction) => () => controller.runAction(action)
 	context.subscriptions.push(
 		channel,
 		item,
+		studyItem,
+		{ dispose: () => setStudyStatusSink(undefined) },
 		controller.onDidChange(paint),
 		vscode.commands.registerCommand(TOOLS_COMMANDS.install, run("install")),
 		vscode.commands.registerCommand(TOOLS_COMMANDS.repair, run("repair")),
