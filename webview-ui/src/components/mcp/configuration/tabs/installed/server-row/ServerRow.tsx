@@ -22,7 +22,7 @@ import {
 	VSCodePanelTab,
 	VSCodePanelView,
 } from "@vscode/webview-ui-toolkit/react"
-import { useCallback, useState } from "react"
+import { type CSSProperties, useCallback, useId, useState } from "react"
 import DangerButton from "@/components/common/DangerButton"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { McpServiceClient } from "@/services/grpc-client"
@@ -31,6 +31,60 @@ import McpResourceRow from "./McpResourceRow"
 import McpToolRow from "./McpToolRow"
 
 // constant JSX.Elements
+const STATUS_LABEL: Record<McpServer["status"], string> = {
+	connected: "Connected",
+	connecting: "Connecting",
+	disconnected: "Disconnected",
+}
+
+/** The name area: fills the row, left-aligned, a button when the row can expand. */
+const nameStyle: CSSProperties = {
+	flex: 1,
+	minWidth: 0,
+	display: "flex",
+	alignItems: "center",
+	gap: "8px",
+	minHeight: "24px",
+	padding: 0,
+	marginRight: "4px",
+	border: 0,
+	background: "transparent",
+	color: "inherit",
+	font: "inherit",
+	textAlign: "left",
+}
+/** A 28 x 24 hit area around a 24 x 12 track, so the switch meets the 24 px target size. */
+const switchStyle: CSSProperties = {
+	display: "flex",
+	alignItems: "center",
+	justifyContent: "center",
+	width: "28px",
+	height: "24px",
+	marginLeft: "8px",
+	padding: 0,
+	border: 0,
+	background: "transparent",
+	cursor: "pointer",
+	flexShrink: 0,
+}
+const switchTrack: CSSProperties = {
+	position: "relative",
+	width: "26px",
+	height: "14px",
+	boxSizing: "border-box",
+	border: "1px solid",
+	borderRadius: "7px",
+	transition: "background-color 0.2s",
+}
+const switchKnob: CSSProperties = {
+	position: "absolute",
+	top: "2px",
+	width: "8px",
+	height: "8px",
+	borderRadius: "50%",
+	transition: "left 0.2s",
+}
+
 const TimeoutOptions = [
 	{ value: "30", label: "30 seconds" },
 	{ value: "60", label: "1 minute" },
@@ -69,6 +123,9 @@ const ServerRow = ({
 				return "var(--vscode-testing-iconFailed)"
 		}
 	}, [])
+
+	const detailsId = useId()
+	const displayName = getMcpServerDisplayName(server.name, mcpMarketplaceCatalog)
 
 	const handleRowClick = () => {
 		if (!server.error && isExpandable) {
@@ -207,37 +264,36 @@ const ServerRow = ({
 	return (
 		<div style={{ marginBottom: "10px" }}>
 			<div
-				onClick={handleRowClick}
 				style={{
 					display: "flex",
 					alignItems: "center",
 					padding: "8px",
 					background: "var(--vscode-textCodeBlock-background)",
-
-					cursor: server.error ? "default" : isExpandable ? "pointer" : "default",
 					borderRadius: isExpanded || server.error || server.trust ? "4px 4px 0 0" : "4px",
 					opacity: server.disabled ? 0.6 : 1,
 				}}>
-				{!server.error && isExpandable && (
-					<span className={`codicon codicon-chevron-${isExpanded ? "down" : "right"}`} style={{ marginRight: "8px" }} />
+				{/* The name is the control that opens the row: a real button, so the keyboard can expand it. */}
+				{!server.error && isExpandable ? (
+					<button
+						aria-controls={isExpanded ? detailsId : undefined}
+						aria-expanded={isExpanded}
+						onClick={handleRowClick}
+						style={{ ...nameStyle, cursor: "pointer" }}
+						type="button">
+						<span aria-hidden="true" className={`codicon codicon-chevron-${isExpanded ? "down" : "right"}`} />
+						<span style={{ wordBreak: "break-all" }}>{displayName}</span>
+					</button>
+				) : (
+					<span style={nameStyle}>
+						<span style={{ wordBreak: "break-all" }}>{displayName}</span>
+					</span>
 				)}
-				<span
-					style={{
-						flex: 1,
-						overflow: "hidden",
-						wordBreak: "break-all",
-						whiteSpace: "normal",
-						display: "flex",
-						alignItems: "center",
-						marginRight: "4px",
-					}}>
-					{getMcpServerDisplayName(server.name, mcpMarketplaceCatalog)}
-				</span>
 				{/* Collapsed view controls */}
 				{!server.error && (
 					<div style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "8px" }}>
 						<VSCodeButton
 							appearance="icon"
+							aria-label={`Restart ${displayName}`}
 							disabled={server.status === "connecting" || isRestarting}
 							onClick={(e) => {
 								e.stopPropagation()
@@ -249,6 +305,7 @@ const ServerRow = ({
 						{hasTrashIcon && (
 							<VSCodeButton
 								appearance="icon"
+								aria-label={`Delete ${displayName}`}
 								disabled={isDeleting}
 								onClick={(e) => {
 									e.stopPropagation()
@@ -260,56 +317,47 @@ const ServerRow = ({
 						)}
 					</div>
 				)}
-				{/* Toggle Switch */}
-				<div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", marginLeft: "8px" }}>
-					<div
-						aria-checked={!server.disabled}
-						onClick={() => {
-							handleToggleMcpServer()
-						}}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault()
-								handleToggleMcpServer()
-							}
-						}}
-						role="switch"
+				{/* Enable switch: a 24 px target with a name, neutral colours (green means approved claims elsewhere). */}
+				<button
+					aria-checked={!server.disabled}
+					aria-label={`Enable ${displayName}`}
+					onClick={handleToggleMcpServer}
+					role="switch"
+					style={switchStyle}
+					title={server.disabled ? `Enable ${displayName}` : `Disable ${displayName}`}
+					type="button">
+					<span
+						aria-hidden="true"
 						style={{
-							width: "20px",
-							height: "10px",
-							backgroundColor: server.disabled
-								? "var(--vscode-titleBar-inactiveForeground)"
-								: "var(--vscode-testing-iconPassed)",
-							borderRadius: "5px",
-							position: "relative",
-							cursor: "pointer",
-							transition: "background-color 0.2s",
-							opacity: server.disabled ? 0.5 : 0.9,
-						}}
-						tabIndex={0}>
-						<div
+							...switchTrack,
+							background: server.disabled ? "var(--vscode-input-background)" : "var(--vscode-button-background)",
+							borderColor: server.disabled
+								? "var(--vscode-checkbox-border, currentColor)"
+								: "var(--vscode-button-background)",
+						}}>
+						<span
 							style={{
-								width: "6px",
-								height: "6px",
-								backgroundColor: "white",
-								border: "1px solid color-mix(in srgb, #666666 65%, transparent)",
-								borderRadius: "50%",
-								position: "absolute",
-								top: "1px",
-								left: server.disabled ? "2px" : "12px",
-								transition: "left 0.2s",
+								...switchKnob,
+								left: server.disabled ? "2px" : "14px",
+								background: server.disabled
+									? "var(--vscode-foreground)"
+									: "var(--vscode-button-foreground, #fff)",
 							}}
 						/>
-					</div>
-				</div>
-				<div
+					</span>
+				</button>
+				<span
+					aria-label={STATUS_LABEL[server.status]}
+					role="img"
 					style={{
 						width: "8px",
 						height: "8px",
 						borderRadius: "50%",
 						background: getStatusColor(server.status),
 						marginLeft: "8px",
+						flexShrink: 0,
 					}}
+					title={STATUS_LABEL[server.status]}
 				/>
 			</div>
 
@@ -380,6 +428,7 @@ const ServerRow = ({
 			) : (
 				isExpanded && (
 					<div
+						id={detailsId}
 						style={{
 							background: "var(--vscode-textCodeBlock-background)",
 							padding: "0 10px 10px 10px",

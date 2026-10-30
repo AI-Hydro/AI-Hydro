@@ -10,6 +10,57 @@
 		}
 	},
 	"screens": {
+		"mcp-configure": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 1,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"mcp-installed-unhealthy": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 1,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"mcp-marketplace": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 5,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 36,
+				"smallText": 30,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"chat-history-list": {
 			"ref": {
 				"noName": 0,
@@ -39,40 +90,6 @@
 				"smallTarget": 48,
 				"smallText": 168,
 				"contrast": 210,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"mcp-configure": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 2,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 12,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"mcp-marketplace": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 6,
-				"smallText": 5,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 36,
-				"smallText": 30,
-				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -3727,7 +3744,7 @@
 				"mcp-configure": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 12,
+						"smallTarget": 6,
 						"smallText": 0,
 						"contrast": 0,
 						"contrastIndeterminate": 0
@@ -3828,6 +3845,16 @@
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"mcp-installed-unhealthy": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 6,
 						"smallText": 0,
 						"contrast": 0,
 						"contrastIndeterminate": 0

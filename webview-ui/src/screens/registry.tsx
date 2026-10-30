@@ -943,12 +943,29 @@ export const screens: ScreenDef[] = [
 	}),
 	navView(
 		"mcp-configure",
-		"MCP servers: Configure tab with servers",
-		() => <McpView initialTab="configure" onDone={() => {}} />,
+		"MCP servers: Installed tab with servers and the tools status",
+		() => <McpView onDone={() => {}} />,
 		{
 			mcpServers: fixtureMcpServers,
+			toolsEnv: { phase: "ready", healthy: true, version: "2.8.2", trust: "trusted", serverName: "ai-hydro" },
+			// N12: Installed is the first tab, the tools status sits above the servers, the switch has a name.
+			expectVisible: [
+				"[role=tab][aria-selected=true]:has-text('Installed')",
+				"[data-testid=tools-status]",
+				"[role=switch][aria-label^='Enable ']",
+			],
 		},
 	),
+	navView("mcp-installed-unhealthy", "MCP servers: Installed tab with unhealthy tools", () => <McpView onDone={() => {}} />, {
+		mcpServers: fixtureMcpServers,
+		toolsEnv: {
+			phase: "unhealthy",
+			version: "2.8.1",
+			message: "aihydro-mcp did not complete the MCP handshake: the server exited (code 1)",
+			errorCode: "UNHEALTHY",
+		},
+		expectVisible: ["[data-testid=tools-status]", "text=unhealthy"],
+	}),
 	navView("mcp-marketplace", "MCP servers: Marketplace tab", () => <McpView initialTab="marketplace" onDone={() => {}} />, {
 		state: { mcpMarketplaceEnabled: true },
 		catalogues: { mcpMarketplace: fixtureMcpMarketplace },

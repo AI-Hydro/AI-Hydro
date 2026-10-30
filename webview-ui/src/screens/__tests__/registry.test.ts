@@ -110,6 +110,7 @@ describe("screen harness registry", () => {
 				"settings-about",
 				"settings-keyboard",
 				"mcp-configure",
+				"mcp-installed-unhealthy",
 				"mcp-marketplace",
 				"connectors",
 				"skills",

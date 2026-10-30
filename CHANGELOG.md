@@ -42,6 +42,17 @@ Found in the navigation audit (N3, N14). Below 500 px, the width the sidebar usu
 - **The view-title buttons show which view is open.** The webview reports the sidebar view it is showing (new `setSidebarView` call), the host sets the `aihydro.sidebarView` context key, and the History, Settings, Hydro Tools & Data Sources, External Connectors and Skills commands read it with `toggled` clauses (the key resets to "chat" when the sidebar is disposed; an unknown value counts as "chat" so no button stays stuck). Needs the installed build to see: the toggle is VS Code UI.
 - **Harness.** The `settings-*` screens now assert the named tab list, the selected tab and the panel at every width; new `settings-keyboard` presses ArrowDown twice and asserts the third section is selected. Budgets: `connectors` 8 to 7 small targets and the MCP, Skills and History headers shrink at the reference cell; nothing rose. 5 new Settings tests, 5 host tests for the context key and the `toggled` clauses.
 
+### Changed — Hydro Tools & Data Sources: Installed first, real tabs, a named switch, the tools status (F-MCP1, branch `vision2040/f-mcp1`, stacked on Nav-3)
+
+From the navigation audit (N12). The view had three names ("Hydro Tools & Data Sources" in the palette, "MCP Servers" as its title and in the Navbar), tabs that were styled buttons with no tab semantics, rows you could only expand with the mouse, an unnamed 20 x 10 px on/off switch coloured green (the colour reserved for approved claims), and nothing that said whether the tools were healthy.
+
+- **Installed is the first tab and the one that opens** (it used to open on Marketplace when that was enabled): what is already connected is what people come to check. Tabs are Installed, Marketplace, Remote servers, on the `Tabs` primitive (arrow keys, Home, End, named list).
+- **The tools status sits above the servers**: the same row as the chat home and Welcome (version, healthy, trusted, and the Repair or Trust action that fits), so the answer to "is it working" is in the view the palette sends you to.
+- **Each server's name is a button** that says whether its details are open (`aria-expanded`), so the keyboard can open a row.
+- **The enable switch is a named button** ("Enable ai-hydro"), has a 28 x 24 px target, and uses the theme's button colour, not green. Restart and Delete name their server; the status dot has a text name (Connected, Connecting, Disconnected).
+- **One name:** "Hydro Tools & Data Sources" for the view title and the Navbar tooltip, recorded in `docs/ui-naming.md`.
+- Harness: `mcp-configure` now opens the default tab and asserts Installed, the status row and the named switch; new `mcp-installed-unhealthy` asserts the status row shows the unhealthy state beside the server list. 10 new tests.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)

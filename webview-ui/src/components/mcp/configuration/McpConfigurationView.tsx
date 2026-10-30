@@ -5,7 +5,7 @@ import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mc
 import { useEffect, useState } from "react"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { SubviewHeader } from "@/design"
+import { SubviewHeader, type TabItem, TabPanel, Tabs } from "@/design"
 import { McpServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import AddRemoteServerForm from "./tabs/add-server/AddRemoteServerForm"
@@ -19,7 +19,14 @@ type McpViewProps = {
 
 const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 	const { mcpMarketplaceEnabled, setMcpServers, environment } = useExtensionState()
-	const [activeTab, setActiveTab] = useState<McpViewTab>(initialTab || (mcpMarketplaceEnabled ? "marketplace" : "configure"))
+	// Installed servers first: what is already connected is what the user came to check; browsing is the second step.
+	const [activeTab, setActiveTab] = useState<McpViewTab>(initialTab || "configure")
+
+	const tabs: TabItem[] = [
+		{ id: "configure", label: "Installed" },
+		...(mcpMarketplaceEnabled ? [{ id: "marketplace", label: "Marketplace" }] : []),
+		{ id: "addRemote", label: "Remote servers" },
+	]
 
 	const handleTabChange = (tab: McpViewTab) => {
 		setActiveTab(tab)
@@ -69,35 +76,30 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 				display: "flex",
 				flexDirection: "column",
 			}}>
-			<SubviewHeader onClose={onDone} title="MCP Servers" titleColor={getEnvironmentColor(environment)} />
+			<SubviewHeader onClose={onDone} title="Hydro Tools & Data Sources" titleColor={getEnvironmentColor(environment)} />
 
 			<div style={{ flex: 1, overflow: "auto" }}>
-				{/* Tabs container */}
-				<div
-					style={{
-						display: "flex",
-						gap: "1px",
-						padding: "0 20px 0 20px",
-						borderBottom: "1px solid var(--vscode-panel-border)",
-					}}>
-					{mcpMarketplaceEnabled && (
-						<TabButton isActive={activeTab === "marketplace"} onClick={() => handleTabChange("marketplace")}>
-							Marketplace
-						</TabButton>
-					)}
-					<TabButton isActive={activeTab === "addRemote"} onClick={() => handleTabChange("addRemote")}>
-						Remote Servers
-					</TabButton>
-					<TabButton isActive={activeTab === "configure"} onClick={() => handleTabChange("configure")}>
-						Configure
-					</TabButton>
+				<div style={{ padding: "0 20px" }}>
+					<Tabs
+						idBase="mcp"
+						items={tabs}
+						label="Hydro tools and data sources sections"
+						onValueChange={(id) => handleTabChange(id as McpViewTab)}
+						value={activeTab}
+					/>
 				</div>
 
 				{/* Content container */}
 				<div style={{ width: "100%" }}>
-					{mcpMarketplaceEnabled && activeTab === "marketplace" && <McpMarketplaceView />}
-					{activeTab === "addRemote" && <AddRemoteServerForm onServerAdded={() => handleTabChange("configure")} />}
-					{activeTab === "configure" && <ConfigureServersView />}
+					<TabPanel idBase="mcp" selected={activeTab === "configure"} tab="configure">
+						<ConfigureServersView />
+					</TabPanel>
+					<TabPanel idBase="mcp" selected={!!mcpMarketplaceEnabled && activeTab === "marketplace"} tab="marketplace">
+						<McpMarketplaceView />
+					</TabPanel>
+					<TabPanel idBase="mcp" selected={activeTab === "addRemote"} tab="addRemote">
+						<AddRemoteServerForm onServerAdded={() => handleTabChange("configure")} />
+					</TabPanel>
 				</div>
 			</div>
 		</div>
