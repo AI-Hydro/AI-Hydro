@@ -37,6 +37,27 @@ context menu).
 A step may be `{ click, optional: true }`: it is skipped when the control is absent. Map screens use it to open the same
 tool through a rail button (800 px and up) or the collapsed "Map tools" menu (below 600 px).
 
+## Sharding (CI)
+
+The CI matrix (about 120 screens, 700+ cells) does not fit one job's time limit, so `.github/workflows/ui-screens.yml`
+splits the render step over `SHARD_COUNT` (4) parallel jobs.
+
+- `--shard i/n` (1-based) renders and checks only one slice of the registry: screens sorted by id, then every n-th
+  starting at i. Slices are disjoint and exhaustive, differ in size by at most one screen, and do not depend on
+  registry order. Each shard logs its screen ids and writes `<out>/shard.json` (`shard`, `of`, `screens`, `registry`).
+- A shard is a full-run check, not a `--screens` subset: the budget must still list exactly the registered screens,
+  and `--require-matrix-budget` plus the per-screen and per-matrix budgets apply to every screen in the shard.
+- `--list [file]` prints the registered screen ids as JSON (`{"screens": [...]}`) and exits without rendering.
+- The one-time steps (budget may only shrink, harness self-test, webview build, bundle guards, registry listing) run
+  once in the `guards` job, not per shard.
+- The `Screens, budget and bundle guard` job (same name as before the split) `needs` both and fails if any of them
+  failed, was cancelled or was skipped. It then runs `check-shard-coverage.mjs`, which compares the independently
+  listed registry with the shards' `shard.json` records and fails if a screen was covered by no shard or by two,
+  a shard report is missing, the shards disagree on `n`, or the number of reports differs from `SHARD_COUNT`.
+  A screen therefore cannot silently fall out of every shard.
+- To add capacity, extend the matrix `shard` list and `SHARD_COUNT` together. Partition and coverage logic is
+  self-tested without a browser in `shard.selftest.mjs` (`npm run ui:screens:selftest`).
+
 ## `--check` and the budget
 
 `webview-ui/screens-baseline/checker-budget.json` holds per-screen counts that may only shrink
