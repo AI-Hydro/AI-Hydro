@@ -9,7 +9,19 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [Unreleased]
+## [0.4.5] — unreleased (navigation polish: every sidebar sub-view in the harness, shared nav primitives, accessible Settings)
+
+### Added — `@/design` navigation primitives: Tabs, Toolbar, RailButton, Menu, SubviewHeader (Nav-2, branch `vision2040/nav-2`)
+
+Five navigation surfaces each hand-rolled their own tabs, icon buttons, menus and "Done" header, and only the map rail had real keyboard support. The shared pieces now exist in `webview-ui/src/design`; nothing outside the design gallery uses them yet (Settings adopts them in Nav-3), so users see no change.
+
+- **`Tabs` / `TabPanel`**: WAI-ARIA tabs. A labelled `tablist`, one tab stop on the selected tab, arrow keys move and select (Up/Down when vertical), Home and End jump, disabled tabs are skipped, a visible focus ring. An icon-only tab keeps its name as `aria-label` and tooltip, so a narrow sidebar is no longer unnamed.
+- **`Toolbar`**: `role="toolbar"` with a roving tab index (one tab stop, arrows, Home, End). The map rail had no toolbar semantics.
+- **`RailButton`**: a 32 px icon button with a mandatory label; a toggle sets `aria-pressed`, a menu trigger `aria-expanded`; a button that cannot act stays focusable, `aria-disabled`, with its reason as tooltip and description; a capped badge.
+- **`Menu`**: the map rail's "More" menu extracted (arrows, Home, End, Escape returns focus, Tab or a click elsewhere closes, disabled items state why). The map rail still uses its own copy; moving it over belongs to the map lane.
+- **`SubviewHeader`**: the title and one Done button every sidebar sub-view needs, and Escape closes the view unless a menu, dialog, listbox or text field has taken the key.
+- Labels are required by the types (`@ts-expect-error` tests), and 25 new tests cover the keyboard paths. The gallery screen `design-primitives` shows all five and stays at 0/0/0/0.
+- The harness themes gain `--vscode-menu-selectionForeground` (VS Code always defines it; the approximation lacked it, which made a focused menu item read as dark text on blue).
 
 ### Changed — explorer subagents, PR-0: the CLI subagent leftovers (branch `vision2040/subagents-pr0`)
 
