@@ -11,6 +11,16 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.5] — unreleased (navigation polish: every sidebar sub-view in the harness, shared nav primitives, accessible Settings)
 
+### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)
+
+The screen harness covered the chat, map, Studio and science panels but none of the sidebar sub-views, so their accessibility counts were invisible and nothing could fail when they regressed. New group `nav`, 12 screens, each rendering the real component under the real providers over synthetic data:
+
+- `settings-api`, `settings-features`, `settings-general`, `settings-about`;
+- `mcp-configure` (with a server), `mcp-marketplace` (two invented listings, opened through the real tab), `connectors`, `skills`, `skills-marketplace`;
+- `onboarding-card` and `onboarding-card-unhealthy` (the first-run card with the tools ready and with the tools unhealthy), `chat-header-collapsed` (the chat header folded to its title row).
+- The fixture host now answers the MCP-marketplace and Skills catalogue calls with an `items` array, as the real host does, instead of an empty object (which crashed the Skills view).
+- First-time entries in `checker-budget.json` record today's counts as the "before". Nothing changed on screen for users. The checker counts only real controls: Settings' compact tab strip is made of `div`s, so it reads `noName` 0 although it has no names. Nav-3 adds structural assertions for it.
+
 ### Added — `@/design` navigation primitives: Tabs, Toolbar, RailButton, Menu, SubviewHeader (Nav-2, branch `vision2040/nav-2`)
 
 Five navigation surfaces each hand-rolled their own tabs, icon buttons, menus and "Done" header, and only the map rail had real keyboard support. The shared pieces now exist in `webview-ui/src/design`; nothing outside the design gallery uses them yet (Settings adopts them in Nav-3), so users see no change.
