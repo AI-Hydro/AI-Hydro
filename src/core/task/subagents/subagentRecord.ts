@@ -24,6 +24,11 @@ export interface SubagentRecord {
 	parentTaskId: string
 	parentUlid: string
 	profile: SubagentProfileId
+	/**
+	 * What this child's MCP calls carried in `_meta["aihydro/context"].agent`. The server does not read it yet, so it is
+	 * not in server RunRecords; this file is where it can be checked.
+	 */
+	agent: { agent_id: string; parent_agent_id: string; role: string }
 	/** sha256 of the resolved allowlist (built-ins plus exit tool, sorted), so a record shows what the child could call. */
 	allowlistSha256: string
 	prompt: string

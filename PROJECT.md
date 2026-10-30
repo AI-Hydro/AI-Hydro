@@ -26,6 +26,12 @@ Active product hardening — last updated 2026-09-08.
   tool is off by default; "AI-Hydro" spelling and palette titles are guarded by
   `src/shared/__tests__/uiContract.test.ts` (words in `docs/ui-naming.md`). Running a program named
   `aihydro` is always denied. The two retired `clineAccountId` secrets are deleted once on start.
+- Explorer subagents (owner decision H1, 2026-10-28; PRs #114, #119, #124 and the PR-3 branch, in review):
+  in-process, read-only, off by default (Settings > Features > Subagents). `spawn_subagents` asks every time; each
+  child is a `SubagentRunner` (src/core/task/subagents/) with a profile-scoped `ToolExecutor`, its approvals are the
+  parent's asks (`ParentAskBridge`), and it writes `<task dir>/subagents/<id>.json`. A `general`/`data-runner`
+  profile (PR-4) is not approved. Agent identity in `_meta` is sent but not yet sealed by the server (WP-H8).
+  Decision record in DECISIONS.md; user guide in docs/guide/subagents.md.
 - Managed tools environment (vision-2040 X0-3, PR #94, in review): the extension owns a venv
   `<aihydro_home>/venvs/tools-2.8` with `aihydro-tools[...]~=2.8.2` (src/core/mcp/toolsEnv/). Install
   is automatic only for a fresh, missing default venv after one consent that names PyPI; an unhealthy

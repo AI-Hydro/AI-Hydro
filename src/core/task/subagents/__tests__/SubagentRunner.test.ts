@@ -110,6 +110,9 @@ describe("SubagentRunner", () => {
 		const meta = (h.mcp.calls[0].meta as any)["aihydro/context"]
 		expect(meta.chat_id).to.equal("ulid-parent")
 		expect(meta.client).to.equal("vscode")
+		// ...and says which agent made the call (not sealed by the server yet; the record states the same identity)
+		expect(meta.agent).to.deep.equal({ agent_id: "sa_test1", parent_agent_id: "ulid-parent", role: "explorer" })
+		expect(h.records[0].agent).to.deep.equal(meta.agent)
 	})
 
 	it("open-world and untrusted-server tools are refused", async () => {

@@ -14,6 +14,7 @@ import type { Mode } from "@shared/storage/types"
 import type { AiHydroDefaultTool } from "@shared/tools"
 import type { AiHydroAskResponse } from "@shared/WebviewMessage"
 import * as vscode from "vscode"
+import type { AiHydroAgentIdentity } from "@/core/mcp/aihydroContext"
 import { WorkspaceRootManager } from "@/core/workspace"
 import type { ContextManager } from "../../../context/context-management/ContextManager"
 import type { Controller } from "../../../controller"
@@ -61,6 +62,9 @@ export interface TaskConfig {
 
 	// Tool coordination
 	coordinator: ToolExecutorCoordinator
+
+	/** Set only for a subagent: who is calling, for the MCP call context. Absent for the main agent. */
+	agent?: AiHydroAgentIdentity
 }
 
 /**

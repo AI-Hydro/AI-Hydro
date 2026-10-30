@@ -454,6 +454,7 @@ export class SubagentRunner {
 			async () => false,
 			{
 				profile: init.caps,
+				agent: { agent_id: this.childId, parent_agent_id: init.ulid, role: init.profile },
 				reportSink: (report) => {
 					this.report = report
 				},
@@ -540,6 +541,7 @@ export class SubagentRunner {
 			parentTaskId: init.taskId,
 			parentUlid: init.ulid,
 			profile: init.profile,
+			agent: { agent_id: this.childId, parent_agent_id: init.ulid, role: init.profile },
 			allowlistSha256: allowlistSha256([...init.caps.builtinAllow, init.caps.reportTool]),
 			prompt: init.prompt,
 			promptSha256: sha256(init.prompt),

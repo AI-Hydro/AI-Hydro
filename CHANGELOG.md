@@ -19,6 +19,13 @@ Owner decision H1 (2026-10-28) approved in-process, explorer-only subagents (`do
 - **Guard tests.** New source-level checks (`subagentCliRetired.test.ts`) fail if anything reads `AIHYDRO_PROFILE` (only the approval terminal's environment scrub may name it), probes `aihydro version`, or brings back the deleted CLI modules. `aihydro "..."` stays denied by `commandPolicy` in every setting.
 - **Tests.** The old `updateSettings.test.ts` sat outside the mocha glob and could not compile, so it never ran; it is replaced by `__tests__/updateSettings.subagents.test.ts`, which does.
 
+### Added — explorer subagents, PR-3: agent identity on MCP calls, docs and decision record (branch `vision2040/subagents-pr3`)
+
+- **A subagent's MCP calls say who made them.** `_meta["aihydro/context"].agent = {agent_id, parent_agent_id, role}` is added to every `use_mcp_tool` call a child makes; `chat_id` stays the parent's and `client` stays `"vscode"` (evaluation sealing rejects another client label). The main agent's context is unchanged (no `agent` key). The child record states the same identity.
+- **Not sealed yet.** The server reads only `study_id`, `workspace`, `chat_id` and `client`, so the agent block is ignored there and is not in server RunRecords. Until the server seals it (audit WP-H8, an aihydro-tools change that is not part of this repo), the per-child record `<task dir>/subagents/<id>.json` is the only place that says which agent made a call. Do not describe child calls as agent-attributed server records.
+- **Export.** The capsule and defensibility exports are server-side over `~/.aihydro/sessions` and do not read the extension's task directory, so `subagents/` is not in them, and adding it is a tools-side change. The extension's own "export task" is a markdown of the conversation; a spawn call's wrapped reports (with record paths) are part of it.
+- **Docs:** `docs/guide/subagents.md` (what a user sees, what an explorer can and cannot do, limits, where the record is), `DECISIONS.md` (the decision, the allowlist change, the provenance limit).
+
 ### Added — explorer subagents, PR-2: `spawn_subagents`, the status row and the approval chip (branch `vision2040/subagents-pr2`)
 
 The feature the user can now turn on (Settings > Features > Subagents, off by default, all platforms). It rests on PR-1; PR-3 adds `_meta` identity, export and docs.

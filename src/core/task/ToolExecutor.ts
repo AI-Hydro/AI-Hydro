@@ -16,6 +16,7 @@ import { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
 import { AiHydroDefaultTool } from "@shared/tools"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
 import * as vscode from "vscode"
+import type { AiHydroAgentIdentity } from "@/core/mcp/aihydroContext"
 import { getModelCapabilityTier, recommendedMaxMistakes } from "@/utils/model-capabilities"
 import { modelDoesntSupportWebp } from "@/utils/model-utils"
 import { ToolUse } from "../assistant-message"
@@ -76,6 +77,8 @@ export interface ToolExecutorOptions {
 	profile?: EffectiveCapabilities
 	/** Where a child's report_findings goes. Required with `profile`. */
 	reportSink?: (report: SubagentReport) => void
+	/** Who a child is, for the MCP call context. */
+	agent?: AiHydroAgentIdentity
 	/** Called when a child's call is refused by its profile, before any handler or ask, so the record can say so. */
 	onRefused?: (block: ToolUse, reason: string) => void
 }
@@ -86,6 +89,7 @@ export class ToolExecutor {
 	private readonly profile?: EffectiveCapabilities
 	private readonly reportSink?: (report: SubagentReport) => void
 	private readonly onRefused?: (block: ToolUse, reason: string) => void
+	private readonly agent?: AiHydroAgentIdentity
 
 	// Effective consecutive-mistake threshold: never below the user's configured value, but
 	// raised for weaker models that need more slack to self-correct. Loop hard-escalation sets
@@ -173,6 +177,7 @@ export class ToolExecutor {
 		this.profile = options.profile
 		this.reportSink = options.reportSink
 		this.onRefused = options.onRefused
+		this.agent = options.agent
 		if (this.profile && !this.reportSink) {
 			throw new Error("A subagent executor needs a reportSink")
 		}
@@ -233,6 +238,7 @@ export class ToolExecutor {
 				switchToActMode: this.switchToActMode,
 			},
 			coordinator: this.coordinator,
+			...(this.agent ? { agent: this.agent } : {}),
 		}
 
 		// Validate the config at runtime to catch any missing properties
