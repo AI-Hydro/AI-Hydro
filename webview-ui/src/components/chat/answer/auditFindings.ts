@@ -83,12 +83,28 @@ export function contextSnippet(excerpt: string | undefined, quantity?: string, w
 	return `${from > 0 ? "…" : ""}${flat.slice(from, to).trim()}${to < flat.length ? "…" : ""}`
 }
 
-/** A finding about a run reference that is missing its `#path` (the number beside it, or the reference itself). */
+/** Any citation-shaped bracket: the one a number binds to is the first after it. */
+const ANY_REFERENCE = /\[(?:run|lit|claim):[^\]\s]*\]/
+
+/**
+ * A finding about a run reference that is missing its `#path`: the malformed marker itself, or a number whose NEAREST
+ * following reference (the one the auditor binds it to) is such a reference. A pathless reference elsewhere in the
+ * excerpt does not make an unrelated number's finding about it.
+ */
 export function isPathlessRunFinding(v: AnswerAuditViolation): boolean {
 	if (v.kind === "malformed_marker") {
-		return PATHLESS_RUN.test(v.message ?? "") || PATHLESS_RUN.test(v.excerpt ?? "")
+		return PATHLESS_RUN.test(v.message ?? "")
 	}
-	return UNLINKED_KINDS.has(v.kind) && PATHLESS_RUN.test(v.excerpt ?? "")
+	if (!UNLINKED_KINDS.has(v.kind) || !v.excerpt) {
+		return false
+	}
+	const quantity = v.message?.match(QUOTED_NUMBER)?.[1]
+	const at = quantity ? v.excerpt.indexOf(quantity) : -1
+	if (at < 0) {
+		return false
+	}
+	const next = ANY_REFERENCE.exec(v.excerpt.slice(at + (quantity?.length ?? 0)))
+	return !!next && new RegExp(`^${PATHLESS_RUN.source}$`).test(next[0])
 }
 
 function statusFor(v: AnswerAuditViolation): string {

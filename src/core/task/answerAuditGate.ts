@@ -71,6 +71,8 @@ export interface AnswerAuditGateState {
 	hidden?: HiddenDraft
 	/** Study id verified as bound to this chat by an earlier status call (refreshed on start_session). */
 	boundStudyId?: string
+	/** A first-party chat status ran in this task (a resumed task). Makes the gate eligible; never supplies a study id. */
+	bindingProbed?: boolean
 	/** A first-party start_session succeeded in this task: a study is (very likely) bound. */
 	sessionStarted: boolean
 	/** A graded audit outcome was observed in this task, so the server speaks the graded schema. */
@@ -104,23 +106,19 @@ export function noteSessionStarted(state: AnswerAuditGateState): void {
 }
 
 /**
- * The study a first-party `aihydro_chat_status` result says is bound to this chat, or undefined. A resumed task starts
- * with an empty gate state, so without this a follow-up answer ("what's the status?") could never be gated even
- * though the model had just been told which study is bound. The gate re-checks it anyway: the audit must come back for
- * exactly this study or the outcome is "unavailable", never silently another study's ledger.
+ * A first-party `aihydro_chat_status` ran in this task, so the model has been told about the binding. It is NOT a
+ * study id: that tool takes `chat_id` from its arguments, so its output is model-invoked and never trusted as
+ * evidence of which study is bound. The flag only makes a resumed task eligible; the audit then asks the server
+ * itself, with the host-issued chat id (`runFinalAnswerAudit` makes its own `aihydro_chat_status` call), and fails
+ * closed if no study is bound or the audited session differs.
  */
-export function studyFromChatStatus(content: unknown): string | undefined {
-	const text =
-		typeof content === "string" ? content : Array.isArray(content) ? content.map((b: any) => b?.text ?? "").join("\n") : ""
-	if (!/"bound"\s*:\s*true/.test(text)) {
-		return undefined
-	}
-	return /"study_id"\s*:\s*"([^"\\]+)"/.exec(text)?.[1]
+export function noteBindingProbed(state: AnswerAuditGateState): void {
+	state.bindingProbed = true
 }
 
-/** Remember the bound study reported by `aihydro_chat_status` (see `studyFromChatStatus`). */
-export function noteBoundStudy(state: AnswerAuditGateState, studyId: string): void {
-	state.boundStudyId = studyId
+/** `aihydro_rebind_chat` ran: whatever study was cached may no longer be bound. */
+export function noteBindingChanged(state: AnswerAuditGateState): void {
+	state.boundStudyId = undefined
 }
 
 // ── Eligibility ───────────────────────────────────────────────────────────────────────────────────────────────────
@@ -179,7 +177,7 @@ export function computeGateEligibility(input: {
 	if (!input.state.gradedObserved && !auditToolAdvertisesGraded(server)) {
 		return { eligible: false, reason: "graded-schema-unknown" }
 	}
-	if (!input.state.boundStudyId && !input.state.sessionStarted) {
+	if (!input.state.boundStudyId && !input.state.sessionStarted && !input.state.bindingProbed) {
 		return { eligible: false, reason: "study-not-bound" }
 	}
 	return { eligible: true, serverName: server.name }

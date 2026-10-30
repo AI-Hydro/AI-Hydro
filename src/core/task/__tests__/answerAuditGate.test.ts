@@ -29,10 +29,10 @@ import {
 	type GateContext,
 	interruptedFromRevision,
 	interruptedPayload,
-	noteBoundStudy,
+	noteBindingChanged,
+	noteBindingProbed,
 	noteSessionStarted,
 	resetGateCycle,
-	studyFromChatStatus,
 	sweepAuditProgress,
 } from "../answerAuditGate"
 import { type FinalAnswerAuditOutcome, runFinalAnswerAudit } from "../finalAnswerAudit"
@@ -123,20 +123,19 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(state.sessionStarted).to.equal(true)
 		})
 
-		it("a chat status that reports a bound study seeds the cache (a resumed task starts empty)", () => {
-			const status = JSON.stringify({ bound: true, study_id: "usgs_01031500_hydro_data", chat_id: "c" }, null, 2)
-			expect(studyFromChatStatus(status)).to.equal("usgs_01031500_hydro_data")
+		it("a probed binding (resumed task) makes the gate eligible without supplying any study id", () => {
 			const state = createGateState()
 			expect(computeGateEligibility(eligibleInput({ state }) as any)).to.deep.include({ reason: "study-not-bound" })
-			noteBoundStudy(state, studyFromChatStatus(status) as string)
+			noteBindingProbed(state)
 			expect(computeGateEligibility(eligibleInput({ state }) as any).eligible).to.equal(true)
+			expect(state.boundStudyId).to.equal(undefined)
 		})
 
-		it("an unbound, malformed or error status seeds nothing", () => {
-			expect(studyFromChatStatus(JSON.stringify({ bound: false, study_id: "s1" }))).to.equal(undefined)
-			expect(studyFromChatStatus(JSON.stringify({ bound: true }))).to.equal(undefined)
-			expect(studyFromChatStatus("Error: boom")).to.equal(undefined)
-			expect(studyFromChatStatus(undefined)).to.equal(undefined)
+		it("a rebind clears the cached study", () => {
+			const state = createGateState()
+			state.boundStudyId = "s1"
+			noteBindingChanged(state)
+			expect(state.boundStudyId).to.equal(undefined)
 		})
 
 		it("the gate is on by default in state defaults (A2/B-web); eligibility still needs a trusted graded server", () => {
