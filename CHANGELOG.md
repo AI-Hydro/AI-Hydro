@@ -9,6 +9,15 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.5] — unreleased (owner feedback on 0.4.4: chat polish)
+
+### Added — the AI-Hydro Map opens beside the chat when the sidebar first shows (branch `vision2040/polish-map-open`)
+
+- New setting `aihydro.map.openWithChat` (default on, window scope). When the AI-Hydro sidebar chat is first shown in a window, the map panel opens in the second editor column, once.
+- It never takes focus from the chat (`preserveFocus` on create and reveal). It opens only for a visible sidebar (the trigger is the view being resolved visible or becoming visible, never activation), is skipped if a map tab already exists (including one VS Code restored), and fires after a 1.2 s delay re-checked at fire time (sidebar still visible, setting still on) so the chat renders before the map bundle loads.
+- Once per window session: if you close the map it stays closed until the window reloads. The Map button and command are unchanged.
+- The e2e profile turns it off (`E2E_DEFAULT_USER_SETTINGS`); the screen harness has no extension host, so it is unaffected.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)

@@ -15,6 +15,7 @@ import { sendSettingsButtonClickedEvent } from "./core/controller/ui/subscribeTo
 import { sendSkillsButtonClickedEvent } from "./core/controller/ui/subscribeToSkillsButtonClicked"
 import { WebviewProvider } from "./core/webview"
 import { createAiHydroAPI } from "./exports"
+import { createMapAutoOpen } from "./hosts/vscode/mapAutoOpen"
 import { registerLearningPackCommands } from "./hosts/vscode/registerLearningPackCommands"
 import { VscodeEvidenceBoardProvider } from "./hosts/vscode/VscodeEvidenceBoardProvider"
 import { VscodeExperimentTableProvider } from "./hosts/vscode/VscodeExperimentTableProvider"
@@ -302,6 +303,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Initialize map panel provider with controller
 	VscodeMapPanelProvider.initialize(context, webview.controller)
+
+	// Open the map beside the chat the first time the sidebar is shown (setting `aihydro.map.openWithChat`).
+	const mapAutoOpen = createMapAutoOpen({
+		enabled: () => vscode.workspace.getConfiguration("aihydro").get<boolean>("map.openWithChat", true),
+		mapExists: () => VscodeMapPanelProvider.hasMapTab(),
+		sidebarVisible: () => webview.isVisible(),
+		open: () => VscodeMapPanelProvider.createOrShow({ preserveFocus: true }),
+		log: (message, error) => Logger.log(`${message}: ${error instanceof Error ? error.message : String(error)}`),
+	})
+	webview.onSidebarShown = () => mapAutoOpen.onSidebarShown()
 
 	// Initialize HTML preview panel provider with controller
 	VscodeHtmlPreviewProvider.initialize(context, webview.controller)
