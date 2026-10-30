@@ -310,9 +310,10 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	// The list the transcript renders: today's rows in verbose, presenter items otherwise (unfiltered input).
 	const detail = transcriptDetail ?? "normal"
 	const resolvers = useMemo(() => makeTranscriptResolvers(mcpServers ?? [], protectedRoots ?? []), [mcpServers, protectedRoots])
+	const taskRunning = isTaskRunning(messages.at(-1), backgroundCommandRunning)
 	const transcriptView = useMemo(
-		() => buildTranscriptView(modifiedMessages, groupedMessages, { detail, ...resolvers }),
-		[modifiedMessages, groupedMessages, detail, resolvers],
+		() => buildTranscriptView(modifiedMessages, groupedMessages, { detail, running: taskRunning, ...resolvers }),
+		[modifiedMessages, groupedMessages, detail, taskRunning, resolvers],
 	)
 
 	// Use scroll behavior hook

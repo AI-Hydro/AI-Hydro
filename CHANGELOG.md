@@ -9,6 +9,17 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.5] — unreleased (owner feedback on 0.4.4: chat polish)
+
+### Fixed — no empty "Worked <1s" rows, no "Resumed a completed task" above a follow-up (branch `vision2040/polish-transcript`)
+
+Reported on the installed 0.4.4 build: a stray "Worked <1s" row after every answer (also after a task completed), and "Resumed a completed task" above a new question.
+
+- Cause: the presenter folds every non-prose message (model requests, checkpoints) into a work group, so a plain answer produced one or two groups whose facts were all zero except cost; the group after the answer is the checkpoint and request that close the turn.
+- A group with no tool work (no tool, not-run call, lifted line, retry, failed request, reuse or revision) is no longer a row, at Focus and Normal. The live tail group stays while the task runs (it is the "Working" row). Verbose is unchanged. A group that did anything (including a failed or retried request) still shows.
+- "Rewind to this message" is computed before the empty groups are dropped, so a chat-only turn still has its rewind target. Its cost remains in the task header.
+- The "Resumed a completed task" divider is no longer drawn at Focus and Normal (the question follows at once and nothing was lost; the presenter still emits it, the view hides it). "Resumed from an interrupted task" still shows, and Verbose is unchanged.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)
