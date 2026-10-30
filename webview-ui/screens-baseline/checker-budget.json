@@ -10,6 +10,40 @@
 		}
 	},
 	"screens": {
+		"composer-add-menu": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 120,
+				"smallText": 0,
+				"contrast": 20,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"composer-paused-grants": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 120,
+				"smallText": 0,
+				"contrast": 20,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
 		"chat-answer-audit-advisory": {
 			"ref": {
 				"noName": 0,
@@ -3258,6 +3292,26 @@
 					"cells": 6
 				},
 				"chat-answer-audit-hard": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"composer-add-menu": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"composer-paused-grants": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 18,

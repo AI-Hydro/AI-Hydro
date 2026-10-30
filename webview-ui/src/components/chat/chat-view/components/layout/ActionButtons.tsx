@@ -6,6 +6,7 @@ import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { VirtuosoHandle } from "react-virtuoso"
+import { Button } from "@/design"
 import { usePendingAsk } from "../../../approval/PendingAskContext"
 import { ButtonActionType, getButtonConfig } from "../../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../../types/chatTypes"
@@ -27,7 +28,7 @@ interface ActionButtonsProps {
 }
 
 /**
- * Action buttons area (approve/reject, Start New Task, ...). Scroll-to-bottom is a small floating round
+ * Action buttons area (retry/proceed, New chat, ...). Scroll-to-bottom is a small floating round
  * button above the footer and NEVER replaces the action buttons: a pending ask must stay answerable while
  * the user scrolls up to read.
  */
@@ -109,6 +110,11 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	const hasButtons = !inlineApproval && (primaryText || secondaryText)
 	const isStreaming = task.partial === true
 	const canInteract = enableButtons && !isProcessing
+	// A lone "start a new chat" action (a finished task) is a modest secondary button, not a full-width bar: it must not
+	// compete with Send (O-P4). The confirm-before-stopping guard lives in the host's clearTask, so it still applies.
+	const loneNewTask =
+		(!!primaryText && !secondaryText && primaryAction === "new_task") ||
+		(!!secondaryText && !primaryText && secondaryAction === "new_task")
 
 	const opacity = canInteract || isStreaming ? 1 : 0.5
 
@@ -177,6 +183,37 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 				{notice}
 				{grantNote}
 				{scrollButton ? <div className="relative h-0">{scrollButton}</div> : null}
+			</>
+		)
+	}
+
+	if (loneNewTask) {
+		return (
+			<>
+				{notice}
+				{grantNote}
+				<div
+					aria-label="Pending request actions"
+					className="relative aih-footer-action"
+					data-testid="footer-actions"
+					role="group"
+					style={{ opacity }}
+					tabIndex={-1}>
+					{scrollButton}
+					<Button
+						data-testid="new-chat-button"
+						disabled={!canInteract}
+						onClick={() =>
+							handleActionClick(
+								(primaryAction ?? secondaryAction) as ButtonActionType,
+								inputValue,
+								selectedImages,
+								selectedFiles,
+							)
+						}>
+						{primaryText ?? secondaryText}
+					</Button>
+				</div>
 			</>
 		)
 	}

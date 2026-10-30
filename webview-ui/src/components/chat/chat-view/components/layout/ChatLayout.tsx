@@ -28,7 +28,8 @@ const ChatLayoutContainer = styled.div.withConfig({
 	margin: 0;
 	width: 100%;
 	height: 100%;
-	min-height: 100vh;
+	/* The parent chain is 100% high already; 100vh overflowed any host that reserves space above the webview root. */
+	min-height: 100%;
 	position: relative;
 `
 

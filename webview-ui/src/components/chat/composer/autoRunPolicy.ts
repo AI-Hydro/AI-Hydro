@@ -1,5 +1,5 @@
-import { alwaysAllowVerdict } from "@shared/aihydro/alwaysAllowPolicy"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
+import { type AlwaysAllowRefusalReason, alwaysAllowVerdict } from "@shared/aihydro/alwaysAllowPolicy"
 import type { McpServer } from "@shared/mcp"
 import { ACTION_METADATA } from "../auto-approve-menu/constants"
 
@@ -14,6 +14,8 @@ export interface AutoRunPolicy {
 	mcpPaused: number
 	/** True when those grants cannot fire right now (auto-run or MCP auto-run is off). Still flagged: over-warning is safe. */
 	mcpDormant: boolean
+	/** Why each paused grant is paused: reason -> number of tools. Empty when none are paused. */
+	mcpPausedReasons: Partial<Record<AlwaysAllowRefusalReason, number>>
 	/** Visible text for the MCP grants ("2 MCP tools always allowed"), or "" when none. */
 	mcpLabel: string
 	/** Global YOLO mode (`yoloModeToggled`): core approves everything first, regardless of `enabled`. */
@@ -21,8 +23,10 @@ export interface AutoRunPolicy {
 	/** Plain-language risky grants. Empty means nothing risky. */
 	riskReasons: string[]
 	risky: boolean
-	/** "Auto-run: Read, Edit, MCP" (no risk marker; the chip adds an icon and "(risky)" text). */
+	/** "Auto-run: Read, Edit, MCP" (no risk marker; the popover lists it, the compact chip shows a count instead). */
 	chipText: string
+	/** The one-line form for the composer chip: "Auto-run: 5 on", "Auto-run: off", "YOLO". The chip adds the risk marker. */
+	compactText: string
 	/** Full policy as a sentence, used for the accessible name. */
 	summary: string
 }
@@ -74,18 +78,21 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 	// reached the webview; without it the grant counts as active (over-warning is the safe side).
 	let mcpAlwaysAllowed = 0
 	let mcpPaused = 0
+	const mcpPausedReasons: AlwaysAllowRefusalReason[] = []
 	for (const s of mcpServers.filter((srv) => !srv.disabled)) {
 		for (const t of (s.tools ?? []).filter((tool) => tool.autoApprove === true)) {
-			const paused =
-				s.trust !== undefined &&
-				!alwaysAllowVerdict({
-					serverTrusted: s.trust.trusted,
-					serverConnected: s.status === "connected",
-					tools: s.tools,
-					toolName: t.name,
-				}).ok
-			if (paused) {
+			const verdict =
+				s.trust !== undefined
+					? alwaysAllowVerdict({
+							serverTrusted: s.trust.trusted,
+							serverConnected: s.status === "connected",
+							tools: s.tools,
+							toolName: t.name,
+						})
+					: undefined
+			if (verdict && !verdict.ok) {
 				mcpPaused++
+				mcpPausedReasons.push(verdict.reason)
 			} else {
 				mcpAlwaysAllowed++
 			}
@@ -136,7 +143,32 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 			: labels.length === 0
 				? "Auto-run: none"
 				: `Auto-run: ${labels.join(", ")}`
+	const compactText = yolo
+		? "YOLO"
+		: !enabled
+			? "Auto-run: off"
+			: labels.length === 0
+				? "Auto-run: none"
+				: `Auto-run: ${labels.length} on`
 	const risky = riskReasons.length > 0
+	const pausedByReason: Partial<Record<AlwaysAllowRefusalReason, number>> = {}
+	for (const reason of mcpPausedReasons) {
+		pausedByReason[reason] = (pausedByReason[reason] ?? 0) + 1
+	}
 	const summary = `${chipText}${risky ? `. Risky: ${riskReasons.join("; ")}` : ""}`
-	return { enabled, labels, mcpAlwaysAllowed, mcpPaused, mcpDormant, mcpLabel, yolo, riskReasons, risky, chipText, summary }
+	return {
+		enabled,
+		labels,
+		mcpAlwaysAllowed,
+		mcpPaused,
+		mcpPausedReasons: pausedByReason,
+		mcpDormant,
+		mcpLabel,
+		yolo,
+		riskReasons,
+		risky,
+		chipText,
+		compactText,
+		summary,
+	}
 }

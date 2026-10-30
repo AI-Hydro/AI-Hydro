@@ -20,7 +20,9 @@ export function ContextRing({ used, contextWindow }: ContextRingProps) {
 	const label = known ? `Context ${percent}% of ${formatLargeNumber(contextWindow)}` : "Context usage unknown"
 	const high = known && ratio >= 0.9
 	return (
-		<span className="inline-flex items-center gap-1 shrink-0 text-[11px] text-[var(--vscode-descriptionForeground)]">
+		<span
+			className="inline-flex items-center gap-1 shrink-0 text-[var(--aih-fg-muted)]"
+			style={{ fontSize: "var(--aih-text-caption)" }}>
 			<svg aria-label={label} height={SIZE} role="img" viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE}>
 				<title>{label}</title>
 				<circle

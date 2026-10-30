@@ -1,83 +1,180 @@
+import type { AlwaysAllowRefusalReason } from "@shared/aihydro/alwaysAllowPolicy"
 import { useMemo, useRef, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { Text } from "@/design"
 import AutoApproveModal from "../auto-approve-menu/AutoApproveModal"
 import { ACTION_METADATA, NOTIFICATIONS_SETTING } from "../auto-approve-menu/constants"
 import { deriveAutoRunPolicy } from "./autoRunPolicy"
+import { ComposerPopover } from "./ComposerPopover"
 import { ContextRing } from "./ContextRing"
+import "./composer.css"
 
 /**
- * Owner decision O2 (always-visible line vs popover only) is pending sign-off, so the disclaimer stays visible
- * here AND heads the popover. Do not remove either without that sign-off.
+ * The claim-approval disclosure. It heads the auto-run popover (one click from the chip, wherever auto-run is
+ * configured) and is not a permanent row: owner feedback on 0.4.2 was that the two status lines and this paragraph
+ * took too much of the composer. The sentence itself is a security statement and must not be reworded or dropped.
  */
 export const CLAIM_DISCLAIMER =
 	"Does not approve claims. Claim approval is a signed step you perform in a terminal (aihydro-approve)."
+
+const PAUSED_REASON_TEXT: Record<AlwaysAllowRefusalReason, string> = {
+	untrusted_server: "the server is not trusted (its launcher changed or is not registered)",
+	server_unavailable: "the server is not connected",
+	unknown_tool: "the server does not list the tool exactly once",
+	destructive: "the server declares the tool may be destructive",
+	unknown_effect: "the server does not declare what the tool does",
+}
 
 interface ComposerStatusProps {
 	/** Per-request context tokens (`lastApiReqTotalTokens`, same source as the task header's context bar). */
 	contextTokens?: number
 	contextWindow?: number
+	/**
+	 * Hook for the "Trust this launcher..." action on the paused-grants popover. When given, the popover shows the
+	 * action and calls this; when absent the popover offers only the link to the Hydro Tools view.
+	 */
+	onTrustLauncher?: () => void
 }
 
 /**
- * The composer's single status footer: the auto-run policy chip (with a text + icon risk marker), the context
- * ring, and the claim disclaimer. Replaces the three-line "Tool auto-run" bar. The chip opens the existing
- * auto-run settings content as a popover.
+ * The composer's single status row (one line, 24 px chips): the auto-run chip, a count chip for paused MCP grants
+ * (only when there are any), and the context ring. Each chip opens a popover. A risky setting stays visible at rest as
+ * a warning icon plus the word "risky" on the chip, and is named in its accessible name.
  */
-export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusProps) {
-	const { autoApprovalSettings, mcpServers, yoloModeToggled } = useExtensionState()
+export function ComposerStatus({ contextTokens, contextWindow, onTrustLauncher }: ComposerStatusProps) {
+	const { autoApprovalSettings, mcpServers, yoloModeToggled, navigateToMcp } = useExtensionState()
 	const [open, setOpen] = useState(false)
+	const [pausedOpen, setPausedOpen] = useState(false)
 	const rowRef = useRef<HTMLDivElement>(null)
 	const chipRef = useRef<HTMLButtonElement>(null)
+	const pausedRef = useRef<HTMLButtonElement>(null)
 	const policy = useMemo(
 		() => deriveAutoRunPolicy(autoApprovalSettings, mcpServers, !!yoloModeToggled),
 		[autoApprovalSettings, mcpServers, yoloModeToggled],
 	)
+	const toolNoun = (n: number) => (n === 1 ? "tool" : "tools")
+	const pausedName = `${policy.mcpPaused} MCP ${toolNoun(policy.mcpPaused)} paused, asks first`
 
-	// Count of MCP tools is part of the visible chip text so it is never colour- or tooltip-only.
-	const showMcpCount = policy.mcpLabel !== ""
 	return (
-		<div className="px-[15px] pb-[6px] select-none" data-testid="composer-status">
-			<div className="flex flex-wrap items-center gap-x-2 gap-y-1" ref={rowRef}>
+		<div className="aih-composer-status" data-testid="composer-status" ref={rowRef}>
+			<button
+				aria-expanded={open}
+				aria-haspopup="dialog"
+				aria-label={`${policy.summary}. Opens tool auto-run settings.`}
+				className={`aih-chip${policy.risky ? " aih-chip--warn" : ""}`}
+				data-testid="auto-run-chip"
+				onClick={() => {
+					setPausedOpen(false)
+					setOpen((v) => !v)
+				}}
+				ref={chipRef}
+				title={policy.summary}
+				type="button">
+				<span className="aih-chip__label">{policy.compactText}</span>
+				{policy.risky && (
+					<span className="aih-chip__risk" data-testid="auto-run-risk">
+						<span aria-hidden="true" className="codicon codicon-warning" />
+						<span>risky</span>
+					</span>
+				)}
+			</button>
+			{policy.mcpPaused > 0 && (
 				<button
-					aria-expanded={open}
+					aria-expanded={pausedOpen}
 					aria-haspopup="dialog"
-					aria-label={`${policy.summary}. Opens tool auto-run settings.`}
-					className="inline-flex flex-wrap items-center gap-x-1 py-0.5 min-h-[24px] px-2 rounded-[10px] text-[11px] cursor-pointer border border-[var(--vscode-editorGroup-border)] bg-transparent text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)] max-w-full"
-					data-testid="auto-run-chip"
-					onClick={() => setOpen((v) => !v)}
-					ref={chipRef}
+					aria-label={`${pausedName}. Opens details.`}
+					className="aih-chip"
+					data-testid="paused-chip"
+					onClick={() => {
+						setOpen(false)
+						setPausedOpen((v) => !v)
+					}}
+					ref={pausedRef}
+					title={pausedName}
 					type="button">
-					<span className="min-w-0 text-left">{policy.chipText}</span>
-					{policy.risky && (
-						<span
-							className="inline-flex items-center gap-0.5 shrink-0"
-							data-testid="auto-run-risk"
-							style={{ color: "var(--vscode-editorWarning-foreground)" }}>
-							<span aria-hidden="true" className="codicon codicon-warning text-[12px]" />
-							<span>(risky)</span>
-						</span>
-					)}
-					{showMcpCount && (
-						<span className="shrink-0 text-[var(--vscode-descriptionForeground)]">{policy.mcpLabel}</span>
-					)}
-					<span aria-hidden="true" className={`codicon codicon-chevron-${open ? "down" : "up"} text-[12px] shrink-0`} />
+					<span className="aih-chip__label">{policy.mcpPaused} paused</span>
 				</button>
-				<span className="ml-auto">
-					<ContextRing contextWindow={contextWindow} used={contextTokens} />
-				</span>
-			</div>
-			<Text as="p" className="pt-[2px]" muted variant="caption">
-				{CLAIM_DISCLAIMER}
-			</Text>
+			)}
+			<span className="aih-composer-status__ring">
+				<ContextRing contextWindow={contextWindow} used={contextTokens} />
+			</span>
+			<ComposerPopover
+				anchorRef={pausedRef}
+				label="Paused MCP tools"
+				onClose={() => setPausedOpen(false)}
+				open={pausedOpen && policy.mcpPaused > 0}
+				testId="paused-popover">
+				<p className="aih-popover__title">{pausedName}</p>
+				<p className="aih-popover__body">
+					These tools have an Always allow grant that the host will not honour right now, so each one asks before it
+					runs. Nothing here runs without you.
+				</p>
+				<ul className="aih-popover__list" data-testid="paused-reasons">
+					{(Object.entries(policy.mcpPausedReasons) as [AlwaysAllowRefusalReason, number][]).map(([reason, n]) => (
+						<li key={reason}>
+							{n} {toolNoun(n)}: {PAUSED_REASON_TEXT[reason]}
+						</li>
+					))}
+				</ul>
+				<p className="aih-popover__body">
+					To fix it, check that the server is connected and shows Trusted in Hydro Tools &amp; Data Sources. Tools the
+					server does not declare as read-only or non-destructive stay on ask.
+				</p>
+				{onTrustLauncher && (
+					<button
+						className="aih-menu-item"
+						data-testid="trust-launcher-action"
+						onClick={() => {
+							setPausedOpen(false)
+							onTrustLauncher()
+						}}
+						type="button">
+						<span aria-hidden="true" className="codicon codicon-shield" />
+						<span>Trust this launcher…</span>
+					</button>
+				)}
+				<button
+					className="aih-menu-item"
+					data-testid="open-mcp-view"
+					onClick={() => {
+						setPausedOpen(false)
+						navigateToMcp?.()
+					}}
+					type="button">
+					<span aria-hidden="true" className="codicon codicon-server" />
+					<span>Open Hydro Tools &amp; Data Sources</span>
+				</button>
+			</ComposerPopover>
 			<AutoApproveModal
 				ACTION_METADATA={ACTION_METADATA}
 				buttonRef={rowRef}
 				header={
-					<div data-testid="popover-disclaimer">
-						<Text as="p" className="mb-2" muted variant="caption">
-							{CLAIM_DISCLAIMER}
+					<div data-testid="popover-summary">
+						<Text as="p" className="mb-2" variant="label">
+							{policy.chipText}
 						</Text>
+						{policy.risky && (
+							<ul className="aih-risk-list" data-testid="popover-risk">
+								{policy.riskReasons.map((reason) => (
+									<li key={reason}>
+										<span aria-hidden="true" className="codicon codicon-warning" />
+										<Text as="span" variant="label">
+											Risky: {reason}
+										</Text>
+									</li>
+								))}
+							</ul>
+						)}
+						{policy.mcpLabel !== "" && (
+							<Text as="p" className="mb-2" muted variant="caption">
+								{policy.mcpLabel}
+							</Text>
+						)}
+						<div data-testid="popover-disclaimer">
+							<Text as="p" className="mb-2" muted variant="caption">
+								{CLAIM_DISCLAIMER}
+							</Text>
+						</div>
 					</div>
 				}
 				isVisible={open}

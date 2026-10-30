@@ -67,6 +67,9 @@ if (!screen) {
 	badge.style.cssText =
 		"flex:none;height:24px;box-sizing:border-box;padding:0 8px;display:flex;align-items:center;font:700 12px/1 monospace;background:#b00020;color:#fff;pointer-events:none;white-space:nowrap;overflow:hidden"
 	document.body.insertBefore(badge, rootEl)
+	// Chat screens: really reserve the banner (#root is 100% high, so without this the bottom 24 px of the footer sits
+	// below the fold and the composer's last row is clipped). Other screens keep their measured geometry.
+	if (screen.group === "chat") rootEl.style.height = "calc(100% - 24px)"
 	createRoot(rootEl).render(screen.render())
 	requestAnimationFrame(() => {
 		window.__screenReady = true

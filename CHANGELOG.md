@@ -29,6 +29,21 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - **Clean answers.** "All N numbers traced" as a tiny check line at Normal and Verbose; nothing at Focus. It still appears only when the audit ran and found nothing.
 - **Unchanged:** what the gate blocks or allows, every disclosure line (silent revisions, findings that remain, removed values, unavailable audit, held-back drafts).
 - **Harness.** New screens `chat-answer-audit-hard`, `chat-answer-audit-advisory`, `chat-answer-audit-clean`; `chat-answer-audit-graded` now expects the new line.
+
+### Changed — the composer footer is one 28 px row of chips; Send, Stop and Add are flat codicon controls (UX program X1-C4, branch `vision2040/composer-footer`)
+
+- **One status row instead of two lines and a paragraph.** Under the input there is one row: an **Auto-run** chip ("Auto-run: 5 on"), a separate **N paused** chip that exists only when MCP "always allow" grants are paused, and the context ring. The row is 28 px tall at every width (it was 47 px at 800 px and 99 px at 400 px).
+- **Risk stays visible at rest.** When a risky class is on (all actions, edit any file, run any command, an MCP tool set to always allow, or YOLO) the Auto-run chip shows a warning icon and the word "risky", takes the warning border, and names the risk in its accessible name. The popover lists each reason as a line with a warning icon.
+- **The claim sentence moved into the auto-run popover.** "Does not approve claims. Claim approval is a signed step you perform in a terminal (aihydro-approve)." is no longer a permanent row; it heads the auto-run popover, one click from the chip (it also stays in the popover title tooltip). Wording unchanged. This is the owner decision O2 the plan left open, now taken on the owner's 0.4.2 feedback.
+- **Paused grants explain themselves.** The "N paused" popover says these tools ask first and nothing runs without you, counts the tools by reason (server not trusted, not connected, effect not declared, declared destructive), and links to Hydro Tools & Data Sources. `ComposerStatus` takes an optional `onTrustLauncher` prop: when the host passes one, the popover shows "Trust this launcher…" (the trust-UX lane wires it).
+- **Send and Stop** are flat 28 px buttons on `--vscode-button-background` with the `send` and `debug-stop` codicons, theme radius and the standard focus ring; no gradient, shadow, scale or fixed blue. Send is disabled while the input is empty.
+- **"Start New Task" is "New chat"**, a modest secondary button at the right of the footer instead of a full-width primary bar (owner decision O-P4: demoted and renamed). It still goes through `clearTask`, so the confirm-before-stopping guard applies. Error states keep both buttons (Retry or Proceed, and New chat).
+- **One Add menu.** The `@`, `+`, MCP-servers and rules icons are replaced by one **Add** button (codicon `mention`, the @ glyph) whose menu holds "Add context (@)", "Attach files & images" and "Rules & workflows". The composer row is now Add, model, Plan/Act and Send at 400 px. The MCP-servers popover is removed from the composer (Hydro Tools & Data Sources owns it). `lucide-react` is no longer imported by `ChatTextArea.tsx`.
+- **Tokens.** The composer's new chrome (`composer/composer.css`) uses only design tokens and theme variables on the 4 px grid; the context ring caption uses `--aih-text-caption`.
+- **Harness.** New screens `composer-add-menu` and `composer-paused-grants`; `composer-danger-policy` now asserts the visible "risky" marker, the New chat button, and the absence of the old paragraph.
+
+---
+
 ## [0.4.2] — unreleased (UX program Wave 1: projects on chats, chat titles, real Focus, project context, map provenance and map chrome; plus the abort-confirm guard and the Wave 0 leftovers)
 
 ### Changed — map chrome: a 40 px rail, three states, one panel width (UX program Wave 1, PR X1-M1, branch `vision2040/x1-m1-map-chrome`)

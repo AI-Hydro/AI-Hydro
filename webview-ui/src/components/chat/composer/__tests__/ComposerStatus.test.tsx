@@ -9,8 +9,9 @@ let settings: AutoApprovalSettings = DEFAULT_AUTO_APPROVAL_SETTINGS
 let servers: McpServer[] = []
 let yolo = false
 
+const navigateToMcp = vi.fn()
 vi.mock("@/context/ExtensionStateContext", () => ({
-	useExtensionState: () => ({ autoApprovalSettings: settings, mcpServers: servers, yoloModeToggled: yolo }),
+	useExtensionState: () => ({ autoApprovalSettings: settings, mcpServers: servers, yoloModeToggled: yolo, navigateToMcp }),
 }))
 vi.mock("@/hooks/useAutoApproveActions", () => ({
 	useAutoApproveActions: () => ({
@@ -54,11 +55,12 @@ afterEach(() => {
 })
 
 describe("ComposerStatus chip", () => {
-	it("is one chip derived from the action ids, e.g. Auto-run: Read, Edit, MCP", () => {
+	it("is one compact chip with a count, and the accessible name keeps the full list", () => {
 		settings = withActions({ readFiles: true, editFiles: true, useMcp: true })
 		render(<ComposerStatus />)
 		const chip = screen.getByTestId("auto-run-chip")
-		expect(chip).toHaveTextContent("Auto-run: Read, Edit, MCP")
+		expect(chip).toHaveTextContent("Auto-run: 3 on")
+		expect(chip).not.toHaveTextContent("Read")
 		expect(chip.getAttribute("aria-label")).toContain("Auto-run: Read, Edit, MCP")
 		expect(screen.queryByTestId("auto-run-risk")).toBeNull()
 		expect(screen.queryByText("Tool auto-run")).toBeNull()
@@ -110,18 +112,20 @@ describe("ComposerStatus chip", () => {
 			servers = srv
 			const { unmount } = render(<ComposerStatus />)
 			const risk = screen.getByTestId("auto-run-risk")
-			expect(risk).toHaveTextContent("(risky)")
+			expect(risk).toHaveTextContent("risky")
 			expect(risk.querySelector(".codicon-warning")).not.toBeNull()
 			expect(screen.getByTestId("auto-run-chip").getAttribute("aria-label")).toMatch(reason)
 			unmount()
 		}
 	})
 
-	it("shows the count of MCP always-allowed tools, ignoring disabled servers", () => {
+	it("counts MCP always-allowed tools, ignoring disabled servers, in the name and the popover", () => {
 		settings = withActions({ readFiles: true, useMcp: true })
 		servers = [server([{ name: "a", autoApprove: true }]), server([{ name: "b", autoApprove: true }], true)]
 		render(<ComposerStatus />)
-		expect(screen.getByTestId("auto-run-chip")).toHaveTextContent("1 MCP tool always allowed")
+		expect(screen.getByTestId("auto-run-chip").getAttribute("aria-label")).toContain("1 MCP tool always allowed")
+		fireEvent.click(screen.getByTestId("auto-run-chip"))
+		expect(screen.getByTestId("popover-risk")).toHaveTextContent("1 MCP tool always allowed")
 	})
 
 	it("has no danger marker for safe grants (read, edit in workspace, read-only commands, browser, MCP)", () => {
@@ -152,8 +156,8 @@ describe("ComposerStatus YOLO and dormant MCP grants", () => {
 		yolo = true
 		render(<ComposerStatus />)
 		const chip = screen.getByTestId("auto-run-chip")
-		expect(chip).toHaveTextContent("YOLO: auto-runs all but MCP tools without a working Always")
-		expect(screen.getByTestId("auto-run-risk")).toHaveTextContent("(risky)")
+		expect(chip).toHaveTextContent("YOLO")
+		expect(screen.getByTestId("auto-run-risk")).toHaveTextContent("risky")
 		expect(chip.getAttribute("aria-label")).toMatch(
 			/YOLO mode is on: everything auto-runs, even when auto-run is off, except MCP tools without a working Always grant/,
 		)
@@ -175,9 +179,8 @@ describe("ComposerStatus YOLO and dormant MCP grants", () => {
 		]
 		render(<ComposerStatus />)
 		expect(screen.getByTestId("auto-run-risk")).toBeInTheDocument()
-		expect(screen.getByTestId("auto-run-chip")).toHaveTextContent(
-			"2 MCP tools set to always allow (inactive while auto-run is off)",
-		)
+		const name = screen.getByTestId("auto-run-chip").getAttribute("aria-label")
+		expect(name).toContain("2 MCP tools set to always allow (inactive while auto-run is off)")
 	})
 
 	it("says MCP auto-run is off when only the MCP action is off", () => {
@@ -207,19 +210,39 @@ describe("ComposerStatus YOLO and dormant MCP grants", () => {
 })
 
 describe("ComposerStatus disclaimer and popover", () => {
-	it("keeps the claim disclaimer visible in the footer (owner decision O2 is pending)", () => {
+	it("is not a permanent row: the claim disclaimer is absent at rest", () => {
 		render(<ComposerStatus />)
-		expect(screen.getByText(CLAIM_DISCLAIMER)).toBeInTheDocument()
+		expect(screen.queryByText(CLAIM_DISCLAIMER)).toBeNull()
 	})
 
-	it("opens the settings popover from the chip with the disclaimer in its header", () => {
+	it("keeps the footer to one row of chips, each a small target", () => {
+		settings = withActions({ readFiles: true, editFilesExternally: true, editFiles: true })
+		servers = [{ ...server([{ name: "a", autoApprove: true }]), trust: { trusted: false, reason: "x" } } as McpServer]
+		render(<ComposerStatus />)
+		const row = screen.getByTestId("composer-status")
+		expect(row.className).toContain("aih-composer-status")
+		expect(row.querySelectorAll("button")).toHaveLength(2) // auto-run chip and paused chip
+		expect(row.querySelectorAll("p")).toHaveLength(0)
+	})
+
+	it("reaches the claim disclaimer in one click, in the auto-run popover", () => {
 		render(<ComposerStatus />)
 		const chip = screen.getByTestId("auto-run-chip")
 		expect(chip).toHaveAttribute("aria-expanded", "false")
 		fireEvent.click(chip)
 		expect(chip).toHaveAttribute("aria-expanded", "true")
 		expect(screen.getByText("Tool auto-run settings")).toBeInTheDocument()
-		expect(screen.getAllByText(CLAIM_DISCLAIMER)).toHaveLength(2)
+		expect(screen.getAllByText(CLAIM_DISCLAIMER)).toHaveLength(1)
+		expect(screen.getByTestId("popover-disclaimer")).toHaveTextContent(CLAIM_DISCLAIMER)
+	})
+
+	it("lists each risky reason with a warning icon in the popover", () => {
+		settings = withActions({ executeSafeCommands: true, executeAllCommands: true })
+		render(<ComposerStatus />)
+		fireEvent.click(screen.getByTestId("auto-run-chip"))
+		const risk = screen.getByTestId("popover-risk")
+		expect(risk).toHaveTextContent("Risky: runs any terminal command without asking")
+		expect(risk.querySelector(".codicon-warning")).not.toBeNull()
 	})
 
 	it("is a labelled dialog, takes focus, closes on Escape and returns focus to the chip", () => {
@@ -311,11 +334,54 @@ describe("ComposerStatus paused MCP grants (M-3)", () => {
 		expect(p.risky).toBe(true)
 	})
 
-	it("shows the paused count in the chip", () => {
+	it("shows paused grants as a separate count chip, only when there are any", () => {
 		settings = withActions({ readFiles: true, useMcp: true })
+		const { unmount } = render(<ComposerStatus />)
+		expect(screen.queryByTestId("paused-chip")).toBeNull()
+		unmount()
 		servers = [srv([tool("r", { readOnlyHint: true })], { trusted: false, reason: "changed" })]
 		render(<ComposerStatus />)
-		expect(screen.getByTestId("auto-run-chip")).toHaveTextContent("1 MCP tool paused (asks first)")
+		const paused = screen.getByTestId("paused-chip")
+		expect(paused).toHaveTextContent("1 paused")
+		expect(paused.getAttribute("aria-label")).toBe("1 MCP tool paused, asks first. Opens details.")
 		expect(screen.queryByTestId("auto-run-risk")).toBeNull()
+		expect(screen.getByTestId("auto-run-chip")).not.toHaveTextContent("paused")
+	})
+
+	it("explains why in a popover and links to the tools view; the trust action is a hook", () => {
+		settings = withActions({ readFiles: true, useMcp: true })
+		servers = [
+			srv([tool("a", { readOnlyHint: true }), tool("b", { readOnlyHint: true })], { trusted: false, reason: "changed" }),
+		]
+		const onTrust = vi.fn()
+		render(<ComposerStatus onTrustLauncher={onTrust} />)
+		fireEvent.click(screen.getByTestId("paused-chip"))
+		const popover = screen.getByRole("dialog", { name: "Paused MCP tools" })
+		expect(popover).toHaveTextContent("Nothing here runs without you")
+		expect(screen.getByTestId("paused-reasons")).toHaveTextContent("2 tools: the server is not trusted")
+		fireEvent.click(screen.getByTestId("trust-launcher-action"))
+		expect(onTrust).toHaveBeenCalledTimes(1)
+		fireEvent.click(screen.getByTestId("paused-chip"))
+		fireEvent.click(screen.getByTestId("open-mcp-view"))
+		expect(navigateToMcp).toHaveBeenCalledTimes(1)
+	})
+
+	it("offers no trust action unless the host wires one", () => {
+		settings = withActions({ readFiles: true, useMcp: true })
+		servers = [srv([tool("a", { readOnlyHint: true })], { trusted: false, reason: "changed" })]
+		render(<ComposerStatus />)
+		fireEvent.click(screen.getByTestId("paused-chip"))
+		expect(screen.queryByTestId("trust-launcher-action")).toBeNull()
+	})
+
+	it("Escape closes the paused popover and returns focus to its chip", () => {
+		settings = withActions({ readFiles: true, useMcp: true })
+		servers = [srv([tool("a", { readOnlyHint: true })], { trusted: false, reason: "changed" })]
+		render(<ComposerStatus />)
+		const chip = screen.getByTestId("paused-chip")
+		fireEvent.click(chip)
+		fireEvent.keyDown(screen.getByRole("dialog", { name: "Paused MCP tools" }), { key: "Escape" })
+		expect(screen.queryByRole("dialog")).toBeNull()
+		expect(document.activeElement).toBe(chip)
 	})
 })
