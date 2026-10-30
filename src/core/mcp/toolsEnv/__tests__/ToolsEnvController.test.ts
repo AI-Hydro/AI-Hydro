@@ -368,6 +368,21 @@ describe("ToolsEnvController", () => {
 			expect(prompts).to.have.length(0)
 		})
 
+		it("no candidate and no name: a disabled entry gets no modal and no record, only a notice", async () => {
+			makeVenv(machine, "2.8.2")
+			await fs.writeFile(
+				settingsPath,
+				JSON.stringify({ mcpServers: { "ai-hydro": { command: "/opt/old/aihydro-mcp", args: [], disabled: true } } }),
+			)
+			const c = ctl()
+			trustAnswers = [true]
+			await c.runAction("trust")
+			expect(prompts).to.have.length(0)
+			expect(chooseAsked).to.have.length(0)
+			expect(await readFirstPartyLauncher(dir)).to.equal(undefined)
+			expect(notices.some((n) => /nothing to confirm/.test(n.message))).to.equal(true)
+		})
+
 		it("the host re-validates a webview-supplied name: disabled, unknown and non-first-party names do nothing", async () => {
 			makeVenv(machine, "2.8.2")
 			await fs.writeFile(

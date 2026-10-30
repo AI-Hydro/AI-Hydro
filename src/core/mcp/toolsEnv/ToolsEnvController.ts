@@ -470,7 +470,16 @@ export class ToolsEnvController {
 				return
 			}
 		} else {
-			name = candidates[0]?.name ?? findFirstPartyEntryName(servers)
+			name = candidates[0]?.name
+			if (!name) {
+				// Nothing enabled and launcher-shaped: a disabled or non-standard entry never gets a modal or a record.
+				void this.host.notify(
+					"info",
+					"No enabled AI-Hydro Tools launcher is registered, so there is nothing to confirm. Enable the server or register the standard `aihydro-mcp` launcher first.",
+					[],
+				)
+				return
+			}
 		}
 		const entry = name ? servers[name] : undefined
 		if (!name || !entry) {
