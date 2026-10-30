@@ -5,6 +5,7 @@
  */
 
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
+import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import App from "../App"
 import { ScienceToolCard } from "../components/chat/ScienceToolCard"
 import HistoryView from "../components/history/HistoryView"
@@ -121,6 +122,13 @@ const openTool = (label: string, more = false): ScreenStep[] => [
 	{ click: `button[aria-label^="${label}"]` },
 	{ wait: 500 },
 ]
+
+const LONG_STUDY_ID = "usgs_01031500_hydro_data_long_identifier"
+const LONG_STUDY_LABEL = "Piscataquis River near Dover-Foxcroft, ME (fixture USGS 01031500)"
+/** The plain task with a real-sized cost, so the cost chip is as wide as in the owner's runs. */
+const costlyTask: AiHydroMessage[] = plainTextTask.map((m) =>
+	m.say === "api_req_started" ? { ...m, text: JSON.stringify({ ...JSON.parse(m.text ?? "{}"), cost: 0.2555 }) } : m,
+)
 
 const chatScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): ScreenDef => ({
 	id,
@@ -439,6 +447,43 @@ export const screens: ScreenDef[] = [
 		},
 		expectVisible: ["#bound-study"],
 		steps: SCROLL_TO_END,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
+	}),
+	// Header layout under pressure: a real-length study id and a non-trivial cost must truncate/wrap, never overlap.
+	chatScreen("chat-header-long-study", "Header: long study id and cost, expanded", {
+		state: {
+			...taskState(costlyTask),
+			studyBinding: {
+				chatId: "01FIXTURECHAT000000000000",
+				status: "bound",
+				studyId: LONG_STUDY_ID,
+				label: LONG_STUDY_LABEL,
+				reason: "The map layer belongs to this study.",
+				by: "map-layer",
+				canChoose: true,
+			},
+		},
+		expectVisible: ["#bound-study", "#price-tag", "[data-testid=task-header-row]"],
+		steps: SCROLL_TO_END,
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
+	}),
+	chatScreen("chat-header-long-study-collapsed", "Header: long study id and cost, collapsed", {
+		state: {
+			...taskState(costlyTask),
+			studyBinding: {
+				chatId: "01FIXTURECHAT000000000000",
+				status: "bound",
+				studyId: LONG_STUDY_ID,
+				label: LONG_STUDY_LABEL,
+				reason: "The map layer belongs to this study.",
+				by: "map-layer",
+				canChoose: true,
+			},
+		},
+		expectVisible: ["#bound-study", "#price-tag", "[aria-label='Show task details'][aria-expanded=false]"],
+		steps: [{ click: "[aria-label='Hide task details']" }, { wait: 200 }, ...SCROLL_TO_END],
 		pixelDiffThreshold: STRUCTURAL_ONLY,
 		scrollPinned: PINNED,
 	}),

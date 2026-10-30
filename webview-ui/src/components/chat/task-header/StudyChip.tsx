@@ -78,12 +78,15 @@ export const StudyChipView: React.FC<StudyChipViewProps> = ({ binding, onOpen, o
 
 	const chipBody = (
 		<>
-			<span aria-hidden="true" className="codicon codicon-database text-xs opacity-70" />
+			<span aria-hidden="true" className="codicon codicon-database shrink-0 text-xs opacity-70" />
 			{id ? (
 				<>
-					{/* The study id is what users look for: first and never truncated. */}
-					<span className="shrink-0 font-medium">{id}</span>
-					{label && <span className="overflow-hidden text-ellipsis whitespace-nowrap min-w-0">· {label}</span>}
+					{/* The study id is what users look for: first, and the last thing to lose width. A long id is cut with an
+					    ellipsis (the full id is the chip's tooltip and accessible name), never allowed to spill over a neighbour. */}
+					<span className="min-w-[4ch] max-w-full shrink-0 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
+						{id}
+					</span>
+					{label && <span className="min-w-0 shrink overflow-hidden text-ellipsis whitespace-nowrap">· {label}</span>}
 				</>
 			) : (
 				<span className={pending ? "font-semibold" : undefined}>{text}</span>
@@ -94,7 +97,7 @@ export const StudyChipView: React.FC<StudyChipViewProps> = ({ binding, onOpen, o
 	if (!interactive) {
 		return (
 			<div
-				className="task-header-chip task-header-chip--solid mr-1 max-w-[132px] min-[480px]:max-w-[220px]"
+				className="task-header-chip task-header-chip--solid min-w-[8rem] max-w-full min-[480px]:max-w-[22rem]"
 				id="bound-study"
 				title={title}>
 				{chipBody}
@@ -105,7 +108,7 @@ export const StudyChipView: React.FC<StudyChipViewProps> = ({ binding, onOpen, o
 		<button
 			aria-expanded={picking}
 			aria-label={`Study for this chat: ${id ? `${id}${label ? ` ${label}` : ""}` : text}. Change study`}
-			className={`task-header-chip task-header-chip--solid task-header-chip--button mr-1 max-w-[132px] min-[480px]:max-w-[220px] cursor-pointer ${pending ? "task-header-chip--attention" : ""}`}
+			className={`task-header-chip task-header-chip--solid task-header-chip--button min-w-[8rem] max-w-full min-[480px]:max-w-[22rem] cursor-pointer ${pending ? "task-header-chip--attention" : ""}`}
 			id="bound-study"
 			onClick={(e) => {
 				e.stopPropagation()
@@ -118,7 +121,7 @@ export const StudyChipView: React.FC<StudyChipViewProps> = ({ binding, onOpen, o
 			title={title}
 			type="button">
 			{chipBody}
-			<span aria-hidden="true" className="codicon codicon-chevron-down text-xs opacity-70" />
+			<span aria-hidden="true" className="codicon codicon-chevron-down shrink-0 text-xs opacity-70" />
 		</button>
 	)
 }

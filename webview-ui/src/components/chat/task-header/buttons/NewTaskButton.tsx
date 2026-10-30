@@ -10,7 +10,7 @@ const NewTaskButton: React.FC<{
 		<HeroTooltip content="Close current task to start a new one" delay={1000} placement="bottom">
 			<button
 				className={cn(
-					"flex items-center gap-0.5 border-0 text-xs bg-transparent opacity-70 hover:opacity-100 whitespace-nowrap",
+					"flex shrink-0 items-center gap-0.5 border-0 text-xs bg-transparent opacity-70 hover:opacity-100 whitespace-nowrap",
 					className,
 					"hover:bg-muted/10 px-1 cursor-pointer",
 				)}

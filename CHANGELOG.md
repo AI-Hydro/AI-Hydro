@@ -9,6 +9,17 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.5] — unreleased (owner feedback on 0.4.4: chat polish)
+
+### Fixed — the task header no longer overlaps the study and cost chips (branch `vision2040/polish-chat`)
+
+Reported on the installed 0.4.4 build: at about 400 px the study chip (`usgs_01031500_hydro_data`) sat on top of the cost chip ($0.2555) and "New task" was crowded. Cause: the study id span was `shrink-0` ("never truncated") inside a chip capped at 132 px, so a real-length id overflowed the chip into its neighbour; the right cluster was `flex-shrink-0` and could not wrap.
+
+- The title row is a wrapping flex row. Chevron, copy and delete stay first; the study chip, cost chip and "New task" form a right cluster that drops to a second row when it does not fit. Nothing overlaps at 280, 400 or 800 px.
+- A long study id is cut with an ellipsis inside its chip (the label loses width first); the full id stays in the tooltip and the accessible name.
+- N4 (`nav-ribbon-audit-2026-10-30.md`): the expand toggle is now a `<button aria-expanded>` with a name ("Show/Hide task details") instead of a click handler on a div; copy, delete and "New task" are 24 px tall instead of 10 px (`max-h-3` removed), so the header has 0 small targets on every chat screen.
+- Harness: `chat-header-long-study` and `chat-header-long-study-collapsed` (a 40-character study id with a label, $0.2555) with first budget entries.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)
