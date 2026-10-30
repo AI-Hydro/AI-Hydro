@@ -179,7 +179,7 @@ describe("tool-call ask vocabulary", () => {
 	it("keeps task-level buttons", () => {
 		expect(BUTTON_CONFIGS.api_req_failed.primaryText).toBe("Retry")
 		expect(BUTTON_CONFIGS.resume_task.primaryText).toBe("Resume Task")
-		expect(BUTTON_CONFIGS.completion_result.primaryText).toBe("Start New Task")
+		expect(BUTTON_CONFIGS.completion_result.primaryText).toBe("New chat")
 		expect(BUTTON_CONFIGS.auto_approval_max_req_reached.primaryText).toBe("Proceed")
 	})
 

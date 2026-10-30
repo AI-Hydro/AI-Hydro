@@ -15,6 +15,7 @@ import {
 	fixtureAnnotatedServers,
 	fixtureMcpServers,
 	fixtureOwnerServers,
+	fixturePausedServers,
 	fixtureUnannotatedServers,
 	provisionalCall,
 	type RecordedCall,
@@ -185,7 +186,8 @@ const ownerShape = (detail: "normal" | "focus"): Partial<ScreenDef> => ({
 		"text=SESSION_RESOLUTION_FAILED",
 		"[data-testid=inline-approval]",
 		"[data-testid=auto-run-risk]",
-		"text=45 MCP tools always allowed",
+		// The count lives in the chip's accessible name and the popover; the chip itself stays "Auto-run: N on, risky".
+		"[data-testid=auto-run-chip][aria-label*='45 MCP tools always allowed']",
 		// X1-C1: the two undeclared-effect calls are one server-level line at Normal and a header count at Focus.
 		detail === "normal" ? "text=declares no effect hints (2 calls" : "text=2 calls with no declared effect",
 	],
@@ -318,12 +320,18 @@ export const screens: ScreenDef[] = [
 		mcpServers: fixtureAlwaysAllowServers,
 		expectVisible: [
 			"[data-testid=auto-run-risk]",
-			"text=(risky)",
-			"text=2 MCP tools always allowed",
+			"text=risky",
 			"[data-testid=composer-status]",
 			"[data-testid=send-button]",
+			"[data-testid=new-chat-button]",
 		],
-		expectAbsent: ["text=Tool auto-run", "text=hold shift to drag", "[data-testid=stop-button]"],
+		expectAbsent: [
+			"text=Tool auto-run",
+			"text=hold shift to drag",
+			"[data-testid=stop-button]",
+			"text=Does not approve claims",
+			"text=Start New Task",
+		],
 	}),
 	chatScreen("composer-running", "Composer: request in flight (compact stop, no full-width Cancel)", {
 		state: taskState(tx.runningTask),
@@ -339,6 +347,7 @@ export const screens: ScreenDef[] = [
 			"text=Run any command",
 			"text=Browse websites",
 			"[data-testid=popover-disclaimer]",
+			"text=Does not approve claims",
 			"[data-testid=auto-run-chip][aria-expanded=true]",
 		],
 		expectAbsent: [
@@ -347,6 +356,38 @@ export const screens: ScreenDef[] = [
 			"text=Execute all commands",
 			"text=Use the browser",
 		],
+	}),
+	chatScreen("composer-add-menu", "Composer: the one Add menu (context, files, rules)", {
+		state: taskState(tx.runningTaskIdle),
+		steps: [{ wait: 600 }, { click: "[data-testid=add-menu-button]" }, { wait: 400 }],
+		expectVisible: [
+			"[data-testid=add-menu-button][aria-expanded=true]",
+			"text=Add context (@)",
+			"text=Attach files & images",
+			"text=Rules & workflows",
+		],
+		expectAbsent: ["[aria-label*='MCP Servers']", "[aria-label*='Rules & Workflows']"],
+	}),
+	// X1-C4: paused MCP grants are a separate count chip; its popover says why and how to fix it.
+	chatScreen("composer-paused-grants", "Composer: 45 paused MCP grants, popover open", {
+		state: {
+			...taskState(tx.runningTaskIdle),
+			autoApprovalSettings: {
+				...DEFAULT_AUTO_APPROVAL_SETTINGS,
+				version: DEFAULT_AUTO_APPROVAL_SETTINGS.version + 1,
+				actions: { ...DEFAULT_AUTO_APPROVAL_SETTINGS.actions, readFiles: true, useMcp: true },
+			},
+		},
+		mcpServers: fixturePausedServers,
+		steps: [{ wait: 600 }, { click: "[data-testid=paused-chip]" }, { wait: 400 }],
+		expectVisible: [
+			"[data-testid=paused-chip][aria-expanded=true]",
+			"text=45 paused",
+			"[data-testid=paused-popover]",
+			"[data-testid=open-mcp-view]",
+			"[data-testid=auto-run-chip]",
+		],
+		expectAbsent: ["[data-testid=auto-run-risk]", "text=Does not approve claims"],
 	}),
 	chatScreen("chat-home-empty-history", "Chat home, no history", { state: { taskHistory: [] } }),
 	chatScreen("chat-task-text", "Task with plain text", {

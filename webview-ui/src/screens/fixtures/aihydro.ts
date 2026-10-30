@@ -202,3 +202,22 @@ export const fixtureOwnerServers: McpServer[] = [
 		})),
 	},
 ]
+
+/**
+ * Paused grants: 45 per-tool "always allow" grants on a server whose launcher no longer matches the recorded one, so
+ * the host's run-time recheck pauses every one (they ask first). Synthetic tool names; the shape of the owner's session.
+ */
+export const fixturePausedServers: McpServer[] = [
+	{
+		name: "ai-hydro",
+		config: "{}",
+		status: "connected",
+		trust: { trusted: false, reason: "fixture: the registered launcher differs from the recorded one" },
+		tools: Array.from({ length: OWNER_ALWAYS_ALLOWED_TOOLS }, (_, i) => ({
+			name: `paused_tool_${String(i + 1).padStart(2, "0")}`,
+			description: "Synthetic fixture tool.",
+			autoApprove: true,
+			annotations: { readOnlyHint: true },
+		})),
+	},
+]

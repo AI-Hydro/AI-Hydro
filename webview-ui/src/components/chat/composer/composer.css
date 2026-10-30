@@ -1,0 +1,227 @@
+/* Composer chrome: the status row, chips, popovers, the toolbar buttons and the send/stop button.
+   Tokens and VS Code theme variables only (design/tokens.css); no raw colours, spacing on the 4 px grid. */
+
+.aih-composer-status {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: var(--aih-space-1);
+	min-height: 28px;
+	padding: 0 15px var(--aih-space-1);
+	user-select: none;
+}
+.aih-composer-status__ring {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+}
+
+.aih-chip {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--aih-space-1);
+	min-height: 24px;
+	max-width: 100%;
+	min-width: 0;
+	padding: 0 var(--aih-space-2);
+	border: 1px solid var(--aih-border);
+	border-radius: var(--aih-radius-lg);
+	background: transparent;
+	color: var(--aih-fg);
+	font: inherit;
+	font-size: var(--aih-text-caption);
+	line-height: var(--aih-line-height);
+	white-space: nowrap;
+	cursor: pointer;
+}
+.aih-chip:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+}
+.aih-chip:focus-visible {
+	outline: var(--aih-focus-ring);
+	outline-offset: var(--aih-focus-offset);
+}
+.aih-chip[aria-expanded="true"] {
+	border-color: var(--aih-border-active);
+}
+/* Risk is text plus icon (never colour alone); the tone only reinforces it. */
+.aih-chip--warn {
+	border-color: var(--vscode-editorWarning-foreground, var(--aih-border));
+}
+.aih-chip__risk {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	color: var(--vscode-editorWarning-foreground, var(--aih-fg));
+}
+.aih-chip .codicon {
+	font-size: var(--aih-text-label);
+}
+.aih-chip__label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Popover and menu surface. */
+.aih-popover {
+	box-sizing: border-box;
+	position: fixed;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	padding: var(--aih-space-2);
+	border: 1px solid var(--vscode-editorWidget-border, var(--aih-border));
+	border-radius: var(--aih-radius-md);
+	background: var(--aih-surface-raised);
+	color: var(--vscode-editorWidget-foreground, var(--aih-fg));
+	font-size: var(--aih-text-label);
+	line-height: var(--aih-line-height);
+	overscroll-behavior: contain;
+	overflow-y: auto;
+	outline: none;
+}
+.aih-popover:focus-visible {
+	outline: var(--aih-focus-ring);
+	outline-offset: -2px;
+}
+.aih-popover__title {
+	margin: 0 0 var(--aih-space-1);
+	font-weight: 600;
+}
+.aih-popover__body {
+	margin: 0 0 var(--aih-space-2);
+	color: var(--aih-fg-muted);
+}
+.aih-popover__list {
+	margin: 0 0 var(--aih-space-2);
+	padding-left: var(--aih-space-4);
+}
+.aih-menu-item {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: var(--aih-space-2);
+	width: 100%;
+	min-height: 28px;
+	padding: 0 var(--aih-space-2);
+	border: 0;
+	border-radius: var(--aih-radius-sm);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.aih-menu-item:hover:not(:disabled),
+.aih-menu-item:focus-visible {
+	background: var(--vscode-list-hoverBackground, var(--vscode-toolbar-hoverBackground));
+}
+.aih-menu-item:focus-visible {
+	outline: var(--aih-focus-ring);
+	outline-offset: -2px;
+}
+.aih-menu-item:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Risk lines in the auto-run popover. */
+.aih-risk-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--aih-space-1);
+	margin: 0 0 var(--aih-space-2);
+	padding: 0;
+	list-style: none;
+}
+.aih-risk-list li {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--aih-space-1);
+}
+.aih-risk-list .codicon {
+	color: var(--vscode-editorWarning-foreground, var(--aih-fg));
+	margin-top: 2px;
+}
+
+/* Toolbar controls: codicon only, one 24 px target. */
+.aih-tool-btn {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--aih-radius-sm);
+	background: transparent;
+	color: var(--aih-fg-muted);
+	font: inherit;
+	cursor: pointer;
+}
+.aih-tool-btn:hover:not(:disabled),
+.aih-tool-btn[aria-expanded="true"] {
+	background: var(--vscode-toolbar-hoverBackground);
+	color: var(--aih-fg);
+}
+.aih-tool-btn:focus-visible {
+	outline: var(--aih-focus-ring);
+	outline-offset: var(--aih-focus-offset);
+}
+.aih-tool-btn .codicon {
+	font-size: 16px;
+}
+.vscode-high-contrast .aih-tool-btn,
+.vscode-high-contrast-light .aih-tool-btn {
+	border-color: var(--aih-border);
+}
+
+/* Send and stop: the theme's own primary button, flat, 28 px. */
+.aih-send {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 1px solid var(--vscode-button-border, transparent);
+	border-radius: var(--aih-radius-md);
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	cursor: pointer;
+}
+.aih-send:hover:not(:disabled) {
+	background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+.aih-send:focus-visible {
+	outline: var(--aih-focus-ring);
+	outline-offset: var(--aih-focus-offset);
+}
+.aih-send:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+.aih-send .codicon {
+	font-size: 16px;
+}
+.vscode-high-contrast .aih-send,
+.vscode-high-contrast-light .aih-send {
+	border-color: var(--vscode-contrastBorder, currentColor);
+}
+
+/* A lone "New chat" action after a finished task: modest, right-aligned, secondary. */
+.aih-footer-action {
+	display: flex;
+	justify-content: flex-end;
+	padding: 0 15px var(--aih-space-1);
+}
+.aih-footer-action .aih-btn {
+	min-height: var(--aih-target-min);
+	padding-top: 0;
+	padding-bottom: 0;
+}
