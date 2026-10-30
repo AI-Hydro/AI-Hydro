@@ -896,6 +896,33 @@ describe("transcript presenter: aggregation (X1-C1)", () => {
 		expect(g.lifted).to.have.length(1)
 		expect(g.lifted[0].text).to.contain("effect unverified, server not trusted (3 calls")
 	})
+	it("an untrusted first-party server's line carries the trust action flag; a third-party server's does not", () => {
+		reset()
+		const first = groups(
+			presentTranscript(calls(1, "aihydro-tools"), {
+				detail: "normal",
+				effectClassFor: () => "UNVERIFIED",
+				isProtectedPath: () => false,
+			}),
+		)[0]
+		expect(first.lifted[0].untrustedFirstParty).to.equal(true)
+		const merged = groups(
+			presentTranscript(calls(3, "aihydro-tools"), {
+				detail: "normal",
+				effectClassFor: () => "UNVERIFIED",
+				isProtectedPath: () => false,
+			}),
+		)[0]
+		expect(merged.lifted[0].untrustedFirstParty).to.equal(true)
+		const third = groups(
+			presentTranscript(calls(3, "swat"), {
+				detail: "normal",
+				effectClassFor: () => "UNVERIFIED",
+				isProtectedPath: () => false,
+			}),
+		)[0]
+		expect(third.lifted[0].untrustedFirstParty).to.equal(undefined)
+	})
 	it("Focus counts the undeclared-effect notice in the header instead of a row, and still lists every member", () => {
 		reset()
 		const g = lastGroup(calls(8), "focus")

@@ -264,6 +264,35 @@ function configLooksFirstParty(config: unknown): boolean {
 	)
 }
 
+/** The `command args` line a connection config launches, for display (never for a decision). Empty when unreadable. */
+export function launchLineOfConfig(config: string | undefined): string {
+	try {
+		const { command, args } = JSON.parse(config ?? "") as { command?: unknown; args?: unknown }
+		if (typeof command !== "string" || !command) {
+			return ""
+		}
+		const rest = Array.isArray(args) ? args.filter((a): a is string => typeof a === "string") : []
+		return [command, ...rest].join(" ")
+	} catch {
+		return ""
+	}
+}
+
+/** Plain-language state of a first-party launcher the user has not confirmed. `launchLine` is shown verbatim. */
+export function newLauncherSentence(launchLine: string): string {
+	return launchLine
+		? `AI-Hydro Tools is running from a new location (\`${launchLine}\`). Your auto-run settings are paused until you confirm it.`
+		: "AI-Hydro Tools is running from a location you have not confirmed. Your auto-run settings are paused until you confirm it."
+}
+
+/**
+ * Whether the "Trust this launcher..." action fits a server: it is first-party by name, so confirming the launcher
+ * AI-Hydro found can make it trusted. A third-party server never gets the action (it can never be first-party).
+ */
+export function canOfferTrustAction(serverName: string | undefined): boolean {
+	return isFirstPartyServerName(serverName)
+}
+
 /**
  * Human-readable trust state, derived from the same evaluation as `isServerTrusted` (so the UI can never
  * disagree with the security decision). Reasons name what to do, never imply an unverified server is safe.
@@ -289,7 +318,7 @@ export function explainServerTrust(
 			return {
 				trusted: false,
 				reason: isFirstPartyServerName(server.name)
-					? "Not trusted: no first-party launcher is recorded yet. Restart AI-Hydro to record or review it."
+					? "Not trusted: you have not confirmed an AI-Hydro Tools launcher yet. Auto-run is paused until you do (Trust this launcher...)."
 					: "Not trusted: third-party server. It gets no first-party privileges and its instructions are not sent to the model.",
 			}
 		case "name_differs_from_record": {
@@ -301,11 +330,9 @@ export function explainServerTrust(
 			}
 			return {
 				trusted: false,
-				reason:
-					`Not trusted: the recorded first-party launcher belongs to a server named '${launcher?.name}', not '${server.name}'.` +
-					(shaped
-						? " This server's launch line has the first-party shape: restart AI-Hydro to review it and, if you agree, record it."
-						: ""),
+				reason: shaped
+					? `Not trusted: ${newLauncherSentence(launchLineOfConfig(server.config))}`
+					: `Not trusted: the launcher AI-Hydro recorded belongs to a server named '${launcher?.name}', not '${server.name}'.`,
 			}
 		}
 		case "config_unreadable":
@@ -315,12 +342,12 @@ export function explainServerTrust(
 		case "env_or_cwd_differs":
 			return {
 				trusted: false,
-				reason: "Not trusted: its environment variables or working directory differ from the recorded launcher. Restart AI-Hydro to review the change.",
+				reason: "Not trusted: AI-Hydro Tools now runs with different environment variables or a different working directory than the launcher AI-Hydro recorded. Your auto-run settings are paused until you confirm it (Trust this launcher...).",
 			}
 		case "launch_differs":
 			return {
 				trusted: false,
-				reason: "Not trusted: its launch command differs from the recorded launcher. Restart AI-Hydro to review the change.",
+				reason: `Not trusted: ${newLauncherSentence(launchLineOfConfig(server.config))}`,
 			}
 		case "no_server":
 		default:
@@ -368,6 +395,20 @@ function entryLaunch(entry: SettingsServerEntry): { command: string; args: strin
 	return { command: entry.command, args: args as string[], launchHash: launchContextHash(entry) }
 }
 
+/** ENABLED stdio entries under a first-party NAME whose launch line has the first-party SHAPE. */
+export function firstPartyCandidates(entries: readonly SettingsServerEntry[]): SettingsServerEntry[] {
+	return entries.filter((e) => {
+		const launch = entryLaunch(e)
+		return (
+			enabledState(e) === "enabled" &&
+			isFirstPartyServerName(e.name) &&
+			(e.type === undefined || e.type === "stdio") &&
+			launch !== undefined &&
+			looksLikeFirstPartyLauncher(launch.command, launch.args)
+		)
+	})
+}
+
 /**
  * Migration plan for the trust anchor (session study S6). Situation: the recorded launcher names a server that is
  * disabled or gone, while an enabled server under a different first-party name is the one in use, so the working
@@ -391,15 +432,7 @@ export function planFirstPartyAnchor(
 	if (recorded && enabled.some((e) => e.name === recorded.name)) {
 		return { action: "none", reason: "recorded server is enabled" }
 	}
-	const candidates = enabled.filter((e) => {
-		const launch = entryLaunch(e)
-		return (
-			isFirstPartyServerName(e.name) &&
-			(e.type === undefined || e.type === "stdio") &&
-			launch !== undefined &&
-			looksLikeFirstPartyLauncher(launch.command, launch.args)
-		)
-	})
+	const candidates = firstPartyCandidates(entries)
 	if (candidates.length === 0) {
 		return { action: "none", reason: "no enabled first-party-shaped server" }
 	}
@@ -416,4 +449,36 @@ export function planFirstPartyAnchor(
 		recorded.args.every((a, i) => a === launch.args[i]) &&
 		recordedLaunchHash(recorded) === launch.launchHash
 	return sameLaunchAsRecord ? { action: "rename", candidate: withLaunch } : { action: "confirm", candidate: withLaunch }
+}
+
+/** The recorded launcher belongs to a server that is disabled or gone, while one enabled first-party server is in use. */
+export interface StaleFirstPartyAnchor {
+	recordedName: string
+	state: "disabled" | "removed"
+	/** The enabled first-party-shaped server that is in use instead. */
+	activeName: string
+}
+
+/**
+ * Display-only companion of `planFirstPartyAnchor`: names the stale record so the status chip and the confirmation
+ * can say "Previously trusted: ai-hydro (disabled)". It never changes trust; the confirmation click is still required.
+ * Undefined unless there is a record, it is not enabled, and exactly one enabled first-party candidate exists.
+ */
+export function describeStaleAnchor(
+	entries: readonly SettingsServerEntry[],
+	recorded: FirstPartyLauncher | undefined,
+): StaleFirstPartyAnchor | undefined {
+	if (!recorded) {
+		return undefined
+	}
+	const plan = planFirstPartyAnchor(entries, recorded)
+	if (plan.action !== "rename" && plan.action !== "confirm") {
+		return undefined
+	}
+	const stored = entries.some((e) => e.name === recorded.name)
+	return { recordedName: recorded.name, state: stored ? "disabled" : "removed", activeName: plan.candidate.name }
+}
+
+export function staleAnchorNote(stale: StaleFirstPartyAnchor): string {
+	return `Previously trusted: ${stale.recordedName} (${stale.state}).`
 }

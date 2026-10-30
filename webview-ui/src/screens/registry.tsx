@@ -272,8 +272,8 @@ export const screens: ScreenDef[] = [
 			version: "2.8.2",
 			trust: "untrusted",
 			trustReason:
-				'The registered launcher differs from the one AI-Hydro recorded. Choose "Trust this launcher" to review the change.',
-			serverName: "ai-hydro",
+				"AI-Hydro Tools is running from a new location (`/fixture/.aihydro/venvs/tools-2.8/bin/aihydro-mcp`). Your auto-run settings are paused until you confirm it. Previously trusted: ai-hydro (disabled).",
+			serverName: "aihydro-tools",
 			serverCommand: "/fixture/.aihydro/venvs/tools-2.8/bin/aihydro-mcp",
 		},
 	}),

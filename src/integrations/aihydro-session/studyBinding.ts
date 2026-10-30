@@ -1,4 +1,4 @@
-import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
+import { canOfferTrustAction, isServerTrusted, launchLineOfConfig, newLauncherSentence } from "@shared/aihydro/firstPartyServers"
 import type { StudyBindingState, StudyCandidateView } from "@shared/ExtensionMessage"
 import type { McpResourceResponse, McpServer, McpToolCallResponse } from "@shared/mcp"
 import { buildAiHydroCallContext } from "@/core/mcp/aihydroContext"
@@ -82,6 +82,20 @@ export function findBindingServer(hub: BindingHub): McpServer | undefined {
 	return hub
 		.getServers()
 		.find((s) => isAiHydroServerName(s.name) && s.status === "connected" && !s.disabled && isServerTrusted(s as any))
+}
+
+/** An enabled, connected first-party-named server that is not trusted: the launcher needs the user's confirmation. */
+export function untrustedBindingServer(hub: BindingHub): McpServer | undefined {
+	return hub
+		.getServers()
+		.find(
+			(s) =>
+				isAiHydroServerName(s.name) &&
+				canOfferTrustAction(s.name) &&
+				s.status === "connected" &&
+				!s.disabled &&
+				!isServerTrusted(s as any),
+		)
 }
 
 function resourceJson(res: McpResourceResponse, uri: string): any {
@@ -357,6 +371,17 @@ export async function resolveLaunchBinding(input: ResolveLaunchInput): Promise<S
 	})
 	const server = findBindingServer(hub)
 	if (!server) {
+		// Connected but not trusted is a different problem from not connected, and the user can fix it.
+		const untrusted = untrustedBindingServer(hub)
+		if (untrusted) {
+			return {
+				...unavailable(
+					`${newLauncherSentence(launchLineOfConfig(untrusted.config))} Studies cannot be bound until you confirm it.`,
+				),
+				cause: "untrusted_server",
+				causeServer: untrusted.name,
+			}
+		}
 		return unavailable("The AI-Hydro server is not connected, so studies cannot be bound yet.")
 	}
 	try {

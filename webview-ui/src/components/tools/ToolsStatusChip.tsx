@@ -7,8 +7,8 @@ import "./tools-status.css"
 
 const ICON: Record<string, string> = { ok: "check", busy: "sync", warn: "warning", error: "error" }
 
-export function runToolsAction(action: ToolsEnvAction): void {
-	McpServiceClient.runToolsEnvAction(ToolsEnvActionRequest.create({ action })).catch((error) =>
+export function runToolsAction(action: ToolsEnvAction, serverName?: string): void {
+	McpServiceClient.runToolsEnvAction(ToolsEnvActionRequest.create({ action, serverName: serverName ?? "" })).catch((error) =>
 		console.error(`Tools action ${action} failed:`, error),
 	)
 }

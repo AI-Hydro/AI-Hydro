@@ -6,6 +6,14 @@
  * There is no permanent dismissal: a failed install leaves phase "failed" with Retry until it succeeds.
  * Host-neutral: all UI and configuration go through `ToolsEnvHost`; all machine access through `ToolsEnvDeps`.
  */
+
+import {
+	describeStaleAnchor,
+	firstPartyCandidates,
+	launchContextHash,
+	looksLikeFirstPartyLauncher,
+	staleAnchorNote,
+} from "@shared/aihydro/firstPartyServers"
 import {
 	emptyToolsEnvStatus,
 	formatToolsDiagnostics,
@@ -17,19 +25,18 @@ import {
 	venvPythonPath,
 	versionMeetsFloor,
 } from "@shared/aihydro/toolsEnv"
-import { launchContextHash, looksLikeFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
 import * as path from "path"
-import { loadFirstPartyLauncher, readFirstPartyLauncher } from "../firstPartyLauncher"
-import { defaultPythonNames, ensureToolsEnv, probeToolsEnv, type ToolsEnvDeps } from "./managedVenv"
+import { loadFirstPartyLauncher, readFirstPartyLauncher, settingsEntries } from "../firstPartyLauncher"
 import {
 	classifyLauncher,
 	findFirstPartyEntryName,
 	type LauncherClass,
 	readMcpSettings,
 	readTrustSnapshot,
-	registerManagedLauncher,
 	reconcileLauncherRecord,
+	registerManagedLauncher,
 } from "./launcherRegistration"
+import { defaultPythonNames, ensureToolsEnv, probeToolsEnv, type ToolsEnvDeps } from "./managedVenv"
 
 export interface ToolsEnvConfig {
 	/** `aihydro.tools.venvPath`; empty means `<aihydro_home>/venvs/tools-2.8`. */
@@ -61,7 +68,17 @@ export interface ToolsEnvHost {
 	/** Run `task` under a cancellable progress notification; `signal` aborts when the user cancels. */
 	withProgress<T>(title: string, task: (report: (step: string) => void, signal: AbortSignal) => Promise<T>): Promise<T>
 	/** Modal: "Trust this launcher" vs dismiss. The only path that rewrites an existing record. */
-	confirmTrust(launcher: TrustPrompt, recorded: { command: string; args: string[] } | undefined): Promise<boolean>
+	confirmTrust(
+		launcher: TrustPrompt,
+		recorded: { command: string; args: string[] } | undefined,
+		/** Extra context for the dialog, e.g. "Previously trusted: ai-hydro (disabled)." Display only. */
+		note?: string,
+	): Promise<boolean>
+	/**
+	 * More than one enabled first-party launcher is registered and the request did not name one: the user picks, by
+	 * exact command. undefined = dismissed (nothing is trusted).
+	 */
+	chooseLauncher(candidates: { name: string; command: string; args: string[] }[]): Promise<string | undefined>
 	/** Non-modal choice between switching the legacy launcher to the managed one and keeping it. undefined = ignored. */
 	askSwitch(currentCommand: string, managedCommand: string): Promise<"switch" | "keep" | undefined>
 	/** Surface a result; resolves with the clicked action label, if any. */
@@ -92,6 +109,8 @@ export class ToolsEnvController {
 	/** Launchers the user declined to trust this session, so one start never shows the same modal twice. */
 	private declined = new Set<string>()
 	private abort: AbortController | undefined
+	/** Other enabled first-party launchers while a trust request is being confirmed (shown in the dialog). */
+	private otherLaunchers: string[] = []
 
 	constructor(
 		private readonly host: ToolsEnvHost,
@@ -387,7 +406,7 @@ export class ToolsEnvController {
 	}
 
 	/** Actions the chip, status bar and commands dispatch. */
-	async runAction(action: ToolsEnvAction): Promise<void> {
+	async runAction(action: ToolsEnvAction, serverName?: string): Promise<void> {
 		switch (action) {
 			case "install":
 			case "retry":
@@ -406,7 +425,7 @@ export class ToolsEnvController {
 				await this.host.copyText(this.diagnostics())
 				return
 			case "trust":
-				await this.trustCurrent()
+				await this.trustCurrent(serverName)
 				return
 			case "useManaged":
 				await this.host.writeState({ keptLauncher: undefined })
@@ -417,19 +436,66 @@ export class ToolsEnvController {
 
 	// ── Trust ───────────────────────────────────────────────────────────────
 
-	/** The explicit "Trust this launcher" path: shows the confirmation again and records only on yes. */
-	async trustCurrent(): Promise<void> {
+	/**
+	 * The explicit "Trust this launcher" path: shows the confirmation again and records only on yes. `serverName` comes
+	 * from the webview and is only a hint: it must be an ENABLED, first-party-named, first-party-shaped entry in the
+	 * settings file, or nothing happens. With no name and several such entries, the user chooses; one is never picked
+	 * silently.
+	 */
+	async trustCurrent(serverName?: string): Promise<void> {
 		this.declined.clear() // an explicit request: ask again
 		const settings = await readMcpSettings(this.paths.settingsPath)
 		if (!settings.ok) {
 			return
 		}
-		const name = findFirstPartyEntryName(settings.config.mcpServers)
-		const entry = name ? settings.config.mcpServers[name] : undefined
+		const servers = settings.config.mcpServers
+		const candidates = firstPartyCandidates(settingsEntries(servers))
+		let name: string | undefined
+		if (serverName !== undefined) {
+			name = candidates.find((c) => c.name === serverName)?.name
+			if (!name) {
+				void this.host.notify(
+					"info",
+					`"${serverName}" is not an enabled AI-Hydro Tools launcher, so there is nothing to confirm for it.`,
+					[],
+				)
+				return
+			}
+		} else if (candidates.length > 1) {
+			const chosen = await this.host.chooseLauncher(
+				candidates.map((c) => ({ name: c.name, ...entryLaunchLine(servers[c.name]) })),
+			)
+			name = candidates.find((c) => c.name === chosen)?.name
+			if (!name) {
+				return
+			}
+		} else {
+			name = candidates[0]?.name
+			if (!name) {
+				// Nothing enabled and launcher-shaped: a disabled or non-standard entry never gets a modal or a record.
+				void this.host.notify(
+					"info",
+					"No enabled AI-Hydro Tools launcher is registered, so there is nothing to confirm. Enable the server or register the standard `aihydro-mcp` launcher first.",
+					[],
+				)
+				return
+			}
+		}
+		const entry = name ? servers[name] : undefined
 		if (!name || !entry) {
 			return
 		}
-		await this.reconcileExisting(name, entry, true)
+		this.otherLaunchers = candidates
+			.filter((c) => c.name !== name)
+			.map(
+				(c) =>
+					`${c.name} (\`${[entryLaunchLine(servers[c.name]).command, ...entryLaunchLine(servers[c.name]).args].join(" ")}\`)`,
+			)
+		try {
+			await this.reconcileExisting(name, entry, true)
+		} finally {
+			this.otherLaunchers = []
+		}
 		await this.refreshTrust()
 	}
 
@@ -484,11 +550,32 @@ export class ToolsEnvController {
 		if (this.declined.has(key)) {
 			return false
 		}
-		const yes = await this.host.confirmTrust(launcher, recorded)
+		const yes = await this.host.confirmTrust(launcher, recorded, await this.staleNote())
 		if (!yes) {
 			this.declined.add(key)
 		}
 		return yes
+	}
+
+	/** "Previously trusted: ai-hydro (disabled)." when the record points at a disabled/removed server. Display only. */
+	private async staleNote(): Promise<string | undefined> {
+		const others = this.otherLaunchers.length
+			? `Another enabled AI-Hydro launcher is also registered: ${this.otherLaunchers.join(", ")}. Only the one named here is being confirmed.`
+			: undefined
+		const stale = await this.staleOnly()
+		return [stale, others].filter(Boolean).join(" ") || undefined
+	}
+
+	private async staleOnly(): Promise<string | undefined> {
+		const settings = await readMcpSettings(this.paths.settingsPath)
+		if (!settings.ok) {
+			return undefined
+		}
+		const stale = describeStaleAnchor(
+			settingsEntries(settings.config.mcpServers),
+			await readFirstPartyLauncher(this.paths.settingsDir),
+		)
+		return stale ? staleAnchorNote(stale) : undefined
 	}
 
 	private async register(switchExisting: boolean) {
@@ -509,15 +596,19 @@ export class ToolsEnvController {
 
 	private async refreshTrust(): Promise<void> {
 		const snap = await readTrustSnapshot(this.paths.settingsDir, this.paths.settingsPath)
-		const reason =
-			snap.trust === "untrusted" && snap.reason.startsWith("Not trusted: its launch command differs")
-				? 'The registered launcher differs from the one AI-Hydro recorded. Choose "Trust this launcher" to review the change.'
-				: snap.reason
+		const reason = snap.reason
 		this.setStatus({
 			serverName: snap.serverName,
 			serverCommand: snap.serverCommand || this.status.serverCommand,
 			trust: snap.trust,
 			trustReason: reason,
 		})
+	}
+}
+
+function entryLaunchLine(entry: Record<string, unknown> | undefined): { command: string; args: string[] } {
+	return {
+		command: typeof entry?.command === "string" ? entry.command : "",
+		args: Array.isArray(entry?.args) ? (entry.args as unknown[]).filter((a): a is string => typeof a === "string") : [],
 	}
 }

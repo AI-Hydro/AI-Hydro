@@ -11,6 +11,15 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.3] — unreleased
 
+### Fixed — AI-Hydro tools untrusted after the launcher moved, with no visible way to fix it (branch `vision2040/trust-ux`)
+
+- **One action, where trust is the reason.** "Trust this launcher…" now sits on the paused-grant card ("Always for X is paused"), under the transcript's "server not trusted" line, and under the header when the study is unavailable because the launcher is not confirmed. It only asks the host to show its modal confirmation (exact command and path); trust is recorded only after that confirmation, and nothing is trusted automatically. Fail-closed semantics are unchanged.
+- **Plain wording.** "AI-Hydro Tools is running from a new location (`<command>`). Your auto-run settings are paused until you confirm it." replaces "not the registered first-party server, or its launch identity changed". The study chip's tooltip says the same instead of "not connected".
+- **Stale record.** When the recorded launcher belongs to a disabled or removed server entry and exactly one enabled first-party entry exists, the tools status chip and the confirmation say "Previously trusted: ai-hydro (disabled)." The click is still required.
+- **The right entry.** The tools status and "Trust this launcher…" now look at the enabled first-party entry first. A disabled legacy `ai-hydro` entry no longer shadows the running `aihydro-tools` (the chip could read "trusted" while the real server was not).
+- **No silent pick between launchers.** The buttons send the server they are about; the host re-validates it (enabled, first-party name and shape) and ignores anything else. With no name and two or more enabled first-party launchers, you choose by exact command, and the dialog says another enabled launcher is registered. The dialog says "AI-Hydro previously recorded" (the first record is written at registration, not by a confirmation).
+- **Immediate.** After you confirm, auto-run grants apply to the next call, the servers list refreshes, and the study chip re-resolves, with no reload.
+
 ### Changed — answer audit: one human summary line, underlined numbers, plain-language review list (branch `vision2040/audit-findings-ux`)
 
 - **One collapsed line, written for a reader.** The footer under a final answer now reads "3 numbers aren't linked to a recorded run · Review" (neutral note tone for advisory-only: "2 notes to review") instead of "Audit: 0/13 numbers traced · 13 hard · 0 advisory" plus an inline findings list. It is a button with `aria-expanded`; the review list stays closed until opened, and the traced count ("10 of 13 are traced") appears only inside it. The counts are the audit's own (`hardCount`, `advisoryCount`), unchanged.
@@ -20,7 +29,6 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - **Clean answers.** "All N numbers traced" as a tiny check line at Normal and Verbose; nothing at Focus. It still appears only when the audit ran and found nothing.
 - **Unchanged:** what the gate blocks or allows, every disclosure line (silent revisions, findings that remain, removed values, unavailable audit, held-back drafts).
 - **Harness.** New screens `chat-answer-audit-hard`, `chat-answer-audit-advisory`, `chat-answer-audit-clean`; `chat-answer-audit-graded` now expects the new line.
-
 ## [0.4.2] — unreleased (UX program Wave 1: projects on chats, chat titles, real Focus, project context, map provenance and map chrome; plus the abort-confirm guard and the Wave 0 leftovers)
 
 ### Changed — map chrome: a 40 px rail, three states, one panel width (UX program Wave 1, PR X1-M1, branch `vision2040/x1-m1-map-chrome`)
