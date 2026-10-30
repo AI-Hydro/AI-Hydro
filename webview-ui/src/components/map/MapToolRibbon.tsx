@@ -53,7 +53,7 @@ const TOOL_META: Record<ToolId, { icon: string; title: string }> = {
 	search: { icon: "search", title: "Search" },
 	annotations: { icon: "pin", title: "Pins" },
 	measure: { icon: "symbol-ruler", title: "Measure" },
-	draw: { icon: "edit", title: "Create vector" },
+	draw: { icon: "edit", title: "Draw ROI" },
 	transect: { icon: "graph-line", title: "Transect profile" },
 	swipe: { icon: "split-horizontal", title: "Swipe" },
 	time: { icon: "clock", title: "Time slider" },
@@ -466,7 +466,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 			return {
 				key: id,
 				icon: TOOL_META[id].icon,
-				text: TOOL_META[id].title === "Create vector" ? "Draw ROI" : TOOL_META[id].title,
+				text: TOOL_META[id].title,
 				label,
 				current: active !== null && railOf(active) === id,
 				onSelect: () => {
@@ -486,21 +486,8 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	const family: ToolId | null = active === "basemap" || active === "hydrography" ? "layers" : active
 	const title = family === null ? "" : TOOL_META[family].title
 
-	const toggleBtn = (pressed: boolean, activeColor: string): React.CSSProperties => ({
-		padding: "6px 10px",
-		fontSize: 12,
-		background: pressed ? activeColor : "transparent",
-		color: pressed ? "var(--vscode-button-foreground, #fff)" : fg,
-		border: `1px solid ${border}`,
-		borderRadius: 3,
-		cursor: "pointer",
-		display: "flex",
-		alignItems: "center",
-		gap: 6,
-		textAlign: "left",
-	})
-	const modeButton = (icon: string, text: string, pressed: boolean, activeColor: string, onClick: () => void) => (
-		<button aria-pressed={pressed} onClick={onClick} style={toggleBtn(pressed, activeColor)} type="button">
+	const modeButton = (icon: string, text: string, pressed: boolean, onClick: () => void) => (
+		<button aria-pressed={pressed} className="map-chip map-chip--block" onClick={onClick} type="button">
 			<span aria-hidden="true" className={`codicon codicon-${icon}`} />
 			{text}
 		</button>
@@ -623,39 +610,31 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 			{active === "transect" && <div style={{ padding: 8 }}>{transectsPanel}</div>}
 			{active === "measure" && (
 				<div style={{ padding: 10 }}>
-					<div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
-						Temporary distance or area measurements — not saved to the workspace.
-					</div>
+					<p className="map-hint" style={{ margin: "0 0 8px" }}>
+						Distance and area measurements are temporary. They are not saved to the workspace.
+					</p>
 					<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-						{modeButton(
-							"symbol-ruler",
-							"Distance",
-							measureMode === "distance",
-							"var(--vscode-button-background, #0e639c)",
-							() => onMeasureModeChange?.(measureMode === "distance" ? null : "distance"),
+						{modeButton("symbol-ruler", "Distance", measureMode === "distance", () =>
+							onMeasureModeChange?.(measureMode === "distance" ? null : "distance"),
 						)}
-						{modeButton(
-							"symbol-array",
-							"Area",
-							measureMode === "area",
-							"var(--vscode-button-background, #0e639c)",
-							() => onMeasureModeChange?.(measureMode === "area" ? null : "area"),
+						{modeButton("symbol-array", "Area", measureMode === "area", () =>
+							onMeasureModeChange?.(measureMode === "area" ? null : "area"),
 						)}
 						{measureMode && (
-							<div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>
-								Click points on map. Double-click or Enter to finish. ESC to cancel.
-							</div>
+							<p className="map-hint" style={{ margin: "4px 0 0" }}>
+								Click points on the map. Double-click or press Enter to finish. Esc cancels.
+							</p>
 						)}
 					</div>
 				</div>
 			)}
 			{active === "draw" && (
 				<div style={{ padding: 10 }}>
-					<div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
-						Create vectors saved to <code style={{ fontSize: 11 }}>vectors/</code> in your workspace. After finishing,
-						use Save or Export — geometry stays on screen until you choose.
-					</div>
-					<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+					<p className="map-hint" style={{ margin: "0 0 8px" }}>
+						Draw a shape, then save it to <code>vectors/</code> in your workspace or export it. The shape stays on the
+						map until you choose.
+					</p>
+					<div className="map-chip-grid">
 						{(
 							[
 								["polygon", "symbol-field", "Polygon"],
@@ -664,7 +643,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 							] as const
 						).map(([kind, icon, text]) => (
 							<React.Fragment key={kind}>
-								{modeButton(icon, text, drawMode === kind, "var(--vscode-button-background, #2d9f6f)", () => {
+								{modeButton(icon, text, drawMode === kind, () => {
 									onMeasureModeChange?.(null)
 									onDrawModeChange?.(drawMode === kind ? null : kind)
 								})}

@@ -57,6 +57,15 @@ The owner's report: the pin card has an editable name and note and no way to con
 - The footer "Your note. Not a measurement." stays: it says what a pin is.
 - New harness screens `map-pin-dirty`, `map-pin-saved`, `map-pin-saving`, `map-pin-save-failed`.
 
+### Changed — the other map panels and chrome follow the same rules (branch `vision2040/polish-map-chrome`)
+
+- **Pins panel**: rows are name and coordinates plus one "more" menu (Zoom to pin, Rename, Delete pin) instead of three icon buttons, one red. The top row is Add pin and a panel menu (Add pins from a layer, Export pins, Clear all pins with the existing confirm).
+- **Search panel**: emoji (a magnifier, a pin, a hammer, an hourglass, check and cross glyphs) are codicons, 9 and 10 px text is 11 to 12 px, every control is 24 px or more, and Search, Go and Save view use the same button, field and section-header styles as the other panels.
+- **Draw ROI**: the header says "Draw ROI" like the rail (it said "Create vector"); Polygon, Line and Point are one row of three. The "Sketches & tracker" section under it no longer repeats Poly and Line buttons, has one title and one menu (Import, one sketch per point of a layer, six export formats), and shows its collections and filters only once there is a sketch.
+- **Measure**: the same buttons and hint text as Draw.
+- **Reference tab, ROI strip, identify card, draw hint**: emoji to codicons, text under 11 px raised, buttons to 24 px (the identify card's previous, next and close buttons were 22 px glyphs; the feature routing badge was 8 px uppercase). The Reference tab took its colours from the map style, so in the light and high-contrast-light themes its text was white on white (1.0:1); it now uses the theme colours.
+- New harness screens `map-search-panel`, `map-draw-panel`, `map-measure-panel`, `map-reference-tab`, and a unit test for the identify card (the harness cannot open it: a canvas click does not reach deck.gl there).
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)

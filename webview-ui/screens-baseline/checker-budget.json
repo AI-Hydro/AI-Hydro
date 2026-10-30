@@ -1649,16 +1649,16 @@
 		"map-panel-overlay-pins": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 9,
-				"smallText": 9,
-				"contrast": 1,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 54,
-				"smallText": 54,
-				"contrast": 12,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -2401,6 +2401,74 @@
 			"cells": 6
 		},
 		"map-pin-save-failed": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-search-panel": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-draw-panel": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-measure-panel": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-reference-tab": {
 			"ref": {
 				"noName": 0,
 				"smallTarget": 0,
@@ -3594,9 +3662,9 @@
 				"map-panel-overlay-pins": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 54,
-						"smallText": 54,
-						"contrast": 12,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -3852,6 +3920,46 @@
 					"cells": 6
 				},
 				"map-pin-save-failed": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-search-panel": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-draw-panel": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-measure-panel": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-reference-tab": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,

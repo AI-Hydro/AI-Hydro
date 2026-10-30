@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useState } from "react"
 import { type ExportFormat, exportAnnotations } from "./annotationExport"
 import {
 	type AnnotationCollection,
@@ -16,7 +16,7 @@ import {
 } from "./annotationStorage"
 import { addToMyGallery } from "./galleryStorage"
 import { askAgentAboutAnnotation, askAgentAboutBatchAnnotations } from "./mapAgentBridge"
-import { MAP_Z } from "./mapZ"
+import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { PhotoStrip } from "./PhotoStrip"
 import { pickImages } from "./resolveFileUri"
 
@@ -126,22 +126,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 	const [filterStatus, setFilterStatus] = useState<AnnotationStatus | "all">("all")
 	const [activeCollectionId, setActiveCollectionId] = useState<string | "all">("all")
 	const [collections, setCollections] = useState<AnnotationCollection[]>(() => loadCollections())
-	const [showExportMenu, setShowExportMenu] = useState(false)
 	const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
-	const exportBtnRef = useRef<HTMLDivElement>(null)
-
-	// Close export dropdown when user clicks outside it
-	useEffect(() => {
-		if (!showExportMenu) return
-		const handler = (e: MouseEvent) => {
-			if (exportBtnRef.current && !exportBtnRef.current.contains(e.target as Node)) {
-				setShowExportMenu(false)
-			}
-		}
-		document.addEventListener("mousedown", handler)
-		return () => document.removeEventListener("mousedown", handler)
-	}, [showExportMenu])
-
 	// ── Helpers ─────────────────────────────────────────────────────────────
 
 	const saveAnns = useCallback(
@@ -310,7 +295,6 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 	// ── Export ───────────────────────────────────────────────────────────────
 
 	const handleExport = async (format: ExportFormat) => {
-		setShowExportMenu(false)
 		const target = filteredAnnotations.length > 0 ? filteredAnnotations : annotations
 		const col = collections.find((c) => c.id === activeCollectionId)
 		await exportAnnotations(format, target, col)
@@ -322,298 +306,195 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 
 	return (
 		<div style={{ marginTop: 12, paddingTop: 12, borderTop: sectionBorder }}>
-			{/* ── Toolbar ── */}
-			<div style={{ display: "flex", alignItems: "center", marginBottom: 8, gap: 4, flexWrap: "wrap" }}>
-				<span
-					style={{
-						fontSize: 11,
-						fontWeight: 700,
-						flex: 1,
-						opacity: 0.9,
-						whiteSpace: "nowrap",
-						letterSpacing: "0.01em",
-					}}>
-					Sketches &amp; tracker
+			{/* ── Toolbar: one title and one menu. Drawing is started by the Polygon / Line / Point buttons above. ── */}
+			<div className="map-section-head">
+				<span className="map-section-label">
+					<span aria-hidden="true" className="codicon codicon-list-unordered" />
+					Sketches
+					<span className="map-hint">({annotations.length})</span>
 				</span>
-				<button
-					onClick={() => {
-						setAgentError(null)
-						onStartDrawing("polygon")
-					}}
-					style={{
-						fontSize: 10,
-						padding: "2px 7px",
-						background: "transparent",
-						color: fg,
-						border: `1px solid ${border}`,
-						borderRadius: 4,
-						cursor: "pointer",
-					}}
-					title="Draw a polygon"
-					type="button">
-					⬠ Poly
-				</button>
-				<button
-					onClick={() => {
-						setAgentError(null)
-						onStartDrawing("line")
-					}}
-					style={{
-						fontSize: 10,
-						padding: "2px 7px",
-						background: "transparent",
-						color: fg,
-						border: `1px solid ${border}`,
-						borderRadius: 4,
-						cursor: "pointer",
-					}}
-					title="Draw a line"
-					type="button">
-					〰 Line
-				</button>
-				<button
-					onClick={handleImport}
-					style={{
-						fontSize: 10,
-						padding: "2px 7px",
-						background: "transparent",
-						color: fg,
-						border: `1px solid ${border}`,
-						borderRadius: 4,
-						cursor: "pointer",
-					}}
-					title="Import from CSV"
-					type="button">
-					⬆ Import
-				</button>
-				{onSeedFromLayer && (
-					<button
-						onClick={() => {
-							setAgentError(null)
-							setAgentStatus(null)
-							const msg = onSeedFromLayer()
-							setAgentStatus(msg)
-						}}
-						style={{
-							fontSize: 10,
-							padding: "2px 7px",
-							background: "transparent",
-							color: fg,
-							border: `1px solid ${border}`,
-							borderRadius: 4,
-							cursor: "pointer",
-						}}
-						title="Create one tracker annotation per point in the active layer"
-						type="button">
-						⊕ Seed from layer
-					</button>
-				)}
-
-				{/* Export dropdown */}
-				<div ref={exportBtnRef} style={{ position: "relative" }}>
-					<button
-						disabled={annotations.length === 0}
-						onClick={() => setShowExportMenu((v) => !v)}
-						style={{
-							fontSize: 10,
-							padding: "2px 7px",
-							background: "transparent",
-							color: fg,
-							border: `1px solid ${border}`,
-							borderRadius: 4,
-							cursor: annotations.length > 0 ? "pointer" : "default",
-							opacity: annotations.length > 0 ? 1 : 0.4,
-						}}
-						title="Export sketches"
-						type="button">
-						⬇ Export ▾
-					</button>
-					{showExportMenu && (
-						<div
-							style={{
-								position: "absolute",
-								right: 0,
-								top: "calc(100% + 4px)",
-								zIndex: MAP_Z.menu,
-								background: isDark ? "#1e1e2e" : "#fff",
-								border: sectionBorder,
-								borderRadius: 6,
-								padding: "4px 0",
-								minWidth: 140,
-								boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
-							}}>
-							{(["csv", "geojson", "kml", "kmz", "shapefile", "markdown"] as ExportFormat[]).map((fmt) => (
-								<button
-									key={fmt}
-									onClick={() => handleExport(fmt)}
-									style={{
-										display: "block",
-										width: "100%",
-										padding: "5px 12px",
-										fontSize: 10,
-										background: "none",
-										color: fg,
-										border: "none",
-										textAlign: "left",
-										cursor: "pointer",
-										whiteSpace: "nowrap",
-									}}
-									type="button">
-									{fmt === "csv"
-										? "📊 CSV"
-										: fmt === "geojson"
-											? "🌐 GeoJSON"
-											: fmt === "kml"
-												? "🌍 KML"
-												: fmt === "kmz"
-													? "🌍 KMZ (zipped)"
-													: fmt === "shapefile"
-														? "📦 Shapefile (.zip)"
-														: "📝 Markdown Report"}
-								</button>
-							))}
-						</div>
-					)}
-				</div>
+				<OverflowMenu
+					items={[
+						{ key: "import", label: "Import from CSV…", icon: "cloud-upload", onSelect: handleImport },
+						...(onSeedFromLayer
+							? [
+									{
+										key: "seed",
+										label: "One sketch per point of the active layer",
+										icon: "layers",
+										onSelect: () => {
+											setAgentError(null)
+											setAgentStatus(null)
+											setAgentStatus(onSeedFromLayer())
+										},
+									} as OverflowItem,
+								]
+							: []),
+						{ key: "d1", divider: true },
+						...(
+							[
+								["csv", "CSV", "table"],
+								["geojson", "GeoJSON", "json"],
+								["kml", "KML", "globe"],
+								["kmz", "KMZ (zipped)", "file-zip"],
+								["shapefile", "Shapefile (.zip)", "package"],
+								["markdown", "Markdown report", "markdown"],
+							] as [ExportFormat, string, string][]
+						).map(
+							([fmt, text, icon]): OverflowItem => ({
+								key: `export-${fmt}`,
+								label: `Export as ${text}`,
+								icon,
+								disabledReason: annotations.length === 0 ? "No sketches to export" : undefined,
+								onSelect: () => void handleExport(fmt),
+							}),
+						),
+					]}
+					label="Sketches actions"
+				/>
 			</div>
 
 			{/* ── Collections tabs ── */}
-			<div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
-				<button
-					onClick={() => setActiveCollectionId("all")}
-					style={{
-						fontSize: 9,
-						padding: "2px 8px",
-						borderRadius: 12,
-						border: `1px solid ${activeCollectionId === "all" ? accent : border}`,
-						background: activeCollectionId === "all" ? `${accent}22` : "transparent",
-						color: activeCollectionId === "all" ? "#a5b4fc" : fg,
-						cursor: "pointer",
-						fontWeight: activeCollectionId === "all" ? 700 : 400,
-					}}
-					type="button">
-					All ({annotations.length})
-				</button>
-				{collections.map((col) => {
-					const count = annotations.filter((a) => a.collectionIds.includes(col.id)).length
-					const isActive = activeCollectionId === col.id
-					return editingCollectionId === col.id ? (
-						<input
-							autoFocus
-							key={col.id}
-							onBlur={() => setEditingCollectionId(null)}
-							onChange={(e) => {
-								const next = collections.map((c) => (c.id === col.id ? { ...c, name: e.target.value } : c))
-								saveCols(next)
-							}}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") setEditingCollectionId(null)
-							}}
-							style={{ ...inputStyle, width: 90, padding: "1px 6px", fontSize: 9 }}
-							value={col.name}
-						/>
-					) : (
-						<div key={col.id} style={{ display: "flex", alignItems: "center", gap: 1 }}>
-							<button
-								onClick={() => setActiveCollectionId(col.id)}
-								style={{
-									fontSize: 9,
-									padding: "2px 8px",
-									borderRadius: "12px 0 0 12px",
-									border: `1px solid ${isActive ? col.color : border}`,
-									background: isActive ? `${col.color}22` : "transparent",
-									color: isActive ? col.color : fg,
-									cursor: "pointer",
-									fontWeight: isActive ? 700 : 400,
+			{annotations.length > 0 && (
+				<div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
+					<button
+						onClick={() => setActiveCollectionId("all")}
+						style={{
+							fontSize: 9,
+							padding: "2px 8px",
+							borderRadius: 12,
+							border: `1px solid ${activeCollectionId === "all" ? accent : border}`,
+							background: activeCollectionId === "all" ? `${accent}22` : "transparent",
+							color: activeCollectionId === "all" ? "#a5b4fc" : fg,
+							cursor: "pointer",
+							fontWeight: activeCollectionId === "all" ? 700 : 400,
+						}}
+						type="button">
+						All ({annotations.length})
+					</button>
+					{collections.map((col) => {
+						const count = annotations.filter((a) => a.collectionIds.includes(col.id)).length
+						const isActive = activeCollectionId === col.id
+						return editingCollectionId === col.id ? (
+							<input
+								autoFocus
+								key={col.id}
+								onBlur={() => setEditingCollectionId(null)}
+								onChange={(e) => {
+									const next = collections.map((c) => (c.id === col.id ? { ...c, name: e.target.value } : c))
+									saveCols(next)
 								}}
-								type="button">
-								<span
+								onKeyDown={(e) => {
+									if (e.key === "Enter") setEditingCollectionId(null)
+								}}
+								style={{ ...inputStyle, width: 90, padding: "1px 6px", fontSize: 9 }}
+								value={col.name}
+							/>
+						) : (
+							<div key={col.id} style={{ display: "flex", alignItems: "center", gap: 1 }}>
+								<button
+									onClick={() => setActiveCollectionId(col.id)}
 									style={{
-										display: "inline-block",
-										width: 7,
-										height: 7,
-										borderRadius: "50%",
-										background: col.color,
-										marginRight: 4,
-										verticalAlign: "middle",
+										fontSize: 9,
+										padding: "2px 8px",
+										borderRadius: "12px 0 0 12px",
+										border: `1px solid ${isActive ? col.color : border}`,
+										background: isActive ? `${col.color}22` : "transparent",
+										color: isActive ? col.color : fg,
+										cursor: "pointer",
+										fontWeight: isActive ? 700 : 400,
 									}}
-								/>
-								{col.name} ({count})
-							</button>
-							<button
-								onClick={() => setEditingCollectionId(col.id)}
-								style={{
-									fontSize: 8,
-									padding: "2px 4px",
-									borderRadius: 0,
-									border: `1px solid ${isActive ? col.color : border}`,
-									borderLeft: "none",
-									background: "transparent",
-									color: fg,
-									cursor: "pointer",
-									opacity: 0.5,
-								}}
-								title="Rename collection"
-								type="button">
-								✏
-							</button>
-							<button
-								onClick={() => handleDeleteCollection(col.id)}
-								style={{
-									fontSize: 8,
-									padding: "2px 4px",
-									borderRadius: "0 12px 12px 0",
-									border: `1px solid ${isActive ? col.color : border}`,
-									borderLeft: "none",
-									background: "transparent",
-									color: "#ef4444",
-									cursor: "pointer",
-									opacity: 0.6,
-								}}
-								title="Delete collection"
-								type="button">
-								✕
-							</button>
-						</div>
-					)
-				})}
-				<button
-					onClick={handleNewCollection}
-					style={{
-						fontSize: 9,
-						padding: "2px 7px",
-						borderRadius: 12,
-						border: `1px dashed ${border}`,
-						background: "transparent",
-						color: fg,
-						cursor: "pointer",
-						opacity: 0.6,
-					}}
-					type="button">
-					+ Collection
-				</button>
-			</div>
+									type="button">
+									<span
+										style={{
+											display: "inline-block",
+											width: 7,
+											height: 7,
+											borderRadius: "50%",
+											background: col.color,
+											marginRight: 4,
+											verticalAlign: "middle",
+										}}
+									/>
+									{col.name} ({count})
+								</button>
+								<button
+									onClick={() => setEditingCollectionId(col.id)}
+									style={{
+										fontSize: 8,
+										padding: "2px 4px",
+										borderRadius: 0,
+										border: `1px solid ${isActive ? col.color : border}`,
+										borderLeft: "none",
+										background: "transparent",
+										color: fg,
+										cursor: "pointer",
+										opacity: 0.5,
+									}}
+									title="Rename collection"
+									type="button">
+									✏
+								</button>
+								<button
+									onClick={() => handleDeleteCollection(col.id)}
+									style={{
+										fontSize: 8,
+										padding: "2px 4px",
+										borderRadius: "0 12px 12px 0",
+										border: `1px solid ${isActive ? col.color : border}`,
+										borderLeft: "none",
+										background: "transparent",
+										color: "#ef4444",
+										cursor: "pointer",
+										opacity: 0.6,
+									}}
+									title="Delete collection"
+									type="button">
+									✕
+								</button>
+							</div>
+						)
+					})}
+					<button
+						onClick={handleNewCollection}
+						style={{
+							fontSize: 9,
+							padding: "2px 7px",
+							borderRadius: 12,
+							border: `1px dashed ${border}`,
+							background: "transparent",
+							color: fg,
+							cursor: "pointer",
+							opacity: 0.6,
+						}}
+						type="button">
+						+ Collection
+					</button>
+				</div>
+			)}
 
 			{/* ── Search + Filter ── */}
-			<div style={{ display: "flex", gap: 4, marginBottom: 8, alignItems: "center" }}>
-				<input
-					onChange={(e) => setSearch(e.target.value)}
-					placeholder="Search name, notes, tags…"
-					style={{ ...inputStyle, flex: 1 }}
-					value={search}
-				/>
-				<select
-					onChange={(e) => setFilterStatus(e.target.value as AnnotationStatus | "all")}
-					style={{ ...inputStyle, width: "auto", cursor: "pointer" }}
-					value={filterStatus}>
-					<option value="all">All status</option>
-					{STATUS_OPTS.map((s) => (
-						<option key={s.value} value={s.value}>
-							{s.label}
-						</option>
-					))}
-				</select>
-			</div>
+			{annotations.length > 0 && (
+				<div style={{ display: "flex", gap: 4, marginBottom: 8, alignItems: "center" }}>
+					<input
+						onChange={(e) => setSearch(e.target.value)}
+						placeholder="Search name, notes, tags…"
+						style={{ ...inputStyle, flex: 1 }}
+						value={search}
+					/>
+					<select
+						onChange={(e) => setFilterStatus(e.target.value as AnnotationStatus | "all")}
+						style={{ ...inputStyle, width: "auto", cursor: "pointer" }}
+						value={filterStatus}>
+						<option value="all">All status</option>
+						{STATUS_OPTS.map((s) => (
+							<option key={s.value} value={s.value}>
+								{s.label}
+							</option>
+						))}
+					</select>
+				</div>
+			)}
 
 			{/* ── Error banner ── */}
 			{agentError && (
@@ -746,9 +627,9 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 
 			{/* ── Annotation cards ── */}
 			{filteredAnnotations.length === 0 ? (
-				<div style={{ fontSize: 10, opacity: 0.5, fontStyle: "italic", padding: "8px 0" }}>
+				<div className="map-hint" style={{ padding: "4px 0" }}>
 					{annotations.length === 0
-						? "No sketches yet — click ⬠ Poly or 〰 Line to draw one."
+						? "No sketches yet. Choose Polygon, Line or Point above to draw one."
 						: "No sketches match your filter."}
 				</div>
 			) : (

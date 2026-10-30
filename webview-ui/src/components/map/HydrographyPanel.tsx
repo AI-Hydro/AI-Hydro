@@ -28,11 +28,12 @@ interface BasinsRegionResult {
 }
 
 const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState, onStatus }) => {
-	const isDark = mapStyle === "dark"
-	const fg = isDark ? "var(--vscode-foreground, #ddd)" : "var(--vscode-foreground, #222)"
-	const muted = isDark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.55)"
-	const border = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"
-	const accentBg = isDark ? "rgba(30,90,140,0.45)" : "rgba(14,99,156,0.15)"
+	// The panel sits on the VS Code panel background, so it takes its colours from the theme (hc-light included), not
+	// from the map style: white text on a white panel was unreadable in the light themes.
+	const fg = "var(--vscode-foreground)"
+	const muted = "var(--vscode-descriptionForeground)"
+	const border = "var(--vscode-editorWidget-border, rgba(128,128,128,0.4))"
+	const accentBg = "color-mix(in srgb, var(--vscode-button-background) 28%, transparent)"
 	const [busy, setBusy] = useState(false)
 	const [status, setStatus] = useState("")
 	const [presets, setPresets] = useState<Preset[]>([])
@@ -269,6 +270,7 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 	}
 
 	const btn: React.CSSProperties = {
+		minHeight: 24,
 		padding: "6px 10px",
 		fontSize: 11,
 		cursor: busy ? "wait" : "pointer",
@@ -284,18 +286,18 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 		...btn,
 		fontWeight: 600,
 		background: accentBg,
-		border: `1px solid ${isDark ? "rgba(126,200,255,0.35)" : "rgba(14,99,156,0.35)"}`,
+		border: "1px solid var(--vscode-button-background)",
 	}
 
 	return (
 		<div style={{ padding: 10, fontSize: 11, color: fg }}>
-			<p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 600, color: muted, letterSpacing: 0.2 }}>
+			<p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: muted, letterSpacing: 0.2 }}>
 				Reference vectors
 			</p>
 			<p style={{ margin: "0 0 8px", color: muted, lineHeight: 1.45 }}>
 				Adds <strong>MERIT-Basins reference vectors</strong> clipped to the map view. Rivers and catchments are staged by
 				Pfaf Level-2 region, never as a global bulk download. Cache:{" "}
-				<code style={{ fontSize: 10 }}>~/.aihydro/merit</code>.
+				<code style={{ fontSize: 11 }}>~/.aihydro/merit</code>.
 			</p>
 
 			<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -305,7 +307,7 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 					style={primaryBtn}
 					title="Download MERIT rivers if needed, then add clipped vectors to the map"
 					type="button">
-					🌊 Load rivers for this view
+					<span aria-hidden="true" className="codicon codicon-pulse" /> Load rivers for this view
 				</button>
 				<button
 					disabled={busy}
@@ -313,14 +315,15 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 					style={btn}
 					title="Stage official MERIT-Basins catchment polygons for this Pfaf region, then add clipped polygons to the map"
 					type="button">
-					▧ Load catchments for this view
+					<span aria-hidden="true" className="codicon codicon-symbol-field" /> Load catchments for this view
 				</button>
 				<button
 					disabled={busy}
 					onClick={() => setShowAdvanced((v) => !v)}
 					style={{
 						...btn,
-						fontSize: 10,
+						fontSize: 11,
+						minHeight: 24,
 						padding: "4px 8px",
 						border: "none",
 						textDecoration: "underline",
@@ -349,10 +352,10 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 						}
 						style={btn}
 						type="button">
-						⬇ Install rivers only (no layers)
+						<span aria-hidden="true" className="codicon codicon-cloud-download" /> Install rivers only (no layers)
 					</button>
 					<button disabled={busy} onClick={() => void loadRiversAndCatchmentsForView()} style={btn} type="button">
-						⬇ Load rivers + catchments
+						<span aria-hidden="true" className="codicon codicon-cloud-download" /> Load rivers + catchments
 					</button>
 					<button
 						disabled={busy}
@@ -375,7 +378,7 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 					</button>
 					{presets.length > 0 && (
 						<div style={{ marginTop: 4 }}>
-							<div style={{ fontSize: 10, fontWeight: 600, marginBottom: 6, color: muted }}>Region presets</div>
+							<div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: muted }}>Region presets</div>
 							<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
 								{presets.map((p) => (
 									<button
@@ -396,7 +399,7 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 										}
 										style={btn}
 										type="button">
-										⬇ {p.label}
+										<span aria-hidden="true" className="codicon codicon-cloud-download" /> {p.label}
 									</button>
 								))}
 							</div>
@@ -406,18 +409,18 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 			)}
 
 			<div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${border}` }}>
-				<p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 600, color: muted, letterSpacing: 0.2 }}>
+				<p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: muted, letterSpacing: 0.2 }}>
 					US hydrologic units (WBD)
 				</p>
 				<p style={{ margin: "0 0 8px", color: muted, lineHeight: 1.45 }}>
 					National Map WBD boundaries for CONUS — HUC context without delineating a watershed.
 				</p>
-				<label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, color: muted, marginBottom: 8 }}>
+				<label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: muted, marginBottom: 8 }}>
 					HUC level
 					<select
 						disabled={busy || !conus}
 						onChange={(e) => setHucLevel(Number(e.target.value))}
-						style={{ flex: 1, fontSize: 10, padding: "4px 6px" }}
+						style={{ flex: 1, fontSize: 11, minHeight: 24, padding: "4px 6px" }}
 						value={hucLevel}>
 						<option value={8}>HUC8 (subbasin)</option>
 						<option value={10}>HUC10 (watershed)</option>
@@ -432,15 +435,15 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 					style={primaryBtn}
 					title={conus ? "Add WBD polygons clipped to map view" : "Pan to CONUS to enable WBD layers"}
 					type="button">
-					🗺 Add HUCs for this view
+					<span aria-hidden="true" className="codicon codicon-map" /> Add HUCs for this view
 				</button>
 				{!conus && (
-					<p style={{ margin: "6px 0 0", fontSize: 10, color: muted }}>Pan to the contiguous US to load WBD layers.</p>
+					<p style={{ margin: "6px 0 0", fontSize: 11, color: muted }}>Pan to the contiguous US to load WBD layers.</p>
 				)}
 			</div>
 
 			<div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${border}` }}>
-				<p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 600, color: muted, letterSpacing: 0.2 }}>
+				<p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: muted, letterSpacing: 0.2 }}>
 					Points in view (CONUS)
 				</p>
 				<p style={{ margin: "0 0 8px", color: muted, lineHeight: 1.45 }}>
@@ -453,7 +456,7 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 						style={btn}
 						title="NWIS streamgages in current extent"
 						type="button">
-						🌊 Show gauges in view
+						<span aria-hidden="true" className="codicon codicon-pulse" /> Show gauges in view
 					</button>
 					<button
 						disabled={busy || !conus}
@@ -461,11 +464,11 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 						style={btn}
 						title="NID dams in current extent"
 						type="button">
-						🏗 Show dams in view
+						<span aria-hidden="true" className="codicon codicon-symbol-structure" /> Show dams in view
 					</button>
 				</div>
 				{!conus && (
-					<p style={{ margin: "6px 0 0", fontSize: 10, color: muted }}>
+					<p style={{ margin: "6px 0 0", fontSize: 11, color: muted }}>
 						Pan to the contiguous US to load gauge and dam layers.
 					</p>
 				)}
@@ -476,7 +479,7 @@ const HydrographyPanel: React.FC<HydrographyPanelProps> = ({ mapStyle, viewState
 					style={{
 						marginTop: 10,
 						padding: "6px 8px",
-						fontSize: 10,
+						fontSize: 11,
 						lineHeight: 1.4,
 						borderRadius: 4,
 						border: `1px solid ${border}`,

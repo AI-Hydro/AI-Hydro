@@ -38,12 +38,16 @@ describe("pins panel", () => {
 		const p = props()
 		render(<PinsPanel {...p} />)
 		fireEvent.click(screen.getByRole("button", { name: "Open pin Dam" }))
-		fireEvent.click(screen.getByRole("button", { name: "Zoom to Dam" }))
-		fireEvent.click(screen.getByRole("button", { name: "Rename Dam" }))
+		const choose = (pin: string, item: string) => {
+			fireEvent.click(screen.getByRole("button", { name: `Actions for ${pin}` }))
+			fireEvent.click(screen.getByRole("menuitem", { name: item }))
+		}
+		choose("Dam", "Zoom to pin")
+		choose("Dam", "Rename")
 		const input = screen.getByLabelText("Pin name")
 		fireEvent.change(input, { target: { value: "Weir" } })
 		fireEvent.keyDown(input, { key: "Enter" })
-		fireEvent.click(screen.getByRole("button", { name: "Delete Pin 1" }))
+		choose("Pin 1", "Delete pin")
 		expect(p.onSelect).toHaveBeenCalledWith("b")
 		expect(p.onZoomTo).toHaveBeenCalledWith("b")
 		expect(p.onRename).toHaveBeenCalledWith("b", "Weir")
@@ -53,12 +57,16 @@ describe("pins panel", () => {
 	it("asks before clearing all, and cancel clears nothing", () => {
 		const p = props()
 		render(<PinsPanel {...p} />)
-		fireEvent.click(screen.getByRole("button", { name: "Clear all 2 pins" }))
+		const clearAll = () => {
+			fireEvent.click(screen.getByRole("button", { name: "Pins panel actions" }))
+			fireEvent.click(screen.getByRole("menuitem", { name: "Clear all pins…" }))
+		}
+		clearAll()
 		expect(p.onClearAll).not.toHaveBeenCalled()
 		const dialog = screen.getByRole("alertdialog", { name: "Clear all pins" })
 		fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
 		expect(p.onClearAll).not.toHaveBeenCalled()
-		fireEvent.click(screen.getByRole("button", { name: "Clear all 2 pins" }))
+		clearAll()
 		fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Clear all" }))
 		expect(p.onClearAll).toHaveBeenCalledTimes(1)
 	})
@@ -93,6 +101,7 @@ describe("pins panel", () => {
 	it("shows an empty state", () => {
 		render(<PinsPanel {...props({ pins: [] })} />)
 		expect(screen.getByText("No pins yet.")).toBeTruthy()
-		expect(screen.queryByRole("button", { name: /Clear all/ })).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: "Pins panel actions" }))
+		expect(screen.getByRole("menuitem", { name: /Clear all pins/ })).toHaveAttribute("aria-disabled", "true")
 	})
 })

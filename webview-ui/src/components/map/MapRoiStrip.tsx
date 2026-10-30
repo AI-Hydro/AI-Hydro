@@ -25,8 +25,9 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 	const warn = "var(--vscode-editorWarning-foreground, #cca700)"
 
 	const btnStyle: React.CSSProperties = {
-		padding: "0 6px",
-		fontSize: 10,
+		minHeight: 24,
+		padding: "0 8px",
+		fontSize: 11,
 		background: "transparent",
 		border: `1px solid ${border}`,
 		borderRadius: 3,
@@ -89,7 +90,7 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 						background: bg,
 						border: `1px solid ${border}`,
 						borderRadius: 4,
-						fontSize: 10,
+						fontSize: 11,
 						color: warn,
 						textAlign: "center",
 					}}
@@ -101,7 +102,7 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 						Load ROI
 					</button>
 				</div>
-				{status && <span style={{ fontSize: 9, color: fg, opacity: 0.8 }}>{status}</span>}
+				{status && <span style={{ fontSize: 11, color: fg, opacity: 0.8 }}>{status}</span>}
 			</div>
 		)
 	}
@@ -135,7 +136,7 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 					background: bg,
 					border: `1px solid ${border}`,
 					borderRadius: 4,
-					fontSize: 10,
+					fontSize: 11,
 					color: fg,
 					pointerEvents: "auto",
 				}}>
@@ -168,12 +169,17 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 					Load
 				</button>
 				{onClear && (
-					<button onClick={onClear} style={btnStyle} title="Clear active ROI" type="button">
-						×
+					<button
+						aria-label="Clear active ROI"
+						onClick={onClear}
+						style={btnStyle}
+						title="Clear active ROI"
+						type="button">
+						<span aria-hidden="true" className="codicon codicon-close" />
 					</button>
 				)}
 			</div>
-			{status && <span style={{ fontSize: 9, color: fg, opacity: 0.85, pointerEvents: "none" }}>{status}</span>}
+			{status && <span style={{ fontSize: 11, color: fg, opacity: 0.85, pointerEvents: "none" }}>{status}</span>}
 		</div>
 	)
 }

@@ -250,14 +250,17 @@ export const VectorDrawTool: React.FC<VectorDrawToolProps> = ({
 				minWidth: 240,
 				maxWidth: 300,
 			}}>
-			<div style={{ fontWeight: 600, marginBottom: 4, color: accent }}>✏️ {title}</div>
-			<div style={{ fontSize: 10, opacity: 0.8, marginBottom: 8, lineHeight: 1.5 }}>
+			<div style={{ fontWeight: 600, marginBottom: 4, color: accent, display: "flex", alignItems: "center", gap: 6 }}>
+				<span aria-hidden="true" className="codicon codicon-edit" />
+				{title}
+			</div>
+			<div style={{ fontSize: 11, opacity: 0.8, marginBottom: 8, lineHeight: 1.5 }}>
 				{mode === "point"
 					? "Click once on the map to place a point. ESC to cancel."
 					: "Click vertices on the map. Enter or double-click to finish. ESC to cancel."}
 			</div>
 			{stats && <div style={{ fontSize: 15, fontWeight: 700, color: accent, marginBottom: 6 }}>{stats}</div>}
-			<div style={{ fontSize: 10, opacity: 0.65 }}>
+			<div style={{ fontSize: 11, opacity: 0.65 }}>
 				{points.length} vertex{points.length === 1 ? "" : "es"}
 				{mode === "polygon" && points.length >= 1 && points.length < 3 ? " (need 3+ to finish)" : ""}
 				{mode === "line" && points.length === 1 ? " (need 2+ to finish)" : ""}

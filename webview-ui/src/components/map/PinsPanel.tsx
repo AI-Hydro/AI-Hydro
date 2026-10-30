@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import type { MapAnnotation } from "./annotationStorage"
+import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { formatPinCoords, pinCoords, pinLabel } from "./pins"
 
 export interface PinsPanelProps {
@@ -23,7 +24,10 @@ export interface PinsPanelProps {
 	onSeedFromLayer?: () => string
 }
 
-/** The Pins rail panel: list, rename, zoom to, delete, and clear all (with a confirm). */
+/**
+ * The Pins rail panel: one row per pin (name and coordinates), and one "more" menu per row (zoom to, rename, delete) and
+ * one for the panel (from layer, export, clear all with a confirm). Same row and menu rules as the Layers panel.
+ */
 const PinsPanel: React.FC<PinsPanelProps> = ({
 	pins,
 	selectedId,
@@ -67,29 +71,6 @@ const PinsPanel: React.FC<PinsPanelProps> = ({
 		setEditingId(null)
 	}
 
-	const iconBtn = (icon: string, label: string, onClick: () => void, color?: string) => (
-		<button
-			aria-label={label}
-			onClick={onClick}
-			style={{
-				display: "inline-flex",
-				alignItems: "center",
-				justifyContent: "center",
-				width: 26,
-				height: 26,
-				padding: 0,
-				background: "transparent",
-				color: color ?? fg,
-				border: "none",
-				borderRadius: 4,
-				cursor: "pointer",
-			}}
-			title={label}
-			type="button">
-			<span aria-hidden="true" className={`codicon codicon-${icon}`} />
-		</button>
-	)
-
 	const textBtn = (icon: string, label: string, onClick: () => void, opts: { pressed?: boolean; color?: string } = {}) => (
 		<button
 			aria-pressed={opts.pressed}
@@ -113,12 +94,48 @@ const PinsPanel: React.FC<PinsPanelProps> = ({
 		</button>
 	)
 
+	const panelItems: OverflowItem[] = [
+		...(onSeedFromLayer
+			? [
+					{
+						key: "seed",
+						label: "Add pins from a layer",
+						icon: "layers",
+						onSelect: () => setSeedMessage(onSeedFromLayer()),
+					} as OverflowItem,
+				]
+			: []),
+		{
+			key: "export",
+			label: "Export pins",
+			icon: "export",
+			disabledReason: !onExport || pins.length === 0 ? "No pins to export" : undefined,
+			onSelect: () => onExport?.(),
+		},
+		{ key: "d1", divider: true },
+		{
+			key: "clear",
+			label: "Clear all pins…",
+			icon: "clear-all",
+			danger: true,
+			disabledReason: pins.length === 0 ? "No pins" : undefined,
+			onSelect: () => setConfirmClear(true),
+		},
+	]
+
+	const rowItems = (pin: MapAnnotation): OverflowItem[] => [
+		{ key: "zoom", label: "Zoom to pin", icon: "target", onSelect: () => onZoomTo(pin.id) },
+		{ key: "rename", label: "Rename", icon: "edit", onSelect: () => startEdit(pin) },
+		{ key: "d1", divider: true },
+		{ key: "delete", label: "Delete pin", icon: "trash", danger: true, onSelect: () => onDelete(pin.id) },
+	]
+
 	return (
 		<div data-testid="pins-panel" style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12, color: fg }}>
-			<div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+			<div style={{ display: "flex", gap: 6, alignItems: "center" }}>
 				{textBtn("add", "Add pin", onToggleTool, { pressed: toolArmed })}
-				{onSeedFromLayer && textBtn("layers", "From layer", () => setSeedMessage(onSeedFromLayer()))}
-				{onExport && pins.length > 0 && textBtn("export", "Export", onExport)}
+				<span style={{ flex: 1 }} />
+				<OverflowMenu items={panelItems} label="Pins panel actions" />
 			</div>
 			<div style={{ color: muted, fontSize: 11 }}>
 				{toolArmed
@@ -177,14 +194,6 @@ const PinsPanel: React.FC<PinsPanelProps> = ({
 				<h3 style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>
 					Pins <span style={{ color: muted, fontWeight: 400 }}>({pins.length})</span>
 				</h3>
-				{pins.length > 0 &&
-					!confirmClear &&
-					iconBtn(
-						"clear-all",
-						`Clear all ${pins.length} ${pins.length === 1 ? "pin" : "pins"}`,
-						() => setConfirmClear(true),
-						danger,
-					)}
 			</div>
 
 			{confirmClear && (
@@ -301,9 +310,7 @@ const PinsPanel: React.FC<PinsPanelProps> = ({
 										</span>
 									</button>
 								)}
-								{iconBtn("target", `Zoom to ${pinLabel(pin)}`, () => onZoomTo(pin.id))}
-								{iconBtn("edit", `Rename ${pinLabel(pin)}`, () => startEdit(pin))}
-								{iconBtn("trash", `Delete ${pinLabel(pin)}`, () => onDelete(pin.id), danger)}
+								<OverflowMenu items={rowItems(pin)} label={`Actions for ${pinLabel(pin)}`} />
 							</li>
 						)
 					})}

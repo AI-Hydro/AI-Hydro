@@ -188,14 +188,14 @@ export const MeasureTool: React.FC<MeasureToolProps> = ({
 			<div style={{ fontWeight: 600, marginBottom: 4, fontSize: 12 }}>
 				{mode === "distance" ? "📏 Distance measure" : "📐 Area measure"}
 			</div>
-			<div style={{ fontSize: 10, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
+			<div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
 				Temporary measurement only — not saved. Enter or double-click to finish. ESC to cancel.
 			</div>
 			{runningTotal && <div style={{ fontSize: 15, fontWeight: 700, color: accent, marginBottom: 6 }}>{runningTotal}</div>}
 			{points.length === 0 && (
 				<div style={{ fontSize: 11, opacity: 0.6, fontStyle: "italic" }}>Click to start measuring…</div>
 			)}
-			<div style={{ marginTop: 8, fontSize: 10, opacity: 0.65 }}>
+			<div style={{ marginTop: 8, fontSize: 11, opacity: 0.65 }}>
 				{points.length} point{points.length === 1 ? "" : "s"}
 			</div>
 		</div>

@@ -1303,6 +1303,23 @@ export const screens: ScreenDef[] = [
 		],
 	}),
 	// No layers: Swipe, Time and Flood are listed but disabled, each with its reason.
+	// The other rail panels and in-canvas chrome (polish-map audit): each opened the way a user opens it.
+	mapScreen("map-search-panel", "Search panel: field, coordinates and bookmarks", {
+		layers: featureLayers(),
+		steps: openTool("Search"),
+	}),
+	mapScreen("map-draw-panel", "Draw ROI panel: three shapes and the saved sketches", {
+		layers: featureLayers(),
+		steps: openTool("Draw ROI"),
+	}),
+	mapScreen("map-measure-panel", "Measure panel: distance and area", {
+		layers: featureLayers(),
+		steps: openTool("Measure"),
+	}),
+	mapScreen("map-reference-tab", "Layers > Reference tab: MERIT rivers, HUCs, gauges and dams", {
+		layers: featureLayers(),
+		steps: [...openTool("Layer manager"), { click: "#map-chrome-tab-hydrography" }, { wait: 500 }],
+	}),
 	mapScreen("map-more-flyout", "More menu with Swipe, Time and Flood disabled and why", {
 		steps: [
 			{ click: 'button[aria-label^="Map tools"]', optional: true },

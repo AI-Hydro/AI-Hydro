@@ -24,6 +24,13 @@ the canvas, divided by the canvas area. A docked panel and the rail own their ow
 | panel open, overlay | 40% |
 | panel open, bottom sheet | 60% |
 
+Panels the user resizes (`PanelResizer.tsx`, sizes in `panelSizes.ts`) keep these rows true at every size, not only at the
+default: a floating panel is clamped so its width times its height never exceeds 40% of the canvas (`clampOverlay`), a
+docked panel always leaves the canvas 360 px, and a stored size is re-clamped against the current map on every use. The
+`coverage.mjs` limits are unchanged. The `map-panel-docked-resized`, `map-panel-overlay-resized` and
+`map-panel-resize-keyboard` screens measure resized panels; a resize needs a drag, so a screen starts from a saved size
+(`framedWorkspace(..., { panelSizes })`) or from the keyboard (`{ press: "Shift+ArrowLeft" }` on a focused separator).
+
 Menus (`data-map-chrome="menu"`) and modal sheets (`data-map-chrome="modal"`) are transient and not counted.
 The rule measures the tool chrome only: in-canvas overlays (legend, feature identifier, bottom bar, claim chip,
 empty-state card, drag overlay) carry no `data-map-chrome` attribute and are not counted, so a screen can pass while
