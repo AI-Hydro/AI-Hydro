@@ -373,6 +373,43 @@ export const answerAuditHardUxTask: AiHydroMessage[] = auditUxTask(AUDIT_UX_ANSW
 	],
 }))
 
+/**
+ * Audit UX, the owner's 0.4.4 answer shape: every number sits beside a `[run:<id>]` reference that has no `#path`, so the
+ * auditor binds nothing (malformed_marker) and the numbers read as unlinked. The findings must say why.
+ */
+const PATHLESS = "[run:fx-run-0007]"
+const PATHLESS_ANSWER = `The synthetic basin has a drainage area of 123.45 km² ${PATHLESS} and a runoff ratio of 0.42 ${PATHLESS}. Fixture answer, not a result.`
+export const answerAuditPathlessUxTask: AiHydroMessage[] = auditUxTask(PATHLESS_ANSWER, (ts) => ({
+	v: 1,
+	stage: "final",
+	status: "violations",
+	sessionId: "fx-session-0001",
+	cited: 0,
+	total: 2,
+	hardCount: 4,
+	advisoryCount: 0,
+	schema: "graded",
+	attempt: 0,
+	answerTs: ts,
+	draftHash: FIXTURE_DRAFT_HASH,
+	violations: [
+		{ ...untracedFinding("123.45", `drainage area of 123.45 km² ${PATHLESS} and a runoff`, false), fixHint: undefined },
+		{ ...untracedFinding("0.42", `runoff ratio of 0.42 ${PATHLESS}. Fixture answer`, false), fixHint: undefined },
+		{
+			kind: "malformed_marker",
+			severity: "hard" as const,
+			excerpt: `123.45 km² ${PATHLESS} and a runoff`,
+			message: `'${PATHLESS}' looks like a citation marker but does not match the grammar, so it binds nothing.`,
+		},
+		{
+			kind: "malformed_marker",
+			severity: "hard" as const,
+			excerpt: `0.42 ${PATHLESS}. Fixture answer`,
+			message: `'${PATHLESS}' looks like a citation marker but does not match the grammar, so it binds nothing.`,
+		},
+	],
+}))
+
 /** Audit UX: advisory findings only (no hard finding, no action). */
 export const answerAuditAdvisoryUxTask: AiHydroMessage[] = auditUxTask(
 	"The synthetic basin is a layout fixture. Fixture answer, not a result.",

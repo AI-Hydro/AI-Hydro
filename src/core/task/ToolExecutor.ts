@@ -25,8 +25,9 @@ import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
-import { noteSessionStarted, START_SESSION_TOOL_NAME } from "./answerAuditGate"
+import { noteBoundStudy, noteSessionStarted, START_SESSION_TOOL_NAME, studyFromChatStatus } from "./answerAuditGate"
 import { browserToolRefusal } from "./browserGate"
+import { CHAT_STATUS_TOOL_NAME } from "./finalAnswerAudit"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
@@ -327,6 +328,18 @@ export class ToolExecutor {
 			!ToolExecutor.isToolErrorResult(content)
 		) {
 			noteSessionStarted(this.taskState.answerAuditGate)
+		}
+		// A first-party chat status that reports a bound study seeds the gate's cache (a resumed task starts empty).
+		if (
+			block.params.tool_name === CHAT_STATUS_TOOL_NAME &&
+			isAiHydroServerName(block.params.server_name) &&
+			typeof content === "string" &&
+			!ToolExecutor.isToolErrorResult(content)
+		) {
+			const study = studyFromChatStatus(content)
+			if (study) {
+				noteBoundStudy(this.taskState.answerAuditGate, study)
+			}
 		}
 	}
 

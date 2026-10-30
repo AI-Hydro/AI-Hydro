@@ -103,6 +103,26 @@ export function noteSessionStarted(state: AnswerAuditGateState): void {
 	state.sessionStarted = true
 }
 
+/**
+ * The study a first-party `aihydro_chat_status` result says is bound to this chat, or undefined. A resumed task starts
+ * with an empty gate state, so without this a follow-up answer ("what's the status?") could never be gated even
+ * though the model had just been told which study is bound. The gate re-checks it anyway: the audit must come back for
+ * exactly this study or the outcome is "unavailable", never silently another study's ledger.
+ */
+export function studyFromChatStatus(content: unknown): string | undefined {
+	const text =
+		typeof content === "string" ? content : Array.isArray(content) ? content.map((b: any) => b?.text ?? "").join("\n") : ""
+	if (!/"bound"\s*:\s*true/.test(text)) {
+		return undefined
+	}
+	return /"study_id"\s*:\s*"([^"\\]+)"/.exec(text)?.[1]
+}
+
+/** Remember the bound study reported by `aihydro_chat_status` (see `studyFromChatStatus`). */
+export function noteBoundStudy(state: AnswerAuditGateState, studyId: string): void {
+	state.boundStudyId = studyId
+}
+
 // ── Eligibility ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type GateIneligibleReason =

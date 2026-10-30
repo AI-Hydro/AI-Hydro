@@ -9,6 +9,24 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.5] — unreleased (owner feedback on 0.4.4: chat polish)
+
+### Fixed — audit findings say why a cited number is flagged; "Referenced this turn" no longer says "no runs" beside run ids (branch `vision2040/polish-audit-findings`)
+
+Reported on the installed 0.4.4 build: "8 findings need review", dotted underlines on 774.15 km², 7,305 values, 7,300 days and 2,262 values in text that carries `[run:...]`, and a follow-up answer reading "Referenced this turn: no runs or claims" while quoting the same numbers. Read from the owner's transcript (task 1793340989672, answer rows 91 and 93), the cause is not the auditor miscounting cited numbers:
+
+- The model wrote its run references as `[run:watershed.0b124654840f]`, with no `#<path>`. The grammar is `[run:<id>#<key_outputs.field>]`. The auditor reports each as `malformed_marker` (3 of the 8 findings) and the marker binds nothing, so the numbers beside it are `uncited_number`. The other findings are numbers with no reference in their sentence ("2,262 of the 7,305 values" in the caveats line; the second 7,305). 8 = 5 uncited numbers + 3 malformed references.
+- The same shape is invisible to the UI: markers need `#path` to be chips, so the answer's evidence strip and "Referenced this turn" counted no runs.
+- The gate that asks the model to fix this before the user sees it did not run on either answer (no revision rows). For the follow-up the reason is in the code: a resumed task starts with an empty gate state, `aihydro_chat_status` was never recorded as "study bound", so eligibility said `study-not-bound`. For the first answer the transcript does not say; candidates are an unconfirmed launcher (the gate needs a trusted server) or a server that does not advertise the graded schema.
+
+What changed (nothing here lets an unproven number pass; the audit's decisions are untouched):
+- A finding about a number beside a `[run:<id>]` reference, and the malformed-marker finding itself, now read "Run reference has no #path, so the value could not be checked" (summary line and underline tooltip) instead of "Not linked to a run". The summary adds "N run references have no #path".
+- "Referenced this turn" counts run ids the answer names without `#path`, so it no longer says "no runs or claims" beside them.
+- A first-party `aihydro_chat_status` result that reports a bound study seeds the gate's cache, so a follow-up in a resumed task is gated like any other (the audit must still come back for exactly that study or it is "unavailable").
+- Harness: `chat-answer-audit-pathless-run`.
+
+Needs a tools change, not made here (aihydro-tools `ai_hydro/audit/resolver.py`): accept `[run:<id>]` when that run exists and holds a leaf that matches the printed value (the only case provably covered by a cited run), or return a `fix_hint` that names the missing `#<path>`. The "7,305 daily values" sample-size decision is not touched.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)
