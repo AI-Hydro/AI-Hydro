@@ -182,7 +182,11 @@ const ServerRow = ({
 			})
 	}
 
-	const handleDelete = () => {
+	// Deleting removes the server from the MCP settings and cannot be undone from here, so both Delete buttons ask first.
+	const [confirmingDelete, setConfirmingDelete] = useState(false)
+	const handleDelete = () => setConfirmingDelete(true)
+	const performDelete = () => {
+		setConfirmingDelete(false)
 		setIsDeleting(true)
 		McpServiceClient.deleteMcpServer({
 			value: server.name,
@@ -360,6 +364,35 @@ const ServerRow = ({
 					title={STATUS_LABEL[server.status]}
 				/>
 			</div>
+
+			{confirmingDelete && (
+				<div
+					aria-label={`Confirm deleting ${displayName}`}
+					onKeyDown={(e) => {
+						if (e.key === "Escape") {
+							e.stopPropagation()
+							setConfirmingDelete(false)
+						}
+					}}
+					role="group"
+					style={{
+						display: "flex",
+						alignItems: "center",
+						flexWrap: "wrap",
+						gap: "8px",
+						padding: "8px",
+						background: "var(--vscode-textCodeBlock-background)",
+						borderTop: "1px solid var(--vscode-panel-border)",
+					}}>
+					<span style={{ flex: 1, minWidth: "160px" }}>
+						Delete {displayName}? It is removed from your MCP settings.
+					</span>
+					<VSCodeButton autofocus onClick={() => setConfirmingDelete(false)}>
+						Cancel
+					</VSCodeButton>
+					<DangerButton onClick={performDelete}>Delete</DangerButton>
+				</div>
+			)}
 
 			{server.trust && (
 				<div

@@ -32,12 +32,9 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 		setActiveTab(tab)
 	}
 
-	useEffect(() => {
-		if (!mcpMarketplaceEnabled && activeTab === "marketplace") {
-			// If marketplace is disabled and we're on marketplace tab, switch to configure
-			setActiveTab("configure")
-		}
-	}, [mcpMarketplaceEnabled, activeTab])
+	// Asked for Marketplace while it is disabled (a link, a stale tab): show Installed from the first render, with the
+	// Installed tab selected, and keep the request so the Marketplace opens if it is enabled a moment later.
+	const shownTab: McpViewTab = activeTab === "marketplace" && !mcpMarketplaceEnabled ? "configure" : activeTab
 
 	// Get setter for MCP marketplace catalog from context
 	const { setMcpMarketplaceCatalog } = useExtensionState()
@@ -85,19 +82,19 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 						items={tabs}
 						label="Hydro tools and data sources sections"
 						onValueChange={(id) => handleTabChange(id as McpViewTab)}
-						value={activeTab}
+						value={shownTab}
 					/>
 				</div>
 
 				{/* Content container */}
 				<div style={{ width: "100%" }}>
-					<TabPanel idBase="mcp" selected={activeTab === "configure"} tab="configure">
+					<TabPanel idBase="mcp" selected={shownTab === "configure"} tab="configure">
 						<ConfigureServersView />
 					</TabPanel>
-					<TabPanel idBase="mcp" selected={!!mcpMarketplaceEnabled && activeTab === "marketplace"} tab="marketplace">
+					<TabPanel idBase="mcp" selected={shownTab === "marketplace"} tab="marketplace">
 						<McpMarketplaceView />
 					</TabPanel>
-					<TabPanel idBase="mcp" selected={activeTab === "addRemote"} tab="addRemote">
+					<TabPanel idBase="mcp" selected={shownTab === "addRemote"} tab="addRemote">
 						<AddRemoteServerForm onServerAdded={() => handleTabChange("configure")} />
 					</TabPanel>
 				</div>

@@ -3,8 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import ServerRow from "./ServerRow"
 
 const toggleMcpServer = vi.fn(async () => ({ mcpServers: [] }))
+const mocks = vi.hoisted(() => ({ delete: (async () => ({ mcpServers: [] })) as () => Promise<unknown> }))
 vi.mock("@/services/grpc-client", () => ({
-	McpServiceClient: { toggleMcpServer: () => toggleMcpServer(), restartMcpServer: async () => ({ mcpServers: [] }) },
+	McpServiceClient: {
+		toggleMcpServer: () => toggleMcpServer(),
+		restartMcpServer: async () => ({ mcpServers: [] }),
+		deleteMcpServer: () => mocks.delete(),
+	},
 }))
 vi.mock("@/context/ExtensionStateContext", () => ({
 	useExtensionState: () => ({
@@ -93,6 +98,25 @@ describe("ServerRow (N12)", () => {
 	it("the status dot says what it means", () => {
 		render(<ServerRow isExpandable server={server({ status: "disconnected" })} />)
 		expect(screen.getByRole("img", { name: "Disconnected" })).toBeInTheDocument()
+	})
+
+	it("Delete asks first, Cancel keeps the server, and only the confirm deletes", () => {
+		const deleteMcpServer = vi.fn(async () => ({ mcpServers: [] }))
+		mocks.delete = deleteMcpServer
+		render(<ServerRow hasTrashIcon isExpandable server={server()} />)
+		fireEvent.click(screen.getByRole("button", { name: "Delete ai-hydro" }))
+		expect(deleteMcpServer).not.toHaveBeenCalled()
+		const group = screen.getByRole("group", { name: "Confirm deleting ai-hydro" })
+		expect(group).toHaveTextContent("Delete ai-hydro?")
+		fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
+		expect(screen.queryByRole("group", { name: "Confirm deleting ai-hydro" })).toBeNull()
+		expect(deleteMcpServer).not.toHaveBeenCalled()
+		fireEvent.click(screen.getByRole("button", { name: "Delete ai-hydro" }))
+		fireEvent.keyDown(screen.getByRole("group"), { key: "Escape" })
+		expect(screen.queryByRole("group")).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: "Delete ai-hydro" }))
+		fireEvent.click(screen.getByRole("button", { name: "Delete" }))
+		expect(deleteMcpServer).toHaveBeenCalledTimes(1)
 	})
 
 	it("restart is named for its server", () => {

@@ -52,6 +52,7 @@ From the navigation audit (N12). The view had three names ("Hydro Tools & Data S
 - **Each server's name is a button** that says whether its details are open (`aria-expanded`), so the keyboard can open a row.
 - **The enable switch is a named button** ("Enable ai-hydro"), has a 28 x 24 px target, and uses the theme's button colour, not green. Restart and Delete name their server; the status dot has a text name (Connected, Connecting, Disconnected).
 - **One name:** "Hydro Tools & Data Sources" for the view title and the Navbar tooltip, recorded in `docs/ui-naming.md`.
+- **Delete asks first.** Both Delete buttons (the trash icon and "Delete Server") now show "Delete <server>? It is removed from your MCP settings." with Cancel and Delete (Escape cancels). Asking for Marketplace while it is disabled shows Installed, selected, from the first render.
 - Harness: `mcp-configure` now opens the default tab and asserts Installed, the status row and the named switch; new `mcp-installed-unhealthy` asserts the status row shows the unhealthy state beside the server list. 10 new tests.
 
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)

@@ -45,6 +45,14 @@ describe("McpConfigurationView (N12)", () => {
 		expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Installed", "Remote servers"])
 	})
 
+	it("asked for Marketplace while it is disabled, shows Installed selected from the first render", () => {
+		state.mcpMarketplaceEnabled = false
+		render(<McpConfigurationView initialTab="marketplace" onDone={() => {}} />)
+		expect(screen.getByRole("tab", { name: "Installed" })).toHaveAttribute("aria-selected", "true")
+		expect(screen.getAllByRole("tab").filter((t) => t.getAttribute("aria-selected") === "true")).toHaveLength(1)
+		expect(screen.getByRole("tabpanel")).toHaveTextContent("installed content")
+	})
+
 	it("an explicit initial tab is honoured, and the surface has one name", () => {
 		state.mcpMarketplaceEnabled = true
 		render(<McpConfigurationView initialTab="addRemote" onDone={() => {}} />)
