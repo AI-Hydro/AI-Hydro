@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import * as os from "os"
 import * as path from "path"
 import { getRecordedFirstPartyLauncher, setRecordedFirstPartyLauncher } from "@/shared/aihydro/firstPartyServers"
-import { type ToolsEnvStatus, venvMcpPath } from "@/shared/aihydro/toolsEnv"
+import { describeToolsStatus, type ToolsEnvStatus, venvMcpPath } from "@/shared/aihydro/toolsEnv"
 import { readFirstPartyLauncher, recordFirstPartyLauncher } from "../../firstPartyLauncher"
 import { ToolsEnvController, type ToolsEnvHost, type ToolsEnvPersisted } from "../ToolsEnvController"
 import { createFakeMachine, type FakeMachine, makeVenv } from "./fakeToolsEnv"
@@ -25,6 +25,8 @@ describe("ToolsEnvController", () => {
 	let recreateAnswer: boolean
 	let switchAnswer: "switch" | "keep" | undefined
 	let abortOnProgress: boolean
+	let chooseAnswer: string | undefined
+	let chooseAsked: { name: string; command: string }[][]
 
 	beforeEach(async () => {
 		saved = getRecordedFirstPartyLauncher()
@@ -43,6 +45,8 @@ describe("ToolsEnvController", () => {
 		recreateAnswer = false
 		switchAnswer = "switch"
 		abortOnProgress = false
+		chooseAnswer = undefined
+		chooseAsked = []
 	})
 	afterEach(async () => {
 		setRecordedFirstPartyLauncher(saved)
@@ -61,6 +65,10 @@ describe("ToolsEnvController", () => {
 		confirmTrust: async () => {
 			trustAsked++
 			return trustAnswers.shift() ?? false
+		},
+		chooseLauncher: async (candidates) => {
+			chooseAsked.push(candidates.map((c) => ({ name: c.name, command: c.command })))
+			return chooseAnswer
 		},
 		askSwitch: async () => switchAnswer,
 		notify: async (kind, message, actions) => {
@@ -236,6 +244,166 @@ describe("ToolsEnvController", () => {
 		await c.runAction("trust")
 		expect(c.getStatus().trust).to.equal("trusted")
 		expect((await readFirstPartyLauncher(dir))?.command).to.equal(mcp())
+	})
+
+	it("stale record (old ai-hydro disabled, aihydro-tools running): untrusted, says so, and trust is recorded only after the modal is confirmed", async () => {
+		makeVenv(machine, "2.8.2")
+		await recordFirstPartyLauncher(dir, { name: "ai-hydro", command: "/opt/miniconda3/bin/aihydro-mcp", args: [] })
+		await fs.writeFile(
+			settingsPath,
+			JSON.stringify({
+				mcpServers: {
+					"ai-hydro": { command: "/opt/miniconda3/bin/aihydro-mcp", args: [], disabled: true },
+					"aihydro-tools": { command: mcp(), args: [] },
+				},
+			}),
+		)
+		const notes: (string | undefined)[] = []
+		const base = host()
+		const withNotes: ToolsEnvHost = {
+			...base,
+			confirmTrust: async (launcher, recorded, note) => {
+				notes.push(note)
+				return base.confirmTrust(launcher, recorded, note)
+			},
+		}
+		const c = new ToolsEnvController(withNotes, machine.deps, {
+			venvsDir: path.join(dir, "venvs"),
+			settingsDir: dir,
+			settingsPath,
+			cacheDir: path.join(dir, "cache"),
+		})
+		trustAnswers = [false, false]
+		await c.startup()
+		await settled(c)
+		// The status describes the server in use (not the disabled entry the record names), in plain words.
+		const s = c.getStatus()
+		expect(s).to.include({ phase: "ready", trust: "untrusted", serverName: "aihydro-tools" })
+		expect(s.trustReason).to.contain("running from a new location")
+		expect(s.trustReason).to.contain(mcp())
+		expect(s.trustReason).to.contain("Previously trusted: ai-hydro (disabled).")
+		expect(describeToolsStatus(s).actions).to.include("trust")
+		// Declining the modal records nothing.
+		expect((await readFirstPartyLauncher(dir))?.name).to.equal("ai-hydro")
+		trustAnswers = [false]
+		await c.runAction("trust")
+		expect((await readFirstPartyLauncher(dir))?.name).to.equal("ai-hydro")
+		expect(c.getStatus().trust).to.equal("untrusted")
+		expect(notes.at(-1)).to.equal("Previously trusted: ai-hydro (disabled).")
+		// Confirming records the ENABLED entry, and the in-memory anchor follows at once.
+		trustAnswers = [true]
+		await c.runAction("trust")
+		expect(await readFirstPartyLauncher(dir)).to.include({ name: "aihydro-tools", command: mcp() })
+		expect(getRecordedFirstPartyLauncher()).to.include({ name: "aihydro-tools", command: mcp() })
+		expect(c.getStatus().trust).to.equal("trusted")
+	})
+
+	describe("two enabled first-party launchers (no silent pick)", () => {
+		const twoEnabled = async () => {
+			makeVenv(machine, "2.8.2")
+			await recordFirstPartyLauncher(dir, { name: "ai-hydro", command: "/opt/old/aihydro-mcp", args: [] })
+			await fs.writeFile(
+				settingsPath,
+				JSON.stringify({
+					mcpServers: {
+						"ai-hydro": { command: "/opt/old/aihydro-mcp", args: [] },
+						"aihydro-tools": { command: mcp(), args: [] },
+					},
+				}),
+			)
+		}
+		const prompts: { name: string; note?: string }[] = []
+		const ctl = () => {
+			prompts.length = 0
+			const base = host()
+			return new ToolsEnvController(
+				{
+					...base,
+					confirmTrust: async (launcher, recorded, note) => {
+						prompts.push({ name: launcher.name, note })
+						return base.confirmTrust(launcher, recorded, note)
+					},
+				},
+				machine.deps,
+				{ venvsDir: path.join(dir, "venvs"), settingsDir: dir, settingsPath, cacheDir: path.join(dir, "cache") },
+			)
+		}
+
+		it("a named request confirms THAT entry (not the default name), says the other is registered, and records only on yes", async () => {
+			await twoEnabled()
+			const c = ctl()
+			trustAnswers = [false]
+			await c.runAction("trust", "aihydro-tools")
+			expect(prompts).to.have.length(1)
+			expect(prompts[0].name).to.equal("aihydro-tools")
+			expect(prompts[0].note).to.contain("Another enabled AI-Hydro launcher is also registered: ai-hydro")
+			expect((await readFirstPartyLauncher(dir))?.name).to.equal("ai-hydro") // declined: unchanged
+			trustAnswers = [true]
+			await c.runAction("trust", "aihydro-tools")
+			expect(await readFirstPartyLauncher(dir)).to.include({ name: "aihydro-tools", command: mcp() })
+		})
+
+		it("an unnamed request with two candidates asks which, by exact command; dismissing records nothing and shows no modal", async () => {
+			await twoEnabled()
+			const c = ctl()
+			chooseAnswer = undefined
+			await c.runAction("trust")
+			expect(chooseAsked).to.have.length(1)
+			expect(chooseAsked[0].map((x) => x.name)).to.have.members(["ai-hydro", "aihydro-tools"])
+			expect(chooseAsked[0].find((x) => x.name === "aihydro-tools")?.command).to.equal(mcp())
+			expect(prompts).to.have.length(0)
+			expect((await readFirstPartyLauncher(dir))?.name).to.equal("ai-hydro")
+			chooseAnswer = "aihydro-tools"
+			trustAnswers = [true]
+			await c.runAction("trust")
+			expect(prompts.map((p) => p.name)).to.deep.equal(["aihydro-tools"])
+			expect((await readFirstPartyLauncher(dir))?.name).to.equal("aihydro-tools")
+		})
+
+		it("a chooser answer that is not a candidate is ignored", async () => {
+			await twoEnabled()
+			const c = ctl()
+			chooseAnswer = "evil"
+			await c.runAction("trust")
+			expect(prompts).to.have.length(0)
+		})
+
+		it("no candidate and no name: a disabled entry gets no modal and no record, only a notice", async () => {
+			makeVenv(machine, "2.8.2")
+			await fs.writeFile(
+				settingsPath,
+				JSON.stringify({ mcpServers: { "ai-hydro": { command: "/opt/old/aihydro-mcp", args: [], disabled: true } } }),
+			)
+			const c = ctl()
+			trustAnswers = [true]
+			await c.runAction("trust")
+			expect(prompts).to.have.length(0)
+			expect(chooseAsked).to.have.length(0)
+			expect(await readFirstPartyLauncher(dir)).to.equal(undefined)
+			expect(notices.some((n) => /nothing to confirm/.test(n.message))).to.equal(true)
+		})
+
+		it("the host re-validates a webview-supplied name: disabled, unknown and non-first-party names do nothing", async () => {
+			makeVenv(machine, "2.8.2")
+			await fs.writeFile(
+				settingsPath,
+				JSON.stringify({
+					mcpServers: {
+						"ai-hydro": { command: "/opt/old/aihydro-mcp", args: [], disabled: true },
+						swat: { command: "/usr/bin/swat", args: [] },
+						"aihydro-tools": { command: mcp(), args: [] },
+					},
+				}),
+			)
+			const c = ctl()
+			trustAnswers = [true, true, true]
+			for (const forged of ["ai-hydro", "swat", "nope"]) {
+				await c.runAction("trust", forged)
+			}
+			expect(prompts).to.have.length(0)
+			expect(await readFirstPartyLauncher(dir)).to.equal(undefined)
+			expect(notices.length).to.equal(3)
+		})
 	})
 
 	it("a failed install stays visible as 'failed', raises an error notice with Retry, and Retry works (no permanent dismiss)", async () => {

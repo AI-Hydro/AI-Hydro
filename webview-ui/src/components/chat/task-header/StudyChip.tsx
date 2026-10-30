@@ -1,5 +1,6 @@
 import type { StudyBindingState } from "@shared/ExtensionMessage"
 import React, { useCallback, useEffect } from "react"
+import { TrustLauncherButton } from "@/components/tools/TrustLauncherButton"
 import { PLATFORM_CONFIG } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import StudyPicker from "./StudyPicker"
@@ -33,6 +34,20 @@ export interface StudyChipViewProps {
 	onChoose: (studyId: string) => void
 	onDecline: (kind: "none" | "new") => void
 }
+
+/** The study is unavailable because the AI-Hydro Tools launcher is not confirmed (the user can fix that here). */
+export const needsLauncherTrust = (b: StudyBindingState | undefined): boolean =>
+	!!b && b.status === "unavailable" && b.cause === "untrusted_server"
+
+/** In flow under the header (never floating): why there is no study, and the one action that fixes it. */
+export const StudyTrustNotice: React.FC<{ reason?: string; serverName?: string }> = ({ reason, serverName }) => (
+	<div className="mx-1 mb-1 flex flex-col gap-1 text-[12px]" data-testid="study-trust-notice" role="status">
+		<span>{reason}</span>
+		<span>
+			<TrustLauncherButton serverName={serverName} testId="study-trust-launcher" />
+		</span>
+	</div>
+)
 
 /** Whether the picker is showing: the host opened it (`choose` with candidates). */
 export const isPicking = (b: StudyBindingState | undefined): b is StudyBindingState =>
@@ -115,6 +130,9 @@ export const StudyPickerPanelView: React.FC<Omit<StudyChipViewProps, "onOpen"> &
 	onChoose,
 	onDecline,
 }) => {
+	if (needsLauncherTrust(binding)) {
+		return <StudyTrustNotice reason={binding?.reason} serverName={binding?.causeServer} />
+	}
 	if (!isPicking(binding)) {
 		return null
 	}

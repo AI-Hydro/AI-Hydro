@@ -5,7 +5,7 @@ import { telemetryService } from "@/services/telemetry"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
-import { mcpResourceAutoRunAllowed, UNTRUSTED_AUTO_RUN_TEXT } from "../mcpAutoApprove"
+import { mcpResourceAutoRunAllowed, resourcePausedFix, UNTRUSTED_AUTO_RUN_TEXT } from "../mcpAutoApprove"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -73,7 +73,14 @@ export class AccessMcpResourceHandler implements IFullyManagedTool {
 			toolName: undefined,
 			uri: uri,
 			arguments: undefined,
-			...(settingsAllow && !trustedServer ? { autoApprovePaused: UNTRUSTED_AUTO_RUN_TEXT } : {}),
+			...(settingsAllow && !trustedServer
+				? {
+						autoApprovePaused: UNTRUSTED_AUTO_RUN_TEXT,
+						...(resourcePausedFix(config.services.mcpHub, server_name)
+							? { autoApprovePausedFix: "trust_launcher" as const }
+							: {}),
+					}
+				: {}),
 		} satisfies AiHydroAskUseMcpServer)
 
 		if (shouldAutoApprove) {

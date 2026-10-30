@@ -9,15 +9,17 @@
  * Host-neutral: no `vscode` import; the human gate and the file locations are injected.
  */
 import {
+	describeStaleAnchor,
 	explainServerTrust,
 	FIRST_PARTY_SERVER_NAMES,
 	launchContextHash,
 	looksLikeFirstPartyLauncher,
+	staleAnchorNote,
 } from "@shared/aihydro/firstPartyServers"
 import type { ToolsTrustVerdict } from "@shared/aihydro/toolsEnv"
 import * as fs from "fs/promises"
+import { loadFirstPartyLauncher, readFirstPartyLauncher, recordFirstPartyLauncher, settingsEntries } from "../firstPartyLauncher"
 import { atomicWriteFile } from "./atomicWrite"
-import { loadFirstPartyLauncher, readFirstPartyLauncher, recordFirstPartyLauncher } from "../firstPartyLauncher"
 
 export const DEFAULT_SERVER_NAME = "ai-hydro"
 
@@ -66,12 +68,20 @@ async function readMcpSettingsOnce(
 	}
 }
 
-/** The key of the first-party server entry: the default name first, then any other first-party name. */
+/**
+ * The key of the first-party server entry. An ENABLED entry wins over a disabled one (a disabled legacy `ai-hydro`
+ * must not shadow the `aihydro-tools` entry that is actually running); within a state the default name comes first,
+ * then any other first-party name.
+ */
 export function findFirstPartyEntryName(servers: Record<string, unknown>): string | undefined {
-	if (servers[DEFAULT_SERVER_NAME]) {
-		return DEFAULT_SERVER_NAME
-	}
-	return Object.keys(servers).find((name) => FIRST_PARTY_SERVER_NAMES.has(name.trim().toLowerCase()) && !!servers[name])
+	const isEnabled = (name: string) => (servers[name] as { disabled?: unknown } | undefined)?.disabled !== true
+	const named = [DEFAULT_SERVER_NAME, ...Object.keys(servers)].filter(
+		(name, i, all) =>
+			all.indexOf(name) === i &&
+			!!servers[name] &&
+			(name === DEFAULT_SERVER_NAME || FIRST_PARTY_SERVER_NAMES.has(name.trim().toLowerCase())),
+	)
+	return named.find(isEnabled) ?? named[0]
 }
 
 export type LauncherClass = "none" | "managed" | "custom-working" | "custom-broken" | "non-standard"
@@ -258,10 +268,12 @@ export async function readTrustSnapshot(settingsDir: string, settingsPath: strin
 		{ name, config: JSON.stringify({ type: "stdio", command, args, env: entry.env, cwd: entry.cwd }) },
 		recorded,
 	)
+	// A recorded launcher whose server is disabled or gone, with one enabled first-party server in use: say so.
+	const stale = verdict.trusted ? undefined : describeStaleAnchor(settingsEntries(read.config.mcpServers), recorded)
 	return {
 		serverName: name,
 		serverCommand: [command, ...args].join(" "),
 		trust: verdict.trusted ? "trusted" : "untrusted",
-		reason: verdict.reason,
+		reason: stale ? `${verdict.reason} ${staleAnchorNote(stale)}` : verdict.reason,
 	}
 }

@@ -9,7 +9,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [0.4.3] — unreleased (UX program Wave 1, owner-reported map fixes)
+## [0.4.3] — unreleased (owner-reported map fixes, trust UX)
 
 ### Changed — map pins: one concept, a pin card, a clean context menu, and double-click zooms again (UX program Wave 1, PR X1-M2, branch `vision2040/x1-m2-pins`)
 
@@ -23,6 +23,14 @@ Reported on the installed 0.4.2 build: the right-click menu offered "Drop pin he
 - **Pins panel (rail).** List with name and coordinates, rename, zoom to, delete, "Clear all" with a confirm (undoable), Export (GeoJSON), "From layer", and the pin tool toggle.
 - **Pins belong to the project.** The host keeps one bucket per project key (`prj_...`, or `dir:<hash>` until the tools server knows the folder; a `dir:` bucket moves to the `prj_` bucket the first time the project has an id). Pins from project A are absent in project B. The pins saved before projects existed (one global list) are handed to the first project that opens the map and marked imported; the Pins panel shows a one-time "Keep / Clear them" banner. The old list is never deleted from the host, so a downgrade still finds it. A stored pin with no usable geometry is dropped with a console warning instead of failing the render.
 - **Harness.** Five screens (`map-pins-list`, `map-pin-card`, `map-pins-imported-banner`, `map-context-menu-empty`, `map-context-menu-pin`); steps may be `{ contextClick }`. The smoke test (`scripts/map-browser-smoke.mjs`) now double-clicks the real map and checks it zooms and creates no pin, then drives P, click, card, Delete, Undo.
+### Fixed — AI-Hydro tools untrusted after the launcher moved, with no visible way to fix it (branch `vision2040/trust-ux`)
+
+- **One action, where trust is the reason.** "Trust this launcher…" now sits on the paused-grant card ("Always for X is paused"), under the transcript's "server not trusted" line, and under the header when the study is unavailable because the launcher is not confirmed. It only asks the host to show its modal confirmation (exact command and path); trust is recorded only after that confirmation, and nothing is trusted automatically. Fail-closed semantics are unchanged.
+- **Plain wording.** "AI-Hydro Tools is running from a new location (`<command>`). Your auto-run settings are paused until you confirm it." replaces "not the registered first-party server, or its launch identity changed". The study chip's tooltip says the same instead of "not connected".
+- **Stale record.** When the recorded launcher belongs to a disabled or removed server entry and exactly one enabled first-party entry exists, the tools status chip and the confirmation say "Previously trusted: ai-hydro (disabled)." The click is still required.
+- **The right entry.** The tools status and "Trust this launcher…" now look at the enabled first-party entry first. A disabled legacy `ai-hydro` entry no longer shadows the running `aihydro-tools` (the chip could read "trusted" while the real server was not).
+- **No silent pick between launchers.** The buttons send the server they are about; the host re-validates it (enabled, first-party name and shape) and ignores anything else. With no name and two or more enabled first-party launchers, you choose by exact command, and the dialog says another enabled launcher is registered. The dialog says "AI-Hydro previously recorded" (the first record is written at registration, not by a confirmation).
+- **Immediate.** After you confirm, auto-run grants apply to the next call, the servers list refreshes, and the study chip re-resolves, with no reload.
 
 ## [0.4.2] — unreleased (UX program Wave 1: projects on chats, chat titles, real Focus, project context, map provenance and map chrome; plus the abort-confirm guard and the Wave 0 leftovers)
 

@@ -31,6 +31,7 @@ import HtmlPreviewView from "@/components/html_preview/HtmlPreviewView"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
 import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server-row/McpResourceRow"
 import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row/McpToolRow"
+import { PausedTrustAction } from "@/components/tools/TrustLauncherButton"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useHtmlPreviewContext } from "@/context/HtmlPreviewContext"
 import { FileServiceClient, TaskServiceClient, UiServiceClient } from "@/services/grpc-client"
@@ -1299,6 +1300,9 @@ export const ChatRowContent = memo(
 							data-testid="mcp-always-paused"
 							style={{ color: "var(--vscode-editorWarning-foreground)" }}>
 							{useMcpServer.autoApprovePaused}
+							{useMcpServer.autoApprovePausedFix === "trust_launcher" && (
+								<PausedTrustAction serverName={useMcpServer.serverName} />
+							)}
 						</div>
 					)}
 

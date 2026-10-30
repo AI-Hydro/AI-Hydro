@@ -11,7 +11,7 @@
  *    conditions hold again.
  */
 import { type AlwaysAllowRefusalReason, alwaysAllowVerdict, alwaysPausedText } from "@shared/aihydro/alwaysAllowPolicy"
-import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
+import { canOfferTrustAction, isServerTrusted, launchLineOfConfig } from "@shared/aihydro/firstPartyServers"
 import type { EffectAnnotations } from "@shared/aihydro/mcpEffectClass"
 
 interface ConnectionsView {
@@ -67,7 +67,12 @@ function decide(
 	if (verdict.ok) {
 		return { auto: true }
 	}
-	return { auto: false, granted: true, reason: verdict.reason, pausedText: alwaysPausedText(toolName, verdict.reason) }
+	return {
+		auto: false,
+		granted: true,
+		reason: verdict.reason,
+		pausedText: alwaysPausedText(toolName, verdict.reason, launchLineOfConfig(server.config)),
+	}
 }
 
 /** True only when the call may run without asking: a stored grant that also passes the run-time recheck. */
@@ -95,8 +100,7 @@ export function mcpConnectionIdentity(hub: ConnectionsView | undefined, serverNa
 }
 
 /** Neutral reason shown when a resource read asks instead of auto-running. */
-export const UNTRUSTED_AUTO_RUN_TEXT =
-	"Auto-run is off for this server: it is not the registered first-party server, or its launch identity changed."
+export const UNTRUSTED_AUTO_RUN_TEXT = "Auto-run is off for this server because AI-Hydro has not confirmed where it runs from."
 
 /** access_mcp_resource may auto-run only against a live connection that is the trusted first-party server. */
 export function mcpResourceAutoRunAllowed(hub: ConnectionsView | undefined, serverName: string | undefined): boolean {
@@ -105,5 +109,31 @@ export function mcpResourceAutoRunAllowed(hub: ConnectionsView | undefined, serv
 		return !!server && isServerTrusted(server)
 	} catch {
 		return false
+	}
+}
+
+/**
+ * The one-click fix an ask offers beside its paused-auto-run line: "Trust this launcher..." (opens the host's modal;
+ * the webview cannot trust anything itself). Only for a first-party-named server whose auto-run is paused by trust.
+ */
+export function pausedFixFor(
+	serverName: string | undefined,
+	reason: AlwaysAllowRefusalReason | "check_failed",
+): "trust_launcher" | undefined {
+	return reason === "untrusted_server" && canOfferTrustAction(serverName) ? "trust_launcher" : undefined
+}
+
+/** The fix for a resource read that asks because the server is not trusted: only for a connected first-party-named server. */
+export function resourcePausedFix(
+	hub: ConnectionsView | undefined,
+	serverName: string | undefined,
+): "trust_launcher" | undefined {
+	try {
+		const server = hub?.connections?.find((conn) => conn.server.name === serverName)?.server
+		return server?.status === "connected" && !isServerTrusted(server)
+			? pausedFixFor(serverName, "untrusted_server")
+			: undefined
+	} catch {
+		return undefined
 	}
 }

@@ -1777,6 +1777,27 @@ export class Controller {
 		}
 	}
 
+	/**
+	 * The user confirmed a first-party launcher (the host dialog, then the recorded anchor changed). Everything that
+	 * read trust at the moment it was untrusted is refreshed without a reload: the servers' trust shown in the UI
+	 * (auto-run decisions already read the anchor live), and the study binding of a chat that was waiting on it.
+	 */
+	async onFirstPartyTrustConfirmed(): Promise<void> {
+		await this.mcpHub?.sendLatestMcpServers().catch(() => {})
+		const task = this.task
+		const current = this.studyBinding
+		if (task && current && current.chatId === task.ulid && current.status === "unavailable") {
+			const historyItem = (this.stateManager.getGlobalStateKey("taskHistory") ?? []).find((h) => h.id === task.taskId)
+			await this.bindChatAtLaunch(
+				task.ulid,
+				this.workspaceManager?.getPrimaryRoot()?.path ?? process.cwd(),
+				historyItem,
+				undefined,
+			)
+		}
+		await this.postStateToWebview().catch(() => {})
+	}
+
 	/** Set the chip state; a bound study is mirrored into the chat's history item (binding writer). */
 	setStudyBinding(state: StudyBindingState, taskId?: string): void {
 		this.studyBinding = state
