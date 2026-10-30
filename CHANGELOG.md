@@ -62,6 +62,11 @@ From the navigation audit (N15, N16). AI-Hydro's code-action provider was regist
 - **The tools status item reads `AI-Hydro tools 2.8.1`** (the version is the tools package's, so it says "tools"; the icon still carries ok, busy, warning or error, and the warning background is unchanged).
 - **A study item** appears beside it, only while the current chat is bound to a study: `$(location) <study name>`, with an accessible name and a tooltip. It hides when the chat has no study or is cleared. Clicking it opens the sidebar if it is closed, returns it to the chat from any sub-view, and focuses the chat input (new hidden command `aihydro.showChat`); it does not open the study picker (that lives in the chat header chip). A study name containing `$(...)` cannot draw a codicon. Needs the installed build to see.
 - 11 new tests (languages and the selector, Fix gating, no "Improve" string, status text in every phase, the study item's show, hide, no-repaint and throwing-sink cases).
+### Fixed — review follow-ups: nav primitives, harness teardown, empty catalogue replies (branch `vision2040/nav-followups`)
+
+- **`Toolbar`** re-evaluates its tab stop when a button's `disabled` changes (a disabled current button hands the stop on). **`Tabs`**: when the selected tab is missing or disabled, the first enabled tab is the one tab stop. **`RailButton`**: `popup` sets `aria-haspopup` (`expanded` alone no longer claims a menu); a badge count is part of the accessible name ("Alerts, 3"); `showReason` draws the disabled reason as visible text.
+- **Screen harness:** the `Screens` shards failed on `requestfailed(net::ERR_ABORTED)` for basemap tiles at teardown. The page cancels tiles the router has not yet been handed; those cancelled tiles are no longer counted as escapes (a live response would still fail the run). The "1190 live requests per shard" in `summary.json` is `externalRoutedRequests`, the requests the harness answered from fixtures, not traffic that left; `scripts/ui-screens/README.md` now says so.
+- **MCP marketplace card** and **Skills** tolerate a host reply with no `aiHydroStars` or no `items` (the proto default), showing 0 instead of "undefined" or a crash.
 
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
