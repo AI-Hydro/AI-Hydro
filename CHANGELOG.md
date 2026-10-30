@@ -54,6 +54,14 @@ From the navigation audit (N12). The view had three names ("Hydro Tools & Data S
 - **One name:** "Hydro Tools & Data Sources" for the view title and the Navbar tooltip, recorded in `docs/ui-naming.md`.
 - **Delete asks first.** Both Delete buttons (the trash icon and "Delete Server") now show "Delete <server>? It is removed from your MCP settings." with Cancel and Delete (Escape cancels). Asking for Marketplace while it is disabled shows Installed, selected, from the first render.
 - Harness: `mcp-configure` now opens the default tab and asserts Installed, the status row and the named switch; new `mcp-installed-unhealthy` asserts the status row shows the unhealthy state beside the server list. 10 new tests.
+### Changed — fewer lightbulb actions, a status bar that names the product, and a study item (Nav-6, branch `vision2040/nav-6`)
+
+From the navigation audit (N15, N16). AI-Hydro's code-action provider was registered for every file (`"*"`), so the editor lightbulb offered "Add to AI-Hydro", "Explain with AI-Hydro" and "Improve with AI-Hydro" on every line of every file type, and the status bar said only `Tools 2.8.1` beside other extensions' items.
+
+- **The lightbulb appears in Python, R and Jupyter documents only** (notebook cells are Python or R documents). It offers "Add to AI-Hydro" and "Explain with AI-Hydro"; "Fix with AI-Hydro" appears only when the editor reports a problem on the range, in Python and R. **"Improve with AI-Hydro" is gone from the lightbulb** (it offered to rewrite a researcher's analysis on any selection). The commands stay in the command palette, and "Add to AI-Hydro" stays on its keybinding and the editor context menu, so nothing is unreachable. Data files (CSV, JSON) no longer get a lightbulb, on purpose: "Add" would sit on every line of every data file; use the context menu or the keybinding there. The e2e helper `addSelectedCodeToAiHydroWebview` now uses the keybinding instead of the lightbulb.
+- **The tools status item reads `AI-Hydro tools 2.8.1`** (the version is the tools package's, so it says "tools"; the icon still carries ok, busy, warning or error, and the warning background is unchanged).
+- **A study item** appears beside it, only while the current chat is bound to a study: `$(location) <study name>`, with an accessible name and a tooltip. It hides when the chat has no study or is cleared. Clicking it opens the sidebar if it is closed, returns it to the chat from any sub-view, and focuses the chat input (new hidden command `aihydro.showChat`); it does not open the study picker (that lives in the chat header chip). A study name containing `$(...)` cannot draw a codicon. Needs the installed build to see.
+- 11 new tests (languages and the selector, Fix gating, no "Improve" string, status text in every phase, the study item's show, hide, no-repaint and throwing-sink cases).
 
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 

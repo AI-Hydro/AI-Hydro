@@ -98,6 +98,7 @@ import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceC
 import { appendAiHydroStealthModels } from "./models/refreshOpenRouterModels"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { clearPending } from "./ui/pendingAskBadge"
+import { reportStudyStatus } from "./ui/studyStatus"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
 
 /*
@@ -1144,6 +1145,7 @@ export class Controller {
 
 	async postStateToWebview() {
 		const state = await this.getStateToPostToWebview()
+		reportStudyStatus(state.studyBinding)
 		await sendStateUpdate(state)
 	}
 

@@ -224,6 +224,11 @@
 				"category": "AI-Hydro"
 			},
 			{
+				"command": "aihydro.showChat",
+				"title": "Show Chat",
+				"category": "AI-Hydro"
+			},
+			{
 				"command": "aihydro.historyButtonClicked",
 				"title": "Analysis History",
 				"icon": "$(history)",
@@ -508,6 +513,10 @@
 				}
 			],
 			"commandPalette": [
+				{
+					"command": "aihydro.showChat",
+					"when": "false"
+				},
 				{
 					"command": "aihydro.focusPendingPrompt",
 					"when": "aihydro.hasPendingAsk"
