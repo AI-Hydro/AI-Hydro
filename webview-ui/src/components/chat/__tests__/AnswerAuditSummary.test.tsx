@@ -1,6 +1,7 @@
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import { fireEvent, render } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
+import { ExtensionStateContext } from "@/context/ExtensionStateContext"
 import { AnswerAuditSummary, auditSummaryLine } from "../AnswerAuditSummary"
 
 const base: AnswerAuditPayload = {
@@ -29,7 +30,8 @@ describe("AnswerAuditSummary (interim)", () => {
 		expect(c.textContent).toContain("Audit: 3/5 quantities cited · 1 hard · 20 advisory")
 		expect(c.querySelectorAll("li")).toHaveLength(21)
 		expect(c.querySelector("details")?.hasAttribute("open")).toBe(false)
-		expect(c.querySelector("li div code")?.textContent).toBe("cite e.g. [run:ID#path]")
+		// agent-directed text is not shown below Verbose
+		expect(c.textContent).not.toContain("cite e.g.")
 		expect(c.textContent).not.toMatch(/passed/i)
 	})
 
@@ -68,11 +70,25 @@ describe("AnswerAuditSummary (interim)", () => {
 		expect(ol.getAttribute("tabindex")).toBe("0")
 		expect(ol.getAttribute("aria-label")).toBe("Audit findings")
 		expect(c.textContent).not.toContain(long.trim())
-		const buttons = c.querySelectorAll("button")
+		expect(c.textContent).not.toContain("Marker:")
+		const verbose = render(
+			<ExtensionStateContext.Provider value={{ transcriptDetail: "verbose" } as any}>
+				<AnswerAuditSummary
+					text={JSON.stringify({
+						...base,
+						hardCount: 1,
+						violations: [
+							{ kind: "k", severity: "hard", message: long, fixHint: long, suggestedMarker: "[run:ID#p]" },
+						],
+					})}
+				/>
+			</ExtensionStateContext.Provider>,
+		).container
+		const buttons = verbose.querySelectorAll("button")
 		expect(buttons).toHaveLength(2)
 		fireEvent.click(buttons[0])
-		expect(c.textContent).toContain(long.trim())
-		expect(c.textContent).toContain("Marker: [run:ID#p]")
+		expect(verbose.textContent).toContain(long.trim())
+		expect(verbose.textContent).toContain("Marker: [run:ID#p]")
 	})
 
 	it("unreadable payloads render a neutral line, not raw JSON", () => {

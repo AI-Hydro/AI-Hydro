@@ -708,7 +708,38 @@ export const screens: ScreenDef[] = [
 			],
 		},
 	),
-	chatTx("chat-answer-audit-graded", "Answer audit (structured, graded)", tx.answerAuditGradedTask, "1 hard"),
+	chatTx(
+		"chat-answer-audit-hard",
+		"Answer with untraced numbers: one summary line, underlined numbers, Ask AI-Hydro to link these",
+		tx.answerAuditHardUxTask,
+		"is a layout fixture. Fixture answer, not a result.",
+		{
+			expectVisible: [
+				"text=3 numbers aren't linked to a recorded run",
+				"button:has-text('Ask AI-Hydro to link these')",
+				"[data-testid=untraced-number]",
+			],
+			expectAbsent: ["text=Fix:", "text=immediately after", "text=uncited_number"],
+		},
+	),
+	chatTx(
+		"chat-answer-audit-advisory",
+		"Answer with advisory notes only: neutral summary, no action",
+		tx.answerAuditAdvisoryUxTask,
+		"is a layout fixture. Fixture answer, not a result.",
+		{
+			expectVisible: ["text=2 notes to review"],
+			expectAbsent: ["button:has-text('Ask AI-Hydro to link these')", "[data-testid=untraced-number]"],
+		},
+	),
+	chatTx(
+		"chat-answer-audit-clean",
+		"Answer with every number traced: a tiny check line",
+		tx.answerAuditCleanUxTask,
+		"Fixture answer, not a result.",
+		{ expectVisible: ["text=All 4 numbers traced"], expectAbsent: ["[data-testid=untraced-number]"] },
+	),
+	chatTx("chat-answer-audit-graded", "Answer audit (structured, graded)", tx.answerAuditGradedTask, "linked to a recorded run"),
 	chatTx(
 		"chat-answer-audit-unavailable",
 		"Answer audit unavailable (structured)",

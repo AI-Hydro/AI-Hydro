@@ -23,6 +23,7 @@ import {
 	readLegacyLocal,
 	saveAnnotations,
 	seedAnnotationsFromGeoJson,
+	takePendingHostSave,
 } from "./annotationStorage"
 import { BasemapNotice } from "./BasemapNotice"
 import {
@@ -100,6 +101,7 @@ import {
 	type Edited,
 	formatPinCoords,
 	isPin,
+	loadWithRetry,
 	mergeAdopted,
 	PinHistory,
 	patchPin,
@@ -929,37 +931,54 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// list) and the selection are reset.
 	const startedWithRef = useRef<Set<string>>(new Set(annotations.map((a) => a.id)))
 	const pinsAdoptedRef = useRef(false)
-	const loadPinsFromHost = useCallback(() => {
+	const unmountedRef = useRef(false)
+	const loadPinsFromHost = useCallback((reloaded = false) => {
 		const first = !pinsAdoptedRef.current
 		const startedWith = first ? startedWithRef.current : new Set(annotationsRef.current.map((a) => a.id))
-		void loadAnnotationsFromHost(first ? readLegacyLocal() : undefined).then((result) => {
+		// The host may be slow to answer (its project lookup can take seconds), so keep asking, with backoff. Saves made
+		// meanwhile are remembered and sent the moment the key is known.
+		void loadWithRetry(() => loadAnnotationsFromHost(first ? readLegacyLocal() : undefined), {
+			cancelled: () => unmountedRef.current,
+		}).then((result) => {
 			if (!result) {
 				return
 			}
 			void postQuarantine(result.projectKey, result.quarantined)
 			const merged = mergeAdopted(result.annotations, annotationsRef.current, startedWith)
 			pinsAdoptedRef.current = true
+			const resend = takePendingHostSave()
 			adoptHostPins(result.projectKey, merged, result.collections)
 			annotationsRef.current = merged
 			setAnnotations(merged)
 			pinUndoStackRef.current.clear()
 			setSelectedPinId(null)
-			if (merged.length !== result.annotations.length) {
+			if (resend || merged.length !== result.annotations.length) {
 				saveAnnotations(merged, result.collections) // pins added before the reply
+			}
+			if (reloaded) {
+				setPinToast({
+					id: Date.now(),
+					message: "Map reloaded for the open folder; your last change was not saved",
+					undoable: false,
+				})
 			}
 		})
 	}, [])
 	useEffect(() => {
 		const local = loadAnnotationsReport()
 		void postQuarantine(null, local.quarantined)
+		unmountedRef.current = false
 		loadPinsFromHost()
 		const onMessage = (event: MessageEvent) => {
 			if ((event.data as { type?: string } | undefined)?.type === "aihydro-map-pins-reload") {
-				loadPinsFromHost()
+				loadPinsFromHost(true)
 			}
 		}
 		window.addEventListener("message", onMessage)
-		return () => window.removeEventListener("message", onMessage)
+		return () => {
+			unmountedRef.current = true
+			window.removeEventListener("message", onMessage)
+		}
 	}, [loadPinsFromHost])
 
 	/** One way to change the list: keep the ref, React state and storage in step. */

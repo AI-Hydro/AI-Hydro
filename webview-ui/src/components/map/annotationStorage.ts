@@ -65,6 +65,9 @@ export interface MapAnnotation {
 	/** Carried over from the pre-project global list; the Pins panel offers "Keep / Clear all" for these once. */
 	imported?: boolean
 
+	/** Saved while no project was known (the host had not answered): the host's list does not have it yet. */
+	pendingSync?: boolean
+
 	createdAt: string
 	updatedAt: string
 }
@@ -215,7 +218,28 @@ export function adoptHostPins(projectKey: string, annotations: MapAnnotation[], 
 	}
 }
 
+/** True when a save was made while no project was known; it is sent once the key is. */
+let pendingHostSave = false
+
+/** Whether a save is waiting for the project key. Reading it clears it: the caller sends that save now. */
+export function takePendingHostSave(): boolean {
+	const was = pendingHostSave
+	pendingHostSave = false
+	return was
+}
+
 export function saveAnnotations(annotations: MapAnnotation[], collections?: AnnotationCollection[]): void {
+	if (!activeProjectKey) {
+		// Unscoped: mark what the host has never seen, so a later session can still tell it from the old global list.
+		let known = new Set<string>()
+		try {
+			const stored = readList(ANNOTATIONS_KEY)
+			known = new Set(Array.isArray(stored) ? stored.map((e) => (e as { id?: string })?.id as string) : [])
+		} catch {
+			/* start from nothing */
+		}
+		annotations = annotations.map((a) => (known.has(a.id) || a.pendingSync ? a : { ...a, pendingSync: true }))
+	}
 	try {
 		localStorage.setItem(
 			activeProjectKey ? PINS_CACHE_PREFIX + activeProjectKey : ANNOTATIONS_KEY,
@@ -537,12 +561,19 @@ const HOST_SAVE_TYPE = "aihydro-map-save-annotations"
 const HOST_LOAD_TYPE = "aihydro-map-load-annotations"
 const HOST_LOAD_RESULT_TYPE = "aihydro-map-load-annotations-result"
 
+/**
+ * How long to wait for the host's answer before trying again. The host's project-key lookup can itself take up to 5 s
+ * (the tools server being slow), so this must be longer, or a slow lookup looks like "no host".
+ */
+export const HOST_LOAD_TIMEOUT_MS = 9_000
+
 /** Fire-and-forget: persist annotations + collections to the extension host. */
 export async function saveAnnotationsToHost(annotations: MapAnnotation[], collections: AnnotationCollection[]): Promise<void> {
 	// Until the host has said which project this is there is nothing to save to: the host writes only to the key the
 	// webview loaded, so an unscoped save would be refused. The list is merged and saved when the host answers.
 	const projectKey = activeProjectKey
 	if (!projectKey) {
+		pendingHostSave = true
 		return
 	}
 	try {
@@ -597,7 +628,7 @@ export async function loadAnnotationsFromHost(legacyLocal?: unknown): Promise<Ho
 		const timeoutId = window.setTimeout(() => {
 			window.removeEventListener("message", handler)
 			resolve(null)
-		}, 3_000)
+		}, HOST_LOAD_TIMEOUT_MS)
 
 		const handler = (event: MessageEvent) => {
 			const data = event.data as {

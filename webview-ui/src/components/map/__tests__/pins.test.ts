@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	adoptHostPins,
+	HOST_LOAD_TIMEOUT_MS,
+	loadAnnotationsFromHost,
 	loadAnnotationsReport,
 	loadCollections,
 	type MapAnnotation,
@@ -8,10 +10,13 @@ import {
 	saveAnnotations,
 	saveCollections,
 	setActiveProjectKey,
+	takePendingHostSave,
 } from "../annotationStorage"
 import {
 	addPin,
 	createPin,
+	loadRetryDelayMs,
+	loadWithRetry,
 	mergeAdopted,
 	nextDefaultName,
 	PinHistory,
@@ -288,5 +293,67 @@ describe("adopting the host's list", () => {
 		h.clear()
 		expect(h.size).toBe(0)
 		expect(h.pop()).toBeUndefined()
+	})
+})
+
+describe("a host that is slow to answer (data-loss path)", () => {
+	afterEach(() => {
+		vi.useRealTimers()
+		setActiveProjectKey(null)
+		localStorage.clear()
+		takePendingHostSave()
+	})
+
+	it("(a) waits longer for the host than the host's own 5 s project lookup", async () => {
+		expect(HOST_LOAD_TIMEOUT_MS).toBeGreaterThanOrEqual(8000)
+		vi.useFakeTimers()
+		let settled = false
+		void loadAnnotationsFromHost().then(() => {
+			settled = true
+		})
+		await vi.advanceTimersByTimeAsync(HOST_LOAD_TIMEOUT_MS - 100)
+		expect(settled).toBe(false)
+		await vi.advanceTimersByTimeAsync(200)
+		expect(settled).toBe(true)
+	})
+
+	it("(b) retries with a growing delay until the host answers, and stops when cancelled", async () => {
+		expect([0, 1, 2, 3, 4, 9].map(loadRetryDelayMs)).toEqual([1000, 2000, 4000, 8000, 15000, 15000])
+		const waits: number[] = []
+		let calls = 0
+		const result = await loadWithRetry(async () => (++calls < 4 ? null : "answer"), {
+			cancelled: () => false,
+			sleep: async (ms) => void waits.push(ms),
+		})
+		expect(result).toBe("answer")
+		expect(waits).toEqual([1000, 2000, 4000])
+		let stop = false
+		const cancelled = await loadWithRetry(async () => null, {
+			cancelled: () => stop,
+			sleep: async () => void (stop = true),
+		})
+		expect(cancelled).toBeNull()
+	})
+
+	it("(b) a save made before the project is known is remembered, and sent once", () => {
+		expect(takePendingHostSave()).toBe(false)
+		saveAnnotations([{ ...pin(1, 2), id: "early" }]) // no project key yet: nothing can be sent
+		expect(takePendingHostSave()).toBe(true)
+		expect(takePendingHostSave()).toBe(false)
+	})
+
+	it("(c) pins saved while unscoped are marked, survive the next session, and are carried into the host's list", () => {
+		const legacy = { ...pin(5, 6), id: "legacy" }
+		localStorage.setItem("aihydro.map.annotations.v2", JSON.stringify([legacy]))
+		// Session 1: the host never answered; the user adds a pin.
+		saveAnnotations([legacy, { ...pin(1, 2), id: "mine" }])
+		const stored = JSON.parse(localStorage.getItem("aihydro.map.annotations.v2") ?? "[]")
+		expect(stored.find((a: MapAnnotation) => a.id === "mine").pendingSync).toBe(true)
+		expect(stored.find((a: MapAnnotation) => a.id === "legacy").pendingSync).toBeUndefined()
+		// Session 2: the map starts with both (all "started with"); the host holds neither.
+		const started = loadAnnotationsReport().annotations
+		const merged = mergeAdopted([{ ...pin(9, 9), id: "host" }], started, new Set(started.map((a) => a.id)))
+		expect(merged.map((a) => a.id)).toEqual(["host", "mine"]) // the old global pin is the host's to hand out, not carried
+		expect("pendingSync" in merged[1]).toBe(false)
 	})
 })

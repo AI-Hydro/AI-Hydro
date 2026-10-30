@@ -2,6 +2,7 @@ import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import { act, fireEvent, render, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import MarkdownBlock from "@/components/common/MarkdownBlock"
+import { ExtensionStateContext } from "@/context/ExtensionStateContext"
 import { APPROVED_TOKEN } from "../../../../design/evidenceStates"
 import { AnswerAuditFooter, auditFooterLine } from "../AnswerAuditFooter"
 import { AnswerBlock, ASK_TO_CITE_TEXT } from "../AnswerBlock"
@@ -144,7 +145,7 @@ describe("AnswerBlock", () => {
 		expect(container.textContent).toContain("1 claim (none approved)")
 	})
 
-	it("'Ask agent to cite' appears only with violations and sends the fixed text once", () => {
+	it("'Ask AI-Hydro to link these' appears only with violations and sends the fixed text once", () => {
 		const send = vi.fn()
 		const withHard = render(
 			<AnswerBlock
@@ -154,7 +155,7 @@ describe("AnswerBlock", () => {
 				<p>x</p>
 			</AnswerBlock>,
 		).container
-		const btn = [...withHard.querySelectorAll("button")].find((b) => b.textContent?.includes("Ask agent to cite"))!
+		const btn = [...withHard.querySelectorAll("button")].find((b) => b.textContent?.includes("Ask AI-Hydro to link these"))!
 		fireEvent.click(btn)
 		expect(send).toHaveBeenCalledTimes(1)
 		expect(send).toHaveBeenCalledWith(ASK_TO_CITE_TEXT)
@@ -167,7 +168,7 @@ describe("AnswerBlock", () => {
 				<p>x</p>
 			</AnswerBlock>,
 		).container
-		expect(legacy.textContent).toContain("Ask agent to cite")
+		expect(legacy.textContent).toContain("Ask AI-Hydro to link these")
 
 		for (const a of [
 			undefined,
@@ -180,14 +181,14 @@ describe("AnswerBlock", () => {
 					<p>x</p>
 				</AnswerBlock>,
 			).container
-			expect(c.textContent).not.toContain("Ask agent to cite")
+			expect(c.textContent).not.toContain("Ask AI-Hydro to link these")
 		}
 		const noReply = render(
 			<AnswerBlock audit={audit({ hardCount: 1, violations: [{ kind: "k", severity: "hard" }] })} text="t">
 				<p>x</p>
 			</AnswerBlock>,
 		).container
-		expect(noReply.textContent).not.toContain("Ask agent to cite")
+		expect(noReply.textContent).not.toContain("Ask AI-Hydro to link these")
 		expect(send).toHaveBeenCalledTimes(1)
 	})
 
@@ -216,8 +217,7 @@ describe("AnswerBlock", () => {
 
 describe("AnswerBlock actions", () => {
 	const hard = audit({ hardCount: 1, violations: [{ kind: "k", severity: "hard" }] })
-	const citeButton = (c: HTMLElement) =>
-		[...c.querySelectorAll("button")].find((b) => /agent to cite/.test(b.textContent ?? ""))!
+	const citeButton = (c: HTMLElement) => [...c.querySelectorAll("button")].find((b) => /link these/.test(b.textContent ?? ""))!
 
 	it("a double click sends the cite request once and the button reads as sent", async () => {
 		const send = vi.fn().mockResolvedValue(true)
@@ -229,7 +229,7 @@ describe("AnswerBlock actions", () => {
 		const btn = citeButton(container)
 		fireEvent.click(btn)
 		fireEvent.click(btn)
-		await waitFor(() => expect(citeButton(container).textContent).toContain("Asked agent to cite"))
+		await waitFor(() => expect(citeButton(container).textContent).toContain("Asked AI-Hydro to link these"))
 		fireEvent.click(citeButton(container))
 		expect(send).toHaveBeenCalledTimes(1)
 		expect(citeButton(container).hasAttribute("disabled")).toBe(true)
@@ -245,7 +245,7 @@ describe("AnswerBlock actions", () => {
 		fireEvent.click(citeButton(container))
 		await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 		await act(async () => {})
-		expect(citeButton(container).textContent).toBe("Ask agent to cite")
+		expect(citeButton(container).textContent).toBe("Ask AI-Hydro to link these")
 		fireEvent.click(citeButton(container))
 		expect(send).toHaveBeenCalledTimes(2)
 	})
@@ -364,31 +364,35 @@ describe("AnswerAuditFooter", () => {
 		}
 	})
 
-	it("findings are severity-sorted with the fix hint as code; drafts are plain text, never chips", () => {
-		const c = texts(
-			audit({
-				hardCount: 1,
-				advisoryCount: 1,
-				violations: [
-					{ kind: "adv", severity: "advisory" },
-					{ kind: "hard1", severity: "hard", fixHint: "cite [run:ID#p]", suggestedMarker: "[run:r#x]" },
-				],
-				history: [
-					{
-						attempt: 0,
-						ts: 1,
-						hardCount: 1,
-						advisoryCount: 0,
-						violations: [],
-						draftHash: "h",
-						draftText: "see [claim:c-approved]",
-					},
-				],
-			}),
-		)
-		const kinds = [...c.querySelectorAll("li > code")].map((e) => e.textContent)
-		expect(kinds).toEqual(["hard1", "adv"])
-		expect(c.querySelector("li div code")?.textContent).toBe("cite [run:ID#p]")
+	it("findings are severity-sorted; drafts are plain text, never chips; agent text only at Verbose", () => {
+		const a = audit({
+			hardCount: 1,
+			advisoryCount: 1,
+			violations: [
+				{ kind: "stale_claim", severity: "advisory" },
+				{ kind: "claim_not_found", severity: "hard", fixHint: "cite [run:ID#p]", suggestedMarker: "[run:r#x]" },
+			],
+			history: [
+				{
+					attempt: 0,
+					ts: 1,
+					hardCount: 1,
+					advisoryCount: 0,
+					violations: [],
+					draftHash: "h",
+					draftText: "see [claim:c-approved]",
+				},
+			],
+		})
+		const c = render(
+			<ExtensionStateContext.Provider value={{ transcriptDetail: "verbose" } as any}>
+				<AnswerAuditFooter audit={a} />
+			</ExtensionStateContext.Provider>,
+		).container
+		fireEvent.click(c.querySelector("button[aria-expanded]")!)
+		const kinds = [...c.querySelectorAll("li")].map((li) => li.querySelector("code")?.textContent)
+		expect(kinds).toEqual(["claim_not_found", "stale_claim"])
+		expect(c.textContent).toContain("cite [run:ID#p]")
 		expect(c.textContent).toContain("Show draft (1)")
 		expect(c.textContent).toContain("see [claim:c-approved]")
 		expect(c.querySelectorAll("[data-evidence-state]")).toHaveLength(0)

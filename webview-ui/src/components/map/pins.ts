@@ -272,13 +272,42 @@ export function sanitizeAnnotations(raw: unknown): Sanitized {
 // ── adopting the host's list ────────────────────────────────────────────────
 
 /**
- * The list to show once the host has answered. The host's list wins; pins the user added before the reply (ids that were
- * not in the list the map started with) are kept too, so a fast first click is not lost. The pins the map started with
- * come from the unscoped local cache, and are the host's to hand out, never kept from here.
+ * The list to show once the host has answered. The host's list wins. Pins the host does not have are kept when they are
+ * the user's own and not yet synced: added since the map opened (ids not in `startedWith`), or saved by an earlier
+ * session that never got an answer (`pendingSync`). The rest of what the map started with is the old unscoped cache,
+ * which the host hands to one project only, and is not carried. The `pendingSync` mark is dropped: they are the host's
+ * from now on.
  */
 export function mergeAdopted(host: MapAnnotation[], current: MapAnnotation[], startedWith: ReadonlySet<string>): MapAnnotation[] {
 	const have = new Set(host.map((a) => a.id))
-	return [...host, ...current.filter((a) => !have.has(a.id) && !startedWith.has(a.id))]
+	const carried = current
+		.filter((a) => !have.has(a.id) && (!startedWith.has(a.id) || a.pendingSync))
+		.map(({ pendingSync: _drop, ...rest }) => rest as MapAnnotation)
+	return [...host, ...carried]
+}
+
+/** Seconds-scale backoff for retrying the host load: 1, 2, 4, 8, then 15 s. */
+export function loadRetryDelayMs(attempt: number): number {
+	return Math.min(15_000, 1_000 * 2 ** attempt)
+}
+
+/**
+ * Call `load` until it returns something, waiting `loadRetryDelayMs` between tries. `cancelled` stops it. Returns the
+ * result, or null when cancelled.
+ */
+export async function loadWithRetry<T>(
+	load: () => Promise<T | null>,
+	options: { cancelled: () => boolean; sleep?: (ms: number) => Promise<void> },
+): Promise<T | null> {
+	const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+	for (let attempt = 0; !options.cancelled(); attempt++) {
+		const result = await load()
+		if (result !== null) {
+			return result
+		}
+		await sleep(loadRetryDelayMs(attempt))
+	}
+	return null
 }
 
 // ── undo history ────────────────────────────────────────────────────────────

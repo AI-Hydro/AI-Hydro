@@ -10,92 +10,24 @@
 		}
 	},
 	"screens": {
-		"map-context-menu-empty": {
+		"chat-answer-audit-advisory": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 0,
+				"smallTarget": 3,
 				"smallText": 0,
 				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 0,
+				"smallTarget": 18,
 				"smallText": 0,
-				"contrast": 0,
+				"contrast": 3,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
 		},
-		"map-context-menu-pin": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-pin-card": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-pins-imported-banner": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-pins-list": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"chat-annotated-first-party": {
+		"chat-answer-audit-clean": {
 			"ref": {
 				"noName": 0,
 				"smallTarget": 3,
@@ -113,6 +45,23 @@
 			"cells": 6
 		},
 		"chat-answer-audit-graded": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-answer-audit-hard": {
 			"ref": {
 				"noName": 0,
 				"smallTarget": 3,
@@ -232,6 +181,56 @@
 			"cells": 6
 		},
 		"chat-answer-revised": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-finished-claims": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-task-answer": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 40,
+				"smallTarget": 2752,
+				"smallText": 440,
+				"contrast": 455,
+				"contrastIndeterminate": 0
+			}
+		},
+		"chat-annotated-first-party": {
 			"ref": {
 				"noName": 0,
 				"smallTarget": 3,
@@ -537,23 +536,6 @@
 			},
 			"cells": 6
 		},
-		"chat-finished-claims": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 3,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 18,
-				"smallText": 0,
-				"contrast": 3,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
 		"chat-history-list": {
 			"ref": {
 				"noName": 0,
@@ -788,22 +770,6 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
-		},
-		"chat-task-answer": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 3,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 40,
-				"smallTarget": 2752,
-				"smallText": 440,
-				"contrast": 455,
-				"contrastIndeterminate": 0
-			}
 		},
 		"chat-task-mcp": {
 			"ref": {
@@ -2076,6 +2042,91 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
+		},
+		"map-pins-list": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-pin-card": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-pins-imported-banner": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-context-menu-empty": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-context-menu-pin": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
 		}
 	},
 	"subsets": {
@@ -3271,17 +3322,37 @@
 					},
 					"cells": 6
 				},
-				"map-context-menu-empty": {
+				"chat-answer-audit-advisory": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 0,
+						"smallTarget": 18,
 						"smallText": 0,
-						"contrast": 0,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
 				},
-				"map-context-menu-pin": {
+				"chat-answer-audit-clean": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-answer-audit-hard": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-pins-list": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,
@@ -3311,7 +3382,17 @@
 					},
 					"cells": 6
 				},
-				"map-pins-list": {
+				"map-context-menu-empty": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-context-menu-pin": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,

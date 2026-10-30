@@ -1,13 +1,15 @@
 import { extractEvidence } from "@shared/aihydro/evidenceMarkers"
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import type { TurnSummary } from "@shared/aihydro/turnSummary"
-import React, { useEffect, useRef, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useLedgerContext } from "../../../context/LedgerContext"
 import { ClaimChip, claimApprovalState } from "../ClaimChip"
 import { LitChip, RunChip } from "../RunChip"
 import { AnswerAuditFooter, auditHasViolations } from "./AnswerAuditFooter"
+import { untracedPlan } from "./auditFindings"
+import { UntracedPlanContext } from "./UntracedNumber"
 
-/** The one fixed request "Ask agent to cite" sends. Fixed so the action is reproducible and carries no model text. */
+/** The one fixed request "Ask AI-Hydro to link these" sends. Fixed so the action is reproducible and carries no model text. */
 export const ASK_TO_CITE_TEXT =
 	"The answer audit found numbers or claims in your last answer that are not traced to a recorded run. Revise the answer: cite each one with [run:<id>#<path>] or [claim:<id>], or remove the value, and do not add new unsupported numbers."
 
@@ -198,6 +200,16 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 	}
 	const showAudit = !!audit && audit.stage === "final"
 	const canCite = !partial && !!onSendFeedback && showAudit && auditHasViolations(audit)
+	// Numbers the audit could not trace are underlined in the prose. Findings that sit only in earlier narration are
+	// not in this text, so they are left out.
+	const plan = useMemo(() => {
+		if (partial || !showAudit || !audit) {
+			return undefined
+		}
+		const skip = audit.unrevisableFindings ?? []
+		const p = untracedPlan(audit.violations.filter((v) => !skip.some((u) => u.kind === v.kind && u.excerpt === v.excerpt)))
+		return p.size > 0 ? p : undefined
+	}, [partial, showAudit, audit])
 
 	const copy = () => {
 		try {
@@ -215,7 +227,9 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 				<span aria-hidden="true" className="codicon codicon-comment-discussion" />
 				<span>Answer</span>
 			</div>
-			<div className="pt-1">{children}</div>
+			<div className="pt-1">
+				<UntracedPlanContext.Provider value={plan}>{children}</UntracedPlanContext.Provider>
+			</div>
 			{!partial && <EvidenceStrip text={text} />}
 			{!partial && turn && (
 				<TurnLine disabled={seeChangesDisabled} hasChanges={hasChanges} onSeeChanges={onSeeChanges} turn={turn} />
@@ -230,15 +244,6 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 					<span aria-live="polite" className="sr-only" role="status">
 						{copied ? "Copied" : ""}
 					</span>
-					{canCite && (
-						<ActionButton
-							disabled={sent}
-							icon="codicon-quote"
-							label={sent ? "Asked agent to cite" : "Ask agent to cite"}
-							onClick={askToCite}
-							title="Ask the agent to cite or remove the values the audit could not trace"
-						/>
-					)}
 					{feedback && (
 						<span className="relative inline-flex">
 							<button
@@ -277,7 +282,9 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 					)}
 				</div>
 			)}
-			{!partial && showAudit && audit && <AnswerAuditFooter audit={audit} />}
+			{!partial && showAudit && audit && (
+				<AnswerAuditFooter askSent={sent} audit={audit} onAskToLink={canCite ? askToCite : undefined} />
+			)}
 		</section>
 	)
 }

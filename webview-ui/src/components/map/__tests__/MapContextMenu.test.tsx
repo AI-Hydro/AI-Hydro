@@ -124,4 +124,9 @@ describe("MapView double-click", () => {
 		expect(src).toMatch(/doubleClickZoom: !\(measureMode \|\| drawMode\)/)
 		expect(src).not.toMatch(/Pin dropped at/)
 	})
+
+	it("tells the user when a reload dropped their last change", () => {
+		expect(src).toContain("Map reloaded for the open folder; your last change was not saved")
+		expect(src).toMatch(/"aihydro-map-pins-reload"/)
+	})
 })
