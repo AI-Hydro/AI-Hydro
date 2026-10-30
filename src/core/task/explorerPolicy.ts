@@ -2,6 +2,7 @@ import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import { effectClass } from "@shared/aihydro/mcpEffectClass"
 import type { McpServer } from "@shared/mcp"
 import { AiHydroDefaultTool } from "@/shared/tools"
+import { EXPLORER_PROFILE } from "./subagents/agentProfile"
 
 /**
  * Capability policy for the `explorer` subagent profile (AGENT_EXECUTION_MODEL §4, gap #3).
@@ -16,29 +17,15 @@ import { AiHydroDefaultTool } from "@/shared/tools"
  */
 
 /**
- * Built-in tools the explorer profile may call. This is an ALLOWLIST: any tool not listed here
- * (including tools added later, e.g. preview_html which writes model-supplied HTML to the workspace
- * and opens it, or report_bug which opens an external issue) is refused by default.
- * use_mcp_tool is allowed here but further gated by MCP readOnlyHint (see explorerMcpBlockReason).
+ * The explorer's built-in allowlist is data on the profile (subagents/agentProfile.ts). This is an ALLOWLIST: any
+ * tool not listed (including tools added later, e.g. preview_html which writes model-supplied HTML to the workspace
+ * and opens it, or report_bug which opens an external issue) is refused by default. `report_findings` is the child's
+ * only exit and is handled by the host. use_mcp_tool and access_mcp_resource are listed but further gated below.
  */
-export const EXPLORER_ALLOWED_TOOLS: readonly AiHydroDefaultTool[] = [
-	AiHydroDefaultTool.FILE_READ,
-	AiHydroDefaultTool.SEARCH,
-	AiHydroDefaultTool.LIST_FILES,
-	AiHydroDefaultTool.WEB_FETCH,
-	AiHydroDefaultTool.MCP_USE, // gated by readOnlyHint
-	AiHydroDefaultTool.MCP_ACCESS,
-	AiHydroDefaultTool.MCP_DOCS,
-	AiHydroDefaultTool.ASK,
-	AiHydroDefaultTool.ATTEMPT,
-	AiHydroDefaultTool.CONDENSE,
-	AiHydroDefaultTool.SUMMARIZE_TASK,
-	AiHydroDefaultTool.PLAN_MODE,
-	AiHydroDefaultTool.TODO,
-]
+export const EXPLORER_ALLOWED_TOOLS: readonly string[] = [...EXPLORER_PROFILE.builtinAllow, EXPLORER_PROFILE.reportTool]
 
 const READ_ONLY_TOOL_LIST =
-	"read_file, search_files, list_files, web_fetch, and read-only MCP tools (readOnlyHint=true, openWorldHint=false) on the trusted first-party server"
+	"read_file, search_files, list_files, load_mcp_documentation, report_findings, and read-only MCP tools (readOnlyHint=true, openWorldHint=false) or resources on the trusted first-party server"
 
 export interface ExplorerMcpHub {
 	getServers(): McpServer[]
@@ -76,15 +63,37 @@ export function explorerMcpBlockReason(
 }
 
 /**
- * Reason a tool call is blocked in the explorer profile, or undefined if allowed.
- * Pure: the caller decides whether the explorer profile is active.
+ * Why an `access_mcp_resource` call is not allowed in explorer, or undefined if it is allowed. A resource read is not
+ * a tool call, so there is no effect annotation to check; the server must be the trusted first-party one on the live
+ * connection (the same condition that lets the parent auto-run a resource read), and the call must be fully specified.
+ */
+export function explorerResourceBlockReason(
+	mcpHub: ExplorerMcpHub | undefined,
+	serverName: string | undefined,
+	uri: string | undefined,
+): string | undefined {
+	if (!serverName || !uri) {
+		return "access_mcp_resource needs server_name and uri so the read-only policy can be checked."
+	}
+	const server = mcpHub?.getServers().find((s) => s.name === serverName)
+	if (!server || !isServerTrusted(server)) {
+		return `MCP server '${serverName}' is not the trusted first-party server, so the explorer may not read its resources.`
+	}
+	return undefined
+}
+
+/**
+ * Reason a tool call is blocked in a subagent profile, or undefined if allowed.
+ * Pure: the caller decides whether a profile is active. `allowlist` defaults to the explorer's; a caller passes the
+ * child's effective list (the intersection with the parent, see capFor), so the check is never wider than the registry.
  */
 export function explorerBlockReason(
 	toolName: string,
 	params: Record<string, unknown> | undefined,
 	mcpHub: ExplorerMcpHub | undefined,
+	allowlist: readonly string[] = EXPLORER_ALLOWED_TOOLS,
 ): string | undefined {
-	if (!(EXPLORER_ALLOWED_TOOLS as readonly string[]).includes(toolName)) {
+	if (!allowlist.includes(toolName)) {
 		return `Tool '${toolName}' is not available in EXPLORER profile. This is a read-only research subagent. Use only ${READ_ONLY_TOOL_LIST}.`
 	}
 	if (toolName === AiHydroDefaultTool.MCP_USE) {
@@ -95,6 +104,16 @@ export function explorerBlockReason(
 		)
 		if (reason) {
 			return `${reason} The EXPLORER profile is read-only: only read-only MCP tools on the trusted first-party server may be called (never run_python or write tools).`
+		}
+	}
+	if (toolName === AiHydroDefaultTool.MCP_ACCESS) {
+		const reason = explorerResourceBlockReason(
+			mcpHub,
+			params?.server_name as string | undefined,
+			params?.uri as string | undefined,
+		)
+		if (reason) {
+			return `${reason} The EXPLORER profile is read-only.`
 		}
 	}
 	return undefined

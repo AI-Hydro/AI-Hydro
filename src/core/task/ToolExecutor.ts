@@ -11,6 +11,7 @@ import { telemetryService } from "@services/telemetry"
 import { callRowIndexToRecord } from "@shared/aihydro/askOutcome"
 import { execOutcomeFor } from "@shared/aihydro/commandEvidence"
 import type { SayEvidence } from "@shared/aihydro/infoNotice"
+import type { SubagentReport } from "@shared/aihydro/subagents"
 import { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
 import { AiHydroDefaultTool } from "@shared/tools"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
@@ -26,9 +27,12 @@ import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
 import { noteSessionStarted, START_SESSION_TOOL_NAME } from "./answerAuditGate"
+import type { AskMeta } from "./askMeta"
 import { browserToolRefusal } from "./browserGate"
+import { explorerBlockReason } from "./explorerPolicy"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
+import type { EffectiveCapabilities } from "./subagents/agentProfile"
 import { TaskState } from "./TaskState"
 import { AutoApprove } from "./tools/autoApprove"
 import { AccessMcpResourceHandler } from "./tools/handlers/AccessMcpResourceHandler"
@@ -46,12 +50,13 @@ import { PlanModeRespondHandler } from "./tools/handlers/PlanModeRespondHandler"
 import { PreviewHtmlToolHandler } from "./tools/handlers/PreviewHtmlToolHandler"
 import { ReadFileToolHandler } from "./tools/handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./tools/handlers/ReportBugHandler"
+import { ReportFindingsHandler } from "./tools/handlers/ReportFindingsHandler"
 import { SearchFilesToolHandler } from "./tools/handlers/SearchFilesToolHandler"
 import { SummarizeTaskHandler } from "./tools/handlers/SummarizeTaskHandler"
 import { UseMcpToolHandler } from "./tools/handlers/UseMcpToolHandler"
 import { WebFetchToolHandler } from "./tools/handlers/WebFetchToolHandler"
 import { WriteToFileToolHandler } from "./tools/handlers/WriteToFileToolHandler"
-import { IPartialBlockHandler, SharedToolHandler, ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator"
+import { IPartialBlockHandler, IToolHandler, SharedToolHandler, ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator"
 import { repairToolParams } from "./tools/ToolInputRepair"
 import { ToolValidator } from "./tools/ToolValidator"
 import { TaskConfig, validateTaskConfig } from "./tools/types/TaskConfig"
@@ -59,9 +64,27 @@ import { createUIHelpers } from "./tools/types/UIHelpers"
 import { ToolDisplayUtils } from "./tools/utils/ToolDisplayUtils"
 import { ToolResultUtils } from "./tools/utils/ToolResultUtils"
 
+/**
+ * Set only when the executor serves a subagent (SubagentRunner). `profile` is the child's effective capabilities
+ * (its profile intersected with what the parent could do, see capFor): the registry holds exactly those handlers, a
+ * call outside them is refused before any handler runs, and nothing auto-approves above the profile's ceiling or
+ * because of YOLO. Per executor on purpose: the extension host is one process, so a process-wide switch such as an
+ * environment variable would restrict the parent too.
+ */
+export interface ToolExecutorOptions {
+	profile?: EffectiveCapabilities
+	/** Where a child's report_findings goes. Required with `profile`. */
+	reportSink?: (report: SubagentReport) => void
+	/** Called when a child's call is refused by its profile, before any handler or ask, so the record can say so. */
+	onRefused?: (block: ToolUse, reason: string) => void
+}
+
 export class ToolExecutor {
 	private autoApprover: AutoApprove
 	private coordinator: ToolExecutorCoordinator
+	private readonly profile?: EffectiveCapabilities
+	private readonly reportSink?: (report: SubagentReport) => void
+	private readonly onRefused?: (block: ToolUse, reason: string) => void
 
 	// Effective consecutive-mistake threshold: never below the user's configured value, but
 	// raised for weaker models that need more slack to self-correct. Loop hard-escalation sets
@@ -123,6 +146,7 @@ export class ToolExecutor {
 			type: AiHydroAsk,
 			text?: string,
 			partial?: boolean,
+			meta?: AskMeta,
 		) => Promise<{
 			response: AiHydroAskResponse
 			text?: string
@@ -143,8 +167,15 @@ export class ToolExecutor {
 		private doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>,
 		private updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>,
 		private switchToActMode: () => Promise<boolean>,
+		options: ToolExecutorOptions = {},
 	) {
-		this.autoApprover = new AutoApprove(this.stateManager)
+		this.profile = options.profile
+		this.reportSink = options.reportSink
+		this.onRefused = options.onRefused
+		if (this.profile && !this.reportSink) {
+			throw new Error("A subagent executor needs a reportSink")
+		}
+		this.autoApprover = new AutoApprove(this.stateManager, this.profile?.autoApproveCeiling)
 
 		// Initialize the coordinator and register all tool handlers
 		this.coordinator = new ToolExecutorCoordinator()
@@ -214,6 +245,11 @@ export class ToolExecutor {
 	private registerToolHandlers(): void {
 		const validator = new ToolValidator(this.aihydroIgnoreController)
 
+		if (this.profile) {
+			this.registerProfileHandlers(validator)
+			return
+		}
+
 		// Register all tool handlers
 		this.coordinator.register(new ListFilesToolHandler(validator))
 		this.coordinator.register(new ReadFileToolHandler(validator))
@@ -240,6 +276,34 @@ export class ToolExecutor {
 		this.coordinator.register(new CondenseHandler())
 		this.coordinator.register(new SummarizeTaskHandler())
 		this.coordinator.register(new ReportBugHandler())
+	}
+
+	/**
+	 * A subagent's registry: only the handlers its effective capabilities list, plus its exit tool. Anything else is
+	 * absent, not merely refused (the refusal in execute() is the second line).
+	 */
+	private registerProfileHandlers(validator: ToolValidator): void {
+		const profile = this.profile!
+		const allowed = new Set<string>(profile.builtinAllow)
+		const candidates: Array<[AiHydroDefaultTool, () => IToolHandler]> = [
+			[AiHydroDefaultTool.LIST_FILES, () => new ListFilesToolHandler(validator)],
+			[AiHydroDefaultTool.FILE_READ, () => new ReadFileToolHandler(validator)],
+			[AiHydroDefaultTool.SEARCH, () => new SearchFilesToolHandler(validator)],
+			[AiHydroDefaultTool.MCP_USE, () => new UseMcpToolHandler()],
+			[AiHydroDefaultTool.MCP_ACCESS, () => new AccessMcpResourceHandler()],
+			[AiHydroDefaultTool.MCP_DOCS, () => new LoadMcpDocumentationHandler()],
+		]
+		for (const [tool, make] of candidates) {
+			if (allowed.has(tool)) {
+				this.coordinator.register(make())
+			}
+		}
+		this.coordinator.register(new ReportFindingsHandler(this.reportSink!))
+	}
+
+	/** The tool names a subagent may call: its effective built-ins plus the exit tool. */
+	private profileAllowlist(): readonly string[] {
+		return [...this.profile!.builtinAllow, this.profile!.reportTool]
 	}
 
 	/**
@@ -362,6 +426,18 @@ export class ToolExecutor {
 	 * Execute a tool through the coordinator if it's registered
 	 */
 	private async execute(block: ToolUse): Promise<boolean> {
+		// A subagent's call is checked against its profile before anything else, and an unknown tool is refused with
+		// a result (not "not handled"), so a model that names a tool outside its profile is told so and no handler runs.
+		if (this.profile && !block.partial) {
+			const reason = explorerBlockReason(block.name, block.params, this.mcpHub, this.profileAllowlist())
+			if (reason || !this.coordinator.has(block.name)) {
+				const message = reason ?? `Tool '${block.name}' is not available to this subagent.`
+				this.onRefused?.(block, message)
+				await this.say("error", message)
+				this.pushToolResult(formatResponse.toolError(message), block)
+				return true
+			}
+		}
 		if (!this.coordinator.has(block.name)) {
 			return false // Tool not handled by coordinator
 		}
@@ -410,8 +486,8 @@ export class ToolExecutor {
 				return true
 			}
 
-			// Close browser for non-browser tools
-			if (block.name !== "browser_action") {
+			// Close browser for non-browser tools (a subagent has no browser and must not close the parent's)
+			if (!this.profile && block.name !== "browser_action") {
 				await this.browserSession.closeBrowser()
 			}
 

@@ -104,6 +104,7 @@ import {
 	resetGateCycle,
 	sweepAuditProgress,
 } from "./answerAuditGate"
+import { type AskMeta, askMessageMeta } from "./askMeta"
 import { acceptAskResponse, resetAskResponse } from "./askResponseBinding"
 import {
 	AIHYDRO_CLI_RETIRED_MESSAGE,
@@ -529,6 +530,7 @@ export class Task {
 		type: AiHydroAsk,
 		text?: string,
 		partial?: boolean,
+		meta?: AskMeta,
 	): Promise<{
 		response: AiHydroAskResponse
 		text?: string
@@ -618,6 +620,7 @@ export class Task {
 						type: "ask",
 						ask: type,
 						text,
+						...askMessageMeta(meta),
 					})
 					await this.postStateToWebview()
 				}
@@ -637,6 +640,7 @@ export class Task {
 				type: "ask",
 				ask: type,
 				text,
+				...askMessageMeta(meta),
 			})
 			await this.postStateToWebview()
 		}

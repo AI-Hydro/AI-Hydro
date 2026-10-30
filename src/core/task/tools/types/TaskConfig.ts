@@ -18,6 +18,7 @@ import { WorkspaceRootManager } from "@/core/workspace"
 import type { ContextManager } from "../../../context/context-management/ContextManager"
 import type { Controller } from "../../../controller"
 import type { StateManager } from "../../../storage/StateManager"
+import type { AskMeta } from "../../askMeta"
 import type { MessageStateHandler } from "../../message-state"
 import type { TaskState } from "../../TaskState"
 import type { AutoApprove } from "../../tools/autoApprove"
@@ -94,6 +95,7 @@ export interface TaskCallbacks {
 		type: AiHydroAsk,
 		text?: string,
 		partial?: boolean,
+		meta?: AskMeta,
 	) => Promise<{
 		response: AiHydroAskResponse
 		text?: string

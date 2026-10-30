@@ -22,6 +22,8 @@ export enum AiHydroDefaultTool {
 	REPORT_BUG = "report_bug",
 	NEW_RULE = "new_rule",
 	PREVIEW_HTML = "preview_html",
+	// Child-only: the single exit of an in-process subagent. Never registered for a top-level task.
+	REPORT_FINDINGS = "report_findings",
 }
 
 // Array of all tool names for compatibility
