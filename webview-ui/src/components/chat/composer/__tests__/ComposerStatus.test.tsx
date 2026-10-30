@@ -22,7 +22,8 @@ vi.mock("@/hooks/useAutoApproveActions", () => ({
 		updateMaxRequests: () => {},
 	}),
 }))
-vi.mock("@/services/grpc-client", () => ({}))
+const runToolsEnvAction = vi.hoisted(() => vi.fn(() => Promise.resolve({})))
+vi.mock("@/services/grpc-client", () => ({ McpServiceClient: { runToolsEnvAction } }))
 
 const withActions = (actions: Partial<AutoApprovalSettings["actions"]>, extra: Partial<AutoApprovalSettings> = {}) => ({
 	...DEFAULT_AUTO_APPROVAL_SETTINGS,
@@ -348,27 +349,28 @@ describe("ComposerStatus paused MCP grants (M-3)", () => {
 		expect(screen.getByTestId("auto-run-chip")).not.toHaveTextContent("paused")
 	})
 
-	it("explains why in a popover and links to the tools view; the trust action is a hook", () => {
+	it("explains why in a popover, offers the host-owned Trust this launcher action, and links to the tools view", () => {
 		settings = withActions({ readFiles: true, useMcp: true })
 		servers = [
 			srv([tool("a", { readOnlyHint: true }), tool("b", { readOnlyHint: true })], { trusted: false, reason: "changed" }),
 		]
-		const onTrust = vi.fn()
-		render(<ComposerStatus onTrustLauncher={onTrust} />)
+		render(<ComposerStatus />)
 		fireEvent.click(screen.getByTestId("paused-chip"))
 		const popover = screen.getByRole("dialog", { name: "Paused MCP tools" })
 		expect(popover).toHaveTextContent("Nothing here runs without you")
 		expect(screen.getByTestId("paused-reasons")).toHaveTextContent("2 tools: the server is not trusted")
-		fireEvent.click(screen.getByTestId("trust-launcher-action"))
-		expect(onTrust).toHaveBeenCalledTimes(1)
-		fireEvent.click(screen.getByTestId("paused-chip"))
+		const trust = screen.getByTestId("trust-launcher-action")
+		expect(trust).toHaveTextContent("Trust this launcher")
+		fireEvent.click(trust)
+		// The webview only asks the host to show its confirmation; it records nothing itself.
+		expect(runToolsEnvAction).toHaveBeenCalledWith(expect.objectContaining({ serverName: "ai-hydro" }))
 		fireEvent.click(screen.getByTestId("open-mcp-view"))
 		expect(navigateToMcp).toHaveBeenCalledTimes(1)
 	})
 
-	it("offers no trust action unless the host wires one", () => {
+	it("offers no trust action when the pause is not about trust (a disconnected, trusted server)", () => {
 		settings = withActions({ readFiles: true, useMcp: true })
-		servers = [srv([tool("a", { readOnlyHint: true })], { trusted: false, reason: "changed" })]
+		servers = [srv([tool("a", { readOnlyHint: true })], { trusted: true, reason: "" }, "disconnected")]
 		render(<ComposerStatus />)
 		fireEvent.click(screen.getByTestId("paused-chip"))
 		expect(screen.queryByTestId("trust-launcher-action")).toBeNull()

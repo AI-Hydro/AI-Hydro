@@ -1,5 +1,6 @@
 import type { AlwaysAllowRefusalReason } from "@shared/aihydro/alwaysAllowPolicy"
 import { useMemo, useRef, useState } from "react"
+import { TrustLauncherButton } from "@/components/tools/TrustLauncherButton"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { Text } from "@/design"
 import AutoApproveModal from "../auto-approve-menu/AutoApproveModal"
@@ -29,11 +30,6 @@ interface ComposerStatusProps {
 	/** Per-request context tokens (`lastApiReqTotalTokens`, same source as the task header's context bar). */
 	contextTokens?: number
 	contextWindow?: number
-	/**
-	 * Hook for the "Trust this launcher..." action on the paused-grants popover. When given, the popover shows the
-	 * action and calls this; when absent the popover offers only the link to the Hydro Tools view.
-	 */
-	onTrustLauncher?: () => void
 }
 
 /**
@@ -41,7 +37,7 @@ interface ComposerStatusProps {
  * (only when there are any), and the context ring. Each chip opens a popover. A risky setting stays visible at rest as
  * a warning icon plus the word "risky" on the chip, and is named in its accessible name.
  */
-export function ComposerStatus({ contextTokens, contextWindow, onTrustLauncher }: ComposerStatusProps) {
+export function ComposerStatus({ contextTokens, contextWindow }: ComposerStatusProps) {
 	const { autoApprovalSettings, mcpServers, yoloModeToggled, navigateToMcp } = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const [pausedOpen, setPausedOpen] = useState(false)
@@ -120,19 +116,15 @@ export function ComposerStatus({ contextTokens, contextWindow, onTrustLauncher }
 					To fix it, check that the server is connected and shows Trusted in Hydro Tools &amp; Data Sources. Tools the
 					server does not declare as read-only or non-destructive stay on ask.
 				</p>
-				{onTrustLauncher && (
-					<button
+				{/* The host-owned action (modal confirmation of the exact command); the popover never records trust itself. */}
+				{policy.mcpPausedUntrustedServers.map((serverName) => (
+					<TrustLauncherButton
 						className="aih-menu-item"
-						data-testid="trust-launcher-action"
-						onClick={() => {
-							setPausedOpen(false)
-							onTrustLauncher()
-						}}
-						type="button">
-						<span aria-hidden="true" className="codicon codicon-shield" />
-						<span>Trust this launcher…</span>
-					</button>
-				)}
+						key={serverName}
+						serverName={serverName}
+						testId="trust-launcher-action"
+					/>
+				))}
 				<button
 					className="aih-menu-item"
 					data-testid="open-mcp-view"

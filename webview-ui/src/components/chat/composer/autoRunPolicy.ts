@@ -16,6 +16,8 @@ export interface AutoRunPolicy {
 	mcpDormant: boolean
 	/** Why each paused grant is paused: reason -> number of tools. Empty when none are paused. */
 	mcpPausedReasons: Partial<Record<AlwaysAllowRefusalReason, number>>
+	/** Servers (names, deduplicated) whose grants are paused because the server is not trusted: the "Trust this launcher" targets. */
+	mcpPausedUntrustedServers: string[]
 	/** Visible text for the MCP grants ("2 MCP tools always allowed"), or "" when none. */
 	mcpLabel: string
 	/** Global YOLO mode (`yoloModeToggled`): core approves everything first, regardless of `enabled`. */
@@ -79,6 +81,7 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 	let mcpAlwaysAllowed = 0
 	let mcpPaused = 0
 	const mcpPausedReasons: AlwaysAllowRefusalReason[] = []
+	const untrustedServers = new Set<string>()
 	for (const s of mcpServers.filter((srv) => !srv.disabled)) {
 		for (const t of (s.tools ?? []).filter((tool) => tool.autoApprove === true)) {
 			const verdict =
@@ -93,6 +96,9 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 			if (verdict && !verdict.ok) {
 				mcpPaused++
 				mcpPausedReasons.push(verdict.reason)
+				if (verdict.reason === "untrusted_server") {
+					untrustedServers.add(s.name)
+				}
 			} else {
 				mcpAlwaysAllowed++
 			}
@@ -162,6 +168,7 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 		mcpAlwaysAllowed,
 		mcpPaused,
 		mcpPausedReasons: pausedByReason,
+		mcpPausedUntrustedServers: [...untrustedServers],
 		mcpDormant,
 		mcpLabel,
 		yolo,
