@@ -9,6 +9,16 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [Unreleased]
+
+### Changed — explorer subagents, PR-0: the CLI subagent leftovers (branch `vision2040/subagents-pr0`)
+
+Owner decision H1 (2026-10-28) approved in-process, explorer-only subagents (`docs/vision-2040/plans/subagents.md`, PR-0 to PR-3). The CLI path itself was already removed in Wave 0 (X0-6); this finishes PR-0 against current `main`.
+
+- **`subagentsEnabled` is no longer macOS-only.** `updateSettings` used to refuse enabling it anywhere but macOS because the `aihydro` CLI subagent only ran there. In-process explorers have no platform dependency, so the gate is gone (and a duplicated write of the same key). The setting stays default off and is not yet shown in Settings; the toggle returns with the tool in PR-2.
+- **Guard tests.** New source-level checks (`subagentCliRetired.test.ts`) fail if anything reads `AIHYDRO_PROFILE` (only the approval terminal's environment scrub may name it), probes `aihydro version`, or brings back the deleted CLI modules. `aihydro "..."` stays denied by `commandPolicy` in every setting.
+- **Tests.** The old `updateSettings.test.ts` sat outside the mocha glob and could not compile, so it never ran; it is replaced by `__tests__/updateSettings.subagents.test.ts`, which does.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)
