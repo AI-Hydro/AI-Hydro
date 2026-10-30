@@ -182,7 +182,7 @@ describe("studyBinding: a connected server whose launcher is not confirmed (Trus
 	it("is 'unavailable' with cause untrusted_server and the exact command, not 'not connected'", async () => {
 		setRecordedFirstPartyLauncher({ ...LAUNCHER, command: "/opt/old/aihydro-mcp" } as any)
 		const state = await resolveLaunchBinding({ hub: new FakeBindingServer([A]), chatId: CHAT, workspace: WS })
-		expect(state).to.include({ status: "unavailable", cause: "untrusted_server" })
+		expect(state).to.include({ status: "unavailable", cause: "untrusted_server", causeServer: "ai-hydro" })
 		expect(state.reason).to.contain(`running from a new location (\`${LAUNCHER.command}\`)`)
 		expect(state.reason).to.not.contain("not connected")
 	})

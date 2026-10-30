@@ -147,7 +147,7 @@ export function WorkGroupRow({
 /** "Trust this launcher..." on a "server not trusted" line, only while that server is still untrusted. */
 function LiftedTrustAction({ serverName }: { serverName: string }) {
 	return useServerNeedsTrust(serverName) ? (
-		<TrustLauncherButton className="transcript-btn ml-2" testId="lifted-trust-launcher" />
+		<TrustLauncherButton className="transcript-btn ml-2" serverName={serverName} testId="lifted-trust-launcher" />
 	) : null
 }
 

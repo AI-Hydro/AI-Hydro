@@ -40,11 +40,11 @@ export const needsLauncherTrust = (b: StudyBindingState | undefined): boolean =>
 	!!b && b.status === "unavailable" && b.cause === "untrusted_server"
 
 /** In flow under the header (never floating): why there is no study, and the one action that fixes it. */
-export const StudyTrustNotice: React.FC<{ reason?: string }> = ({ reason }) => (
+export const StudyTrustNotice: React.FC<{ reason?: string; serverName?: string }> = ({ reason, serverName }) => (
 	<div className="mx-1 mb-1 flex flex-col gap-1 text-[12px]" data-testid="study-trust-notice" role="status">
 		<span>{reason}</span>
 		<span>
-			<TrustLauncherButton testId="study-trust-launcher" />
+			<TrustLauncherButton serverName={serverName} testId="study-trust-launcher" />
 		</span>
 	</div>
 )
@@ -131,7 +131,7 @@ export const StudyPickerPanelView: React.FC<Omit<StudyChipViewProps, "onOpen"> &
 	onDecline,
 }) => {
 	if (needsLauncherTrust(binding)) {
-		return <StudyTrustNotice reason={binding?.reason} />
+		return <StudyTrustNotice reason={binding?.reason} serverName={binding?.causeServer} />
 	}
 	if (!isPicking(binding)) {
 		return null

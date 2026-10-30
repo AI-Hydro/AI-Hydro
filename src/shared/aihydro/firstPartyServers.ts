@@ -332,7 +332,7 @@ export function explainServerTrust(
 				trusted: false,
 				reason: shaped
 					? `Not trusted: ${newLauncherSentence(launchLineOfConfig(server.config))}`
-					: `Not trusted: the launcher you confirmed belongs to a server named '${launcher?.name}', not '${server.name}'.`,
+					: `Not trusted: the launcher AI-Hydro recorded belongs to a server named '${launcher?.name}', not '${server.name}'.`,
 			}
 		}
 		case "config_unreadable":
@@ -342,7 +342,7 @@ export function explainServerTrust(
 		case "env_or_cwd_differs":
 			return {
 				trusted: false,
-				reason: "Not trusted: AI-Hydro Tools now runs with different environment variables or a different working directory than the launcher you confirmed. Your auto-run settings are paused until you confirm it (Trust this launcher...).",
+				reason: "Not trusted: AI-Hydro Tools now runs with different environment variables or a different working directory than the launcher AI-Hydro recorded. Your auto-run settings are paused until you confirm it (Trust this launcher...).",
 			}
 		case "launch_differs":
 			return {
@@ -395,6 +395,20 @@ function entryLaunch(entry: SettingsServerEntry): { command: string; args: strin
 	return { command: entry.command, args: args as string[], launchHash: launchContextHash(entry) }
 }
 
+/** ENABLED stdio entries under a first-party NAME whose launch line has the first-party SHAPE. */
+export function firstPartyCandidates(entries: readonly SettingsServerEntry[]): SettingsServerEntry[] {
+	return entries.filter((e) => {
+		const launch = entryLaunch(e)
+		return (
+			enabledState(e) === "enabled" &&
+			isFirstPartyServerName(e.name) &&
+			(e.type === undefined || e.type === "stdio") &&
+			launch !== undefined &&
+			looksLikeFirstPartyLauncher(launch.command, launch.args)
+		)
+	})
+}
+
 /**
  * Migration plan for the trust anchor (session study S6). Situation: the recorded launcher names a server that is
  * disabled or gone, while an enabled server under a different first-party name is the one in use, so the working
@@ -418,15 +432,7 @@ export function planFirstPartyAnchor(
 	if (recorded && enabled.some((e) => e.name === recorded.name)) {
 		return { action: "none", reason: "recorded server is enabled" }
 	}
-	const candidates = enabled.filter((e) => {
-		const launch = entryLaunch(e)
-		return (
-			isFirstPartyServerName(e.name) &&
-			(e.type === undefined || e.type === "stdio") &&
-			launch !== undefined &&
-			looksLikeFirstPartyLauncher(launch.command, launch.args)
-		)
-	})
+	const candidates = firstPartyCandidates(entries)
 	if (candidates.length === 0) {
 		return { action: "none", reason: "no enabled first-party-shaped server" }
 	}

@@ -103,12 +103,26 @@ export function createVscodeToolsEnv(
 			const line = [launcher.command, ...launcher.args].join(" ")
 			const choice = await vscode.window.showWarningMessage(
 				`The "${launcher.name}" MCP server runs \`${line}\`.${
-					recorded ? ` You previously confirmed \`${[recorded.command, ...recorded.args].join(" ")}\`.` : ""
+					recorded ? ` AI-Hydro previously recorded \`${[recorded.command, ...recorded.args].join(" ")}\`.` : ""
 				}${note ? ` ${note}` : ""} Until you confirm, AI-Hydro does not treat it as the first-party server: auto-run grants stay paused, and claim-approval prompts and read-only subagent tools are off. Confirm only if you installed or started this launcher.`,
 				{ modal: true },
 				trust,
 			)
 			return choice === trust
+		},
+		chooseLauncher: async (candidates) => {
+			const pick = await vscode.window.showQuickPick(
+				candidates.map((c) => ({
+					label: c.name,
+					description: [c.command, ...c.args].join(" "),
+				})),
+				{
+					title: "More than one AI-Hydro launcher is enabled",
+					placeHolder: "Choose the launcher to review. You will be asked to confirm it next.",
+					ignoreFocusOut: true,
+				},
+			)
+			return pick?.label
 		},
 		askSwitch: async (current, managed) => {
 			const sw = "Switch to the managed environment"

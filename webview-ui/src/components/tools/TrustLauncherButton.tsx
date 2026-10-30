@@ -19,7 +19,16 @@ export function useServerNeedsTrust(serverName: string | undefined): boolean {
  * "Trust this launcher...": opens the host's modal confirmation (exact command and path). It never records trust
  * itself; declining the dialog changes nothing.
  */
-export function TrustLauncherButton({ className, testId = "trust-launcher" }: { className?: string; testId?: string }) {
+export function TrustLauncherButton({
+	className,
+	testId = "trust-launcher",
+	serverName,
+}: {
+	className?: string
+	testId?: string
+	/** The server the surface is about; the host re-validates it and never treats it as authority. */
+	serverName?: string
+}) {
 	return (
 		<button
 			className={
@@ -29,7 +38,7 @@ export function TrustLauncherButton({ className, testId = "trust-launcher" }: { 
 			data-testid={testId}
 			onClick={(e) => {
 				e.stopPropagation()
-				runToolsAction("trust")
+				runToolsAction("trust", serverName)
 			}}
 			type="button">
 			{TRUST_LAUNCHER_LABEL}
@@ -41,7 +50,7 @@ export function TrustLauncherButton({ className, testId = "trust-launcher" }: { 
 export function PausedTrustAction({ serverName }: { serverName: string }) {
 	return useServerNeedsTrust(serverName) ? (
 		<div className="mt-1">
-			<TrustLauncherButton testId="paused-trust-launcher" />
+			<TrustLauncherButton serverName={serverName} testId="paused-trust-launcher" />
 		</div>
 	) : null
 }

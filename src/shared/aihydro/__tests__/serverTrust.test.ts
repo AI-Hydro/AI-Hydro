@@ -6,6 +6,7 @@ import {
 	describeStaleAnchor,
 	explainServerTrust,
 	type FirstPartyLauncher,
+	firstPartyCandidates,
 	isServerTrusted,
 	looksLikeFirstPartyLauncher,
 	staleAnchorNote,
@@ -137,5 +138,17 @@ describe("trust wording and the stale first-party record (Trust UX)", () => {
 		expect(canOfferTrustAction("aihydro-tools")).to.equal(true)
 		expect(canOfferTrustAction("swat")).to.equal(false)
 		expect(canOfferTrustAction(undefined)).to.equal(false)
+	})
+
+	it("firstPartyCandidates lists only enabled first-party-named, first-party-shaped stdio entries", () => {
+		const tools = { name: "aihydro-tools", command: NEW_CMD, args: [] as string[] }
+		const entries = [
+			{ name: "ai-hydro", command: OLD.command, args: [], disabled: true },
+			tools,
+			{ name: "ai-hydro-2", command: NEW_CMD, args: [] }, // not a first-party name
+			{ name: "aihydro", command: "/usr/bin/swat", args: [] }, // not the first-party shape
+			{ name: "ai_hydro", type: "sse", command: NEW_CMD, args: [] },
+		]
+		expect(firstPartyCandidates(entries).map((e) => e.name)).to.deep.equal(["aihydro-tools"])
 	})
 })

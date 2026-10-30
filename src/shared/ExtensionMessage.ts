@@ -77,6 +77,8 @@ export interface StudyBindingState {
 	 * is not confirmed. The header then offers "Trust this launcher..." (host-set, display only).
 	 */
 	cause?: "untrusted_server"
+	/** With `cause`: the server the notice is about (sent back with the request; the host re-validates it). */
+	causeServer?: string
 	/** Whether this server can list studies and rebind a chat (capability flags); gates the picker's choices. */
 	canChoose: boolean
 	/**

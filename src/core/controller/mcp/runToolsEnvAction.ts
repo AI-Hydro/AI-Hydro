@@ -28,7 +28,7 @@ export async function runToolsEnvAction(controller: Controller, request: ToolsEn
 		return ToolsEnvStatus.create({ phase: "checking" })
 	}
 	if (ACTIONS.has(request.action)) {
-		const run = tools.runAction(request.action as ToolsEnvAction).catch((error) => {
+		const run = tools.runAction(request.action as ToolsEnvAction, request.serverName || undefined).catch((error) => {
 			console.error(`Tools action ${request.action} failed:`, error)
 		})
 		if (!BACKGROUND.has(request.action)) {

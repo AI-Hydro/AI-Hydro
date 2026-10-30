@@ -174,4 +174,7 @@ message ToolsEnvStatus {
 message ToolsEnvActionRequest {
   // install | repair | retry | cancel | showLog | trust | copyDiagnostics | useManaged
   string action = 1;
+  // trust only: the MCP server the request is about. The host re-validates it (enabled, first-party-shaped) and
+  // never treats it as authority; empty means "the one launcher, or ask which".
+  string server_name = 2;
 }

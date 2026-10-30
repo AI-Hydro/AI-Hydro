@@ -379,6 +379,7 @@ export async function resolveLaunchBinding(input: ResolveLaunchInput): Promise<S
 					`${newLauncherSentence(launchLineOfConfig(untrusted.config))} Studies cannot be bound until you confirm it.`,
 				),
 				cause: "untrusted_server",
+				causeServer: untrusted.name,
 			}
 		}
 		return unavailable("The AI-Hydro server is not connected, so studies cannot be bound yet.")

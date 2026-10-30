@@ -32,10 +32,11 @@ afterEach(() => {
 	mock.run.mockClear()
 })
 
-const expectHostAsked = () => {
+const expectHostAsked = (serverName = "aihydro-tools") => {
 	expect(mock.run).toHaveBeenCalledTimes(1)
-	// Only a request for the host's own confirmation goes out: the webview records nothing.
-	expect(mock.run).toHaveBeenCalledWith(expect.objectContaining({ action: "trust" }))
+	// Only a request for the host's own confirmation goes out (with the server the surface is about, which the
+	// host re-validates): the webview records nothing.
+	expect(mock.run).toHaveBeenCalledWith(expect.objectContaining({ action: "trust", serverName }))
 }
 
 describe("paused-grant card", () => {
@@ -65,7 +66,7 @@ describe("study chip", () => {
 	const handlers = { onChoose: vi.fn(), onDecline: vi.fn() }
 
 	it("untrusted cause: the chip says 'Study unavailable', its tooltip says why, and the panel carries the action", () => {
-		const binding = { ...unavailable, cause: "untrusted_server" as const }
+		const binding = { ...unavailable, cause: "untrusted_server" as const, causeServer: "aihydro-tools" }
 		render(
 			<>
 				<StudyChipView binding={binding} onOpen={vi.fn()} {...handlers} />
@@ -123,7 +124,7 @@ describe("transcript 'server not trusted' line", () => {
 		expect(g.lifted[0].untrustedFirstParty).toBe(true)
 		expect(screen.getAllByText(/server not trusted/).length).toBeGreaterThan(0)
 		fireEvent.click(screen.getByRole("button", { name: TRUST }))
-		expectHostAsked()
+		expectHostAsked(g.lifted[0].server)
 	})
 
 	it("drops the action after the server is trusted (the history line stays, the button goes)", () => {
