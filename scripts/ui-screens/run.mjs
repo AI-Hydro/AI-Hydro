@@ -21,6 +21,7 @@ import { assertAbsent } from "./assertions.mjs"
 import { pageChecker } from "./checker.mjs"
 import { measureChromeCoverage } from "./coverage.mjs"
 import { startServer, THEMES } from "./server.mjs"
+import { parseShard, shardScreens } from "./shard.mjs"
 import { basemapIdForUrl, isPlaceholderScreen, tileFaultStatus, tilePng } from "./tiles.mjs"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
@@ -44,6 +45,11 @@ const widths = list(opt("widths", "320,400,800,1280,1920")).map(Number)
 const fonts = list(opt("font", "13,20")).map(Number)
 const motion = list(opt("motion", "reduce"))
 const only = opt("screens") ? list(opt("screens")) : null
+// --shard i/n renders and checks one deterministic slice of the registry (see shard.mjs); CI runs every slice.
+const shard = opt("shard") ? parseShard(opt("shard")) : args.includes("--shard") ? parseShard("") : null
+// --list [file] prints the registered screen ids as JSON ({ screens: [...] }) and exits without rendering.
+const listOnly = flag("list")
+const listFile = opt("list")
 const workers = Number(opt("workers", "4"))
 const baselineDir = resolve(opt("baseline", join(root, "webview-ui/screens-baseline", process.platform)))
 const budgetPath = resolve(opt("budget", join(root, "webview-ui/screens-baseline/checker-budget.json")))
@@ -195,7 +201,39 @@ await warm.goto(`${base}/screen/chat-home-history`, { waitUntil: "networkidle", 
 await warm.waitForFunction(() => window.__screens, null, { timeout: 120000 })
 const allScreens = await warm.evaluate(() => window.__screens)
 await warm.context().close()
-const screens = allScreens.filter((s) => !only || only.includes(s.id) || only.includes(s.group))
+if (listOnly) {
+	const registry = { screens: allScreens.map((s) => s.id).sort() }
+	if (listFile) writeFileSync(resolve(listFile), JSON.stringify(registry, null, "\t") + "\n")
+	else console.log(JSON.stringify(registry))
+	await browser.close()
+	await close()
+	process.exit(0)
+}
+const selected = allScreens.filter((s) => !only || only.includes(s.id) || only.includes(s.group))
+const screens = shard ? shardScreens(selected, shard) : selected
+if (shard) {
+	if (screens.length === 0) {
+		console.error(`shard ${shard.index}/${shard.count} covers no screens (${selected.length} selected); use fewer shards`)
+		process.exit(1)
+	}
+	process.stderr.write(
+		`shard ${shard.index}/${shard.count}: ${screens.length} of ${selected.length} screens: ${screens.map((s) => s.id).join(", ")}\n`,
+	)
+	// Coverage record for the aggregator (check-shard-coverage.mjs): which screens this shard owned, against which registry.
+	writeFileSync(
+		join(outDir, "shard.json"),
+		JSON.stringify(
+			{
+				shard: shard.index,
+				of: shard.count,
+				screens: screens.map((s) => s.id).sort(),
+				registry: allScreens.map((s) => s.id).sort(),
+			},
+			null,
+			"\t",
+		) + "\n",
+	)
+}
 
 const allCells = []
 for (const s of screens)

@@ -11,6 +11,11 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.3] — unreleased
 
+### Changed — CI screen harness sharded so it stops timing out (branch `vision2040/ci-shard-screens`)
+
+- **`ui-screens.yml` renders in 4 parallel shards.** The single 714-cell job hit its 60-minute limit on slow runners. `run.mjs --shard i/n` checks a deterministic slice of the registry (sorted ids, striped), with the same `--check`, `--require-matrix-budget` and budgets applied to its screens. Budget-shrink, self-test, bundle guards run once in a `guards` job.
+- **Same required check name, stronger coverage proof.** "Screens, budget and bundle guard" is now an aggregator that fails if any job failed or was skipped and verifies the union of the shards' screens equals `run.mjs --list` (each exactly once). `--list` and `--shard` are documented in `scripts/ui-screens/README.md`.
+
 ### Fixed — AI-Hydro tools untrusted after the launcher moved, with no visible way to fix it (branch `vision2040/trust-ux`)
 
 - **One action, where trust is the reason.** "Trust this launcher…" now sits on the paused-grant card ("Always for X is paused"), under the transcript's "server not trusted" line, and under the header when the study is unavailable because the launcher is not confirmed. It only asks the host to show its modal confirmation (exact command and path); trust is recorded only after that confirmation, and nothing is trusted automatically. Fail-closed semantics are unchanged.
