@@ -1,6 +1,11 @@
 import { writeFile } from "@utils/fs"
 import * as fs from "fs/promises"
 import { isBinaryFile } from "isbinaryfile"
+import open from "open"
+
+/** The system opener, a seam so tests never launch a real viewer. */
+export const systemOpener = { open: (target: string) => open(target) }
+
 import * as os from "os"
 import * as path from "path"
 import { fileURLToPath } from "url"
@@ -36,9 +41,9 @@ export async function openImage(dataUri: string) {
  * How a file is opened. Text goes through the text-document API; anything VS Code can show in its own viewer goes
  * through `vscode.open`; scientific/data formats VS Code cannot display get a clear action instead of an error.
  */
-export type OpenFileKind = "text" | "viewer" | "data"
+export type OpenFileKind = "text" | "viewer" | "data" | "pdf"
 
-/** Formats VS Code (or an installed viewer extension) renders itself: images, PDF, audio and video. */
+/** Formats VS Code renders itself: images, audio and video. PDF is handled separately (no built-in viewer). */
 const VIEWER_EXTENSIONS = new Set([
 	".png",
 	".jpg",
@@ -48,7 +53,6 @@ const VIEWER_EXTENSIONS = new Set([
 	".bmp",
 	".ico",
 	".avif",
-	".pdf",
 	".mp3",
 	".wav",
 	".ogg",
@@ -86,13 +90,32 @@ const DATA_FORMATS: Record<string, string> = {
 	".xls": "Excel workbook",
 	".docx": "Word document",
 	".pptx": "PowerPoint presentation",
+	// Installers and packages are never opened or run from a chat link: reveal only.
+	".exe": "Windows program",
+	".msi": "Windows installer",
+	".dmg": "macOS disk image",
+	".pkg": "installer package",
+	".vsix": "VS Code extension package",
+	".app": "macOS application",
 }
 
 /** Classify by extension first (cheap, no I/O); unknown extensions fall back to content sniffing. */
+let pdfViewerProbe: () => boolean = () => false
+
+/** The host registers how to tell whether a PDF viewer extension is installed (VS Code: an extension id with "pdf"). */
+export function setPdfViewerProbe(probe: () => boolean): void {
+	pdfViewerProbe = probe
+}
+
+export const pdfViewerInstalled = (): boolean => pdfViewerProbe()
+
 export async function classifyFile(absolutePath: string): Promise<{ kind: OpenFileKind; label?: string }> {
 	const ext = path.extname(absolutePath).toLowerCase()
 	if (VIEWER_EXTENSIONS.has(ext)) {
 		return { kind: "viewer" }
+	}
+	if (ext === ".pdf") {
+		return { kind: "pdf" }
 	}
 	if (DATA_FORMATS[ext]) {
 		return { kind: "data", label: DATA_FORMATS[ext] }
@@ -139,6 +162,13 @@ export async function openFile(absolutePath: string, preserveFocus: boolean = fa
 	try {
 		if (kind === "text") {
 			await HostProvider.window.showTextDocument({ path: target, options: { preserveFocus, preview } })
+		} else if (kind === "pdf") {
+			if (pdfViewerInstalled()) {
+				await HostProvider.window.openFile({ filePath: target })
+			} else {
+				// VS Code has no PDF viewer of its own (it would show a binary notice): hand it to the system viewer.
+				await systemOpener.open(target)
+			}
 		} else if (kind === "viewer") {
 			// VS Code's own viewer (image preview, media, or an installed PDF viewer), in the editor area.
 			await HostProvider.window.openFile({ filePath: target })

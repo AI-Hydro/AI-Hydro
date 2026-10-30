@@ -3,6 +3,7 @@ import { openFile as openFileIntegration } from "@integrations/misc/open-file"
 import { Empty, StringRequest } from "@shared/proto/cline/common"
 import { getWorkspacePath } from "@utils/path"
 import { Controller } from ".."
+import { isInsideRoot } from "./workspaceScope"
 
 /**
  * Opens a file in the editor by a relative path
@@ -26,6 +27,11 @@ export async function openFileRelativePath(_controller: Controller, request: Str
 			"Controller.openFileRelativePath",
 		)
 		const absolutePath = typeof resolvedPath === "string" ? resolvedPath : resolvedPath.absolutePath
+
+		if (!isInsideRoot(workspacePath, absolutePath)) {
+			console.error(`openFileRelativePath: refusing a path outside the workspace: ${absolutePath}`)
+			return Empty.create()
+		}
 
 		// Open the file using the existing integration
 		openFileIntegration(absolutePath)

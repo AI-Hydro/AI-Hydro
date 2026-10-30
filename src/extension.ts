@@ -22,6 +22,7 @@ import { VscodeHtmlPreviewProvider } from "./hosts/vscode/VscodeHtmlPreviewProvi
 import { VscodeMapPanelProvider } from "./hosts/vscode/VscodeMapPanelProvider"
 import { VscodeReplayProvider } from "./hosts/vscode/VscodeReplayProvider"
 import { createApprovalPrompter, setApprovalPrompter } from "./integrations/aihydro-session/approvalTerminal"
+import { setPdfViewerProbe } from "./integrations/misc/open-file"
 import { GeeService } from "./services/gee/GeeService"
 import { GeeTileProxyService } from "./services/gee/GeeTileProxyService"
 import type { GeeProjectInfo, GeeStatusResult } from "./services/gee/types"
@@ -238,6 +239,8 @@ async function warnIfWorkspaceOnCloudStorage(context: vscode.ExtensionContext): 
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
 	setupHostProvider(context)
+	// PDF has no built-in VS Code viewer: chips open it in one only if an installed extension looks like a PDF viewer.
+	setPdfViewerProbe(() => vscode.extensions.all.some((e) => /pdf/i.test(e.id)))
 	// Read-only git auto-run needs a trusted workspace (a hostile .git/config runs programs); see readOnlyClassifier.ts.
 	setWorkspaceTrustProvider(() => vscode.workspace.isTrusted)
 

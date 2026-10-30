@@ -4,9 +4,10 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import * as os from "os"
 import * as path from "path"
 import * as sinon from "sinon"
+import { pathToFileURL } from "url"
 import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"
-import { classifyFile, normalizeOpenPath, openFile } from "../open-file"
+import { classifyFile, normalizeOpenPath, openFile, setPdfViewerProbe, systemOpener } from "../open-file"
 
 describe("openFile", () => {
 	let sandbox: sinon.SinonSandbox
@@ -15,6 +16,7 @@ describe("openFile", () => {
 	let hostOpen: sinon.SinonStub
 	let showMessage: sinon.SinonStub
 	let reveal: sinon.SinonStub
+	let external: sinon.SinonStub
 
 	const write = (name: string, data: Buffer | string) => {
 		const p = path.join(dir, name)
@@ -31,6 +33,7 @@ describe("openFile", () => {
 		hostOpen = sandbox.stub().resolves({})
 		showMessage = sandbox.stub().resolves({})
 		reveal = sandbox.stub().resolves({})
+		external = sandbox.stub(systemOpener, "open").resolves(undefined as any)
 		sandbox.stub(HostProvider, "window").get(() => ({ showTextDocument, openFile: hostOpen, showMessage }) as any)
 		sandbox.stub(HostProvider, "workspace").get(() => ({ openInFileExplorerPanel: reveal }) as any)
 	})
@@ -47,11 +50,25 @@ describe("openFile", () => {
 		expect(showMessage.called).to.equal(false)
 	})
 
-	it("opens a PDF in the host viewer", async () => {
+	it("hands a PDF to the system viewer when no PDF viewer extension is installed (never a binary notice)", async () => {
 		const p = write("report.PDF", "%PDF-1.4")
 		await openFile(p)
-		expect(hostOpen.calledOnce).to.equal(true)
+		expect(external.calledOnceWithExactly(p)).to.equal(true)
+		expect(hostOpen.called).to.equal(false)
 		expect(showTextDocument.called).to.equal(false)
+		expect(showMessage.called).to.equal(false)
+	})
+
+	it("opens a PDF in the host viewer when a PDF viewer extension is installed", async () => {
+		setPdfViewerProbe(() => true)
+		try {
+			const p = write("r.pdf", "%PDF-1.4")
+			await openFile(p)
+			expect(hostOpen.calledOnceWithExactly({ filePath: p })).to.equal(true)
+			expect(external.called).to.equal(false)
+		} finally {
+			setPdfViewerProbe(() => false)
+		}
 	})
 
 	it("opens text through the text-document API with the caller's options", async () => {
@@ -72,6 +89,11 @@ describe("openFile", () => {
 		["dem.tif", "GeoTIFF raster"],
 		["forcing.nc", "netCDF dataset"],
 		["attrs.parquet", "Parquet table"],
+		["setup.exe", "Windows program"],
+		["x.msi", "Windows installer"],
+		["x.dmg", "macOS disk image"],
+		["x.pkg", "installer package"],
+		["x.vsix", "VS Code extension package"],
 	] as const) {
 		it(`reveals ${file} and says what it is instead of failing`, async () => {
 			const p = write(file, Buffer.from([0, 1, 2, 3]))
@@ -115,7 +137,7 @@ describe("openFile", () => {
 
 	it("accepts file:// URIs with encoded spaces and quotes", async () => {
 		const p = write("a b.png", PNG)
-		await openFile(`"file://${p.split("/").map(encodeURIComponent).join("/")}"`)
+		await openFile(`"${pathToFileURL(p).href}"`)
 		expect(hostOpen.calledOnceWithExactly({ filePath: p })).to.equal(true)
 	})
 })

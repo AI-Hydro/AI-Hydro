@@ -16,9 +16,10 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 Reported on the installed 0.4.4 build: clicking `hydrograph_01013500.png` or `watershed_01031500_map.png` in an answer showed "Could not open file!". Cause: `openFile` (`src/integrations/misc/open-file.ts`) sent every path to the text-document API, which rejects binary files, and its catch block discarded the reason.
 
 - Files are classified first. Images, PDF, audio and video open in VS Code's own viewer (`vscode.open`) in the editor. Text files still use the text-document API with the caller's `preserveFocus`/`preview`. Unknown extensions are sniffed (`isbinaryfile`).
-- GeoTIFF, netCDF, Parquet, HDF5, GeoPackage, NumPy, archives and office files have no VS Code viewer: they are selected in the Explorer and a message names the format ("dem.tif is a GeoTIFF raster, which VS Code cannot display...") instead of an error.
+- GeoTIFF, netCDF, Parquet, HDF5, GeoPackage, NumPy, archives, office files and installers/packages (`.exe`, `.msi`, `.dmg`, `.pkg`, `.vsix`, `.app`; never run from a chat link) have no VS Code viewer: they are selected in the Explorer and a message names the format ("dem.tif is a GeoTIFF raster, which VS Code cannot display...") instead of an error.
 - A missing file says `File not found: <path>`; any other failure says `Could not open <path>: <reason>`. Directories are revealed in the Explorer.
 - `file://` URIs and quoted paths are accepted. Chips now also match absolute paths, Windows drive paths and names with spaces (the host still checks that the file exists before showing a chip).
+- Chips are scoped to the workspace: a path that resolves (after symlinks) outside the workspace roots gets no chip, and `openFileRelativePath` refuses it, so a model cannot put a clickable `~/.ssh/...` link in an answer. The chat's own output folders are not a separate case: outputs written under the workspace are covered; outputs elsewhere get no chip.
 - 15 unit tests (`src/integrations/misc/__tests__/open-file.test.ts`).
 
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)

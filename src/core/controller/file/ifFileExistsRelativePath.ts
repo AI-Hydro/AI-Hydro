@@ -3,6 +3,7 @@ import { BooleanResponse, StringRequest } from "@shared/proto/cline/common"
 import { getWorkspacePath } from "@utils/path"
 import * as fs from "fs"
 import { Controller } from ".."
+import { isInsideRoot } from "./workspaceScope"
 
 /**
  * Check if a file exists in the project using a relative path
@@ -31,6 +32,10 @@ export async function ifFileExistsRelativePath(_controller: Controller, request:
 		"Controller.ifFileExistsRelativePath",
 	)
 	const absolutePath = typeof resolvedPath === "string" ? resolvedPath : resolvedPath.absolutePath
+	// Only files in the workspace get a chip (a model must not offer a clickable ~/.ssh/... path).
+	if (!isInsideRoot(workspacePath, absolutePath)) {
+		return BooleanResponse.create({ value: false })
+	}
 	// Check if the file exists
 	try {
 		return BooleanResponse.create({ value: fs.statSync(absolutePath).isFile() })
