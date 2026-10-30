@@ -1583,9 +1583,9 @@
 		"map-layer-manager": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 13,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 26,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -1599,9 +1599,9 @@
 		"map-layer-provenance": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 16,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 50,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -1632,16 +1632,16 @@
 		"map-panel-docked-layers": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 13,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 26,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 78,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 168,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -2182,16 +2182,16 @@
 		"map-panel-docked-resized": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 13,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 26,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 78,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 168,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -2214,6 +2214,125 @@
 			"cells": 6
 		},
 		"map-panel-resize-keyboard": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-selected": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-menu-open": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-long-names": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-many": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-restored": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-confirm-undo": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-collapsed-group": {
 			"ref": {
 				"noName": 0,
 				"smallTarget": 0,
@@ -2537,9 +2656,9 @@
 				"map-layer-manager": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 78,
+						"smallTarget": 0,
 						"smallText": 0,
-						"contrast": 168,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -2547,9 +2666,9 @@
 				"map-layer-provenance": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 96,
+						"smallTarget": 0,
 						"smallText": 0,
-						"contrast": 312,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -3397,9 +3516,9 @@
 				"map-panel-docked-layers": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 78,
+						"smallTarget": 0,
 						"smallText": 0,
-						"contrast": 168,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -3537,9 +3656,9 @@
 				"map-panel-docked-resized": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 78,
+						"smallTarget": 0,
 						"smallText": 0,
-						"contrast": 168,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -3555,6 +3674,76 @@
 					"cells": 6
 				},
 				"map-panel-resize-keyboard": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-selected": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-menu-open": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-long-names": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-many": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-restored": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-confirm-undo": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-collapsed-group": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,

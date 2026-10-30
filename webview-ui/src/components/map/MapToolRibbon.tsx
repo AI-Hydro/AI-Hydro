@@ -484,7 +484,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 
 	// ── panel pieces ──
 	const family: ToolId | null = active === "basemap" || active === "hydrography" ? "layers" : active
-	const title = family === null ? "" : family === "layers" ? `Layers (${layerSummary})` : TOOL_META[family].title
+	const title = family === null ? "" : TOOL_META[family].title
 
 	const toggleBtn = (pressed: boolean, activeColor: string): React.CSSProperties => ({
 		padding: "6px 10px",

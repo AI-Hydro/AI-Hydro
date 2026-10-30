@@ -27,7 +27,17 @@ import {
 import { finalAnswerTask, mcpCallTask, plainTextTask, refusalTask, taskItem } from "./fixtures/chat"
 import { approvalClaims, claim, driftClaims, FIXTURE_SESSION, statusClaims } from "./fixtures/claims"
 import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/experiments"
-import { basinPolygon, featureLayers, fixturePins, framedWorkspace, gaugePoint, MAP_STORAGE_KEY } from "./fixtures/map"
+import {
+	basinPolygon,
+	featureLayers,
+	fixturePins,
+	framedWorkspace,
+	gaugePoint,
+	longNameLayers,
+	MAP_STORAGE_KEY,
+	manyLayers,
+	restoredLayers,
+} from "./fixtures/map"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
 import * as tx from "./fixtures/transcripts"
@@ -1035,7 +1045,7 @@ export const screens: ScreenDef[] = [
 	}),
 	mapScreen("map-sync-hydrating", "Saved layers still restoring (no empty-state card)", { mapHydrating: true }),
 	mapScreen("map-sync-loading", "Layer sync still loading (no empty-state card)", { mapConnection: "loading" }),
-	// Ribbon badge counts visible layers only (2 of 4 shown); the tooltip and panel header read "N visible · M hidden".
+	// Ribbon badge counts visible layers only (2 of 4 shown); the tooltip reads "N visible · M hidden" and the Layers toolbar shows the counts.
 	mapScreen("map-layer-badge-counts", "Layer badge counts visible layers only", {
 		layers: featureLayers().map((layer, index) => (index % 2 === 1 ? { ...layer, visible: false } : layer)),
 	}),
@@ -1048,11 +1058,58 @@ export const screens: ScreenDef[] = [
 		layers: featureLayers(),
 		steps: [
 			...openTool("Layer manager"),
-			{ click: 'button[title="Show details"]', nth: 2 },
+			{ click: 'button.map-layer-name:has-text("river lines")' },
+			{ click: 'button.map-chip:text-is("Details")' },
 			{ wait: 300 },
 			{ click: 'button:text-is("Provenance")' },
 			{ wait: 300 },
 			{ scroll: "text=No provenance record linked" },
+		],
+	}),
+	// Layers panel (polish-map): one compact row per layer, grouped by origin; selecting a row opens its drawer.
+	mapScreen("map-layers-selected", "Layers: a selected row opens opacity, style, attributes and details", {
+		layers: featureLayers(),
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("Synthetic basin")' }, { wait: 300 }],
+		expectVisible: ['[aria-label^="Settings for"]'],
+	}),
+	mapScreen("map-layers-menu-open", "Layers: the row overflow menu open (zoom, style, save, copy run ID, move, remove)", {
+		layers: featureLayers(),
+		steps: [...openTool("Layer manager"), { click: 'button[aria-label^="Actions for Synthetic basin"]' }, { wait: 300 }],
+		expectVisible: ['[role="menu"]'],
+	}),
+	mapScreen("map-layers-long-names", "Layers: long names wrap to two lines instead of truncating", {
+		layers: longNameLayers(),
+		steps: openTool("Layer manager"),
+	}),
+	mapScreen("map-layers-many", "Layers: a busy session grouped by origin, one run duplicated", {
+		layers: manyLayers(),
+		steps: openTool("Layer manager"),
+	}),
+	mapScreen(
+		"map-layers-restored",
+		"Layers: restored duplicates flagged with Remove duplicates, one group note for Limited layers",
+		{
+			layers: restoredLayers(),
+			steps: openTool("Layer manager"),
+			expectVisible: ['button:text-is("Remove duplicates")'],
+		},
+	),
+	mapScreen("map-layers-confirm-undo", "Layers: Remove duplicates confirmed, then the Undo bar", {
+		layers: restoredLayers(),
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button:text-is("Remove duplicates")' },
+			{ click: "button.map-chip--danger" },
+			{ wait: 400 },
+		],
+		expectVisible: ['button:text-is("Undo")'],
+	}),
+	mapScreen("map-layers-collapsed-group", "Layers: a group collapsed to its header", {
+		layers: manyLayers(),
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button.map-layer-group__head:has-text("Workspace files")' },
+			{ wait: 200 },
 		],
 	}),
 	mapScreen("map-time-slider", "Map time slider", {

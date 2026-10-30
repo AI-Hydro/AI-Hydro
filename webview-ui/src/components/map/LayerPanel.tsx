@@ -1,20 +1,16 @@
 /**
- * LayerPanel — layer manager content.
+ * LayerPanel: the Layers tab of the map tool panel.
  *
- *  Compact icon-toolbar per layer (hover for label), inspired by QGIS/ArcGIS layer panel:
- *    👁 visibility · swatch symbology · 🔍 zoom · 📊 attributes · 💾 export · ↑↓ reorder · ✕ remove
+ * One compact row per layer (LayerRow.tsx), grouped by where the layer came from and collapsible. Selecting a row opens a
+ * drawer under it with opacity, style, attributes and details; everything else is in the row's "more" menu. Drag
+ * reorders within a group; Move up and Move down stay in the menu for keyboard users. Removing a layer asks nothing and
+ * offers Undo; removing many (Remove all, Remove duplicates) asks first and offers Undo too.
  *
- *  Features:
- *  • Drag-handle reorder: grab the ⠿ gripper and drag a layer row up/down
- *  • Per-row "show all metadata" toggle and global "ⓘ" toggle
- *  • Per-layer symbology editor
- *  • Source badges: 📁 workspace · 🐍 tool · 📥 loaded · 📤 pushed
- *  • Panel state persisted via mapWorkspace localStorage
- *
+ * Pure decisions (grouping, warnings versus notes, duplicates) live in layerModel.ts.
  * Positioning is the parent's responsibility (see MapToolRibbon).
  */
 
-import { layerRetrievedAt, layerRunId, layerTool, NO_RUN_RECORD } from "@shared/map/provenanceEnvelope"
+import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import { StringRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
@@ -25,10 +21,20 @@ import { FileServiceClient, MapServiceClient } from "../../services/grpc-client"
 import { ACCEPTED_EXTENSIONS, loadAndPushFileEntries, loadAndPushFiles } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
 import GraduatedSymbologyEditor from "./GraduatedSymbologyEditor"
-import { deriveLayerIntelligence, type LayerIntelligence, layerResearchDetails, warningText } from "./layerIntelligence"
-import { geeDisplayLines } from "./mapLayerAdapters"
+import { LayerRow } from "./LayerRow"
+import { deriveLayerIntelligence } from "./layerIntelligence"
+import {
+	duplicateIds,
+	duplicatesToRemove,
+	groupLayers,
+	type LayerOrigin,
+	ORIGIN_LABEL,
+	rowIndicators,
+	sharedNote,
+} from "./layerModel"
+import { AttributeTable, LayerInspector, niceMetadata } from "./layerPanelParts"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
-import { MAP_Z } from "./mapZ"
+import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { SymbologyEditor } from "./SymbologyEditor"
 import { restoredLayersNote, WorkspaceFilesSection } from "./WorkspaceFilesSection"
 
@@ -48,118 +54,6 @@ interface LayerPanelContentProps {
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────────
-
-const layerTypeIcon = (t?: string): string => {
-	switch ((t || "").toLowerCase()) {
-		case "point":
-			return "●"
-		case "line":
-			return "〰"
-		case "polygon":
-			return "⬡"
-		case "raster":
-			return "▦"
-		case "gee_tile":
-			return "◉"
-		default:
-			return "◈"
-	}
-}
-
-const sourceBadge = (layer: MapLayer): { icon: string; title: string } => {
-	const s = layer.metadata?.source
-	if (s === "gee") {
-		return { icon: "🛰", title: "Google Earth Engine layer" }
-	}
-	if (s === "workspace") {
-		return { icon: "📁", title: "Workspace file" }
-	}
-	if (s === "user") {
-		return { icon: "📥", title: "Loaded by you" }
-	}
-	if (layer.metadata?._run_id || layer.metadata?.tool) {
-		return { icon: "🐍", title: "Tool output" }
-	}
-	return { icon: "📤", title: "Pushed layer" }
-}
-
-const HIDDEN_KEYS = new Set([
-	"__operation",
-	"source",
-	"path",
-	"lastModified",
-	"originalFormat",
-	"formatIcon",
-	"raster_data_url",
-	"raster_bounds",
-	"raster_opacity",
-	"raster_path",
-	"raster_colormap",
-	"raster_cached",
-	"gee_tile_url_template",
-	"gee_remote_tile_url_template",
-	"addedAt",
-	"source_uri",
-	"source_path",
-	"source_display_path",
-	"source_format",
-	"source_mtime_ms",
-	"source_size_bytes",
-	"source_loaded_at_utc",
-	"source_status",
-	"source_remote_url",
-	"source_derived_from",
-	"converted_artifact_path",
-	"conversion",
-	"display_geojson_path",
-	"display_mode",
-	"full_geojson_embedded",
-	"original_feature_count",
-	"preview_feature_count",
-	"preview_coord_count",
-	"preview_bytes",
-])
-
-const niceMetadata = (layer: MapLayer): Array<[string, string]> => {
-	const out: Array<[string, string]> = []
-	const meta = layer.metadata ?? {}
-	if (layer.layerType !== "raster" && layer.geojson) {
-		try {
-			const p = JSON.parse(layer.geojson)
-			if (p?.type === "FeatureCollection" && Array.isArray(p.features)) {
-				out.push(["features", String(p.features.length)])
-			}
-		} catch {
-			/* ignore */
-		}
-	}
-	const PRIORITY = [
-		"format",
-		"crs",
-		"reprojected",
-		"units",
-		"variable",
-		"gee_dataset_id",
-		"gee_start_date",
-		"gee_end_date",
-		"tool",
-		"_run_id",
-		"rows",
-	]
-	for (const k of PRIORITY) {
-		if (meta[k]) {
-			out.push([k, meta[k]])
-		}
-	}
-	if (layer.layerType === "gee_tile") {
-		for (const [k, v] of geeDisplayLines(layer)) {
-			if (!out.some(([key]) => key === k)) {
-				out.push([k, v])
-			}
-		}
-	}
-	return out
-}
 
 const openProvenance = async (path: string) => {
 	try {
@@ -200,47 +94,6 @@ function resolveSourceFileUri(filePath: string): Promise<{ uri: string; name: st
 		window.addEventListener("message", onMessage)
 		PLATFORM_CONFIG.postMessage({ type: "aihydro-resolve-file-uri", requestId, path: filePath })
 	})
-}
-
-const allMetadata = (layer: MapLayer): Array<[string, string]> =>
-	Object.entries(layer.metadata ?? {}).filter(([k]) => !HIDDEN_KEYS.has(k) && !k.startsWith("__"))
-
-const colorSwatch = (layer: MapLayer): string => {
-	if (layer.layerType === "gee_tile") {
-		return "linear-gradient(to right, #081d58, #225ea8, #41b6c4, #a1dab4, #ffffcc)"
-	}
-	if (layer.layerType === "raster") {
-		const cmap = layer.metadata?.raster_colormap ?? "viridis"
-		const gradients: Record<string, string> = {
-			viridis: "linear-gradient(to right, #440154, #31688e, #35b779, #fde725)",
-			viridis_r: "linear-gradient(to right, #fde725, #35b779, #31688e, #440154)",
-			YlOrRd: "linear-gradient(to right, #ffffb2, #fecc5c, #fd8d3c, #e31a1c)",
-			Blues: "linear-gradient(to right, #f7fbff, #6baed6, #2171b5, #084594)",
-			RdYlGn: "linear-gradient(to right, #d73027, #fee08b, #1a9850)",
-			plasma: "linear-gradient(to right, #0d0887, #cc4778, #f0f921)",
-			magma: "linear-gradient(to right, #000004, #b73779, #fcfdbf)",
-			cividis: "linear-gradient(to right, #00224e, #7c7b78, #fde737)",
-		}
-		return gradients[cmap] ?? "linear-gradient(to right, #440154, #fde725)"
-	}
-	return layer.style?.fillColor || layer.style?.color || "#0066CC"
-}
-
-const statusColors = (dataState: LayerIntelligence["dataState"]) => {
-	switch (dataState) {
-		case "analysis_ready_raster":
-			return { bg: "rgba(43, 183, 117, 0.14)", fg: "#6ee7a8", bd: "rgba(43, 183, 117, 0.32)" }
-		case "visual_preview_raster":
-			return { bg: "rgba(255, 190, 80, 0.14)", fg: "#ffc857", bd: "rgba(255, 190, 80, 0.34)" }
-		case "remote_raster":
-			return { bg: "rgba(93, 173, 226, 0.14)", fg: "#7cc7ff", bd: "rgba(93, 173, 226, 0.32)" }
-		case "reference_vector":
-			return { bg: "rgba(52, 211, 153, 0.12)", fg: "#8ee8d1", bd: "rgba(52, 211, 153, 0.28)" }
-		case "analysis_output":
-			return { bg: "rgba(147, 197, 253, 0.12)", fg: "#a9d0ff", bd: "rgba(147, 197, 253, 0.28)" }
-		default:
-			return { bg: "rgba(255,255,255,0.08)", fg: "inherit", bd: "rgba(255,255,255,0.16)" }
-	}
 }
 
 const buildDisplayNames = (layers: MapLayer[], aliases: Record<string, string>): Map<string, string> => {
@@ -301,6 +154,24 @@ const saveLayerToWorkspace = async (layer: MapLayer, displayName: string): Promi
 	return res.workspacePath
 }
 
+const copyText = (text: string) => void navigator.clipboard?.writeText(text)
+
+/** What a selected row's drawer shows besides opacity. */
+interface DrawerView {
+	style: boolean
+	attrs: boolean
+	details: boolean
+}
+const CLOSED_DRAWER: DrawerView = { style: false, attrs: false, details: false }
+
+/** A removal the user can take back. */
+interface UndoEntry {
+	label: string
+	layers: { layer: MapLayer; visible: boolean }[]
+	order: string[]
+}
+const UNDO_MS = 10_000
+
 // ─── component ──────────────────────────────────────────────────────────────
 
 export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
@@ -321,41 +192,60 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const [restoringOlder, setRestoringOlder] = useState(false)
 	const [restoreError, setRestoreError] = useState<string | null>(null)
 	const persisted = useMemo(() => loadMapWorkspace(), [])
-	const [showDetails, setShowDetails] = useState<boolean>(persisted.layerPanel?.showDetails ?? false)
 	const [layerAliases, setLayerAliases] = useState<Record<string, string>>(persisted.layerAliases ?? {})
 	const [renamingId, setRenamingId] = useState<string | null>(null)
 	const [renameDraft, setRenameDraft] = useState("")
-	const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-	const [attrTableFor, setAttrTableFor] = useState<string | null>(null)
-	const [symbologyFor, setSymbologyFor] = useState<string | null>(null)
+	const [selectedId, setSelectedId] = useState<string | null>(null)
+	const [drawer, setDrawer] = useState<DrawerView>(CLOSED_DRAWER)
 	const [symbologyMode, setSymbologyMode] = useState<"basic" | "graduated">("basic")
-	const [confirmingClear, setConfirmingClear] = useState(false)
+	const [confirm, setConfirm] = useState<null | { kind: "all" } | { kind: "duplicates"; count: number }>(null)
 	const [loadStatus, setLoadStatus] = useState<{ kind: "idle" | "ok" | "err"; msg: string }>({ kind: "idle", msg: "" })
-	const [savingLayerId, setSavingLayerId] = useState<string | null>(null)
-	const [removingLayerIds, setRemovingLayerIds] = useState<Set<string>>(new Set())
-	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-
-	// Subscribe to platform load events.
-	const rowDragRef = useRef<{ dragId: string; overIndex: number } | null>(null)
+	const [collapsedGroups, setCollapsedGroups] = useState<Set<LayerOrigin>>(new Set())
+	const [undo, setUndo] = useState<UndoEntry | null>(null)
+	const [drag, setDrag] = useState<{ id: string; origin: LayerOrigin } | null>(null)
+	const [drop, setDrop] = useState<{ id: string; pos: "above" | "below" } | null>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
-
-	useEffect(() => {
-		saveMapWorkspace({ layerPanel: { showDetails } })
-	}, [showDetails])
+	const undoTimer = useRef<number | undefined>(undefined)
 
 	useEffect(() => {
 		saveMapWorkspace({ layerAliases })
 	}, [layerAliases])
-
-	const isDark = mapStyle === "dark"
-	const fg = isDark ? "var(--vscode-foreground, #ddd)" : "var(--vscode-foreground, #222)"
-	const border = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"
-	const subtle = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"
-	const danger = "#dc3545"
+	useEffect(() => () => window.clearTimeout(undoTimer.current), [])
 
 	const displayNames = useMemo(() => buildDisplayNames(layers, layerAliases), [layers, layerAliases])
 	const visibleCount = useMemo(() => layers.filter((layer) => visibleLayerIds.has(layer.id)).length, [layers, visibleLayerIds])
 	const restoredNote = useMemo(() => restoredLayersNote(layers, restoreState.olderCount), [layers, restoreState.olderCount])
+
+	// Sorted layer list respects the custom order maintained in MapView
+	const orderedLayers = useMemo(() => {
+		if (layerOrder.length === 0) {
+			return layers
+		}
+		const byId = new Map(layers.map((l) => [l.id, l]))
+		const sorted = layerOrder.map((id) => byId.get(id)).filter(Boolean) as MapLayer[]
+		// Append any layers not yet in the order list
+		const inOrder = new Set(layerOrder)
+		for (const l of layers) {
+			if (!inOrder.has(l.id)) {
+				sorted.push(l)
+			}
+		}
+		return sorted
+	}, [layers, layerOrder])
+
+	const groups = useMemo(() => groupLayers(orderedLayers), [orderedLayers])
+	const twins = useMemo(() => duplicateIds(orderedLayers), [orderedLayers])
+	const intelligenceOf = useCallback(
+		(layer: MapLayer) =>
+			deriveLayerIntelligence(layer, { rawRasterValuesAvailable: Boolean(rasterCache.get(layer.id)?.rawPixels) }),
+		[],
+	)
+
+	const say = useCallback((kind: "ok" | "err" | "idle", msg: string, ms = 3500) => {
+		setLoadStatus({ kind, msg })
+		if (msg) window.setTimeout(() => setLoadStatus((cur) => (cur.msg === msg ? { kind: "idle", msg: "" } : cur)), ms)
+	}, [])
+
 	const restoreOlder = async () => {
 		setRestoringOlder(true)
 		setRestoreError(null)
@@ -366,6 +256,11 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		} finally {
 			setRestoringOlder(false)
 		}
+	}
+
+	const select = (id: string | null, view: Partial<DrawerView> = {}) => {
+		setSelectedId(id)
+		setDrawer({ ...CLOSED_DRAWER, ...view })
 	}
 
 	const commitRename = async (layer: MapLayer) => {
@@ -402,25 +297,22 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	}
 
 	const handleSaveLayerToWorkspace = async (layer: MapLayer, displayName: string) => {
-		setSavingLayerId(layer.id)
+		say("idle", `Saving ${displayName}…`, 15_000)
 		try {
 			const workspacePath = await saveLayerToWorkspace(layer, displayName)
-			setLoadStatus({ kind: "ok", msg: `Saved ${workspacePath}` })
-			window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 3500)
+			say("ok", `Saved ${workspacePath}`)
 		} catch (err) {
-			setLoadStatus({ kind: "err", msg: err instanceof Error ? err.message : "Save failed" })
-		} finally {
-			setSavingLayerId(null)
+			say("err", err instanceof Error ? err.message : "Save failed", 6000)
 		}
 	}
 
 	const handleReloadSource = async (layer: MapLayer, displayName: string) => {
 		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
 		if (!sourcePath) {
-			setLoadStatus({ kind: "err", msg: "No source file path recorded for this layer." })
+			say("err", "No source file path recorded for this layer.", 5000)
 			return
 		}
-		setLoadStatus({ kind: "idle", msg: `Reloading ${displayName}…` })
+		say("idle", `Reloading ${displayName}…`, 15_000)
 		try {
 			const resolved = await resolveSourceFileUri(sourcePath)
 			const response = await fetch(resolved.uri)
@@ -441,134 +333,150 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				},
 			])
 			if (result.loaded > 0) {
-				setLoadStatus({ kind: "ok", msg: `Reloaded ${displayName}.` })
+				say("ok", `Reloaded ${displayName}.`, 5000)
 			} else {
-				setLoadStatus({ kind: "err", msg: result.errors[0] ?? "Reload failed." })
+				say("err", result.errors[0] ?? "Reload failed.", 6000)
 			}
 		} catch (err) {
-			setLoadStatus({ kind: "err", msg: err instanceof Error ? err.message : "Reload failed." })
+			say("err", err instanceof Error ? err.message : "Reload failed.", 6000)
 		}
-		window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
 	}
 
-	// Sorted layer list respects the custom order maintained in MapView
-	const orderedLayers = useMemo(() => {
-		if (layerOrder.length === 0) {
-			return layers
-		}
-		const byId = new Map(layers.map((l) => [l.id, l]))
-		const sorted = layerOrder.map((id) => byId.get(id)).filter(Boolean) as MapLayer[]
-		// Append any layers not yet in the order list
-		const inOrder = new Set(layerOrder)
-		for (const l of layers) {
-			if (!inOrder.has(l.id)) {
-				sorted.push(l)
-			}
-		}
-		return sorted
-	}, [layers, layerOrder])
+	// ── removal, with undo ────────────────────────────────────────────────
 
-	const toggleRowDetails = (id: string) =>
-		setExpandedRows((prev) => {
-			const next = new Set(prev)
-			next.has(id) ? next.delete(id) : next.add(id)
-			return next
-		})
+	const offerUndo = useCallback((entry: UndoEntry) => {
+		window.clearTimeout(undoTimer.current)
+		setUndo(entry)
+		undoTimer.current = window.setTimeout(() => setUndo(null), UNDO_MS)
+	}, [])
 
-	const handleRemove = async (id: string) => {
-		const removedLayer = layers.find((layer) => layer.id === id)
-		setRemovingLayerIds((prev) => new Set(prev).add(id))
-		removeLayer(id)
-		rasterCache.delete(id)
-		onVisibilityChange(id, false)
-		onReorder(
-			(layerOrder.length > 0 ? layerOrder : orderedLayers.map((layer) => layer.id)).filter((layerId) => layerId !== id),
+	/** Remove layers from the map and the host. A failed host call puts that layer back and says so. */
+	const removeLayers = async (targets: MapLayer[], label: string) => {
+		if (targets.length === 0) return
+		const previousOrder = orderedLayers.map((l) => l.id)
+		const entry: UndoEntry = {
+			label,
+			layers: targets.map((layer) => ({ layer, visible: visibleLayerIds.has(layer.id) })),
+			order: previousOrder,
+		}
+		const gone = new Set(targets.map((l) => l.id))
+		for (const layer of targets) {
+			removeLayer(layer.id)
+			rasterCache.delete(layer.id)
+			onVisibilityChange(layer.id, false)
+		}
+		onReorder(previousOrder.filter((id) => !gone.has(id)))
+		if (selectedId && gone.has(selectedId)) select(null)
+		if (renamingId && gone.has(renamingId)) setRenamingId(null)
+		const failed: MapLayer[] = []
+		await Promise.all(
+			targets.map(async (layer) => {
+				try {
+					await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId: layer.id }))
+				} catch (err) {
+					console.error("Failed to remove layer:", err)
+					failed.push(layer)
+				}
+			}),
 		)
-		setExpandedRows((prev) => {
-			const next = new Set(prev)
-			next.delete(id)
-			return next
-		})
-		if (attrTableFor === id) setAttrTableFor(null)
-		if (symbologyFor === id) setSymbologyFor(null)
-		if (renamingId === id) setRenamingId(null)
-		try {
-			await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId: id }))
-			setLoadStatus({ kind: "ok", msg: "Layer removed." })
-			window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 2500)
-		} catch (err) {
-			console.error("Failed to remove layer:", err)
-			if (removedLayer) {
-				addLayer(removedLayer)
-			}
-			setLoadStatus({ kind: "err", msg: err instanceof Error ? err.message : "Failed to remove layer." })
-		} finally {
-			setRemovingLayerIds((prev) => {
-				const next = new Set(prev)
-				next.delete(id)
-				return next
-			})
+		for (const layer of failed) addLayer(layer)
+		if (failed.length > 0) {
+			say("err", `Could not remove ${failed.length === 1 ? "the layer" : `${failed.length} layers`}.`, 6000)
+			entry.layers = entry.layers.filter((e) => !failed.includes(e.layer))
 		}
+		if (entry.layers.length > 0) offerUndo(entry)
+	}
+
+	const handleUndo = async () => {
+		const entry = undo
+		if (!entry) return
+		window.clearTimeout(undoTimer.current)
+		setUndo(null)
+		const failed: string[] = []
+		for (const { layer, visible } of entry.layers) {
+			addLayer(layer)
+			try {
+				await MapServiceClient.addMapLayer(AddMapLayerRequest.create({ layer, replaceExisting: true }))
+				onVisibilityChange(layer.id, visible)
+			} catch (err) {
+				console.error("Failed to restore layer:", err)
+				failed.push(layer.name || layer.id)
+			}
+		}
+		onReorder(entry.order)
+		say(failed.length ? "err" : "ok", failed.length ? `Could not restore ${failed.join(", ")}.` : "Restored.", 4000)
 	}
 
 	const handleClearAll = async () => {
-		const previousLayers = [...layers]
-		setConfirmingClear(false)
+		setConfirm(null)
+		const previous = [...layers]
 		clearLayers()
-		for (const layer of previousLayers) {
+		for (const layer of previous) {
 			rasterCache.delete(layer.id)
 		}
+		const previousOrder = orderedLayers.map((l) => l.id)
+		const visibleBefore = new Set(visibleLayerIds)
 		onReorder([])
 		onHideAllLayers?.()
-		setExpandedRows(new Set())
-		setAttrTableFor(null)
-		setSymbologyFor(null)
+		select(null)
 		setRenamingId(null)
 		try {
 			await MapServiceClient.clearMapLayers({})
-			setLoadStatus({ kind: "ok", msg: `Removed ${previousLayers.length} layers.` })
-			window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 2500)
+			offerUndo({
+				label: `Removed ${previous.length} layers`,
+				layers: previous.map((layer) => ({ layer, visible: visibleBefore.has(layer.id) })),
+				order: previousOrder,
+			})
 		} catch (err) {
 			console.error("Failed to clear layers:", err)
-			previousLayers.forEach(addLayer)
-			setLoadStatus({ kind: "err", msg: err instanceof Error ? err.message : "Failed to clear layers." })
+			previous.forEach(addLayer)
+			say("err", err instanceof Error ? err.message : "Failed to clear layers.", 6000)
 		}
 	}
 
-	// ── row drag-to-reorder ───────────────────────────────────────────────
-	const onRowDragStart = useCallback((e: React.DragEvent, id: string) => {
-		e.dataTransfer.effectAllowed = "move"
-		e.dataTransfer.setData("text/plain", id)
-		rowDragRef.current = { dragId: id, overIndex: -1 }
-	}, [])
+	const handleRemoveDuplicates = async () => {
+		const drop = duplicatesToRemove(orderedLayers, (id) => visibleLayerIds.has(id))
+		setConfirm(null)
+		await removeLayers(drop, `Removed ${drop.length} duplicate${drop.length === 1 ? "" : "s"}`)
+	}
 
-	const onRowDragOver = useCallback((e: React.DragEvent, overIndex: number) => {
+	// ── order ─────────────────────────────────────────────────────────────
+
+	const orderIds = orderedLayers.map((l) => l.id)
+	const moveWithinGroup = (layer: MapLayer, dir: -1 | 1) => {
+		const group = groups.find((g) => g.layers.some((l) => l.id === layer.id))
+		if (!group) return
+		const ids = group.layers.map((l) => l.id)
+		const neighbour = ids[ids.indexOf(layer.id) + dir]
+		if (!neighbour) return
+		const next = [...orderIds]
+		const a = next.indexOf(layer.id)
+		const b = next.indexOf(neighbour)
+		;[next[a], next[b]] = [next[b], next[a]]
+		onReorder(next)
+	}
+
+	const finishDrag = () => {
+		setDrag(null)
+		setDrop(null)
+	}
+	const onRowDragOver = (e: React.DragEvent, layer: MapLayer, origin: LayerOrigin) => {
+		if (!drag || drag.origin !== origin || drag.id === layer.id) return
 		e.preventDefault()
 		e.dataTransfer.dropEffect = "move"
-		if (rowDragRef.current) {
-			rowDragRef.current.overIndex = overIndex
-		}
-	}, [])
-
-	const onRowDrop = useCallback(
-		(e: React.DragEvent, dropIndex: number) => {
-			e.preventDefault()
-			const dragId = e.dataTransfer.getData("text/plain")
-			if (!dragId) {
-				return
-			}
-			const currentOrder = layerOrder.length > 0 ? layerOrder : orderedLayers.map((l) => l.id)
-			const fromIndex = currentOrder.indexOf(dragId)
-			if (fromIndex === -1 || fromIndex === dropIndex) {
-				return
-			}
-			const next = [...currentOrder]
-			next.splice(fromIndex, 1)
-			next.splice(dropIndex, 0, dragId)
-			onReorder(next)
-		},
-		[layerOrder, orderedLayers, onReorder],
-	)
+		const rect = e.currentTarget.getBoundingClientRect()
+		const pos = e.clientY < rect.top + rect.height / 2 ? "above" : "below"
+		setDrop((cur) => (cur?.id === layer.id && cur.pos === pos ? cur : { id: layer.id, pos }))
+	}
+	const onRowDrop = (e: React.DragEvent, layer: MapLayer) => {
+		e.preventDefault()
+		if (!drag || !drop || drag.id === layer.id) return finishDrag()
+		const next = orderIds.filter((id) => id !== drag.id)
+		const at = next.indexOf(layer.id)
+		next.splice(drop.pos === "above" ? at : at + 1, 0, drag.id)
+		onReorder(next)
+		finishDrag()
+	}
 
 	// ── file picker ───────────────────────────────────────────────────────
 	const onPickFiles = () => fileInputRef.current?.click()
@@ -578,35 +486,310 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		if (!files || files.length === 0) {
 			return
 		}
-		setLoadStatus({ kind: "idle", msg: `Loading…` })
+		say("idle", "Loading…", 15_000)
 		const result = await loadAndPushFiles(files)
 		if (result.loaded > 0 && result.errors.length === 0) {
-			setLoadStatus({ kind: "ok", msg: `Loaded ${result.loaded} layer${result.loaded > 1 ? "s" : ""}.` })
+			say("ok", `Loaded ${result.loaded} layer${result.loaded > 1 ? "s" : ""}.`, 5000)
 		} else if (result.loaded > 0) {
-			setLoadStatus({
-				kind: "ok",
-				msg: `Loaded ${result.loaded}, ${result.errors.length} error${result.errors.length > 1 ? "s" : ""}.`,
-			})
+			say("ok", `Loaded ${result.loaded}, ${result.errors.length} error${result.errors.length > 1 ? "s" : ""}.`, 5000)
 		} else {
-			setLoadStatus({ kind: "err", msg: result.errors[0] ?? "No files loaded." })
+			say("err", result.errors[0] ?? "No files loaded.", 6000)
 		}
 		if (fileInputRef.current) {
 			fileInputRef.current.value = ""
 		}
-		window.setTimeout(() => setLoadStatus({ kind: "idle", msg: "" }), 5000)
 	}
 
+	// ── menus ─────────────────────────────────────────────────────────────
+
+	const menuFor = (layer: MapLayer, displayName: string, group: MapLayer[]): OverflowItem[] => {
+		const isRaster = layer.layerType === "raster"
+		const hasGeojson = !!layer.geojson && !isRaster
+		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
+		const provenancePath = layer.metadata?.provenance_path
+		const tool = layerTool(layer.metadata)
+		const run = layerRunId(layer.metadata)
+		const at = group.findIndex((l) => l.id === layer.id)
+		const items: (OverflowItem | false)[] = [
+			{ key: "zoom", label: "Zoom to layer", icon: "zoom-in", onSelect: () => onZoomToLayer?.(layer) },
+			{
+				key: "rename",
+				label: "Rename",
+				icon: "edit",
+				onSelect: () => {
+					setRenamingId(layer.id)
+					setRenameDraft(displayName)
+				},
+			},
+			{ key: "d1", divider: true },
+			{ key: "style", label: "Style…", icon: "symbol-color", onSelect: () => select(layer.id, { style: true }) },
+			{
+				key: "opacity",
+				label: "Opacity",
+				icon: "color-mode",
+				onSelect: () => {
+					select(layer.id)
+					window.setTimeout(() => document.getElementById(`map-layer-opacity-${layer.id}`)?.focus(), 0)
+				},
+			},
+			hasGeojson && {
+				key: "attrs",
+				label: "Attribute table",
+				icon: "table",
+				onSelect: () => select(layer.id, { attrs: true }),
+			},
+			!isRaster &&
+				hasGeojson &&
+				layer.layerType === "point" && {
+					key: "cluster",
+					label: "Cluster points",
+					checked: !!clusterLayerIds?.has(layer.id),
+					onSelect: () => onClusterToggle?.(layer.id, !clusterLayerIds?.has(layer.id)),
+				},
+			{
+				key: "details",
+				label: "Details and provenance",
+				icon: "info",
+				onSelect: () => select(layer.id, { details: true }),
+			},
+			{ key: "d2", divider: true },
+			!isRaster &&
+				layer.metadata?.source !== "workspace" && {
+					key: "save",
+					label: "Save to workspace",
+					icon: "save",
+					onSelect: () => void handleSaveLayerToWorkspace(layer, displayName),
+				},
+			!isRaster &&
+				layer.metadata?.source !== "workspace" &&
+				hasGeojson && {
+					key: "export",
+					label: "Export as GeoJSON",
+					icon: "export",
+					onSelect: () => exportLayer(layer, displayName),
+				},
+			!!sourcePath && {
+				key: "open-source",
+				label: "Open source file",
+				icon: "go-to-file",
+				onSelect: () => openSourceFile(sourcePath),
+			},
+			!!sourcePath && {
+				key: "reload",
+				label: "Reload source",
+				icon: "refresh",
+				onSelect: () => void handleReloadSource(layer, displayName),
+			},
+			!!provenancePath && {
+				key: "provenance",
+				label: "Open provenance record",
+				icon: "file-code",
+				onSelect: () => void openProvenance(provenancePath),
+			},
+			(!!tool || !!run) && { key: "d3", divider: true },
+			!!tool && {
+				key: "copy-tool",
+				label: "Copy tool name",
+				icon: "copy",
+				onSelect: () => {
+					copyText(tool)
+					say("ok", "Copied tool name.", 2500)
+				},
+			},
+			!!run && {
+				key: "copy-run",
+				label: "Copy run ID",
+				icon: "copy",
+				onSelect: () => {
+					copyText(run)
+					say("ok", "Copied run ID.", 2500)
+				},
+			},
+			{ key: "d4", divider: true },
+			{
+				key: "up",
+				label: "Move up",
+				icon: "arrow-up",
+				disabledReason: at <= 0 ? "Already first in this group" : undefined,
+				onSelect: () => moveWithinGroup(layer, -1),
+			},
+			{
+				key: "down",
+				label: "Move down",
+				icon: "arrow-down",
+				disabledReason: at >= group.length - 1 ? "Already last in this group" : undefined,
+				onSelect: () => moveWithinGroup(layer, 1),
+			},
+			{ key: "d5", divider: true },
+			{
+				key: "remove",
+				label: "Remove layer",
+				icon: "trash",
+				danger: true,
+				onSelect: () => void removeLayers([layer], `Removed “${displayName}”`),
+			},
+		]
+		return items.filter(Boolean) as OverflowItem[]
+	}
+
+	const addItems: OverflowItem[] = [
+		{ key: "file", label: "Add file…", icon: "file-add", onSelect: onPickFiles },
+		{
+			key: "url",
+			label: "Add from URL…",
+			icon: "link",
+			onSelect: () => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-add-url-command" }),
+		},
+	]
+	const panelItems: OverflowItem[] = [
+		{
+			key: "save-scene",
+			label: "Save scene…",
+			icon: "save-all",
+			onSelect: () => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-save-scene-command" }),
+		},
+		{
+			key: "open-scene",
+			label: "Open scene…",
+			icon: "folder-opened",
+			onSelect: () => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-open-scene-command" }),
+		},
+		{ key: "d1", divider: true },
+		{
+			key: "show-all",
+			label: "Show all layers",
+			icon: "eye",
+			disabledReason: layers.length === 0 ? "No layers" : undefined,
+			onSelect: () => onShowAllLayers?.(),
+		},
+		{
+			key: "hide-all",
+			label: "Hide all layers",
+			icon: "eye-closed",
+			disabledReason: layers.length === 0 ? "No layers" : undefined,
+			onSelect: () => onHideAllLayers?.(),
+		},
+		{ key: "d2", divider: true },
+		{
+			key: "remove-all",
+			label: "Remove all layers…",
+			icon: "trash",
+			danger: true,
+			disabledReason: layers.length === 0 ? "No layers" : undefined,
+			onSelect: () => setConfirm({ kind: "all" }),
+		},
+	]
+
+	// ── drawer under the selected row ─────────────────────────────────────
+
+	const renderDrawer = (layer: MapLayer, displayName: string) => {
+		const isRaster = layer.layerType === "raster"
+		const hasGeojson = !!layer.geojson && !isRaster
+		const visible = visibleLayerIds.has(layer.id)
+		const intelligence = intelligenceOf(layer)
+		const niceMeta = niceMetadata(layer)
+		const opacity = layerOpacities[layer.id] ?? (isRaster ? Number.parseFloat(layer.metadata?.raster_opacity ?? "0.75") : 1)
+		const fg = "var(--vscode-foreground)"
+		const border = "var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
+		return (
+			<div aria-label={`Settings for ${displayName}`} className="map-layer-drawer" role="group">
+				<label className="map-layer-opacity" htmlFor={`map-layer-opacity-${layer.id}`}>
+					<span>Opacity</span>
+					<input
+						disabled={!visible}
+						id={`map-layer-opacity-${layer.id}`}
+						max={1}
+						min={0}
+						onChange={(e) => onOpacityChange?.(layer.id, Number.parseFloat(e.target.value))}
+						step={0.05}
+						type="range"
+						value={opacity}
+					/>
+					<output>{Math.round(opacity * 100)}%</output>
+				</label>
+				{!visible && <div className="map-layer-hint">Hidden. Show the layer to change its opacity.</div>}
+				<div className="map-layer-drawer__actions">
+					<button
+						aria-pressed={drawer.style}
+						className="map-chip"
+						onClick={() => setDrawer((d) => ({ ...d, style: !d.style }))}
+						type="button">
+						<span aria-hidden="true" className="codicon codicon-symbol-color" />
+						Style
+					</button>
+					{hasGeojson && (
+						<button
+							aria-pressed={drawer.attrs}
+							className="map-chip"
+							onClick={() => setDrawer((d) => ({ ...d, attrs: !d.attrs }))}
+							type="button">
+							<span aria-hidden="true" className="codicon codicon-table" />
+							Attributes
+						</button>
+					)}
+					<button
+						aria-pressed={drawer.details}
+						className="map-chip"
+						onClick={() => setDrawer((d) => ({ ...d, details: !d.details }))}
+						type="button">
+						<span aria-hidden="true" className="codicon codicon-info" />
+						Details
+					</button>
+				</div>
+				{drawer.style && (
+					<>
+						{!isRaster && (
+							<div aria-label="Style type" className="map-layer-segment" role="group">
+								<button
+									aria-pressed={symbologyMode === "basic"}
+									onClick={() => setSymbologyMode("basic")}
+									type="button">
+									Basic
+								</button>
+								<button
+									aria-pressed={symbologyMode === "graduated"}
+									onClick={() => setSymbologyMode("graduated")}
+									type="button">
+									By attribute
+								</button>
+							</div>
+						)}
+						{symbologyMode === "basic" || isRaster ? (
+							<SymbologyEditor
+								layer={layer}
+								mapStyle={mapStyle}
+								onClose={() => setDrawer((d) => ({ ...d, style: false }))}
+							/>
+						) : (
+							<GraduatedSymbologyEditor
+								layer={layer}
+								mapStyle={mapStyle}
+								onClose={() => setDrawer((d) => ({ ...d, style: false }))}
+							/>
+						)}
+					</>
+				)}
+				{drawer.attrs && hasGeojson && <AttributeTable border={border} fg={fg} layer={layer} />}
+				{drawer.details && (
+					<LayerInspector
+						border={border}
+						fg={fg}
+						intelligence={intelligence}
+						layer={layer}
+						niceMeta={niceMeta}
+						onCopied={(what) => say("ok", `Copied ${what}.`, 2500)}
+					/>
+				)}
+			</div>
+		)
+	}
+
+	// ── render ────────────────────────────────────────────────────────────
+
+	const allVisible = layers.length > 0 && visibleCount === layers.length
+
 	return (
-		<div
-			style={{
-				flex: 1,
-				display: "flex",
-				flexDirection: "column",
-				overflow: "hidden",
-				minHeight: 0,
-				color: fg,
-				fontFamily: "var(--vscode-font-family, system-ui, sans-serif)",
-			}}>
+		<div className="map-layers">
 			<input
 				accept={ACCEPTED_EXTENSIONS}
 				multiple
@@ -616,1211 +799,210 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				type="file"
 			/>
 
-			{/* "Show all details" toggle row — sits above the Add Layer bar */}
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					padding: "4px 8px",
-					borderBottom: `1px solid ${border}`,
-					background: subtle,
-					gap: 4,
-				}}>
-				<span style={{ fontSize: 11, opacity: 0.7, flex: 1 }} title={restoredNote ?? undefined}>
-					{layers.length === 0 ? "Empty" : `${visibleCount} visible · ${layers.length - visibleCount} hidden`}
+			<div className="map-layers__toolbar">
+				<OverflowMenu icon="add" items={addItems} label="Add layer" text="Add" />
+				<span className="map-layers__summary" title={restoredNote ?? undefined}>
+					{layers.length === 0
+						? "No layers"
+						: `${layers.length} layer${layers.length === 1 ? "" : "s"} · ${visibleCount} visible`}
 				</span>
 				{layers.length > 0 && (
-					<>
-						<IconBtn border={border} fg={fg} onClick={() => onShowAllLayers?.()} title="Show all layers">
-							👁
-						</IconBtn>
-						<IconBtn border={border} fg={fg} onClick={() => onHideAllLayers?.()} title="Hide all layers">
-							👁‍🗨
-						</IconBtn>
-					</>
+					<button
+						aria-label={allVisible ? "Hide all layers" : "Show all layers"}
+						className="map-overflow-trigger"
+						onClick={() => (allVisible ? onHideAllLayers?.() : onShowAllLayers?.())}
+						title={allVisible ? "Hide all layers" : "Show all layers"}
+						type="button">
+						<span aria-hidden="true" className={`codicon codicon-${allVisible ? "eye" : "eye-closed"}`} />
+					</button>
 				)}
-				<IconBtn
-					active={showDetails}
-					border={border}
-					fg={fg}
-					onClick={() => setShowDetails((v) => !v)}
-					title={showDetails ? "Hide all details" : "Show all details"}>
-					ⓘ
-				</IconBtn>
+				<OverflowMenu items={panelItems} label="Layers panel actions" />
 			</div>
 
-			{/* Add Layer bar */}
-			<div style={{ padding: "6px 8px", borderBottom: `1px solid ${border}` }}>
-				<div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 5 }}>
-					<button
-						onClick={onPickFiles}
-						style={{
-							padding: "6px 8px",
-							fontSize: 12,
-							fontWeight: 500,
-							background: "var(--vscode-button-background, #0e639c)",
-							color: "var(--vscode-button-foreground, #fff)",
-							border: "none",
-							borderRadius: 3,
-							cursor: "pointer",
-							display: "flex",
-							alignItems: "center",
-							justifyContent: "center",
-							gap: 6,
-						}}
-						title="Add layer from file (GeoJSON, KML, KMZ, GPX, Shapefile.zip, GeoTIFF, CSV)"
-						type="button">
-						<span>＋</span>
-						<span>Add file</span>
-					</button>
-					<button
-						onClick={() => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-add-url-command" })}
-						style={smallBtn(fg, border)}
-						title="Add layer from URL"
-						type="button">
-						🔗 URL
-					</button>
-				</div>
-				<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginTop: 5 }}>
-					<button
-						onClick={() => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-save-scene-command" })}
-						style={smallBtn(fg, border)}
-						title="Save the current layer stack, styles, view, and source references"
-						type="button">
-						💾 Save scene
-					</button>
-					<button
-						onClick={() => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-open-scene-command" })}
-						style={smallBtn(fg, border)}
-						title="Open a saved AI-Hydro map scene"
-						type="button">
-						📂 Open scene
-					</button>
-				</div>
+			<div aria-live="polite" role="status">
 				{loadStatus.msg && (
-					<div
-						style={{
-							marginTop: 4,
-							fontSize: 11,
-							color: loadStatus.kind === "err" ? danger : "var(--vscode-descriptionForeground, #999)",
-						}}>
+					<div className={`map-layers__status${loadStatus.kind === "err" ? " map-layers__status--err" : ""}`}>
 						{loadStatus.msg}
 					</div>
 				)}
 			</div>
 
-			{/* Layer list */}
-			<div style={{ flex: 1, overflowY: "auto", padding: 6, minHeight: 0 }}>
+			<div className="map-layers__list">
 				{orderedLayers.length === 0 ? (
-					<div style={{ padding: 16, textAlign: "center", fontSize: 12, opacity: 0.75, lineHeight: 1.6 }}>
-						<div style={{ fontSize: 32, marginBottom: 8 }}>🗺️</div>
-						<div style={{ fontWeight: 600, marginBottom: 4 }}>No layers yet</div>
-						<div>
-							Click <strong>＋ Add Layer</strong> above,
-							<br />
-							or right-click a file in the
-							<br />
-							VS Code Explorer →
-							<br />
-							<strong>Add to AI-Hydro Map</strong>
-						</div>
-						<div style={{ fontSize: 11, marginTop: 10, opacity: 0.7 }}>
-							GeoJSON · KML · KMZ · GPX
-							<br />
-							Shapefile (.zip) · GeoTIFF · CSV
-						</div>
+					<div className="map-layers__empty">
+						<span aria-hidden="true" className="codicon codicon-layers" />
+						<strong>No layers yet</strong>
+						<span>
+							Use <em>Add</em> above, ask the assistant to run a tool, or right-click a file in the Explorer and
+							choose Add to AI-Hydro Map.
+						</span>
+						<span className="map-layer-hint">GeoJSON, KML, KMZ, GPX, Shapefile (.zip), GeoTIFF, CSV</span>
 					</div>
 				) : (
-					(() => {
-						const elements: JSX.Element[] = []
-						let currentGroupTitle = ""
-
-						orderedLayers.forEach((layer, idx) => {
-							const isVisible = visibleLayerIds.has(layer.id)
-							const swatch = colorSwatch(layer)
-							const badge = sourceBadge(layer)
-							const niceMeta = niceMetadata(layer)
-							const expanded = expandedRows.has(layer.id)
-							const detailsOn = allMetadata(layer).length > 0
-							const editing = symbologyFor === layer.id
-							const attrOpen = attrTableFor === layer.id
-							const displayName = displayNames.get(layer.id) ?? layer.name ?? layer.id
-							const isRaster = layer.layerType === "raster"
-							const isGeeTile = layer.layerType === "gee_tile"
-							const provenancePath = layer.metadata?.provenance_path
-							const sourcePath =
-								layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
-							const sourceStatus = layer.metadata?.source_status
-							const hasGeojson = !!layer.geojson && !isRaster
-							const intelligence = deriveLayerIntelligence(layer, {
-								rawRasterValuesAvailable: Boolean(rasterCache.get(layer.id)?.rawPixels),
-							})
-							const statusTone = statusColors(intelligence.dataState)
-							const primaryWarning = intelligence.warnings[0]
-
-							const isNewGroup = badge.title !== currentGroupTitle
-							if (isNewGroup) {
-								currentGroupTitle = badge.title
-								const isCollapsed = collapsedGroups.has(currentGroupTitle)
-								elements.push(
-									<div
-										key={`group-${currentGroupTitle}-${idx}`}
-										onClick={() => {
-											const next = new Set(collapsedGroups)
-											if (isCollapsed) {
-												next.delete(currentGroupTitle)
-											} else {
-												next.add(currentGroupTitle)
-											}
-											setCollapsedGroups(next)
-										}}
-										style={{
-											display: "flex",
-											alignItems: "center",
-											gap: 6,
-											padding: "4px 8px",
-											fontSize: 11,
-											fontWeight: 600,
-											opacity: 0.85,
-											background: "rgba(0,0,0,0.1)",
-											marginTop: idx === 0 ? 0 : 8,
-											marginBottom: 4,
-											borderRadius: 3,
-											cursor: "pointer",
-											userSelect: "none",
-										}}>
-										<span style={{ fontSize: 11, opacity: 0.6, width: 12, textAlign: "center" }}>
-											{isCollapsed ? "▶" : "▼"}
-										</span>
-										<span>
-											{badge.icon} {badge.title}
-										</span>
-									</div>,
-								)
-							}
-
-							if (collapsedGroups.has(currentGroupTitle)) {
-								return // skip rendering layer row
-							}
-
-							elements.push(
-								<div
-									draggable
-									key={layer.id}
-									onDragOver={(e) => onRowDragOver(e, idx)}
-									onDragStart={(e) => onRowDragStart(e, layer.id)}
-									onDrop={(e) => onRowDrop(e, idx)}
-									style={{
-										padding: "6px 8px",
-										marginBottom: 4,
-										background: subtle,
-										borderRadius: 4,
-										border: `1px solid ${border}`,
-										opacity: isVisible ? 1 : 0.55,
-										cursor: "default",
-									}}>
-									{/* ── Row: visibility + swatch + icons + name ── */}
-									<div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-										{/* Gripper */}
-										<span
-											style={{
-												fontSize: 13,
-												opacity: 0.35,
-												cursor: "grab",
-												userSelect: "none",
-												flexShrink: 0,
-											}}
-											title="Drag to reorder">
-											⠿
-										</span>
-
-										{/* Visibility checkbox */}
-										<input
-											checked={isVisible}
-											onChange={() => onVisibilityChange(layer.id, !isVisible)}
-											style={{
-												cursor: "pointer",
-												accentColor: "var(--vscode-button-background)",
-												flexShrink: 0,
-											}}
-											title={isVisible ? "Hide layer" : "Show layer"}
-											type="checkbox"
-										/>
-
-										{/* Color swatch / symbology trigger */}
-										<button
-											onClick={() => setSymbologyFor(editing ? null : layer.id)}
-											style={{
-												width: isRaster ? 26 : 14,
-												height: 14,
-												padding: 0,
-												borderRadius: 2,
-												background: swatch,
-												border: editing
-													? "1px solid var(--vscode-focusBorder, #0e639c)"
-													: "1px solid rgba(255,255,255,0.25)",
-												flexShrink: 0,
-												cursor: "pointer",
-											}}
-											title="Edit symbology"
-											type="button"
-										/>
-
-										{/* Layer type + source badges */}
-										<span style={{ fontSize: 11, opacity: 0.6, flexShrink: 0 }} title={layer.layerType ?? ""}>
-											{layerTypeIcon(layer.layerType)}
-										</span>
-										{isGeeTile && layer.metadata?.gee_mock === "true" && (
-											<span
-												style={{
-													fontSize: 11,
-													padding: "1px 5px",
-													borderRadius: 3,
-													background: "rgba(220,160,0,0.15)",
-													color: "var(--vscode-editorWarning-foreground, #cca700)",
-													flexShrink: 0,
-												}}
-												title="Mock tile layer">
-												mock
-											</span>
+					groups.map((group) => {
+						const label = ORIGIN_LABEL[group.origin]
+						const collapsed = collapsedGroups.has(group.origin)
+						const indicators = group.layers.map((l) => rowIndicators(l, intelligenceOf(l)))
+						const groupNote = sharedNote(indicators)
+						const groupTwins = group.layers.filter((l) => twins.has(l.id)).length
+						return (
+							<section aria-label={label.title} className="map-layer-group" key={group.origin}>
+								<button
+									aria-expanded={!collapsed}
+									className="map-layer-group__head"
+									onClick={() =>
+										setCollapsedGroups((prev) => {
+											const next = new Set(prev)
+											next.has(group.origin) ? next.delete(group.origin) : next.add(group.origin)
+											return next
+										})
+									}
+									title={label.hint}
+									type="button">
+									<span
+										aria-hidden="true"
+										className={`codicon codicon-chevron-${collapsed ? "right" : "down"}`}
+									/>
+									<span className="map-layer-group__title">{label.title}</span>
+									<span className="map-layer-group__count">{group.layers.length}</span>
+								</button>
+								{!collapsed && (
+									<>
+										{groupNote && (
+											<p className="map-layer-group__note">
+												<span aria-hidden="true" className="codicon codicon-info" />
+												{groupNote}
+											</p>
 										)}
-										{sourceStatus === "source_changed" && (
-											<span
-												style={{
-													fontSize: 11,
-													padding: "1px 5px",
-													borderRadius: 3,
-													background: "rgba(255, 190, 80, 0.14)",
-													color: "var(--vscode-editorWarning-foreground, #cca700)",
-													flexShrink: 0,
-												}}
-												title="The source file changed after this layer was loaded. Reload source to refresh it.">
-												stale
-											</span>
-										)}
-										<span
-											style={{
-												fontSize: 11,
-												lineHeight: "15px",
-												padding: "0 5px",
-												borderRadius: 999,
-												background: statusTone.bg,
-												border: `1px solid ${statusTone.bd}`,
-												color: statusTone.fg,
-												flexShrink: 0,
-												maxWidth: 112,
-												overflow: "hidden",
-												textOverflow: "ellipsis",
-												whiteSpace: "nowrap",
-											}}
-											title={intelligence.statusDetail}>
-											{intelligence.statusLabel}
-										</span>
-										{primaryWarning && (
-											<span
-												style={{
-													fontSize: 11,
-													color: "var(--vscode-editorWarning-foreground, #cca700)",
-													flexShrink: 0,
-												}}
-												title={intelligence.warnings.map(warningText).join(" · ")}>
-												⚠
-											</span>
-										)}
-										{layer.metadata?.display_mode === "preview" && (
-											<span
-												style={{
-													fontSize: 11,
-													padding: "1px 5px",
-													borderRadius: 3,
-													background: "rgba(100,180,255,0.12)",
-													color: "var(--vscode-textLink-foreground, #4da3ff)",
-													flexShrink: 0,
-												}}
-												title={`Rendering preview: ${Number(layer.metadata.preview_feature_count ?? 0).toLocaleString()} of ${Number(layer.metadata.original_feature_count ?? 0).toLocaleString()} features. Full data is retained for export/provenance.`}>
-												preview
-											</span>
-										)}
-										{layer.metadata?.simplified === "true" && (
-											<span
-												style={{
-													fontSize: 11,
-													padding: "1px 5px",
-													borderRadius: 3,
-													background: "rgba(100,180,255,0.12)",
-													color: "var(--vscode-textLink-foreground, #4da3ff)",
-													flexShrink: 0,
-												}}
-												title={`Auto-simplified: ${Number(layer.metadata.original_coord_count ?? 0).toLocaleString()} → ${Number(layer.metadata.simplified_coord_count ?? 0).toLocaleString()} coordinates (file was very large)`}>
-												simplified
-											</span>
-										)}
-										{(layerRunId(layer.metadata) || layerTool(layer.metadata)) && (
-											<span
-												style={{
-													fontSize: 11,
-													padding: "1px 5px",
-													borderRadius: 3,
-													background: "rgba(80,200,120,0.12)",
-													color: "var(--vscode-charts-green, #89d185)",
-													flexShrink: 0,
-													fontFamily: "var(--vscode-editor-font-family, monospace)",
-												}}
-												title={[
-													layerTool(layer.metadata) && `Tool: ${layerTool(layer.metadata)}`,
-													`Run: ${layerRunId(layer.metadata) ?? NO_RUN_RECORD}`,
-													layer.metadata?.agent_step && `Step: ${layer.metadata.agent_step}`,
-													layerRetrievedAt(layer.metadata) && `At: ${layerRetrievedAt(layer.metadata)}`,
-												]
-													.filter(Boolean)
-													.join("\n")}>
-												🐍 {layerRunId(layer.metadata)?.split(".")[0] ?? layerTool(layer.metadata)}
-											</span>
-										)}
-
-										{/* Name (double-click to rename) */}
-										{renamingId === layer.id ? (
-											<input
-												autoFocus
-												onBlur={() => void commitRename(layer)}
-												onChange={(e) => setRenameDraft(e.target.value)}
-												onKeyDown={(e) => {
-													if (e.key === "Enter") {
-														void commitRename(layer)
-													}
-													if (e.key === "Escape") {
-														setRenamingId(null)
-														setRenameDraft("")
-													}
-												}}
-												style={{
-													flex: 1,
-													minWidth: 0,
-													fontSize: 12,
-													padding: "1px 4px",
-													border: `1px solid var(--vscode-focusBorder, #0e639c)`,
-													borderRadius: 2,
-													background: "var(--vscode-input-background, #3c3c3c)",
-													color: fg,
-												}}
-												title="Layer display name"
-												type="text"
-												value={renameDraft}
-											/>
-										) : (
-											<span
-												onDoubleClick={() => {
-													setRenamingId(layer.id)
-													setRenameDraft(displayName)
-												}}
-												style={{
-													fontSize: 12,
-													fontWeight: 500,
-													flex: "1 1 90px",
-													minWidth: 0,
-													overflow: "hidden",
-													textOverflow: "ellipsis",
-													whiteSpace: "nowrap",
-													cursor: "text",
-												}}
-												title={`${displayName} — double-click to rename (saved in map session)`}>
-												{displayName}
-											</span>
-										)}
-									</div>
-
-									{/* Opacity slider */}
-									{isVisible && (
-										<div
-											style={{
-												display: "flex",
-												alignItems: "center",
-												gap: 6,
-												marginLeft: 50,
-												marginTop: 4,
-												marginBottom: 2,
-											}}>
-											<span style={{ fontSize: 11, opacity: 0.65, minWidth: 38 }}>Opacity</span>
-											<input
-												max={1}
-												min={0}
-												onChange={(e) => onOpacityChange?.(layer.id, parseFloat(e.target.value))}
-												step={0.05}
-												style={{
-													flex: 1,
-													accentColor: "var(--vscode-button-background)",
-													cursor: "pointer",
-												}}
-												title={`Opacity: ${Math.round((layerOpacities[layer.id] ?? 1) * 100)}%`}
-												type="range"
-												value={
-													layerOpacities[layer.id] ??
-													(isRaster ? parseFloat(layer.metadata?.raster_opacity ?? "0.75") : 1)
-												}
-											/>
-											<span
-												style={{
-													fontSize: 11,
-													opacity: 0.65,
-													minWidth: 28,
-													textAlign: "right",
-													fontVariantNumeric: "tabular-nums",
-												}}>
-												{Math.round(
-													(layerOpacities[layer.id] ??
-														(isRaster ? parseFloat(layer.metadata?.raster_opacity ?? "0.75") : 1)) *
-														100,
-												)}
-												%
-											</span>
-										</div>
-									)}
-
-									{/* ── Compact metadata line ── */}
-									{niceMeta.length > 0 && (
-										<div
-											style={{
-												fontSize: 11,
-												opacity: 0.7,
-												marginTop: 3,
-												marginLeft: 58,
-												display: "flex",
-												flexWrap: "wrap",
-												gap: "1px 6px",
-											}}>
-											{niceMeta.map(([k, v]) => (
-												<span key={k}>
-													<span style={{ opacity: 0.6 }}>{k}:</span> {v}
+										{groupTwins > 0 && (
+											<p className="map-layer-group__note map-layer-group__note--action">
+												<span aria-hidden="true" className="codicon codicon-files" />
+												<span>
+													{groupTwins} layers are the same tool run and source drawn more than once.
 												</span>
-											))}
-										</div>
-									)}
-
-									{/* ── Icon toolbar ── */}
-									<div
-										style={{
-											display: "flex",
-											flexWrap: "wrap",
-											gap: 3,
-											marginTop: 5,
-											marginLeft: 22,
-											alignItems: "center",
-										}}>
-										<IconBtn
-											border={border}
-											fg={fg}
-											onClick={() => onZoomToLayer?.(layer)}
-											title="Zoom to extent">
-											🔍
-										</IconBtn>
-										{provenancePath && (
-											<IconBtn
-												border={border}
-												fg={fg}
-												onClick={() => void openProvenance(provenancePath)}
-												title="Open provenance record">
-												📋
-											</IconBtn>
+												<button
+													className="map-chip"
+													onClick={() =>
+														setConfirm({
+															kind: "duplicates",
+															count: duplicatesToRemove(orderedLayers, (id) =>
+																visibleLayerIds.has(id),
+															).length,
+														})
+													}
+													type="button">
+													Remove duplicates
+												</button>
+											</p>
 										)}
-										{sourcePath && (
-											<IconBtn
-												border={border}
-												fg={fg}
-												onClick={() => openSourceFile(sourcePath)}
-												title="Open source file">
-												↗
-											</IconBtn>
-										)}
-										{sourcePath && (
-											<IconBtn
-												border={border}
-												fg={fg}
-												onClick={() => void handleReloadSource(layer, displayName)}
-												title="Reload source file">
-												⟳
-											</IconBtn>
-										)}
-										<IconBtn
-											active={editing}
-											border={border}
-											fg={fg}
-											onClick={() => setSymbologyFor(editing ? null : layer.id)}
-											title="Symbology">
-											🎨
-										</IconBtn>
-										{/* Cluster toggle — only for point layers */}
-										{!isRaster && hasGeojson && layer.layerType === "point" && (
-											<IconBtn
-												active={clusterLayerIds?.has(layer.id)}
-												border={border}
-												fg={fg}
-												onClick={() => onClusterToggle?.(layer.id, !clusterLayerIds?.has(layer.id))}
-												title={
-													clusterLayerIds?.has(layer.id)
-														? "Disable point clustering"
-														: "Cluster points at low zoom"
-												}>
-												{clusterLayerIds?.has(layer.id) ? "🧩" : "🔘"}
-											</IconBtn>
-										)}
-										{hasGeojson && (
-											<IconBtn
-												active={attrOpen}
-												border={border}
-												fg={fg}
-												onClick={() => setAttrTableFor(attrOpen ? null : layer.id)}
-												title="Attribute table">
-												📊
-											</IconBtn>
-										)}
-										{!isRaster && layer.metadata?.source !== "workspace" && (
-											<IconBtn
-												border={border}
-												fg={fg}
-												onClick={() => void handleSaveLayerToWorkspace(layer, displayName)}
-												style={{ opacity: savingLayerId === layer.id ? 0.5 : 1 }}
-												title="Save to workspace vectors">
-												{savingLayerId === layer.id ? "…" : "📁"}
-											</IconBtn>
-										)}
-										{!isRaster && layer.metadata?.source !== "workspace" && (
-											<IconBtn
-												border={border}
-												fg={fg}
-												onClick={() => exportLayer(layer, displayName)}
-												title="Export as GeoJSON">
-												💾
-											</IconBtn>
-										)}
-										{detailsOn && (
-											<IconBtn
-												active={expanded}
-												border={border}
-												fg={fg}
-												onClick={() => toggleRowDetails(layer.id)}
-												title={expanded ? "Hide details" : "Show details"}>
-												{expanded ? "▴" : "▾"}
-											</IconBtn>
-										)}
-										{/* Move up / down */}
-										<IconBtn
-											border={border}
-											fg={fg}
-											onClick={() => {
-												if (idx === 0) {
-													return
-												}
-												const order = layerOrder.length > 0 ? layerOrder : orderedLayers.map((l) => l.id)
-												const next = [...order]
-												const i = next.indexOf(layer.id)
-												if (i > 0) {
-													;[next[i - 1], next[i]] = [next[i], next[i - 1]]
-													onReorder(next)
-												}
-											}}
-											style={{ opacity: idx === 0 ? 0.25 : 1 }}
-											title="Move layer up (renders on top)">
-											↑
-										</IconBtn>
-										<IconBtn
-											border={border}
-											fg={fg}
-											onClick={() => {
-												if (idx === orderedLayers.length - 1) {
-													return
-												}
-												const order = layerOrder.length > 0 ? layerOrder : orderedLayers.map((l) => l.id)
-												const next = [...order]
-												const i = next.indexOf(layer.id)
-												if (i < next.length - 1) {
-													;[next[i], next[i + 1]] = [next[i + 1], next[i]]
-													onReorder(next)
-												}
-											}}
-											style={{ opacity: idx === orderedLayers.length - 1 ? 0.25 : 1 }}
-											title="Move layer down (renders below)">
-											↓
-										</IconBtn>
-										<div style={{ flex: 1 }} />
-										<IconBtn
-											border={border}
-											disabled={removingLayerIds.has(layer.id)}
-											fg={fg}
-											onClick={() => handleRemove(layer.id)}
-											style={{
-												color: danger,
-												borderColor: "rgba(220,53,69,0.35)",
-												background: "rgba(220,53,69,0.08)",
-												opacity: removingLayerIds.has(layer.id) ? 0.55 : 1,
-											}}
-											title="Remove layer">
-											{removingLayerIds.has(layer.id) ? "…" : "✕"}
-										</IconBtn>
-									</div>
-
-									{/* ── Attribute table ── */}
-									{attrOpen && hasGeojson && <AttributeTable border={border} fg={fg} layer={layer} />}
-
-									{/* ── Symbology editor ── */}
-									{editing && (
-										<>
-											{!isRaster && (
-												<div
-													style={{
-														marginTop: 6,
-														padding: 8,
-														background: subtle,
-														borderRadius: 4,
-														display: "flex",
-														gap: 6,
-													}}>
-													<button
-														onClick={() => setSymbologyMode("basic")}
-														style={{
-															flex: 1,
-															padding: "4px 8px",
-															fontSize: 11,
-															background:
-																symbologyMode === "basic"
-																	? "var(--vscode-button-background, #0e639c)"
-																	: "transparent",
-															color: fg,
-															border: `1px solid ${border}`,
-															borderRadius: 3,
-															cursor: "pointer",
+										<ul className="map-layer-list">
+											{group.layers.map((layer, i) => {
+												const displayName = displayNames.get(layer.id) ?? layer.name ?? layer.id
+												const selected = selectedId === layer.id
+												return (
+													<LayerRow
+														displayName={displayName}
+														dragging={drag?.id === layer.id}
+														dropTarget={drop?.id === layer.id ? drop.pos : null}
+														duplicate={twins.has(layer.id)}
+														key={layer.id}
+														layer={layer}
+														menuItems={menuFor(layer, displayName, group.layers)}
+														note={groupNote ? undefined : indicators[i].note}
+														onDragEnd={finishDrag}
+														onDragOver={(e) => onRowDragOver(e, layer, group.origin)}
+														onDragStart={(e) => {
+															e.dataTransfer.effectAllowed = "move"
+															e.dataTransfer.setData("text/plain", layer.id)
+															setDrag({ id: layer.id, origin: group.origin })
 														}}
-														type="button">
-														Basic
-													</button>
-													<button
-														onClick={() => setSymbologyMode("graduated")}
-														style={{
-															flex: 1,
-															padding: "4px 8px",
-															fontSize: 11,
-															background:
-																symbologyMode === "graduated"
-																	? "var(--vscode-button-background, #0e639c)"
-																	: "transparent",
-															color: fg,
-															border: `1px solid ${border}`,
-															borderRadius: 3,
-															cursor: "pointer",
+														onDrop={(e) => onRowDrop(e, layer)}
+														onRenameCancel={() => {
+															setRenamingId(null)
+															setRenameDraft("")
 														}}
-														type="button">
-														By Attribute
-													</button>
-												</div>
-											)}
-											{symbologyMode === "basic" ? (
-												<SymbologyEditor
-													layer={layer}
-													mapStyle={mapStyle}
-													onClose={() => setSymbologyFor(null)}
-												/>
-											) : (
-												<GraduatedSymbologyEditor
-													layer={layer}
-													mapStyle={mapStyle}
-													onClose={() => setSymbologyFor(null)}
-												/>
-											)}
-										</>
-									)}
-
-									{(expanded || editing) && (
-										<LayerInspector
-											border={border}
-											fg={fg}
-											intelligence={intelligence}
-											layer={layer}
-											niceMeta={niceMeta}
-										/>
-									)}
-
-									{/* ── Full metadata details ── */}
-									{(expanded || showDetails) && detailsOn && (
-										<div
-											style={{
-												marginTop: 8,
-												paddingTop: 6,
-												borderTop: `1px dashed ${border}`,
-												fontSize: 11,
-												fontFamily: "var(--vscode-editor-font-family, ui-monospace, monospace)",
-												opacity: 0.85,
-												display: "grid",
-												gridTemplateColumns: "auto 1fr",
-												gap: "2px 8px",
-												wordBreak: "break-word",
-											}}>
-											{allMetadata(layer).map(([k, v]) => (
-												<React.Fragment key={k}>
-													<span style={{ opacity: 0.6 }}>{k}</span>
-													<span>{v}</span>
-												</React.Fragment>
-											))}
-										</div>
-									)}
-								</div>,
-							)
-						})
-						return elements
-					})()
+														onRenameCommit={() => void commitRename(layer)}
+														onRenameDraft={setRenameDraft}
+														onSelect={() => select(selected ? null : layer.id)}
+														onShowDetails={() => select(layer.id, { details: true })}
+														onStartRename={() => {
+															setRenamingId(layer.id)
+															setRenameDraft(displayName)
+														}}
+														onToggleVisible={() =>
+															onVisibilityChange(layer.id, !visibleLayerIds.has(layer.id))
+														}
+														renameDraft={renameDraft}
+														renaming={renamingId === layer.id}
+														selected={selected}
+														visible={visibleLayerIds.has(layer.id)}
+														warnings={indicators[i].warnings}>
+														{selected && renderDrawer(layer, displayName)}
+													</LayerRow>
+												)
+											})}
+										</ul>
+									</>
+								)}
+							</section>
+						)
+					})
 				)}
 			</div>
 
-			{restoredNote && (
-				<div style={{ padding: "4px 8px", fontSize: 11, borderTop: `1px solid ${border}` }}>
-					<div style={{ opacity: 0.8 }}>{restoredNote}</div>
-					{restoreState.olderCount > 0 && (
-						<button
-							disabled={restoringOlder}
-							onClick={() => void restoreOlder()}
-							style={{
-								marginTop: 4,
-								padding: "3px 8px",
-								fontSize: 11,
-								color: fg,
-								background: subtle,
-								border: `1px solid ${border}`,
-								borderRadius: 3,
-								cursor: restoringOlder ? "default" : "pointer",
-							}}
-							type="button">
-							{restoringOlder ? "Restoring…" : `Restore older layers (${restoreState.olderCount})`}
-						</button>
-					)}
+			{undo && (
+				<div className="map-layers__undo" role="status">
+					<span>{undo.label}.</span>
+					<button className="map-chip" onClick={() => void handleUndo()} type="button">
+						Undo
+					</button>
+				</div>
+			)}
+
+			{restoreState.olderCount > 0 && (
+				<div className="map-layers__foot">
+					<span>
+						{restoreState.olderCount} older saved layer{restoreState.olderCount === 1 ? " is" : "s are"} kept but not
+						loaded.
+					</span>
+					<button className="map-chip" disabled={restoringOlder} onClick={() => void restoreOlder()} type="button">
+						{restoringOlder ? "Restoring…" : "Restore"}
+					</button>
 					{restoreError && (
-						<div role="alert" style={{ marginTop: 4, color: danger }}>
+						<div className="map-layers__status map-layers__status--err" role="alert">
 							{restoreError}
 						</div>
 					)}
 				</div>
 			)}
 
-			<WorkspaceFilesSection border={border} fg={fg} layers={layers} subtle={subtle} />
+			<WorkspaceFilesSection
+				border="var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
+				fg="var(--vscode-foreground)"
+				layers={layers}
+				subtle="color-mix(in srgb, var(--vscode-foreground) 6%, transparent)"
+			/>
 
-			{/* Footer — clear all */}
-			{layers.length > 1 && (
-				<div style={{ padding: 6, borderTop: `1px solid ${border}`, background: subtle }}>
-					{confirmingClear ? (
-						<div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-							<span style={{ fontSize: 11, flex: 1, color: danger }}>Remove all {layers.length}?</span>
-							<button
-								onClick={handleClearAll}
-								style={{ ...smallBtn(fg, border), background: danger, color: "#fff", borderColor: danger }}
-								type="button">
-								Yes
-							</button>
-							<button onClick={() => setConfirmingClear(false)} style={smallBtn(fg, border)} type="button">
-								No
-							</button>
-						</div>
-					) : (
-						<button
-							onClick={() => setConfirmingClear(true)}
-							style={{
-								width: "100%",
-								padding: "5px 8px",
-								fontSize: 11,
-								background: "rgba(220,53,69,0.08)",
-								border: "1px solid rgba(220,53,69,0.28)",
-								borderRadius: 3,
-								color: danger,
-								cursor: "pointer",
-								fontWeight: 500,
-							}}
-							type="button">
-							Clear all layers
-						</button>
-					)}
-				</div>
-			)}
-		</div>
-	)
-}
-
-// ─── Attribute Table ─────────────────────────────────────────────────────────
-
-const AttributeTable: React.FC<{ layer: MapLayer; border: string; fg: string }> = ({ layer, border, fg }) => {
-	const [page, setPage] = useState(0)
-	const PAGE_SIZE = 10
-
-	const { features, headers } = useMemo(() => {
-		try {
-			const parsed = JSON.parse(layer.geojson)
-			const feats = parsed?.type === "FeatureCollection" ? parsed.features : parsed?.type === "Feature" ? [parsed] : []
-			const keys = new Set<string>()
-			for (const f of feats.slice(0, 100)) {
-				for (const k of Object.keys(f.properties ?? {})) {
-					if (!k.startsWith("_")) {
-						keys.add(k)
-					}
-				}
-			}
-			return { features: feats, headers: Array.from(keys).slice(0, 12) }
-		} catch {
-			return { features: [], headers: [] }
-		}
-	}, [layer.geojson])
-
-	const pageFeats = features.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-	const totalPages = Math.ceil(features.length / PAGE_SIZE)
-
-	if (features.length === 0 || headers.length === 0) {
-		return (
-			<div
-				style={{
-					marginTop: 8,
-					padding: "6px 8px",
-					fontSize: 11,
-					opacity: 0.65,
-					borderTop: `1px dashed ${border}`,
-					color: fg,
-				}}>
-				{features.length === 0 ? "No features in this layer." : "Features have no attribute columns."}
-			</div>
-		)
-	}
-
-	const exportCsv = () => {
-		try {
-			const allKeys = new Set<string>()
-			for (const f of features) {
-				for (const k of Object.keys(f.properties ?? {})) {
-					if (!k.startsWith("_")) {
-						allKeys.add(k)
-					}
-				}
-			}
-			const cols = Array.from(allKeys)
-			const escape = (v: unknown) => {
-				const s = String(v ?? "")
-				return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s
-			}
-			const rows = [
-				cols.map(escape).join(","),
-				...features.map((f: any) => cols.map((k) => escape(f.properties?.[k] ?? "")).join(",")),
-			]
-			const blob = new Blob([rows.join("\n")], { type: "text/csv" })
-			const url = URL.createObjectURL(blob)
-			const a = document.createElement("a")
-			a.href = url
-			a.download = `${layer.name ?? "layer"}_attributes.csv`
-			a.click()
-			URL.revokeObjectURL(url)
-		} catch {
-			/* ignore */
-		}
-	}
-
-	return (
-		<div
-			style={{
-				marginTop: 8,
-				overflow: "auto",
-				maxHeight: 220,
-				fontSize: 11,
-				fontFamily: "var(--vscode-editor-font-family, ui-monospace, monospace)",
-				borderTop: `1px dashed ${border}`,
-			}}>
-			{/* Toolbar */}
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					gap: 6,
-					padding: "3px 4px 3px 0",
-					position: "sticky",
-					top: 0,
-					background: "var(--vscode-sideBar-background, #1e1e1e)",
-					zIndex: MAP_Z.local,
-					borderBottom: `1px solid ${border}`,
-				}}>
-				<span style={{ flex: 1, opacity: 0.6 }}>
-					{features.length} feature{features.length === 1 ? "" : "s"} · {headers.length} cols
-				</span>
-				<button
-					onClick={exportCsv}
-					style={{
-						fontSize: 11,
-						padding: "1px 6px",
-						background: "transparent",
-						color: fg,
-						border: `1px solid ${border}`,
-						borderRadius: 3,
-						cursor: "pointer",
-						whiteSpace: "nowrap",
-					}}
-					title={`Download all ${features.length} rows as CSV`}
-					type="button">
-					⬇ CSV
-				</button>
-			</div>
-			<table style={{ width: "100%", borderCollapse: "collapse" }}>
-				<thead>
-					<tr style={{ background: "rgba(255,255,255,0.05)" }}>
-						{headers.map((h) => (
-							<th
-								key={h}
-								style={{
-									padding: "2px 5px",
-									textAlign: "left",
-									opacity: 0.75,
-									borderBottom: `1px solid ${border}`,
-									whiteSpace: "nowrap",
-								}}>
-								{h}
-							</th>
-						))}
-					</tr>
-				</thead>
-				<tbody>
-					{pageFeats.map((f: any, i: number) => (
-						<tr key={i} style={{ borderBottom: `1px solid ${border}` }}>
-							{headers.map((h) => (
-								<td
-									key={h}
-									style={{
-										padding: "2px 5px",
-										maxWidth: 120,
-										overflow: "hidden",
-										textOverflow: "ellipsis",
-										whiteSpace: "nowrap",
-										color: fg,
-									}}
-									title={String(f.properties?.[h] ?? "")}>
-									{String(f.properties?.[h] ?? "")}
-								</td>
-							))}
-						</tr>
-					))}
-				</tbody>
-			</table>
-			{totalPages > 1 && (
-				<div style={{ display: "flex", gap: 6, justifyContent: "center", padding: 4, opacity: 0.7 }}>
-					<button
-						disabled={page === 0}
-						onClick={() => setPage((p) => Math.max(0, p - 1))}
-						style={{ fontSize: 11, cursor: "pointer", background: "transparent", border: "none", color: fg }}>
-						‹ Prev
-					</button>
-					<span style={{ fontSize: 11 }}>
-						{page + 1} / {totalPages} ({features.length} features)
+			{confirm && (
+				<div aria-label="Confirm removal" className="map-layers__confirm" role="alertdialog">
+					<span>
+						{confirm.kind === "all"
+							? `Remove all ${layers.length} layers from the map?`
+							: `Remove ${confirm.count} duplicate layer${confirm.count === 1 ? "" : "s"}? One copy of each stays.`}
 					</span>
 					<button
-						disabled={page === totalPages - 1}
-						onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-						style={{ fontSize: 11, cursor: "pointer", background: "transparent", border: "none", color: fg }}>
-						Next ›
+						className="map-chip map-chip--danger"
+						onClick={() => void (confirm.kind === "all" ? handleClearAll() : handleRemoveDuplicates())}
+						type="button">
+						Remove
+					</button>
+					<button className="map-chip" onClick={() => setConfirm(null)} type="button">
+						Cancel
 					</button>
 				</div>
 			)}
 		</div>
 	)
 }
-
-const LayerInspector: React.FC<{
-	layer: MapLayer
-	intelligence: LayerIntelligence
-	niceMeta: Array<[string, string]>
-	border: string
-	fg: string
-}> = ({ layer, intelligence, niceMeta, border, fg }) => {
-	const [tab, setTab] = useState<"overview" | "data" | "provenance">("overview")
-	const meta = layer.metadata ?? {}
-	const all = allMetadata(layer)
-	const statusTone = statusColors(intelligence.dataState)
-	const rasterRange =
-		meta.min || meta.max ? `${meta.min ?? "?"} – ${meta.max ?? "?"}${meta.units ? ` ${meta.units}` : ""}` : undefined
-	const resolution = meta.resolution || meta.pixel_size || meta.cell_size || meta.raster_resolution
-
-	return (
-		<div
-			style={{
-				marginTop: 8,
-				border: `1px solid ${border}`,
-				borderRadius: 5,
-				overflow: "hidden",
-				background: "rgba(0,0,0,0.10)",
-			}}>
-			<div style={{ display: "flex", gap: 2, padding: 4, borderBottom: `1px solid ${border}` }}>
-				{[
-					["overview", "Overview"],
-					["data", "Data"],
-					["provenance", "Provenance"],
-				].map(([key, label]) => (
-					<button
-						key={key}
-						onClick={() => setTab(key as typeof tab)}
-						style={{
-							padding: "3px 8px",
-							fontSize: 11,
-							border: `1px solid ${tab === key ? statusTone.bd : "transparent"}`,
-							borderRadius: 3,
-							background: tab === key ? statusTone.bg : "transparent",
-							color: fg,
-							cursor: "pointer",
-						}}
-						type="button">
-						{label}
-					</button>
-				))}
-			</div>
-			<div style={{ padding: 8, fontSize: 11, lineHeight: 1.45 }}>
-				{tab === "overview" && (
-					<>
-						<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-							<strong style={{ fontSize: 12 }}>{layer.name || layer.id}</strong>
-							<span
-								style={{
-									fontSize: 11,
-									padding: "1px 6px",
-									borderRadius: 999,
-									background: statusTone.bg,
-									border: `1px solid ${statusTone.bd}`,
-									color: statusTone.fg,
-								}}>
-								{intelligence.statusLabel}
-							</span>
-						</div>
-						<div style={{ opacity: 0.78, marginBottom: 8 }}>{intelligence.statusDetail}</div>
-						<InspectorGrid
-							border={border}
-							rows={[
-								["Type", intelligence.typeLabel],
-								["Source", intelligence.sourceLabel],
-								...(rasterRange ? ([["Value range", rasterRange]] as Array<[string, string]>) : []),
-								...(resolution ? ([["Resolution", resolution]] as Array<[string, string]>) : []),
-								...niceMeta.slice(0, 5),
-							]}
-						/>
-						{intelligence.warnings.length > 0 && (
-							<div
-								style={{
-									marginTop: 8,
-									padding: "5px 7px",
-									borderRadius: 4,
-									background: "rgba(255, 190, 80, 0.10)",
-									color: "var(--vscode-editorWarning-foreground, #cca700)",
-								}}>
-								{intelligence.warnings.map(warningText).join(" · ")}
-							</div>
-						)}
-					</>
-				)}
-				{tab === "data" && (
-					<InspectorGrid
-						border={border}
-						rows={[
-							["Capabilities", Array.from(intelligence.capabilities).join(", ")],
-							["Layer state", intelligence.dataState.replace(/_/g, " ")],
-							[
-								"Feature/raster info",
-								niceMeta.length > 0 ? niceMeta.map(([k, v]) => `${k}: ${v}`).join("; ") : "No summary available",
-							],
-						]}
-					/>
-				)}
-				{tab === "provenance" && (
-					<InspectorGrid
-						border={border}
-						rows={[
-							["Source", intelligence.sourceLabel],
-							...layerResearchDetails(layer),
-							[
-								"Source file",
-								meta.source_display_path ?? meta.source_path ?? meta.path ?? "No local source path recorded",
-							],
-							["Source format", meta.source_format ?? meta.format ?? "Unknown"],
-							["Converted artifact", meta.converted_artifact_path ?? "Not a converted vector layer"],
-							["Provenance", intelligence.provenancePath ?? "No provenance record linked"],
-							["Citation", intelligence.citation ?? "No citation recorded"],
-							["License", intelligence.license ?? "No license recorded"],
-							["Path", meta.path ?? meta.raster_source_path ?? meta.raster_path ?? "No local source path recorded"],
-							["MCP tool", layerTool(meta) ?? "Not created by a tool"],
-							["Run ID", layerRunId(meta) ?? NO_RUN_RECORD],
-							["Agent step", meta.agent_step ?? "—"],
-							["Computed at", layerRetrievedAt(meta) ?? "—"],
-							["Time range", meta.time_start ? `${meta.time_start} – ${meta.time_end ?? "present"}` : "—"],
-							["Linked claim", meta.claim_id ?? "—"],
-							["Metadata fields", String(all.length)],
-						]}
-					/>
-				)}
-			</div>
-		</div>
-	)
-}
-
-const InspectorGrid: React.FC<{ rows: Array<[string, string]>; border: string }> = ({ rows, border }) => (
-	<div
-		style={{
-			display: "grid",
-			gridTemplateColumns: "minmax(78px, auto) 1fr",
-			gap: "3px 8px",
-			wordBreak: "break-word",
-		}}>
-		{rows
-			.filter(([, value]) => value !== "")
-			.map(([key, value]) => (
-				<React.Fragment key={`${key}-${value}`}>
-					<span style={{ opacity: 0.58 }}>{key}</span>
-					<span style={{ borderBottom: `1px solid ${border}`, paddingBottom: 2 }}>{value}</span>
-				</React.Fragment>
-			))}
-	</div>
-)
-
-// ─── Style helpers ───────────────────────────────────────────────────────────
-
-const IconBtn: React.FC<{
-	onClick: () => void
-	title: string
-	children: React.ReactNode
-	fg: string
-	border: string
-	active?: boolean
-	disabled?: boolean
-	style?: React.CSSProperties
-}> = ({ onClick, title, children, fg, border, active, disabled, style }) => (
-	<button
-		aria-label={title}
-		disabled={disabled}
-		onClick={onClick}
-		style={{
-			background: active ? "rgba(255,255,255,0.12)" : "transparent",
-			color: fg,
-			border: `1px solid ${active ? border : "transparent"}`,
-			borderRadius: 3,
-			padding: "2px 5px",
-			minWidth: 24,
-			minHeight: 24,
-			display: "inline-flex",
-			alignItems: "center",
-			justifyContent: "center",
-			cursor: disabled ? "default" : "pointer",
-			fontSize: 12,
-			lineHeight: 1,
-			fontFamily: "inherit",
-			...style,
-		}}
-		title={title}
-		type="button">
-		{children}
-	</button>
-)
-
-const smallBtn = (fg: string, border: string): React.CSSProperties => ({
-	padding: "3px 8px",
-	minHeight: 24,
-	fontSize: 11,
-	background: "transparent",
-	border: `1px solid ${border}`,
-	borderRadius: 3,
-	color: fg,
-	cursor: "pointer",
-	fontFamily: "inherit",
-})
 
 export default LayerPanelContent
