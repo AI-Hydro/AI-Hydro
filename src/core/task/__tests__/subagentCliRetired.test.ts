@@ -27,7 +27,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 function filesContaining(pattern: RegExp): string[] {
 	return sourceFiles(SRC)
 		.filter((file) => pattern.test(fs.readFileSync(file, "utf8")))
-		.map((file) => path.relative(SRC, file))
+		.map((file) => path.relative(SRC, file).split(path.sep).join("/")) // posix: the same list on Windows
 }
 
 describe("retired aihydro CLI subagent", () => {

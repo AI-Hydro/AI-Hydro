@@ -232,3 +232,221 @@
 .aih-provenance__key {
 	color: var(--aih-fg-muted);
 }
+
+/* ── Navigation primitives: Tabs, Toolbar, RailButton, Menu, SubviewHeader ─────────────────────────────── */
+.aih-visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+.aih-tabs {
+	display: flex;
+	box-sizing: border-box;
+}
+.aih-tabs--horizontal {
+	flex-direction: row;
+	gap: 1px;
+	border-bottom: 1px solid var(--aih-border);
+}
+.aih-tabs--vertical {
+	flex-direction: column;
+	border-right: 1px solid var(--aih-border);
+}
+.aih-tab {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--aih-space-2);
+	min-height: 32px;
+	min-width: var(--aih-target-min);
+	padding: var(--aih-space-1) var(--aih-space-3);
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--aih-fg-muted);
+	font: inherit;
+	font-size: var(--aih-text-body);
+	white-space: nowrap;
+	cursor: pointer;
+}
+.aih-tabs--vertical .aih-tab {
+	border-bottom: 0;
+	border-left: 2px solid transparent;
+	justify-content: flex-start;
+}
+.aih-tab:hover:not([aria-disabled="true"]) {
+	color: var(--aih-fg);
+	background: var(--vscode-list-hoverBackground, transparent);
+}
+.aih-tab--selected {
+	color: var(--aih-fg);
+	border-bottom-color: var(--aih-border-active);
+}
+.aih-tabs--vertical .aih-tab--selected {
+	border-left-color: var(--aih-border-active);
+	background: var(--vscode-list-activeSelectionBackground, transparent);
+}
+.aih-tab--icon {
+	justify-content: center;
+	padding-inline: var(--aih-space-2);
+}
+.aih-tab[aria-disabled="true"] {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+.aih-tab:focus-visible,
+.aih-rail-btn:focus-visible,
+.aih-menu__item:focus-visible {
+	outline: var(--aih-focus-ring);
+	outline-offset: -2px;
+}
+[role="tabpanel"]:focus-visible {
+	outline: var(--aih-focus-ring);
+	outline-offset: -2px;
+}
+
+.aih-toolbar {
+	display: flex;
+	box-sizing: border-box;
+	gap: var(--aih-space-1);
+	align-items: center;
+}
+.aih-toolbar--vertical {
+	flex-direction: column;
+}
+
+.aih-rail-btn {
+	box-sizing: border-box;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--aih-radius-sm);
+	background: transparent;
+	color: var(--aih-fg);
+	font: inherit;
+	font-size: 18px;
+	cursor: pointer;
+}
+.aih-rail-btn .codicon {
+	font-size: 18px;
+}
+.aih-rail-btn:hover:not([aria-disabled="true"]) {
+	background: var(--vscode-toolbar-hoverBackground, color-mix(in srgb, var(--aih-fg) 10%, transparent));
+}
+.aih-rail-btn--active {
+	border-color: var(--aih-border-active);
+	background: color-mix(in srgb, var(--aih-border-active) 18%, transparent);
+}
+.aih-rail-btn[aria-disabled="true"] {
+	cursor: default;
+	opacity: 0.6;
+}
+.aih-rail-btn__badge {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 3px;
+	box-sizing: border-box;
+	border-radius: 8px;
+	background: var(--vscode-badge-background, var(--vscode-button-background));
+	color: var(--vscode-badge-foreground, var(--vscode-button-foreground, #fff));
+	font-size: var(--aih-text-caption);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.aih-menu {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 200px;
+	padding: var(--aih-space-1);
+	background: var(--vscode-menu-background, var(--aih-surface-raised));
+	color: var(--vscode-menu-foreground, var(--aih-fg));
+	border: 1px solid var(--vscode-menu-border, var(--aih-border));
+	border-radius: var(--aih-radius-md);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+	font-size: var(--aih-text-label);
+}
+.aih-menu__item {
+	display: flex;
+	align-items: center;
+	gap: var(--aih-space-2);
+	min-height: 28px;
+	padding: 3px var(--aih-space-2);
+	border: 0;
+	border-radius: var(--aih-radius-sm);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.aih-menu__item:hover,
+.aih-menu__item:focus-visible {
+	background: var(--vscode-menu-selectionBackground, color-mix(in srgb, var(--vscode-button-background) 18%, transparent));
+	color: var(--vscode-menu-selectionForeground, inherit);
+}
+.aih-menu__item:hover .aih-menu__reason,
+.aih-menu__item:focus-visible .aih-menu__reason,
+.aih-menu__item:hover .aih-menu__kbd,
+.aih-menu__item:focus-visible .aih-menu__kbd {
+	color: inherit;
+}
+.aih-menu__item--current {
+	font-weight: 600;
+}
+.aih-menu__item[aria-disabled="true"] {
+	cursor: default;
+}
+.aih-menu__text {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+.aih-menu__reason,
+.aih-menu__kbd {
+	font-family: inherit;
+	font-size: var(--aih-text-caption);
+	color: var(--aih-fg-muted);
+}
+.aih-menu__divider {
+	height: 1px;
+	margin: 3px var(--aih-space-1);
+	background: var(--aih-border);
+}
+
+.aih-subview-header {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--aih-space-2);
+	flex-wrap: wrap;
+	padding: var(--aih-space-2) var(--aih-space-4);
+	border-bottom: 1px solid var(--aih-border);
+}
+.aih-subview-header__actions {
+	display: flex;
+	align-items: center;
+	gap: var(--aih-space-2);
+}
