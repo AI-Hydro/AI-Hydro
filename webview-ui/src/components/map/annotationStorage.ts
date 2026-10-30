@@ -195,25 +195,57 @@ export function readLegacyLocal(): unknown {
 }
 
 /**
- * The host has said which project this is. From now on the cache is that project's. The old unscoped list is removed
- * locally (so the next map does not flash another project's pins before the host answers) ONLY when the host's list
- * holds every one of its ids: if the host did not take them (another project already claimed the list, or the host has
- * an older copy), the local copy is the only one and stays.
+ * The host has said which project this is. From now on the cache is that project's. `hostIds` are the ids the host's own
+ * list holds (default: all of `annotations`). The unscoped list keeps every entry the host does not hold: another
+ * project's old global pins, and, marked `pendingSync`, pins that are the user's but not on the host yet. Those are
+ * released only by `acknowledgeSaved`, once the host has persisted them, so a window that closes (or a save the host
+ * refuses) before then loses nothing: the next session starts from the unscoped list and carries them.
  */
-export function adoptHostPins(projectKey: string, annotations: MapAnnotation[], collections: AnnotationCollection[] = []): void {
+export function adoptHostPins(
+	projectKey: string,
+	annotations: MapAnnotation[],
+	collections: AnnotationCollection[] = [],
+	hostIds?: Iterable<string>,
+): void {
 	activeProjectKey = projectKey
-	unsyncedIds.clear() // the caller saves the merged list to the host next, which is what hands these pins over
+	const held = new Set(hostIds ?? annotations.map((a) => a.id))
+	for (const id of held) {
+		unsyncedIds.delete(id)
+	}
 	try {
 		localStorage.setItem(PINS_CACHE_PREFIX + projectKey, JSON.stringify(annotations))
 		localStorage.setItem(COLLECTIONS_CACHE_PREFIX + projectKey, JSON.stringify(collections))
-		const legacy = readList(ANNOTATIONS_KEY)
-		if (Array.isArray(legacy)) {
-			const have = new Set(annotations.map((a) => a.id))
-			const covered = legacy.every((e) => e && typeof e === "object" && have.has((e as { id?: string }).id as string))
-			if (covered) {
-				localStorage.removeItem(ANNOTATIONS_KEY)
-			}
-		}
+		releaseFromUnscoped(held)
+	} catch {
+		/* ignore */
+	}
+}
+
+/** Drop the entries with these ids from the unscoped list; remove the key when nothing is left. */
+function releaseFromUnscoped(ids: ReadonlySet<string>): void {
+	const stored = readList(ANNOTATIONS_KEY)
+	if (!Array.isArray(stored)) {
+		return
+	}
+	const keep = stored.filter((e) => !ids.has((e as { id?: string })?.id as string))
+	if (keep.length === 0) {
+		localStorage.removeItem(ANNOTATIONS_KEY)
+	} else if (keep.length !== stored.length) {
+		localStorage.setItem(ANNOTATIONS_KEY, JSON.stringify(keep))
+	}
+}
+
+/** The host says it has persisted these pins for `projectKey`: the unscoped copies (and their marks) can go. */
+export function acknowledgeSaved(projectKey: unknown, ids: unknown): void {
+	if (projectKey !== activeProjectKey || !Array.isArray(ids)) {
+		return
+	}
+	const acked = new Set(ids.filter((id): id is string => typeof id === "string"))
+	for (const id of acked) {
+		unsyncedIds.delete(id)
+	}
+	try {
+		releaseFromUnscoped(acked)
 	} catch {
 		/* ignore */
 	}

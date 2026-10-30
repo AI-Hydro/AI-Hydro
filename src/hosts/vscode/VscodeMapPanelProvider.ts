@@ -940,6 +940,14 @@ export class VscodeMapPanelProvider {
 									message.annotations,
 									message.collections,
 								)
+								// Tell the map what is now on disk, so it can let go of its own unsynced copies.
+								await postMessageToWebview({
+									type: "aihydro-map-save-ack",
+									projectKey: String(message.projectKey),
+									ids: (Array.isArray(message.annotations) ? message.annotations : [])
+										.map((a: { id?: unknown }) => a?.id)
+										.filter((id: unknown) => typeof id === "string"),
+								})
 							} else {
 								console.warn("[Map] Refused a pin save for a project that is not open; asking the map to reload")
 								await postMessageToWebview({ type: "aihydro-map-pins-reload" })

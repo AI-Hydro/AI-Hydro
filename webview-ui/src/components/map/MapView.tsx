@@ -14,6 +14,7 @@ import { claimAgentCommand, escapeHtml } from "./agentCommandDedupe"
 import { exportAnnotationsGeoJson } from "./annotationExport"
 import {
 	type AnnotationCollection,
+	acknowledgeSaved,
 	adoptHostPins,
 	loadAnnotationsFromHost,
 	loadAnnotationsReport,
@@ -959,7 +960,12 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			const merged = mergeAdopted(result.annotations, annotationsRef.current, startedWith)
 			pinsAdoptedRef.current = true
 			const resend = takePendingHostSave()
-			adoptHostPins(result.projectKey, merged, result.collections)
+			adoptHostPins(
+				result.projectKey,
+				merged,
+				result.collections,
+				result.annotations.map((a) => a.id),
+			)
 			annotationsRef.current = merged
 			setAnnotations(merged)
 			pinUndoStackRef.current.clear()
@@ -982,8 +988,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		unmountedRef.current = false
 		loadPinsFromHost()
 		const onMessage = (event: MessageEvent) => {
-			if ((event.data as { type?: string } | undefined)?.type === "aihydro-map-pins-reload") {
+			const data = event.data as { type?: string; projectKey?: unknown; ids?: unknown } | undefined
+			if (data?.type === "aihydro-map-pins-reload") {
 				loadPinsFromHost(true)
+			} else if (data?.type === "aihydro-map-save-ack") {
+				acknowledgeSaved(data.projectKey, data.ids)
 			}
 		}
 		window.addEventListener("message", onMessage)

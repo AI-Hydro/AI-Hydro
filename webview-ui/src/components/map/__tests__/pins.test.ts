@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+	acknowledgeSaved,
 	adoptHostPins,
 	HOST_LOAD_TIMEOUT_MS,
 	loadAnnotationsFromHost,
@@ -392,5 +393,71 @@ describe("a host that is slow to answer (data-loss path)", () => {
 		])
 		const cached = JSON.parse(localStorage.getItem("aihydro.map.pins.v3:prj_A") ?? "[]") as MapAnnotation[]
 		expect(cached.some((a) => a.pendingSync)).toBe(false)
+	})
+})
+
+describe("the host acknowledges what it persisted", () => {
+	const mk = (id: string) => ({ ...pin(0, 0), id })
+	const legacy = mk("legacy")
+	const UNSCOPED = "aihydro.map.annotations.v2"
+
+	beforeEach(() => {
+		localStorage.clear()
+		setActiveProjectKey(null)
+	})
+	afterEach(() => {
+		setActiveProjectKey(null)
+		localStorage.clear()
+	})
+
+	/** A new session: fresh module state, only localStorage survives. Returns what the map would show after an empty host. */
+	const nextSession = async (hostList: MapAnnotation[] = []) => {
+		vi.resetModules()
+		const storage = await import("../annotationStorage")
+		const model = await import("../pins")
+		const started = storage.loadAnnotationsReport().annotations
+		return { started, merged: model.mergeAdopted(hostList, started, new Set(started.map((a) => a.id))), storage }
+	}
+
+	/** Session 1: no answer from the host; the user adds p1 and p2. Then the host answers with an empty list. */
+	const sessionOneThenAdopt = (hostIds: string[] = []) => {
+		localStorage.setItem(UNSCOPED, JSON.stringify([legacy]))
+		saveAnnotations([legacy, mk("p1")])
+		saveAnnotations([legacy, mk("p1"), mk("p2")])
+		adoptHostPins("prj_X", [mk("p1"), mk("p2"), ...hostIds.map(mk)], [], hostIds)
+	}
+
+	it("adoption without an ack keeps the pins: a new session with an empty host carries them", async () => {
+		sessionOneThenAdopt()
+		expect(JSON.parse(localStorage.getItem(UNSCOPED) ?? "[]").map((a: MapAnnotation) => a.id)).toEqual(["legacy", "p1", "p2"])
+		const { merged } = await nextSession()
+		expect(merged.map((a) => a.id)).toEqual(["p1", "p2"]) // legacy was never marked: not imported twice
+	})
+
+	it("adoption, then the ack: a new session has no duplicate and no stale mark", async () => {
+		sessionOneThenAdopt(["legacy"]) // the host took the old list too
+		acknowledgeSaved("prj_X", ["p1", "p2"])
+		expect(localStorage.getItem(UNSCOPED)).toBeNull()
+		const { started, merged } = await nextSession([mk("legacy"), mk("p1"), mk("p2")])
+		expect(started).toEqual([])
+		expect(merged.map((a) => a.id)).toEqual(["legacy", "p1", "p2"])
+		expect(merged.some((a) => a.pendingSync)).toBe(false)
+	})
+
+	it("an ack for another project, or for some of the pins, releases only what it names", async () => {
+		sessionOneThenAdopt()
+		acknowledgeSaved("prj_OTHER", ["p1", "p2"])
+		acknowledgeSaved("prj_X", ["p1"])
+		const stored = JSON.parse(localStorage.getItem(UNSCOPED) ?? "[]") as MapAnnotation[]
+		expect(stored.map((a) => a.id)).toEqual(["legacy", "p2"])
+		expect(stored.find((a) => a.id === "p2")?.pendingSync).toBe(true)
+	})
+
+	it("a refused save followed by a reload (another project) still leaves the pins to be carried", async () => {
+		sessionOneThenAdopt() // adopted for prj_X, the keyed save is refused: no ack
+		adoptHostPins("prj_Y", [mk("y1")], [], ["y1"]) // the reload answers for the folder that is open now
+		acknowledgeSaved("prj_Y", ["y1"])
+		const { merged } = await nextSession([mk("y1")])
+		expect(merged.map((a) => a.id)).toEqual(["y1", "p1", "p2"])
 	})
 })
