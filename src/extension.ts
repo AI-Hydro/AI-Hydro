@@ -42,6 +42,7 @@ import { explainWithAiHydro } from "./core/controller/commands/explainWithAiHydr
 import { fixWithAiHydro } from "./core/controller/commands/fixWithAiHydro"
 import { improveWithAiHydro } from "./core/controller/commands/improveWithAiHydro"
 import { sendAddToInputEvent } from "./core/controller/ui/subscribeToAddToInput"
+import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
 import { sendFocusChatInputEvent } from "./core/controller/ui/subscribeToFocusChatInput"
 import { sendFocusPendingPromptEvent } from "./core/controller/ui/subscribeToFocusPendingPrompt"
 import { setWorkspaceTrustProvider } from "./core/task/workspaceTrust"
@@ -1071,6 +1072,16 @@ export async function activate(context: vscode.ExtensionContext) {
 				return
 			}
 			await improveWithAiHydro(context.controller, context.commandContext)
+		}),
+	)
+
+	// Show Chat: open the sidebar if it is closed or unresolved, return it to the chat from any sub-view, then focus
+	// the chat input. The study status item uses it; the palette does not list it.
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.ShowChat, async () => {
+			await vscode.commands.executeCommand("aihydro.SidebarProvider.focus")
+			await sendChatButtonClickedEvent()
+			sendFocusChatInputEvent()
 		}),
 	)
 

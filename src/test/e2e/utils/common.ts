@@ -11,15 +11,9 @@ export const addSelectedCodeToAiHydroWebview = async (_page: Page) => {
 	await _page.locator("div:nth-child(4) > span > span").first().click()
 	await _page.getByRole("textbox", { name: "The editor is not accessible" }).press("ControlOrMeta+a")
 
-	// Open Code Actions via keyboard for cross-platform reliability
-	await _page.keyboard.press("ControlOrMeta+.")
-	// Wait for the Code Actions UI to appear (listbox or menu depending on platform/version)
-	try {
-		await _page.getByRole("listbox").first().waitFor({ state: "visible", timeout: 5000 })
-	} catch {
-		await _page.getByRole("menu").first().waitFor({ state: "visible", timeout: 5000 })
-	}
-	await _page.keyboard.press("Enter", { delay: 100 }) // First action - "Add to AI-Hydro"
+	// The "Add to AI-Hydro" keybinding (aihydro.addToChat, `when: editorHasSelection`). The editor lightbulb only
+	// appears in Python, R and notebooks, and this test opens index.html, so the lightbulb is not the path.
+	await _page.keyboard.press("ControlOrMeta+'")
 }
 
 export const toggleNotifications = async (_page: Page) => {

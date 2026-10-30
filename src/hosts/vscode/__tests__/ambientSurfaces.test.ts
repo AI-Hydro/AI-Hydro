@@ -6,7 +6,7 @@ import type { StudyBindingState } from "@shared/ExtensionMessage"
 import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import { CODE_ACTION_LANGUAGES, CODE_ACTION_SELECTOR, offeredCodeActions } from "../aiHydroCodeActions"
-import { studyStatusText } from "../studyStatusText"
+import { escapeCodicons, studyStatusText } from "../studyStatusText"
 import { statusBarText } from "../toolsStatusText"
 
 describe("editor code actions (Nav-6)", () => {
@@ -30,7 +30,7 @@ describe("editor code actions (Nav-6)", () => {
 	it("there is no Improve action, and the provider is registered on the selector, not on every file", () => {
 		const source = fs.readFileSync(path.resolve(__dirname, "../../../extension.ts"), "utf8")
 		expect(source).to.not.contain("Improve with AI-Hydro")
-		expect(source).to.contain("registerCodeActionsProvider(\n\t\t\tCODE_ACTION_SELECTOR")
+		expect(source).to.match(/registerCodeActionsProvider\(\s*CODE_ACTION_SELECTOR\b/)
 		expect(source).to.not.match(/registerCodeActionsProvider\(\s*"\*"/)
 	})
 })
@@ -111,5 +111,12 @@ describe("study status item (Nav-6)", () => {
 		expect(t.text).to.contain("Piscataquis River")
 		expect(t.accessibility).to.equal("AI-Hydro study Piscataquis River")
 		expect(studyStatusText({ studyId: "01031500" }).text).to.contain("01031500")
+	})
+
+	it("a study name cannot draw a codicon: $(...) is escaped", () => {
+		expect(escapeCodicons("Basin $(error) A")).to.equal("Basin \\$(error) A")
+		expect(studyStatusText({ studyId: "x", label: "$(sync~spin) hostile" }).text).to.equal(
+			"$(location) \\$(sync~spin) hostile",
+		)
 	})
 })

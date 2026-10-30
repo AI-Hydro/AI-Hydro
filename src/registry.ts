@@ -21,6 +21,7 @@ const AiHydroCommands = {
 	ExplainCode: prefix + ".explainCode",
 	ImproveCode: prefix + ".improveCode",
 	FocusChatInput: prefix + ".focusChatInput",
+	ShowChat: prefix + ".showChat",
 	Walkthrough: prefix + ".openWalkthrough",
 	ReconstructTaskHistory: prefix + ".reconstructTaskHistory",
 	LoadGeojsonToMap: prefix + ".loadGeojsonToMap",

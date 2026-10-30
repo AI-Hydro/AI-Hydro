@@ -175,7 +175,7 @@ export function createVscodeToolsEnv(
 
 	// The chat's bound study, beside the tools item. Hidden unless the current chat is bound; a click goes to the chat.
 	const studyItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -1)
-	studyItem.command = commands.FocusChatInput
+	studyItem.command = commands.ShowChat
 	studyItem.name = "AI-Hydro study"
 	setStudyStatusSink((study) => {
 		if (!study) {
