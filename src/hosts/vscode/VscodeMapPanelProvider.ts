@@ -3,6 +3,8 @@ import * as os from "node:os"
 import * as path from "node:path"
 import type { Controller } from "@core/controller"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
+import { checkSaveTarget, loadPinsForProject, NO_FOLDER_KEY, quarantinePins, savePinsForProject } from "@core/project/pinStore"
+import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import axios from "axios"
 import * as vscode from "vscode"
@@ -248,6 +250,29 @@ export class VscodeMapPanelProvider {
 	public static initialize(context: vscode.ExtensionContext, controller: Controller) {
 		VscodeMapPanelProvider.context = context
 		VscodeMapPanelProvider.controller = controller
+	}
+
+	/** Pin bucket keys per workspace root. A lookup that fell back to `dir:` is retried, so a project that gets an id later is picked up. */
+	private static pinKeys = new Map<string, ProjectKey>()
+
+	/**
+	 * Which project's pins the map shows: the first workspace folder's project key (`prj_...` when the tools server knows
+	 * it, `dir:` otherwise), plus the folder's `dir:` key so a bucket saved before the project had an id can follow it.
+	 * With no folder open there is one shared "no folder" bucket.
+	 */
+	private static async pinProjectKeys(): Promise<{ key: ProjectKey; dirKey?: string }> {
+		const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+		if (!root) {
+			return { key: { key: NO_FOLDER_KEY, kind: "dir" } }
+		}
+		const cached = VscodeMapPanelProvider.pinKeys.get(root)
+		if (cached?.kind === "prj") {
+			return { key: cached, dirKey: await dirProjectKey(root) }
+		}
+		const hub = VscodeMapPanelProvider.controller?.mcpHub as unknown as ProjectKeyHub | undefined
+		const key = await getProjectKey(root, hub)
+		VscodeMapPanelProvider.pinKeys.set(root, key)
+		return { key, dirKey: await dirProjectKey(root) }
 	}
 
 	/** Returns true if the map panel is currently open (even if not visible). */
@@ -905,34 +930,66 @@ export class VscodeMapPanelProvider {
 					}
 					case "aihydro-map-save-annotations": {
 						try {
-							await VscodeMapPanelProvider.context.globalState.update(
-								"aihydro.map.annotations.v2",
-								message.annotations ?? [],
-							)
-							await VscodeMapPanelProvider.context.globalState.update(
-								"aihydro.map.annotation.collections.v1",
-								message.collections ?? [],
-							)
+							// The webview says which project it loaded. Write only there, and only while that key still
+							// belongs to the open folder; otherwise the folder changed under it, so it reloads instead.
+							const current = await VscodeMapPanelProvider.pinProjectKeys()
+							if (checkSaveTarget(message.projectKey, current) === "write") {
+								await savePinsForProject(
+									VscodeMapPanelProvider.context.globalState,
+									String(message.projectKey),
+									message.annotations,
+									message.collections,
+								)
+								// Tell the map what is now on disk, so it can let go of its own unsynced copies.
+								await postMessageToWebview({
+									type: "aihydro-map-save-ack",
+									projectKey: String(message.projectKey),
+									ids: (Array.isArray(message.annotations) ? message.annotations : [])
+										.map((a: { id?: unknown }) => a?.id)
+										.filter((id: unknown) => typeof id === "string"),
+								})
+							} else {
+								console.warn("[Map] Refused a pin save for a project that is not open; asking the map to reload")
+								await postMessageToWebview({ type: "aihydro-map-pins-reload" })
+							}
 						} catch (err) {
-							console.error("[Map] Failed to persist annotations to globalState:", err)
+							console.error("[Map] Failed to persist pins to globalState:", err)
+						}
+						break
+					}
+					case "aihydro-map-quarantine-pins": {
+						try {
+							const kept = await quarantinePins(
+								VscodeMapPanelProvider.context.globalState,
+								String(message.projectKey ?? ""),
+								message.entries,
+							)
+							if (kept > 0) {
+								console.warn(
+									`[Map] ${kept} unreadable pin(s) were set aside, not deleted (aihydro.map.pins.quarantine.v1)`,
+								)
+							}
+						} catch (err) {
+							console.error("[Map] Failed to quarantine pins:", err)
 						}
 						break
 					}
 					case "aihydro-map-load-annotations": {
 						const requestId = message.requestId ?? ""
 						try {
-							const annotations =
-								VscodeMapPanelProvider.context.globalState.get<unknown[]>("aihydro.map.annotations.v2") ?? []
-							const collections =
-								VscodeMapPanelProvider.context.globalState.get<unknown[]>(
-									"aihydro.map.annotation.collections.v1",
-								) ?? []
+							const { key, dirKey } = await VscodeMapPanelProvider.pinProjectKeys()
+							const loaded = await loadPinsForProject(VscodeMapPanelProvider.context.globalState, key, {
+								dirKey,
+								legacyLocal: message.legacyLocal,
+							})
 							await postMessageToWebview({
 								type: "aihydro-map-load-annotations-result",
 								requestId,
 								ok: true,
-								annotations,
-								collections,
+								projectKey: loaded.projectKey,
+								importedCount: loaded.importedCount,
+								annotations: loaded.annotations,
+								collections: loaded.collections,
 							})
 						} catch (err) {
 							await postMessageToWebview({

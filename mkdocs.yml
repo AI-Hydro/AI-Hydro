@@ -159,6 +159,7 @@ nav:
       - Overview: guide/map.md
       - Layers & Symbology: guide/map/layers.md
       - Draw & Measure: guide/map/draw-measure.md
+      - Pins: guide/map/pins.md
       - Smart Annotations: guide/map/annotations.md
       - Transect Profiles: guide/map/transects.md
       - Swipe Comparison: guide/map/swipe.md

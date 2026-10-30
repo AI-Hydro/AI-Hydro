@@ -2076,6 +2076,91 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
+		},
+		"map-pins-list": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-pin-card": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-pins-imported-banner": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-context-menu-empty": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-context-menu-pin": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
 		}
 	},
 	"subsets": {
@@ -3317,6 +3402,56 @@
 						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-pins-list": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-pin-card": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-pins-imported-banner": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-context-menu-empty": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-context-menu-pin": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6

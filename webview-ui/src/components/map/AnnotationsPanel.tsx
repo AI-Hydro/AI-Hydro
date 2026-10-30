@@ -16,9 +16,9 @@ import {
 } from "./annotationStorage"
 import { addToMyGallery } from "./galleryStorage"
 import { askAgentAboutAnnotation, askAgentAboutBatchAnnotations } from "./mapAgentBridge"
+import { MAP_Z } from "./mapZ"
 import { PhotoStrip } from "./PhotoStrip"
 import { pickImages } from "./resolveFileUri"
-import { MAP_Z } from "./mapZ"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -333,26 +333,8 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 						whiteSpace: "nowrap",
 						letterSpacing: "0.01em",
 					}}>
-					🏷️ Smart Annotations
+					Sketches &amp; tracker
 				</span>
-				<button
-					onClick={() => {
-						setAgentError(null)
-						onStartDrawing("point")
-					}}
-					style={{
-						fontSize: 10,
-						padding: "2px 7px",
-						background: "transparent",
-						color: fg,
-						border: `1px solid ${border}`,
-						borderRadius: 4,
-						cursor: "pointer",
-					}}
-					title="Drop a pin marker"
-					type="button">
-					📍 Pin
-				</button>
 				<button
 					onClick={() => {
 						setAgentError(null)
@@ -442,7 +424,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 							cursor: annotations.length > 0 ? "pointer" : "default",
 							opacity: annotations.length > 0 ? 1 : 0.4,
 						}}
-						title="Export annotations"
+						title="Export sketches"
 						type="button">
 						⬇ Export ▾
 					</button>
@@ -766,8 +748,8 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 			{filteredAnnotations.length === 0 ? (
 				<div style={{ fontSize: 10, opacity: 0.5, fontStyle: "italic", padding: "8px 0" }}>
 					{annotations.length === 0
-						? "No annotations yet — click 📍 Pin, ⬠ Poly, or 〰 Line to add one."
-						: "No annotations match your filter."}
+						? "No sketches yet — click ⬠ Poly or 〰 Line to draw one."
+						: "No sketches match your filter."}
 				</div>
 			) : (
 				<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

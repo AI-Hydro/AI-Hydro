@@ -1,6 +1,11 @@
 /**
  * annotationStorage.ts  (v2)
- * Persistent storage for Smart Map Annotations + named Collections (localStorage).
+ * Persistent storage for map pins (type "point"), sketched lines/areas and named Collections.
+ *
+ * Pins are scoped to the project (X1-M2): the extension host owns the per-project buckets, and this module keeps a
+ * localStorage copy under `aihydro.map.pins.v3:<projectKey>` as a fast cache. Until the host has said which project
+ * this is, and when there is no host at all (a plain browser, tests), the old unscoped `aihydro.map.annotations.v2`
+ * list is used, exactly as before. Once a project key is known the unscoped list is never written again.
  *
  * v2 changes vs v1:
  *  - `comment`  → split into `notes` (personal) and `aiPrompt` (agent instruction)
@@ -10,10 +15,13 @@
  */
 
 import { extractPhotoPaths } from "./photoPaths"
+import { nextDefaultName, sanitizeAnnotations } from "./pins"
 
 // ─── Storage keys ────────────────────────────────────────────────────────────
 const ANNOTATIONS_KEY = "aihydro.map.annotations.v2"
 const ANNOTATIONS_V1_KEY = "aihydro.map.annotations.v1"
+const PINS_CACHE_PREFIX = "aihydro.map.pins.v3:"
+const COLLECTIONS_CACHE_PREFIX = "aihydro.map.collections.v2:"
 const COLLECTIONS_KEY = "aihydro.map.annotation.collections.v1"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -53,6 +61,12 @@ export interface MapAnnotation {
 
 	status: AnnotationStatus
 	priority: AnnotationPriority | null
+
+	/** Carried over from the pre-project global list; the Pins panel offers "Keep / Clear all" for these once. */
+	imported?: boolean
+
+	/** Saved while no project was known (the host had not answered): the host's list does not have it yet. */
+	pendingSync?: boolean
 
 	createdAt: string
 	updatedAt: string
@@ -120,30 +134,164 @@ function migrateV1toV2(v1: V1Annotation): MapAnnotation {
 
 // ─── Annotation CRUD ─────────────────────────────────────────────────────────
 
-export function loadAnnotations(): MapAnnotation[] {
+/** The project the map is showing, once the host has said. Null: unscoped (no host, or it has not answered yet). */
+let activeProjectKey: string | null = null
+
+export function setActiveProjectKey(key: string | null): void {
+	activeProjectKey = key
+}
+
+export function getActiveProjectKey(): string | null {
+	return activeProjectKey
+}
+
+function readList(key: string): unknown {
+	const raw = localStorage.getItem(key)
+	return raw ? JSON.parse(raw) : null
+}
+
+/** What `loadAnnotations` found, with how many entries were dropped or renamed on the way in. */
+export interface LoadedAnnotations {
+	annotations: MapAnnotation[]
+	dropped: number
+	/** The dropped entries, verbatim (see `postQuarantine`). */
+	quarantined: unknown[]
+	renamed: number
+}
+
+export function loadAnnotationsReport(projectKey: string | null = activeProjectKey): LoadedAnnotations {
 	try {
-		// Try v2 store first
-		const raw = localStorage.getItem(ANNOTATIONS_KEY)
-		if (raw) {
-			return (JSON.parse(raw) as MapAnnotation[]).map((a) => (Array.isArray(a.images) ? a : { ...a, images: [] }))
+		if (projectKey) {
+			return sanitizeAnnotations(readList(PINS_CACHE_PREFIX + projectKey))
 		}
-		// Fall back to v1 and migrate
-		const rawV1 = localStorage.getItem(ANNOTATIONS_V1_KEY)
-		if (rawV1) {
-			const v1List = JSON.parse(rawV1) as V1Annotation[]
-			const migrated = v1List.map(migrateV1toV2)
-			saveAnnotations(migrated)
+		// Unscoped: v2 first, then v1 (migrated and saved as v2).
+		const v2 = readList(ANNOTATIONS_KEY)
+		if (v2) {
+			return sanitizeAnnotations(v2)
+		}
+		const v1 = readList(ANNOTATIONS_V1_KEY) as V1Annotation[] | null
+		if (Array.isArray(v1)) {
+			const migrated = sanitizeAnnotations(v1.map(migrateV1toV2))
+			saveAnnotations(migrated.annotations)
 			return migrated
 		}
-		return []
+		return { annotations: [], dropped: 0, quarantined: [], renamed: 0 }
 	} catch {
-		return []
+		return { annotations: [], dropped: 0, quarantined: [], renamed: 0 }
 	}
 }
 
-export function saveAnnotations(annotations: MapAnnotation[], collections?: AnnotationCollection[]): void {
+export function loadAnnotations(projectKey: string | null = activeProjectKey): MapAnnotation[] {
+	return loadAnnotationsReport(projectKey).annotations
+}
+
+/** The unscoped list as stored, for the host to adopt when it never held a copy. Null when there is none. */
+export function readLegacyLocal(): unknown {
 	try {
-		localStorage.setItem(ANNOTATIONS_KEY, JSON.stringify(annotations))
+		return readList(ANNOTATIONS_KEY)
+	} catch {
+		return null
+	}
+}
+
+/**
+ * The host has said which project this is. From now on the cache is that project's. `hostIds` are the ids the host's own
+ * list holds (default: all of `annotations`). The unscoped list keeps every entry the host does not hold: another
+ * project's old global pins, and, marked `pendingSync`, pins that are the user's but not on the host yet. Those are
+ * released only by `acknowledgeSaved`, once the host has persisted them, so a window that closes (or a save the host
+ * refuses) before then loses nothing: the next session starts from the unscoped list and carries them.
+ */
+export function adoptHostPins(
+	projectKey: string,
+	annotations: MapAnnotation[],
+	collections: AnnotationCollection[] = [],
+	hostIds?: Iterable<string>,
+): void {
+	activeProjectKey = projectKey
+	const held = new Set(hostIds ?? annotations.map((a) => a.id))
+	for (const id of held) {
+		unsyncedIds.delete(id)
+	}
+	try {
+		localStorage.setItem(PINS_CACHE_PREFIX + projectKey, JSON.stringify(annotations))
+		localStorage.setItem(COLLECTIONS_CACHE_PREFIX + projectKey, JSON.stringify(collections))
+		releaseFromUnscoped(held)
+	} catch {
+		/* ignore */
+	}
+}
+
+/** Drop the entries with these ids from the unscoped list; remove the key when nothing is left. */
+function releaseFromUnscoped(ids: ReadonlySet<string>): void {
+	const stored = readList(ANNOTATIONS_KEY)
+	if (!Array.isArray(stored)) {
+		return
+	}
+	const keep = stored.filter((e) => !ids.has((e as { id?: string })?.id as string))
+	if (keep.length === 0) {
+		localStorage.removeItem(ANNOTATIONS_KEY)
+	} else if (keep.length !== stored.length) {
+		localStorage.setItem(ANNOTATIONS_KEY, JSON.stringify(keep))
+	}
+}
+
+/** The host says it has persisted these pins for `projectKey`: the unscoped copies (and their marks) can go. */
+export function acknowledgeSaved(projectKey: unknown, ids: unknown): void {
+	if (projectKey !== activeProjectKey || !Array.isArray(ids)) {
+		return
+	}
+	const acked = new Set(ids.filter((id): id is string => typeof id === "string"))
+	for (const id of acked) {
+		unsyncedIds.delete(id)
+	}
+	try {
+		releaseFromUnscoped(acked)
+	} catch {
+		/* ignore */
+	}
+}
+
+/** Ids this session first saved without a project key: they stay marked `pendingSync` until the host has them. */
+const unsyncedIds = new Set<string>()
+
+/** True when a save was made while no project was known; it is sent once the key is. */
+let pendingHostSave = false
+
+/** Whether a save is waiting for the project key. Reading it clears it: the caller sends that save now. */
+export function takePendingHostSave(): boolean {
+	const was = pendingHostSave
+	pendingHostSave = false
+	return was
+}
+
+export function saveAnnotations(annotations: MapAnnotation[], collections?: AnnotationCollection[]): void {
+	if (!activeProjectKey) {
+		// Unscoped: mark what the host has never seen, so a later session can still tell it from the old global list.
+		// A pin stays marked on every later unscoped save (a rename, a second pin): by its stored mark, or because this
+		// session first saved it without a key. The mark goes only when the host has taken the pin (adoptHostPins).
+		let stored = new Map<string, boolean>()
+		try {
+			const list = readList(ANNOTATIONS_KEY)
+			if (Array.isArray(list)) {
+				stored = new Map(
+					list.map((e) => [(e as { id?: string })?.id as string, Boolean((e as MapAnnotation)?.pendingSync)]),
+				)
+			}
+		} catch {
+			/* start from nothing */
+		}
+		annotations = annotations.map((a) => {
+			if (!stored.has(a.id)) {
+				unsyncedIds.add(a.id)
+			}
+			return a.pendingSync || stored.get(a.id) || unsyncedIds.has(a.id) ? { ...a, pendingSync: true } : a
+		})
+	}
+	try {
+		localStorage.setItem(
+			activeProjectKey ? PINS_CACHE_PREFIX + activeProjectKey : ANNOTATIONS_KEY,
+			JSON.stringify(annotations),
+		)
 	} catch {
 		/* ignore */
 	}
@@ -156,15 +304,15 @@ export function saveAnnotations(annotations: MapAnnotation[], collections?: Anno
 export function newAnnotation(
 	type: MapAnnotation["type"],
 	geometry: MapAnnotation["geometry"],
-	existingCount: number,
+	existing: MapAnnotation[],
 ): MapAnnotation {
 	const now = new Date().toISOString()
 	return {
 		id: `ann_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-		name: `Annotation ${existingCount + 1}`,
+		name: nextDefaultName(existing, type),
 		notes: "",
 		aiPrompt: "",
-		color: PRESET_COLORS[existingCount % PRESET_COLORS.length],
+		color: PRESET_COLORS[existing.length % PRESET_COLORS.length],
 		type,
 		geometry,
 		tags: [],
@@ -244,7 +392,8 @@ export function seedAnnotationsFromGeoJson(
 
 export function loadCollections(): AnnotationCollection[] {
 	try {
-		const raw = localStorage.getItem(COLLECTIONS_KEY)
+		// Collections belong to the project, like the pins they group.
+		const raw = localStorage.getItem(activeProjectKey ? COLLECTIONS_CACHE_PREFIX + activeProjectKey : COLLECTIONS_KEY)
 		return raw ? (JSON.parse(raw) as AnnotationCollection[]) : []
 	} catch {
 		return []
@@ -253,7 +402,10 @@ export function loadCollections(): AnnotationCollection[] {
 
 export function saveCollections(collections: AnnotationCollection[]): void {
 	try {
-		localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections))
+		localStorage.setItem(
+			activeProjectKey ? COLLECTIONS_CACHE_PREFIX + activeProjectKey : COLLECTIONS_KEY,
+			JSON.stringify(collections),
+		)
 	} catch {
 		/* ignore */
 	}
@@ -456,12 +608,26 @@ const HOST_SAVE_TYPE = "aihydro-map-save-annotations"
 const HOST_LOAD_TYPE = "aihydro-map-load-annotations"
 const HOST_LOAD_RESULT_TYPE = "aihydro-map-load-annotations-result"
 
+/**
+ * How long to wait for the host's answer before trying again. The host's project-key lookup can itself take up to 5 s
+ * (the tools server being slow), so this must be longer, or a slow lookup looks like "no host".
+ */
+export const HOST_LOAD_TIMEOUT_MS = 9_000
+
 /** Fire-and-forget: persist annotations + collections to the extension host. */
 export async function saveAnnotationsToHost(annotations: MapAnnotation[], collections: AnnotationCollection[]): Promise<void> {
+	// Until the host has said which project this is there is nothing to save to: the host writes only to the key the
+	// webview loaded, so an unscoped save would be refused. The list is merged and saved when the host answers.
+	const projectKey = activeProjectKey
+	if (!projectKey) {
+		pendingHostSave = true
+		return
+	}
 	try {
 		const { PLATFORM_CONFIG } = await import("../../config/platform.config")
 		PLATFORM_CONFIG.postMessage({
 			type: HOST_SAVE_TYPE,
+			projectKey,
 			annotations,
 			collections,
 		})
@@ -470,33 +636,70 @@ export async function saveAnnotationsToHost(annotations: MapAnnotation[], collec
 	}
 }
 
-/** Ask the host for the saved annotation set. Returns null if unavailable or timed out. */
-export async function loadAnnotationsFromHost(): Promise<{
+/** Hand entries that could not be read to the host to keep (it never deletes them), and say so in the console. */
+export async function postQuarantine(projectKey: string | null, entries: unknown[]): Promise<void> {
+	if (entries.length === 0) {
+		return
+	}
+	console.warn(`[map] ${entries.length} stored pin(s) could not be read; they were set aside, not deleted`)
+	try {
+		const { PLATFORM_CONFIG } = await import("../../config/platform.config")
+		PLATFORM_CONFIG.postMessage({ type: "aihydro-map-quarantine-pins", projectKey, entries })
+	} catch {
+		/* no-op outside VS Code */
+	}
+}
+
+export interface HostPins {
+	/** The project the host scoped these to. */
+	projectKey: string
 	annotations: MapAnnotation[]
 	collections: AnnotationCollection[]
-} | null> {
+	/** Entries of the pre-project list handed to this project by this very call (0 afterwards). */
+	importedCount: number
+	/** Entries dropped as malformed, and default names migrated. */
+	dropped: number
+	/** The dropped entries, verbatim. */
+	quarantined: unknown[]
+	renamed: number
+}
+
+/**
+ * Ask the host for this project's pins. Returns null if there is no host, it failed or it timed out; the caller then
+ * keeps the unscoped local list. The unscoped local list is sent along so the host can hand it to the first project
+ * when it never held a copy itself.
+ */
+export async function loadAnnotationsFromHost(legacyLocal?: unknown): Promise<HostPins | null> {
 	return new Promise(async (resolve) => {
 		const requestId = `ann-load-${Date.now()}`
 		const timeoutId = window.setTimeout(() => {
 			window.removeEventListener("message", handler)
 			resolve(null)
-		}, 3_000)
+		}, HOST_LOAD_TIMEOUT_MS)
 
 		const handler = (event: MessageEvent) => {
 			const data = event.data as {
 				type?: string
 				requestId?: string
 				ok?: boolean
+				projectKey?: unknown
+				importedCount?: unknown
 				annotations?: unknown
 				collections?: unknown
 			}
 			if (data?.type === HOST_LOAD_RESULT_TYPE && data.requestId === requestId) {
 				window.clearTimeout(timeoutId)
 				window.removeEventListener("message", handler)
-				if (data.ok) {
+				if (data.ok && typeof data.projectKey === "string") {
+					const clean = sanitizeAnnotations(data.annotations)
 					resolve({
-						annotations: (data.annotations as MapAnnotation[]) ?? [],
-						collections: (data.collections as AnnotationCollection[]) ?? [],
+						projectKey: data.projectKey,
+						annotations: clean.annotations,
+						collections: Array.isArray(data.collections) ? (data.collections as AnnotationCollection[]) : [],
+						importedCount: typeof data.importedCount === "number" ? data.importedCount : 0,
+						dropped: clean.dropped,
+						quarantined: clean.quarantined,
+						renamed: clean.renamed,
 					})
 				} else {
 					resolve(null)
@@ -507,7 +710,7 @@ export async function loadAnnotationsFromHost(): Promise<{
 
 		try {
 			const { PLATFORM_CONFIG } = await import("../../config/platform.config")
-			PLATFORM_CONFIG.postMessage({ type: HOST_LOAD_TYPE, requestId })
+			PLATFORM_CONFIG.postMessage({ type: HOST_LOAD_TYPE, requestId, legacyLocal })
 		} catch {
 			window.clearTimeout(timeoutId)
 			window.removeEventListener("message", handler)

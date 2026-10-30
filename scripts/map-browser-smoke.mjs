@@ -52,7 +52,7 @@ const server = await createServer({
 			},
 			load(id) {
 				if (id === "\0smoke-grpc")
-					return `const client = new Proxy({}, {get: (_, name) => name === "prepareMapExport" ? async () => ({accepted: true, basePath: "/synthetic-smoke-no-disk-write"}) : name === "saveMapExport" ? async request => {window.__savedMapExport = request; return {ok: true, outputs: []}} : name.startsWith("subscribe") ? () => () => {} : async () => ({})}); ${clients.map((name) => `export const ${name} = client;`).join("\n")}`
+					return `const client = new Proxy({}, {get: (_, name) => name === "prepareMapExport" ? async () => ({accepted: true, basePath: "/synthetic-smoke-no-disk-write"}) : name === "saveMapExport" ? async request => {window.__savedMapExport = request; return {ok: true, outputs: []}} : name.startsWith("subscribe") ? () => () => {} : async request => {if (name === "reportMapEvent") (window.__mapEvents ??= []).push(request?.event?.type); return {}}}); ${clients.map((name) => `export const ${name} = client;`).join("\n")}`
 				if (id === "\0smoke-context")
 					return `const state = {layers: ${JSON.stringify(fixture)}, connectionStatus: "connected", restoreState: {hydrating: false, olderCount: 0}, restoreOlderLayers: async () => 0, reconnect: () => {}}; export const useMapContext = () => state;`
 				if (id === "\0smoke-entry")
@@ -355,6 +355,86 @@ try {
 	assert.equal(manifest.visibleLayers[0].metadata.source_status, "synthetic")
 	assert.ok(manifest.warnings.some((warning) => warning.code === "RENDER_COMPLETENESS_UNVERIFIED"))
 	assert.deepEqual(errors, [])
+	// MP2 (X1-M2): double-click zooms the map and creates no pin; the P tool places one, which gets a card, can be
+	// deleted with the Delete key and brought back with Undo; the context menu offers one "Add pin".
+	await page.keyboard.press("Escape")
+	await page
+		.getByRole("dialog")
+		.waitFor({ state: "detached", timeout: 10000 })
+		.catch(() => {})
+	const pointCount = () =>
+		page.evaluate(
+			() => JSON.parse(localStorage.getItem("aihydro.map.annotations.v2") ?? "[]").filter((a) => a.type === "point").length,
+		)
+	const pinNames = () =>
+		page.evaluate(() => JSON.parse(localStorage.getItem("aihydro.map.annotations.v2") ?? "[]").map((a) => a.name))
+	const mapZoom = async () => {
+		await page.mouse.move(1099, 749) // off the canvas: the readout falls back to the zoom
+		await page.waitForFunction(() => /^z /.test(document.querySelector(".map-coords-btn")?.textContent ?? ""), null, {
+			timeout: 5000,
+		})
+		return Number((await page.locator(".map-coords-btn").textContent()).replace("z ", ""))
+	}
+	for (let i = 0; i < 8; i++) await page.getByRole("button", { name: "Zoom out", exact: true }).click()
+	await page.waitForTimeout(800)
+	const box = await page.locator("canvas#ai-hydro-research-map").boundingBox()
+	const centre = { x: box.x + box.width / 2 - 60, y: box.y + box.height / 2 + 80 }
+	const pinsBefore = await pointCount()
+	const zoomBefore = await mapZoom()
+	const inspectBefore = (await page.evaluate(() => window.__mapEvents ?? [])).filter((t) => t === "inspect.click").length
+	await page.mouse.dblclick(centre.x, centre.y)
+	// The zoom animates; on a slow machine it takes longer, so wait for it to settle instead of for a fixed time.
+	let zoomAfter = await mapZoom()
+	for (let i = 0; i < 40 && zoomAfter - zoomBefore <= 0.5; i++) {
+		await page.waitForTimeout(250)
+		zoomAfter = await mapZoom()
+	}
+	await page.waitForTimeout(500)
+	zoomAfter = await mapZoom()
+	const inspectAfter = (await page.evaluate(() => window.__mapEvents ?? [])).filter((t) => t === "inspect.click").length
+	assert.equal(await pointCount(), pinsBefore, "double-click must not create a pin")
+	assert.ok(zoomAfter - zoomBefore > 0.5, `double-click should zoom in: ${zoomBefore} -> ${zoomAfter}`)
+	assert.ok(inspectAfter - inspectBefore <= 1, `double-click emitted ${inspectAfter - inspectBefore} inspect.click events`)
+	console.log(JSON.stringify({ doubleClick: { zoomBefore, zoomAfter, inspectClicks: inspectAfter - inspectBefore } }))
+	await page.keyboard.press("Escape") // close any identify popover the first click opened
+	// P, then click: one pin, with its card and the name field focused.
+	await page.keyboard.press("p")
+	await page.getByText("Pin tool: click the map", { exact: false }).waitFor({ timeout: 5000 })
+	await page.mouse.click(box.x + 200, box.y + 200)
+	const card = page.getByTestId("pin-card")
+	await card.waitFor({ timeout: 5000 })
+	assert.equal(await pointCount(), pinsBefore + 1)
+	assert.equal(await page.getByLabel("Pin name").evaluate((el) => el === document.activeElement), true, "name is focused")
+	await page.getByLabel("Pin name").fill("Test dam")
+	await page.keyboard.press("Enter")
+	await page.waitForFunction(() =>
+		JSON.parse(localStorage.getItem("aihydro.map.annotations.v2") ?? "[]").some((a) => a.name === "Test dam"),
+	)
+	assert.equal(await page.getByText("__annotations-overlay", { exact: false }).count(), 0, "internal layer id is shown")
+	// Delete with the key, then Undo from the toast: the pin returns with its name.
+	await page.keyboard.press("Delete")
+	await page.waitForFunction(
+		() => !JSON.parse(localStorage.getItem("aihydro.map.annotations.v2") ?? "[]").some((a) => a.name === "Test dam"),
+	)
+	assert.equal(await pointCount(), pinsBefore)
+	await page.getByRole("button", { name: "Undo", exact: true }).click()
+	await page.waitForFunction(() =>
+		JSON.parse(localStorage.getItem("aihydro.map.annotations.v2") ?? "[]").some((a) => a.name === "Test dam"),
+	)
+	assert.equal(await pointCount(), pinsBefore + 1)
+	await page.keyboard.press("Escape") // the pin tool stays armed until Esc
+	await page.keyboard.press("Escape") // then the card
+	// Right-click on empty map: one "Add pin", no "Drop pin" or "Add annotation".
+	await page.mouse.click(box.x + 20, box.y + 20, { button: "right" })
+	const menu = page.getByRole("menu", { name: "Map actions" })
+	await menu.waitFor({ timeout: 5000 })
+	const items = await menu.getByRole("menuitem").allTextContents()
+	assert.equal(items.filter((t) => /pin/i.test(t)).length, 1, `menu items: ${items.join(" | ")}`)
+	assert.equal(items.filter((t) => /annotation|drop pin/i.test(t)).length, 0)
+	await menu.getByRole("menuitem", { name: "Add pin" }).click()
+	await card.waitFor({ timeout: 5000 })
+	assert.equal(await pointCount(), pinsBefore + 2)
+	assert.deepEqual(errors, [])
 	await page.screenshot({ path: "/tmp/aihydro-map-smoke.png" })
 	console.log(
 		JSON.stringify({
@@ -369,6 +449,7 @@ try {
 				"rendered station pixels",
 				"readable canvas",
 				"PNG composition and provenance bridge",
+				"double-click zooms and creates no pin; P, click, card, Delete, Undo; one Add pin in the context menu",
 				"no uncaught browser errors",
 			],
 			fixture: "synthetic, host/network mocked",

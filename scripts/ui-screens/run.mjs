@@ -307,6 +307,16 @@ async function worker() {
 							.locator(step.click)
 							.nth(step.nth ?? 0)
 							.click({ timeout: 20000 })
+					} else if (step.contextClick) {
+						// A right-click (the map's context menu), optionally at an offset inside the element.
+						await page
+							.locator(step.contextClick)
+							.first()
+							.click({
+								button: "right",
+								timeout: 20000,
+								...(step.at ? { position: { x: step.at[0], y: step.at[1] } } : {}),
+							})
 					} else if (step.scrollEnd)
 						// Virtualised lists re-measure items after each scroll; iterate until scrollTop/scrollHeight stop moving.
 						await page
