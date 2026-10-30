@@ -10,7 +10,15 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { FileServiceClient } from "@/services/grpc-client"
 import RulesToggleList from "./RulesToggleList"
 
-const AiHydroRulesToggleModal: React.FC = () => {
+interface AiHydroRulesToggleModalProps {
+	/** Controlled open state. When given, the modal renders no trigger of its own (the composer's Add menu opens it). */
+	open?: boolean
+	onOpenChange?: (open: boolean) => void
+	/** The control the panel points at when it has no trigger of its own. */
+	anchorRef?: React.RefObject<HTMLElement>
+}
+
+const AiHydroRulesToggleModal: React.FC<AiHydroRulesToggleModalProps> = ({ open, onOpenChange, anchorRef }) => {
 	const {
 		globalAiHydroRulesToggles = {},
 		localAiHydroRulesToggles = {},
@@ -21,7 +29,10 @@ const AiHydroRulesToggleModal: React.FC = () => {
 		setLocalWorkflowToggles,
 		setGlobalWorkflowToggles,
 	} = useExtensionState()
-	const [isVisible, setIsVisible] = useState(false)
+	const [internalVisible, setInternalVisible] = useState(false)
+	const controlled = open !== undefined
+	const isVisible = controlled ? open : internalVisible
+	const setIsVisible = (v: boolean) => (controlled ? onOpenChange?.(v) : setInternalVisible(v))
 	const buttonRef = useRef<HTMLDivElement>(null)
 	const modalRef = useRef<HTMLDivElement>(null)
 	const { width: viewportWidth, height: viewportHeight } = useWindowSize()
@@ -123,8 +134,9 @@ const AiHydroRulesToggleModal: React.FC = () => {
 
 	// Calculate positions for modal and arrow
 	useEffect(() => {
-		if (isVisible && buttonRef.current) {
-			const buttonRect = buttonRef.current.getBoundingClientRect()
+		const anchor = anchorRef?.current ?? buttonRef.current
+		if (isVisible && anchor) {
+			const buttonRect = anchor.getBoundingClientRect()
 			const buttonCenter = buttonRect.left + buttonRect.width / 2
 			const rightPosition = document.documentElement.clientWidth - buttonCenter - 5
 
@@ -135,22 +147,24 @@ const AiHydroRulesToggleModal: React.FC = () => {
 
 	return (
 		<div ref={modalRef}>
-			<div className="inline-flex min-w-0 max-w-full" ref={buttonRef}>
-				<Tooltip tipText="Manage AI-Hydro Rules & Workflows" visible={isVisible ? false : undefined}>
-					<VSCodeButton
-						appearance="icon"
-						aria-label={isVisible ? "Hide AI-Hydro Rules & Workflows" : "Show AI-Hydro Rules & Workflows"}
-						onClick={() => setIsVisible(!isVisible)}
-						style={{ padding: "0px 0px", height: "20px" }}>
-						<div className="flex items-center gap-1 text-xs whitespace-nowrap min-w-0 w-full">
-							<span
-								className="codicon codicon-law flex items-center"
-								style={{ fontSize: "12.5px", marginBottom: 1 }}
-							/>
-						</div>
-					</VSCodeButton>
-				</Tooltip>
-			</div>
+			{!controlled && (
+				<div className="inline-flex min-w-0 max-w-full" ref={buttonRef}>
+					<Tooltip tipText="Manage AI-Hydro Rules & Workflows" visible={isVisible ? false : undefined}>
+						<VSCodeButton
+							appearance="icon"
+							aria-label={isVisible ? "Hide AI-Hydro Rules & Workflows" : "Show AI-Hydro Rules & Workflows"}
+							onClick={() => setIsVisible(!isVisible)}
+							style={{ padding: "0px 0px", height: "20px" }}>
+							<div className="flex items-center gap-1 text-xs whitespace-nowrap min-w-0 w-full">
+								<span
+									className="codicon codicon-law flex items-center"
+									style={{ fontSize: "12.5px", marginBottom: 1 }}
+								/>
+							</div>
+						</VSCodeButton>
+					</Tooltip>
+				</div>
+			)}
 
 			{isVisible && (
 				<div

@@ -78,10 +78,10 @@ describe("ActionButtons scroll-to-bottom", () => {
 		expect(screen.queryByRole("button", { name: /Scroll to/ })).toBeNull()
 	})
 
-	it("Start New Task still renders when scrolled up, with the plain scroll button", () => {
+	it("New chat still renders when scrolled up, with the plain scroll button", () => {
 		const done: AiHydroMessage = { ts: 1, type: "ask", ask: "completion_result", text: "done" }
 		renderButtons(done, true)
-		expect(screen.getByText("Start New Task")).toBeTruthy()
+		expect(screen.getByText("New chat")).toBeTruthy()
 		expect(screen.getByTestId("footer-actions")).toBeTruthy()
 		expect(screen.getByRole("button", { name: "Scroll to bottom" })).toBeTruthy()
 	})
@@ -90,5 +90,25 @@ describe("ActionButtons scroll-to-bottom", () => {
 		const done: AiHydroMessage = { ts: 1, type: "ask", ask: "completion_result", text: "done" }
 		renderButtons(done, false)
 		expect(screen.queryByRole("button", { name: "Scroll to bottom" })).toBeNull()
+	})
+
+	it("a finished task offers a modest secondary New chat button, not a full-width bar, and routes through new_task", () => {
+		const done: AiHydroMessage = { ts: 1, type: "ask", ask: "completion_result", text: "done" }
+		renderButtons(done, false)
+		const button = screen.getByTestId("new-chat-button")
+		expect(button.className).toContain("aih-btn")
+		expect(button.className).not.toContain("aih-btn--primary")
+		expect(screen.getByTestId("footer-actions").className).toContain("aih-footer-action")
+		fireEvent.click(button)
+		// The host's clearTask asks before it stops a running chat; the button only requests new_task.
+		expect(executeButtonAction).toHaveBeenCalledWith("new_task", "", [], [])
+	})
+
+	it("keeps both buttons, Retry and New chat, when a request failed", () => {
+		const failed: AiHydroMessage = { ts: 1, type: "ask", ask: "api_req_failed", text: "boom" }
+		renderButtons(failed, false)
+		expect(screen.getByText("Retry")).toBeTruthy()
+		expect(screen.getByText("New chat")).toBeTruthy()
+		expect(screen.queryByTestId("new-chat-button")).toBeNull()
 	})
 })

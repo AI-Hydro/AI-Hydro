@@ -6,8 +6,6 @@ import { UpdateApiConfigurationRequest } from "@shared/proto/cline/models"
 import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/cline/state"
 import { convertApiConfigurationToProto } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { Mode } from "@shared/storage/types"
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import { AtSignIcon, PlusIcon } from "lucide-react"
 import type React from "react"
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
@@ -48,8 +46,9 @@ import {
 } from "@/utils/slash-commands"
 import { validateApiConfiguration, validateModelId } from "@/utils/validate"
 import AiHydroRulesToggleModal from "../aihydro-rules/AiHydroRulesToggleModal"
+import { AddMenu } from "./composer/AddMenu"
 import { ACT_MODE_COLOR, PLAN_MODE_COLOR, PlanActSwitch } from "./PlanActSwitch"
-import ServersToggleModal from "./ServersToggleModal"
+import "./composer/composer.css"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
 
@@ -113,16 +112,6 @@ const ButtonGroup = styled.div`
 	gap: 4px;
 	flex: 1;
 	min-width: 0;
-`
-
-const ButtonContainer = styled.div`
-	display: flex;
-	align-items: center;
-	gap: 3px;
-	font-size: 11px;
-	white-space: nowrap;
-	min-width: 0;
-	width: 100%;
 `
 
 const ModelSelectorTooltip = styled.div<ModelSelectorTooltipProps>`
@@ -1136,6 +1125,12 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		})
 
 		// Get model display name
+		const [rulesOpen, setRulesOpen] = useState(false)
+		const addButtonRef = useRef<HTMLButtonElement>(null)
+		// Send needs something to send. Nothing else changes: an empty submit was already a no-op in handleSendMessage.
+		const hasDraft = inputValue.trim().length > 0 || selectedImages.length > 0 || selectedFiles.length > 0
+		const sendDisabled = sendingDisabled || !hasDraft
+
 		const modelDisplayName = useMemo(() => {
 			const { selectedProvider, selectedModelId } = normalizeApiConfiguration(apiConfiguration, mode)
 			const { vsCodeLmModelSelector, togetherModelId, lmStudioModelId, ollamaModelId, liteLlmModelId, requestyModelId } =
@@ -1590,34 +1585,30 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								<button
 									aria-busy={isStopping}
 									aria-label={isStopping ? "Stopping…" : "Stop task"}
-									className="flex items-center justify-center w-[28px] h-[28px] rounded-md cursor-pointer border border-[var(--vscode-editorGroup-border)] bg-transparent text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)] disabled:opacity-50 disabled:cursor-not-allowed"
+									className="aih-send"
 									data-testid="stop-button"
 									disabled={isStopping}
 									onClick={() => onStop?.()}
 									title={isStopping ? "Stopping…" : "Stop task (Esc)"}
 									type="button">
-									<span aria-hidden="true" className="codicon codicon-debug-stop text-sm" />
+									<span aria-hidden="true" className="codicon codicon-debug-stop" />
 								</button>
 							)}
 							{!isTaskRunning && (
 								<button
 									aria-label="Send message"
-									className={cn(
-										"flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200",
-										sendingDisabled
-											? "opacity-40 cursor-not-allowed text-[var(--vscode-descriptionForeground)]"
-											: "cursor-pointer text-white bg-gradient-to-br from-aihydro-ocean-blue to-aihydro-teal hover:shadow-lg hover:shadow-aihydro-ocean-blue/20 hover:scale-105 active:scale-95",
-									)}
+									className="aih-send"
 									data-testid="send-button"
-									disabled={sendingDisabled}
+									disabled={sendDisabled}
 									onClick={() => {
-										if (!sendingDisabled) {
+										if (!sendDisabled) {
 											setIsTextAreaFocused(false)
 											onSend()
 										}
 									}}
-									title={sendTitle}>
-									<span className="codicon codicon-send text-sm" />
+									title={sendTitle ?? (hasDraft ? "Send" : "Type a message to send")}
+									type="button">
+									<span aria-hidden="true" className="codicon codicon-send" />
 								</button>
 							)}
 						</div>
@@ -1628,38 +1619,17 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					<div className="relative flex-1 min-w-0 h-6">
 						{/* ButtonGroup - always in DOM but visibility controlled */}
 						<ButtonGroup className="absolute top-0 left-0 right-0 ease-in-out w-full h-6 z-10 flex items-center">
-							<Tooltip style={{ left: 0 }} tipText="Add Context">
-								<VSCodeButton
-									appearance="icon"
-									aria-label="Add Context"
-									className="p-0 m-0 flex items-center"
-									data-testid="context-button"
-									onClick={handleContextButtonClick}>
-									<ButtonContainer>
-										<AtSignIcon size={12} />
-									</ButtonContainer>
-								</VSCodeButton>
-							</Tooltip>
-
-							<Tooltip tipText="Add Files & Images">
-								<VSCodeButton
-									appearance="icon"
-									aria-label="Add Files & Images"
-									className="p-0 m-0 flex items-center"
-									data-testid="files-button"
-									disabled={shouldDisableFilesAndImages}
-									onClick={() => {
-										if (!shouldDisableFilesAndImages) {
-											onSelectFilesAndImages()
-										}
-									}}>
-									<ButtonContainer>
-										<PlusIcon size={13} />
-									</ButtonContainer>
-								</VSCodeButton>
-							</Tooltip>
-							<ServersToggleModal />
-							<AiHydroRulesToggleModal />
+							<AddMenu
+								attachDisabled={shouldDisableFilesAndImages}
+								onAddContext={handleContextButtonClick}
+								onAttach={() => {
+									if (!shouldDisableFilesAndImages) {
+										onSelectFilesAndImages()
+									}
+								}}
+								onOpenRules={() => setRulesOpen(true)}
+								triggerRef={addButtonRef}
+							/>
 							<ModelContainer ref={modelSelectorRef}>
 								<ModelButtonWrapper ref={buttonRef}>
 									<ModelDisplayButton
@@ -1693,6 +1663,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								)}
 							</ModelContainer>
 						</ButtonGroup>
+						<AiHydroRulesToggleModal anchorRef={addButtonRef} onOpenChange={setRulesOpen} open={rulesOpen} />
 					</div>
 					{/* Tooltip for Plan/Act toggle remains outside the conditional rendering */}
 					<Tooltip
