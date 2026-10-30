@@ -184,12 +184,14 @@ describe("send button and the Add menu", () => {
 		expect(screen.queryByLabelText(/Rules & Workflows/)).toBeNull()
 		expect(screen.queryByTestId("context-button")).toBeNull()
 		const add = screen.getByRole("button", { name: "Add" })
+		expect(add.querySelector(".codicon-add")).not.toBeNull()
 		expect(add).toHaveAttribute("aria-haspopup", "menu")
 		expect(add).toHaveAttribute("aria-expanded", "false")
 		fireEvent.click(add)
 		expect(add).toHaveAttribute("aria-expanded", "true")
 		const items = screen.getAllByRole("menuitem").map((i) => i.textContent)
 		expect(items).toEqual(["Add context (@)", "Attach files & images", "Rules & workflows"])
+		expect(screen.getByTestId("context-button").querySelector(".codicon-mention")).not.toBeNull()
 	})
 
 	it("Escape closes the Add menu, returns focus to Add and does not stop a running task", () => {

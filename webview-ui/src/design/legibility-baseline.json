@@ -125,10 +125,6 @@
 			"smallText": 5,
 			"emoji": 0
 		},
-		"components/chat/ServersToggleModal.tsx": {
-			"smallText": 1,
-			"emoji": 0
-		},
 		"components/chat/auto-approve-menu/AutoApproveModal.tsx": {
 			"smallText": 1,
 			"emoji": 0

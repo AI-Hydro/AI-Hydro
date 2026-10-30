@@ -49,7 +49,7 @@ export function AddMenu({ onAddContext, onAttach, onOpenRules, attachDisabled, t
 				ref={buttonRef}
 				title="Add context, files, rules"
 				type="button">
-				<span aria-hidden="true" className="codicon codicon-mention" />
+				<span aria-hidden="true" className="codicon codicon-add" />
 			</button>
 			<ComposerPopover anchorRef={buttonRef} label="Add" onClose={() => setOpen(false)} open={open} role="menu" width={240}>
 				{item("context-button", "mention", "Add context (@)", onAddContext)}
