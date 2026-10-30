@@ -10,6 +10,260 @@
 		}
 	},
 	"screens": {
+		"mcp-configure": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 1,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"mcp-installed-unhealthy": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 1,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"mcp-marketplace": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 6,
+				"smallText": 5,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 36,
+				"smallText": 30,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"chat-history-list": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 2056,
+				"smallText": 0,
+				"contrast": 250,
+				"contrastIndeterminate": 0
+			}
+		},
+		"connectors": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 8,
+				"smallText": 28,
+				"contrast": 31,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 48,
+				"smallText": 168,
+				"contrast": 210,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"settings-about": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"settings-api": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"settings-features": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"settings-general": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"settings-keyboard": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"skills": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 7,
+				"smallText": 4,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 42,
+				"smallText": 24,
+				"contrast": 6,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"skills-marketplace": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 4,
+				"smallText": 4,
+				"contrast": 0,
+				"contrastIndeterminate": 2
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 24,
+				"smallText": 24,
+				"contrast": 6,
+				"contrastIndeterminate": 12
+			},
+			"cells": 6
+		},
+		"chat-header-collapsed": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 2,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 12,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"onboarding-card": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 2,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 21,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"onboarding-card-unhealthy": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 5,
+				"smallText": 0,
+				"contrast": 2,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 30,
+				"smallText": 0,
+				"contrast": 21,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"composer-paused-by-design": {
 			"ref": {
 				"noName": 0,
@@ -586,22 +840,6 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
-		},
-		"chat-history-list": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 2056,
-				"smallText": 0,
-				"contrast": 250,
-				"contrastIndeterminate": 0
-			}
 		},
 		"chat-home-empty-history": {
 			"ref": {
@@ -3479,6 +3717,146 @@
 						"smallTarget": 18,
 						"smallText": 0,
 						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"chat-header-collapsed": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 12,
+						"smallText": 0,
+						"contrast": 3,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"connectors": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 48,
+						"smallText": 168,
+						"contrast": 210,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"mcp-configure": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 6,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"mcp-marketplace": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 36,
+						"smallText": 30,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"onboarding-card": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 21,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"onboarding-card-unhealthy": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 30,
+						"smallText": 0,
+						"contrast": 21,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"settings-about": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"settings-api": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"settings-features": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"settings-general": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"skills": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 42,
+						"smallText": 24,
+						"contrast": 6,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"skills-marketplace": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 24,
+						"smallText": 24,
+						"contrast": 6,
+						"contrastIndeterminate": 12
+					},
+					"cells": 6
+				},
+				"settings-keyboard": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"mcp-installed-unhealthy": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 6,
+						"smallText": 0,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6

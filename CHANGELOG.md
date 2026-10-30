@@ -11,6 +11,16 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [0.4.5] — unreleased (navigation polish: every sidebar sub-view in the harness, shared nav primitives, accessible Settings)
 
+### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)
+
+The screen harness covered the chat, map, Studio and science panels but none of the sidebar sub-views, so their accessibility counts were invisible and nothing could fail when they regressed. New group `nav`, 12 screens, each rendering the real component under the real providers over synthetic data:
+
+- `settings-api`, `settings-features`, `settings-general`, `settings-about`;
+- `mcp-configure` (with a server), `mcp-marketplace` (two invented listings, opened through the real tab), `connectors`, `skills`, `skills-marketplace`;
+- `onboarding-card` and `onboarding-card-unhealthy` (the first-run card with the tools ready and with the tools unhealthy), `chat-header-collapsed` (the chat header folded to its title row).
+- The fixture host now answers the MCP-marketplace and Skills catalogue calls with an `items` array, as the real host does, instead of an empty object (which crashed the Skills view).
+- First-time entries in `checker-budget.json` record today's counts as the "before". Nothing changed on screen for users. The checker counts only real controls: Settings' compact tab strip is made of `div`s, so it reads `noName` 0 although it has no names. Nav-3 adds structural assertions for it.
+
 ### Added — `@/design` navigation primitives: Tabs, Toolbar, RailButton, Menu, SubviewHeader (Nav-2, branch `vision2040/nav-2`)
 
 Five navigation surfaces each hand-rolled their own tabs, icon buttons, menus and "Done" header, and only the map rail had real keyboard support. The shared pieces now exist in `webview-ui/src/design`; nothing outside the design gallery uses them yet (Settings adopts them in Nav-3), so users see no change.
@@ -22,6 +32,28 @@ Five navigation surfaces each hand-rolled their own tabs, icon buttons, menus an
 - **`SubviewHeader`**: the title and one Done button every sidebar sub-view needs, and Escape closes the view unless a menu, dialog, listbox or text field has taken the key.
 - Labels are required by the types (`@ts-expect-error` tests), and 25 new tests cover the keyboard paths. The gallery screen `design-primitives` shows all five and stays at 0/0/0/0.
 - The harness themes gain `--vscode-menu-selectionForeground` (VS Code always defines it; the approximation lacked it, which made a focused menu item read as dark text on blue).
+
+### Changed — Settings is keyboard-operable and named at any width; every sidebar sub-view closes the same way (Nav-3, branch `vision2040/nav-3`)
+
+Found in the navigation audit (N3, N14). Below 500 px, the width the sidebar usually has, the Settings section list was a column of unnamed `div`s with no keyboard access: a keyboard or screen-reader user could not reach "Features" or "Terminal" at all. Above 500 px only the selected section was reachable, the focus outline was removed, and every switch logged to the console.
+
+- **Settings sections are a real tab list** (the `Tabs` primitive from Nav-2): the list is named "Settings sections", each section is a tab with its name (as `aria-label` and tooltip when only the icon is drawn), the arrow keys, Home and End move between sections and select, only the selected tab is a tab stop, and the focus ring is back. The icons are codicons (Settings no longer imports `lucide-react`). The old `TabList` and `TabTrigger` are gone; `data-testid="tab-<id>"` is unchanged.
+- **One header for Settings, MCP Servers, External Connectors, Skills and History**: the title and one Done button, from `SubviewHeader`. Escape closes the view, unless a menu, dialog, dropdown or text field has taken the key, so Escape never discards an edit. When a sub-view closes, the keyboard goes back to the chat input instead of the page.
+- **The view-title buttons show which view is open.** The webview reports the sidebar view it is showing (new `setSidebarView` call), the host sets the `aihydro.sidebarView` context key, and the History, Settings, Hydro Tools & Data Sources, External Connectors and Skills commands read it with `toggled` clauses (the key resets to "chat" when the sidebar is disposed; an unknown value counts as "chat" so no button stays stuck). Needs the installed build to see: the toggle is VS Code UI.
+- **Focus returns to the chat input only when it is safe**: not while a run is in progress (Escape in the composer stops a run, and a double tap would end a long task), and not when something already has the focus (the "Focus pending prompt" command from a sub-view lands on the approval). 6 tests. The committed `proto/descriptor_set.pb` is regenerated, and CI now fails if it is stale.
+- **Harness.** The `settings-*` screens now assert the named tab list, the selected tab and the panel at every width; new `settings-keyboard` presses ArrowDown twice and asserts the third section is selected. Budgets: `connectors` 8 to 7 small targets and the MCP, Skills and History headers shrink at the reference cell; nothing rose. 5 new Settings tests, 5 host tests for the context key and the `toggled` clauses.
+
+### Changed — Hydro Tools & Data Sources: Installed first, real tabs, a named switch, the tools status (F-MCP1, branch `vision2040/f-mcp1`, stacked on Nav-3)
+
+From the navigation audit (N12). The view had three names ("Hydro Tools & Data Sources" in the palette, "MCP Servers" as its title and in the Navbar), tabs that were styled buttons with no tab semantics, rows you could only expand with the mouse, an unnamed 20 x 10 px on/off switch coloured green (the colour reserved for approved claims), and nothing that said whether the tools were healthy.
+
+- **Installed is the first tab and the one that opens** (it used to open on Marketplace when that was enabled): what is already connected is what people come to check. Tabs are Installed, Marketplace, Remote servers, on the `Tabs` primitive (arrow keys, Home, End, named list).
+- **The tools status sits above the servers**: the same row as the chat home and Welcome (version, healthy, trusted, and the Repair or Trust action that fits), so the answer to "is it working" is in the view the palette sends you to.
+- **Each server's name is a button** that says whether its details are open (`aria-expanded`), so the keyboard can open a row.
+- **The enable switch is a named button** ("Enable ai-hydro"), has a 28 x 24 px target, and uses the theme's button colour, not green. Restart and Delete name their server; the status dot has a text name (Connected, Connecting, Disconnected).
+- **One name:** "Hydro Tools & Data Sources" for the view title and the Navbar tooltip, recorded in `docs/ui-naming.md`.
+- **Delete asks first.** Both Delete buttons (the trash icon and "Delete Server") now show "Delete <server>? It is removed from your MCP settings." with Cancel and Delete (Escape cancels). Asking for Marketplace while it is disabled shows Installed, selected, from the first render.
+- Harness: `mcp-configure` now opens the default tab and asserts Installed, the status row and the named switch; new `mcp-installed-unhealthy` asserts the status row shows the unhealthy state beside the server list. 10 new tests.
 
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 

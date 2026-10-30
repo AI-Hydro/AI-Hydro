@@ -1,5 +1,6 @@
 import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import ToolsStatusChip from "@/components/tools/ToolsStatusChip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { McpServiceClient, UiServiceClient } from "@/services/grpc-client"
 import ServersToggleList from "./ServersToggleList"
@@ -29,6 +30,11 @@ const ConfigureServersView = () => {
 				<VSCodeLink href="https://x.com/sdrzn/status/1867271665086074969" style={{ display: "inline" }}>
 					See a demo here.
 				</VSCodeLink>
+			</div>
+
+			{/* Whether the first-party tools are installed, healthy and trusted, with the actions that fix it. */}
+			<div style={{ marginBottom: "10px" }}>
+				<ToolsStatusChip />
 			</div>
 
 			<ServersToggleList hasTrashIcon={false} isExpandable={true} servers={servers} />

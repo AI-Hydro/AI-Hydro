@@ -302,6 +302,10 @@ service UiService {
   // Subscribe to focus pending prompt events (the approval group of the ask the agent is waiting on)
   rpc subscribeToFocusPendingPrompt(EmptyRequest) returns (stream Empty);
 
+  // The webview reports which sidebar view is showing (chat, history, settings, mcp, connectors, skills, map) so the
+  // host can set the aihydro.sidebarView context key that the view-title buttons read.
+  rpc setSidebarView(StringRequest) returns (Empty);
+
   // Subscribe to webview visibility change events
   rpc subscribeToDidBecomeVisible(EmptyRequest) returns (stream Empty);
 
