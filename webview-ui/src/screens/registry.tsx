@@ -15,6 +15,7 @@ import {
 	fixtureAnnotatedServers,
 	fixtureMcpServers,
 	fixtureOwnerServers,
+	fixturePausedMixedServers,
 	fixturePausedServers,
 	fixtureUnannotatedServers,
 	provisionalCall,
@@ -384,10 +385,35 @@ export const screens: ScreenDef[] = [
 			"[data-testid=paused-chip][aria-expanded=true]",
 			"text=45 paused",
 			"[data-testid=paused-popover]",
+			"[data-testid=trust-launcher-action]",
 			"[data-testid=open-mcp-view]",
 			"[data-testid=auto-run-chip]",
 		],
 		expectAbsent: ["[data-testid=auto-run-risk]", "text=Does not approve claims"],
+	}),
+	// Every paused tool asks by design (destructive declaration, third-party server): neutral "5 ask first" chip, names
+	// grouped by server with the reason, nothing to fix, and no Trust action.
+	chatScreen("composer-paused-by-design", "Composer: 5 tools ask first by design (mixed causes), popover open", {
+		state: {
+			...taskState(tx.runningTaskIdle),
+			autoApprovalSettings: {
+				...DEFAULT_AUTO_APPROVAL_SETTINGS,
+				version: DEFAULT_AUTO_APPROVAL_SETTINGS.version + 1,
+				actions: { ...DEFAULT_AUTO_APPROVAL_SETTINGS.actions, readFiles: true, useMcp: true },
+			},
+		},
+		mcpServers: fixturePausedMixedServers,
+		steps: [{ wait: 600 }, { click: "[data-testid=paused-chip]" }, { wait: 400 }],
+		expectVisible: [
+			"[data-testid=paused-chip][aria-expanded=true]",
+			"text=5 ask first",
+			"text=run_workflow, workflow_status",
+			"text=third-party server, so each run asks you",
+			"text=may change or delete data, so each run asks you",
+			"text=there is nothing to fix",
+			"[data-testid=open-mcp-view]",
+		],
+		expectAbsent: ["[data-testid=trust-launcher-action]", "text=To lift a pause"],
 	}),
 	chatScreen("chat-home-empty-history", "Chat home, no history", { state: { taskHistory: [] } }),
 	chatScreen("chat-task-text", "Task with plain text", {

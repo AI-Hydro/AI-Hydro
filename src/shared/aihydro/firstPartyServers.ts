@@ -294,6 +294,22 @@ export function canOfferTrustAction(serverName: string | undefined): boolean {
 }
 
 /**
+ * Whether "Trust this launcher..." can actually fix THIS server: first-party by name, enabled, and launched the
+ * first-party way (a local stdio `aihydro-mcp` or `<python> -m ai_hydro.mcp`). Mirrors what the host accepts
+ * (`firstPartyCandidates`), which re-validates and never takes this as authority. Display only.
+ */
+export function trustActionFixesServer(server: { name?: string; disabled?: boolean; config?: string }): boolean {
+	if (!canOfferTrustAction(server.name) || server.disabled) {
+		return false
+	}
+	try {
+		return configLooksFirstParty(JSON.parse(server.config ?? ""))
+	} catch {
+		return false
+	}
+}
+
+/**
  * Human-readable trust state, derived from the same evaluation as `isServerTrusted` (so the UI can never
  * disagree with the security decision). Reasons name what to do, never imply an unverified server is safe.
  */

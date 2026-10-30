@@ -303,8 +303,14 @@ describe("ComposerStatus context ring", () => {
 describe("ComposerStatus paused MCP grants (M-3)", () => {
 	const trusted = { trusted: true, reason: "" }
 	const tool = (name: string, annotations?: Record<string, boolean>) => ({ name, autoApprove: true, annotations })
-	const srv = (tools: ReturnType<typeof tool>[], trust: McpServer["trust"], status: McpServer["status"] = "connected") =>
-		({ name: "ai-hydro", config: "{}", status, tools, trust }) as McpServer
+	const launcher = JSON.stringify({ type: "stdio", command: "/x/bin/aihydro-mcp", args: [] })
+	const srv = (
+		tools: ReturnType<typeof tool>[],
+		trust: McpServer["trust"],
+		status: McpServer["status"] = "connected",
+		name = "ai-hydro",
+		config = launcher,
+	) => ({ name, config, status, tools, trust }) as McpServer
 
 	it("counts a grant the host would honour, and pauses the ones its run-time recheck refuses", () => {
 		const s = withActions({ readFiles: true, useMcp: true })
@@ -313,7 +319,9 @@ describe("ComposerStatus paused MCP grants (M-3)", () => {
 		])
 		expect(p.mcpAlwaysAllowed).toBe(1)
 		expect(p.mcpPaused).toBe(2)
-		expect(p.mcpLabel).toBe("1 MCP tool always allowed, 2 MCP tools paused (asks first)")
+		// destructive and undeclared are paused by design: nothing to fix, so "ask first", not "paused"
+		expect(p.mcpPausedNeedsAction).toBe(false)
+		expect(p.mcpLabel).toBe("1 MCP tool always allowed, 2 MCP tools ask first")
 	})
 
 	it("a server that lost trust or is disconnected pauses everything and is not risky", () => {
@@ -324,6 +332,7 @@ describe("ComposerStatus paused MCP grants (M-3)", () => {
 			expect(p.mcpAlwaysAllowed).toBe(0)
 			expect(p.mcpPaused).toBe(1)
 			expect(p.risky).toBe(false)
+			expect(p.mcpPausedNeedsAction).toBe(true)
 			expect(p.mcpLabel).toBe("1 MCP tool paused (asks first)")
 		}
 	})
@@ -358,7 +367,10 @@ describe("ComposerStatus paused MCP grants (M-3)", () => {
 		fireEvent.click(screen.getByTestId("paused-chip"))
 		const popover = screen.getByRole("dialog", { name: "Paused MCP tools" })
 		expect(popover).toHaveTextContent("Nothing here runs without you")
-		expect(screen.getByTestId("paused-reasons")).toHaveTextContent("2 tools: the server is not trusted")
+		expect(screen.getByTestId("paused-groups")).toHaveTextContent("ai-hydro: a, b")
+		expect(screen.getByTestId("paused-groups")).toHaveTextContent("launcher not confirmed yet")
+		expect(screen.getByTestId("trust-launcher-explain")).toHaveTextContent("exact command that starts ai-hydro")
+		expect(screen.getByText("To lift a pause", { exact: false })).toBeInTheDocument()
 		const trust = screen.getByTestId("trust-launcher-action")
 		expect(trust).toHaveTextContent("Trust this launcher")
 		fireEvent.click(trust)
@@ -385,5 +397,94 @@ describe("ComposerStatus paused MCP grants (M-3)", () => {
 		fireEvent.keyDown(screen.getByRole("dialog", { name: "Paused MCP tools" }), { key: "Escape" })
 		expect(screen.queryByRole("dialog")).toBeNull()
 		expect(document.activeElement).toBe(chip)
+	})
+
+	// The owner's 0.4.3 session: a trusted first-party server with destructive tools, plus a third-party server.
+	const mixed = () => [
+		srv(
+			[
+				tool("r", { readOnlyHint: true }),
+				tool("nuke_a", { destructiveHint: true }),
+				tool("nuke_b", { destructiveHint: true }),
+			],
+			trusted,
+			"connected",
+			"aihydro-tools",
+		),
+		srv(
+			[tool("run_workflow", { destructiveHint: false }), tool("workflow_status", { readOnlyHint: true })],
+			{ trusted: false, reason: "Not trusted: third-party server." },
+			"connected",
+			"swatplus-builder",
+			JSON.stringify({ type: "stdio", command: "/opt/miniconda3/bin/swat", args: ["mcp"] }),
+		),
+	]
+
+	it("groups paused tools by server with a plain reason, and never offers Trust for a third-party server", () => {
+		settings = withActions({ readFiles: true, useMcp: true })
+		servers = mixed()
+		const p = deriveAutoRunPolicy(settings, servers)
+		expect(p.mcpPaused).toBe(4)
+		expect(p.mcpPausedUntrustedServers).toEqual([])
+		expect(p.mcpPausedNeedsAction).toBe(false)
+		render(<ComposerStatus />)
+		const chip = screen.getByTestId("paused-chip")
+		expect(chip).toHaveTextContent("4 ask first")
+		expect(chip.className).not.toContain("aih-chip--warn")
+		expect(chip.getAttribute("aria-label")).toBe("4 MCP tools ask first. Opens details.")
+		fireEvent.click(chip)
+		const groups = screen.getAllByTestId("paused-group").map((g) => g.textContent)
+		expect(groups).toEqual([
+			"aihydro-tools: nuke_a, nuke_b \u2014 may change or delete data, so each run asks you",
+			"swatplus-builder: run_workflow, workflow_status \u2014 third-party server, so each run asks you",
+		])
+		const popover = screen.getByTestId("paused-popover")
+		expect(popover).toHaveTextContent("there is nothing to fix")
+		expect(popover).not.toHaveTextContent("To lift a pause")
+		expect(screen.queryByTestId("trust-launcher-action")).toBeNull()
+		expect(screen.getByTestId("open-mcp-view")).toBeInTheDocument()
+	})
+
+	it("offers Trust only for the first-party server whose launcher is unconfirmed, naming it, even beside a third-party one", () => {
+		settings = withActions({ readFiles: true, useMcp: true })
+		const [, swat] = mixed()
+		servers = [
+			srv([tool("a", { readOnlyHint: true })], { trusted: false, reason: "changed" }, "connected", "aihydro-tools"),
+			swat,
+		]
+		render(<ComposerStatus />)
+		const chip = screen.getByTestId("paused-chip")
+		expect(chip).toHaveTextContent("3 paused")
+		expect(chip.className).toContain("aih-chip--warn")
+		fireEvent.click(chip)
+		const trust = screen.getByTestId("trust-launcher-action")
+		expect(trust.getAttribute("aria-label")).toBe("Trust this launcher for aihydro-tools")
+		expect(screen.getAllByTestId("trust-launcher-action")).toHaveLength(1)
+		fireEvent.click(trust)
+		expect(runToolsEnvAction).toHaveBeenLastCalledWith(expect.objectContaining({ serverName: "aihydro-tools" }))
+	})
+
+	it("offers no Trust for a first-party name whose entry is not a first-party launch", () => {
+		const s = withActions({ readFiles: true, useMcp: true })
+		const odd = srv(
+			[tool("a")],
+			{ trusted: false, reason: "x" },
+			"connected",
+			"ai-hydro",
+			JSON.stringify({ type: "stdio", command: "node", args: ["x.js"] }),
+		)
+		expect(deriveAutoRunPolicy(s, [odd]).mcpPausedUntrustedServers).toEqual([])
+		expect(deriveAutoRunPolicy(s, [odd]).mcpPausedNeedsAction).toBe(true)
+	})
+
+	it("caps long name lists but keeps every name in the title", () => {
+		settings = withActions({ readFiles: true, useMcp: true })
+		const many = Array.from({ length: 12 }, (_, i) => tool(`t${i}`, { destructiveHint: true }))
+		servers = [srv(many, trusted, "connected", "aihydro-tools")]
+		render(<ComposerStatus />)
+		fireEvent.click(screen.getByTestId("paused-chip"))
+		const group = screen.getByTestId("paused-group")
+		expect(group).toHaveTextContent("t0, t1, t2, t3, t4, t5, t6, t7 and 4 more")
+		expect(group.querySelector("span[title]")?.getAttribute("title")).toContain("t11")
 	})
 })

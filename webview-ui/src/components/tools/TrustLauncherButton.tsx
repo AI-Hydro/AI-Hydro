@@ -23,14 +23,18 @@ export function TrustLauncherButton({
 	className,
 	testId = "trust-launcher",
 	serverName,
+	ariaLabel,
 }: {
 	className?: string
 	testId?: string
 	/** The server the surface is about; the host re-validates it and never treats it as authority. */
 	serverName?: string
+	/** Names the server for assistive tech when several are listed. */
+	ariaLabel?: string
 }) {
 	return (
 		<button
+			aria-label={ariaLabel}
 			className={
 				className ??
 				"inline-flex items-center min-h-[22px] px-2 rounded-sm border cursor-pointer text-[12px] border-[var(--vscode-button-border,transparent)] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"

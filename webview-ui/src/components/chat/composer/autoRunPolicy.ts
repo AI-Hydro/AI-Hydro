@@ -1,7 +1,49 @@
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import { type AlwaysAllowRefusalReason, alwaysAllowVerdict } from "@shared/aihydro/alwaysAllowPolicy"
+import { isFirstPartyServerName, trustActionFixesServer } from "@shared/aihydro/firstPartyServers"
 import type { McpServer } from "@shared/mcp"
 import { ACTION_METADATA } from "../auto-approve-menu/constants"
+
+/** One server's paused grants that share a cause. Tool names are exact; the wording is `pausedGroupText`. */
+export interface PausedGroup {
+	server: string
+	reason: AlwaysAllowRefusalReason
+	tools: string[]
+	/** The server is a first-party name (display only; never a decision). */
+	firstParty: boolean
+	/**
+	 * Paused on purpose, nothing to fix: the tool is declared destructive or does not say what it does, or the server is
+	 * third-party (which can never be auto-approved). False when something the user can do would lift the pause.
+	 */
+	byDesign: boolean
+	/** "Trust this launcher..." can fix this group: a first-party launcher the user has not confirmed. */
+	trustFixable: boolean
+}
+
+/** The plain-language cause of one group, ending in what happens at run time. */
+export function pausedGroupText(g: Pick<PausedGroup, "reason" | "firstParty" | "trustFixable">): string {
+	switch (g.reason) {
+		case "untrusted_server":
+			if (g.trustFixable) {
+				return "launcher not confirmed yet, so each run asks you until you trust it"
+			}
+			return g.firstParty
+				? "not the registered AI-Hydro Tools launcher, so each run asks you"
+				: "third-party server, so each run asks you"
+		case "destructive":
+			return "may change or delete data, so each run asks you"
+		case "unknown_effect":
+			return "the server does not say what it does, so each run asks you"
+		case "unknown_tool":
+			return "the server does not list it exactly once, so each run asks you"
+		case "server_unavailable":
+			return "the server is not connected, so each run asks you"
+		default: {
+			const unreachable: never = g.reason
+			return String(unreachable)
+		}
+	}
+}
 
 export interface AutoRunPolicy {
 	/** Master switch (`enableAutoApprove`). */
@@ -16,10 +58,16 @@ export interface AutoRunPolicy {
 	mcpDormant: boolean
 	/** Why each paused grant is paused: reason -> number of tools. Empty when none are paused. */
 	mcpPausedReasons: Partial<Record<AlwaysAllowRefusalReason, number>>
-	/** Servers (names, deduplicated) whose grants are paused because the server is not trusted: the "Trust this launcher" targets. */
+	/** Servers (names, deduplicated) whose grants are paused for a first-party launcher the action can confirm: the "Trust this launcher" targets. Never a third-party server. */
 	mcpPausedUntrustedServers: string[]
+	/** The paused grants by server and cause, in server then tool order. */
+	mcpPausedGroups: PausedGroup[]
+	/** True when something the user can do would lift a pause. False means every paused tool asks by design. */
+	mcpPausedNeedsAction: boolean
 	/** Visible text for the MCP grants ("2 MCP tools always allowed"), or "" when none. */
 	mcpLabel: string
+	/** Only the paused part of mcpLabel ("5 MCP tools ask first"), or "". The active part is already in riskReasons. */
+	mcpPausedLabel: string
 	/** Global YOLO mode (`yoloModeToggled`): core approves everything first, regardless of `enabled`. */
 	yolo: boolean
 	/** Plain-language risky grants. Empty means nothing risky. */
@@ -82,6 +130,7 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 	let mcpPaused = 0
 	const mcpPausedReasons: AlwaysAllowRefusalReason[] = []
 	const untrustedServers = new Set<string>()
+	const groups: PausedGroup[] = []
 	for (const s of mcpServers.filter((srv) => !srv.disabled)) {
 		for (const t of (s.tools ?? []).filter((tool) => tool.autoApprove === true)) {
 			const verdict =
@@ -96,8 +145,25 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 			if (verdict && !verdict.ok) {
 				mcpPaused++
 				mcpPausedReasons.push(verdict.reason)
-				if (verdict.reason === "untrusted_server") {
+				const trustFixable = verdict.reason === "untrusted_server" && trustActionFixesServer(s)
+				if (trustFixable) {
 					untrustedServers.add(s.name)
+				}
+				const group = groups.find((g) => g.server === s.name && g.reason === verdict.reason)
+				if (group) {
+					group.tools.push(t.name)
+				} else {
+					groups.push({
+						server: s.name,
+						reason: verdict.reason,
+						tools: [t.name],
+						firstParty: isFirstPartyServerName(s.name),
+						byDesign:
+							verdict.reason === "destructive" ||
+							verdict.reason === "unknown_effect" ||
+							(verdict.reason === "untrusted_server" && !trustFixable && !isFirstPartyServerName(s.name)),
+						trustFixable,
+					})
 				}
 			} else {
 				mcpAlwaysAllowed++
@@ -139,7 +205,14 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 	if (activeLabel) {
 		riskReasons.push(activeLabel)
 	}
-	const pausedLabel = mcpPaused === 0 ? "" : `${mcpPaused} MCP ${mcpPaused === 1 ? "tool" : "tools"} paused (asks first)`
+	const pausedNeedsAction = groups.some((g) => !g.byDesign)
+	const pausedNoun = mcpPaused === 1 ? "tool" : "tools"
+	const pausedLabel =
+		mcpPaused === 0
+			? ""
+			: pausedNeedsAction
+				? `${mcpPaused} MCP ${pausedNoun} paused (asks first)`
+				: `${mcpPaused} MCP ${pausedNoun} ${mcpPaused === 1 ? "asks" : "ask"} first`
 	const mcpLabel = [activeLabel, pausedLabel].filter(Boolean).join(", ")
 
 	const chipText = yolo
@@ -169,8 +242,11 @@ export function deriveAutoRunPolicy(settings: AutoApprovalSettings, mcpServers: 
 		mcpPaused,
 		mcpPausedReasons: pausedByReason,
 		mcpPausedUntrustedServers: [...untrustedServers],
+		mcpPausedGroups: groups,
+		mcpPausedNeedsAction: pausedNeedsAction,
 		mcpDormant,
 		mcpLabel,
+		mcpPausedLabel: pausedLabel,
 		yolo,
 		riskReasons,
 		risky,

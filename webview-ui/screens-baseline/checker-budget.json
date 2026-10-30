@@ -10,6 +10,23 @@
 		}
 	},
 	"screens": {
+		"composer-paused-by-design": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 3,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 18,
+				"smallText": 0,
+				"contrast": 3,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"composer-add-menu": {
 			"ref": {
 				"noName": 0,
@@ -3452,6 +3469,16 @@
 						"smallTarget": 0,
 						"smallText": 0,
 						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"composer-paused-by-design": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 18,
+						"smallText": 0,
+						"contrast": 3,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
