@@ -5,9 +5,14 @@
  */
 
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
+import type { ReactNode } from "react"
 import App from "../App"
 import { ScienceToolCard } from "../components/chat/ScienceToolCard"
+import ConnectorsView from "../components/connectors/ConnectorsView"
 import HistoryView from "../components/history/HistoryView"
+import McpView from "../components/mcp/configuration/McpConfigurationView"
+import SettingsView from "../components/settings/SettingsView"
+import SkillsView from "../components/skills/SkillsView"
 import { Providers } from "../Providers"
 import {
 	areaFailCall,
@@ -28,6 +33,7 @@ import { finalAnswerTask, mcpCallTask, plainTextTask, refusalTask, taskItem } fr
 import { approvalClaims, claim, driftClaims, FIXTURE_SESSION, statusClaims } from "./fixtures/claims"
 import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/experiments"
 import { basinPolygon, featureLayers, fixturePins, framedWorkspace, gaugePoint, MAP_STORAGE_KEY } from "./fixtures/map"
+import { fixtureInstalledSkills, fixtureMarketplaceSkills, fixtureMcpMarketplace } from "./fixtures/nav"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
 import * as tx from "./fixtures/transcripts"
@@ -238,6 +244,20 @@ const toolCardScreen = (
 				toolName={c.toolName}
 			/>
 		</div>
+	),
+	...extra,
+})
+
+/** A sidebar sub-view (Settings, MCP, Connectors, Skills) drawn full-bleed under the real providers. */
+const navView = (id: string, title: string, view: () => ReactNode, extra: Partial<ScreenDef> = {}): ScreenDef => ({
+	id,
+	title,
+	group: "nav",
+	surface: "sidebar",
+	render: () => (
+		<Providers>
+			<div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>{view()}</div>
+		</Providers>
 	),
 	...extra,
 })
@@ -878,6 +898,62 @@ export const screens: ScreenDef[] = [
 			</Providers>
 		),
 	},
+
+	// ── Navigation surfaces (Nav-0): sub-views the sidebar opens in place of the chat ──
+	// Each renders the real view component full-bleed, the way App.tsx does when the view-title command opens it.
+	navView("settings-api", "Settings: API Configuration", () => <SettingsView onDone={() => {}} targetSection="api-config" />),
+	navView("settings-features", "Settings: Features", () => <SettingsView onDone={() => {}} targetSection="features" />),
+	navView("settings-general", "Settings: General", () => <SettingsView onDone={() => {}} targetSection="general" />),
+	navView("settings-about", "Settings: About", () => <SettingsView onDone={() => {}} targetSection="about" />),
+	navView(
+		"mcp-configure",
+		"MCP servers: Configure tab with servers",
+		() => <McpView initialTab="configure" onDone={() => {}} />,
+		{
+			mcpServers: fixtureMcpServers,
+		},
+	),
+	navView("mcp-marketplace", "MCP servers: Marketplace tab", () => <McpView initialTab="marketplace" onDone={() => {}} />, {
+		state: { mcpMarketplaceEnabled: true },
+		catalogues: { mcpMarketplace: fixtureMcpMarketplace },
+		// The view opens on its first tab once the extension state arrives, so wait and choose Marketplace explicitly.
+		steps: [{ wait: 400 }, { click: "button:has-text('Marketplace')" }, { wait: 400 }],
+	}),
+	navView("connectors", "External connectors", () => <ConnectorsView onDone={() => {}} />),
+	navView("skills", "Skills: Configured tab", () => <SkillsView onDone={() => {}} />, {
+		catalogues: { skillsInstalled: fixtureInstalledSkills },
+	}),
+	navView("skills-marketplace", "Skills: Marketplace tab", () => <SkillsView onDone={() => {}} />, {
+		catalogues: { skillsMarketplace: fixtureMarketplaceSkills },
+		steps: [{ click: "button:has-text('Marketplace')" }, { wait: 400 }],
+	}),
+	// The first-run card inside the chat. Healthy and unhealthy tools: the card's checklist and the status chip
+	// are read side by side.
+	chatScreen("onboarding-card", "Onboarding card with the tools ready", {
+		state: { shouldShowAnnouncement: true },
+		mcpServers: fixtureMcpServers,
+		toolsEnv: { phase: "ready", healthy: true, version: "2.8.2", trust: "trusted", serverName: "ai-hydro" },
+		ready: ".announcement-step-dot",
+	}),
+	chatScreen("onboarding-card-unhealthy", "Onboarding card with unhealthy tools", {
+		state: { shouldShowAnnouncement: true },
+		mcpServers: fixtureMcpServers,
+		toolsEnv: {
+			phase: "unhealthy",
+			version: "2.8.1",
+			message: "aihydro-mcp did not complete the MCP handshake: the server exited (code 1)",
+			errorCode: "UNHEALTHY",
+		},
+		ready: ".announcement-step-dot",
+	}),
+	// A running chat with its header folded: what a returning user sees first in a long task.
+	chatScreen("chat-header-collapsed", "Chat header folded to its title row", {
+		state: taskState(tx.ownerApprovalPendingTask, true),
+		mcpServers: fixtureMcpServers,
+		steps: [{ wait: 400 }, { click: ".task-header-card svg", nth: 0 }, ...SCROLL_TO_END],
+		pixelDiffThreshold: STRUCTURAL_ONLY,
+		scrollPinned: PINNED,
+	}),
 
 	// ── Evidence Board (editor) ─────────────────────────────────────
 	evidenceScreen("evidence-all-statuses", "Evidence Board: one claim per status", {

@@ -9,9 +9,11 @@ import type { McpServer } from "@shared/mcp"
 import type { HtmlPreviewItem } from "@shared/proto/cline/html_preview"
 import type { ClaimRecord } from "@shared/proto/cline/ledger"
 import type { MapLayer } from "@shared/proto/cline/map"
+import type { McpMarketplaceItem } from "@shared/proto/cline/mcp"
+import type { SkillItem } from "@shared/proto/cline/skills"
 import type { ReactNode } from "react"
 
-export type ScreenGroup = "chat" | "evidence" | "experiment" | "replay" | "map" | "studio" | "design"
+export type ScreenGroup = "chat" | "evidence" | "experiment" | "replay" | "map" | "studio" | "design" | "nav"
 /** Where VS Code would host the screen: narrow sidebar view, panel, or editor tab. */
 export type ScreenSurface = "sidebar" | "panel" | "editor"
 
@@ -93,5 +95,7 @@ export interface ScreenDef {
 	 * the chip unrendered (the host has not reported), so existing screens keep their measured rendering.
 	 */
 	toolsEnv?: Partial<ToolsEnvStatus>
+	/** Rows the fixture host serves for the MCP marketplace and the Skills tabs; unset serves an empty catalogue. */
+	catalogues?: { mcpMarketplace?: McpMarketplaceItem[]; skillsInstalled?: SkillItem[]; skillsMarketplace?: SkillItem[] }
 	render: () => ReactNode
 }

@@ -3,9 +3,10 @@
  * Every method resolves to an empty message unless the active screen supplies data,
  * so panels render their real "not reported" / empty branches rather than crashing.
  */
+
+import { emptyToolsEnvStatus, formatToolsDiagnostics } from "@shared/aihydro/toolsEnv"
 import type { ExtensionState } from "@shared/ExtensionMessage"
 import { convertMcpServersToProtoMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
-import { emptyToolsEnvStatus, formatToolsDiagnostics } from "@shared/aihydro/toolsEnv"
 import { getActiveScreen } from "./active"
 import { buildBaseState } from "./fixtures/state"
 
@@ -71,6 +72,16 @@ export function hostCall(service: string, method: string, _request: unknown): Pr
 	}
 	if (service === "MapServiceClient" && method === "getMapState") {
 		return Promise.resolve({ layers: screen?.layers ?? [] })
+	}
+	// Catalogue calls answer the way the host does: an `items` array, empty when the screen supplies none.
+	if (service === "McpServiceClient" && method === "refreshMcpMarketplace") {
+		return Promise.resolve({ items: screen?.catalogues?.mcpMarketplace ?? [] })
+	}
+	if (service === "SkillsServiceClient" && method === "listInstalledSkills") {
+		return Promise.resolve({ items: screen?.catalogues?.skillsInstalled ?? [] })
+	}
+	if (service === "SkillsServiceClient" && method === "refreshSkillsMarketplace") {
+		return Promise.resolve({ items: screen?.catalogues?.skillsMarketplace ?? [] })
 	}
 	return Promise.resolve({})
 }
