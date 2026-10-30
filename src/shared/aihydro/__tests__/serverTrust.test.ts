@@ -1,8 +1,16 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import { isServerTrusted, looksLikeFirstPartyLauncher, type FirstPartyLauncher } from "../firstPartyServers"
-import { effectClass } from "../mcpEffectClass"
 import { parseApprovalRequired } from "../claimApproval"
+import {
+	canOfferTrustAction,
+	describeStaleAnchor,
+	explainServerTrust,
+	type FirstPartyLauncher,
+	isServerTrusted,
+	looksLikeFirstPartyLauncher,
+	staleAnchorNote,
+} from "../firstPartyServers"
+import { effectClass } from "../mcpEffectClass"
 
 const LAUNCHER: FirstPartyLauncher = { name: "ai-hydro", command: "/opt/miniconda3/bin/aihydro-mcp", args: [] }
 const PY_LAUNCHER: FirstPartyLauncher = { name: "ai-hydro", command: "python3", args: ["-m", "ai_hydro.mcp"] }
@@ -84,5 +92,50 @@ describe("effectClass (T1)", () => {
 	it("treats non-boolean hints as absent", () => {
 		expect(effectClass({ readOnlyHint: "true", openWorldHint: false })).to.equal("DESTRUCTIVE")
 		expect(effectClass({ readOnlyHint: true, openWorldHint: "false" })).to.equal("NETWORK")
+	})
+})
+
+describe("trust wording and the stale first-party record (Trust UX)", () => {
+	const OLD = { name: "ai-hydro", command: "/opt/miniconda3/bin/aihydro-mcp", args: [] as string[] }
+	const NEW_CMD = "/Users/x/.aihydro/venvs/tools-2.8/bin/aihydro-mcp"
+
+	it("a new launch line is explained in plain words with the exact command, and names the action", () => {
+		const v = explainServerTrust({ name: "ai-hydro", config: JSON.stringify(stdio(NEW_CMD)) }, OLD)
+		expect(v.trusted).to.equal(false)
+		expect(v.reason).to.contain(`AI-Hydro Tools is running from a new location (\`${NEW_CMD}\`)`)
+		expect(v.reason).to.contain("Your auto-run settings are paused until you confirm it.")
+		expect(v.reason).to.not.match(/launch identity|Restart AI-Hydro/)
+	})
+
+	it("the same sentence covers a first-party-shaped server under another name", () => {
+		const v = explainServerTrust({ name: "aihydro-tools", config: JSON.stringify(stdio(NEW_CMD)) }, OLD)
+		expect(v.reason).to.contain("running from a new location")
+	})
+
+	it("describeStaleAnchor: record points at a disabled entry and exactly one enabled first-party entry exists", () => {
+		const entries = [
+			{ name: "ai-hydro", type: "stdio", command: OLD.command, args: [], disabled: true },
+			{ name: "aihydro-tools", type: "stdio", command: NEW_CMD, args: [] },
+		]
+		const stale = describeStaleAnchor(entries, OLD)
+		expect(stale).to.deep.equal({ recordedName: "ai-hydro", state: "disabled", activeName: "aihydro-tools" })
+		expect(staleAnchorNote(stale!)).to.equal("Previously trusted: ai-hydro (disabled).")
+	})
+
+	it("describeStaleAnchor: removed says removed; an enabled record, no candidate, two candidates or no record say nothing", () => {
+		const tools = { name: "aihydro-tools", type: "stdio", command: NEW_CMD, args: [] }
+		expect(describeStaleAnchor([tools], OLD)?.state).to.equal("removed")
+		expect(describeStaleAnchor([{ name: "ai-hydro", command: OLD.command, args: [] }, tools], OLD)).to.equal(undefined)
+		expect(describeStaleAnchor([{ name: "ai-hydro", command: OLD.command, args: [], disabled: true }], OLD)).to.equal(
+			undefined,
+		)
+		expect(describeStaleAnchor([tools, { ...tools, name: "aihydro" }], OLD)).to.equal(undefined)
+		expect(describeStaleAnchor([tools], undefined)).to.equal(undefined)
+	})
+
+	it("canOfferTrustAction is for first-party names only", () => {
+		expect(canOfferTrustAction("aihydro-tools")).to.equal(true)
+		expect(canOfferTrustAction("swat")).to.equal(false)
+		expect(canOfferTrustAction(undefined)).to.equal(false)
 	})
 })

@@ -2,6 +2,7 @@ import { deriveCallState } from "@shared/aihydro/askOutcome"
 import type { LiftedLine, WorkGroup } from "@shared/aihydro/transcriptPresenter"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
 import { type ReactNode, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { TrustLauncherButton, useServerNeedsTrust } from "@/components/tools/TrustLauncherButton"
 import { ActivityLine, liveActivity } from "./ActivityLine"
 import { RewindMenu } from "./RewindMenu"
 import { summarizeGroup } from "./summary"
@@ -143,6 +144,13 @@ export function WorkGroupRow({
 	)
 }
 
+/** "Trust this launcher..." on a "server not trusted" line, only while that server is still untrusted. */
+function LiftedTrustAction({ serverName }: { serverName: string }) {
+	return useServerNeedsTrust(serverName) ? (
+		<TrustLauncherButton className="transcript-btn ml-2" testId="lifted-trust-launcher" />
+	) : null
+}
+
 /**
  * One lifted line. An aggregated line (`count > 1`) carries a disclosure listing every member, so the shortened list
  * never hides a call: the full per-call list is one click away.
@@ -182,6 +190,7 @@ function LiftedLineItem({ line }: { line: LiftedLine }) {
 			) : (
 				<span>{line.text}</span>
 			)}
+			{line.untrustedFirstParty && line.server && <LiftedTrustAction serverName={line.server} />}
 		</li>
 	)
 }

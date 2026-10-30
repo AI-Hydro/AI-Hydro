@@ -125,8 +125,9 @@ describe("explainServerTrust (UI trust state)", () => {
 	it("the study case explains the name mismatch and points to the safe path, without trusting it", () => {
 		const e = explainServerTrust(conn("aihydro-tools", "python3", ["-m", "ai_hydro.mcp"]), RECORDED)
 		expect(e.trusted).to.equal(false)
-		expect(e.reason).to.include("'ai-hydro'")
-		expect(e.reason).to.include("restart")
+		expect(e.reason).to.include("running from a new location")
+		expect(e.reason).to.include("until you confirm it")
+		expect(e.reason).to.not.match(/restart/i)
 	})
 
 	it("trusted servers say why", () => {

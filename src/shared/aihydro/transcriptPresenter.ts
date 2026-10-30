@@ -17,6 +17,7 @@
  */
 import type { AiHydroAsk, AiHydroMessage, AiHydroSay, AiHydroSayTool } from "../ExtensionMessage"
 import { deriveCallState } from "./askOutcome"
+import { isFirstPartyServerName } from "./firstPartyServers"
 import { isElevatedMcpLevel } from "./infoNotice"
 import { presentToolCall } from "./toolCallPresenter"
 import { type AnswerAuditPayload, classifyLegacyInfoNotice, isLiftedNotice, parseAnswerAuditPayload } from "./transcriptContracts"
@@ -185,6 +186,8 @@ export interface LiftedLine {
 	count: number
 	/** The MCP server an effect line is about (set on effect lines only). */
 	server?: string
+	/** The line says a first-party server is not trusted: the row offers "Trust this launcher..." (the host decides). */
+	untrustedFirstParty?: true
 	/**
 	 * Every source line folded into this one, in order. A line always has at least itself; every lifted source `ts`
 	 * of a group appears in exactly one line's `members` (across `lifted` and `absorbed`), so aggregation can shorten
@@ -666,8 +669,9 @@ function aggregateLifts(
 	for (const l of lifted) {
 		const a = info.get(l.key)
 		let out = l
+		const untrusted = a !== undefined && a.family.startsWith("unverified:") && isFirstPartyServerName(a.server)
 		if (a?.server !== undefined) {
-			out = { ...l, server: a.server }
+			out = { ...l, server: a.server, ...(untrusted ? { untrustedFirstParty: true as const } : {}) }
 		}
 		if (a !== undefined) {
 			if (done.has(a.family)) {
@@ -684,6 +688,7 @@ function aggregateLifts(
 					text: mergedText(l.reason, infos, same[0].text.startsWith("You approved") ? "You approved" : "Ran"),
 					sourceTs: l.sourceTs,
 					...(a.server !== undefined ? { server: a.server } : {}),
+					...(untrusted ? { untrustedFirstParty: true as const } : {}),
 					count: same.length,
 					members: same.flatMap((x) => x.members),
 				}

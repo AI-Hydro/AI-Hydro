@@ -8,10 +8,10 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as vscode from "vscode"
 import { atomicWriteFile } from "@/core/mcp/toolsEnv/atomicWrite"
+import { setToolsEnvController } from "@/core/mcp/toolsEnv/instance"
+import { createNodeToolsEnvDeps } from "@/core/mcp/toolsEnv/nodeDeps"
 import type { ToolsEnvConfig, ToolsEnvHost } from "@/core/mcp/toolsEnv/ToolsEnvController"
 import { ToolsEnvController } from "@/core/mcp/toolsEnv/ToolsEnvController"
-import { createNodeToolsEnvDeps } from "@/core/mcp/toolsEnv/nodeDeps"
-import { setToolsEnvController } from "@/core/mcp/toolsEnv/instance"
 import { ExtensionRegistryInfo } from "@/registry"
 
 const commands = ExtensionRegistryInfo.commands
@@ -98,14 +98,13 @@ export function createVscodeToolsEnv(
 					},
 				),
 			),
-		confirmTrust: async (launcher, recorded) => {
+		confirmTrust: async (launcher, recorded, note) => {
 			const trust = "Trust this launcher"
+			const line = [launcher.command, ...launcher.args].join(" ")
 			const choice = await vscode.window.showWarningMessage(
-				`The "${launcher.name}" MCP server now launches \`${[launcher.command, ...launcher.args].join(" ")}\`${
-					recorded
-						? `, which differs from the launcher AI-Hydro recorded (\`${[recorded.command, ...recorded.args].join(" ")}\`)`
-						: ""
-				}. Until you confirm, it is not treated as the first-party server (claim-approval prompts and read-only subagent tools are off).`,
+				`The "${launcher.name}" MCP server runs \`${line}\`.${
+					recorded ? ` You previously confirmed \`${[recorded.command, ...recorded.args].join(" ")}\`.` : ""
+				}${note ? ` ${note}` : ""} Until you confirm, AI-Hydro does not treat it as the first-party server: auto-run grants stay paused, and claim-approval prompts and read-only subagent tools are off. Confirm only if you installed or started this launcher.`,
 				{ modal: true },
 				trust,
 			)

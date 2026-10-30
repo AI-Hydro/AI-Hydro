@@ -9,6 +9,7 @@
  *
  * Removing a grant tightens policy and is never checked here.
  */
+import { newLauncherSentence } from "./firstPartyServers"
 import { type EffectAnnotations, effectClass } from "./mcpEffectClass"
 
 export type AlwaysAllowRefusalReason =
@@ -89,12 +90,12 @@ export function alwaysAllowReasonText(reason: AlwaysAllowRefusalReason): string 
  * Why a stored "Always" grant is not honoured right now (M-3 run-time recheck). Shown in the ask that replaces the
  * auto-run, so the user sees the call is being asked about on purpose. The grant itself is untouched.
  */
-export function alwaysPausedText(toolName: string, reason: AlwaysAllowRefusalReason): string {
+export function alwaysPausedText(toolName: string, reason: AlwaysAllowRefusalReason, launchLine?: string): string {
 	let why: string
 	switch (reason) {
 		case "untrusted_server":
-			why = "this server is not the registered first-party server, or its launch identity changed"
-			break
+			// Plain wording and the exact command; the card next to this text carries the "Trust this launcher..." action.
+			return `Always for ${toolName} is paused. ${newLauncherSentence(launchLine ?? "")}`
 		case "server_unavailable":
 			why = "the server is not connected"
 			break

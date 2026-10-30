@@ -6,6 +6,13 @@
  * There is no permanent dismissal: a failed install leaves phase "failed" with Retry until it succeeds.
  * Host-neutral: all UI and configuration go through `ToolsEnvHost`; all machine access through `ToolsEnvDeps`.
  */
+
+import {
+	describeStaleAnchor,
+	launchContextHash,
+	looksLikeFirstPartyLauncher,
+	staleAnchorNote,
+} from "@shared/aihydro/firstPartyServers"
 import {
 	emptyToolsEnvStatus,
 	formatToolsDiagnostics,
@@ -17,19 +24,18 @@ import {
 	venvPythonPath,
 	versionMeetsFloor,
 } from "@shared/aihydro/toolsEnv"
-import { launchContextHash, looksLikeFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
 import * as path from "path"
-import { loadFirstPartyLauncher, readFirstPartyLauncher } from "../firstPartyLauncher"
-import { defaultPythonNames, ensureToolsEnv, probeToolsEnv, type ToolsEnvDeps } from "./managedVenv"
+import { loadFirstPartyLauncher, readFirstPartyLauncher, settingsEntries } from "../firstPartyLauncher"
 import {
 	classifyLauncher,
 	findFirstPartyEntryName,
 	type LauncherClass,
 	readMcpSettings,
 	readTrustSnapshot,
-	registerManagedLauncher,
 	reconcileLauncherRecord,
+	registerManagedLauncher,
 } from "./launcherRegistration"
+import { defaultPythonNames, ensureToolsEnv, probeToolsEnv, type ToolsEnvDeps } from "./managedVenv"
 
 export interface ToolsEnvConfig {
 	/** `aihydro.tools.venvPath`; empty means `<aihydro_home>/venvs/tools-2.8`. */
@@ -61,7 +67,12 @@ export interface ToolsEnvHost {
 	/** Run `task` under a cancellable progress notification; `signal` aborts when the user cancels. */
 	withProgress<T>(title: string, task: (report: (step: string) => void, signal: AbortSignal) => Promise<T>): Promise<T>
 	/** Modal: "Trust this launcher" vs dismiss. The only path that rewrites an existing record. */
-	confirmTrust(launcher: TrustPrompt, recorded: { command: string; args: string[] } | undefined): Promise<boolean>
+	confirmTrust(
+		launcher: TrustPrompt,
+		recorded: { command: string; args: string[] } | undefined,
+		/** Extra context for the dialog, e.g. "Previously trusted: ai-hydro (disabled)." Display only. */
+		note?: string,
+	): Promise<boolean>
 	/** Non-modal choice between switching the legacy launcher to the managed one and keeping it. undefined = ignored. */
 	askSwitch(currentCommand: string, managedCommand: string): Promise<"switch" | "keep" | undefined>
 	/** Surface a result; resolves with the clicked action label, if any. */
@@ -484,11 +495,24 @@ export class ToolsEnvController {
 		if (this.declined.has(key)) {
 			return false
 		}
-		const yes = await this.host.confirmTrust(launcher, recorded)
+		const yes = await this.host.confirmTrust(launcher, recorded, await this.staleNote())
 		if (!yes) {
 			this.declined.add(key)
 		}
 		return yes
+	}
+
+	/** "Previously trusted: ai-hydro (disabled)." when the record points at a disabled/removed server. Display only. */
+	private async staleNote(): Promise<string | undefined> {
+		const settings = await readMcpSettings(this.paths.settingsPath)
+		if (!settings.ok) {
+			return undefined
+		}
+		const stale = describeStaleAnchor(
+			settingsEntries(settings.config.mcpServers),
+			await readFirstPartyLauncher(this.paths.settingsDir),
+		)
+		return stale ? staleAnchorNote(stale) : undefined
 	}
 
 	private async register(switchExisting: boolean) {
@@ -509,10 +533,7 @@ export class ToolsEnvController {
 
 	private async refreshTrust(): Promise<void> {
 		const snap = await readTrustSnapshot(this.paths.settingsDir, this.paths.settingsPath)
-		const reason =
-			snap.trust === "untrusted" && snap.reason.startsWith("Not trusted: its launch command differs")
-				? 'The registered launcher differs from the one AI-Hydro recorded. Choose "Trust this launcher" to review the change.'
-				: snap.reason
+		const reason = snap.reason
 		this.setStatus({
 			serverName: snap.serverName,
 			serverCommand: snap.serverCommand || this.status.serverCommand,

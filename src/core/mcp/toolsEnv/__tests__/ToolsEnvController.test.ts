@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import * as os from "os"
 import * as path from "path"
 import { getRecordedFirstPartyLauncher, setRecordedFirstPartyLauncher } from "@/shared/aihydro/firstPartyServers"
-import { type ToolsEnvStatus, venvMcpPath } from "@/shared/aihydro/toolsEnv"
+import { describeToolsStatus, type ToolsEnvStatus, venvMcpPath } from "@/shared/aihydro/toolsEnv"
 import { readFirstPartyLauncher, recordFirstPartyLauncher } from "../../firstPartyLauncher"
 import { ToolsEnvController, type ToolsEnvHost, type ToolsEnvPersisted } from "../ToolsEnvController"
 import { createFakeMachine, type FakeMachine, makeVenv } from "./fakeToolsEnv"
@@ -236,6 +236,58 @@ describe("ToolsEnvController", () => {
 		await c.runAction("trust")
 		expect(c.getStatus().trust).to.equal("trusted")
 		expect((await readFirstPartyLauncher(dir))?.command).to.equal(mcp())
+	})
+
+	it("stale record (old ai-hydro disabled, aihydro-tools running): untrusted, says so, and trust is recorded only after the modal is confirmed", async () => {
+		makeVenv(machine, "2.8.2")
+		await recordFirstPartyLauncher(dir, { name: "ai-hydro", command: "/opt/miniconda3/bin/aihydro-mcp", args: [] })
+		await fs.writeFile(
+			settingsPath,
+			JSON.stringify({
+				mcpServers: {
+					"ai-hydro": { command: "/opt/miniconda3/bin/aihydro-mcp", args: [], disabled: true },
+					"aihydro-tools": { command: mcp(), args: [] },
+				},
+			}),
+		)
+		const notes: (string | undefined)[] = []
+		const base = host()
+		const withNotes: ToolsEnvHost = {
+			...base,
+			confirmTrust: async (launcher, recorded, note) => {
+				notes.push(note)
+				return base.confirmTrust(launcher, recorded, note)
+			},
+		}
+		const c = new ToolsEnvController(withNotes, machine.deps, {
+			venvsDir: path.join(dir, "venvs"),
+			settingsDir: dir,
+			settingsPath,
+			cacheDir: path.join(dir, "cache"),
+		})
+		trustAnswers = [false, false]
+		await c.startup()
+		await settled(c)
+		// The status describes the server in use (not the disabled entry the record names), in plain words.
+		const s = c.getStatus()
+		expect(s).to.include({ phase: "ready", trust: "untrusted", serverName: "aihydro-tools" })
+		expect(s.trustReason).to.contain("running from a new location")
+		expect(s.trustReason).to.contain(mcp())
+		expect(s.trustReason).to.contain("Previously trusted: ai-hydro (disabled).")
+		expect(describeToolsStatus(s).actions).to.include("trust")
+		// Declining the modal records nothing.
+		expect((await readFirstPartyLauncher(dir))?.name).to.equal("ai-hydro")
+		trustAnswers = [false]
+		await c.runAction("trust")
+		expect((await readFirstPartyLauncher(dir))?.name).to.equal("ai-hydro")
+		expect(c.getStatus().trust).to.equal("untrusted")
+		expect(notes.at(-1)).to.equal("Previously trusted: ai-hydro (disabled).")
+		// Confirming records the ENABLED entry, and the in-memory anchor follows at once.
+		trustAnswers = [true]
+		await c.runAction("trust")
+		expect(await readFirstPartyLauncher(dir)).to.include({ name: "aihydro-tools", command: mcp() })
+		expect(getRecordedFirstPartyLauncher()).to.include({ name: "aihydro-tools", command: mcp() })
+		expect(c.getStatus().trust).to.equal("trusted")
 	})
 
 	it("a failed install stays visible as 'failed', raises an error notice with Retry, and Retry works (no permanent dismiss)", async () => {

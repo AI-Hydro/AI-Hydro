@@ -206,7 +206,7 @@ export const TOOLS_ACTION_LABEL: Record<ToolsEnvAction, string> = {
 	retry: "Retry",
 	cancel: "Cancel",
 	showLog: "Show log",
-	trust: "Trust this launcher",
+	trust: "Trust this launcher…",
 	copyDiagnostics: "Copy diagnostics",
 	useManaged: "Use managed environment",
 }

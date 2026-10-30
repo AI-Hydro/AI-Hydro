@@ -1,5 +1,5 @@
-import { expect } from "chai"
 import { setRecordedFirstPartyLauncher } from "@shared/aihydro/firstPartyServers"
+import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import { findBindingServer, parseBindingSignal, resolveLaunchBinding } from "../studyBinding"
 import { CAPS_282, FakeBindingServer, type FakeStudy, fakeServerEntry, LAUNCHER } from "./fakeBindingServer"
@@ -173,5 +173,34 @@ describe("studyBinding (X0-2: host-side binding through the server's resources)"
 			expect(parseBindingSignal(JSON.stringify({ data: { session_binding_note: "x" } }))).to.equal(undefined)
 			expect(parseBindingSignal("not json session_binding")).to.equal(undefined)
 		})
+	})
+})
+
+describe("studyBinding: a connected server whose launcher is not confirmed (Trust UX)", () => {
+	afterEach(() => setRecordedFirstPartyLauncher(undefined))
+
+	it("is 'unavailable' with cause untrusted_server and the exact command, not 'not connected'", async () => {
+		setRecordedFirstPartyLauncher({ ...LAUNCHER, command: "/opt/old/aihydro-mcp" } as any)
+		const state = await resolveLaunchBinding({ hub: new FakeBindingServer([A]), chatId: CHAT, workspace: WS })
+		expect(state).to.include({ status: "unavailable", cause: "untrusted_server" })
+		expect(state.reason).to.contain(`running from a new location (\`${LAUNCHER.command}\`)`)
+		expect(state.reason).to.not.contain("not connected")
+	})
+
+	it("a server that is not connected has no cause (the trust action would not help)", async () => {
+		setRecordedFirstPartyLauncher({ ...LAUNCHER, command: "/opt/old/aihydro-mcp" } as any)
+		const hub = new FakeBindingServer([A], undefined, [fakeServerEntry({ status: "disconnected" })])
+		const state = await resolveLaunchBinding({ hub, chatId: CHAT, workspace: WS })
+		expect(state.status).to.equal("unavailable")
+		expect(state.cause).to.equal(undefined)
+	})
+
+	it("re-resolving after the anchor is confirmed binds the study (what the host does after the dialog)", async () => {
+		setRecordedFirstPartyLauncher({ ...LAUNCHER, command: "/opt/old/aihydro-mcp" } as any)
+		const hub = new FakeBindingServer([A])
+		expect((await resolveLaunchBinding({ hub, chatId: CHAT, workspace: WS })).status).to.equal("unavailable")
+		setRecordedFirstPartyLauncher(LAUNCHER as any)
+		const state = await resolveLaunchBinding({ hub, chatId: CHAT, workspace: WS })
+		expect(state).to.include({ status: "bound", studyId: A.id })
 	})
 })

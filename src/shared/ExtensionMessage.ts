@@ -72,6 +72,11 @@ export interface StudyBindingState {
 	reason?: string
 	/** Where a bound study came from. */
 	by?: "map-layer" | "map-artifact" | "workspace" | "resume" | "user" | "agent" | "server"
+	/**
+	 * Why `unavailable`, when the cause is one the user can fix: the AI-Hydro Tools server is connected but its launcher
+	 * is not confirmed. The header then offers "Trust this launcher..." (host-set, display only).
+	 */
+	cause?: "untrusted_server"
 	/** Whether this server can list studies and rebind a chat (capability flags); gates the picker's choices. */
 	canChoose: boolean
 	/**
@@ -295,6 +300,8 @@ export interface AiHydroAskUseMcpServer {
 	uri?: string
 	/** Set when a stored "Always" grant exists but failed the run-time recheck (M-3); the ask says why. */
 	autoApprovePaused?: string
+	/** With `autoApprovePaused`: the ask offers "Trust this launcher..." because the pause is a trust problem (host-set). */
+	autoApprovePausedFix?: "trust_launcher"
 }
 
 export interface AiHydroPlanModeResponse {
