@@ -6,6 +6,7 @@ import type { Environment } from "../config"
 import { AiHydroFeatureSetting } from "./AiHydroFeatureSetting"
 import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import type { CommandExit, CommandPolicyClass } from "./aihydro/commandEvidence"
+import type { CompletionOutcome } from "./aihydro/completionOutcome"
 import type { InfoNotice, McpNotificationLevel } from "./aihydro/infoNotice"
 import type { SubagentLaunch, SubagentOrigin } from "./aihydro/subagents"
 import { AiHydroRulesToggles } from "./aihydro-rules"
@@ -194,6 +195,8 @@ export interface AiHydroMessage {
 	exitCode?: CommandExit
 	/** Command rows the host's policy flagged (subagent launch, protected path, danger grant, ...). */
 	policyClass?: CommandPolicyClass
+	/** `completion_result` rows: the model said it only partly did the task or could not (honest exit). Absent = done. */
+	completionOutcome?: CompletionOutcome
 	/** Set by the host on an ask that a subagent raised, so the card says whose request it is. Never model-supplied. */
 	subagentOrigin?: SubagentOrigin
 	lastCheckpointHash?: string

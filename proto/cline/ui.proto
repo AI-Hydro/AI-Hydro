@@ -235,6 +235,8 @@ message ClineMessage {
   string exec_outcome = 1002;
   // Only `true` is meaningful; false = absent.
   bool command_completed = 1003;
+  // completion_result rows: JSON {outcome: "partial"|"infeasible", unmet: string[]}; "" = done / not recorded.
+  string completion_outcome_json = 1012;
 }
 
 // UiService provides methods for managing UI interactions

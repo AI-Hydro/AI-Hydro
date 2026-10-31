@@ -5,8 +5,8 @@
  */
 
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
-import type { ReactNode } from "react"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
+import type { ReactNode } from "react"
 import App from "../App"
 import { ScienceToolCard } from "../components/chat/ScienceToolCard"
 import ConnectorsView from "../components/connectors/ConnectorsView"
@@ -952,6 +952,13 @@ export const screens: ScreenDef[] = [
 		tx.answerAuditCleanUxTask,
 		"Fixture answer, not a result.",
 		{ expectVisible: ["text=All 4 numbers traced"], expectAbsent: ["[data-testid=untraced-number]"] },
+	),
+	chatTx(
+		"chat-answer-partial",
+		"Answer where the agent says the task was only partly done: outcome in the header, what was not done listed",
+		tx.answerPartialTask,
+		"Fixture answer, not a result.",
+		{ expectVisible: ["text=Partly done", "text=Not done:", "text=no observed record for 2010 to 2015"] },
 	),
 	chatTx("chat-answer-audit-graded", "Answer audit (structured, graded)", tx.answerAuditGradedTask, "linked to a recorded run"),
 	chatTx(

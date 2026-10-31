@@ -1,3 +1,4 @@
+import { type CompletionOutcome, OUTCOME_LABEL } from "@shared/aihydro/completionOutcome"
 import { extractEvidence } from "@shared/aihydro/evidenceMarkers"
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import type { TurnSummary } from "@shared/aihydro/turnSummary"
@@ -30,6 +31,8 @@ interface AnswerBlockProps {
 	audit?: AnswerAuditPayload
 	/** Presenter facts for the turn. Absent: no summary line. */
 	turn?: TurnSummary
+	/** The agent said it only partly did the task, or could not (honest exit). Absent: a normal completion. */
+	outcome?: CompletionOutcome
 	hasChanges?: boolean
 	seeChangesDisabled?: boolean
 	onSeeChanges?: () => void
@@ -148,6 +151,7 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 	partial,
 	audit,
 	turn,
+	outcome,
 	hasChanges,
 	seeChangesDisabled,
 	onSeeChanges,
@@ -226,7 +230,25 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 			<div className="mb-2 flex items-center gap-1.5 font-bold">
 				<span aria-hidden="true" className="codicon codicon-comment-discussion" />
 				<span>Answer</span>
+				{outcome && (
+					<span className="font-normal text-xs opacity-90" data-outcome={outcome.outcome} data-testid="answer-outcome">
+						<span aria-hidden="true" className="codicon codicon-warning mr-1 align-middle" />
+						{OUTCOME_LABEL[outcome.outcome]} · the agent says
+					</span>
+				)}
 			</div>
+			{outcome && outcome.unmet.length > 0 && (
+				<div className="text-xs mb-1.5" data-testid="answer-unmet">
+					<div className="opacity-80">Not done:</div>
+					<ul className="m-0 pl-4">
+						{outcome.unmet.map((item) => (
+							<li className="ph-no-capture" key={item}>
+								{item}
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
 			<div className="pt-1">
 				<UntracedPlanContext.Provider value={plan}>{children}</UntracedPlanContext.Provider>
 			</div>

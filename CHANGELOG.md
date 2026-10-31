@@ -9,6 +9,19 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — 2026-10-31 (agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
+
+### Added — an honest exit: `attempt_completion` can say partial or infeasible (N1, branch `vision2040/agent-exit`)
+
+Until now `attempt_completion` meant "done", and the prompt pressed toward it ("code corruption and system failure"), so a model that could not finish had no first-class way to say so.
+
+- `attempt_completion` gains two optional parameters: `outcome` (`done` | `partial` | `infeasible`; `done`, absent or unrecognised records nothing) and `unmet` (what was not done and why, one item per line). A partial or infeasible completion is a normal completion: it resets the mistake count, never triggers the "you did not use a tool" nudge, and goes through the same answer gate and audit.
+- The answer card shows it in the header ("Partly done" or "Could not be done", always followed by "the agent says": it is the model's statement, not evidence) and lists the unmet items under the header, above the prose. Stored on the row as `completionOutcome` (new proto field `completion_outcome_json = 1012`, additive).
+- The completion-pressure paragraph is gone from the tool description. The `noToolsUsed` text and the audit revision request now say that stopping honestly (partial or infeasible, with what is unmet) is a valid answer.
+- The audit-finding view knows a new kind, `no_observed_lineage` ("Not derived from observed data"), for the tools-side check of numbers with no observed-data lineage. Nothing in the extension reads `outcome` as evidence or gates on it.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)

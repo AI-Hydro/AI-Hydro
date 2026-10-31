@@ -58,6 +58,40 @@ const audit = (p: Partial<AnswerAuditPayload> = {}): AnswerAuditPayload => ({
 
 const TEXT = "Answer prose [claim:c-approved] and [claim:c-integrity] with [run:fx-run-1#a.b]."
 
+describe("AnswerBlock honest exit", () => {
+	it("shows the outcome in the header and the unmet list, labelled as the agent's statement", () => {
+		const { getByTestId } = render(
+			<AnswerBlock
+				outcome={{ outcome: "partial", unmet: ["no observed streamflow for 2010-2015", "forcing fetch timed out"] }}
+				text="Fetched part.">
+				<p>Fetched part.</p>
+			</AnswerBlock>,
+		)
+		expect(getByTestId("answer-outcome").textContent).toContain("Partly done")
+		expect(getByTestId("answer-outcome").textContent).toContain("the agent says")
+		const unmet = getByTestId("answer-unmet")
+		expect(unmet.querySelectorAll("li")).toHaveLength(2)
+		expect(unmet.textContent).toContain("forcing fetch timed out")
+	})
+
+	it("infeasible reads as could not be done; no outcome shows nothing", () => {
+		const a = render(
+			<AnswerBlock outcome={{ outcome: "infeasible", unmet: [] }} text="x">
+				<p>x</p>
+			</AnswerBlock>,
+		)
+		expect(a.getByTestId("answer-outcome").textContent).toContain("Could not be done")
+		expect(a.queryByTestId("answer-unmet")).toBeNull()
+		a.unmount()
+		const b = render(
+			<AnswerBlock text="y">
+				<p>y</p>
+			</AnswerBlock>,
+		)
+		expect(b.queryByTestId("answer-outcome")).toBeNull()
+	})
+})
+
 describe("AnswerBlock", () => {
 	it("the summary row holds exactly one approved element for one approved and one integrity-only claim", () => {
 		const { container } = render(
