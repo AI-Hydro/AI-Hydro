@@ -29,6 +29,8 @@ import {
 	type GateContext,
 	interruptedFromRevision,
 	interruptedPayload,
+	noteBindingChanged,
+	noteBindingProbed,
 	noteSessionStarted,
 	resetGateCycle,
 	sweepAuditProgress,
@@ -119,6 +121,21 @@ describe("answer-audit gate (W2-C)", () => {
 			noteSessionStarted(state)
 			expect(state.boundStudyId).to.equal(undefined)
 			expect(state.sessionStarted).to.equal(true)
+		})
+
+		it("a probed binding (resumed task) makes the gate eligible without supplying any study id", () => {
+			const state = createGateState()
+			expect(computeGateEligibility(eligibleInput({ state }) as any)).to.deep.include({ reason: "study-not-bound" })
+			noteBindingProbed(state)
+			expect(computeGateEligibility(eligibleInput({ state }) as any).eligible).to.equal(true)
+			expect(state.boundStudyId).to.equal(undefined)
+		})
+
+		it("a rebind clears the cached study", () => {
+			const state = createGateState()
+			state.boundStudyId = "s1"
+			noteBindingChanged(state)
+			expect(state.boundStudyId).to.equal(undefined)
 		})
 
 		it("the gate is on by default in state defaults (A2/B-web); eligibility still needs a trusted graded server", () => {

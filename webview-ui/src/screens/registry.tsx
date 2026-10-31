@@ -927,6 +927,16 @@ export const screens: ScreenDef[] = [
 		},
 	),
 	chatTx(
+		"chat-answer-audit-pathless-run",
+		"Answer whose run references lack #path: the summary and the underlined numbers say so",
+		tx.answerAuditPathlessUxTask,
+		"Fixture answer, not a result.",
+		{
+			expectVisible: ["text=2 run references have no #path", "[data-testid=untraced-number]"],
+			expectAbsent: ["text=Fix:", "text=malformed_marker"],
+		},
+	),
+	chatTx(
 		"chat-answer-audit-advisory",
 		"Answer with advisory notes only: neutral summary, no action",
 		tx.answerAuditAdvisoryUxTask,

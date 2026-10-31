@@ -205,6 +205,22 @@ Reported on the installed 0.4.4 build: a stray "Worked <1s" row after every answ
 - "Rewind to this message" is computed before the empty groups are dropped, so a chat-only turn still has its rewind target. Its cost remains in the task header (the total is computed from the messages, not from the rows; a test covers it). Known loss: a checkpoint that sits in a dropped group after the first one in a turn (for example the one taken as the answer completes) no longer has a "Rewind this work" row; the turn's first checkpoint still backs "Rewind to this message", and a group that ran tools still shows its own rewind.
 - The "Resumed a completed task" divider is no longer drawn at Focus and Normal (the question follows at once and nothing was lost; the presenter still emits it, the view hides it). "Resumed from an interrupted task" still shows, and Verbose is unchanged.
 
+### Fixed — audit findings say why a cited number is flagged; "Referenced this turn" no longer says "no runs" beside run ids (branch `vision2040/polish-audit-findings`)
+
+Reported on the installed 0.4.4 build: "8 findings need review", dotted underlines on 774.15 km², 7,305 values, 7,300 days and 2,262 values in text that carries `[run:...]`, and a follow-up answer reading "Referenced this turn: no runs or claims" while quoting the same numbers. Read from the owner's transcript (task 1793340989672, answer rows 91 and 93), the cause is not the auditor miscounting cited numbers:
+
+- The model wrote its run references as `[run:watershed.0b124654840f]`, with no `#<path>`. The grammar is `[run:<id>#<key_outputs.field>]`. The auditor reports each as `malformed_marker` and the marker binds nothing, so the numbers beside it are `uncited_number`. The other findings are numbers with no reference in their sentence ("2,262 of the 7,305 values" in the caveats line; the second 7,305).  The reported count is the sum of the two groups.
+- The same shape is invisible to the UI: markers need `#path` to be chips, so the answer's evidence strip and "Referenced this turn" counted no runs.
+- The gate that asks the model to fix this before the user sees it did not run on either answer (no revision rows). For the follow-up the reason is in the code: a resumed task starts with an empty gate state, `aihydro_chat_status` was never recorded as "study bound", so eligibility said `study-not-bound`. For the first answer the transcript does not say; candidates are an unconfirmed launcher (the gate needs a trusted server) or a server that does not advertise the graded schema.
+
+What changed (nothing here lets an unproven number pass; the audit's decisions are untouched):
+- A finding about a number beside a `[run:<id>]` reference, and the malformed-marker finding itself, now read "Run reference has no #path, so the value could not be checked" (summary line and underline tooltip) instead of "Not linked to a run". The summary adds "N run references have no #path".
+- "Referenced this turn" counts run ids the answer names without `#path`, so it no longer says "no runs or claims" beside them.
+- A resumed task's gate was never eligible (`study-not-bound`). A first-party `aihydro_chat_status` call now only marks the binding as probed (`bindingProbed`), which makes the gate eligible; it never supplies a study id, because the call is model-invoked and the host should not take a study id from model-invoked output (tools >= 2.8.2 refuse a differing `chat_id` with `CHAT_ID_MISMATCH`, so a spoof would not work there; this is simpler and holds against any server). The audit asks the server itself with the host-issued chat id and fails closed. `aihydro_rebind_chat` clears the cached study. Not done: the post-audit check still compares two answers from the same server; an independent comparison (for example with the host's study-chip state) needs plumbing into `runFinalAnswerAudit`.
+- Harness: `chat-answer-audit-pathless-run`.
+
+Needs a tools change, not made here (aihydro-tools `ai_hydro/audit/resolver.py`): accept `[run:<id>]` when that run exists and holds a leaf that matches the printed value (the only case provably covered by a cited run), or return a `fix_hint` that names the missing `#<path>`. The "7,305 daily values" sample-size decision is not touched.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)

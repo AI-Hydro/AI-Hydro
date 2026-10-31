@@ -17,6 +17,7 @@ import { AiHydroDefaultTool } from "@shared/tools"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
 import * as vscode from "vscode"
 import type { AiHydroAgentIdentity } from "@/core/mcp/aihydroContext"
+import { REBIND_CHAT_TOOL } from "@/integrations/aihydro-session/studyBinding"
 import { getModelCapabilityTier, recommendedMaxMistakes } from "@/utils/model-capabilities"
 import { modelDoesntSupportWebp } from "@/utils/model-utils"
 import { ToolUse } from "../assistant-message"
@@ -27,10 +28,11 @@ import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
-import { noteSessionStarted, START_SESSION_TOOL_NAME } from "./answerAuditGate"
+import { noteBindingChanged, noteBindingProbed, noteSessionStarted, START_SESSION_TOOL_NAME } from "./answerAuditGate"
 import type { AskMeta } from "./askMeta"
 import { browserToolRefusal } from "./browserGate"
 import { explorerBlockReason } from "./explorerPolicy"
+import { CHAT_STATUS_TOOL_NAME } from "./finalAnswerAudit"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
 import type { EffectiveCapabilities } from "./subagents/agentProfile"
@@ -413,6 +415,24 @@ export class ToolExecutor {
 			!ToolExecutor.isToolErrorResult(content)
 		) {
 			noteSessionStarted(this.taskState.answerAuditGate)
+		}
+		// Model-invoked, so never a source of a study id (holds against any server, whatever it does with a differing chat_id): it only marks that the binding was
+		// probed, which makes a resumed task eligible. The audit asks the server itself with the host's chat id.
+		if (
+			block.params.tool_name === CHAT_STATUS_TOOL_NAME &&
+			isAiHydroServerName(block.params.server_name) &&
+			typeof content === "string" &&
+			!ToolExecutor.isToolErrorResult(content)
+		) {
+			noteBindingProbed(this.taskState.answerAuditGate)
+		}
+		if (
+			block.params.tool_name === REBIND_CHAT_TOOL &&
+			isAiHydroServerName(block.params.server_name) &&
+			typeof content === "string" &&
+			!ToolExecutor.isToolErrorResult(content)
+		) {
+			noteBindingChanged(this.taskState.answerAuditGate)
 		}
 	}
 

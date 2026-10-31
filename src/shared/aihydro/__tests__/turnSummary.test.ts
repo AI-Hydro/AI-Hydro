@@ -36,4 +36,10 @@ describe("summarizeTurn", () => {
 		expect(r.claimIds).to.deep.equal(["c1"])
 		expect(r.runIds).to.deep.equal(["r2"])
 	})
+	it("counts a run the answer names without #path (so it never says 'no runs' beside a run id), but not code", () => {
+		const answer = "area 774.15 km² [run:watershed.0b12] and [run:a.b#key_outputs.x] and `[run:in.code]` plus [run:2nd-run]"
+		const r = summarizeTurn([say(1, "task", "q"), say(2, "completion_result", answer)], 2)
+		expect(r.runIds).to.have.members(["a.b", "watershed.0b12", "2nd-run"])
+		expect(r.runIds).to.have.length(3)
+	})
 })
