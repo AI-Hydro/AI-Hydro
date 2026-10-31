@@ -95,12 +95,17 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 		<section
 			aria-label="Workspace files you can add"
 			style={{ borderTop: `1px solid ${border}`, padding: "6px 8px", fontSize: 11, color: fg }}>
-			<div style={{ fontWeight: 600, marginBottom: 4 }}>Workspace files you can add ({addable.length})</div>
-			{addable.length === 0 && <div style={{ opacity: 0.75 }}>All workspace geo files found are already on the map.</div>}
+			<div className="map-section-head">
+				<span className="map-section-label">
+					<span aria-hidden="true" className="codicon codicon-folder" />
+					{`Workspace files you can add (${addable.length})`}
+				</span>
+			</div>
+			{addable.length === 0 && <div className="map-hint">All workspace geo files found are already on the map.</div>}
 			{shown.map((file) => (
 				<div
 					key={workspaceFileKey(file.workspaceFolder, file.relativePath)}
-					style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+					style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 28 }}>
 					<span
 						style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
 						title={workspaceFileKey(file.workspaceFolder, file.relativePath).replace("\u0000", " / ")}>
@@ -109,36 +114,16 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 					</span>
 					<button
 						aria-label={`Add ${file.relativePath} to the map`}
+						className="map-chip"
 						disabled={busyKey !== null}
 						onClick={() => void add(file)}
-						style={{
-							padding: "3px 8px",
-							fontSize: 11,
-							color: fg,
-							background: subtle,
-							border: `1px solid ${border}`,
-							borderRadius: 3,
-							cursor: busyKey === null ? "pointer" : "default",
-						}}
 						type="button">
 						{busyKey === workspaceFileKey(file.workspaceFolder, file.relativePath) ? "Adding…" : "Add"}
 					</button>
 				</div>
 			))}
 			{addable.length > COLLAPSED_ROWS && (
-				<button
-					onClick={() => setShowAll((value) => !value)}
-					style={{
-						marginTop: 4,
-						padding: 0,
-						background: "none",
-						border: "none",
-						color: "inherit",
-						textDecoration: "underline",
-						cursor: "pointer",
-						fontSize: 11,
-					}}
-					type="button">
+				<button className="map-chip" onClick={() => setShowAll((value) => !value)} style={{ marginTop: 4 }} type="button">
 					{showAll ? "Show fewer" : `Show all ${addable.length}`}
 				</button>
 			)}

@@ -114,6 +114,15 @@ From the navigation audit (N15, N16). AI-Hydro's code-action provider was regist
 - **Screen harness:** the `Screens` shards failed on `requestfailed(net::ERR_ABORTED)` for basemap tiles at teardown. The page cancels tiles the router has not yet been handed; those cancelled tiles are no longer counted as escapes (a live response would still fail the run). The "1190 live requests per shard" in `summary.json` is `externalRoutedRequests`, the requests the harness answered from fixtures, not traffic that left; `scripts/ui-screens/README.md` now says so.
 - **MCP marketplace card** and **Skills** tolerate a host reply with no `aiHydroStars` or no `items` (the proto default), showing 0 instead of "undefined" or a crash.
 
+### Changed — Export, Transect, the sketch tracker and the workspace-files list follow the same rules (branch `vision2040/polish-map-rest`)
+
+The owner asked for all of the map's panels to be polished. These four were the ones left with small targets, small text, emoji and fixed dark colours.
+
+- **Export** (the Map Plate Composer): 31 controls under 24 px are 24 px (one `.map-export` rule, since the panel is styled inline throughout). Its panel, border and field colours came from the map style, so in the light and high-contrast-light themes dark text sat on a hard-coded dark panel (1.5:1); they now use the theme. Status colours (blocked, ready, warnings) use the theme error, foreground and warning colours.
+- **Transect profile and the sketch tracker**: emoji and glyph buttons are codicons, 8 to 10 px text is 11 px, controls are 24 px, and status, priority and collection colours no longer carry the text (the text uses the theme foreground and the colour is a bar beside it). The empty messages no longer point at buttons that are gone.
+- **Workspace files you can add**: the same header and chip button as the other lists, 24 px buttons.
+- New harness screens `map-draw-sketches` (two sketches), `map-transect-saved` (one saved transect) and `map-layers-workspace-files` (the fixture host now lists workspace geo files). All three, and the Export screens, read 0 small targets, small text and contrast failures at dark and hc-light by 400, 800 and 1280.
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)

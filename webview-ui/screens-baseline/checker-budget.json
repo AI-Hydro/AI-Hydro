@@ -1739,16 +1739,16 @@
 		"map-export-sheet": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 31,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 1,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
 				"noName": 0,
-				"smallTarget": 186,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 144,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
@@ -1756,9 +1756,9 @@
 		"map-export-success": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 31,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 1,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -1772,9 +1772,9 @@
 		"map-export-zero-output": {
 			"ref": {
 				"noName": 0,
-				"smallTarget": 31,
+				"smallTarget": 0,
 				"smallText": 0,
-				"contrast": 1,
+				"contrast": 0,
 				"contrastIndeterminate": 0
 			},
 			"matrixTotal": {
@@ -2739,6 +2739,57 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
+		},
+		"map-draw-sketches": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-transect-saved": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-workspace-files": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
 		}
 	},
 	"subsets": {
@@ -3017,9 +3068,9 @@
 				"map-export-success": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 186,
+						"smallTarget": 0,
 						"smallText": 0,
-						"contrast": 147,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -3027,9 +3078,9 @@
 				"map-export-zero-output": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 186,
+						"smallTarget": 0,
 						"smallText": 0,
-						"contrast": 147,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -3887,9 +3938,9 @@
 				"map-export-sheet": {
 					"matrixTotal": {
 						"noName": 0,
-						"smallTarget": 186,
+						"smallTarget": 0,
 						"smallText": 0,
-						"contrast": 144,
+						"contrast": 0,
 						"contrastIndeterminate": 0
 					},
 					"cells": 6
@@ -4365,6 +4416,36 @@
 					"cells": 6
 				},
 				"map-identify-card": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-draw-sketches": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-transect-saved": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-workspace-files": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,

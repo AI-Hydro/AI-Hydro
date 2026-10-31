@@ -57,6 +57,8 @@ export interface ScreenDef {
 	mapHydrating?: boolean
 	/** Saved layers kept on disk beyond the restore cap (the Layers panel offers "Restore older layers"). */
 	mapOlderCount?: number
+	/** Geo files the fixture host lists in the open workspace (the Layers panel offers to add them). */
+	workspaceFiles?: { relativePath: string; name: string; extension: string; workspaceFolder: string; folderName: string }[]
 	/** Artifacts the fixture host reports from saveMapExport (0 exercises the zero-output state). */
 	exportOutputs?: number
 	htmlPreviews?: HtmlPreviewItem[]

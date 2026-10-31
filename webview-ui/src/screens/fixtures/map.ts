@@ -309,3 +309,80 @@ export const manyLayers = (): MapLayer[] => {
 		file(1, "user", "dams_nid_subset"),
 	]
 }
+
+/** Two sketches (an area and a line) as the host returns them next to the pins: the tracker cards in the Draw panel. */
+export const fixtureSketches = (): Record<string, unknown>[] =>
+	[
+		{
+			id: "fx-sketch-1",
+			name: "Study area",
+			notes: "Outer boundary of the low-flow study.",
+			type: "polygon",
+			geometry: {
+				type: "Polygon",
+				coordinates: [
+					[
+						[-90.2, 38.85],
+						[-89.7, 38.85],
+						[-89.7, 39.2],
+						[-90.2, 39.2],
+						[-90.2, 38.85],
+					],
+				],
+			},
+			status: "in_progress",
+			priority: "high",
+			tags: ["low-flow", "draft"],
+		},
+		{
+			id: "fx-sketch-2",
+			name: "Transect to gauge",
+			notes: "",
+			type: "line",
+			geometry: {
+				type: "LineString",
+				coordinates: [
+					[-90.1, 38.9],
+					[-89.9, 38.85],
+				],
+			},
+			status: "open",
+			priority: null,
+			tags: [],
+		},
+	].map((s) => ({
+		aiPrompt: "",
+		color: "#2d9f6f",
+		images: [],
+		collectionIds: [],
+		createdAt: "2026-01-01T00:00:00.000Z",
+		updatedAt: "2026-01-01T00:00:00.000Z",
+		...s,
+	}))
+
+/** One saved transect, in the key the Transect panel reads. */
+export const TRANSECTS_STORAGE_KEY = "aihydro.map.transects.v1"
+export const fixtureTransectsJson = (): string =>
+	JSON.stringify([
+		{
+			id: "fx-transect-1",
+			name: "Gauge to outlet",
+			notes: "Check the bank slope.",
+			aiPrompt: "",
+			geometry: {
+				type: "LineString",
+				coordinates: [
+					[-90.2, 38.9],
+					[-89.95, 38.95],
+					[-89.8, 39.05],
+				],
+			},
+			color: "#f97316",
+			tags: [],
+			collectionIds: [],
+			status: "open",
+			priority: null,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		},
+	])

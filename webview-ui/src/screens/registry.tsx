@@ -36,12 +36,15 @@ import {
 	basinPolygon,
 	featureLayers,
 	fixturePins,
+	fixtureSketches,
+	fixtureTransectsJson,
 	framedWorkspace,
 	gaugePoint,
 	longNameLayers,
 	MAP_STORAGE_KEY,
 	manyLayers,
 	restoredLayers,
+	TRANSECTS_STORAGE_KEY,
 } from "./fixtures/map"
 import { fixtureInstalledSkills, fixtureMarketplaceSkills, fixtureMcpMarketplace } from "./fixtures/nav"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
@@ -118,7 +121,7 @@ const mapScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): S
  * answers: the card reads Saving, and Not saved once ten seconds have passed).
  */
 const pinsHost =
-	(imported = false, save: "ack" | "refuse" | "silent" = "ack"): ScreenDef["onMessage"] =>
+	(imported = false, save: "ack" | "refuse" | "silent" = "ack", sketches = false): ScreenDef["onMessage"] =>
 	(msg, reply) => {
 		if (msg.type === "aihydro-map-save-annotations") {
 			if (save === "ack") {
@@ -130,7 +133,9 @@ const pinsHost =
 			return
 		}
 		if (msg.type !== "aihydro-map-load-annotations") return
-		const annotations = fixturePins().map((pin) => (imported ? { ...pin, imported: true } : pin))
+		const annotations = [...fixturePins(), ...(sketches ? fixtureSketches() : [])].map((pin) =>
+			imported ? { ...pin, imported: true } : pin,
+		)
 		reply({
 			type: "aihydro-map-load-annotations-result",
 			requestId: msg.requestId,
@@ -1458,6 +1463,38 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-reference-tab", "Layers > Reference tab: MERIT rivers, HUCs, gauges and dams", {
 		layers: featureLayers(),
 		steps: [...openTool("Layer manager"), { click: "#map-chrome-tab-hydrography" }, { wait: 500 }],
+	}),
+	// The remaining panels: tracker cards under Draw, the Transect panel with a saved transect, workspace files to add.
+	mapScreen("map-draw-sketches", "Draw ROI with two sketches: tracker cards, collections and filters", {
+		layers: featureLayers(),
+		onMessage: pinsHost(false, "ack", true),
+		steps: [...openTool("Draw ROI"), { wait: 300 }],
+	}),
+	mapScreen("map-transect-saved", "Transect panel with one saved transect", {
+		layers: featureLayers(),
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace(), [TRANSECTS_STORAGE_KEY]: fixtureTransectsJson() },
+		steps: openTool("Transect profile", true),
+	}),
+	mapScreen("map-layers-workspace-files", "Layers with workspace files that can be added", {
+		layers: featureLayers(),
+		workspaceFiles: [
+			{
+				relativePath: "data/huc8_boundaries.geojson",
+				name: "huc8_boundaries.geojson",
+				extension: ".geojson",
+				workspaceFolder: "/fixture",
+				folderName: "fixture",
+			},
+			{
+				relativePath: "roi/active.json",
+				name: "active.json",
+				extension: ".json",
+				workspaceFolder: "/fixture",
+				folderName: "fixture",
+			},
+		],
+		steps: openTool("Layer manager"),
+		expectVisible: ['[aria-label="Workspace files you can add"]'],
 	}),
 	mapScreen("map-more-flyout", "More menu with Swipe, Time and Flood disabled and why", {
 		steps: [

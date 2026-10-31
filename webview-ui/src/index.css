@@ -3525,3 +3525,30 @@ vscode-dropdown::part(listbox) {
 	color: var(--vscode-editorWarning-foreground, #cca700);
 	font-weight: 400;
 }
+
+/* Export: its controls are styled inline all over; one rule brings every target to 24 px. */
+.map-export button,
+.map-export select,
+.map-export input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+	min-height: 24px;
+	min-width: 24px;
+	box-sizing: border-box;
+}
+.map-export input[type="checkbox"],
+.map-export input[type="radio"] {
+	width: 24px;
+	height: 24px;
+	margin: 0;
+}
+.map-export input[type="range"] {
+	min-height: 24px;
+}
+
+/* Sketch tracker cards: many inline-styled controls; one rule brings every target to 24 px. */
+.map-tracker button,
+.map-tracker select,
+.map-tracker input:not([type="checkbox"]):not([type="radio"]) {
+	min-height: 24px;
+	min-width: 24px;
+	box-sizing: border-box;
+}
