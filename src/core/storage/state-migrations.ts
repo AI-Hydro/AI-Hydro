@@ -682,6 +682,29 @@ export async function removeRetiredAccountSecrets(context: vscode.ExtensionConte
 	}
 }
 
+/** Marker for {@link resetLegacySubagentsEnabled}. */
+const SUBAGENTS_RESET_MIGRATION_KEY = "migrations.subagentsEnabledReset.v1"
+
+/**
+ * `subagentsEnabled` used to mean "allow the macOS-only `aihydro` CLI subagent". It now means "allow in-process read-only
+ * explorers", which is a different feature the user has never been shown. A stored `true` from the CLI era must not
+ * silently enable it, so it is reset to off exactly once; the marker means a user who turns explorers on afterwards keeps
+ * the choice. A failed write leaves the marker unset so the next start retries.
+ */
+export async function resetLegacySubagentsEnabled(context: vscode.ExtensionContext) {
+	try {
+		if (context.globalState.get(SUBAGENTS_RESET_MIGRATION_KEY) === true) {
+			return
+		}
+		if (context.globalState.get("subagentsEnabled") === true) {
+			await context.globalState.update("subagentsEnabled", false)
+		}
+		await context.globalState.update(SUBAGENTS_RESET_MIGRATION_KEY, true)
+	} catch (error) {
+		console.error("Failed to reset the legacy subagentsEnabled setting:", error)
+	}
+}
+
 /**
  * Drop the workspace-state toggles of the removed Cursor and Windsurf rule dialects (X0-6b). Nothing reads these keys
  * any more. Clearing an already-absent key is a no-op, so no marker is needed and the function is idempotent.

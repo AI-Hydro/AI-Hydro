@@ -4,6 +4,45 @@ Append-only. Newest first. One entry per non-obvious choice, with the **why**.
 
 ---
 
+## 2026-10-31 — Explorer subagents are in-process, profile-scoped and asked every time
+
+Branches `vision2040/subagents-pr0` to `-pr3` (owner decision H1, 2026-10-28: explorer-only; PR-4, a `general` or
+`data-runner` profile, is NOT approved and needs its own decision).
+
+- **Shape.** A child is a headless model loop in the extension host (`SubagentRunner`) with its own conversation, state and
+  API handler. It runs tools through a `ToolExecutor` built for one profile. The profile is per executor, never a
+  process-wide switch: the extension host is one process, so an environment variable would restrict the parent too, or
+  nothing. The retired `aihydro "..."` CLI path stays denied in every setting. *Why not a CLI:* a separate process moves
+  approvals out of the host's sight, needs signed per-platform binaries, and would run its own MCP server and trust.
+- **A child is never more capable than its parent** (`capFor`): the intersection of the profile and what the parent can call
+  now; no auto-approve at all in an untrusted workspace; no spawning from a child. A child ignores YOLO, "execute all
+  commands" and edit grants. It auto-approves only its own reads and MCP, and only when the user's own settings approve them.
+- **Every child approval is the parent's ask.** One pending at a time, first in first out, bound to its `ask_ts`, stamped by
+  the host with the child's name. A child's `say` never reaches the parent, because moving `lastMessageTs` supersedes the
+  pending ask. Only `tool` and `use_mcp_server` asks are allowed from a child.
+- **The launch is asked every time (H2)**, even in YOLO and with auto-approve on, and has no "Always". *Why:* children cost
+  money and the user judges the installed build.
+- **Explorer allowlist v2.** `read_file`, `search_files`, `list_files`, `load_mcp_documentation`, `use_mcp_tool` (READ class
+  on a trusted server only), `access_mcp_resource` (trusted server only), and `report_findings`. Removed from the old
+  process-based list: `web_fetch` (an open-world egress channel for an agent that can read the workspace),
+  `ask_followup_question`, `attempt_completion`, `plan_mode_respond`, `condense`, `summarize_task`, `focus_chain` (they
+  reach the parent's state or its asks). Everything else is refused before a handler or an ask runs.
+- **Child output is untrusted text.** Reports are validated, size-capped, wrapped in `<subagent_reports untrusted="true">`
+  with no `<` surviving from the child, and the tool description tells the parent to check the source a report names.
+- **No claim authority.** No claim, promotion, pre-registration or approval tool is reachable (none is READ class), and a
+  source test fails if a subagent module names one. Promotion stays the owner's signature outside the agent.
+- **Provenance is partial, on purpose.** Each child writes `<task dir>/subagents/<id>.json` (arguments hashed). Each MCP call
+  a child makes carries `_meta["aihydro/context"].agent = {agent_id, parent_agent_id, role}` with the parent's `chat_id` and
+  `client: "vscode"`. The server reads only `study_id`, `workspace`, `chat_id` and `client` today, so the agent block is
+  **not sealed in server RunRecords**; do not call child calls agent-attributed there until the server seals it (audit
+  WP-H8, an aihydro-tools change). The capsule and defensibility exports are server-side over `~/.aihydro/sessions` and do
+  not read the extension's task directory, so `subagents/` is not in them; including it needs a tools-side change.
+- **Known limit.** `ApiHandler` has no abort signal. Stop and cancel drop a child's stream without waiting for it
+  (`iterator.return()`); a provider request that hangs on the network cannot be torn down from here. Children stop
+  being awaited within one poll interval, and their budgets and records are unaffected.
+
+---
+
 ## 2026-10-28 — HistoryItem has one writer and a field-owner table; each chat is bound to its study by the host
 
 Branch `vision2040/x0-binding-history` (UX program Wave 0, X0-1 and X0-2).

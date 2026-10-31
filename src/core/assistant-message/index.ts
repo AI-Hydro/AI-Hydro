@@ -42,6 +42,12 @@ export const toolParamNames = [
 	"timeout",
 	"start_line",
 	"end_line",
+	"prompts",
+	"profile",
+	"summary",
+	"key_findings",
+	"files_read",
+	"open_questions",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]

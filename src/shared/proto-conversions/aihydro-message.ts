@@ -1,5 +1,6 @@
 import type { CommandPolicyClass } from "@shared/aihydro/commandEvidence"
 import { INFO_CLASS_SEVERITY, INFO_CLASSES, type InfoNotice, type McpNotificationLevel } from "@shared/aihydro/infoNotice"
+import { parseSubagentOrigin } from "@shared/aihydro/subagents"
 import {
 	AiHydroAsk as AppAiHydroAsk,
 	AiHydroMessage as AppAiHydroMessage,
@@ -114,6 +115,7 @@ function convertAiHydroSayToProtoEnum(say: AppAiHydroSay | undefined): ClineSay 
 		answer_audit: ClineSay.ANSWER_AUDIT,
 		task_progress: ClineSay.TASK_PROGRESS,
 		error_retry: ClineSay.ERROR_RETRY,
+		subagent_status: ClineSay.SUBAGENT_STATUS,
 	}
 
 	const result = mapping[say]
@@ -162,6 +164,7 @@ function convertProtoEnumToAiHydroSay(say: ClineSay): AppAiHydroSay | undefined 
 		[ClineSay.ERROR_RETRY]: "error_retry",
 		[ClineSay.HTML_PREVIEW]: "html_preview",
 		[ClineSay.ANSWER_AUDIT]: "answer_audit",
+		[ClineSay.SUBAGENT_STATUS]: "subagent_status",
 		[ClineSay.SHELL_INTEGRATION_WARNING_WITH_SUGGESTION]: "shell_integration_warning_with_suggestion",
 	}
 
@@ -222,6 +225,7 @@ export function convertAiHydroMessageToProto(message: AppAiHydroMessage): ProtoC
 		exitCodeState: message.exitCode === undefined ? "" : message.exitCode === "unknown" ? "unknown" : "known",
 		exitCode: typeof message.exitCode === "number" ? message.exitCode : 0,
 		policyClass: message.policyClass ?? "",
+		subagentOriginJson: message.subagentOrigin ? JSON.stringify(message.subagentOrigin) : "",
 		// Outcome evidence the host records; empty/false = absent (the readers treat both the same way).
 		askOutcome: message.askOutcome ?? "",
 		execOutcome: message.execOutcome ?? "",
@@ -338,6 +342,12 @@ export function convertProtoToAiHydroMessage(protoMessage: ProtoClineMessage): A
 	}
 	if (protoMessage.policyClass !== "") {
 		message.policyClass = protoMessage.policyClass as CommandPolicyClass
+	}
+	if (protoMessage.subagentOriginJson !== "") {
+		const origin = parseSubagentOrigin(protoMessage.subagentOriginJson)
+		if (origin) {
+			message.subagentOrigin = origin
+		}
 	}
 
 	return message

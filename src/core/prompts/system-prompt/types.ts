@@ -104,6 +104,8 @@ export interface SystemPromptContext {
 	readonly isTesting?: boolean
 	readonly runtimePlaceholders?: Readonly<Record<string, unknown>>
 	readonly yoloModeToggled?: boolean
+	/** The user turned in-process explorer subagents on; gates the spawn_subagents tool spec. */
+	readonly subagentsEnabled?: boolean
 	readonly isMultiRootEnabled?: boolean
 	readonly workspaceRoots?: Array<{ path: string; name: string; vcs?: string }>
 }

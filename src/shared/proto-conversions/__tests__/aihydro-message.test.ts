@@ -39,6 +39,7 @@ const SAY_KINDS: Record<AiHydroSay, true> = {
 	info: true,
 	task_progress: true,
 	answer_audit: true,
+	subagent_status: true,
 }
 const ASK_KINDS: Record<AiHydroAsk, true> = {
 	followup: true,
@@ -166,5 +167,34 @@ describe("aihydro-message proto round trip (W2-0 M2)", () => {
 		const back = convertProtoToAiHydroMessage(proto)
 		expect(back).to.not.have.property("askOutcome")
 		expect(back).to.not.have.property("execOutcome")
+	})
+})
+
+describe("subagent origin on the wire", () => {
+	const origin = { childId: "sa_1", label: "Explorer 2", profile: "explorer" as const, promptHead: "Survey the repo" }
+
+	it("round-trips on an ask and is absent otherwise", () => {
+		const withOrigin: AiHydroMessage = { ts: 5, type: "ask", ask: "tool", text: "{}", subagentOrigin: origin }
+		expect(convertProtoToAiHydroMessage(convertAiHydroMessageToProto(withOrigin)).subagentOrigin).to.deep.equal(origin)
+		const without: AiHydroMessage = { ts: 6, type: "ask", ask: "tool", text: "{}" }
+		expect(convertProtoToAiHydroMessage(convertAiHydroMessageToProto(without)).subagentOrigin).to.equal(undefined)
+	})
+
+	it("drops an origin that is not exactly the expected shape (a stored or forged one)", () => {
+		const proto = convertAiHydroMessageToProto({ ts: 7, type: "ask", ask: "tool", text: "{}", subagentOrigin: origin })
+		for (const bad of [
+			"{",
+			"[]",
+			JSON.stringify({ ...origin, profile: "general" }),
+			JSON.stringify({ ...origin, label: 3 }),
+			'{"childId":"x"}',
+		]) {
+			expect(convertProtoToAiHydroMessage({ ...proto, subagentOriginJson: bad }).subagentOrigin, bad).to.equal(undefined)
+		}
+	})
+
+	it("the status row kind survives the wire", () => {
+		const row: AiHydroMessage = { ts: 8, type: "say", say: "subagent_status", text: "{}" }
+		expect(convertProtoToAiHydroMessage(convertAiHydroMessageToProto(row)).say).to.equal("subagent_status")
 	})
 })

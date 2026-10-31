@@ -469,6 +469,42 @@ export const screens: ScreenDef[] = [
 		],
 		expectAbsent: ["[data-testid=trust-launcher-action]", "text=To lift a pause"],
 	}),
+	// SUB PR-2: one lifted status row per spawn call; a child's approval is the parent's pending card, named after it.
+	chatTx(
+		"chat-subagents-running",
+		"Subagents: four read-only explorers mid-run (done, running, waiting, stopped early)",
+		tx.subagentsRunningTask,
+		"Explorer 4",
+		{
+			expectVisible: [
+				"[data-testid=subagent-status]",
+				"text=Explorer 1",
+				"text=Done",
+				"text=Running",
+				"text=Waiting for you",
+				"text=Stopped early: tool-call budget used",
+				"[data-testid=stop-button]",
+			],
+			expectAbsent: ["[data-testid=inline-approval]", "text=Always"],
+		},
+	),
+	chatTx(
+		"chat-subagent-ask",
+		"Subagents: Explorer 3's read approval is pending (chip names it; no Always)",
+		tx.subagentAskTask,
+		"From Explorer 3",
+		{
+			expectVisible: [
+				"[data-testid=subagent-status]",
+				"[data-testid=subagent-origin]",
+				"text=From Explorer 3 · read-only",
+				APPROVAL_INLINE,
+				"[data-testid=inline-approval-primary]",
+				"[data-testid=inline-approval-deny]",
+			],
+			expectAbsent: [APPROVAL_ALWAYS, FOOTER_ACTIONS],
+		},
+	),
 	chatScreen("chat-home-empty-history", "Chat home, no history", { state: { taskHistory: [] } }),
 	chatScreen("chat-task-text", "Task with plain text", {
 		state: taskState(plainTextTask),

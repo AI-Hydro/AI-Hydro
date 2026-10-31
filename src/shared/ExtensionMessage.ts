@@ -7,6 +7,7 @@ import { AiHydroFeatureSetting } from "./AiHydroFeatureSetting"
 import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import type { CommandExit, CommandPolicyClass } from "./aihydro/commandEvidence"
 import type { InfoNotice, McpNotificationLevel } from "./aihydro/infoNotice"
+import type { SubagentLaunch, SubagentOrigin } from "./aihydro/subagents"
 import { AiHydroRulesToggles } from "./aihydro-rules"
 import { ApiConfiguration } from "./api"
 import { BrowserSettings } from "./BrowserSettings"
@@ -193,6 +194,8 @@ export interface AiHydroMessage {
 	exitCode?: CommandExit
 	/** Command rows the host's policy flagged (subagent launch, protected path, danger grant, ...). */
 	policyClass?: CommandPolicyClass
+	/** Set by the host on an ask that a subagent raised, so the card says whose request it is. Never model-supplied. */
+	subagentOrigin?: SubagentOrigin
 	lastCheckpointHash?: string
 	isCheckpointCheckedOut?: boolean
 	isOperationOutsideWorkspace?: boolean
@@ -254,6 +257,7 @@ export type AiHydroSay =
 	| "info" // Added for general informational messages like retry status
 	| "task_progress"
 	| "answer_audit" // structured audit of a final answer (W2-B emits it; the proto enum is reserved at 1001)
+	| "subagent_status" // one row per spawn_subagents call: its children, updated in place (JSON: SubagentStatusPayload)
 
 export interface AiHydroSayTool {
 	tool:
@@ -266,6 +270,7 @@ export interface AiHydroSayTool {
 		| "searchFiles"
 		| "webFetch"
 		| "summarizeTask"
+		| "spawnSubagents"
 	path?: string
 	diff?: string
 	content?: string
@@ -275,6 +280,8 @@ export interface AiHydroSayTool {
 	startLine?: number
 	endLine?: number
 	totalLines?: number
+	/** `spawnSubagents` launch ask: what will run. Shown on the card the user approves. */
+	subagents?: SubagentLaunch
 }
 
 // must keep in sync with system prompt
