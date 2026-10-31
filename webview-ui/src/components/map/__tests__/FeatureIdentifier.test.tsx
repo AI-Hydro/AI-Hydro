@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { PLATFORM_CONFIG } from "../../../config/platform.config"
 import FeatureIdentifier, { type ClickedFeature } from "../FeatureIdentifier"
@@ -112,5 +112,59 @@ describe("feature identifier card", () => {
 		expect(names).toEqual(["Delineate without chat", "Select", "Save as GeoJSON", "Save as shapefile", "Copy coordinates"])
 		fireEvent.click(screen.getByRole("menuitem", { name: "Delineate without chat" }))
 		expect(onQuickDelineate).toHaveBeenCalled()
+	})
+
+	it("a layer with a tool name is not called Reference, even from a reference source", () => {
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "r", layerName: "Gauges", properties: { site_no: "1" } }]}
+				inspectPoint={{ lon: -68.5, lat: 47.2 }}
+				layerMetadata={() => ({ source: "nwis", tool: "fetch_gauges" })}
+				mapStyle="dark"
+				onClose={vi.fn()}
+			/>,
+		)
+		expect(screen.queryByText("Reference, not in any run")).toBeNull()
+		expect(screen.getByText("fetch_gauges · no run record")).toBeInTheDocument()
+	})
+
+	it("Remove layer asks first, and Escape closes the card", () => {
+		const onRemoveLayer = vi.fn()
+		const onClose = vi.fn()
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "l", layerName: "Wells", properties: { a: 1 } }]}
+				inspectPoint={{ lon: -90, lat: 40 }}
+				mapStyle="dark"
+				onAgentAsk={vi.fn()}
+				onClose={onClose}
+				onRemoveLayer={onRemoveLayer}
+			/>,
+		)
+		fireEvent.click(screen.getByRole("button", { name: "More actions for this selection" }))
+		fireEvent.click(screen.getByRole("menuitem", { name: "Remove layer" }))
+		expect(onRemoveLayer).not.toHaveBeenCalled()
+		const dialog = screen.getByRole("alertdialog", { name: "Confirm removal" })
+		fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
+		expect(onRemoveLayer).not.toHaveBeenCalled()
+		fireEvent.click(screen.getByRole("button", { name: "More actions for this selection" }))
+		fireEvent.click(screen.getByRole("menuitem", { name: "Remove layer" }))
+		fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Remove layer" }))
+		expect(onRemoveLayer).toHaveBeenCalledWith("l")
+		fireEvent.keyDown(window, { key: "Escape" })
+		expect(onClose).toHaveBeenCalled()
+	})
+
+	it("a large-basin routing warning is visible text, not only a tooltip", () => {
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "r", layerName: "Rivers", properties: { uparea: 90000 } }]}
+				inspectPoint={{ lon: 10, lat: 50 }}
+				mapStyle="dark"
+				onAgentDelineate={vi.fn()}
+				onClose={vi.fn()}
+			/>,
+		)
+		expect(screen.getByRole("note")).toHaveTextContent(/hybrid/i)
 	})
 })
