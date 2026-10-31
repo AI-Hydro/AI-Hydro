@@ -80,6 +80,7 @@ import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
 import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext, mapLayerStudyHint } from "./mapAgentBridge"
+import { buildMapRef } from "./mapAgentRef"
 import { panelFamily, useMapChrome } from "./mapChrome"
 import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapHydroGuards"
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
@@ -347,12 +348,19 @@ function meritCatchmentVisual(
 	}
 }
 
+/** What to tell the user after a launch: an open chat took the text into its input; otherwise a new chat opened. */
+function agentLaunchStatus(result: { addedToChat?: boolean; warning?: string }, newChatText: string): string {
+	if (!result.addedToChat) return newChatText
+	return `Added to the current chat's input. Send it when ready.${result.warning ? ` ${result.warning}` : ""}`
+}
+
 function buildMapAgentContext(
 	pt: MapInspectPoint,
 	features: ClickedFeature[],
 	layers: MapLayer[],
 	visibleLayerIds: Set<string>,
 	selectedFeatures: ClickedFeature[] = [],
+	pinId?: string,
 ): MapAgentInspectContext {
 	const primary = features[0]
 	const primaryLayer = primary ? layers.find((l) => l.id === primary.layerId) : undefined
@@ -360,6 +368,7 @@ function buildMapAgentContext(
 		lat: pt.lat,
 		lon: pt.lon,
 		layerName: primary?.layerName,
+		ref: buildMapRef({ point: pt, features, layers, pinId }),
 		studyHint: mapLayerStudyHint(primaryLayer),
 		featureProperties: primary?.properties,
 		visibleLayerNames: layers.filter((l) => visibleLayerIds.has(l.id)).map((l) => l.name),
@@ -3228,16 +3237,16 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	}, [])
 
 	const handleAgentAsk = useCallback(
-		async (pt: MapInspectPoint, features: ClickedFeature[], userQuestion?: string) => {
+		async (pt: MapInspectPoint, features: ClickedFeature[], userQuestion?: string, pinId?: string) => {
 			setAgentStarting(true)
 			setAgentStatus(null)
 			setDelineateStatus(null)
-			const ctx = buildMapAgentContext(pt, features, sortedLayers, visibleLayerIds, selectedFeatures)
+			const ctx = buildMapAgentContext(pt, features, sortedLayers, visibleLayerIds, selectedFeatures, pinId)
 			try {
 				const result = await askAgentAboutMap(ctx, userQuestion)
 				setAgentStatus(
 					result.ok
-						? "Chat opened — edit the prompt and send when ready."
+						? agentLaunchStatus(result, "Chat opened — edit the prompt and send when ready.")
 						: result.cancelled
 							? "Kept the current chat."
 							: result.error || "Could not start agent task",
@@ -3261,7 +3270,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				const result = await askAgentToDelineate(ctx)
 				setAgentStatus(
 					result.ok
-						? "Chat opened — agent will delineate and push to map."
+						? agentLaunchStatus(result, "Chat opened — agent will delineate and push to map.")
 						: result.cancelled
 							? "Kept the current chat."
 							: result.error || "Could not start agent task",
@@ -3284,7 +3293,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			const expectedAreaKm2 = selectedMeritUpareaKm2(features)
 			if (expectedAreaKm2 && expectedAreaKm2 > QUICK_DELINEATE_MAX_MERIT_UPAREA_KM2) {
 				setDelineateStatus(
-					`Large basin (~${Math.round(expectedAreaKm2).toLocaleString()} km²). Quick raster delineation exceeds the interactive envelope; use Delineate with agent so the hybrid workflow can stage MERIT-Basins assets.`,
+					`Large basin (~${Math.round(expectedAreaKm2).toLocaleString()} km²). Quick raster delineation exceeds the interactive envelope; use Delineate so the hybrid workflow can stage MERIT-Basins assets.`,
 				)
 				return
 			}
@@ -3814,7 +3823,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							menuPin
 								? () => {
 										const [pinLon, pinLat] = pinCoords(menuPin)
-										void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(menuPin))
+										void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(menuPin), menuPin.id)
 									}
 								: undefined
 						}
@@ -3877,7 +3886,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						mapStyle={mapStyle === "dark" ? "dark" : "light"}
 						onAsk={() => {
 							const [pinLon, pinLat] = pinCoords(selectedPin)
-							void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(selectedPin))
+							void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(selectedPin), selectedPin.id)
 						}}
 						onClose={() => selectPin(null)}
 						onCopy={() => {

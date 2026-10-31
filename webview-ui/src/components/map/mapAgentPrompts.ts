@@ -19,6 +19,8 @@ export interface MapAgentInspectContext {
 	userQuestion?: string
 	/** Lookup keys for the study the clicked layer belongs to; sent to the host, never put in the prompt. */
 	studyHint?: { sessionId?: string; artifactPath?: string }
+	/** What was pointed at, as a reference. Goes to an open chat as one line instead of the long prompt. */
+	ref?: import("@shared/map/mapRef").MapRef
 }
 
 function formatCoords(lat: number, lon: number): string {
