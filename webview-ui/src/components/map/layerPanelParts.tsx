@@ -7,6 +7,7 @@ import { layerRunId, layerTool, NO_RUN_RECORD } from "@shared/map/provenanceEnve
 import type { MapLayer } from "@shared/proto/cline/map"
 import React, { useMemo, useState } from "react"
 import { type LayerIntelligence, layerProvenance, warningText } from "./layerIntelligence"
+import { originOf } from "./layerModel"
 import { geeDisplayLines } from "./mapLayerAdapters"
 import { MAP_Z } from "./mapZ"
 
@@ -331,9 +332,13 @@ export const LayerInspector: React.FC<{
 	fg: string
 	/** Called after a value is copied, with what was copied ("tool name", "run ID"). */
 	onCopied?: (what: string) => void
+	/** Open the run that made this layer in Replay; absent when the layer has no study and run to open. */
+	onOpenRun?: () => void
+	/** Open the layer's provenance record file; absent when it has none. */
+	onOpenProvenance?: () => void
 	/** Every warning the row's icon stands for, in full (the tooltip is not the only place to read them). */
 	warnings?: string[]
-}> = ({ layer, intelligence, niceMeta, border, fg, onCopied, warnings }) => {
+}> = ({ layer, intelligence, niceMeta, border, fg, onCopied, onOpenRun, onOpenProvenance, warnings }) => {
 	const [tab, setTab] = useState<"overview" | "data" | "provenance">("overview")
 	const meta = layer.metadata ?? {}
 	const statusTone = statusColors(intelligence.dataState)
@@ -450,7 +455,29 @@ export const LayerInspector: React.FC<{
 							onCopied={onCopied}
 							rows={provenance.rows}
 						/>
-						{!layerRunId(meta) && <div style={{ marginTop: 6 }}>{NO_RUN_RECORD}.</div>}
+						{!layerRunId(meta) && (
+							<div style={{ marginTop: 6 }}>
+								{originOf(layer) === "reference"
+									? "Reference, not in any run. It cannot back a claim."
+									: `${NO_RUN_RECORD}.`}
+							</div>
+						)}
+						{(onOpenRun || onOpenProvenance) && (
+							<div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+								{onOpenRun && (
+									<button className="map-chip" onClick={onOpenRun} type="button">
+										<span aria-hidden="true" className="codicon codicon-history" />
+										Open run
+									</button>
+								)}
+								{onOpenProvenance && (
+									<button className="map-chip" onClick={onOpenProvenance} type="button">
+										<span aria-hidden="true" className="codicon codicon-file-code" />
+										Open provenance record
+									</button>
+								)}
+							</div>
+						)}
 						{provenance.notRecorded.length > 0 && (
 							<div style={{ marginTop: 6, opacity: 0.75 }}>Not recorded: {provenance.notRecorded.join(", ")}.</div>
 						)}

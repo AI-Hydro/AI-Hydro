@@ -219,6 +219,15 @@ function sourceLabel(layer: MapLayer): string {
 	if (source === "merit") {
 		return "MERIT-Basins"
 	}
+	if (source === "nwis") {
+		return "USGS NWIS"
+	}
+	if (source === "wbd") {
+		return "USGS Watershed Boundary Dataset"
+	}
+	if (source === "nid") {
+		return "National Inventory of Dams"
+	}
 	if (source === "user") {
 		return "Loaded file"
 	}

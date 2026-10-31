@@ -123,9 +123,13 @@ Each action lives in one place. Click a layer's name to open its drawer; the `..
 | Drawer | **Details** | Overview, Data and Provenance. The run and tool names copy from here |
 | `...` menu | Zoom to layer, Rename | |
 | `...` menu | **Save as…** | A workspace file, or a GeoJSON download |
-| `...` menu | Open source file, Reload source, Open provenance record | Only when the layer has them |
+| `...` menu | Open source file, Reload source | Only when the layer has a source file |
+| `...` menu and Details | **Open run** | Opens the run that made the layer in Replay. Shown only when the layer records both its study and its run |
+| Details, Provenance | Open provenance record | When the layer has one |
 | `...` menu | Move up, Move down | Render order |
 | `...` menu | Remove layer | Source file not deleted; Undo appears |
+
+Layers are grouped by origin. **Reference data** holds MERIT rivers, WBD boundaries, NWIS gauges and NID dams that no run made: they are labelled "Reference, not in any run" and cannot back a claim. The same layer made by a study's run sits under Tool output instead.
 
 Show all and Hide all are in the Layers panel `...` menu. The Provenance tab lists what is recorded and ends with one "Not recorded: ..." line for the facts that are not.
 

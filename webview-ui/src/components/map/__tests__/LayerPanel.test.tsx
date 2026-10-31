@@ -29,6 +29,7 @@ vi.mock("../../../services/grpc-client", () => ({
 	FileServiceClient: { openFile: vi.fn() },
 }))
 
+import { PLATFORM_CONFIG } from "../../../config/platform.config"
 import { LayerPanelContent } from "../LayerPanel"
 
 const poly = (id: string, name: string, metadata: Record<string, string> = {}): MapLayer =>
@@ -128,6 +129,41 @@ describe("LayerPanel", () => {
 		expect(writeText).toHaveBeenCalledWith("run-7f3a.1")
 		fireEvent.click(screen.getByRole("button", { name: "Copy tool name" }))
 		expect(writeText).toHaveBeenCalledWith("delineate_watershed")
+	})
+
+	it("Open run is a menu item and a Details button only when the layer names its study and run, and it asks the host", () => {
+		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation(() => {})
+		state.layers = [
+			poly("a", "with run", { source_path: "/w/a.geojson", study_id: "study-1" }),
+			poly("b", "no study", { _run_id: "run-9.1" }),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for no study/ }))
+		expect(screen.queryByRole("menuitem", { name: "Open run" })).toBeNull()
+		fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" })
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for with run/ }))
+		expect(within(screen.getByRole("menu")).getAllByRole("menuitem").length).toBeLessThanOrEqual(9)
+		fireEvent.click(screen.getByRole("menuitem", { name: "Open run" }))
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-map-open-run", study_id: "study-1", run_id: "run-7f3a.1" })
+		postMessage.mockClear()
+		fireEvent.click(screen.getByRole("button", { name: /^with run/ }))
+		fireEvent.click(screen.getByRole("button", { name: "Details" }))
+		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
+		fireEvent.click(screen.getByRole("button", { name: "Open run" }))
+		expect(postMessage).toHaveBeenCalledTimes(1)
+		postMessage.mockRestore()
+	})
+
+	it("a reference layer with no study open sits under Reference data and says it is not in any run", () => {
+		state.layers = [poly("g", "NWIS gauges", { source: "nwis", tool: "", _run_id: "", provenance_path: "" })]
+		render(<LayerPanelContent {...baseProps()} />)
+		expect(screen.getByRole("button", { name: /Reference data/ })).toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: /^Other/ })).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: /^NWIS gauges/ }))
+		fireEvent.click(screen.getByRole("button", { name: "Details" }))
+		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
+		expect(screen.getByText(/Reference, not in any run/)).toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: "Open run" })).toBeNull()
 	})
 
 	it("Save as… offers a workspace file and a GeoJSON download in the drawer", () => {
