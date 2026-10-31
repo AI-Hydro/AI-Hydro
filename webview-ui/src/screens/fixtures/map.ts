@@ -77,6 +77,7 @@ export const gaugePoint: MapLayer = {
 		source_status: "synthetic",
 		tool: "locate_gauge",
 		_run_id: "fx-run-0002",
+		study_id: "fx-study",
 		provenance_path: "/fixture/provenance/fx-run-0002.json",
 		time_start: "2021-01-01",
 		time_end: "2021-12-31",
@@ -162,6 +163,17 @@ export function rasterLayer(): MapLayer {
 			provenance_path: "/fixture/provenance/fx-run-0004.json",
 		},
 	}
+}
+
+/** A reference layer (NWIS gauges in view) with no study open: no tool, no run. */
+export const referenceGauges: MapLayer = {
+	id: "fx-ref-gauges",
+	name: "NWIS gauges in view",
+	layerType: "point",
+	visible: true,
+	geojson: gaugePoint.geojson,
+	style: gaugePoint.style,
+	metadata: { source: "nwis", style_preset: "gauge", feature_count: "1", source_status: "synthetic" },
 }
 
 export const featureLayers = (): MapLayer[] => [rasterLayer(), basinPolygon, riverLines, gaugePoint]

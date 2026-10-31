@@ -12,21 +12,31 @@ import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { deriveLayerIntelligence, type LayerIntelligence, warningText } from "./layerIntelligence"
 
-export type LayerOrigin = "tool" | "workspace" | "user" | "gee" | "pushed"
+export type LayerOrigin = "tool" | "reference" | "workspace" | "user" | "gee" | "pushed"
 
 /** Groups appear in this order. */
-export const ORIGIN_ORDER: LayerOrigin[] = ["tool", "user", "workspace", "gee", "pushed"]
+export const ORIGIN_ORDER: LayerOrigin[] = ["tool", "reference", "user", "workspace", "gee", "pushed"]
 
 export const ORIGIN_LABEL: Record<LayerOrigin, { title: string; icon: string; hint: string }> = {
 	tool: { title: "Tool output", icon: "beaker", hint: "Layers an AI-Hydro tool produced" },
+	reference: {
+		title: "Reference data",
+		icon: "book",
+		hint: "Reference, not in any run. These layers are not from a recorded run",
+	},
 	workspace: { title: "Workspace files", icon: "folder", hint: "Files from your workspace" },
 	user: { title: "Loaded by you", icon: "cloud-download", hint: "Layers you added from a file or URL" },
 	gee: { title: "Earth Engine", icon: "globe", hint: "Google Earth Engine layers" },
 	pushed: { title: "Other", icon: "layers", hint: "Layers pushed to the map without a recorded origin" },
 }
 
+/** Sources the Reference tab and the hydrology tools draw from (MERIT rivers, WBD HUCs, NWIS gauges, NID dams). */
+const REFERENCE_SOURCES = new Set(["merit", "wbd", "nwis", "nid"])
+
 export function originOf(layer: MapLayer): LayerOrigin {
 	const source = layer.metadata?.source
+	// A reference layer with no run is labelled for what it is. One a study's run made is that run's output.
+	if (source && REFERENCE_SOURCES.has(source) && !layerRunId(layer.metadata) && !layerTool(layer.metadata)) return "reference"
 	if (source === "gee") return "gee"
 	if (source === "workspace") return "workspace"
 	if (source === "user") return "user"
@@ -208,4 +218,11 @@ export const listOrder = (draw: MapLayer[]): MapLayer[] => [...draw].reverse()
 export function stackPosition(draw: MapLayer[], id: string): { position: number; of: number } | null {
 	const i = draw.findIndex((l) => l.id === id)
 	return i < 0 ? null : { position: draw.length - i, of: draw.length }
+}
+
+/** The study and run that made a layer, when both are recorded. Without both, Replay has nothing to open. */
+export function openableRun(layer: MapLayer): { studyId: string; runId: string } | null {
+	const runId = layerRunId(layer.metadata)
+	const studyId = layer.metadata?.study_id
+	return runId && studyId ? { studyId, runId } : null
 }

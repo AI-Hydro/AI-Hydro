@@ -44,6 +44,7 @@ import {
 	longNameLayers,
 	MAP_STORAGE_KEY,
 	manyLayers,
+	referenceGauges,
 	restoredLayers,
 	TRANSECTS_STORAGE_KEY,
 } from "./fixtures/map"
@@ -1354,6 +1355,23 @@ export const screens: ScreenDef[] = [
 			{ wait: 400 },
 		],
 		expectVisible: ['button:text-is("Undo")'],
+	}),
+	mapScreen("map-layers-menu-run", "Layers: the row menu of a layer that names its study and run (Open run)", {
+		layers: featureLayers(),
+		steps: [...openTool("Layer manager"), { click: 'button[aria-label^="Actions for Synthetic gauge"]' }, { wait: 300 }],
+		expectVisible: ['[role="menu"]', '[role="menuitem"]:has-text("Open run")'],
+	}),
+	mapScreen("map-layers-reference-group", "Layers: a reference layer under Reference data, not in any run", {
+		layers: [...featureLayers(), referenceGauges],
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button.map-layer-name:has-text("NWIS gauges")' },
+			{ click: 'button.map-chip:text-is("Details")' },
+			{ click: 'button:text-is("Provenance")' },
+			{ wait: 300 },
+			{ scroll: "text=Reference, not in any run" },
+		],
+		expectVisible: ["text=Reference, not in any run"],
 	}),
 	mapScreen("map-layers-collapsed-group", "Layers: a group collapsed to its header", {
 		layers: manyLayers(),

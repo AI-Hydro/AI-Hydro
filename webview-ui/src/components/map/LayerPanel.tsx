@@ -30,6 +30,7 @@ import {
 	type LayerOrigin,
 	listOrder,
 	ORIGIN_LABEL,
+	openableRun,
 	rowIndicators,
 	sharedNote,
 } from "./layerModel"
@@ -255,6 +256,14 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 			setRestoreError(error instanceof Error ? error.message : "Could not restore older layers.")
 		} finally {
 			setRestoringOlder(false)
+		}
+	}
+
+	/** Replay opens in its own panel; the host checks the ids before it opens anything. */
+	const openRun = (layer: MapLayer) => {
+		const run = openableRun(layer)
+		if (run) {
+			PLATFORM_CONFIG.postMessage({ type: "aihydro-map-open-run", study_id: run.studyId, run_id: run.runId })
 		}
 	}
 
@@ -528,7 +537,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const menuFor = (layer: MapLayer, displayName: string): OverflowItem[] => {
 		const isRaster = layer.layerType === "raster"
 		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
-		const provenancePath = layer.metadata?.provenance_path
+		const openable = openableRun(layer)
 		const rank = displayIds.indexOf(layer.id)
 		const items: (OverflowItem | false)[] = [
 			{ key: "zoom", label: "Zoom to layer", icon: "zoom-in", onSelect: () => onZoomToLayer?.(layer) },
@@ -561,11 +570,11 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				icon: "refresh",
 				onSelect: () => void handleReloadSource(layer, displayName),
 			},
-			!!provenancePath && {
-				key: "provenance",
-				label: "Open provenance record",
-				icon: "file-code",
-				onSelect: () => void openProvenance(provenancePath),
+			!!openable && {
+				key: "open-run",
+				label: "Open run",
+				icon: "history",
+				onSelect: () => openRun(layer),
 			},
 			{ key: "d4", divider: true },
 			{
@@ -776,6 +785,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 						layer={layer}
 						niceMeta={niceMeta}
 						onCopied={(what) => say("ok", `Copied ${what}.`, 2500)}
+						onOpenProvenance={
+							layer.metadata?.provenance_path
+								? () => void openProvenance(layer.metadata?.provenance_path as string)
+								: undefined
+						}
+						onOpenRun={openableRun(layer) ? () => openRun(layer) : undefined}
 						warnings={rowIndicators(layer, intelligence).warnings}
 					/>
 				)}

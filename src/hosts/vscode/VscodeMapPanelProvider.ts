@@ -16,6 +16,7 @@ import { geeCommandSchema, geePreviewChirpsPayloadSchema, geeStatusPayloadSchema
 import type { GeeProjectInfo, GeeStatusResult } from "@/services/gee/types"
 import { handleHydroMapCommand } from "@/services/hydrology/handleHydroMapCommand"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
+import { validReplayIds } from "./replayIds"
 
 function expandHomePath(filePath: string): string {
 	if (filePath === "~") {
@@ -917,6 +918,17 @@ export class VscodeMapPanelProvider {
 					}
 					case "aihydro-map-add-url-command": {
 						await VscodeMapPanelProvider.addLayerFromUrl()
+						break
+					}
+					case "aihydro-map-open-run": {
+						// A layer's "Open run": the ids come from layer metadata, so they are checked before Replay opens.
+						const ids = validReplayIds(message.study_id, message.run_id)
+						if (ids) {
+							const { VscodeReplayProvider } = require("@/hosts/vscode/VscodeReplayProvider")
+							void VscodeReplayProvider.openWithSession(ids.sessionId, ids.runId)
+						} else {
+							void vscode.window.showWarningMessage("This layer does not name a run that can be opened.")
+						}
 						break
 					}
 					case "aihydro-map-gallery-command": {

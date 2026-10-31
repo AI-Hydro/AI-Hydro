@@ -7,6 +7,7 @@ import {
 	duplicatesToRemove,
 	groupLayers,
 	listOrder,
+	openableRun,
 	originOf,
 	rowIndicators,
 	sharedNote,
@@ -32,6 +33,26 @@ describe("origin and groups", () => {
 		expect(originOf(layer("d", {}, { source: "user" }))).toBe("user")
 		expect(originOf(layer("e", {}, { source: "gee" }))).toBe("gee")
 		expect(originOf(layer("f"))).toBe("pushed")
+	})
+
+	it("classes MERIT, NWIS, WBD and NID layers as reference data, unless a run made them", () => {
+		for (const source of ["merit", "nwis", "wbd", "nid"]) {
+			expect(originOf(layer(source, {}, { source }))).toBe("reference")
+			expect(originOf(layer(`${source}-run`, {}, { source, _run_id: "run-3.1", study_id: "s1" }))).toBe("tool")
+		}
+		expect(groupLayers([layer("a", {}, { source: "wbd" })]).map((g) => g.origin)).toEqual(["reference"])
+	})
+
+	it("a tool-made layer from a reference source with no run is Tool output, not Reference data", () => {
+		expect(originOf(layer("t", {}, { source: "nwis", tool: "fetch_gauges" }))).toBe("tool")
+		expect(originOf(layer("m", {}, { source: "merit", tool: "extract_rivers" }))).toBe("tool")
+	})
+
+	it("opens a run only when the layer names both its study and its run", () => {
+		expect(openableRun(layer("a", {}, { _run_id: "run-1.1", study_id: "s1" }))).toEqual({ studyId: "s1", runId: "run-1.1" })
+		expect(openableRun(layer("b", {}, { _run_id: "run-1.1" }))).toBeNull()
+		expect(openableRun(layer("c", {}, { study_id: "s1" }))).toBeNull()
+		expect(openableRun(layer("d"))).toBeNull()
 	})
 
 	it("buckets in a fixed group order and keeps map order inside a group", () => {

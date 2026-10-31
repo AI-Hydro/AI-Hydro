@@ -118,6 +118,24 @@ it("keeps scientific metadata while excluding transport fields", () => {
 		uncertainty: "unknown",
 	})
 })
+it("keeps the provenance envelope except the chat id in the plate sidecar, and names the run when there is no file", () => {
+	expect(
+		exportLayerMetadata({
+			tool: "delineate_watershed",
+			study_id: "s1",
+			chat_id: "c1",
+			retrieved_at: "2026-10-31T00:00:00Z",
+			_run_id: "r1",
+		}),
+	).toEqual({ tool: "delineate_watershed", study_id: "s1", retrieved_at: "2026-10-31T00:00:00Z", _run_id: "r1" })
+	const layers = [
+		{ id: "a", name: "a", layerType: "polygon", metadata: { _run_id: "r1" } },
+		{ id: "b", name: "b", layerType: "polygon", metadata: { _run_id: "r2", provenance_path: "/p.json" } },
+		{ id: "c", name: "c", layerType: "polygon", metadata: {} },
+	] as MapLayer[]
+	const refs = buildSnapshot(spec, { layers }).layers.map((l) => l.sourceRef)
+	expect(refs).toEqual(["run:r1", "/p.json", undefined])
+})
 it("uses actual line geometry and stroke despite a misleading basin name", () => {
 	const snapshot = buildSnapshot(spec, {
 		layers: [
