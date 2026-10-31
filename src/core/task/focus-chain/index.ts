@@ -430,6 +430,10 @@ ${listInstrunctionsReminder}\n`
 	 * @returns boolean - True if instructions should be included in AI prompt, false otherwise
 	 */
 	public shouldIncludeFocusChainInstructions(): boolean {
+		// A follow-up question is not a new task: no to-do prompt for that turn (a plan-mode turn still gets its optional one).
+		if (this.taskState.followUpTurn && this.stateManager.getGlobalSettingsKey("mode") !== "plan") {
+			return false
+		}
 		// Always include when in Plan mode
 		const inPlanMode = this.stateManager.getGlobalSettingsKey("mode") === "plan"
 		// Always include when switching from Plan > Act

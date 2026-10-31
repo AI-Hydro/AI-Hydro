@@ -9,6 +9,22 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — 2026-10-31 (agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
+
+### Fixed — a follow-up question is answered, not treated as a restarted task (A2, branch `vision2040/agent-followup`)
+
+"whats the status?" after a finished task got a 1,268-character repeat of the report, a file list, a new to-do list and a tool call. Five things pushed the model there:
+
+- The resume text said "It may or may not be complete, so please reassess ... retry the last step" even when the UI knew the task had completed (`resume_completed_task`). A finished task plus a message now gets one short instruction: answer it directly, do not repeat earlier results unless asked, use a tool only if the answer needs new information.
+- The to-do prompt ("TODO LIST RECOMMENDED ... When starting a new task") was added because the resumed request looked early. It is skipped for a follow-up turn.
+- A text-only reply was rejected as `[ERROR] You did not use a tool`. In the follow-up state only, the text is now held while it streams and, if no tool follows, becomes the `attempt_completion` result: it appears as an answer card and goes through the same answer audit as any other answer. Inside a running task the nudge stays. If a tool call follows, the held text is shown first and the normal loop applies.
+- The same applies to a message typed after a shown answer in a live task: the feedback result now says "The user sent a new message after your answer", not "continue the task".
+- Three prompt rules forbade conversation ("NOT engage in a back and forth", "NEVER end ... with a question", "don't end your responses with questions"). They are replaced, in every variant (`rules`, `objective`, `next-gen`, `gpt-5`), by: answer a question about finished work directly and briefly; do not pad a result with offers of further help.
+
+There is no text classifier: the state is set by the host when the user writes after a finished answer and is cleared the moment the model uses a tool.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)

@@ -1124,7 +1124,10 @@ export class Task {
 			wasRecent,
 			responseText,
 			hasPendingFileContextWarnings,
+			askType === "resume_completed_task",
 		)
+		// A message after a finished task is conversation until the model has to use a tool.
+		this.taskState.followUpTurn = askType === "resume_completed_task" && !!responseText && mode !== "plan"
 
 		if (taskResumptionMessage !== "") {
 			newUserContent.push({
@@ -2143,12 +2146,26 @@ export class Task {
 					}
 				}
 
+				if (this.taskState.followUpTurn) {
+					this.taskState.followUpHeldText[this.taskState.currentStreamingContentIndex] = content ?? ""
+					break
+				}
 				await this.say("text", content, undefined, undefined, block.partial)
 				break
 			}
-			case "tool_use":
+			case "tool_use": {
+				// The model is working again, not just answering: show what it said first, and the nudges apply as usual.
+				if (this.taskState.followUpTurn) {
+					const held = Object.values(this.taskState.followUpHeldText).join("\n\n").trim()
+					this.taskState.followUpHeldText = {}
+					this.taskState.followUpTurn = false
+					if (held) {
+						await this.say("text", held)
+					}
+				}
 				await this.toolExecutor.executeTool(block)
 				break
+			}
 		}
 
 		/*
@@ -2180,6 +2197,32 @@ export class Task {
 		if (this.taskState.presentAssistantMessageHasPendingUpdates) {
 			this.presentAssistantMessage()
 		}
+	}
+
+	/**
+	 * A text-only reply to a follow-up (a message the user sent after a completed answer) is the answer: it goes through
+	 * attempt_completion, so the answer audit and the answer card apply, instead of being rejected as "you did not use a
+	 * tool". Only in that state; inside a running task a text-only turn is still nudged. No text classification: the
+	 * state is set by the host when the user writes after a finished task, and cleared when the model uses a tool.
+	 * Returns true when the reply was taken as the answer (its result is already in `userMessageContent`).
+	 */
+	async acceptFollowUpAnswer(): Promise<boolean> {
+		if (!this.taskState.followUpTurn) {
+			return false
+		}
+		const reply = Object.values(this.taskState.followUpHeldText).join("\n\n").trim()
+		this.taskState.followUpHeldText = {}
+		if (!reply) {
+			return false
+		}
+		// The flag stays on: an audit revision request or the user's next message is still a follow-up.
+		await this.toolExecutor.executeTool({
+			type: "tool_use",
+			name: AiHydroDefaultTool.ATTEMPT,
+			params: { result: reply },
+			partial: false,
+		})
+		return true
 	}
 
 	async recursivelyMakeAiHydroRequests(userContent: UserContent, includeFileDetails: boolean = false): Promise<boolean> {
@@ -2648,6 +2691,7 @@ export class Task {
 			// reset streaming state
 			this.taskState.currentStreamingContentIndex = 0
 			this.taskState.assistantMessageContent = []
+			this.taskState.followUpHeldText = {}
 			this.taskState.didCompleteReadingStream = false
 			this.taskState.userMessageContent = []
 			this.taskState.userMessageContentReady = false
@@ -2943,7 +2987,12 @@ export class Task {
 				await pWaitFor(() => this.taskState.userMessageContentReady)
 
 				// if the model did not tool use, then we need to tell it to either use a tool or attempt_completion
-				const didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use")
+				let didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use")
+
+				// A follow-up question answered in plain text IS the answer (see acceptFollowUpAnswer).
+				if (!didToolUse && (await this.acceptFollowUpAnswer())) {
+					didToolUse = true
+				}
 
 				if (!didToolUse) {
 					// normal request where tool use is required

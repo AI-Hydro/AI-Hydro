@@ -848,6 +848,15 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(t.notify.calledOnce).to.equal(true)
 		})
 
+		it("feedback on a shown answer is a follow-up: the state is set and the result text asks for a direct answer", async () => {
+			const t = build({ gate: false })
+			const out = (await new AttemptCompletionHandler().execute(t.config, block("The ratio is 0.42"))) as any[]
+			expect(t.config.taskState.followUpTurn).to.equal(true)
+			const text = out.map((b) => b.text ?? "").join("\n")
+			expect(text).to.include("answer it directly and briefly")
+			expect(text).to.not.include("continue the task")
+		})
+
 		it("eligible: no completion_result streaming, one updating activity line", async () => {
 			const t = build({ gate: true })
 			const h = new AttemptCompletionHandler()

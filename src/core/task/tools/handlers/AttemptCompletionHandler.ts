@@ -242,7 +242,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			if (decision.kind === "user_feedback") {
 				await this.revealDraft(config, "you sent a message while the answer was being checked")
 				await config.callbacks.say("user_feedback", decision.text ?? "", decision.images, decision.files)
-				return await this.feedbackResult(undefined, decision.text, decision.images, decision.files)
+				return await this.feedbackResult(undefined, decision.text, decision.images, decision.files, false)
 			}
 			gateDecision = decision
 		}
@@ -351,6 +351,8 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 
 		await config.callbacks.say("user_feedback", text ?? "", images, completionFiles)
+		// What the user writes after a shown answer is a follow-up until the model has to use a tool again.
+		config.taskState.followUpTurn = true
 		return await this.feedbackResult(commandResult, text, images, completionFiles)
 	}
 
@@ -360,6 +362,8 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		text: string | undefined,
 		images: string[] | undefined,
 		completionFiles: string[] | undefined,
+		/** The feedback answers a SHOWN answer. False when the user wrote during the audit gate: the draft was never shown. */
+		followUp = true,
 	): Promise<ToolResponse> {
 		const toolResults: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
 		if (commandResult) {
@@ -374,7 +378,9 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 		toolResults.push({
 			type: "text",
-			text: `The user has provided feedback on the results. Consider their input to continue the task, and then attempt completion again.\n<feedback>\n${text}\n</feedback>`,
+			text: followUp
+				? `The user sent a new message after your answer. If it is a question, answer it directly and briefly: do not repeat the earlier report, and use a tool only if the answer needs new information. If it asks for a change, make it, then attempt completion again.\n<feedback>\n${text}\n</feedback>`
+				: `The user has provided feedback on the results. Consider their input to continue the task, and then attempt completion again.\n<feedback>\n${text}\n</feedback>`,
 		})
 		toolResults.push(...formatResponse.imageBlocks(images))
 
