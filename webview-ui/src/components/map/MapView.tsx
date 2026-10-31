@@ -122,6 +122,7 @@ import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGal
 import { resolveFileUri } from "./resolveFileUri"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
+import { remapSceneIds } from "./sceneAliases"
 import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
 import {
@@ -710,6 +711,8 @@ const useEscToClosePanels = ({
 
 export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const { layers, connectionStatus, connectionError, reconnect, restoreState } = useMapContext()
+	const restoreStateRef = useRef(restoreState)
+	restoreStateRef.current = restoreState
 	const [resourceRetry, setResourceRetry] = useState(0)
 	const { states: rasterStates, revision: rasterResourceRevision } = useRasterResources(layers, resourceRetry)
 	const [rendererError, setRendererError] = useState<string | null>(null)
@@ -1638,7 +1641,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				return
 			} else if (msg?.type === "aihydro-open-map-scene" && typeof msg.scene === "string") {
 				try {
-					const scene = JSON.parse(msg.scene)
+					const scene = remapSceneIds(JSON.parse(msg.scene), restoreStateRef.current.aliases)
 					if (scene?.viewState) {
 						setViewState(sanitizeViewState(scene.viewState))
 					}
@@ -2028,7 +2031,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 
 	/** "On map" from a tool card or claim: show the layers, select the first, move the camera only if the map is idle. */
 	const pendingFocusRef = useRef<{ ids: string[]; until: number } | null>(null)
-	const handleFocusLayers = (layerIds: string[], fromQueue = false) => {
+	const handleFocusLayers = (layerIds: string[], fromQueue = false, note?: string) => {
 		const found = layersRef.current.filter((l) => layerIds.includes(l.id))
 		if (found.length === 0) {
 			// The map may have just opened and still be restoring its layers: wait for them, then give up out loud.
@@ -2057,7 +2060,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		if (move && bounds) {
 			setViewState((previous) => fitViewStateToBounds(bounds, dimensions, previous))
 		}
-		setDropStatus({ kind: "ok", msg: focusLayersMessage(found.length, layerIds.length, move) })
+		setDropStatus({ kind: "ok", msg: note ?? focusLayersMessage(found.length, layerIds.length, move) })
 		window.setTimeout(() => setDropStatus(null), 6000)
 	}
 	const handleFocusLayersRef = useRef(handleFocusLayers)
@@ -2095,12 +2098,16 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				}
 				if (event.type === "command.focus_layers") {
 					try {
-						const payload = JSON.parse(event.payloadJson || "{}") as { layerIds?: unknown }
+						const payload = JSON.parse(event.payloadJson || "{}") as { layerIds?: unknown; note?: unknown }
 						const ids = Array.isArray(payload.layerIds)
 							? payload.layerIds.filter((v): v is string => typeof v === "string")
 							: []
 						if (!focusExpired(event.timestampMs, Date.now())) {
-							handleFocusLayersRef.current(ids)
+							handleFocusLayersRef.current(
+								ids,
+								false,
+								typeof payload.note === "string" ? payload.note.slice(0, 300) : undefined,
+							)
 						}
 					} catch {
 						/* ignore */

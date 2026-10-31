@@ -11,6 +11,10 @@ export interface MapRestoreState {
 	hydrating: boolean
 	/** Saved layers beyond the restore cap: kept on disk, not loaded. */
 	olderCount: number
+	/** Layers merged because they were the same file (restore and later adds). 0 when none. */
+	mergedCount: number
+	/** Layer ids merged away because they were the same file, and the layer that stands for each. */
+	aliases: Record<string, string>
 }
 
 interface MapContextType {
@@ -47,17 +51,37 @@ function protoToActiveRoi(roi?: MapRoi): ActiveRoi | undefined {
 	}
 }
 
+function parseAliases(raw: string | undefined): Record<string, string> {
+	try {
+		const parsed = raw ? JSON.parse(raw) : {}
+		if (!parsed || typeof parsed !== "object") return {}
+		return Object.fromEntries(Object.entries(parsed).filter(([k, v]) => typeof v === "string" && k !== v)) as Record<
+			string,
+			string
+		>
+	} catch {
+		return {}
+	}
+}
+
 function restoreStateFrom(metadata: Record<string, string> | undefined): MapRestoreState {
 	// A host without restore reporting is treated as not hydrating, so the empty card is never hidden forever.
 	return {
 		hydrating: metadata?.hydrating === "1",
 		olderCount: Number.parseInt(metadata?.older_count ?? "0", 10) || 0,
+		mergedCount: Number.parseInt(metadata?.merged_count ?? "0", 10) || 0,
+		aliases: parseAliases(metadata?.aliases),
 	}
 }
 
 export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [layers, setLayers] = useState<MapLayer[]>([])
-	const [restoreState, setRestoreState] = useState<MapRestoreState>({ hydrating: true, olderCount: 0 })
+	const [restoreState, setRestoreState] = useState<MapRestoreState>({
+		hydrating: true,
+		olderCount: 0,
+		mergedCount: 0,
+		aliases: {},
+	})
 	const [activeRoi, setActiveRoi] = useState<ActiveRoi | undefined>()
 	const [boundClaimId, setBoundClaimId] = useState<string | undefined>()
 	const [connectionStatus, setConnectionStatus] = useState<"loading" | "connected" | "stale">("loading")

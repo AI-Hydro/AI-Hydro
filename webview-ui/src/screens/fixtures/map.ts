@@ -263,7 +263,7 @@ export const longNameLayers = (): MapLayer[] => [
 
 /**
  * Layers restored from earlier sessions: the same delineation twice (same run, same source), plus a layer whose geometry
- * is not loaded, so AI-Hydro can only show it ("Limited layer"). Every one of them sits in the Tool output group.
+ * is not loaded, so AI-Hydro can only show it ("Limited layer"). Every one of them sits in the Results group.
  */
 export const restoredLayers = (): MapLayer[] => {
 	const restored = { _hydrated: "1", _hydrated_of: "6" }

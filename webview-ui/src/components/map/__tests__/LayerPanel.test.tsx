@@ -30,6 +30,7 @@ vi.mock("../../../services/grpc-client", () => ({
 }))
 
 import { PLATFORM_CONFIG } from "../../../config/platform.config"
+import { MapServiceClient } from "../../../services/grpc-client"
 import { LayerPanelContent } from "../LayerPanel"
 
 const poly = (id: string, name: string, metadata: Record<string, string> = {}): MapLayer =>
@@ -78,12 +79,63 @@ describe("LayerPanel", () => {
 		expect(container.querySelectorAll('input[type="range"]').length).toBe(0)
 	})
 
+	it("workspace files not on the map are offered in the Add menu, not as a panel section; none means nothing", async () => {
+		const list = MapServiceClient.listWorkspaceGeoFiles as unknown as ReturnType<typeof vi.fn>
+		const f = (relativePath: string) => ({
+			relativePath,
+			workspaceFolder: "/w",
+			folderName: "w",
+			name: relativePath,
+			extension: ".geojson",
+		})
+		list.mockResolvedValueOnce({ files: [f("a.geojson"), f("b.geojson")], totalCount: 2 })
+		const { unmount } = render(<LayerPanelContent {...baseProps()} />)
+		expect(screen.queryByRole("region", { name: /workspace/i })).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: "Add layer" }))
+		const item = await screen.findByRole("menuitem", { name: "From this workspace (2)" })
+		fireEvent.click(item)
+		expect(await screen.findByRole("region", { name: "From this workspace" })).toBeInTheDocument()
+		unmount()
+		list.mockResolvedValueOnce({ files: [], totalCount: 0 })
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: "Add layer" }))
+		expect(screen.queryByRole("menuitem", { name: /From this workspace/ })).toBeNull()
+	})
+
+	it("groups say what a layer is: a user file and a workspace file are both Your files, a tool file in the workspace is a Result with its path in Details", () => {
+		state.layers = [
+			poly("t", "watershed_01013500", {
+				source: "workspace",
+				path: "vectors/watershed_01013500.geojson",
+				workspace_folder: "/w",
+			}),
+			poly("u", "mine", { source: "user", tool: "", _run_id: "", source_path: "/elsewhere/mine.geojson" }),
+			poly("w", "also mine", {
+				source: "workspace",
+				tool: "",
+				_run_id: "",
+				path: "vectors/b.geojson",
+				workspace_folder: "/w",
+			}),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		expect(screen.queryByRole("button", { name: /Loaded by you|Workspace files/ })).toBeNull()
+		const files = screen.getByRole("region", { name: "Your files" })
+		expect(within(files).getAllByRole("listitem")).toHaveLength(2)
+		const results = screen.getByRole("region", { name: "Results" })
+		expect(within(results).getByText("watershed_01013500")).toBeInTheDocument()
+		fireEvent.click(within(results).getByRole("button", { name: /^watershed_01013500/ }))
+		fireEvent.click(screen.getByRole("button", { name: "Details" }))
+		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
+		expect(screen.getByText("vectors/watershed_01013500.geojson")).toBeInTheDocument()
+	})
+
 	it("groups by origin, and a group collapses", () => {
 		render(<LayerPanelContent {...baseProps()} />)
-		expect(screen.getByRole("button", { name: /Tool output/ })).toHaveAttribute("aria-expanded", "true")
-		expect(screen.getByRole("button", { name: /Loaded by you/ })).toBeInTheDocument()
-		fireEvent.click(screen.getByRole("button", { name: /Tool output/ }))
-		expect(screen.getByRole("button", { name: /Tool output/ })).toHaveAttribute("aria-expanded", "false")
+		expect(screen.getByRole("button", { name: /Results/ })).toHaveAttribute("aria-expanded", "true")
+		expect(screen.getByRole("button", { name: /Your files/ })).toBeInTheDocument()
+		fireEvent.click(screen.getByRole("button", { name: /Results/ }))
+		expect(screen.getByRole("button", { name: /Results/ })).toHaveAttribute("aria-expanded", "false")
 		expect(document.querySelector('[data-layer-id="a"]')).toBeNull()
 	})
 
@@ -322,9 +374,9 @@ describe("LayerPanel", () => {
 		state.layers = [poly("a", "x", { provenance_path: "" }), poly("b", "y", { source: "user", tool: "", _run_id: "" })]
 		const props = baseProps()
 		render(<LayerPanelContent {...props} />)
-		fireEvent.click(screen.getByRole("button", { name: /Tool output/ }))
+		fireEvent.click(screen.getByRole("button", { name: /Results/ }))
 		expect(screen.getByRole("img", { name: "1 layer with warnings" })).toBeInTheDocument()
-		fireEvent.click(screen.getByRole("button", { name: /Tool output/ }))
+		fireEvent.click(screen.getByRole("button", { name: /Results/ }))
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for x/ }))
 		fireEvent.click(screen.getByRole("menuitem", { name: /Move up/ }))
 		expect(props.onReorder).toHaveBeenCalledWith(["b", "a"])

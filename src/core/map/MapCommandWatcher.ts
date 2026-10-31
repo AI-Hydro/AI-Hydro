@@ -145,7 +145,9 @@ export class MapCommandWatcher {
 				break
 			case "fit_layer": {
 				if (cmd.layer_id) {
-					this.appendAgentCommandEvent("command.fit_layer", { layerId: cmd.layer_id })
+					this.appendAgentCommandEvent("command.fit_layer", {
+						layerId: this.controller.resolveMapLayerId(cmd.layer_id),
+					})
 				}
 				break
 			}
@@ -226,7 +228,9 @@ export class MapCommandWatcher {
 				})
 				this.controller.addMapLayer(layer)
 				if (cmd.auto_zoom !== false) {
-					this.appendAgentCommandEvent("command.fit_layer", { layerId: cmd.layer_id })
+					this.appendAgentCommandEvent("command.fit_layer", {
+						layerId: this.controller.resolveMapLayerId(cmd.layer_id),
+					})
 				}
 				break
 			}

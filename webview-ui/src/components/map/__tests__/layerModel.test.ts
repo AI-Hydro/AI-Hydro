@@ -29,8 +29,19 @@ describe("origin and groups", () => {
 	it("classifies by recorded origin, with a run or tool meaning tool output", () => {
 		expect(originOf(layer("a", {}, { tool: "delineate_watershed" }))).toBe("tool")
 		expect(originOf(layer("b", {}, { _run_id: "run-1.1" }))).toBe("tool")
-		expect(originOf(layer("c", {}, { source: "workspace" }))).toBe("workspace")
-		expect(originOf(layer("d", {}, { source: "user" }))).toBe("user")
+		// How a file reached the map does not matter: both are "your files".
+		expect(originOf(layer("c", {}, { source: "workspace" }))).toBe("files")
+		expect(originOf(layer("d", {}, { source: "user" }))).toBe("files")
+		// A result a tool made stays a result, even saved in the workspace folder.
+		expect(
+			originOf(
+				layer(
+					"w",
+					{},
+					{ source: "workspace", path: "vectors/w.geojson", tool: "delineate_watershed", _run_id: "run-1.1" },
+				),
+			),
+		).toBe("tool")
 		expect(originOf(layer("e", {}, { source: "gee" }))).toBe("gee")
 		expect(originOf(layer("f"))).toBe("pushed")
 	})
@@ -62,7 +73,8 @@ describe("origin and groups", () => {
 			layer("u1", {}, { source: "user" }),
 			layer("t2", {}, { tool: "y" }),
 		])
-		expect(groups.map((g) => g.origin)).toEqual(["tool", "user", "workspace"])
+		expect(groups.map((g) => g.origin)).toEqual(["tool", "files"])
+		expect(groups[1].layers.map((l) => l.id)).toEqual(["w1", "u1"])
 		expect(groups[0].layers.map((l) => l.id)).toEqual(["t1", "t2"])
 	})
 })
