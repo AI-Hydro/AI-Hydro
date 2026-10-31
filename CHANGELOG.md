@@ -17,7 +17,7 @@ Reported on the installed 0.4.4 build: at about 400 px the study chip (`usgs_010
 
 - The title row is a wrapping flex row. Chevron, copy and delete stay first; the study chip, cost chip and "New task" form a right cluster that drops to a second row when it does not fit. Nothing overlaps at 280, 400 or 800 px.
 - A long study id is cut with an ellipsis inside its chip (the label loses width first); the full id stays in the tooltip and the accessible name.
-- N4 (`nav-ribbon-audit-2026-10-30.md`): the expand toggle is now a `<button aria-expanded>` with a name ("Show/Hide task details") instead of a click handler on a div; copy, delete and "New task" are 24 px tall instead of 10 px (`max-h-3` removed), so the header has 0 small targets on every chat screen.
+- N4 (`nav-ribbon-audit-2026-10-30.md`): the expand toggle is now a `<button aria-expanded>` with a name ("Show/Hide task details") instead of a click handler on a div; copy, delete and "New task" are 24 px tall instead of 10 px (`max-h-3` removed), so the header's own controls are no longer small targets. The screen checker still counts 1 small target on the chat screens (budgeted in the new entries): the composer's 22x22 toolbar button, not part of the header. Budgets of the existing chat screens were not tightened (they may only shrink, and CI passes either way).
 - Harness: `chat-header-long-study` and `chat-header-long-study-collapsed` (a 40-character study id with a label, $0.2555) with first budget entries.
 
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
