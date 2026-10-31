@@ -42,7 +42,8 @@ export function Toolbar({ label, orientation = "horizontal", className, children
 		}
 		sync()
 		const observer = new MutationObserver(sync)
-		observer.observe(root, { childList: true, subtree: true })
+		// `disabled` flips which buttons count as items: a disabled current button hands the tab stop on.
+		observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] })
 		return () => observer.disconnect()
 	}, [])
 

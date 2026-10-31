@@ -47,9 +47,11 @@ const SkillsConfiguredTab = () => {
 		setIsLoading(true)
 		SkillsServiceClient.listInstalledSkills(EmptyRequest.create({}))
 			.then((catalog) => {
-				setSkills(catalog.items)
+				// A reply with no `items` (an older host, an empty message) is an empty list, not a crash.
+				const items = catalog.items ?? []
+				setSkills(items)
 				const map: Record<string, boolean> = {}
-				for (const s of catalog.items) {
+				for (const s of items) {
 					map[s.skillId] = true
 				}
 				setEnabledMap((prev) => ({ ...map, ...prev }))

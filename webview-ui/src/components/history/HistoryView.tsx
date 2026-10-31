@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { Virtuoso } from "react-virtuoso"
 import DangerButton from "@/components/common/DangerButton"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { Button, Disclosure, IconButton, KeyValue, Text } from "@/design"
+import { Button, Disclosure, IconButton, KeyValue, SubviewHeader, Text } from "@/design"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import { formatLargeNumber, formatSize } from "@/utils/format"
@@ -348,16 +348,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 				`}
 			</style>
 			<div className="history-container">
-				<div className="history-header">
-					<h3
-						className="history-header-title"
-						style={{
-							color: getEnvironmentColor(environment),
-						}}>
-						History
-					</h3>
-					<Button onClick={() => onDone()}>Done</Button>
-				</div>
+				<SubviewHeader onClose={onDone} title="History" titleColor={getEnvironmentColor(environment)} />
 				<div className="history-search-area">
 					<div className="history-search-row">
 						<VSCodeTextField
