@@ -17,7 +17,7 @@ Reported on the installed 0.4.4 build: a stray "Worked <1s" row after every answ
 
 - Cause: the presenter folds every non-prose message (model requests, checkpoints) into a work group, so a plain answer produced one or two groups whose facts were all zero except cost; the group after the answer is the checkpoint and request that close the turn.
 - A group with no tool work (no tool, not-run call, lifted line, retry, failed request, reuse or revision) is no longer a row, at Focus and Normal. The live tail group stays while the task runs (it is the "Working" row). Verbose is unchanged. A group that did anything (including a failed or retried request) still shows.
-- "Rewind to this message" is computed before the empty groups are dropped, so a chat-only turn still has its rewind target. Its cost remains in the task header.
+- "Rewind to this message" is computed before the empty groups are dropped, so a chat-only turn still has its rewind target. Its cost remains in the task header (the total is computed from the messages, not from the rows; a test covers it). Known loss: a checkpoint that sits in a dropped group after the first one in a turn (for example the one taken as the answer completes) no longer has a "Rewind this work" row; the turn's first checkpoint still backs "Rewind to this message", and a group that ran tools still shows its own rewind.
 - The "Resumed a completed task" divider is no longer drawn at Focus and Normal (the question follows at once and nothing was lost; the presenter still emits it, the view hides it). "Resumed from an interrupted task" still shows, and Verbose is unchanged.
 
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)

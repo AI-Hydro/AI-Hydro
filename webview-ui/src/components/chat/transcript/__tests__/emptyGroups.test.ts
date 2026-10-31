@@ -1,5 +1,6 @@
 import { presentTranscript } from "@shared/aihydro/transcriptPresenter"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
+import { getApiMetrics } from "@shared/getApiMetrics"
 import { describe, expect, it } from "vitest"
 import { buildTranscriptView, filterVisibleMessages, groupMessages, processMessages } from "../../chat-view/utils/messageUtils"
 
@@ -57,6 +58,19 @@ describe("empty work groups are not rows", () => {
 			expect(v.rewinds.get(user.key)).toBe(msgs.find((m) => m.say === "checkpoint_created")?.ts)
 		})
 	}
+
+	it("the task header total still includes the cost of the dropped rows (it is computed from the messages, not the view)", () => {
+		const msgs = plainTurn("q") // two requests at $0.01
+		expect(kinds(view(msgs, "normal"))).toEqual(["user", "answer"])
+		expect(getApiMetrics(processMessages(msgs)).totalCost).toBeCloseTo(0.02, 6)
+	})
+
+	it("a checkpoint after the answer has no row and no target (documented loss); the turn's first one does", () => {
+		const msgs = plainTurn("q")
+		const cps = msgs.filter((m) => m.say === "checkpoint_created")
+		const v = view(msgs, "normal")
+		expect([...v.rewinds.values()]).toEqual([cps[0].ts])
+	})
 
 	it("a group with tool work is kept", () => {
 		const msgs = [
