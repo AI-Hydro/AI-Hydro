@@ -234,3 +234,21 @@ describe("run reference without #path (the owner's 0.4.4 answer)", () => {
 		expect(plan.get("774.15")?.[0].status).toContain("no #path")
 	})
 })
+
+describe("pathless wording is about the reference the number binds to (nearest after it)", () => {
+	const pathless = "[run:watershed.0b124654840f]"
+	const valid = "[run:watershed.0b124654840f#key_outputs.area_km2]"
+	const num = (excerpt: string) => uncited("774.15", { excerpt, suggestedMarker: undefined, fixHint: undefined })
+
+	it("a valid reference between the number and a later pathless one keeps 'Not linked to a run'", () => {
+		expect(viewFinding(num(`area 774.15 km² ${valid} and the record ${pathless}`)).status).toBe("Not linked to a run")
+	})
+
+	it("a pathless reference BEFORE the number does not make the number's finding about it", () => {
+		expect(viewFinding(num(`from ${pathless} the area is 774.15 km² here`)).status).toBe("Not linked to a run")
+	})
+
+	it("the nearest following reference being pathless does", () => {
+		expect(viewFinding(num(`area 774.15 km² ${pathless} then ${valid}`)).status).toContain("no #path")
+	})
+})
