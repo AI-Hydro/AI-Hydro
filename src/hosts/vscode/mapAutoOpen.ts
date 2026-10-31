@@ -24,12 +24,15 @@ export interface MapAutoOpenDeps {
 	/** Wait this long after the sidebar shows, so the chat renders before the map bundle loads (startup cost). */
 	delayMs?: number
 	setTimeout?: (fn: () => void, ms: number) => unknown
+	clearTimeout?: (handle: unknown) => void
 	log?: (message: string, error?: unknown) => void
 }
 
 export interface MapAutoOpen {
 	/** Call when the sidebar chat view is resolved or becomes visible. */
 	onSidebarShown(): void
+	/** Cancel a pending delayed open (extension deactivation or window close). */
+	dispose(): void
 }
 
 export const MAP_AUTO_OPEN_DELAY_MS = 1200
@@ -38,11 +41,15 @@ export function createMapAutoOpen(deps: MapAutoOpenDeps): MapAutoOpen {
 	const schedule = deps.setTimeout ?? ((fn, ms) => setTimeout(fn, ms))
 	let settled = false
 	let pending = false
+	let handle: unknown
+	let disposed = false
+	const cancel = deps.clearTimeout ?? ((h: unknown) => clearTimeout(h as NodeJS.Timeout))
 
 	const attempt = async () => {
 		pending = false
+		handle = undefined
 		// Re-check at fire time: the sidebar may have been hidden, the setting turned off or a map opened meanwhile.
-		if (settled || !deps.enabled() || !deps.sidebarVisible()) {
+		if (disposed || settled || !deps.enabled() || !deps.sidebarVisible()) {
 			return
 		}
 		settled = true
@@ -58,11 +65,19 @@ export function createMapAutoOpen(deps: MapAutoOpenDeps): MapAutoOpen {
 
 	return {
 		onSidebarShown() {
-			if (settled || pending || !deps.enabled() || !deps.sidebarVisible()) {
+			if (disposed || settled || pending || !deps.enabled() || !deps.sidebarVisible()) {
 				return
 			}
 			pending = true
-			schedule(() => void attempt(), deps.delayMs ?? MAP_AUTO_OPEN_DELAY_MS)
+			handle = schedule(() => void attempt(), deps.delayMs ?? MAP_AUTO_OPEN_DELAY_MS)
+		},
+		dispose() {
+			disposed = true
+			if (handle !== undefined) {
+				cancel(handle)
+				handle = undefined
+			}
+			pending = false
 		},
 	}
 }

@@ -13,6 +13,7 @@ describe("map auto-open beside the chat", () => {
 	let failOpen: boolean
 	let logged: string[]
 	let waits: number[]
+	let cleared: unknown[]
 
 	const make = () =>
 		createMapAutoOpen({
@@ -28,7 +29,11 @@ describe("map auto-open beside the chat", () => {
 			setTimeout: (fn, ms) => {
 				timers.push(fn)
 				waits.push(ms)
-				return 0
+				return fn
+			},
+			clearTimeout: (h) => {
+				cleared.push(h)
+				timers = timers.filter((t) => t !== h)
 			},
 			log: (m) => logged.push(m),
 		})
@@ -49,6 +54,7 @@ describe("map auto-open beside the chat", () => {
 		failOpen = false
 		logged = []
 		waits = []
+		cleared = []
 	})
 
 	it("opens the map once after a short delay when the sidebar is shown", async () => {
@@ -109,6 +115,17 @@ describe("map auto-open beside the chat", () => {
 		a.onSidebarShown()
 		await flush()
 		expect(opened).to.equal(0)
+	})
+
+	it("dispose cancels the pending delayed open, and nothing opens afterwards", async () => {
+		const a = make()
+		a.onSidebarShown()
+		a.dispose()
+		expect(cleared).to.have.length(1)
+		await flush()
+		expect(opened).to.equal(0)
+		a.onSidebarShown()
+		expect(timers).to.have.length(0)
 	})
 
 	it("is off if the setting is turned off during the delay", async () => {

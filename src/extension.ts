@@ -313,6 +313,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		log: (message, error) => Logger.log(`${message}: ${error instanceof Error ? error.message : String(error)}`),
 	})
 	webview.onSidebarShown = () => mapAutoOpen.onSidebarShown()
+	context.subscriptions.push({ dispose: () => mapAutoOpen.dispose() })
 
 	// Initialize HTML preview panel provider with controller
 	VscodeHtmlPreviewProvider.initialize(context, webview.controller)
