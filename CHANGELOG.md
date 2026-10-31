@@ -21,6 +21,8 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - The same applies to a message typed after a shown answer in a live task: the feedback result now says "The user sent a new message after your answer", not "continue the task".
 - Three prompt rules forbade conversation ("NOT engage in a back and forth", "NEVER end ... with a question", "don't end your responses with questions"). They are replaced, in every variant (`rules`, `objective`, `next-gen`, `gpt-5`), by: answer a question about finished work directly and briefly; do not pad a result with offers of further help.
 
+A text-only reply is an answer, not a finished-task result: its row is marked `followUpAnswer` (new proto field `follow_up_answer = 1013`), headed "Reply" instead of "Answer", is not counted as a completed task, and is never treated as "done" in the honest-exit sense. While the reply is held, the same "Drafting answer…" activity line a gated answer shows is displayed. The offline scorecard gains a `follow-up` category, including the "redo with 2005-2015" case.
+
 There is no text classifier: the state is set by the host when the user writes after a finished answer and is cleared the moment the model uses a tool.
 
 ---

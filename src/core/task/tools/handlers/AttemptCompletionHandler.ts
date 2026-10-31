@@ -247,6 +247,14 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			gateDecision = decision
 		}
 
+		// A text-only reply to a follow-up is an answer to the user, not a finished-task result: the row says so, and it
+		// is not counted as a completed task.
+		const followUpAnswer = config.taskState.followUpAnswerInFlight
+		const sayCompletion = () =>
+			followUpAnswer
+				? config.callbacks.say("completion_result", result, undefined, undefined, false, { followUpAnswer: true })
+				: config.callbacks.say("completion_result", result, undefined, undefined, false)
+
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Show notification if auto-approval is enabled
@@ -283,11 +291,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		if (command) {
 			if (lastMessage && lastMessage.ask !== "command") {
 				// haven't sent a command message yet so first send completion_result then command
-				const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+				const completionMessageTs = await sayCompletion()
 				config.taskState.answerAuditGate.hidden = undefined // shown: no longer a hidden draft
 				await config.callbacks.saveCheckpoint(true, completionMessageTs)
 				await addNewChangesFlagToLastCompletionResultMessage()
-				telemetryService.captureTaskCompleted(config.ulid)
+				if (!followUpAnswer) {
+					telemetryService.captureTaskCompleted(config.ulid)
+				}
 				await finalizeGate()
 			} else {
 				config.taskState.answerAuditGate.hidden = undefined
@@ -315,11 +325,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			// user didn't reject, but the command may have output
 			commandResult = execCommandResult
 		} else {
-			const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+			const completionMessageTs = await sayCompletion()
 			config.taskState.answerAuditGate.hidden = undefined // shown: no longer a hidden draft
 			await config.callbacks.saveCheckpoint(true, completionMessageTs)
 			await addNewChangesFlagToLastCompletionResultMessage()
-			telemetryService.captureTaskCompleted(config.ulid)
+			if (!followUpAnswer) {
+				telemetryService.captureTaskCompleted(config.ulid)
+			}
 		}
 
 		// The chat has an answer: one more automatic title, from the whole exchange, unless the user named it (X1-P2).

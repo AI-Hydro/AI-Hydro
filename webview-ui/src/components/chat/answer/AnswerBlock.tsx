@@ -30,6 +30,8 @@ interface AnswerBlockProps {
 	audit?: AnswerAuditPayload
 	/** Presenter facts for the turn. Absent: no summary line. */
 	turn?: TurnSummary
+	/** A text-only reply to a follow-up: it answers the user, it is not a finished-task result. */
+	followUpAnswer?: boolean
 	hasChanges?: boolean
 	seeChangesDisabled?: boolean
 	onSeeChanges?: () => void
@@ -148,6 +150,7 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 	partial,
 	audit,
 	turn,
+	followUpAnswer,
 	hasChanges,
 	seeChangesDisabled,
 	onSeeChanges,
@@ -225,7 +228,7 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 		<section aria-label="Answer" className="mb-1" data-testid="answer-block" style={{ color: "var(--vscode-foreground)" }}>
 			<div className="mb-2 flex items-center gap-1.5 font-bold">
 				<span aria-hidden="true" className="codicon codicon-comment-discussion" />
-				<span>Answer</span>
+				<span data-follow-up-answer={followUpAnswer ? "true" : undefined}>{followUpAnswer ? "Reply" : "Answer"}</span>
 			</div>
 			<div className="pt-1">
 				<UntracedPlanContext.Provider value={plan}>{children}</UntracedPlanContext.Provider>

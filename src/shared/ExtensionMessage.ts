@@ -194,6 +194,8 @@ export interface AiHydroMessage {
 	exitCode?: CommandExit
 	/** Command rows the host's policy flagged (subagent launch, protected path, danger grant, ...). */
 	policyClass?: CommandPolicyClass
+	/** `completion_result` rows that are a text-only reply to a follow-up: an answer, not a "task done" result. Absent = a normal completion. */
+	followUpAnswer?: boolean
 	/** Set by the host on an ask that a subagent raised, so the card says whose request it is. Never model-supplied. */
 	subagentOrigin?: SubagentOrigin
 	lastCheckpointHash?: string

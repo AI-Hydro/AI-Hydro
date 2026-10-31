@@ -54,6 +54,7 @@ import { featureFlagsService } from "@services/feature-flags"
 import { listFiles } from "@services/glob/list-files"
 import { Logger } from "@services/logging/Logger"
 import { McpHub } from "@services/mcp/McpHub"
+import { AUDIT_PROGRESS_DRAFTING } from "@shared/aihydro/answerAuditGate"
 import { recordedOutcomeFor } from "@shared/aihydro/askOutcome"
 import { type CommandExit, describeExit } from "@shared/aihydro/commandEvidence"
 import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
@@ -2148,6 +2149,11 @@ export class Task {
 
 				if (this.taskState.followUpTurn) {
 					this.taskState.followUpHeldText[this.taskState.currentStreamingContentIndex] = content ?? ""
+					// The text is held, so show the same activity line a gated answer shows while it is drafted.
+					if (!this.taskState.followUpProgressShown && (content ?? "").trim()) {
+						this.taskState.followUpProgressShown = true
+						await this.say("answer_audit", AUDIT_PROGRESS_DRAFTING, undefined, undefined, true)
+					}
 					break
 				}
 				await this.say("text", content, undefined, undefined, block.partial)
@@ -2159,6 +2165,7 @@ export class Task {
 					const held = Object.values(this.taskState.followUpHeldText).join("\n\n").trim()
 					this.taskState.followUpHeldText = {}
 					this.taskState.followUpTurn = false
+					await this.clearFollowUpProgress()
 					if (held) {
 						await this.say("text", held)
 					}
@@ -2216,13 +2223,27 @@ export class Task {
 			return false
 		}
 		// The flag stays on: an audit revision request or the user's next message is still a follow-up.
-		await this.toolExecutor.executeTool({
-			type: "tool_use",
-			name: AiHydroDefaultTool.ATTEMPT,
-			params: { result: reply },
-			partial: false,
-		})
+		this.taskState.followUpAnswerInFlight = true
+		try {
+			await this.toolExecutor.executeTool({
+				type: "tool_use",
+				name: AiHydroDefaultTool.ATTEMPT,
+				params: { result: reply },
+				partial: false,
+			})
+		} finally {
+			this.taskState.followUpAnswerInFlight = false
+			await this.clearFollowUpProgress()
+		}
 		return true
+	}
+
+	/** Remove the "drafting" activity line shown while a follow-up reply was held. */
+	private async clearFollowUpProgress(): Promise<void> {
+		if (this.taskState.followUpProgressShown) {
+			this.taskState.followUpProgressShown = false
+			await sweepAuditProgress(this.messageStateHandler).catch(() => {})
+		}
 	}
 
 	async recursivelyMakeAiHydroRequests(userContent: UserContent, includeFileDetails: boolean = false): Promise<boolean> {

@@ -89,6 +89,10 @@ export class TaskState {
 	// While a follow-up turn streams, its text is held here (by block index) instead of shown: it is either the answer
 	// (accepted through attempt_completion, so it gets the audit) or narration before a tool call (shown then).
 	followUpHeldText: Record<number, string> = {}
+	// True only while a held follow-up reply is being run through attempt_completion: the answer row is marked as a reply.
+	followUpAnswerInFlight = false
+	// The "drafting" activity line is showing for held follow-up text.
+	followUpProgressShown = false
 	// Sliding window of the most recent tool failures (tool name + truncated error), used to
 	// ground the auto-decompose nudge in concrete failures instead of generic boilerplate.
 	recentToolErrors: string[] = []

@@ -149,6 +149,12 @@ describe("aihydro-message proto round trip (W2-0 M2)", () => {
 		})
 	})
 
+	it("a follow-up reply mark survives the proto; an ordinary completion gains none", () => {
+		const m: AiHydroMessage = { ts: 8, type: "say", say: "completion_result", text: "Re-running.", followUpAnswer: true }
+		expect(roundTrip(m)).to.deep.equal(m)
+		expect(roundTrip({ ts: 9, type: "say", say: "completion_result", text: "Done." })).to.not.have.property("followUpAnswer")
+	})
+
 	it("an old message without outcome fields round-trips without gaining any", () => {
 		const m: AiHydroMessage = { ts: 5, type: "ask", ask: "command", text: "ls" }
 		const back = roundTrip(m)

@@ -88,6 +88,46 @@ describe("follow-up turns are conversation (A2)", () => {
 			expect(task.taskState.followUpHeldText).to.deep.equal({})
 		})
 
+		it("the reply runs with the in-flight mark (so its row is a reply, not a result) and the mark and progress line are cleared after", async () => {
+			const seen: boolean[] = []
+			const { task } = build({ followUpTurn: true, followUpHeldText: { 0: "Redoing now." }, followUpProgressShown: true })
+			task.toolExecutor.executeTool = async () => {
+				seen.push(task.taskState.followUpAnswerInFlight)
+				return true
+			}
+			task.messageStateHandler = {
+				getAiHydroMessages: () => [],
+				setAiHydroMessages() {},
+				saveAiHydroMessagesAndUpdateHistory: async () => {},
+			}
+			await task.acceptFollowUpAnswer()
+			expect(seen).to.deep.equal([true])
+			expect(task.taskState.followUpAnswerInFlight).to.equal(false)
+			expect(task.taskState.followUpProgressShown).to.equal(false)
+		})
+
+		it("held text shows one activity line while it is pending", async () => {
+			const say = sinon.stub().resolves(undefined)
+			const task = Object.create(Task.prototype)
+			task.say = say
+			task.toolExecutor = { executeTool: sinon.stub().resolves(true) }
+			task.taskState = {
+				followUpTurn: true,
+				followUpHeldText: {},
+				followUpProgressShown: false,
+				presentAssistantMessageLocked: false,
+				currentStreamingContentIndex: 0,
+				assistantMessageContent: [{ type: "text", content: "Re-running for 2005-2015.", partial: true }],
+				didCompleteReadingStream: false,
+			}
+			await Task.prototype.presentAssistantMessage.call(task)
+			task.taskState.presentAssistantMessageLocked = false
+			await Task.prototype.presentAssistantMessage.call(task)
+			expect(say.callCount).to.equal(1)
+			expect(say.firstCall.args[0]).to.equal("answer_audit")
+			expect(say.firstCall.args[4]).to.equal(true)
+		})
+
 		it("outside a follow-up (a running task) nothing is accepted, so the tool nudge still applies", async () => {
 			const { task, executeTool } = build({ followUpTurn: false, followUpHeldText: { 0: "thinking out loud" } })
 			expect(await task.acceptFollowUpAnswer()).to.equal(false)
@@ -110,13 +150,14 @@ describe("follow-up turns are conversation (A2)", () => {
 				didCompleteReadingStream: false,
 			}
 			await Task.prototype.presentAssistantMessage.call(task)
-			expect(say.called).to.equal(false)
+			// Only the drafting activity line is shown; the text itself is held.
+			expect(say.args.map((a: any[]) => a[0])).to.deep.equal(["answer_audit"])
 			expect(task.taskState.followUpHeldText[0]).to.equal("Checking the run log.")
 
 			task.taskState.currentStreamingContentIndex = 1
 			task.taskState.assistantMessageContent.push({ type: "tool_use", name: "read_file", params: {}, partial: false })
 			await Task.prototype.presentAssistantMessage.call(task)
-			expect(say.firstCall.args).to.deep.equal(["text", "Checking the run log."])
+			expect(say.lastCall.args).to.deep.equal(["text", "Checking the run log."])
 			expect(executeTool.calledOnce).to.equal(true)
 			expect(task.taskState.followUpTurn).to.equal(false)
 			expect(task.taskState.followUpHeldText).to.deep.equal({})
