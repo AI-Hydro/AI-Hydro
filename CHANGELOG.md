@@ -9,7 +9,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [0.4.5] — unreleased (navigation polish: every sidebar sub-view in the harness, shared nav primitives, accessible Settings)
+## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)
 
