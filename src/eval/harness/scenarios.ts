@@ -191,4 +191,81 @@ export const offlineScenarios: EvalScenario[] = [
 			return ok(out.includes("unsuccessful attempts") && !out.includes("most recent tool failures"))
 		},
 	},
+
+	// --- follow-up turns (A2). Live version, for the model runner: resume a finished task with "redo with 2005-2015" and
+	// score that the model uses a tool (re-runs the analysis) rather than answering in text that claims it is done.
+	{
+		id: "followup-redo-resume-text",
+		category: "follow-up",
+		description:
+			"a work-request follow-up ('redo with 2005-2015') after a finished task gets the follow-up instruction, not reassess/retry",
+		run: () => {
+			const [head, user] = formatResponse.taskResumption(
+				"act",
+				"2 hours ago",
+				"/ws",
+				false,
+				"redo with 2005-2015",
+				false,
+				true,
+			)
+			const good =
+				/Answer it directly/.test(head) &&
+				!/reassess|retry|interrupted/i.test(head) &&
+				user.includes("redo with 2005-2015")
+			return ok(good, head.slice(0, 120))
+		},
+	},
+	{
+		id: "followup-redo-text-only-is-a-reply-not-done",
+		category: "follow-up",
+		description:
+			"a text-only reply to a work-request follow-up becomes a completion row marked as a reply, never an unmarked 'done'",
+		run: async () => {
+			const { Task } = await import("@/core/task")
+			const task: any = Object.create(Task.prototype)
+			let marked: boolean | undefined
+			task.taskState = {
+				followUpTurn: true,
+				followUpHeldText: { 0: "I will redo it for 2005-2015." },
+				followUpAnswerInFlight: false,
+				followUpProgressShown: false,
+			}
+			task.toolExecutor = {
+				executeTool: async (b: any) => {
+					marked =
+						task.taskState.followUpAnswerInFlight && b.name === "attempt_completion" && b.params.outcome === undefined
+					return true
+				},
+			}
+			const accepted = await task.acceptFollowUpAnswer()
+			return ok(
+				accepted && marked === true && task.taskState.followUpAnswerInFlight === false,
+				`accepted=${accepted} marked=${marked}`,
+			)
+		},
+	},
+	{
+		id: "followup-tool-use-ends-the-state",
+		category: "follow-up",
+		description: "once the model calls a tool in a follow-up, the state ends and a later text-only turn is nudged as usual",
+		run: async () => {
+			const { Task } = await import("@/core/task")
+			const task: any = Object.create(Task.prototype)
+			task.say = async () => undefined
+			task.toolExecutor = { executeTool: async () => true }
+			task.taskState = {
+				followUpTurn: true,
+				followUpHeldText: {},
+				followUpProgressShown: false,
+				presentAssistantMessageLocked: false,
+				currentStreamingContentIndex: 0,
+				assistantMessageContent: [{ type: "tool_use", name: "use_mcp_tool", params: {}, partial: false }],
+				didCompleteReadingStream: false,
+			}
+			await Task.prototype.presentAssistantMessage.call(task)
+			task.taskState.followUpHeldText = { 0: "thinking out loud" }
+			return ok(task.taskState.followUpTurn === false && (await task.acceptFollowUpAnswer()) === false)
+		},
+	},
 ]

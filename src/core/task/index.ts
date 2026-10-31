@@ -54,6 +54,7 @@ import { featureFlagsService } from "@services/feature-flags"
 import { listFiles } from "@services/glob/list-files"
 import { Logger } from "@services/logging/Logger"
 import { McpHub } from "@services/mcp/McpHub"
+import { AUDIT_PROGRESS_DRAFTING } from "@shared/aihydro/answerAuditGate"
 import { recordedOutcomeFor } from "@shared/aihydro/askOutcome"
 import { type CommandExit, describeExit } from "@shared/aihydro/commandEvidence"
 import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
@@ -709,6 +710,7 @@ export class Task {
 		if (type === "user_feedback") {
 			// Real user feedback starts a new completion cycle: the audit revision counter does not carry over.
 			resetGateCycle(this.taskState.answerAuditGate)
+			this.taskState.followUpAnswerInFlight = false
 		}
 
 		if (partial !== undefined) {
@@ -1124,7 +1126,10 @@ export class Task {
 			wasRecent,
 			responseText,
 			hasPendingFileContextWarnings,
+			askType === "resume_completed_task",
 		)
+		// A message after a finished task is conversation until the model has to use a tool.
+		this.taskState.followUpTurn = askType === "resume_completed_task" && !!responseText && mode !== "plan"
 
 		if (taskResumptionMessage !== "") {
 			newUserContent.push({
@@ -2143,12 +2148,35 @@ export class Task {
 					}
 				}
 
+				if (this.taskState.followUpTurn) {
+					this.taskState.followUpHeldText[this.taskState.currentStreamingContentIndex] = content ?? ""
+					// The text is held, so show the same activity line a gated answer shows while it is drafted.
+					if (!this.taskState.followUpProgressShown && (content ?? "").trim()) {
+						this.taskState.followUpProgressShown = true
+						await this.say("answer_audit", AUDIT_PROGRESS_DRAFTING, undefined, undefined, true)
+					}
+					break
+				}
 				await this.say("text", content, undefined, undefined, block.partial)
 				break
 			}
-			case "tool_use":
+			case "tool_use": {
+				// The model is working again, not just answering: show what it said first, and the nudges apply as usual.
+				if (this.taskState.followUpTurn) {
+					const held = Object.values(this.taskState.followUpHeldText).join("\n\n").trim()
+					this.taskState.followUpHeldText = {}
+					this.taskState.followUpTurn = false
+					if (block.name !== AiHydroDefaultTool.ATTEMPT) {
+						this.taskState.followUpAnswerInFlight = false
+					}
+					await this.clearFollowUpProgress()
+					if (held) {
+						await this.say("text", held)
+					}
+				}
 				await this.toolExecutor.executeTool(block)
 				break
+			}
 		}
 
 		/*
@@ -2179,6 +2207,47 @@ export class Task {
 		// block is partial, but the read stream may have finished
 		if (this.taskState.presentAssistantMessageHasPendingUpdates) {
 			this.presentAssistantMessage()
+		}
+	}
+
+	/**
+	 * A text-only reply to a follow-up (a message the user sent after a completed answer) is the answer: it goes through
+	 * attempt_completion, so the answer audit and the answer card apply, instead of being rejected as "you did not use a
+	 * tool". Only in that state; inside a running task a text-only turn is still nudged. No text classification: the
+	 * state is set by the host when the user writes after a finished task, and cleared when the model uses a tool.
+	 * Returns true when the reply was taken as the answer (its result is already in `userMessageContent`).
+	 */
+	async acceptFollowUpAnswer(): Promise<boolean> {
+		if (!this.taskState.followUpTurn) {
+			return false
+		}
+		const reply = Object.values(this.taskState.followUpHeldText).join("\n\n").trim()
+		this.taskState.followUpHeldText = {}
+		if (!reply) {
+			return false
+		}
+		// The flag stays on: an audit revision request or the user's next message is still a follow-up.
+		this.taskState.followUpAnswerInFlight = true
+		try {
+			await this.toolExecutor.executeTool({
+				type: "tool_use",
+				name: AiHydroDefaultTool.ATTEMPT,
+				params: { result: reply },
+				partial: false,
+			})
+		} finally {
+			// The mark is NOT cleared here: an audit revision of this reply is still a reply. It ends with the user's next
+			// message, or when the model uses a tool other than attempt_completion.
+			await this.clearFollowUpProgress()
+		}
+		return true
+	}
+
+	/** Remove the "drafting" activity line shown while a follow-up reply was held. */
+	private async clearFollowUpProgress(): Promise<void> {
+		if (this.taskState.followUpProgressShown) {
+			this.taskState.followUpProgressShown = false
+			await sweepAuditProgress(this.messageStateHandler).catch(() => {})
 		}
 	}
 
@@ -2648,6 +2717,7 @@ export class Task {
 			// reset streaming state
 			this.taskState.currentStreamingContentIndex = 0
 			this.taskState.assistantMessageContent = []
+			this.taskState.followUpHeldText = {}
 			this.taskState.didCompleteReadingStream = false
 			this.taskState.userMessageContent = []
 			this.taskState.userMessageContentReady = false
@@ -2943,7 +3013,12 @@ export class Task {
 				await pWaitFor(() => this.taskState.userMessageContentReady)
 
 				// if the model did not tool use, then we need to tell it to either use a tool or attempt_completion
-				const didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use")
+				let didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use")
+
+				// A follow-up question answered in plain text IS the answer (see acceptFollowUpAnswer).
+				if (!didToolUse && (await this.acceptFollowUpAnswer())) {
+					didToolUse = true
+				}
 
 				if (!didToolUse) {
 					// normal request where tool use is required

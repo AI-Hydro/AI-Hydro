@@ -26,6 +26,7 @@ describe("EVAL: harness resilience scorecard (offline)", () => {
 		const categories = card.categories.map((c) => c.category).sort()
 		categories.should.deepEqual([
 			"capability-routing",
+			"follow-up",
 			"loop-detection",
 			"mcp-json-repair",
 			"resilience-nudge",
