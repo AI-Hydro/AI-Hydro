@@ -35,6 +35,7 @@ import { explorerBlockReason } from "./explorerPolicy"
 import { CHAT_STATUS_TOOL_NAME } from "./finalAnswerAudit"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
+import { planModeBlockReason } from "./planModePolicy"
 import type { EffectiveCapabilities } from "./subagents/agentProfile"
 import { TaskState } from "./TaskState"
 import { AutoApprove } from "./tools/autoApprove"
@@ -455,16 +456,6 @@ export class ToolExecutor {
 	}
 
 	/**
-	 * Tools that are restricted in plan mode and can only be used in act mode
-	 */
-	private static readonly PLAN_MODE_RESTRICTED_TOOLS: AiHydroDefaultTool[] = [
-		AiHydroDefaultTool.FILE_NEW,
-		AiHydroDefaultTool.FILE_EDIT,
-		AiHydroDefaultTool.MULTI_FILE_EDIT,
-		AiHydroDefaultTool.NEW_RULE,
-	]
-
-	/**
 	 * Execute a tool through the coordinator if it's registered
 	 */
 	private async execute(block: ToolUse): Promise<boolean> {
@@ -512,18 +503,23 @@ export class ToolExecutor {
 				return true
 			}
 
-			// Logic for plan-mode tool call restrictions
+			// Plan mode is read-only (planModePolicy.ts): file writers, non-READ MCP tools and non-read-only commands are
+			// refused with a result that says so. A partial block is swallowed silently; the complete one reports once.
 			if (
 				this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled") &&
 				this.stateManager.getGlobalSettingsKey("mode") === "plan" &&
-				block.name &&
-				this.isPlanModeToolRestricted(block.name)
+				block.name
 			) {
-				const errorMessage = `Tool '${block.name}' is not available in PLAN MODE. This tool is restricted to ACT MODE for file modifications. Only use tools available for PLAN MODE when in that mode.`
-				await this.say("error", errorMessage)
-				this.pushToolResult(formatResponse.toolError(errorMessage), block)
-				await this.saveCheckpoint()
-				return true
+				const planRefusal = planModeBlockReason(block.name, block.params, this.mcpHub)
+				if (planRefusal) {
+					if (block.partial) {
+						return true
+					}
+					await this.say("error", planRefusal)
+					this.pushToolResult(formatResponse.toolError(planRefusal), block)
+					await this.saveCheckpoint()
+					return true
+				}
 			}
 
 			// The browser tool is off by default (X0-5); refuse a call the prompt no longer offers (see browserGate.ts).
@@ -555,13 +551,6 @@ export class ToolExecutor {
 			await this.saveCheckpoint()
 			return true
 		}
-	}
-
-	/**
-	 * Check if a tool is restricted in plan mode
-	 */
-	private isPlanModeToolRestricted(toolName: AiHydroDefaultTool): boolean {
-		return ToolExecutor.PLAN_MODE_RESTRICTED_TOOLS.includes(toolName)
 	}
 
 	/**

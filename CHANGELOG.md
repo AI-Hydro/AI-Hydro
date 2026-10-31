@@ -9,6 +9,18 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — 2026-10-31 (agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
+
+### Fixed — Plan mode is read-only (branch `vision2040/agent-plan`)
+
+Plan mode blocked four file tools and nothing else: every MCP writer, `run_python` (an MCP tool) and any shell command still ran, so planning a study could create runs and fill study slots.
+
+- One policy, `src/core/task/planModePolicy.ts`, built from predicates that already decide for the explorer subagent and for command auto-run. `use_mcp_tool` runs in Plan mode only for a READ-class tool (`readOnlyHint` true and `openWorldHint` false) on a **trusted** first-party server (`explorerMcpBlockReason`: another server's labels are untrusted hints, an unannotated tool is not read-only, and `start_session`, rebind, claim and approval tools are refused by name). `execute_command` runs only if the host's read-only classifier accepts every part of it (fail closed). `preview_html` joins the refused file writers.
+- A refused call comes back as a tool result that starts "PLAN MODE is read-only, so this call did not run", names the reason, and tells the model to put the step in the plan or ask the user to switch to Act mode. The tool list does not change, so the prompt cache is not disturbed. The system prompt's Plan-mode section says the same in one line.
+- No approval is weakened: the refusal happens before any approval is asked. The existing `strictPlanModeEnabled` setting (default on) still governs.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)
