@@ -75,6 +75,32 @@ describe("Plan mode is read-only", () => {
 		expect(PLAN_MODE_RESTRICTED_TOOLS).to.include("preview_html")
 	})
 
+	it("refuses the browser, new_task and report_bug; spawn_subagents (read-only children) stays allowed", () => {
+		for (const t of ["browser_action", "new_task", "report_bug"]) {
+			expect(planModeBlockReason(t, {}, hub(), POSIX), t).to.include("not available in PLAN MODE")
+		}
+		expect(planModeBlockReason("spawn_subagents", {}, hub(), POSIX)).to.equal(undefined)
+	})
+
+	it("routes access_mcp_resource through the trusted-server check", () => {
+		const read = (h: any, uri = "aihydro://x") =>
+			planModeBlockReason("access_mcp_resource", { server_name: "ai-hydro", uri }, h, POSIX)
+		expect(read(hub())).to.equal(undefined)
+		const evil = hub(JSON.stringify({ type: "stdio", command: "/tmp/evil", args: [] }))
+		expect(read(evil)).to.include("PLAN MODE is read-only")
+		expect(planModeBlockReason("access_mcp_resource", { server_name: "ai-hydro" }, hub(), POSIX)).to.include("did not run")
+	})
+
+	it("a git command is hardened in Plan mode even when the user approved it (it ran because the classifier accepted it)", () => {
+		const { commandToExecute } = require("../commandPolicy")
+		const ask = { action: "ask", reason: "x", policyClass: "not_read_only" }
+		const plain = commandToExecute("git status", ask, false)
+		expect(plain).to.equal("git status")
+		const hardened = commandToExecute("git status", ask, true, POSIX)
+		expect(hardened).to.include("GIT_CONFIG_COUNT").and.include("git status")
+		expect(commandToExecute("ls", ask, true, POSIX)).to.equal("ls")
+	})
+
 	it("runs only commands the host classifies as read-only", () => {
 		const run = (command: string) => planModeBlockReason("execute_command", { command }, hub(), POSIX)
 		expect(run("ls -la")).to.equal(undefined)

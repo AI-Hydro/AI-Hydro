@@ -1,5 +1,5 @@
 import { AiHydroDefaultTool } from "@shared/tools"
-import { type ExplorerMcpHub, explorerMcpBlockReason } from "./explorerPolicy"
+import { type ExplorerMcpHub, explorerMcpBlockReason, explorerResourceBlockReason } from "./explorerPolicy"
 import { classifyCommand, type ShellEnvironment } from "./readOnlyClassifier"
 
 /**
@@ -17,13 +17,19 @@ import { classifyCommand, type ShellEnvironment } from "./readOnlyClassifier"
  * back as a tool result that says it was Plan mode, so the model plans the step instead of trying again.
  */
 
-/** Built-in tools that write files; refused in Plan mode (unchanged set, plus `preview_html`, which writes HTML to the workspace). */
+/** Built-in tools refused in Plan mode: the file writers (plus `preview_html`, which writes HTML to the workspace) and the tools with effects outside the workspace. */
 export const PLAN_MODE_RESTRICTED_TOOLS: readonly AiHydroDefaultTool[] = [
 	AiHydroDefaultTool.FILE_NEW,
 	AiHydroDefaultTool.FILE_EDIT,
 	AiHydroDefaultTool.MULTI_FILE_EDIT,
 	AiHydroDefaultTool.NEW_RULE,
 	AiHydroDefaultTool.PREVIEW_HTML,
+	// Not file writes but effects all the same: a browser session acts on the open web (clicks, form posts), `new_task`
+	// starts another task from this one, `report_bug` opens an external issue. `spawn_subagents` stays allowed: its
+	// children run the read-only explorer profile.
+	AiHydroDefaultTool.BROWSER,
+	AiHydroDefaultTool.NEW_TASK,
+	AiHydroDefaultTool.REPORT_BUG,
 ]
 
 const SWITCH = "Describe this step in the plan, or ask the user to switch to Act mode."
@@ -46,6 +52,16 @@ export function planModeBlockReason(
 		)
 		if (reason) {
 			return `PLAN MODE is read-only, so this MCP call did not run. ${reason} In Plan mode only read-only tools on the trusted first-party server run. ${SWITCH}`
+		}
+	}
+	if (toolName === AiHydroDefaultTool.MCP_ACCESS) {
+		const reason = explorerResourceBlockReason(
+			mcpHub,
+			params?.server_name as string | undefined,
+			params?.uri as string | undefined,
+		)
+		if (reason) {
+			return `PLAN MODE is read-only, so this resource read did not run. ${reason} ${SWITCH}`
 		}
 	}
 	if (toolName === AiHydroDefaultTool.BASH) {

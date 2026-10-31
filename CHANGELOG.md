@@ -17,6 +17,8 @@ Plan mode blocked four file tools and nothing else: every MCP writer, `run_pytho
 
 - One policy, `src/core/task/planModePolicy.ts`, built from predicates that already decide for the explorer subagent and for command auto-run. `use_mcp_tool` runs in Plan mode only for a READ-class tool (`readOnlyHint` true and `openWorldHint` false) on a **trusted** first-party server (`explorerMcpBlockReason`: another server's labels are untrusted hints, an unannotated tool is not read-only, and `start_session`, rebind, claim and approval tools are refused by name). `execute_command` runs only if the host's read-only classifier accepts every part of it (fail closed). `preview_html` joins the refused file writers.
 - A refused call comes back as a tool result that starts "PLAN MODE is read-only, so this call did not run", names the reason, and tells the model to put the step in the plan or ask the user to switch to Act mode. The tool list does not change, so the prompt cache is not disturbed. The system prompt's Plan-mode section says the same in one line.
+- Also refused in Plan: `browser_action`, `new_task` and `report_bug` (effects outside the workspace); `access_mcp_resource` goes through the trusted-server check; `spawn_subagents` stays (its children are read-only explorers). A git command that runs in Plan, auto-run or approved, is wrapped in the hardened git environment.
+- The Plan-mode prompt line is shown only when `strictPlanModeEnabled` is on, so the prompt never claims an enforcement that is off.
 - No approval is weakened: the refusal happens before any approval is asked. The existing `strictPlanModeEnabled` setting (default on) still governs.
 
 ---
