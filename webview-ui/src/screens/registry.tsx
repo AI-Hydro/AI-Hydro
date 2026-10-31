@@ -1218,7 +1218,8 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-layers-menu-open", "Layers: the row overflow menu open (zoom, style, save, copy run ID, move, remove)", {
 		layers: featureLayers(),
 		steps: [...openTool("Layer manager"), { click: 'button[aria-label^="Actions for Synthetic basin"]' }, { wait: 300 }],
-		expectVisible: ['[role="menu"]'],
+		// The first item has focus once the menu is placed (it is hidden while it measures, and a hidden element cannot focus).
+		expectVisible: ['[role="menu"]', '[role="menuitem"]:focus'],
 	}),
 	mapScreen("map-layers-long-names", "Layers: long names wrap to two lines instead of truncating", {
 		layers: longNameLayers(),
