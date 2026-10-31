@@ -82,22 +82,32 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({ label, items, icon =
 		setPos({ top, left, maxHeight })
 	}, [open])
 
+	// Focus the first item once the menu is placed: while it is still measuring it is `visibility: hidden`, and a hidden
+	// element cannot take focus.
+	const placed = pos !== null
+	useEffect(() => {
+		if (open && placed) menuRef.current?.querySelector<HTMLElement>('[role^="menuitem"]')?.focus()
+	}, [open, placed])
+
 	useEffect(() => {
 		if (!open) return
-		menuRef.current?.querySelector<HTMLElement>('[role^="menuitem"]')?.focus()
 		const onPointerDown = (e: PointerEvent) => {
 			const target = e.target as Node
 			if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return
 			setOpen(false)
 		}
 		const close = () => setOpen(false)
+		// Scrolling the menu itself (a long menu in a short panel) must not close it; scrolling the page under it does.
+		const onScroll = (e: Event) => {
+			if (!menuRef.current?.contains(e.target as Node)) setOpen(false)
+		}
 		document.addEventListener("pointerdown", onPointerDown, true)
 		window.addEventListener("resize", close)
-		window.addEventListener("scroll", close, true)
+		window.addEventListener("scroll", onScroll, true)
 		return () => {
 			document.removeEventListener("pointerdown", onPointerDown, true)
 			window.removeEventListener("resize", close)
-			window.removeEventListener("scroll", close, true)
+			window.removeEventListener("scroll", onScroll, true)
 		}
 	}, [open, setOpen])
 
@@ -173,8 +183,14 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({ label, items, icon =
 									key={item.key}
 									onClick={() => {
 										if (item.disabledReason) return
-										setOpen(false, true)
+										setOpen(false)
 										item.onSelect()
+										// Focus goes back to the button only if the action did not move it (Rename focuses its own
+										// field; returning focus there would blur the field and cancel the edit).
+										window.setTimeout(() => {
+											const at = document.activeElement
+											if (!at || at === document.body) triggerRef.current?.focus()
+										}, 0)
 									}}
 									role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
 									tabIndex={-1}

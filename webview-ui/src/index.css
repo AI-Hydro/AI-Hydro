@@ -3394,3 +3394,10 @@ vscode-dropdown::part(listbox) {
 	color: var(--vscode-button-foreground);
 	border-color: transparent;
 }
+.map-layer-group__warn {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--vscode-editorWarning-foreground, #cca700);
+	font-weight: 400;
+}
