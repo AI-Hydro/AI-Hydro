@@ -116,3 +116,11 @@ export function pinSavePhase(s: PinSaveStatus, awaiting: number | "local" | null
 export function currentSaveToken(): number | "local" {
 	return status.unscoped ? "local" : status.requested
 }
+
+/** What the one toast says when the host refused a save (the folder changed) and the map reloads: it names the pin and offers its note. */
+export function refusedSaveNotice(pin: { name: string; notes?: string } | undefined): { message: string; copy?: string } {
+	return {
+		message: `${pin ? `Pin \u201C${pin.name}\u201D was` : "A pin edit was"} not saved: the open folder changed, so pins were reloaded.`,
+		copy: pin?.notes || undefined,
+	}
+}
