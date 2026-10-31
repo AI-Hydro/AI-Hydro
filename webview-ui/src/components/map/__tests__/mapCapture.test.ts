@@ -118,7 +118,7 @@ it("keeps scientific metadata while excluding transport fields", () => {
 		uncertainty: "unknown",
 	})
 })
-it("keeps the whole provenance envelope in the plate sidecar, and names the run when there is no file", () => {
+it("keeps the provenance envelope except the chat id in the plate sidecar, and names the run when there is no file", () => {
 	expect(
 		exportLayerMetadata({
 			tool: "delineate_watershed",
@@ -127,7 +127,7 @@ it("keeps the whole provenance envelope in the plate sidecar, and names the run 
 			retrieved_at: "2026-10-31T00:00:00Z",
 			_run_id: "r1",
 		}),
-	).toEqual({ tool: "delineate_watershed", study_id: "s1", chat_id: "c1", retrieved_at: "2026-10-31T00:00:00Z", _run_id: "r1" })
+	).toEqual({ tool: "delineate_watershed", study_id: "s1", retrieved_at: "2026-10-31T00:00:00Z", _run_id: "r1" })
 	const layers = [
 		{ id: "a", name: "a", layerType: "polygon", metadata: { _run_id: "r1" } },
 		{ id: "b", name: "b", layerType: "polygon", metadata: { _run_id: "r2", provenance_path: "/p.json" } },

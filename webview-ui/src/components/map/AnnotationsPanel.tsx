@@ -141,7 +141,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 	const [collections, setCollections] = useState<AnnotationCollection[]>(() => loadCollections())
 	const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
 	// Tracker fields are off by default; the data is kept either way.
-	const [extras, setExtras] = useState<boolean>(() => trackerExtrasEnabled())
+	const [extras, setExtras] = useState<boolean>(() => trackerExtrasEnabled(annotations))
 	// ── Helpers ─────────────────────────────────────────────────────────────
 
 	const saveAnns = useCallback(
@@ -200,7 +200,9 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 
 	// ── Filter ──────────────────────────────────────────────────────────────
 
+	// The filters live in the tracker controls; with those hidden they must not hide sketches.
 	const filteredAnnotations = annotations.filter((ann) => {
+		if (!extras) return true
 		if (filterStatus !== "all" && ann.status !== filterStatus) return false
 		if (activeCollectionId !== "all" && !ann.collectionIds.includes(activeCollectionId)) return false
 		if (search) {

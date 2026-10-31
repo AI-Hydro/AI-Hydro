@@ -164,6 +164,15 @@ export function routingNote(feature: ClickedFeature | undefined, point: MapInspe
 	return "Routing: outlet check. Click a MERIT river or catchment feature for area-aware routing guidance."
 }
 
+/** The routing note when it is a warning the user must read before choosing (a large basin), not just a hint. */
+export function routingWarning(
+	feature: ClickedFeature | undefined,
+	point: MapInspectPoint | null | undefined,
+): string | undefined {
+	const note = routingNote(feature, point)
+	return note?.startsWith("Routing: hybrid") ? note : undefined
+}
+
 /** The tooltip of an action at a point, with the routing note on the delineate verbs. */
 export function actionTooltip(id: MapActionId, feature?: ClickedFeature, point?: MapInspectPoint | null): string | undefined {
 	const base = MAP_ACTIONS[id].tooltip

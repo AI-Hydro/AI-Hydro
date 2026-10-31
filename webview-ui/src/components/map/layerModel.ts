@@ -22,7 +22,7 @@ export const ORIGIN_LABEL: Record<LayerOrigin, { title: string; icon: string; hi
 	reference: {
 		title: "Reference data",
 		icon: "book",
-		hint: "Reference, not in any run. These layers cannot back a claim",
+		hint: "Reference, not in any run. These layers are not from a recorded run",
 	},
 	workspace: { title: "Workspace files", icon: "folder", hint: "Files from your workspace" },
 	user: { title: "Loaded by you", icon: "cloud-download", hint: "Layers you added from a file or URL" },
@@ -36,7 +36,7 @@ const REFERENCE_SOURCES = new Set(["merit", "wbd", "nwis", "nid"])
 export function originOf(layer: MapLayer): LayerOrigin {
 	const source = layer.metadata?.source
 	// A reference layer with no run is labelled for what it is. One a study's run made is that run's output.
-	if (source && REFERENCE_SOURCES.has(source) && !layerRunId(layer.metadata)) return "reference"
+	if (source && REFERENCE_SOURCES.has(source) && !layerRunId(layer.metadata) && !layerTool(layer.metadata)) return "reference"
 	if (source === "gee") return "gee"
 	if (source === "workspace") return "workspace"
 	if (source === "user") return "user"

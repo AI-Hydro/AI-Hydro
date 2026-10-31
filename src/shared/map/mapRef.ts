@@ -3,7 +3,8 @@
  *
  * "Ask AI-Hydro" from the map used to send a long prompt that described the click (twelve properties, no layer id,
  * no run id). The agent got a description, not a reference. A MapRef names the layer, the run and the study, so the
- * agent can look the object up (`map_get_state`) instead of reading a paraphrase of it.
+ * agent can ask the map about the named layer (`map_get_state`) instead of reading a paraphrase of it. Whether the
+ * agent resolves a ref correctly is not measured; `map_get_item`, which would fetch one object, does not exist yet.
  */
 
 export type MapRefKind = "gauge" | "river" | "basin" | "feature" | "pin" | "empty"
@@ -26,10 +27,14 @@ const KINDS: ReadonlySet<string> = new Set(["gauge", "river", "basin", "feature"
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/
 const MAX_TEXT = 120
 
+/** Control, zero-width, separator and bidi-control characters: invisible, so they can hide or reorder text. */
+const INVISIBLE = /[\u0000-\u001F\u007F-\u009F\u00AD\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/g
+export const stripInvisible = (value: string): string => value.replace(INVISIBLE, " ")
+
 const text = (value: unknown): string | undefined => {
 	if (typeof value !== "string") return undefined
-	const clean = value
-		.replace(/[\r\n\t\][]+/g, " ")
+	const clean = stripInvisible(value)
+		.replace(/[\][]+/g, " ")
 		.replace(/\s+/g, " ")
 		.trim()
 		.slice(0, MAX_TEXT)

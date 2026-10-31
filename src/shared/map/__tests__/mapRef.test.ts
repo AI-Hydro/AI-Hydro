@@ -33,4 +33,11 @@ describe("MapRef", () => {
 		expect(parseMapRef(null)).to.equal(undefined)
 		expect(parseMapRef({ kind: "other" })).to.equal(undefined)
 	})
+
+	it("strips control, zero-width and bidi characters from text values", () => {
+		const ref = parseMapRef({ kind: "gauge", layer_name: "Gau\u202Ege\u200B\u0007s \u2066x\u2069", feature_key: "a\u0000b" })
+		expect(ref?.layer_name).to.equal("Gau ge s x")
+		expect(ref?.feature_key).to.equal("a b")
+		expect(formatMapRef(ref as any)).to.not.match(/[\u0000-\u001F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/)
+	})
 })

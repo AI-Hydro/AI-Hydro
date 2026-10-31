@@ -458,7 +458,7 @@ export const LayerInspector: React.FC<{
 						{!layerRunId(meta) && (
 							<div style={{ marginTop: 6 }}>
 								{originOf(layer) === "reference"
-									? "Reference, not in any run. It cannot back a claim."
+									? "Reference, not in any run. It is not from a recorded run."
 									: `${NO_RUN_RECORD}.`}
 							</div>
 						)}
