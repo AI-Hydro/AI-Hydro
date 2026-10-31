@@ -234,6 +234,15 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				})
 				break
 			}
+			case "aihydro-show-on-map": {
+				// "On map" on a tool card or a claim: the webview sends run ids; the host finds the layers.
+				const { showRunsOnMap } = require("@core/map/showOnMap")
+				const result = await showRunsOnMap(this.controller, message.run_ids)
+				if (!result.ok) {
+					void vscode.window.showInformationMessage("No layer on the map came from that run.")
+				}
+				break
+			}
 			case "aihydro-study-binding": {
 				await handleStudyBindingMessage(this.controller, message.payload)
 				break

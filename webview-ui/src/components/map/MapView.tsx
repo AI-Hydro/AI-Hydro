@@ -39,6 +39,7 @@ import {
 } from "./basemaps"
 import FeatureIdentifier, { type ClickedFeature, type MapInspectPoint } from "./FeatureIdentifier"
 import { flyToTransition } from "./flyToTransition"
+import { FOCUS_WAIT_MS, focusExpired, focusLayersMessage, mayMoveCamera } from "./focusLayers"
 import { loadAndPushFileEntries, loadAndPushFiles } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
 import { freshLayers } from "./freshLayers"
@@ -1286,6 +1287,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 
 	// Drag-and-drop state — drop zone visibility + last-drop status
 	const [isDragOver, setIsDragOver] = useState(false)
+	const [focusLayerRequest, setFocusLayerRequest] = useState<{ layerId: string; nonce: number } | null>(null)
 	const [dropStatus, setDropStatus] = useState<{ kind: "ok" | "err"; msg: string } | null>(null)
 	const dragDepthRef = useRef(0) // dragenter/leave fire for child elements; track depth
 
@@ -2011,6 +2013,63 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		setViewState((previousViewState) => fitViewStateToBounds(bounds, dimensions, previousViewState))
 	}, [layers, visibleLayerIds, dimensions])
 
+	// Any input in the map panel counts as "the user is working here".
+	const lastInteractionRef = useRef(0)
+	useEffect(() => {
+		const touch = () => {
+			lastInteractionRef.current = Date.now()
+		}
+		const events = ["pointerdown", "wheel", "keydown"] as const
+		for (const name of events) window.addEventListener(name, touch, true)
+		return () => {
+			for (const name of events) window.removeEventListener(name, touch, true)
+		}
+	}, [])
+
+	/** "On map" from a tool card or claim: show the layers, select the first, move the camera only if the map is idle. */
+	const pendingFocusRef = useRef<{ ids: string[]; until: number } | null>(null)
+	const handleFocusLayers = (layerIds: string[], fromQueue = false) => {
+		const found = layersRef.current.filter((l) => layerIds.includes(l.id))
+		if (found.length === 0) {
+			// The map may have just opened and still be restoring its layers: wait for them, then give up out loud.
+			if (!fromQueue) {
+				pendingFocusRef.current = { ids: layerIds, until: Date.now() + FOCUS_WAIT_MS }
+				window.setTimeout(() => {
+					if (pendingFocusRef.current && pendingFocusRef.current.until <= Date.now()) {
+						pendingFocusRef.current = null
+						setDropStatus({ kind: "err", msg: focusLayersMessage(0, layerIds.length, false) })
+						window.setTimeout(() => setDropStatus(null), 6000)
+					}
+				}, FOCUS_WAIT_MS + 50)
+			}
+			return
+		}
+		pendingFocusRef.current = null
+		for (const layer of found) {
+			handleVisibilityChange(layer.id, true)
+		}
+		setToolOpen("layers", true)
+		setFocusLayerRequest({ layerId: found[0].id, nonce: Date.now() })
+		const bounds = mergeBounds(
+			found.map((l) => getLayerBounds(l, rasterCache)).filter((value): value is BoundingBox => value !== undefined),
+		)
+		const move = !!bounds && mayMoveCamera(lastInteractionRef.current, Date.now())
+		if (move && bounds) {
+			setViewState((previous) => fitViewStateToBounds(bounds, dimensions, previous))
+		}
+		setDropStatus({ kind: "ok", msg: focusLayersMessage(found.length, layerIds.length, move) })
+		window.setTimeout(() => setDropStatus(null), 6000)
+	}
+	const handleFocusLayersRef = useRef(handleFocusLayers)
+	handleFocusLayersRef.current = handleFocusLayers
+	// A queued request runs when its layers arrive.
+	useEffect(() => {
+		const pending = pendingFocusRef.current
+		if (pending && pending.until > Date.now() && layers.some((l) => pending.ids.includes(l.id))) {
+			handleFocusLayersRef.current(pending.ids, true)
+		}
+	}, [layers])
+
 	const handleFitExtentRef = useRef(handleFitExtent)
 	const handleZoomToLayerRef = useRef(handleZoomToLayer)
 	handleFitExtentRef.current = handleFitExtent
@@ -2032,6 +2091,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				}
 				if (event.type === "command.fit_extent") {
 					handleFitExtentRef.current()
+					return
+				}
+				if (event.type === "command.focus_layers") {
+					try {
+						const payload = JSON.parse(event.payloadJson || "{}") as { layerIds?: unknown }
+						const ids = Array.isArray(payload.layerIds)
+							? payload.layerIds.filter((v): v is string => typeof v === "string")
+							: []
+						if (!focusExpired(event.timestampMs, Date.now())) {
+							handleFocusLayersRef.current(ids)
+						}
+					} catch {
+						/* ignore */
+					}
 					return
 				}
 				if (event.type === "command.fit_layer") {
@@ -4140,6 +4213,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						/>
 					</>
 				}
+				focusLayerRequest={focusLayerRequest}
 				galleryPanel={(() => {
 					const galleryImportCallbacks: GalleryImportCallbacks = {
 						onImportScene: (item) => {

@@ -127,6 +127,8 @@ interface MapToolRibbonProps {
 	onOpacityChange?: (layerId: string, opacity: number) => void
 	clusterLayerIds?: Set<string>
 	onClusterToggle?: (layerId: string, enabled: boolean) => void
+	/** Select this layer row in the Layers panel (a "Show on map" from the chat). `nonce` makes a repeat count. */
+	focusLayerRequest?: { layerId: string; nonce: number } | null
 	onShowAllLayers?: () => void
 	onHideAllLayers?: () => void
 	viewState?: MapViewState
@@ -316,6 +318,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	onOpacityChange,
 	clusterLayerIds,
 	onClusterToggle,
+	focusLayerRequest,
 	onShowAllLayers,
 	onHideAllLayers,
 	viewState,
@@ -587,6 +590,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 						{active === "layers" && (
 							<LayerPanelContent
 								clusterLayerIds={clusterLayerIds}
+								focusLayerRequest={focusLayerRequest}
 								layerOpacities={layerOpacities}
 								layerOrder={layerOrder}
 								mapStyle={mapStyle}

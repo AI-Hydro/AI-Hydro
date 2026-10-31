@@ -107,6 +107,10 @@ Several map panels send context directly to the agent chat, pre-loading all the 
 
 ---
 
+## From the chat to the map
+
+A tool card whose run made layers that are on the map shows **On map (N)**, and a claim whose run evidence made layers shows **Show on map (N)** in its popover. Either one opens the map, shows those layers and selects the first in the Layers panel. The map moves its view only when you have not touched it for 5 seconds; otherwise it says the view did not move. The layers are matched by the run id recorded on each layer, so a layer with no run record is never linked.
+
 ## Camera, Run-Output and Time Control
 
 Three further agent tools write command files that the extension's `MapCommandWatcher` validates against a bounded schema (`mapCommandSchema`) before acting on them:
