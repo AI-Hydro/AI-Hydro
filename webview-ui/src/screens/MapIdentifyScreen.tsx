@@ -47,3 +47,32 @@ export function MapIdentifyScreen() {
 		</div>
 	)
 }
+
+const gaugeFeatures: ClickedFeature[] = [
+	{
+		layerId: "fx-ref-gauges",
+		layerName: "NWIS gauges in view",
+		properties: { site_no: "SYN-00000001", name: "Synthetic gauge", label: "SYN-00000001 — Synthetic gauge" },
+		geometry: { type: "Point", coordinates: [-89.9, 38.85] },
+	},
+]
+
+/** A clicked gauge from the Reference tab: the layer reports site and name only, so the rest reads "not reported". */
+export function MapIdentifyGaugeScreen() {
+	return (
+		<div style={{ position: "relative", height: "100%", minHeight: 520, background: "var(--vscode-editor-background)" }}>
+			<FeatureIdentifier
+				features={gaugeFeatures}
+				inspectPoint={{ lon: -89.9, lat: 38.85 }}
+				layerMetadata={() => ({ source: "nwis" })}
+				mapStyle="dark"
+				onAddSelection={() => {}}
+				onAgentAsk={() => {}}
+				onAgentDelineate={() => {}}
+				onClose={() => {}}
+				onQuickDelineate={() => {}}
+				onSaveFeatures={() => {}}
+			/>
+		</div>
+	)
+}

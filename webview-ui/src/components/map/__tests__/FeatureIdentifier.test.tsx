@@ -114,6 +114,42 @@ describe("feature identifier card", () => {
 		expect(onQuickDelineate).toHaveBeenCalled()
 	})
 
+	it("a gauge card shows the site, name, not reported for what the layer lacks, and a USGS link", () => {
+		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation(() => {})
+		render(
+			<FeatureIdentifier
+				features={[
+					{
+						layerId: "g",
+						layerName: "USGS gauges in view",
+						properties: {
+							site_no: "01013500",
+							name: "Fish River near Fort Kent, Maine",
+							label: "01013500 — Fish River",
+						},
+					},
+				]}
+				inspectPoint={{ lon: -68.5, lat: 47.2 }}
+				layerMetadata={() => ({ source: "nwis" })}
+				mapStyle="dark"
+				onClose={vi.fn()}
+			/>,
+		)
+		const block = screen.getByRole("group", { name: "Gauge" })
+		expect(block).toHaveTextContent("USGS 01013500")
+		expect(block).toHaveTextContent("Fish River near Fort Kent, Maine")
+		expect(block).toHaveTextContent(/Drainage areanot reported/)
+		expect(block).toHaveTextContent(/Recordnot reported/)
+		// The property list does not repeat what the block shows.
+		expect(screen.queryByText("01013500 — Fish River")).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: "USGS page" }))
+		expect(postMessage).toHaveBeenCalledWith({
+			type: "openExternal",
+			url: "https://waterdata.usgs.gov/monitoring-location/01013500/",
+		})
+		postMessage.mockRestore()
+	})
+
 	it("a layer with a tool name is not called Reference, even from a reference source", () => {
 		render(
 			<FeatureIdentifier
@@ -166,5 +202,21 @@ describe("feature identifier card", () => {
 			/>,
 		)
 		expect(screen.getByRole("note")).toHaveTextContent(/hybrid/i)
+	})
+
+	it("a gauge id that is not known to be USGS is shown bare, with no USGS label or link", () => {
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "m", layerName: "Stations", properties: { site_no: "08MF005", name: "Rio Bravo" } }]}
+				inspectPoint={{ lon: -100, lat: 28 }}
+				layerMetadata={() => ({ source: "user" })}
+				mapStyle="dark"
+				onClose={vi.fn()}
+			/>,
+		)
+		const block = screen.getByRole("group", { name: "Gauge" })
+		expect(block).toHaveTextContent("Site08MF005")
+		expect(block).not.toHaveTextContent("USGS")
+		expect(screen.queryByRole("button", { name: "USGS page" })).toBeNull()
 	})
 })
