@@ -70,7 +70,7 @@ const SkillsMarketplaceTab = () => {
 		setError(null)
 		SkillsServiceClient.refreshSkillsMarketplace(EmptyRequest.create({}))
 			.then((response) => {
-				setCatalog(response)
+				setCatalog({ ...response, items: response.items ?? [] })
 				setIsLoading(false)
 			})
 			.catch((err) => {

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { SubviewHeader } from "@/design"
 import SkillsConfiguredTab from "./SkillsConfiguredTab"
 import SkillsMarketplaceTab from "./SkillsMarketplaceTab"
 
@@ -23,44 +24,7 @@ const SkillsView = ({ onDone }: SkillsViewProps) => {
 				flexDirection: "column",
 				background: "var(--vscode-editor-background)",
 			}}>
-			{/* Header */}
-			<div
-				style={{
-					display: "flex",
-					justifyContent: "space-between",
-					alignItems: "center",
-					padding: "10px 17px 5px 20px",
-					flexShrink: 0,
-				}}>
-				<h3
-					style={{
-						margin: 0,
-						fontSize: 14,
-						fontWeight: 600,
-						color: "var(--vscode-textLink-foreground, #06b6d4)",
-					}}>
-					Skills
-				</h3>
-				<button
-					onClick={onDone}
-					style={{
-						background: "none",
-						border: "none",
-						cursor: "pointer",
-						color: "var(--vscode-foreground)",
-						display: "flex",
-						alignItems: "center",
-						padding: "4px 6px",
-						borderRadius: 3,
-						fontSize: 12,
-						gap: 4,
-					}}
-					title="Close"
-					type="button">
-					<span className="codicon codicon-close" style={{ fontSize: 14 }} />
-					<span>Done</span>
-				</button>
-			</div>
+			<SubviewHeader onClose={onDone} title="Skills" />
 
 			{/* Tab bar */}
 			<div

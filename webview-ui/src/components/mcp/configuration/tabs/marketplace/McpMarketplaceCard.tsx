@@ -19,7 +19,7 @@ const McpMarketplaceCard = ({ item, installedServers, setError, onRecognitionCha
 	const [isStarring, setIsStarring] = useState(false)
 	const [starred, setStarred] = useState(item.starredByClient)
 	const [aiHydroInstalls, setAiHydroInstalls] = useState(item.aiHydroInstalls || 0)
-	const [aiHydroStars, setAiHydroStars] = useState(item.aiHydroStars)
+	const [aiHydroStars, setAiHydroStars] = useState(item.aiHydroStars || 0)
 	const { onRelinquishControl } = useExtensionState()
 
 	useEffect(() => {

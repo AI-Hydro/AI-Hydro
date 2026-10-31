@@ -23,6 +23,7 @@ Code identifiers (`AiHydroError`, `aihydro.settingsButtonClicked`, `AiHydroEnv`)
 | A basin or place research record | **Study** | The tool argument `session_id` stays as an accepted alias. |
 | A delegated read-only helper | **Explorer** (generic: subagent) | Not shipped yet. |
 | One recorded tool execution | **Run** | Numbers in answers cite runs. |
+| The view that lists connected MCP servers | **Hydro Tools & Data Sources** | The same name in the command palette, the sidebar view title and the status popover link. Its tabs are Installed, Marketplace, Remote servers. "MCP" appears only inside that view, where the protocol is the subject. |
 
 Never say "session" in new interface text: it means both a chat and a study in different places.
 

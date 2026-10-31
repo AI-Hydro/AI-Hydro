@@ -38,6 +38,8 @@ export function Tabs({ label, items, value, onValueChange, orientation = "horizo
 	const base = idBase ?? generated
 	const listRef = useRef<HTMLDivElement>(null)
 	const enabled = items.filter((item) => !item.disabled)
+	// One tab stop: the selected tab, or, when the selection is not an enabled tab, the first enabled one.
+	const stopId = enabled.some((item) => item.id === value) ? value : enabled[0]?.id
 
 	const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
 		const from = enabled.findIndex((item) => item.id === value)
@@ -79,7 +81,7 @@ export function Tabs({ label, items, value, onValueChange, orientation = "horizo
 							}
 						}}
 						role="tab"
-						tabIndex={selected ? 0 : -1}
+						tabIndex={item.id === stopId ? 0 : -1}
 						title={item.label}
 						type="button">
 						{item.icon && <span aria-hidden="true" className={`codicon codicon-${item.icon}`} />}

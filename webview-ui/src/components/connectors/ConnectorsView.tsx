@@ -4,6 +4,7 @@ import type { GeeStatusResponse } from "@shared/proto/cline/ui"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { SubviewHeader } from "@/design"
 import { UiServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 
@@ -105,11 +106,7 @@ const ConnectorsView = ({ onDone }: ConnectorsViewProps) => {
 
 	return (
 		<div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, display: "flex", flexDirection: "column" }}>
-			<div
-				style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 17px 5px 20px" }}>
-				<h3 style={{ color: getEnvironmentColor(environment), margin: 0 }}>External Connectors</h3>
-				<VSCodeButton onClick={onDone}>Done</VSCodeButton>
-			</div>
+			<SubviewHeader onClose={onDone} title="External Connectors" titleColor={getEnvironmentColor(environment)} />
 
 			<div
 				style={{
