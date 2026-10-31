@@ -230,6 +230,45 @@ describe("SubagentRunner", () => {
 		expect(result).to.include({ status: "partial", budgetStop: "wall_clock" })
 	})
 
+	it("the wall clock does not run while the child waits on the user, and resumes after", async () => {
+		h.settings.autoApprovalSettings = { ...(h.settings.autoApprovalSettings as object), enabled: false }
+		let now = 1_000_000
+		let answer!: () => void
+		h.answer = () => new Promise((resolve) => (answer = () => resolve({ response: "yesButtonClicked" })))
+		const runner = runnerFor(h, scriptedApi([tool("read_file", { path: "README.md" }), REPORT]), "x", {
+			now: () => now,
+			pollMs: 5,
+		})
+		const running = runner.run()
+		await new Promise((r) => setTimeout(r, 50))
+		expect(runner.currentStatus).to.equal("waiting")
+		now += PROFILE.budget.wallClockMs * 3 // far past the budget, all of it spent waiting for the user
+		await new Promise((r) => setTimeout(r, 50))
+		expect(runner.currentStatus).to.equal("waiting") // not timed out: no ghost card
+		answer()
+		const result = await running
+		expect(result.status).to.equal("completed")
+	})
+
+	it("time spent working still counts after a wait", async () => {
+		h.settings.autoApprovalSettings = { ...(h.settings.autoApprovalSettings as object), enabled: false }
+		let now = 1_000_000
+		let answer!: () => void
+		h.answer = () => new Promise((resolve) => (answer = () => resolve({ response: "yesButtonClicked" })))
+		const runner = runnerFor(h, scriptedApi([tool("read_file", { path: "README.md" }), ""], { hang: false }), "x", {
+			now: () => now,
+			pollMs: 5,
+		})
+		const running = runner.run()
+		await new Promise((r) => setTimeout(r, 50))
+		now += 5 * 60_000 // waiting: free
+		answer()
+		await new Promise((r) => setTimeout(r, 20))
+		now += PROFILE.budget.wallClockMs + 1 // working: counts
+		const result = await running
+		expect(["partial"]).to.include(result.status)
+	})
+
 	it("cancel() ends a child that is waiting on its model, quickly, and drops the stream", async () => {
 		const api = scriptedApi([], { hang: true })
 		const runner = runnerFor(h, api)

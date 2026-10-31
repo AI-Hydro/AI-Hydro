@@ -32,7 +32,7 @@ Each explorer is stopped, and its last message kept, at 30 tool calls, about 10 
 
 ## Where the record is
 
-Each explorer writes `subagents/<id>.json` in the task's storage folder: its prompt (and a hash), the model requested and the model the provider reported, times, usage, every tool call (name, server and tool, a hash of the arguments, how it was approved and how it ended) and its report. Arguments are hashed, not stored.
+Each explorer writes `subagents/<id>.json` in the task's storage folder: its prompt (and a hash), the model requested and the model the provider reported, times, usage, every tool call (name, server and tool, a hash of the arguments, how it was approved and how it ended), its report, and, when a budget or an error ended it without a report, its last message (`lastAssistantText`) and the reason (`error`). Arguments are hashed, not stored.
 
 The AI-Hydro server does not yet record which agent made a call; its run records carry the chat's id and the label "vscode". Until the server seals the explorer's identity, this file is the only place that says which agent made a call. Each MCP call an explorer makes also carries the explorer's id in the request metadata (`agent_id`, `parent_agent_id`, `role`), which the server ignores for now.
 

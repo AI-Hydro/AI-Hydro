@@ -191,7 +191,7 @@ describe("spawn_subagents end to end", () => {
 		expect(childApis).to.have.length(0)
 	})
 
-	it("a child's approval is the parent's ask, one at a time, and Stop clears it", async () => {
+	it("a child's approval is the parent's ask, one at a time, first in first out", async () => {
 		h.settings.autoApprovalSettings = { ...(h.settings.autoApprovalSettings as object), enabled: false }
 		const gates: Array<() => void> = []
 		h.answer = (ask) => {
@@ -223,6 +223,21 @@ describe("spawn_subagents end to end", () => {
 		gates.shift()!()
 		await done
 		expect(resultText()).to.include('status="completed"')
+	})
+
+	it("Stop while a child's approval is pending ends every child as cancelled and returns the call", async () => {
+		h.settings.autoApprovalSettings = { ...(h.settings.autoApprovalSettings as object), enabled: false }
+		h.answer = (ask) => (ask.meta?.subagentOrigin ? new Promise(() => {}) : Promise.resolve({ response: "yesButtonClicked" })) // the user never answers a child ask
+		childApis.push(scriptedApi([tool("read_file", { path: "README.md" }), report("one")]), scriptedApi([], { hang: true }))
+		const done = executor.executeTool(spawn(["a", "b"]))
+		await waitFor(() => childStatuses().includes("waiting"))
+		taskState.abort = true
+		await done
+		expect(resultText()).to.include('status="cancelled"')
+		expect(resultText().match(/status="cancelled"/g)).to.have.length(2)
+		expect(parseSubagentStatus(messages.getAiHydroMessages().find((m) => m.say === "subagent_status")?.text)?.done).to.equal(
+			true,
+		)
 	})
 
 	it("is refused when the setting is off: not in the registry, and an explicit result", async () => {

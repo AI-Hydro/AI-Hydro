@@ -26,7 +26,7 @@ Active product hardening — last updated 2026-09-08.
   tool is off by default; "AI-Hydro" spelling and palette titles are guarded by
   `src/shared/__tests__/uiContract.test.ts` (words in `docs/ui-naming.md`). Running a program named
   `aihydro` is always denied. The two retired `clineAccountId` secrets are deleted once on start.
-- Explorer subagents (owner decision H1, 2026-10-28; PRs #114, #119, #124 and the PR-3 branch, in review):
+- Explorer subagents (owner decision H1, 2026-10-28; PRs #114, #119, #124 and #128, in review):
   in-process, read-only, off by default (Settings > Features > Subagents). `spawn_subagents` asks every time; each
   child is a `SubagentRunner` (src/core/task/subagents/) with a profile-scoped `ToolExecutor`, its approvals are the
   parent's asks (`ParentAskBridge`), and it writes `<task dir>/subagents/<id>.json`. A `general`/`data-runner`

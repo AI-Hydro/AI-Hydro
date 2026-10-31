@@ -95,6 +95,14 @@ function emptyUsage(): SubagentUsage {
 	return { toolCalls: 0, turns: 0, tokensIn: 0, tokensOut: 0, cacheWrites: 0, cacheReads: 0 }
 }
 
+const MAX_LABEL_CHARS = 80
+
+/** Cap a model-supplied label (a tool name) at about 80 characters, with an ellipsis, on one line. */
+export function capLabel(text: string): string {
+	const oneLine = text.replace(/\s+/g, " ").trim()
+	return oneLine.length > MAX_LABEL_CHARS ? `${oneLine.slice(0, MAX_LABEL_CHARS - 1)}…` : oneLine
+}
+
 /** Cut one text block to a cap, saying so in the text. */
 function capText(text: string): string {
 	return text.length > MAX_RESULT_CHARS
@@ -131,6 +139,9 @@ export class SubagentRunner {
 	private currentCall?: { approval: SubagentToolCallRecord["approval"] }
 	private refusedThisCall = false
 	private lastRequestInputTokens = 0
+	/** Time spent waiting on the user is not the child's: the wall clock stops while an ask is open. */
+	private askWaitStart?: number
+	private waitedMs = 0
 
 	constructor(private readonly init: SubagentRunnerInit) {
 		this.childId = init.childId
@@ -159,7 +170,7 @@ export class SubagentRunner {
 			profile: this.init.profile,
 			promptHead: promptHeadOf(this.init.prompt),
 			status: this.status,
-			...(this.lastTool ? { lastTool: this.lastTool } : {}),
+			...(this.lastTool ? { lastTool: capLabel(this.lastTool) } : {}),
 			toolCalls: this.usage.toolCalls,
 			tokensIn: this.usage.tokensIn,
 			tokensOut: this.usage.tokensOut,
@@ -170,7 +181,7 @@ export class SubagentRunner {
 			...(this.recordPath ? { recordPath: this.recordPath } : {}),
 			calls: this.toolCalls.slice(-MAX_CALL_LINES).map((call) => ({
 				name: call.name,
-				...(call.tool ? { tool: call.tool } : {}),
+				...(call.tool ? { tool: capLabel(call.tool) } : {}),
 				approval: call.approval,
 				result: call.result,
 			})),
@@ -223,7 +234,7 @@ export class SubagentRunner {
 		const timer = setInterval(() => {
 			if (this.cancelRequested || init.isParentAborted()) {
 				this.rejectInterrupt?.(new Interrupt("cancelled"))
-			} else if (this.now() >= deadline) {
+			} else if (this.askWaitStart === undefined && this.now() - this.waitedMs >= deadline) {
 				this.rejectInterrupt?.(new Interrupt("wall_clock"))
 			}
 		}, this.pollMs)
@@ -412,6 +423,7 @@ export class SubagentRunner {
 		}
 		const ask = async (type: AiHydroAsk, text?: string, partial?: boolean) => {
 			this.setStatus("waiting")
+			this.askWaitStart = this.now()
 			try {
 				const result = await init.bridge.ask(this.origin, type, text, partial)
 				if (this.currentCall) {
@@ -419,6 +431,10 @@ export class SubagentRunner {
 				}
 				return result
 			} finally {
+				if (this.askWaitStart !== undefined) {
+					this.waitedMs += Math.max(0, this.now() - this.askWaitStart)
+					this.askWaitStart = undefined
+				}
 				this.setStatus("running")
 			}
 		}
@@ -507,8 +523,10 @@ export class SubagentRunner {
 		return undefined
 	}
 
+	/** The tool name for the status row. `tool_name` is model-controlled, so it is capped before it reaches the UI. */
 	private describeTool(block: ToolUse): string {
-		return block.name === AiHydroDefaultTool.MCP_USE && block.params.tool_name ? block.params.tool_name : block.name
+		const name = block.name === AiHydroDefaultTool.MCP_USE && block.params.tool_name ? block.params.tool_name : block.name
+		return capLabel(name)
 	}
 
 	private callRecord(

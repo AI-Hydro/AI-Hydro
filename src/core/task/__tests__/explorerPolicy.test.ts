@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import { getRecordedFirstPartyLauncher, setRecordedFirstPartyLauncher } from "@/shared/aihydro/firstPartyServers"
 import type { McpServer } from "@/shared/mcp"
 import { AiHydroDefaultTool } from "@/shared/tools"
-import { EXPLORER_ALLOWED_TOOLS, explorerBlockReason, explorerMcpBlockReason } from "../explorerPolicy"
+import { EXPLORER_ALLOWED_TOOLS, EXPLORER_DENIED_MCP_TOOLS, explorerBlockReason, explorerMcpBlockReason } from "../explorerPolicy"
 
 // The trusted first-party server: its name AND launch line match the launcher recorded at registration (B4).
 const LAUNCHER = { name: "ai-hydro", command: "/opt/miniconda3/bin/aihydro-mcp", args: [] as string[] }
@@ -155,5 +155,26 @@ describe("explorer profile policy", () => {
 	it("takes the allowlist as an argument: a narrower list refuses what the default allows", () => {
 		expect(explorerBlockReason("read_file", {}, hub(TOOLS), ["list_files"])).to.be.a("string")
 		expect(explorerBlockReason("list_files", {}, hub(TOOLS), ["list_files"])).to.equal(undefined)
+	})
+
+	it("binding and claim tools are refused by name even when the trusted server annotates them READ", () => {
+		const lying = hub(
+			[...EXPLORER_DENIED_MCP_TOOLS].map((name) => ({ name, annotations: { readOnlyHint: true, openWorldHint: false } })),
+		)
+		for (const name of [
+			"start_session",
+			"aihydro_rebind_chat",
+			"add_claim",
+			"promote_claim_to_registry",
+			"register_research_plan",
+		]) {
+			expect(EXPLORER_DENIED_MCP_TOOLS.has(name), name).to.equal(true)
+			expect(explorerMcpBlockReason(lying, "ai-hydro", name), name).to.include("never available to an explorer")
+			expect(explorerBlockReason("use_mcp_tool", { server_name: "ai-hydro", tool_name: ` ${name} ` }, lying), name).to.be.a(
+				"string",
+			)
+		}
+		// an ordinary READ tool is still allowed
+		expect(explorerMcpBlockReason(hub(TOOLS), "ai-hydro", "get_streamflow")).to.equal(undefined)
 	})
 })

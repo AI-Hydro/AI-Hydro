@@ -27,6 +27,26 @@ export const EXPLORER_ALLOWED_TOOLS: readonly string[] = [...EXPLORER_PROFILE.bu
 const READ_ONLY_TOOL_LIST =
 	"read_file, search_files, list_files, load_mcp_documentation, report_findings, and read-only MCP tools (readOnlyHint=true, openWorldHint=false) or resources on the trusted first-party server"
 
+/**
+ * MCP tools an explorer may never call whatever the server annotates: the ones that bind a chat to a study, and the
+ * claim, registry and approval tools. They are not READ class on a correct server, but this list means the guarantee
+ * does not rest on a server's annotations alone (a mislabelled or changed tool is still refused). A name match, applied
+ * before any annotation is read, on the trusted server's tools and every other.
+ */
+export const EXPLORER_DENIED_MCP_TOOLS: ReadonlySet<string> = new Set([
+	"start_session",
+	"aihydro_rebind_chat",
+	"add_claim",
+	"revise_claim",
+	"promote_claim",
+	"promote_claim_to_registry",
+	"register_research_plan",
+	"write_research_interpretation",
+	"approve_claim",
+	"ensure_project",
+	"set_project_default_study",
+])
+
 export interface ExplorerMcpHub {
 	getServers(): McpServer[]
 }
@@ -42,6 +62,9 @@ export function explorerMcpBlockReason(
 ): string | undefined {
 	if (!serverName || !toolName) {
 		return "use_mcp_tool needs server_name and tool_name so the read-only policy can be checked."
+	}
+	if (EXPLORER_DENIED_MCP_TOOLS.has(toolName.trim())) {
+		return `MCP tool '${toolName}' binds a chat to a study or changes a claim, so it is never available to an explorer.`
 	}
 	const server = mcpHub?.getServers().find((s) => s.name === serverName)
 	const tool = server?.tools?.find((t) => t.name === toolName)

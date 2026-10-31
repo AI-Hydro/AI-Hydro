@@ -7,6 +7,7 @@ import {
 	migrateWorkspaceToGlobalStorage,
 	removeRetiredAccountSecrets,
 	removeRetiredRuleDialectState,
+	resetLegacySubagentsEnabled,
 } from "./core/storage/state-migrations"
 import { WebviewProvider } from "./core/webview"
 import { Logger } from "./services/logging/Logger"
@@ -59,6 +60,9 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 
 	// Delete the retired cloud-account secrets once (X0-6)
 	await removeRetiredAccountSecrets(context)
+
+	// A stored `subagentsEnabled: true` came from the removed CLI subagent: do not let it enable explorers (once)
+	await resetLegacySubagentsEnabled(context)
 
 	// Clear the toggles of the removed Cursor/Windsurf rule dialects (X0-6b)
 	await removeRetiredRuleDialectState(context)
