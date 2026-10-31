@@ -39,7 +39,6 @@ const EXPORT_METADATA = new Set([
 	// The rest of the provenance envelope: which tool, in which study and chat, retrieved when.
 	"tool",
 	"study_id",
-	"chat_id",
 	"retrieved_at",
 	"validation_status",
 	"uncertainty",
