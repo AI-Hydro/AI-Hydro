@@ -21,7 +21,7 @@ Code identifiers (`AiHydroError`, `aihydro.settingsButtonClicked`, `AiHydroEnv`)
 | A directory-bound container | **Project** | Planned; see the program plan. |
 | One conversation | **Task** today, **Chat** after the chat-polish wave | The sidebar button and the command palette both say "New Task" now, so they agree. The rename to "Chat" is made once, with the chat-polish work, to avoid changing the chat transcript strings twice. |
 | A basin or place research record | **Study** | The tool argument `session_id` stays as an accepted alias. |
-| A delegated read-only helper | **Explorer** (generic: subagent) | Not shipped yet. |
+| A delegated read-only helper | **Explorer** (generic: subagent) | Settings > Features > Subagents, off by default. "Read-only explorer" on cards, "Explorer 2" for one of several in a call. |
 | One recorded tool execution | **Run** | Numbers in answers cite runs. |
 | The view that lists connected MCP servers | **Hydro Tools & Data Sources** | The same name in the command palette, the sidebar view title and the status popover link. Its tabs are Installed, Marketplace, Remote servers. "MCP" appears only inside that view, where the protocol is the subject. |
 

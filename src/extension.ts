@@ -15,6 +15,7 @@ import { sendSettingsButtonClickedEvent } from "./core/controller/ui/subscribeTo
 import { sendSkillsButtonClickedEvent } from "./core/controller/ui/subscribeToSkillsButtonClicked"
 import { WebviewProvider } from "./core/webview"
 import { createAiHydroAPI } from "./exports"
+import { createMapAutoOpen } from "./hosts/vscode/mapAutoOpen"
 import { registerLearningPackCommands } from "./hosts/vscode/registerLearningPackCommands"
 import { VscodeEvidenceBoardProvider } from "./hosts/vscode/VscodeEvidenceBoardProvider"
 import { VscodeExperimentTableProvider } from "./hosts/vscode/VscodeExperimentTableProvider"
@@ -22,6 +23,7 @@ import { VscodeHtmlPreviewProvider } from "./hosts/vscode/VscodeHtmlPreviewProvi
 import { VscodeMapPanelProvider } from "./hosts/vscode/VscodeMapPanelProvider"
 import { VscodeReplayProvider } from "./hosts/vscode/VscodeReplayProvider"
 import { createApprovalPrompter, setApprovalPrompter } from "./integrations/aihydro-session/approvalTerminal"
+import { setPdfViewerProbe } from "./integrations/misc/open-file"
 import { GeeService } from "./services/gee/GeeService"
 import { GeeTileProxyService } from "./services/gee/GeeTileProxyService"
 import type { GeeProjectInfo, GeeStatusResult } from "./services/gee/types"
@@ -240,6 +242,8 @@ async function warnIfWorkspaceOnCloudStorage(context: vscode.ExtensionContext): 
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
 	setupHostProvider(context)
+	// PDF has no built-in VS Code viewer: chips open it in one only if an installed extension looks like a PDF viewer.
+	setPdfViewerProbe(() => vscode.extensions.all.some((e) => /pdf/i.test(e.id)))
 	// Read-only git auto-run needs a trusted workspace (a hostile .git/config runs programs); see readOnlyClassifier.ts.
 	setWorkspaceTrustProvider(() => vscode.workspace.isTrusted)
 
@@ -304,6 +308,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Initialize map panel provider with controller
 	VscodeMapPanelProvider.initialize(context, webview.controller)
+
+	// Open the map beside the chat the first time the sidebar is shown (setting `aihydro.map.openWithChat`).
+	const mapAutoOpen = createMapAutoOpen({
+		enabled: () => vscode.workspace.getConfiguration("aihydro").get<boolean>("map.openWithChat", true),
+		mapExists: () => VscodeMapPanelProvider.hasMapTab(),
+		sidebarVisible: () => webview.isVisible(),
+		open: () => VscodeMapPanelProvider.createOrShow({ preserveFocus: true }),
+		log: (message, error) => Logger.log(`${message}: ${error instanceof Error ? error.message : String(error)}`),
+	})
+	webview.onSidebarShown = () => mapAutoOpen.onSidebarShown()
+	context.subscriptions.push({ dispose: () => mapAutoOpen.dispose() })
 
 	// Initialize HTML preview panel provider with controller
 	VscodeHtmlPreviewProvider.initialize(context, webview.controller)

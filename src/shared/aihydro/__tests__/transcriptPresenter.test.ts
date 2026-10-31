@@ -1050,3 +1050,89 @@ describe("transcript presenter: aggregation (X1-C1)", () => {
 		expect(risky[0].text).to.contain("outside the workspace")
 	})
 })
+
+describe("transcript presenter: subagents (AC5)", () => {
+	const origin = { childId: "sa_1", label: "Explorer 2", profile: "explorer" as const, promptHead: "Survey the repo" }
+	const statusRow = () =>
+		say(
+			"subagent_status",
+			JSON.stringify({
+				profile: "explorer",
+				done: false,
+				children: [
+					{
+						childId: "sa_1",
+						label: "Explorer 2",
+						profile: "explorer",
+						promptHead: "x",
+						status: "running",
+						toolCalls: 1,
+						tokensIn: 1,
+						tokensOut: 1,
+						cacheWrites: 0,
+						cacheReads: 0,
+						calls: [],
+					},
+				],
+			}),
+		)
+	const childRead = (extra: Partial<AiHydroMessage> = {}) =>
+		ask("tool", JSON.stringify({ tool: "readFile", path: "a.py", operationIsLocatedInWorkspace: true }), {
+			subagentOrigin: origin,
+			...extra,
+		})
+
+	it("the status row is its own item at every detail level and never folds into a group", () => {
+		for (const detail of ["focus", "normal", "verbose"] as const) {
+			reset()
+			const items = present([say("task", "go"), req(), statusRow(), req(), say("text", "done")], detail)
+			const rows = items.filter((i) => i.kind === "passthrough" && i.messages.some((m) => m.say === "subagent_status"))
+			expect(rows, detail).to.have.length(1)
+			for (const g of groups(items)) {
+				expect(
+					g.members.some((m) => m.say === "subagent_status"),
+					detail,
+				).to.equal(false)
+			}
+		}
+	})
+
+	it("a child's PENDING ask is a pending prompt at every detail level, never folded", () => {
+		for (const detail of ["focus", "normal", "verbose"] as const) {
+			reset()
+			const pending = childRead()
+			const items = present([say("task", "go"), statusRow(), pending], detail)
+			if (detail === "verbose") {
+				expect(items.at(-1)).to.deep.include({ kind: "passthrough" })
+			} else {
+				const last = items.at(-1)!
+				expect(last.kind, detail).to.equal("pending")
+				expect((last as any).message.subagentOrigin.label).to.equal("Explorer 2")
+			}
+		}
+	})
+
+	it("an answered child ask is lifted by name at every detail level, once", () => {
+		for (const detail of ["focus", "normal"] as const) {
+			reset()
+			const answered = childRead({ askOutcome: "approved" })
+			const items = present([say("task", "go"), req(), answered, req(), say("text", "ok")], detail)
+			const g = groups(items)[0]
+			const subagentLines = g.lifted.filter((l) => l.reason === "subagent_approval")
+			expect(subagentLines, detail).to.have.length(1)
+			expect(subagentLines[0].text).to.include("Explorer 2")
+			expect(subagentLines[0].text).to.include("You approved")
+		}
+	})
+
+	it("a denied child ask names the child; the main agent's own approvals are unchanged", () => {
+		reset()
+		const denied = childRead({ askOutcome: "denied" })
+		const own = ask("tool", JSON.stringify({ tool: "readFile", path: "b.py", operationIsLocatedInWorkspace: true }), {
+			askOutcome: "approved",
+		})
+		const g = groups(present([say("task", "go"), req(), denied, own, req(), say("text", "ok")]))[0]
+		expect(g.lifted.map((l) => l.text).some((t) => t.includes("You denied (Explorer 2)"))).to.equal(true)
+		expect(g.lifted.some((l) => l.reason === "subagent_approval")).to.equal(false)
+	})
+})

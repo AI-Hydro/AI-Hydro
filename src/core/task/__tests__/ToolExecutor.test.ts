@@ -392,3 +392,58 @@ describe("ToolExecutor Hook Integration", () => {
 		})
 	})
 })
+
+// Tools >= 2.8.2 refuse a differing chat_id (CHAT_ID_MISMATCH); the gate still never trusts model-invoked output.
+describe("ToolExecutor gate binding (model-invoked output is never a study id)", () => {
+	// eslint-disable-next-line @typescript-eslint/no-var-requires
+	const { ToolExecutor } = require("../ToolExecutor")
+	const { createGateState } = require("../answerAuditGate")
+	const executor = (state: any) => {
+		const ex = Object.create(ToolExecutor.prototype)
+		ex.taskState = { answerAuditGate: state }
+		return ex
+	}
+	const block = (tool: string) => ({ params: { server_name: "aihydro-tools", tool_name: tool } })
+
+	it("a chat status naming another chat's study seeds no study id, only the probed flag", () => {
+		const state = createGateState()
+		const other = JSON.stringify({ bound: true, study_id: "SOMEONE_ELSES_STUDY", chat_id: "other-chat" })
+		executor(state).noteStartSession(other, block("aihydro_chat_status"))
+		state.should.have.property("bindingProbed", true)
+		;(state.boundStudyId === undefined).should.equal(true)
+	})
+
+	it("resumed-task flow: status then eligible, audit uses the host's own status call (no cached study)", () => {
+		const { computeGateEligibility } = require("../answerAuditGate")
+		const state = createGateState()
+		executor(state).noteStartSession("{}", block("aihydro_chat_status"))
+		const server = {
+			name: "aihydro-tools",
+			status: "connected",
+			tools: [{ name: "audit_interpretation", description: "advisories" }],
+		}
+		const r = computeGateEligibility({
+			toolName: "attempt_completion",
+			mode: "act",
+			gateSetting: true,
+			auditEnabled: true,
+			servers: [server],
+			state,
+			isTrusted: () => true,
+		})
+		r.eligible.should.equal(true)
+		;(state.boundStudyId === undefined).should.equal(true)
+	})
+
+	it("a rebind clears the cached study; an errored status or another server's status is ignored", () => {
+		const state = createGateState()
+		state.boundStudyId = "s1"
+		executor(state).noteStartSession("{}", block("aihydro_rebind_chat"))
+		;(state.boundStudyId === undefined).should.equal(true)
+		const fresh = createGateState()
+		executor(fresh).noteStartSession("The tool execution failed with the following error: boom", block("aihydro_chat_status"))
+		;(fresh.bindingProbed === undefined).should.equal(true)
+		executor(fresh).noteStartSession("{}", { params: { server_name: "evil", tool_name: "aihydro_chat_status" } })
+		;(fresh.bindingProbed === undefined).should.equal(true)
+	})
+})

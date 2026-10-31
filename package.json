@@ -2,7 +2,7 @@
 	"name": "ai-hydro",
 	"displayName": "AI-Hydro",
 	"description": "An open platform for AI-driven hydrological research. Describe your intent — the agent delineates watersheds, retrieves streamflow, calibrates models, and builds reproducible provenance. Community-extensible via MCP.",
-	"version": "0.4.4",
+	"version": "0.4.5",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0",
@@ -631,6 +631,12 @@
 		"configuration": {
 			"title": "AI-Hydro",
 			"properties": {
+				"aihydro.map.openWithChat": {
+					"type": "boolean",
+					"default": true,
+					"scope": "window",
+					"description": "Open the AI-Hydro Map beside the chat the first time the AI-Hydro sidebar is shown in a window. It opens once per window and never takes focus from the chat; if you close it, it stays closed until the window is reloaded. Turn off to open the map only from the Map button or the command."
+				},
 				"aihydro.htmlPreview.pythonExecution": {
 					"type": "string",
 					"enum": [

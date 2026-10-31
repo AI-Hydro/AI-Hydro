@@ -1,5 +1,5 @@
 import type { AiHydroMessage } from "../ExtensionMessage"
-import { extractEvidence } from "./evidenceMarkers"
+import { extractEvidence, proseForEvidence } from "./evidenceMarkers"
 
 /**
  * "This turn" facts for the answer card: what the recorded messages of the turn say was produced. Counts only; it
@@ -16,6 +16,8 @@ export interface TurnSummary {
 
 const RUN_ID_KEY = /"_run_id"\s*:\s*"([A-Za-z0-9][A-Za-z0-9._-]*)"/g
 const CLAIM_ID_KEY = /"claim_id"\s*:\s*"([A-Za-z0-9][A-Za-z0-9._-]*)"/g
+/** `[run:<id>]` with no `#path`: it names the run but not the value, so it is not a valid marker (and is never a chip). */
+const PATHLESS_RUN = /\[run:([A-Za-z0-9][A-Za-z0-9._-]*)\]/g
 const WRITE_TOOLS = new Set(["editedExistingFile", "newFileCreated"])
 
 function collect(text: string | undefined, re: RegExp, into: Set<string>) {
@@ -49,6 +51,8 @@ export function summarizeTurn(messages: readonly AiHydroMessage[], answerTs: num
 		if (m.ts === answerTs) {
 			const ev = extractEvidence(m.text)
 			ev.runs.forEach((r) => runs.add(r.runId))
+			// The answer does name these runs; "no runs or claims" would be false. (They still audit as malformed.)
+			collect(proseForEvidence(m.text ?? ""), PATHLESS_RUN, runs)
 			ev.claims.forEach((c) => claims.add(c))
 			continue
 		}

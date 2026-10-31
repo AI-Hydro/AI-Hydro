@@ -17,6 +17,21 @@ const FILE_WRITE_TOOLS: ReadonlySet<AiHydroDefaultTool> = new Set([
 	AiHydroDefaultTool.MULTI_FILE_EDIT,
 ])
 
+/**
+ * What a subagent may auto-approve at most. "read": built-in reads and MCP calls (the profile has already limited
+ * MCP to READ class on a trusted server), never a write or a command, and never because of YOLO. "none": nothing, so
+ * every call asks (an untrusted workspace). Absent: the top-level task, which follows the user's settings.
+ */
+export type AutoApproveCeiling = "read" | "none"
+
+const READ_CEILING_TOOLS: ReadonlySet<AiHydroDefaultTool> = new Set([
+	AiHydroDefaultTool.FILE_READ,
+	AiHydroDefaultTool.LIST_FILES,
+	AiHydroDefaultTool.SEARCH,
+	AiHydroDefaultTool.MCP_USE,
+	AiHydroDefaultTool.MCP_ACCESS,
+])
+
 export class AutoApprove {
 	private stateManager: StateManager
 	// Cache for workspace paths - populated on first access and reused for the task lifetime
@@ -24,8 +39,21 @@ export class AutoApprove {
 	private workspacePathsCache: { paths: string[] } | null = null
 	private isMultiRootScenarioCache: boolean | null = null
 
-	constructor(stateManager: StateManager) {
+	constructor(
+		stateManager: StateManager,
+		private readonly ceiling?: AutoApproveCeiling,
+	) {
 		this.stateManager = stateManager
+	}
+
+	/** YOLO is a top-level setting: a subagent (any ceiling) never inherits it. */
+	private yolo(): boolean {
+		return this.ceiling === undefined && !!this.stateManager.getGlobalSettingsKey("yoloModeToggled")
+	}
+
+	/** True when the ceiling alone rules the tool out, before any setting is read. */
+	private aboveCeiling(toolName: AiHydroDefaultTool): boolean {
+		return this.ceiling === "none" || (this.ceiling === "read" && !READ_CEILING_TOOLS.has(toolName))
 	}
 
 	/**
@@ -52,7 +80,10 @@ export class AutoApprove {
 	// Check if the tool should be auto-approved based on the settings
 	// Returns bool for most tools, and tuple for tools with nested settings
 	shouldAutoApproveTool(toolName: AiHydroDefaultTool): boolean | [boolean, boolean] {
-		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
+		if (this.aboveCeiling(toolName)) {
+			return false
+		}
+		if (this.yolo()) {
 			switch (toolName) {
 				case AiHydroDefaultTool.FILE_READ:
 				case AiHydroDefaultTool.LIST_FILES:
@@ -135,7 +166,11 @@ export class AutoApprove {
 			return false
 		}
 
-		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
+		if (this.aboveCeiling(blockname)) {
+			return false
+		}
+
+		if (this.yolo()) {
 			return true
 		}
 

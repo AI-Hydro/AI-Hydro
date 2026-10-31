@@ -21,8 +21,9 @@ import { BasemapList } from "./BaseMapSelector"
 import HydrographyPanel from "./HydrographyPanel"
 import { LayerPanelContent } from "./LayerPanel"
 import MapExport from "./MapExport"
-import { COLLAPSED_SIZE, EDGE_TAB_WIDTH, type MapChromeController, SHEET_HEIGHT, toolDisabledReason } from "./mapChrome"
+import { COLLAPSED_SIZE, EDGE_TAB_WIDTH, type MapChromeController, toolDisabledReason } from "./mapChrome"
 import { MAP_Z } from "./mapZ"
+import { PanelResizer } from "./PanelResizer"
 import ResearchGalleryPanel from "./ResearchGalleryPanel"
 
 export type RibbonTool =
@@ -52,7 +53,7 @@ const TOOL_META: Record<ToolId, { icon: string; title: string }> = {
 	search: { icon: "search", title: "Search" },
 	annotations: { icon: "pin", title: "Pins" },
 	measure: { icon: "symbol-ruler", title: "Measure" },
-	draw: { icon: "edit", title: "Create vector" },
+	draw: { icon: "edit", title: "Draw ROI" },
 	transect: { icon: "graph-line", title: "Transect profile" },
 	swipe: { icon: "split-horizontal", title: "Swipe" },
 	time: { icon: "clock", title: "Time slider" },
@@ -465,7 +466,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 			return {
 				key: id,
 				icon: TOOL_META[id].icon,
-				text: TOOL_META[id].title === "Create vector" ? "Draw ROI" : TOOL_META[id].title,
+				text: TOOL_META[id].title,
 				label,
 				current: active !== null && railOf(active) === id,
 				onSelect: () => {
@@ -478,54 +479,15 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 		...moreEntries(() => setToolsMenuOpen(false), true),
 	]
 
-	// ── sheet drag handle ──
+	// The panel element, for the shared resizer (PanelResizer.tsx).
 	const sheetRef = useRef<HTMLElement>(null)
-	const onHandlePointerDown = (e: React.PointerEvent) => {
-		e.preventDefault()
-		const parent = sheetRef.current?.parentElement
-		if (!parent) return
-		const rect = parent.getBoundingClientRect()
-		const onMove = (ev: PointerEvent) => chrome.setSheetHeightPct(((rect.bottom - ev.clientY) / rect.height) * 100)
-		const onUp = () => {
-			window.removeEventListener("pointermove", onMove)
-			window.removeEventListener("pointerup", onUp)
-		}
-		window.addEventListener("pointermove", onMove)
-		window.addEventListener("pointerup", onUp)
-	}
-	const onHandleKeyDown = (e: React.KeyboardEvent) => {
-		const step = e.key === "ArrowUp" ? 5 : e.key === "ArrowDown" ? -5 : 0
-		if (step) {
-			e.preventDefault()
-			chrome.setSheetHeightPct(chrome.sheetHeightPct + step)
-		} else if (e.key === "Home") {
-			e.preventDefault()
-			chrome.setSheetHeightPct(SHEET_HEIGHT.maxPct)
-		} else if (e.key === "End") {
-			e.preventDefault()
-			chrome.setSheetHeightPct(SHEET_HEIGHT.minPct)
-		}
-	}
 
 	// ── panel pieces ──
 	const family: ToolId | null = active === "basemap" || active === "hydrography" ? "layers" : active
-	const title = family === null ? "" : family === "layers" ? `Layers (${layerSummary})` : TOOL_META[family].title
+	const title = family === null ? "" : TOOL_META[family].title
 
-	const toggleBtn = (pressed: boolean, activeColor: string): React.CSSProperties => ({
-		padding: "6px 10px",
-		fontSize: 12,
-		background: pressed ? activeColor : "transparent",
-		color: pressed ? "var(--vscode-button-foreground, #fff)" : fg,
-		border: `1px solid ${border}`,
-		borderRadius: 3,
-		cursor: "pointer",
-		display: "flex",
-		alignItems: "center",
-		gap: 6,
-		textAlign: "left",
-	})
-	const modeButton = (icon: string, text: string, pressed: boolean, activeColor: string, onClick: () => void) => (
-		<button aria-pressed={pressed} onClick={onClick} style={toggleBtn(pressed, activeColor)} type="button">
+	const modeButton = (icon: string, text: string, pressed: boolean, onClick: () => void) => (
+		<button aria-pressed={pressed} className="map-chip map-chip--block" onClick={onClick} type="button">
 			<span aria-hidden="true" className={`codicon codicon-${icon}`} />
 			{text}
 		</button>
@@ -648,39 +610,31 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 			{active === "transect" && <div style={{ padding: 8 }}>{transectsPanel}</div>}
 			{active === "measure" && (
 				<div style={{ padding: 10 }}>
-					<div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
-						Temporary distance or area measurements — not saved to the workspace.
-					</div>
+					<p className="map-hint" style={{ margin: "0 0 8px" }}>
+						Distance and area measurements are temporary. They are not saved to the workspace.
+					</p>
 					<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-						{modeButton(
-							"symbol-ruler",
-							"Distance",
-							measureMode === "distance",
-							"var(--vscode-button-background, #0e639c)",
-							() => onMeasureModeChange?.(measureMode === "distance" ? null : "distance"),
+						{modeButton("symbol-ruler", "Distance", measureMode === "distance", () =>
+							onMeasureModeChange?.(measureMode === "distance" ? null : "distance"),
 						)}
-						{modeButton(
-							"symbol-array",
-							"Area",
-							measureMode === "area",
-							"var(--vscode-button-background, #0e639c)",
-							() => onMeasureModeChange?.(measureMode === "area" ? null : "area"),
+						{modeButton("symbol-array", "Area", measureMode === "area", () =>
+							onMeasureModeChange?.(measureMode === "area" ? null : "area"),
 						)}
 						{measureMode && (
-							<div style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>
-								Click points on map. Double-click or Enter to finish. ESC to cancel.
-							</div>
+							<p className="map-hint" style={{ margin: "4px 0 0" }}>
+								Click points on the map. Double-click or press Enter to finish. Esc cancels.
+							</p>
 						)}
 					</div>
 				</div>
 			)}
 			{active === "draw" && (
 				<div style={{ padding: 10 }}>
-					<div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8, lineHeight: 1.5 }}>
-						Create vectors saved to <code style={{ fontSize: 11 }}>vectors/</code> in your workspace. After finishing,
-						use Save or Export — geometry stays on screen until you choose.
-					</div>
-					<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+					<p className="map-hint" style={{ margin: "0 0 8px" }}>
+						Draw a shape, then save it to <code>vectors/</code> in your workspace or export it. The shape stays on the
+						map until you choose.
+					</p>
+					<div className="map-chip-grid">
 						{(
 							[
 								["polygon", "symbol-field", "Polygon"],
@@ -689,7 +643,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 							] as const
 						).map(([kind, icon, text]) => (
 							<React.Fragment key={kind}>
-								{modeButton(icon, text, drawMode === kind, "var(--vscode-button-background, #2d9f6f)", () => {
+								{modeButton(icon, text, drawMode === kind, () => {
 									onMeasureModeChange?.(null)
 									onDrawModeChange?.(drawMode === kind ? null : kind)
 								})}
@@ -801,10 +755,12 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 			: mode === "overlay"
 				? {
 						...panelShell,
-						top: 8,
-						right: chrome.railReserve + 8,
+						top: chrome.overlay?.top ?? 8,
+						right: chrome.railReserve + (chrome.overlay?.right ?? 8),
 						width: chrome.panelWidth,
-						maxHeight: "min(560px, calc(100% - 16px))",
+						...(chrome.overlay?.height != null
+							? { height: chrome.overlay.height }
+							: { maxHeight: "min(560px, calc(100% - 16px))" }),
 						border: `1px solid ${border}`,
 						borderRadius: 6,
 						boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
@@ -821,7 +777,10 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					}
 
 	// The collapsed button and edge tab sit at the canvas corner, clear of a docked or floating panel.
-	const cornerRight = chrome.stageInset + (mode === "overlay" && panelVisible && !modal ? chrome.panelWidth + 8 : 0) + 8
+	const cornerRight =
+		chrome.stageInset +
+		(mode === "overlay" && panelVisible && !modal ? chrome.panelWidth + (chrome.overlay?.right ?? 8) : 0) +
+		8
 	const activeMeta = active ? TOOL_META[active] : null
 	const activeName = active
 		? active === "layers" || active === "basemap" || active === "hydrography"
@@ -852,22 +811,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 					}}
 					ref={sheetRef}
 					style={panelStyle}>
-					{mode === "sheet" && (
-						<div
-							aria-label="Resize sheet"
-							aria-orientation="horizontal"
-							aria-valuemax={SHEET_HEIGHT.maxPct}
-							aria-valuemin={SHEET_HEIGHT.minPct}
-							aria-valuenow={chrome.sheetHeightPct}
-							aria-valuetext={`${chrome.sheetHeightPct}% of the map`}
-							className="map-chrome-handle"
-							onKeyDown={onHandleKeyDown}
-							onPointerDown={onHandlePointerDown}
-							role="separator"
-							tabIndex={0}>
-							<span className="map-chrome-handle__grip" />
-						</div>
-					)}
+					<PanelResizer chrome={chrome} name={(activeName ?? "tool").toLowerCase()} panelRef={sheetRef} />
 					{header("map-chrome-panel-title", activeMeta?.icon ?? "layers", title)}
 					<div className="map-ribbon-panel-content" style={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
 						{panelBody}

@@ -9,7 +9,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [0.4.5] — unreleased (navigation polish: every sidebar sub-view in the harness, shared nav primitives, accessible Settings)
+## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)
 
@@ -32,6 +32,52 @@ Five navigation surfaces each hand-rolled their own tabs, icon buttons, menus an
 - **`SubviewHeader`**: the title and one Done button every sidebar sub-view needs, and Escape closes the view unless a menu, dialog, listbox or text field has taken the key.
 - Labels are required by the types (`@ts-expect-error` tests), and 25 new tests cover the keyboard paths. The gallery screen `design-primitives` shows all five and stays at 0/0/0/0.
 - The harness themes gain `--vscode-menu-selectionForeground` (VS Code always defines it; the approximation lacked it, which made a focused menu item read as dark text on blue).
+
+### Added — every map tool panel resizes, in every direction, from one shared primitive (branch `vision2040/polish-map`)
+
+The Layers, Search, Pins, Draw, Measure and other panels opened from the map rail were a fixed 300 px. They now resize, and a size is remembered per panel and per window state.
+
+- **Docked** (map 960 px and up): drag the panel's left edge to change the column width (260 to 640 px, and the canvas always keeps 360 px). **Floating** (600 to 959 px): drag any edge or corner; the opposite edge stays put. **Bottom sheet** (below 600 px): the existing top handle, now remembered.
+- **Keyboard**: the width and height separators take the arrow keys (16 px, 64 px with Shift), Home and End go to the smallest and largest size, and a double-click (or Home) restores the default. Top, right and corner handles are pointer-only so the tab order stays short.
+- **Stays usable**: the stored size is clamped to the current map on every use and never rewritten, so a panel squeezed by a small window gets its size back when the window grows. A floating panel keeps the whole panel on screen and covers at most 40% of the canvas (the map-polish coverage rule still holds; `coverage.mjs` is unchanged). Sizes are saved once on release, not per pixel.
+- **Smooth**: while the pointer is down the panel element is resized directly, so React and the map do not re-render per pixel. The canvas gives up or takes back a docked panel's width once, on release.
+- New harness screens `map-panel-docked-resized`, `map-panel-overlay-resized` and `map-panel-resize-keyboard`.
+
+### Changed — the Layers panel: one compact row per layer, grouped by origin, with one menu (branch `vision2040/polish-map-layers`)
+
+Reported on the installed 0.4.4 build: every row carried a drag handle, a checkbox, a swatch, a "Limited layer" chip with a warning icon, five emoji buttons, an always-open opacity slider, up and down arrows and a red delete, so four layers filled the panel and names truncated ("watershed_basi...").
+
+- **One line per layer**: `[grip] [eye] [swatch] name [warning] [note] [duplicate] [more]`. The eye replaces the 13 px checkbox (24 px target, `aria-pressed`). The swatch is the legend key (fill for polygons, a stroke for lines, a dot for points, the ramp for rasters). Names wrap to two lines, and show in full when the row is selected; the full name is also the tooltip.
+- **Select a row to see its opacity and style.** The drawer under the row has the opacity slider, and Style, Attributes and Details toggles (the existing symbology editors, attribute table and inspector, unchanged). Opacity is no longer open on every row.
+- **One "more" menu per row** replaces the emoji buttons: Zoom to layer, Rename, Style, Opacity, Attribute table, Cluster points, Details and provenance, Save to workspace, Export as GeoJSON, Open source file, Reload source, Open provenance record, Copy tool name, Copy run ID, Move up, Move down, Remove layer. Drag reorders inside a group; Move up and Move down stay in the menu (disabled with a reason at the ends) so reordering still works from the keyboard. The new `OverflowMenu` is shared with the Pins panel.
+- **Grouped by origin and collapsible**: Tool output, Loaded by you, Workspace files, Earth Engine, Other.
+- **Provenance stays honest.** A real warning (missing provenance, a source that changed, a preview that is not the full data, a simplified geometry, values not loaded, a mock tile layer) is one warning icon on the row with its text as the tooltip and accessible name, and opens Details. "Limited layer" is a capability note, not a warning: one quiet info icon on the row, or one line on the group when every layer in it has the same note. The status chips ("Analysis output", "Editable vector") are gone from the row and stay in Details. `tool` and `_run_id` are in Details > Provenance with copy buttons, and in the menu as Copy tool name and Copy run ID. A layer with no run record still says so (`NO_RUN_RECORD`); nothing is invented.
+- **Remove is one quiet menu action with Undo.** No per-row delete button. Removing a layer, Remove duplicates and Remove all layers show an Undo bar for ten seconds; undo re-adds the layers through the host and restores visibility and order. Removing several layers asks first. The Undo bar and the confirmation stay pinned to the bottom of the panel, so they are never below the fold.
+- **Duplicates from restores are flagged, not silently merged**: layers with the same name, tool, run and source path get a duplicate icon, and the group offers "Remove duplicates" (keeps a visible copy, otherwise the first). Hand-loaded layers with no run or path are never called duplicates.
+- **Toolbar**: `Add` (file, URL), the summary, one show or hide all toggle, and a menu (Save scene, Open scene, Show all, Hide all, Remove all layers). The global "show all details" toggle is gone (details are per layer, on demand). The footer line "N restored from earlier sessions" is now a tooltip on the summary; the older-layers notice stays, with Restore.
+- **Review fixes.** Every warning is also written out in Details (a list, readable without hover). Rename from the menu keeps its field focused. Scrolling inside a long menu no longer closes it, and the first item takes focus once the menu is placed. Undo gives back opacity and clustering, keeps the raster values until the undo window closes, and back-to-back removals each stay undoable. The host is asked first for remove, clear and undo, so the panel never shows what the host refused. The list reads like a GIS legend: the top row is the layer on top of the map (the list is the persisted draw order reversed, and MapView and the panel share one `drawOrder`), the drawer says "Layer 3 of 11 from the top of the map", Move up moves toward the top, and Move up, Move down and drag work across groups, and a collapsed group shows how many of its layers have warnings. Duplicates also compare a content fingerprint (geometry, raster, tile URL, dates, bands, filter), and the confirmation lists the names.
+- New harness screens: `map-layers-selected`, `map-layers-menu-open`, `map-layers-long-names`, `map-layers-many`, `map-layers-restored`, `map-layers-confirm-undo`, `map-layers-collapsed-group`.
+
+### Changed — the pin card has an explicit Save, a dirty state and a "Saved" that means the host acknowledged it (branch `vision2040/polish-map-pins`)
+
+The owner's report: the pin card has an editable name and note and no way to confirm them. Edits did autosave, invisibly (the name on Enter or blur, the note on blur).
+
+- **Edits are a draft until saved.** The footer reads "Unsaved changes" with a Save button. Enter in the name saves, Ctrl or Cmd+Enter in the note saves (a plain Enter is a new line), Escape throws a field's draft away. Name and note are saved together as one undoable edit. The toast after it says "Pin updated", not "saved": it is the local edit with Undo, and only the card's own line says Saved, after the host has. (The toast also used a colour that was 1.6:1 on a light theme; it now follows the theme foreground.)
+- **Nothing is lost.** Moving focus out of the card, closing it, or selecting another pin commits the draft first.
+- **"Saved" means the host said so.** Every save sent to the host now carries a sequence number (`saveSeq`), and the host echoes it in `aihydro-map-save-ack` (host change in `VscodeMapPanelProvider.ts`: one extra field). The card reads "Saving" until the ack for that save or a later one arrives, then "Saved". A save with no answer in 10 s reads "Not saved to the project" with Retry. A save made before the project is known (nothing can be sent) reads "Saved on this device only", never "Saved". The same `pendingSync` and per-project ack rules from the data-safety work apply unchanged.
+- The footer "Your note. Not a measurement." stays: it says what a pin is.
+- **Review fixes.** A draft typed for pin A is saved onto A even when the card switches to pin B without a focus change (the card is keyed by pin, and the save carries the pin id). A save the host refuses now says which pin was not saved, in the one toast shown after the reload (it used to be replaced by a generic one), with a Copy note button for the unsaved note. The host runs pin saves one at a time in the order sent, so a later acknowledgement can never cover an older write that landed last.
+- New harness screens `map-pin-dirty`, `map-pin-saved`, `map-pin-saving`, `map-pin-save-failed`.
+
+### Changed — the other map panels and chrome follow the same rules (branch `vision2040/polish-map-chrome`)
+
+- **Pins panel**: rows are name and coordinates plus one "more" menu (Zoom to pin, Rename, Delete pin) instead of three icon buttons, one red. The top row is Add pin and a panel menu (Add pins from a layer, Export pins, Clear all pins with the existing confirm).
+- **Search panel**: emoji (a magnifier, a pin, a hammer, an hourglass, check and cross glyphs) are codicons, 9 and 10 px text is 11 to 12 px, every control is 24 px or more, and Search, Go and Save view use the same button, field and section-header styles as the other panels.
+- **Draw ROI**: the header says "Draw ROI" like the rail (it said "Create vector"); Polygon, Line and Point are one row of three. The "Sketches & tracker" section under it no longer repeats Poly and Line buttons, has one title and one menu (Import, one sketch per point of a layer, six export formats), and shows its collections and filters only once there is a sketch.
+- **Measure**: the same buttons and hint text as Draw.
+- **Reference tab, ROI strip, identify card, draw hint**: emoji to codicons, text under 11 px raised, buttons to 24 px (the identify card's previous, next and close buttons were 22 px glyphs; the feature routing badge was 8 px uppercase). The Reference tab took its colours from the map style, so in the light and high-contrast-light themes its text was white on white (1.0:1); it now uses the theme colours.
+- **Review fixes.** "Save ROI as" asked for a name with `window.prompt`, which does nothing in a VS Code webview; the strip now has an inline name field. The identify card has a harness screen (`map-identify-card`) that renders the production card with selected features, a click point and a raster reading, since a canvas click does not reach deck.gl in the harness.
+- New harness screens `map-search-panel`, `map-draw-panel`, `map-measure-panel`, `map-reference-tab`, and a unit test for the identify card (the harness cannot open it: a canvas click does not reach deck.gl there).
 
 ### Changed — Settings is keyboard-operable and named at any width; every sidebar sub-view closes the same way (Nav-3, branch `vision2040/nav-3`)
 
@@ -67,6 +113,113 @@ From the navigation audit (N15, N16). AI-Hydro's code-action provider was regist
 - **`Toolbar`** re-evaluates its tab stop when a button's `disabled` changes (a disabled current button hands the stop on). **`Tabs`**: when the selected tab is missing or disabled, the first enabled tab is the one tab stop. **`RailButton`**: `popup` sets `aria-haspopup` (`expanded` alone no longer claims a menu); a badge count is part of the accessible name ("Alerts, 3"); `showReason` draws the disabled reason as visible text.
 - **Screen harness:** the `Screens` shards failed on `requestfailed(net::ERR_ABORTED)` for basemap tiles at teardown. The page cancels tiles the router has not yet been handed; those cancelled tiles are no longer counted as escapes (a live response would still fail the run). The "1190 live requests per shard" in `summary.json` is `externalRoutedRequests`, the requests the harness answered from fixtures, not traffic that left; `scripts/ui-screens/README.md` now says so.
 - **MCP marketplace card** and **Skills** tolerate a host reply with no `aiHydroStars` or no `items` (the proto default), showing 0 instead of "undefined" or a crash.
+
+### Changed — Export, Transect, the sketch tracker and the workspace-files list follow the same rules (branch `vision2040/polish-map-rest`)
+
+The owner asked for all of the map's panels to be polished. These four were the ones left with small targets, small text, emoji and fixed dark colours.
+
+- **Export** (the Map Plate Composer): 31 controls under 24 px are 24 px (one `.map-export` rule, since the panel is styled inline throughout). Its panel, border and field colours came from the map style, so in the light and high-contrast-light themes dark text sat on a hard-coded dark panel (1.5:1); they now use the theme. Status colours (blocked, ready, warnings) use the theme error, foreground and warning colours.
+- **Transect profile and the sketch tracker**: emoji and glyph buttons are codicons, 8 to 10 px text is 11 px, controls are 24 px, and status, priority and collection colours no longer carry the text (the text uses the theme foreground and the colour is a bar beside it). The empty messages no longer point at buttons that are gone.
+- **Workspace files you can add**: the same header and chip button as the other lists, 24 px buttons.
+- New harness screens `map-draw-sketches` (two sketches), `map-transect-saved` (one saved transect) and `map-layers-workspace-files` (the fixture host now lists workspace geo files). All three, and the Export screens, read 0 small targets, small text and contrast failures at dark and hc-light by 400, 800 and 1280.
+### Changed — explorer subagents, PR-0: the CLI subagent leftovers (branch `vision2040/subagents-pr0`)
+
+Owner decision H1 (2026-10-28) approved in-process, explorer-only subagents (`docs/vision-2040/plans/subagents.md`, PR-0 to PR-3). The CLI path itself was already removed in Wave 0 (X0-6); this finishes PR-0 against current `main`.
+
+- **`subagentsEnabled` is no longer macOS-only.** `updateSettings` used to refuse enabling it anywhere but macOS because the `aihydro` CLI subagent only ran there. In-process explorers have no platform dependency, so the gate is gone (and a duplicated write of the same key). The setting stays default off and is not yet shown in Settings; the toggle returns with the tool in PR-2.
+- **Guard tests.** New source-level checks (`subagentCliRetired.test.ts`) fail if anything reads `AIHYDRO_PROFILE` (only the approval terminal's environment scrub may name it), probes `aihydro version`, or brings back the deleted CLI modules. `aihydro "..."` stays denied by `commandPolicy` in every setting.
+- **Tests.** The old `updateSettings.test.ts` sat outside the mocha glob and could not compile, so it never ran; it is replaced by `__tests__/updateSettings.subagents.test.ts`, which does.
+
+### Added — explorer subagents, PR-1: the host core, not yet exposed (branch `vision2040/subagents-pr1`)
+
+The engine for in-process, read-only subagents (plan `docs/vision-2040/plans/subagents.md`, PR-1). Nothing calls it yet: there is no `spawn_subagents` tool, no setting in the UI and no prompt text, so behaviour for users is unchanged. PR-2 exposes it.
+
+- **A child is a headless model loop with its own conversation, state and API handler** (`SubagentRunner`). It runs tools through a `ToolExecutor` built for one profile (`ToolExecutorOptions.profile`): the registry holds exactly the explorer allowlist plus `report_findings`, and any other call is refused with a result before a handler or an ask. The profile is per executor, not a process-wide environment variable, so a child cannot restrict (or fail to restrict) the parent.
+- **Explorer allowlist v2** (`agentProfile.ts`, `explorerPolicy.ts`): `read_file`, `search_files`, `list_files`, `load_mcp_documentation`, `use_mcp_tool` (READ class on the trusted first-party server only, unchanged) and `access_mcp_resource` (trusted server only; new, fail closed). Removed from the explorer because they act on the parent's task, raise the parent's asks or leave the machine: `web_fetch`, `ask_followup_question`, `attempt_completion`, `plan_mode_respond`, `condense`, `summarize_task`, `focus_chain`.
+- **A child is never more capable than its parent** (`capFor`): the intersection of the profile and what the parent can call, no auto-approve ceiling at all in an untrusted workspace, and no spawning from a child. `AutoApprove` takes a ceiling: a child ignores YOLO, "execute all commands" and edit grants; it auto-approves only its own reads and MCP, and only when the user's own settings approve them.
+- **Every child approval is the parent's ask** (`ParentAskBridge`): one pending ask at a time, first in first out, partial asks dropped, only `tool` and `use_mcp_server` asks allowed, and the origin stamped by the host (`AiHydroMessage.subagentOrigin`, via a new `meta` argument on `Task.ask`). A child's `say` goes to its own in-memory list and never to the parent's, because that would move `lastMessageTs` and supersede the pending ask.
+- **Budgets and stopping**: 30 tool calls, 10 minutes, 40,000 output tokens, 80% of the context window, and a USD cap that applies only when the provider reports cost. A breach ends the child as `partial` with its last message and the cause named; repeated refusals end it `blocked`. Stop (the parent aborting) or a cancel ends a child within one poll interval, including one waiting on the user or on its model.
+- **`report_findings`** is the child's only exit: validated, size-capped (every cut named), written by the host. `formatReportsForParent` wraps reports as untrusted text with no `<` surviving from the child.
+- **A record per child** at `<task dir>/subagents/<childId>.json`: profile and allowlist hash, prompt and its hash, requested and returned model, times, status, usage, each tool call (name, server and tool, arguments hash, approval, result) and the report. Server RunRecords do not carry agent identity until the server seals it (audit WP-H8), so this file is the only place that says which agent made a call.
+- **Tests**: runner, supervisor (bounded fan-out of 3, queueing, Stop and cancel within 2 seconds, one parent ask at a time), capability (every tool outside the allowlist is probed and refused with no side effect), auto-approve ceiling, ask bridge, report validation, and boundary tests (no subagent module names a claim, promotion or approval tool; none calls the parent's `say`). The end-to-end test has a parent spawn explorers where one tries a write and a command and is refused, one is cancelled, and the rest report.
+
+### Added — explorer subagents, PR-2: `spawn_subagents`, the status row and the approval chip (branch `vision2040/subagents-pr2`)
+
+The feature the user can now turn on (Settings > Features > Subagents, off by default, all platforms). It rests on PR-1; PR-3 adds `_meta` identity, export and docs.
+
+- **`spawn_subagents`** takes 1 to 4 self-contained prompts. It is in the prompt and the tool registry only while the setting is on (a call while it is off gets an explicit result), never in a child's. **Every launch asks** (a `tool` ask showing the prompts, the model, the budget and what an explorer cannot do), never auto-approved, not even in YOLO. No "Always".
+- **One status row per call** (`subagent_status`, a new say kind and proto enum 1003), never folded at any detail level: each explorer's state (queued, running, waiting for you, done, stopped early with the cause, blocked, failed, cancelled), last tool, calls, tokens and cost; expand for its calls and record path. The host rewrites it in place at most four times a second without moving `lastMessageTs`, so a pending approval is never superseded.
+- **A child's approval is the parent's pending card**, with a chip "From Explorer 2 · read-only" and the first line of its prompt (`subagent_origin_json`, proto field 1011, host-stamped). It is never folded while pending; once answered it is lifted by name ("You approved for Explorer 2: ..."). **No "Always"** on a subagent's ask. The sidebar badge, the "Approval waiting" pill and the live region all name the explorer.
+- **Stop cancels everything**: the trailing status row counts as a running task, so Stop and Escape are offered; every child reaches `cancelled` within one poll interval.
+- **Task totals include the children's tokens and cost** (the status row is summed in `getApiMetrics`); the context-now figure does not.
+- **What the parent gets back** is one `<subagent_reports untrusted="true">` result: status, a validated summary and findings capped at 4,000 characters each, usage and the record path. The tool description tells the model to treat it as unverified text and to open the source a report names before relying on it.
+- Not included: a `general` or `data-runner` profile (PR-4, needs its own owner decision), parallel data fetches, and the compact local-model prompt variant (it has no MCP tools).
+- **Screens**: `chat-subagents-running` and `chat-subagent-ask`.
+
+### Added — explorer subagents, PR-3: agent identity on MCP calls, docs and decision record (branch `vision2040/subagents-pr3`)
+
+- **A subagent's MCP calls say who made them.** `_meta["aihydro/context"].agent = {agent_id, parent_agent_id, role}` is added to every `use_mcp_tool` call a child makes; `chat_id` stays the parent's and `client` stays `"vscode"` (evaluation sealing rejects another client label). The main agent's context is unchanged (no `agent` key). The child record states the same identity.
+- **Not sealed yet.** The server reads only `study_id`, `workspace`, `chat_id` and `client`, so the agent block is ignored there and is not in server RunRecords. Until the server seals it (audit WP-H8, an aihydro-tools change that is not part of this repo), the per-child record `<task dir>/subagents/<id>.json` is the only place that says which agent made a call. Do not describe child calls as agent-attributed server records.
+- **Export.** The capsule and defensibility exports are server-side over `~/.aihydro/sessions` and do not read the extension's task directory, so `subagents/` is not in them, and adding it is a tools-side change. The extension's own "export task" is a markdown of the conversation; a spawn call's wrapped reports (with record paths) are part of it.
+- **Upgrade: a stored `subagentsEnabled: true` from the CLI era is reset to off, once** (`resetLegacySubagentsEnabled`, marker `migrations.subagentsEnabledReset.v1`). That key used to mean the removed macOS-only `aihydro` CLI subagent; it now means in-process explorers, which the user has not been shown, so it must not turn them on by itself. A choice made after the reset is kept.
+- **Host-side name denylist for explorer MCP calls**: `start_session`, `aihydro_rebind_chat`, the claim, promotion, pre-registration and approval tools and the project-binding tools are refused by name before any annotation is read, so the guarantee does not rest on a server's annotations alone.
+- **The wall clock stops while an explorer waits on you**, so a child never times out behind an unanswered approval and leaves a ghost card. Working time still counts.
+- **Child-controlled labels (the MCP tool name shown on the status row) are cut to about 80 characters.**
+- **Docs:** `docs/guide/subagents.md` (what a user sees, what an explorer can and cannot do, limits, where the record is), `DECISIONS.md` (the decision, the allowlist change, the provenance limit).
+
+### Fixed — the task header no longer overlaps the study and cost chips (branch `vision2040/polish-chat`)
+
+Reported on the installed 0.4.4 build: at about 400 px the study chip (`usgs_01031500_hydro_data`) sat on top of the cost chip ($0.2555) and "New task" was crowded. Cause: the study id span was `shrink-0` ("never truncated") inside a chip capped at 132 px, so a real-length id overflowed the chip into its neighbour; the right cluster was `flex-shrink-0` and could not wrap.
+
+- The title row is a wrapping flex row. Chevron, copy and delete stay first; the study chip, cost chip and "New task" form a right cluster that drops to a second row when it does not fit. Nothing overlaps at 280, 400 or 800 px.
+- A long study id is cut with an ellipsis inside its chip (the label loses width first); the full id stays in the tooltip and the accessible name.
+- N4 (`nav-ribbon-audit-2026-10-30.md`): the expand toggle is now a `<button aria-expanded>` with a name ("Show/Hide task details") instead of a click handler on a div; copy, delete and "New task" are 24 px tall instead of 10 px (`max-h-3` removed), so the header's own controls are no longer small targets. The screen checker still counts 1 small target on the chat screens (budgeted in the new entries): the composer's 22x22 toolbar button, not part of the header. Budgets of the existing chat screens were not tightened (they may only shrink, and CI passes either way).
+- Harness: `chat-header-long-study` and `chat-header-long-study-collapsed` (a 40-character study id with a label, $0.2555) with first budget entries.
+
+### Added — the AI-Hydro Map opens beside the chat when the sidebar first shows (branch `vision2040/polish-map-open`)
+
+- New setting `aihydro.map.openWithChat` (default on, window scope). When the AI-Hydro sidebar chat is first shown in a window, the map panel opens in the second editor column, once.
+- It never takes focus from the chat (`preserveFocus` on create and reveal). It opens only for a visible sidebar (the trigger is the view being resolved visible or becoming visible, never activation), is skipped if a map tab already exists (including one VS Code restored), and fires after a 1.2 s delay re-checked at fire time (sidebar still visible, setting still on) so the chat renders before the map bundle loads.
+- Once per window session: if you close the map it stays closed until the window reloads. The Map button and command are unchanged.
+- The pending delay timer is cleared when the extension is disposed.
+- Layout and cost: the map opens in the second editor column (`ViewColumn.Two`, as the Map button does). With no editor open that creates a second editor group beside an empty first one, so the editor area is split with the map on the right. The map webview uses `retainContextWhenHidden`, so a map opened this way keeps its GPU context alive for the window even if you never use it; users who do not want that cost should turn the setting off.
+- The e2e profile turns it off (`E2E_DEFAULT_USER_SETTINGS`); the screen harness has no extension host, so it is unaffected.
+
+### Fixed — file chips for images, PDFs and data files open instead of "Could not open file!" (branch `vision2040/polish-open-file`)
+
+Reported on the installed 0.4.4 build: clicking `hydrograph_01013500.png` or `watershed_01031500_map.png` in an answer showed "Could not open file!". Cause: `openFile` (`src/integrations/misc/open-file.ts`) sent every path to the text-document API, which rejects binary files, and its catch block discarded the reason.
+
+- Files are classified first. Images, audio and video open in VS Code's own viewer (`vscode.open`) in the editor. A PDF opens in the system viewer unless a PDF viewer extension is installed (an extension id containing "pdf"), in which case it opens in `vscode.open`; never a binary notice. Text files still use the text-document API with the caller's `preserveFocus`/`preview`. Unknown extensions are sniffed (`isbinaryfile`).
+- GeoTIFF, netCDF, Parquet, HDF5, GeoPackage, NumPy, archives, office files and installers/packages (`.exe`, `.msi`, `.dmg`, `.pkg`, `.vsix`, `.app`; never run from a chat link) have no VS Code viewer: they are selected in the Explorer and a message names the format ("dem.tif is a GeoTIFF raster, which VS Code cannot display...") instead of an error.
+- A missing file says `File not found: <path>`; any other failure says `Could not open <path>: <reason>`. Directories are revealed in the Explorer.
+- `file://` URIs and quoted paths are accepted. Chips now also match absolute paths, Windows drive paths and names with spaces (the host still checks that the file exists before showing a chip).
+- Chips are scoped: a path gets a chip only if it is an existing file (after symlinks) in ANY workspace root (a relative path is tried against every root, not just the active folder) or in a place aihydro-tools 2.8.5 writes outputs when a study has no workspace: `$AIHYDRO_HOME/sessions/<id>/outputs`, `exports`, `models`, `surrogate`, `inundation_physics`, `inundation_surrogate`, `data_jobs`. The rest of `AIHYDRO_HOME` (`trust`, `approvals`, `registry`, session records) and anything else, such as `~/.ssh/...`, gets no chip, and `openFileRelativePath` refuses it.
+- 15 unit tests (`src/integrations/misc/__tests__/open-file.test.ts`).
+
+### Fixed — no empty "Worked <1s" rows, no "Resumed a completed task" above a follow-up (branch `vision2040/polish-transcript`)
+
+Reported on the installed 0.4.4 build: a stray "Worked <1s" row after every answer (also after a task completed), and "Resumed a completed task" above a new question.
+
+- Cause: the presenter folds every non-prose message (model requests, checkpoints) into a work group, so a plain answer produced one or two groups whose facts were all zero except cost; the group after the answer is the checkpoint and request that close the turn.
+- A group with no tool work (no tool, not-run call, lifted line, retry, failed request, reuse or revision) is no longer a row, at Focus and Normal. The live tail group stays while the task runs (it is the "Working" row). Verbose is unchanged. A group that did anything (including a failed or retried request) still shows.
+- "Rewind to this message" is computed before the empty groups are dropped, so a chat-only turn still has its rewind target. Its cost remains in the task header (the total is computed from the messages, not from the rows; a test covers it). Known loss: a checkpoint that sits in a dropped group after the first one in a turn (for example the one taken as the answer completes) no longer has a "Rewind this work" row; the turn's first checkpoint still backs "Rewind to this message", and a group that ran tools still shows its own rewind.
+- The "Resumed a completed task" divider is no longer drawn at Focus and Normal (the question follows at once and nothing was lost; the presenter still emits it, the view hides it). "Resumed from an interrupted task" still shows, and Verbose is unchanged.
+
+### Fixed — audit findings say why a cited number is flagged; "Referenced this turn" no longer says "no runs" beside run ids (branch `vision2040/polish-audit-findings`)
+
+Reported on the installed 0.4.4 build: "8 findings need review", dotted underlines on 774.15 km², 7,305 values, 7,300 days and 2,262 values in text that carries `[run:...]`, and a follow-up answer reading "Referenced this turn: no runs or claims" while quoting the same numbers. Read from the owner's transcript (task 1793340989672, answer rows 91 and 93), the cause is not the auditor miscounting cited numbers:
+
+- The model wrote its run references as `[run:watershed.0b124654840f]`, with no `#<path>`. The grammar is `[run:<id>#<key_outputs.field>]`. The auditor reports each as `malformed_marker` and the marker binds nothing, so the numbers beside it are `uncited_number`. The other findings are numbers with no reference in their sentence ("2,262 of the 7,305 values" in the caveats line; the second 7,305).  The reported count is the sum of the two groups.
+- The same shape is invisible to the UI: markers need `#path` to be chips, so the answer's evidence strip and "Referenced this turn" counted no runs.
+- The gate that asks the model to fix this before the user sees it did not run on either answer (no revision rows). For the follow-up the reason is in the code: a resumed task starts with an empty gate state, `aihydro_chat_status` was never recorded as "study bound", so eligibility said `study-not-bound`. For the first answer the transcript does not say; candidates are an unconfirmed launcher (the gate needs a trusted server) or a server that does not advertise the graded schema.
+
+What changed (nothing here lets an unproven number pass; the audit's decisions are untouched):
+- A finding about a number beside a `[run:<id>]` reference, and the malformed-marker finding itself, now read "Run reference has no #path, so the value could not be checked" (summary line and underline tooltip) instead of "Not linked to a run". The summary adds "N run references have no #path".
+- "Referenced this turn" counts run ids the answer names without `#path`, so it no longer says "no runs or claims" beside them.
+- A resumed task's gate was never eligible (`study-not-bound`). A first-party `aihydro_chat_status` call now only marks the binding as probed (`bindingProbed`), which makes the gate eligible; it never supplies a study id, because the call is model-invoked and the host should not take a study id from model-invoked output (tools >= 2.8.2 refuse a differing `chat_id` with `CHAT_ID_MISMATCH`, so a spoof would not work there; this is simpler and holds against any server). The audit asks the server itself with the host-issued chat id and fails closed. `aihydro_rebind_chat` clears the cached study. Not done: the post-audit check still compares two answers from the same server; an independent comparison (for example with the host's study-chip state) needs plumbing into `runFinalAnswerAudit`.
+- Harness: `chat-answer-audit-pathless-run`.
+
+Needs a tools change, not made here (aihydro-tools `ai_hydro/audit/resolver.py`): accept `[run:<id>]` when that run exists and holds a leaf that matches the printed value (the only case provably covered by a cited run), or return a `fix_hint` that names the missing `#<path>`. The "7,305 daily values" sample-size decision is not touched.
 
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 

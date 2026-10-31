@@ -27,6 +27,11 @@ const STATUS_BY_KIND: Record<string, string> = {
 	stale_claim: "Claim predates the latest run",
 }
 
+/** `[run:<id>]` without `#<path>`: names a run but not which value, so the auditor can check nothing against it. */
+const PATHLESS_RUN = /\[run:[A-Za-z0-9][A-Za-z0-9._-]*\]/
+
+export const PATHLESS_RUN_STATUS = "Run reference has no #path, so the value could not be checked"
+
 const QUOTED_NUMBER = /['"‘’“”]([-+−]?\d[\d,]*(?:\.\d+)?(?:[eE][-+]?\d+)?%?)['"‘’“”]/
 
 export interface RunHint {
@@ -78,6 +83,34 @@ export function contextSnippet(excerpt: string | undefined, quantity?: string, w
 	return `${from > 0 ? "…" : ""}${flat.slice(from, to).trim()}${to < flat.length ? "…" : ""}`
 }
 
+/** Any citation-shaped bracket: the one a number binds to is the first after it. */
+const ANY_REFERENCE = /\[(?:run|lit|claim):[^\]\s]*\]/
+
+/**
+ * A finding about a run reference that is missing its `#path`: the malformed marker itself, or a number whose NEAREST
+ * following reference (the one the auditor binds it to) is such a reference. A pathless reference elsewhere in the
+ * excerpt does not make an unrelated number's finding about it.
+ */
+export function isPathlessRunFinding(v: AnswerAuditViolation): boolean {
+	if (v.kind === "malformed_marker") {
+		return PATHLESS_RUN.test(v.message ?? "")
+	}
+	if (!UNLINKED_KINDS.has(v.kind) || !v.excerpt) {
+		return false
+	}
+	const quantity = v.message?.match(QUOTED_NUMBER)?.[1]
+	const at = quantity ? v.excerpt.indexOf(quantity) : -1
+	if (at < 0) {
+		return false
+	}
+	const next = ANY_REFERENCE.exec(v.excerpt.slice(at + (quantity?.length ?? 0)))
+	return !!next && new RegExp(`^${PATHLESS_RUN.source}$`).test(next[0])
+}
+
+function statusFor(v: AnswerAuditViolation): string {
+	return isPathlessRunFinding(v) ? PATHLESS_RUN_STATUS : (STATUS_BY_KIND[v.kind] ?? humanize(v.kind))
+}
+
 export function viewFinding(v: AnswerAuditViolation): FindingView {
 	const quantity = NUMBER_KINDS.has(v.kind) ? v.message?.match(QUOTED_NUMBER)?.[1] : undefined
 	let runHint: RunHint | undefined
@@ -93,7 +126,7 @@ export function viewFinding(v: AnswerAuditViolation): FindingView {
 		severity: v.severity,
 		quantity,
 		context: contextSnippet(v.excerpt, quantity),
-		status: STATUS_BY_KIND[v.kind] ?? humanize(v.kind),
+		status: statusFor(v),
 		runHint,
 		fixHint: v.fixHint,
 		marker: v.suggestedMarker,
@@ -142,7 +175,10 @@ export function auditSummaryView(p: AnswerAuditPayload): AuditSummaryView | unde
 				? `${hard} ${plural(hard, "number doesn't", "numbers don't")} match a recorded run`
 				: `${hard} ${plural(hard, "finding needs", "findings need")} review`
 		const adv = Math.max(p.advisoryCount, p.violations.filter((v) => v.severity === "advisory").length)
-		return { text: adv > 0 ? `${head} · ${adv} more ${plural(adv, "note", "notes")}` : head, tone: "warn" }
+		// A reference without its #path is the one cause a reader can see and fix: say it, not just "needs review".
+		const pathless = hardList.filter((v) => v.kind === "malformed_marker" && isPathlessRunFinding(v)).length
+		const why = pathless > 0 ? ` · ${pathless} run ${plural(pathless, "reference has", "references have")} no #path` : ""
+		return { text: `${head}${why}${adv > 0 ? ` · ${adv} more ${plural(adv, "note", "notes")}` : ""}`, tone: "warn" }
 	}
 	const adv = Math.max(p.advisoryCount, p.violations.length)
 	return { text: `${adv} ${plural(adv, "note", "notes")} to review`, tone: "note" }

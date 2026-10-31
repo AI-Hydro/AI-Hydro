@@ -5,6 +5,7 @@ import { addToMyGallery } from "./galleryStorage"
 import { interpolateLine } from "./geoMeasureMath"
 import { askAgentAboutBatchTransects, askAgentAboutTransect } from "./mapAgentBridge"
 import { sampleAllRastersAtPoint, sampleTopRasterAtPoint } from "./mapLayerAdapters"
+import { MAP_Z } from "./mapZ"
 import { type ExportFormat, exportTransects, type ProfileDataMap, type ProfilePoint } from "./transectExport"
 import {
 	loadCollections,
@@ -17,23 +18,22 @@ import {
 	type TransectPriority,
 	type TransectStatus,
 } from "./transectStorage"
-import { MAP_Z } from "./mapZ"
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const PROFILE_SAMPLES = 200
 
 const STATUS_OPTS: { value: TransectStatus; label: string; color: string }[] = [
-	{ value: "open", label: "● Open", color: "#6b7280" },
-	{ value: "in-progress", label: "◑ In Progress", color: "#f59e0b" },
-	{ value: "reviewed", label: "◉ Reviewed", color: "#06b6d4" },
-	{ value: "done", label: "✓ Done", color: "#22c55e" },
+	{ value: "open", label: "Open", color: "#6b7280" },
+	{ value: "in-progress", label: "In Progress", color: "#f59e0b" },
+	{ value: "reviewed", label: "Reviewed", color: "#06b6d4" },
+	{ value: "done", label: "Done", color: "#22c55e" },
 ]
 
 const PRIORITY_OPTS: { value: Exclude<TransectPriority, null>; label: string; color: string }[] = [
-	{ value: "low", label: "▽ Low", color: "#6b7280" },
-	{ value: "medium", label: "◈ Medium", color: "#f59e0b" },
-	{ value: "high", label: "⚡ High", color: "#ef4444" },
+	{ value: "low", label: "Low", color: "#6b7280" },
+	{ value: "medium", label: "Medium", color: "#f59e0b" },
+	{ value: "high", label: "High", color: "#ef4444" },
 ]
 
 // ─── Profile computation ──────────────────────────────────────────────────────
@@ -252,7 +252,7 @@ export default function TransectsPanel({
 	const border = isDark ? "rgba(255,255,255,0.13)" : "rgba(0,0,0,0.13)"
 	const subtle = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"
 	const subtleBorder = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"
-	const accent = "#6366f1"
+	const accent = "var(--vscode-button-background, #4f46e5)"
 	const inputStyle: React.CSSProperties = {
 		fontSize: 11,
 		padding: "4px 7px",
@@ -470,20 +470,22 @@ export default function TransectsPanel({
 	const sectionBorder = `1px solid ${border}`
 
 	return (
-		<div style={{ display: "flex", flexDirection: "column", gap: 8, color: fg }}>
+		<div className="map-tracker" style={{ display: "flex", flexDirection: "column", gap: 8, color: fg }}>
 			{/* Toolbar */}
 			<div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-				<span style={{ fontSize: 11, fontWeight: 700, flex: 1, opacity: 0.9, whiteSpace: "nowrap" }}>📈 Transects</span>
+				<span style={{ fontSize: 11, fontWeight: 700, flex: 1, opacity: 0.9, whiteSpace: "nowrap" }}>
+					<span aria-hidden="true" className="codicon codicon-graph-line" /> Transects
+				</span>
 				<button
 					onClick={() => {
 						setAgentError(null)
 						onStartDrawing()
 					}}
 					style={{
-						fontSize: 10,
+						fontSize: 11,
 						padding: "2px 8px",
 						background: accent,
-						color: "#fff",
+						color: "var(--vscode-button-foreground, #fff)",
 						border: "none",
 						borderRadius: 4,
 						cursor: "pointer",
@@ -491,14 +493,14 @@ export default function TransectsPanel({
 					}}
 					title="Draw a cross-sectional profile line"
 					type="button">
-					＋ Draw Profile
+					<span aria-hidden="true" className="codicon codicon-add" /> Draw Profile
 				</button>
 				<div ref={exportBtnRef} style={{ position: "relative" }}>
 					<button
 						disabled={transects.length === 0}
 						onClick={() => setShowExportMenu((v) => !v)}
 						style={{
-							fontSize: 10,
+							fontSize: 11,
 							padding: "2px 7px",
 							background: "transparent",
 							color: fg,
@@ -509,7 +511,7 @@ export default function TransectsPanel({
 						}}
 						title="Export transects"
 						type="button">
-						⬇ Export ▾
+						<span aria-hidden="true" className="codicon codicon-export" /> Export
 					</button>
 					{showExportMenu && (
 						<div
@@ -533,7 +535,7 @@ export default function TransectsPanel({
 										display: "block",
 										width: "100%",
 										padding: "5px 12px",
-										fontSize: 10,
+										fontSize: 11,
 										background: "none",
 										color: fg,
 										border: "none",
@@ -543,14 +545,14 @@ export default function TransectsPanel({
 									}}
 									type="button">
 									{fmt === "csv"
-										? "📊 CSV (summary)"
+										? "CSV (summary)"
 										: fmt === "geojson"
-											? "🌐 GeoJSON"
+											? "GeoJSON"
 											: fmt === "kml"
-												? "🌍 KML"
+												? "KML"
 												: fmt === "md"
-													? "📝 Markdown Report"
-													: "📈 Profile Points CSV"}
+													? "Markdown report"
+													: "Profile points CSV"}
 								</button>
 							))}
 						</div>
@@ -563,12 +565,13 @@ export default function TransectsPanel({
 				<button
 					onClick={() => setActiveCollectionId("all")}
 					style={{
-						fontSize: 9,
+						fontSize: 11,
 						padding: "2px 8px",
 						borderRadius: 12,
 						border: `1px solid ${activeCollectionId === "all" ? accent : border}`,
-						background: activeCollectionId === "all" ? `${accent}22` : "transparent",
-						color: activeCollectionId === "all" ? "#a5b4fc" : fg,
+						background:
+							activeCollectionId === "all" ? `color-mix(in srgb, ${accent} 15%, transparent)` : "transparent",
+						color: activeCollectionId === "all" ? "var(--vscode-foreground)" : fg,
 						cursor: "pointer",
 						fontWeight: activeCollectionId === "all" ? 700 : 400,
 					}}
@@ -589,7 +592,7 @@ export default function TransectsPanel({
 							onKeyDown={(e) => {
 								if (e.key === "Enter") setEditingCollectionId(null)
 							}}
-							style={{ ...inputStyle, width: 90, padding: "1px 6px", fontSize: 9 }}
+							style={{ ...inputStyle, width: 90, padding: "1px 6px", fontSize: 11 }}
 							value={col.name}
 						/>
 					) : (
@@ -597,7 +600,7 @@ export default function TransectsPanel({
 							<button
 								onClick={() => setActiveCollectionId(col.id)}
 								style={{
-									fontSize: 9,
+									fontSize: 11,
 									padding: "2px 8px",
 									borderRadius: "12px 0 0 12px",
 									border: `1px solid ${isActive ? col.color : border}`,
@@ -623,7 +626,7 @@ export default function TransectsPanel({
 							<button
 								onClick={() => setEditingCollectionId(col.id)}
 								style={{
-									fontSize: 8,
+									fontSize: 11,
 									padding: "2px 4px",
 									border: `1px solid ${isActive ? col.color : border}`,
 									borderLeft: "none",
@@ -634,12 +637,12 @@ export default function TransectsPanel({
 								}}
 								title="Rename collection"
 								type="button">
-								✏
+								<span aria-hidden="true" className="codicon codicon-edit" />
 							</button>
 							<button
 								onClick={() => handleDeleteCollection(col.id)}
 								style={{
-									fontSize: 8,
+									fontSize: 11,
 									padding: "2px 4px",
 									borderRadius: "0 12px 12px 0",
 									border: `1px solid ${isActive ? col.color : border}`,
@@ -651,7 +654,7 @@ export default function TransectsPanel({
 								}}
 								title="Delete collection"
 								type="button">
-								✕
+								<span aria-hidden="true" className="codicon codicon-close" />
 							</button>
 						</div>
 					)
@@ -659,14 +662,14 @@ export default function TransectsPanel({
 				<button
 					onClick={handleNewCollection}
 					style={{
-						fontSize: 9,
+						fontSize: 11,
 						padding: "2px 7px",
 						borderRadius: 12,
 						border: `1px dashed ${border}`,
 						background: "transparent",
 						color: fg,
 						cursor: "pointer",
-						opacity: 0.6,
+						opacity: 1,
 					}}
 					type="button">
 					+ Collection
@@ -702,13 +705,15 @@ export default function TransectsPanel({
 						background: "rgba(239,68,68,0.1)",
 						border: "1px solid rgba(239,68,68,0.3)",
 						borderRadius: 4,
-						fontSize: 10,
+						fontSize: 11,
 						color: "#f87171",
 						display: "flex",
 						alignItems: "center",
 						gap: 6,
 					}}>
-					<span style={{ flex: 1 }}>⚠ {agentError}</span>
+					<span style={{ flex: 1 }}>
+						<span aria-hidden="true" className="codicon codicon-warning" /> {agentError}
+					</span>
 					<button
 						onClick={() => setAgentError(null)}
 						style={{
@@ -720,7 +725,7 @@ export default function TransectsPanel({
 							padding: 0,
 						}}
 						type="button">
-						✕
+						<span aria-hidden="true" className="codicon codicon-close" />
 					</button>
 				</div>
 			)}
@@ -735,15 +740,15 @@ export default function TransectsPanel({
 						borderRadius: 6,
 					}}>
 					<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-						<span style={{ fontSize: 11, fontWeight: 700, color: "#a5b4fc", flex: 1 }}>
-							✨ Batch Profile Analysis
+						<span style={{ fontSize: 11, fontWeight: 700, color: "var(--vscode-foreground)", flex: 1 }}>
+							<span aria-hidden="true" className="codicon codicon-sparkle" /> Batch Profile Analysis
 						</span>
-						<span style={{ fontSize: 9, opacity: 0.6 }}>
+						<span style={{ fontSize: 11, opacity: 0.6 }}>
 							{(activeCollectionId !== "all" ? filtered : transects).length} transect
 							{(activeCollectionId !== "all" ? filtered : transects).length !== 1 ? "s" : ""}
 						</span>
 					</div>
-					<div style={{ fontSize: 10, opacity: 0.65, lineHeight: 1.5, marginBottom: 6 }}>
+					<div style={{ fontSize: 11, opacity: 0.65, lineHeight: 1.5, marginBottom: 6 }}>
 						Each transect is sampled along the topmost visible raster and sent as a CSV table of profile statistics
 						(min/max/mean/length). Add batch-level instructions below (optional).
 					</div>
@@ -761,7 +766,7 @@ export default function TransectsPanel({
 								setAgentError(null)
 							}}
 							style={{
-								fontSize: 10,
+								fontSize: 11,
 								padding: "4px 10px",
 								background: "transparent",
 								color: fg,
@@ -776,7 +781,7 @@ export default function TransectsPanel({
 							disabled={Boolean(agentBusy)}
 							onClick={handleBatchAskAgent}
 							style={{
-								fontSize: 10,
+								fontSize: 11,
 								padding: "4px 14px",
 								background: agentBusy ? "rgba(99,102,241,0.4)" : "rgba(99,102,241,0.85)",
 								color: "#fff",
@@ -786,7 +791,7 @@ export default function TransectsPanel({
 								fontWeight: 600,
 							}}
 							type="button">
-							{agentBusy === "batch" ? "⏳ Sampling & sending…" : "✨ Send to Agent"}
+							{agentBusy === "batch" ? "Sampling & sending…" : "Send to Agent"}
 						</button>
 					</div>
 				</div>
@@ -794,9 +799,9 @@ export default function TransectsPanel({
 
 			{/* Cards */}
 			{filtered.length === 0 ? (
-				<div style={{ fontSize: 10, opacity: 0.5, fontStyle: "italic", padding: "8px 0" }}>
+				<div className="map-hint" style={{ padding: "4px 0" }}>
 					{transects.length === 0
-						? "No transects yet — click ＋ Draw Profile to add one."
+						? "No transects yet. Choose Draw Profile to add one."
 						: "No transects match your filter."}
 				</div>
 			) : (
@@ -825,7 +830,7 @@ export default function TransectsPanel({
 										alignItems: "center",
 										gap: 6,
 									}}>
-									<span style={{ fontSize: 12 }}>📈</span>
+									<span aria-hidden="true" className="codicon codicon-graph-line" />
 									<span
 										style={{
 											fontSize: 11,
@@ -839,7 +844,12 @@ export default function TransectsPanel({
 									</span>
 									<PriorityBadge priority={t.priority} />
 									<StatusBadge status={t.status} />
-									<span style={{ fontSize: 10, opacity: 0.5, marginLeft: 2 }}>{isExpanded ? "▲" : "▼"}</span>
+									<span style={{ fontSize: 11, opacity: 0.5, marginLeft: 2 }}>
+										<span
+											aria-hidden="true"
+											className={`codicon codicon-chevron-${isExpanded ? "up" : "down"}`}
+										/>
+									</span>
 								</div>
 
 								{/* Expanded body */}
@@ -871,7 +881,7 @@ export default function TransectsPanel({
 												<button
 													onClick={() => setOverlayMode((prev) => ({ ...prev, [t.id]: !prev[t.id] }))}
 													style={{
-														fontSize: 9,
+														fontSize: 11,
 														padding: "2px 7px",
 														whiteSpace: "nowrap",
 														borderRadius: 4,
@@ -939,7 +949,9 @@ export default function TransectsPanel({
 
 										{/* Notes */}
 										<div>
-											<FieldLabel>📓 My Notes</FieldLabel>
+											<FieldLabel>
+												<span aria-hidden="true" className="codicon codicon-notebook" /> My Notes
+											</FieldLabel>
 											<textarea
 												onChange={(e) => updateTransect(t.id, { notes: e.target.value })}
 												placeholder="Field observations, channel context, what to look for…"
@@ -952,9 +964,14 @@ export default function TransectsPanel({
 										{/* AI Prompt */}
 										<div>
 											<FieldLabel>
-												🤖 AI Prompt{" "}
+												<span aria-hidden="true" className="codicon codicon-hubot" /> AI Prompt{" "}
 												<span
-													style={{ fontWeight: 400, textTransform: "none", fontSize: 9, opacity: 0.7 }}>
+													style={{
+														fontWeight: 400,
+														textTransform: "none",
+														fontSize: 11,
+														opacity: 0.7,
+													}}>
 													(optional — overrides smart default)
 												</span>
 											</FieldLabel>
@@ -980,11 +997,11 @@ export default function TransectsPanel({
 													<span
 														key={tag}
 														style={{
-															fontSize: 9,
+															fontSize: 11,
 															padding: "2px 7px",
 															borderRadius: 10,
 															background: "rgba(99,102,241,0.15)",
-															color: "#a5b4fc",
+															color: "var(--vscode-foreground)",
 															display: "flex",
 															alignItems: "center",
 															gap: 3,
@@ -997,9 +1014,9 @@ export default function TransectsPanel({
 															style={{
 																background: "none",
 																border: "none",
-																color: "#a5b4fc",
+																color: "var(--vscode-foreground)",
 																cursor: "pointer",
-																fontSize: 9,
+																fontSize: 11,
 																padding: 0,
 																lineHeight: 1,
 															}}
@@ -1022,7 +1039,7 @@ export default function TransectsPanel({
 														}
 													}}
 													placeholder="+ tag"
-													style={{ ...inputStyle, width: 60, padding: "2px 6px", fontSize: 9 }}
+													style={{ ...inputStyle, width: 60, padding: "2px 6px", fontSize: 11 }}
 													value={tagDrafts[t.id] ?? ""}
 												/>
 											</div>
@@ -1083,7 +1100,7 @@ export default function TransectsPanel({
 																	})
 																}
 																style={{
-																	fontSize: 9,
+																	fontSize: 11,
 																	padding: "2px 8px",
 																	borderRadius: 10,
 																	border: `1px solid ${inCol ? col.color : border}`,
@@ -1152,7 +1169,7 @@ export default function TransectsPanel({
 													onFlyTo(t.geometry.coordinates[0][0], t.geometry.coordinates[0][1])
 												}
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													padding: "3px 8px",
 													background: "transparent",
 													color: fg,
@@ -1161,12 +1178,12 @@ export default function TransectsPanel({
 													cursor: "pointer",
 												}}
 												type="button">
-												📍 Fly to
+												<span aria-hidden="true" className="codicon codicon-target" /> Fly to
 											</button>
 											<button
 												onClick={() => duplicateTransect(t)}
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													padding: "3px 8px",
 													background: "transparent",
 													color: fg,
@@ -1175,12 +1192,12 @@ export default function TransectsPanel({
 													cursor: "pointer",
 												}}
 												type="button">
-												📋 Duplicate
+												<span aria-hidden="true" className="codicon codicon-copy" /> Duplicate
 											</button>
 											<button
 												onClick={() => deleteTransect(t.id)}
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													padding: "3px 8px",
 													background: "transparent",
 													color: "#ef4444",
@@ -1189,7 +1206,7 @@ export default function TransectsPanel({
 													cursor: "pointer",
 												}}
 												type="button">
-												🗑 Delete
+												<span aria-hidden="true" className="codicon codicon-trash" /> Delete
 											</button>
 											<div style={{ flex: 1 }} />
 											<button
@@ -1199,7 +1216,7 @@ export default function TransectsPanel({
 													handleAskAgent(t, activeProfileData)
 												}}
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													padding: "4px 12px",
 													background: isBusy ? "rgba(99,102,241,0.4)" : "rgba(99,102,241,0.85)",
 													color: "#fff",
@@ -1209,7 +1226,7 @@ export default function TransectsPanel({
 													fontWeight: 600,
 												}}
 												type="button">
-												{isBusy ? "⏳ Sending…" : "✨ Ask Agent"}
+												{isBusy ? "Sending…" : "Ask Agent"}
 											</button>
 										</div>
 									</div>
@@ -1324,17 +1341,17 @@ export default function TransectsPanel({
 							setGallerySaveOpen((v) => !v)
 						}}
 						style={{
-							fontSize: 10,
+							fontSize: 11,
 							padding: "4px 10px",
 							background: gallerySaveOpen ? "rgba(16,185,129,0.2)" : "rgba(16,185,129,0.1)",
-							color: "#6ee7b7",
+							color: "var(--vscode-foreground)",
 							border: `1px solid ${gallerySaveOpen ? "rgba(16,185,129,0.5)" : "rgba(16,185,129,0.3)"}`,
 							borderRadius: 4,
 							cursor: "pointer",
 							fontWeight: 600,
 						}}
 						type="button">
-						📌 Save to My Gallery
+						<span aria-hidden="true" className="codicon codicon-star" /> Save to My Gallery
 					</button>
 					<button
 						disabled={Boolean(agentBusy)}
@@ -1343,10 +1360,10 @@ export default function TransectsPanel({
 							setBatchOpen((v) => !v)
 						}}
 						style={{
-							fontSize: 10,
+							fontSize: 11,
 							padding: "4px 12px",
 							background: batchOpen ? "rgba(99,102,241,0.25)" : "rgba(99,102,241,0.1)",
-							color: batchOpen ? "#a5b4fc" : fg,
+							color: batchOpen ? "var(--vscode-foreground)" : fg,
 							border: `1px solid ${batchOpen ? "rgba(99,102,241,0.5)" : border}`,
 							borderRadius: 4,
 							cursor: agentBusy ? "wait" : "pointer",
@@ -1354,8 +1371,8 @@ export default function TransectsPanel({
 						}}
 						type="button">
 						{agentBusy === "batch"
-							? "⏳ Sending…"
-							: `✨ Batch Ask Agent (${(activeCollectionId !== "all" ? filtered : transects).length})`}
+							? "Sending…"
+							: `Batch Ask Agent (${(activeCollectionId !== "all" ? filtered : transects).length})`}
 					</button>
 				</div>
 			)}
@@ -1368,7 +1385,7 @@ export default function TransectsPanel({
 const FieldLabel: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
 	<label
 		style={{
-			fontSize: 9,
+			fontSize: 11,
 			opacity: 0.55,
 			display: "block",
 			marginBottom: 3,
@@ -1384,12 +1401,12 @@ const FieldLabel: React.FC<{ children: React.ReactNode; style?: React.CSSPropert
 const MetricChip: React.FC<{ label: string; value: string }> = ({ label, value }) => (
 	<span
 		style={{
-			fontSize: 9,
+			fontSize: 11,
 			padding: "2px 7px",
 			borderRadius: 8,
 			background: "rgba(99,102,241,0.1)",
 			border: "1px solid rgba(99,102,241,0.2)",
-			color: "#a5b4fc",
+			color: "var(--vscode-foreground)",
 			whiteSpace: "nowrap",
 		}}>
 		<span style={{ opacity: 0.7 }}>{label}: </span>
@@ -1421,7 +1438,7 @@ function MultiSeriesChart({
 					display: "flex",
 					alignItems: "center",
 					justifyContent: "center",
-					fontSize: 10,
+					fontSize: 11,
 					color: muted,
 					textAlign: "center",
 					padding: "0 12px",
@@ -1451,7 +1468,7 @@ function MultiSeriesChart({
 			{/* Legend */}
 			<div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
 				{nonEmpty.map((s) => (
-					<span key={s.layerId} style={{ fontSize: 9, display: "flex", alignItems: "center", gap: 3, color: muted }}>
+					<span key={s.layerId} style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 3, color: muted }}>
 						<span style={{ display: "inline-block", width: 14, height: 2, background: s.color, borderRadius: 1 }} />
 						{s.layerName}
 						{s.units ? ` (${s.units})` : ""}
@@ -1534,7 +1551,7 @@ function MultiSeriesChart({
 							border: `1px solid ${muted}`,
 							borderRadius: 3,
 							padding: "2px 5px",
-							fontSize: 9,
+							fontSize: 11,
 							color: isDark ? "#e2e8f0" : "#0f172a",
 							pointerEvents: "none",
 							whiteSpace: "nowrap",
@@ -1544,7 +1561,7 @@ function MultiSeriesChart({
 					</div>
 				)}
 			</div>
-			<div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: muted }}>
+			<div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: muted }}>
 				<span>min {gMin.toFixed(2)}</span>
 				<span>{maxDist.toFixed(2)} km</span>
 				<span>max {gMax.toFixed(2)}</span>
@@ -1555,7 +1572,19 @@ function MultiSeriesChart({
 
 const StatusBadge: React.FC<{ status: TransectStatus }> = ({ status }) => {
 	const opt = STATUS_OPTS.find((s) => s.value === status) ?? STATUS_OPTS[0]
-	return <span style={{ fontSize: 9, color: opt.color, whiteSpace: "nowrap", fontWeight: 600, opacity: 0.9 }}>{opt.label}</span>
+	return (
+		<span
+			style={{
+				fontSize: 11,
+				color: "var(--vscode-foreground)",
+				borderLeft: `3px solid ${opt.color}`,
+				paddingLeft: 4,
+				whiteSpace: "nowrap",
+				fontWeight: 600,
+			}}>
+			{opt.label}
+		</span>
+	)
 }
 
 const PriorityBadge: React.FC<{ priority: TransectPriority }> = ({ priority }) => {
@@ -1565,8 +1594,8 @@ const PriorityBadge: React.FC<{ priority: TransectPriority }> = ({ priority }) =
 	return (
 		<span
 			style={{
-				fontSize: 9,
-				color: opt.color,
+				fontSize: 11,
+				color: "var(--vscode-foreground)",
 				whiteSpace: "nowrap",
 				fontWeight: 600,
 				padding: "1px 5px",
@@ -1614,13 +1643,13 @@ function ProfileChart({
 					alignItems: "center",
 					justifyContent: "center",
 					gap: 4,
-					fontSize: 10,
+					fontSize: 11,
 					color: muted,
 					textAlign: "center",
 					padding: "0 12px",
 				}}>
 				<span>No raster data under this line.</span>
-				<span style={{ fontSize: 9, opacity: 0.8 }}>
+				<span style={{ fontSize: 11, opacity: 0.8 }}>
 					Make a raster layer with numeric pixels visible, then re-open this profile.
 				</span>
 			</div>
@@ -1638,8 +1667,8 @@ function ProfileChart({
 
 	return (
 		<div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-			<div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: muted }}>
-				<span>{sampledLayerName ? `📡 ${sampledLayerName}${units ? ` (${units})` : ""}` : "Profile"}</span>
+			<div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: muted }}>
+				<span>{sampledLayerName ? `${sampledLayerName}${units ? ` (${units})` : ""}` : "Profile"}</span>
 				<span>{stats.lengthKm.toFixed(2)} km</span>
 			</div>
 			<div
@@ -1686,7 +1715,7 @@ function ProfileChart({
 							border: `1px solid ${muted}`,
 							borderRadius: 3,
 							padding: "2px 5px",
-							fontSize: 9,
+							fontSize: 11,
 							color: isDark ? "#e2e8f0" : "#0f172a",
 							pointerEvents: "none",
 							whiteSpace: "nowrap",
@@ -1695,7 +1724,7 @@ function ProfileChart({
 					</div>
 				)}
 			</div>
-			<div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: muted }}>
+			<div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: muted }}>
 				<span>min {stats.min.toFixed(2)}</span>
 				<span>mean {stats.mean.toFixed(2)}</span>
 				<span>max {stats.max.toFixed(2)}</span>

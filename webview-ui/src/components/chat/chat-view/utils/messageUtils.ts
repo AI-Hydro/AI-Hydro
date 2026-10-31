@@ -162,6 +162,11 @@ export type RenderEntry =
 
 export interface TranscriptView {
 	entries: RenderEntry[]
+	/**
+	 * "Rewind to this message" targets by user entry key: the first checkpoint after the user turn, before the next
+	 * one. Computed over the full presenter output, so a turn with no tool work (its group is not shown) still has one.
+	 */
+	rewinds: Map<string, number>
 	/** One entry per row, in the shape useScrollBehavior understands (a message, or the messages a row covers). */
 	scrollEntries: (AiHydroMessage | AiHydroMessage[])[]
 }
@@ -170,13 +175,69 @@ export interface TranscriptView {
  * Builds what the list renders. `verbose` is today's pipeline untouched (filter + browser-session grouping); every
  * other level runs the presenter on the UNFILTERED processed list, so nothing the filter drops is lost to it.
  */
+/**
+ * A work group that carries nothing to show: no tool ran, nothing was refused, failed, retried, reused or revised.
+ * It is only the machinery of a plain answer (a model request and a checkpoint), and its "Worked <1s" header
+ * would be noise. Its cost is still in the task header; its checkpoint still serves "Rewind" on the user turn.
+ */
+export function isEmptyWorkGroup(item: TranscriptItem): boolean {
+	if (item.kind !== "group") {
+		return false
+	}
+	const f = item.facts
+	return (
+		f.toolCount === 0 &&
+		f.notRunCount === 0 &&
+		f.liftedCount === 0 &&
+		f.retryCount === 0 &&
+		f.failedRequestCount === 0 &&
+		f.reuseCount === 0 &&
+		f.revisionCount === 0 &&
+		item.lifted.length === 0 &&
+		item.absorbed.length === 0
+	)
+}
+
+/**
+ * "Resumed a completed task": the divider the presenter draws when a follow-up resumes a finished task. The user's
+ * question follows at once and nothing was cut off, so it only repeats above every follow-up. (An interrupted task's
+ * divider stays: work was lost.) The presenter still emits it (it surfaces every break message); the view hides it.
+ */
+export function isRoutineResume(item: TranscriptItem): boolean {
+	return item.kind === "divider" && item.dividerKind === "resumed" && item.message.ask === "resume_completed_task"
+}
+
+function rewindTargets(items: TranscriptItem[]): Map<string, number> {
+	const out = new Map<string, number>()
+	items.forEach((item, i) => {
+		if (item.kind !== "user") {
+			return
+		}
+		for (let j = i + 1; j < items.length; j++) {
+			const next = items[j]
+			if (next.kind === "user") {
+				break
+			}
+			if (next.kind === "group") {
+				const checkpoint = next.members.find((m) => m.say === "checkpoint_created")
+				if (checkpoint) {
+					out.set(item.key, checkpoint.ts)
+					return
+				}
+			}
+		}
+	})
+	return out
+}
+
 export function buildTranscriptView(
 	processed: AiHydroMessage[],
 	grouped: (AiHydroMessage | AiHydroMessage[])[],
-	options: PresentOptions,
+	options: PresentOptions & { running?: boolean },
 ): TranscriptView {
 	if (options.detail === "verbose") {
 		return {
+			rewinds: new Map(),
 			entries: grouped.map((entry, i) => ({
 				mode: "legacy" as const,
 				key: Array.isArray(entry) ? `legacy:${entry[0]?.ts}:${i}` : `legacy:${entry.ts}:${i}`,
@@ -185,7 +246,12 @@ export function buildTranscriptView(
 			scrollEntries: grouped,
 		}
 	}
-	const items = presentTranscript(processed, options)
+	const all = presentTranscript(processed, options)
+	const rewinds = rewindTargets(all)
+	// The live tail group is the "Working" row, so it stays even while empty; any other empty group is dropped.
+	const items = all.filter(
+		(item, i) => !isRoutineResume(item) && (!isEmptyWorkGroup(item) || (!!options.running && i === all.length - 1)),
+	)
 	const entries: RenderEntry[] = items.map((item) => ({
 		mode: "presented" as const,
 		key: item.key,
@@ -207,5 +273,5 @@ export function buildTranscriptView(
 				return item.message
 		}
 	})
-	return { entries, scrollEntries }
+	return { entries, scrollEntries, rewinds }
 }

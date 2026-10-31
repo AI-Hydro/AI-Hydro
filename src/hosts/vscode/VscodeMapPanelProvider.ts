@@ -254,6 +254,8 @@ export class VscodeMapPanelProvider {
 
 	/** Pin bucket keys per workspace root. A lookup that fell back to `dir:` is retried, so a project that gets an id later is picked up. */
 	private static pinKeys = new Map<string, ProjectKey>()
+	/** Pin saves run through this chain, so they reach disk in the order they were sent. */
+	private static pinSaveQueue: Promise<void> = Promise.resolve()
 
 	/**
 	 * Which project's pins the map shows: the first workspace folder's project key (`prj_...` when the tools server knows
@@ -740,7 +742,20 @@ export class VscodeMapPanelProvider {
 		}
 	}
 
-	public static async createOrShow() {
+	/** True when a map tab exists in any editor group, including one this provider does not hold (restored by VS Code). */
+	public static hasMapTab(): boolean {
+		if (VscodeMapPanelProvider.currentPanel) {
+			return true
+		}
+		return vscode.window.tabGroups.all.some((group) =>
+			group.tabs.some(
+				(tab) => tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith("aihydroMapView"),
+			),
+		)
+	}
+
+	/** `preserveFocus` keeps the keyboard where it is (the chat), for opens the user did not ask for. */
+	public static async createOrShow(options: { preserveFocus?: boolean } = {}) {
 		if (!VscodeMapPanelProvider.context) {
 			console.warn("[VscodeMapPanelProvider] Not yet initialized — cannot open map panel")
 			return
@@ -750,20 +765,25 @@ export class VscodeMapPanelProvider {
 
 		// If we already have a panel, show it
 		if (VscodeMapPanelProvider.currentPanel) {
-			VscodeMapPanelProvider.currentPanel.reveal(column)
+			VscodeMapPanelProvider.currentPanel.reveal(column, options.preserveFocus)
 			return
 		}
 
 		// Otherwise, create a new panel
 		const workspaceRoots = vscode.workspace.workspaceFolders?.map((folder) => folder.uri) ?? []
-		const panel = vscode.window.createWebviewPanel("aihydroMapView", "AI-Hydro Map", column, {
-			enableScripts: true,
-			retainContextWhenHidden: true,
-			localResourceRoots: [
-				vscode.Uri.joinPath(VscodeMapPanelProvider.context.extensionUri, "webview-ui", "build"),
-				...workspaceRoots,
-			],
-		})
+		const panel = vscode.window.createWebviewPanel(
+			"aihydroMapView",
+			"AI-Hydro Map",
+			{ viewColumn: column, preserveFocus: options.preserveFocus },
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+				localResourceRoots: [
+					vscode.Uri.joinPath(VscodeMapPanelProvider.context.extensionUri, "webview-ui", "build"),
+					...workspaceRoots,
+				],
+			},
+		)
 
 		VscodeMapPanelProvider.currentPanel = panel
 
@@ -929,32 +949,41 @@ export class VscodeMapPanelProvider {
 						break
 					}
 					case "aihydro-map-save-annotations": {
-						try {
-							// The webview says which project it loaded. Write only there, and only while that key still
-							// belongs to the open folder; otherwise the folder changed under it, so it reloads instead.
-							const current = await VscodeMapPanelProvider.pinProjectKeys()
-							if (checkSaveTarget(message.projectKey, current) === "write") {
-								await savePinsForProject(
-									VscodeMapPanelProvider.context.globalState,
-									String(message.projectKey),
-									message.annotations,
-									message.collections,
-								)
-								// Tell the map what is now on disk, so it can let go of its own unsynced copies.
-								await postMessageToWebview({
-									type: "aihydro-map-save-ack",
-									projectKey: String(message.projectKey),
-									ids: (Array.isArray(message.annotations) ? message.annotations : [])
-										.map((a: { id?: unknown }) => a?.id)
-										.filter((id: unknown) => typeof id === "string"),
-								})
-							} else {
-								console.warn("[Map] Refused a pin save for a project that is not open; asking the map to reload")
-								await postMessageToWebview({ type: "aihydro-map-pins-reload" })
+						// One save at a time, in the order the webview sent them. Each save has a sequence number that the
+						// webview treats as "this and everything before it is on disk"; running them concurrently could let a
+						// slower, older write land last and make "Saved" untrue.
+						VscodeMapPanelProvider.pinSaveQueue = VscodeMapPanelProvider.pinSaveQueue.then(async () => {
+							try {
+								// The webview says which project it loaded. Write only there, and only while that key still
+								// belongs to the open folder; otherwise the folder changed under it, so it reloads instead.
+								const current = await VscodeMapPanelProvider.pinProjectKeys()
+								if (checkSaveTarget(message.projectKey, current) === "write") {
+									await savePinsForProject(
+										VscodeMapPanelProvider.context.globalState,
+										String(message.projectKey),
+										message.annotations,
+										message.collections,
+									)
+									// Tell the map what is now on disk, so it can let go of its own unsynced copies.
+									await postMessageToWebview({
+										type: "aihydro-map-save-ack",
+										projectKey: String(message.projectKey),
+										// Echoed so the pin card can tell that THIS save, not an earlier one, reached the host.
+										saveSeq: typeof message.saveSeq === "number" ? message.saveSeq : undefined,
+										ids: (Array.isArray(message.annotations) ? message.annotations : [])
+											.map((a: { id?: unknown }) => a?.id)
+											.filter((id: unknown) => typeof id === "string"),
+									})
+								} else {
+									console.warn(
+										"[Map] Refused a pin save for a project that is not open; asking the map to reload",
+									)
+									await postMessageToWebview({ type: "aihydro-map-pins-reload" })
+								}
+							} catch (err) {
+								console.error("[Map] Failed to persist pins to globalState:", err)
 							}
-						} catch (err) {
-							console.error("[Map] Failed to persist pins to globalState:", err)
-						}
+						})
 						break
 					}
 					case "aihydro-map-quarantine-pins": {

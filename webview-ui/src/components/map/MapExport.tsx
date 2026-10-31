@@ -6,10 +6,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { MapServiceClient } from "../../services/grpc-client"
 import { attributionList, resolveBaseMap } from "./basemaps"
-import { MAP_Z } from "./mapZ"
 import { rasterCache, rasterColorStops } from "./formats/rasterCache"
 import { exportLayerMetadata, freezeMapCanvas } from "./mapCapture"
 import { reportMapEvent } from "./mapSessionBridge"
+import { MAP_Z } from "./mapZ"
 
 type ExportTemplate =
 	| "manuscript"
@@ -2019,10 +2019,12 @@ export const MapExport: React.FC<MapExportProps> = ({
 	const dims = pagePixels(template, dpi)
 
 	const isDark = mapStyle === "dark"
-	const fg = isDark ? "var(--vscode-foreground, #ddd)" : "var(--vscode-foreground, #222)"
-	const bg = isDark ? "rgba(20,20,28,0.96)" : "rgba(248,248,250,0.97)"
-	const border = isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"
-	const subtle = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)"
+	// The composer sits in the dialog on the VS Code widget background, so its colours come from the theme, not from the
+	// map style: dark text on a hard-coded dark panel was unreadable in the light themes.
+	const fg = "var(--vscode-foreground)"
+	const bg = "var(--vscode-editorWidget-background, var(--vscode-editor-background))"
+	const border = "var(--vscode-editorWidget-border, rgba(128,128,128,0.4))"
+	const subtle = "color-mix(in srgb, var(--vscode-foreground) 7%, transparent)"
 	const accent = "var(--vscode-button-background, #0e639c)"
 
 	const toggleFormat = (format: ExportFormat) => {
@@ -2202,7 +2204,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 	const inputStyle: React.CSSProperties = {
 		width: "100%",
 		boxSizing: "border-box",
-		background: isDark ? "rgba(255,255,255,0.07)" : "#fff",
+		background: "var(--vscode-input-background)",
 		border: `1px solid ${border}`,
 		color: fg,
 		borderRadius: 4,
@@ -2213,6 +2215,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 
 	return (
 		<div
+			className="map-export"
 			style={{
 				padding: "10px 14px",
 				background: bg,
@@ -2254,10 +2257,10 @@ export const MapExport: React.FC<MapExportProps> = ({
 						fontWeight: 700,
 						color:
 							readiness.qualityStatus === "blocked"
-								? "#f87171"
+								? "var(--vscode-errorForeground, #f87171)"
 								: readiness.qualityStatus === "verified"
-									? "#7dd3fc"
-									: "#fbbf24",
+									? "var(--vscode-foreground)"
+									: "var(--vscode-editorWarning-foreground, #cca700)",
 					}}>
 					{readiness.qualityStatus === "blocked"
 						? "Research export blocked"
@@ -2270,12 +2273,14 @@ export const MapExport: React.FC<MapExportProps> = ({
 					capture-only, {readiness.unsupportedLayers.length} unsupported.
 				</div>
 				{readiness.blockingReasons.map((reason) => (
-					<div key={reason} style={{ color: "#f87171", marginTop: 4 }}>
+					<div key={reason} style={{ color: "var(--vscode-errorForeground, #f87171)", marginTop: 4 }}>
 						{reason}
 					</div>
 				))}
 				{readiness.warnings.slice(0, 3).map((warning) => (
-					<div key={`${warning.code}:${warning.message}`} style={{ color: "#fbbf24", marginTop: 4 }}>
+					<div
+						key={`${warning.code}:${warning.message}`}
+						style={{ color: "var(--vscode-editorWarning-foreground, #cca700)", marginTop: 4 }}>
 						{warning.message}
 					</div>
 				))}
@@ -2345,7 +2350,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 								style={{ width: "100%", height: "auto", display: "block" }}
 							/>
 						) : (
-							<div style={{ padding: 10, textAlign: "center", opacity: 0.74 }}>
+							<div style={{ padding: 10, textAlign: "center", opacity: 0.9 }}>
 								Click <strong>Refresh preview</strong> to generate the first preview. After that it updates
 								automatically when you change settings.
 							</div>
@@ -2355,7 +2360,10 @@ export const MapExport: React.FC<MapExportProps> = ({
 						<div
 							style={{
 								fontSize: 11,
-								color: previewStatus.kind === "err" ? "#f87171" : "var(--vscode-descriptionForeground, #999)",
+								color:
+									previewStatus.kind === "err"
+										? "var(--vscode-errorForeground, #f87171)"
+										: "var(--vscode-descriptionForeground, #999)",
 								marginBottom: 8,
 							}}>
 							{previewStatus.msg}
@@ -2455,8 +2463,8 @@ export const MapExport: React.FC<MapExportProps> = ({
 							</div>
 						)}
 						{savedTemplates.length === 0 ? (
-							<div style={{ fontSize: 11, opacity: 0.45, textAlign: "center" }}>
-								No templates yet. Configure layout settings then click ＋ Save current.
+							<div className="map-hint" style={{ textAlign: "center" }}>
+								No templates yet. Configure the layout, then choose Save current.
 							</div>
 						) : (
 							<div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -2652,8 +2660,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 												border: `1px solid ${border}`,
 												borderRadius: 3,
 												cursor: "pointer",
-												background:
-													textAlign[field] === a ? accent : isDark ? "rgba(255,255,255,0.07)" : "#fff",
+												background: textAlign[field] === a ? accent : "var(--vscode-input-background)",
 												color: textAlign[field] === a ? "#fff" : fg,
 											}}
 											title={`Align ${a}`}>
@@ -2698,7 +2705,7 @@ export const MapExport: React.FC<MapExportProps> = ({
 										border: `1px solid ${border}`,
 										borderRadius: 3,
 										cursor: "pointer",
-										background: textAlign.footer === a ? accent : isDark ? "rgba(255,255,255,0.07)" : "#fff",
+										background: textAlign.footer === a ? accent : "var(--vscode-input-background)",
 										color: textAlign.footer === a ? "#fff" : fg,
 									}}
 									title={`Footer align ${a}`}>

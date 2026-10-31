@@ -1,35 +1,26 @@
-import { workspaceResolver } from "@core/workspace"
 import { openFile as openFileIntegration } from "@integrations/misc/open-file"
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import { Empty, StringRequest } from "@shared/proto/cline/common"
-import { getWorkspacePath } from "@utils/path"
 import { Controller } from ".."
+import { chipRoots, resolveChipPath } from "./workspaceScope"
 
 /**
- * Opens a file in the editor by a relative path
- * @param controller The controller instance
- * @param request The request message containing the relative file path in the 'value' field
- * @returns Empty response
+ * Opens a file in the editor by a path from a chat chip: relative to any workspace root, or absolute inside a
+ * workspace root or a tool-output location. Anything else is refused (see `workspaceScope.ts`).
  */
 export async function openFileRelativePath(_controller: Controller, request: StringRequest): Promise<Empty> {
-	const workspacePath = await getWorkspacePath()
-
-	if (!workspacePath) {
+	const roots = await chipRoots()
+	if (roots.length === 0) {
 		console.error("Error in openFileRelativePath: No workspace path available")
 		return Empty.create()
 	}
-
 	if (request.value) {
-		// Resolve the relative path to absolute path
-		const resolvedPath = workspaceResolver.resolveWorkspacePath(
-			workspacePath,
-			request.value,
-			"Controller.openFileRelativePath",
-		)
-		const absolutePath = typeof resolvedPath === "string" ? resolvedPath : resolvedPath.absolutePath
-
-		// Open the file using the existing integration
+		const absolutePath = resolveChipPath(roots, aihydroHome(), request.value, false)
+		if (!absolutePath) {
+			console.error(`openFileRelativePath: refusing a path outside the workspace and tool outputs: ${request.value}`)
+			return Empty.create()
+		}
 		openFileIntegration(absolutePath)
 	}
-
 	return Empty.create()
 }

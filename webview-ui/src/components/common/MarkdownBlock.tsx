@@ -398,7 +398,9 @@ const PreWithCopyButton = ({ children, ...preProps }: React.HTMLAttributes<HTMLP
  */
 const remarkFilePathDetection = () => {
 	return async (tree: Node) => {
-		const fileNameRegex = /^(?!\/)[\w\-./]+(?<!\/)$/
+		// Relative or absolute (POSIX or Windows drive) path with a file extension; spaces allowed. Existence is checked
+		// by the host before a chip is shown, so a loose pattern costs only one lookup per candidate.
+		const fileNameRegex = /^(?!https?:)(?:[A-Za-z]:[\\/])?(?:[\w\-./\\ ()~]*[\w\-)])?\.[A-Za-z0-9]{1,8}$/
 		const _inlineCodeNodes: any[] = []
 		const filePathPromises: Promise<void>[] = []
 

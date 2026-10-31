@@ -198,3 +198,57 @@ describe("in-place underline", () => {
 		expect(container.querySelector('[data-testid="untraced-number"]')).toBeNull()
 	})
 })
+
+describe("run reference without #path (the owner's 0.4.4 answer)", () => {
+	const pathless = "[run:watershed.0b124654840f]"
+	const number = uncited("774.15", {
+		excerpt: `area 774.15 km² ${pathless}\n- streamflow`,
+		suggestedMarker: undefined,
+		fixHint: undefined,
+	})
+	const malformed: AnswerAuditViolation = {
+		kind: "malformed_marker",
+		severity: "hard",
+		excerpt: `area 774.15 km² ${pathless}`,
+		message: `'${pathless}' looks like a citation marker but does not match the grammar, so it binds nothing.`,
+	}
+
+	it("says the reference has no #path instead of 'not linked to a run'", () => {
+		expect(viewFinding(number).status).toContain("no #path")
+		expect(viewFinding(malformed).status).toContain("no #path")
+		// A number with no reference nearby is still "not linked".
+		expect(viewFinding(uncited("0.42", { excerpt: "runoff ratio 0.42 and more" })).status).toBe("Not linked to a run")
+	})
+
+	it("names the cause in the summary and still counts every hard finding", () => {
+		const view = auditSummaryView(
+			audit({ hardCount: 4, violations: [number, malformed, malformed, malformed], advisoryCount: 0 }),
+		)
+		expect(view?.tone).toBe("warn")
+		expect(view?.text).toContain("4 findings need review")
+		expect(view?.text).toContain("3 run references have no #path")
+	})
+
+	it("the untraced underline carries the same status", () => {
+		const plan = untracedPlan([number])
+		expect(plan.get("774.15")?.[0].status).toContain("no #path")
+	})
+})
+
+describe("pathless wording is about the reference the number binds to (nearest after it)", () => {
+	const pathless = "[run:watershed.0b124654840f]"
+	const valid = "[run:watershed.0b124654840f#key_outputs.area_km2]"
+	const num = (excerpt: string) => uncited("774.15", { excerpt, suggestedMarker: undefined, fixHint: undefined })
+
+	it("a valid reference between the number and a later pathless one keeps 'Not linked to a run'", () => {
+		expect(viewFinding(num(`area 774.15 km² ${valid} and the record ${pathless}`)).status).toBe("Not linked to a run")
+	})
+
+	it("a pathless reference BEFORE the number does not make the number's finding about it", () => {
+		expect(viewFinding(num(`from ${pathless} the area is 774.15 km² here`)).status).toBe("Not linked to a run")
+	})
+
+	it("the nearest following reference being pathless does", () => {
+		expect(viewFinding(num(`area 774.15 km² ${pathless} then ${valid}`)).status).toContain("no #path")
+	})
+})

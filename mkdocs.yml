@@ -172,6 +172,7 @@ nav:
     - Tool Discovery: guide/tool-discovery.md
     - AI-Hydro Studio: guide/html-preview.md
     - Skills: guide/skills.md
+    - Read-only Explorers: guide/subagents.md
     - Connectors: guide/connectors.md
     - Models & Providers: guide/providers.md
     - Sessions & Provenance: guide/sessions.md

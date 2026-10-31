@@ -337,18 +337,13 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			const wasEnabled = currentSettings ?? false
 			const isEnabled = !!request.subagentsEnabled
 
-			// Platform validation: Only allow enabling subagents on macOS
-			if (isEnabled && process.platform !== "darwin") {
-				throw new Error("CLI subagents are only supported on macOS platforms")
-			}
-
+			// The retired `aihydro` CLI subagent was macOS-only; in-process explorers have no platform dependency.
 			controller.stateManager.setGlobalState("subagentsEnabled", isEnabled)
 
 			// Capture telemetry when setting changes
 			if (wasEnabled !== isEnabled) {
 				telemetryService.captureSubagentToggle(isEnabled)
 			}
-			controller.stateManager.setGlobalState("subagentsEnabled", !!request.subagentsEnabled)
 		}
 
 		// Post updated state to webview

@@ -193,3 +193,27 @@ describe("StudyPicker (X0-2)", () => {
 		expect(pickerFocusFlag.get()).toBe(false)
 	})
 })
+
+describe("StudyChip layout (long ids)", () => {
+	const longId = "usgs_01031500_hydro_data_long_identifier"
+
+	it("keeps the full id in the tooltip and accessible name while the visible text may be cut", () => {
+		render(<StudyChipView binding={{ ...bound, studyId: longId, label: undefined }} {...handlers()} />)
+		const chip = screen.getByRole("button", { name: /Study for this chat/ })
+		expect(chip.getAttribute("title")).toContain(longId)
+		expect(chip.getAttribute("aria-label")).toContain(longId)
+		const idSpan = screen.getByText(longId)
+		// Truncates with an ellipsis inside the chip instead of overflowing a neighbouring chip.
+		expect(idSpan.className).toContain("text-ellipsis")
+		expect(idSpan.className).toContain("overflow-hidden")
+		expect(idSpan.className).toContain("max-w-full")
+		expect(chip.className).toContain("max-w-full")
+	})
+
+	it("truncates the same way when the host cannot switch studies (non-interactive chip)", () => {
+		const { container } = render(<StudyChipView binding={{ ...bound, studyId: longId, canChoose: false }} {...handlers()} />)
+		const chip = container.querySelector("#bound-study") as HTMLElement
+		expect(chip.getAttribute("title")).toContain(longId)
+		expect(chip.className).toContain("max-w-full")
+	})
+})

@@ -373,6 +373,43 @@ export const answerAuditHardUxTask: AiHydroMessage[] = auditUxTask(AUDIT_UX_ANSW
 	],
 }))
 
+/**
+ * Audit UX, the owner's 0.4.4 answer shape: every number sits beside a `[run:<id>]` reference that has no `#path`, so the
+ * auditor binds nothing (malformed_marker) and the numbers read as unlinked. The findings must say why.
+ */
+const PATHLESS = "[run:fx-run-0007]"
+const PATHLESS_ANSWER = `The synthetic basin has a drainage area of 123.45 km² ${PATHLESS} and a runoff ratio of 0.42 ${PATHLESS}. Fixture answer, not a result.`
+export const answerAuditPathlessUxTask: AiHydroMessage[] = auditUxTask(PATHLESS_ANSWER, (ts) => ({
+	v: 1,
+	stage: "final",
+	status: "violations",
+	sessionId: "fx-session-0001",
+	cited: 0,
+	total: 2,
+	hardCount: 4,
+	advisoryCount: 0,
+	schema: "graded",
+	attempt: 0,
+	answerTs: ts,
+	draftHash: FIXTURE_DRAFT_HASH,
+	violations: [
+		{ ...untracedFinding("123.45", `drainage area of 123.45 km² ${PATHLESS} and a runoff`, false), fixHint: undefined },
+		{ ...untracedFinding("0.42", `runoff ratio of 0.42 ${PATHLESS}. Fixture answer`, false), fixHint: undefined },
+		{
+			kind: "malformed_marker",
+			severity: "hard" as const,
+			excerpt: `123.45 km² ${PATHLESS} and a runoff`,
+			message: `'${PATHLESS}' looks like a citation marker but does not match the grammar, so it binds nothing.`,
+		},
+		{
+			kind: "malformed_marker",
+			severity: "hard" as const,
+			excerpt: `0.42 ${PATHLESS}. Fixture answer`,
+			message: `'${PATHLESS}' looks like a citation marker but does not match the grammar, so it binds nothing.`,
+		},
+	],
+}))
+
 /** Audit UX: advisory findings only (no hard finding, no action). */
 export const answerAuditAdvisoryUxTask: AiHydroMessage[] = auditUxTask(
 	"The synthetic basin is a layout fixture. Fixture answer, not a result.",
@@ -884,5 +921,138 @@ export const mapLaunchedFirstTurnTask: AiHydroMessage[] = (() => {
 		apiReq(c(), 0.0162),
 		text(c(), "I will check which selected segments are upstream of the outlet. Fixture prose only."),
 		completion(c(), "The answer would go here. Fixture answer, not a result."),
+	]
+})()
+
+// ── Subagents (SUB PR-2). Invented layout data; no model produced these. ────────────────────────────────────────
+
+const subagentChild = (over: Record<string, unknown>) => ({
+	profile: "explorer",
+	promptHead: "Fixture prompt",
+	toolCalls: 0,
+	tokensIn: 0,
+	tokensOut: 0,
+	cacheWrites: 0,
+	cacheReads: 0,
+	calls: [],
+	...over,
+})
+const subagentStatus = (ts: number, children: Record<string, unknown>[], done = false) =>
+	say(ts, "subagent_status", JSON.stringify({ profile: "explorer", done, children }))
+const subagentLaunch = {
+	profile: "explorer",
+	prompts: [
+		"Find where the fixture metric is defined and list its callers.",
+		"Summarise what the session already holds (fixture).",
+		"Read the fixture README and report its setup steps.",
+		"List the fixture scripts under scripts/.",
+	],
+	budget: { maxToolCalls: 30, wallClockMs: 600_000, maxOutputTokens: 40_000, contextStopFraction: 0.8, maxCostUsd: 2 },
+	model: "fixture-model",
+	limits: "No file writes, no commands, no network or browser tools, no questions to you, and no claims. It reads this workspace and calls read-only tools on the trusted AI-Hydro server.",
+}
+const subagentLaunchAsk = (ts: number, extra: Partial<AiHydroMessage> = {}) =>
+	ask(ts, "tool", toolJson({ tool: "spawnSubagents", subagents: subagentLaunch }), extra)
+
+/** Four explorers mid-run: one done, one running, one waiting for the user, one stopped early by its budget. */
+export const subagentsRunningTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	return [
+		task("Compare the three fixture scripts. Layout fixture."),
+		apiReq(c(), 0.0121),
+		subagentLaunchAsk(c(), { askOutcome: "approved" }),
+		subagentStatus(c(), [
+			subagentChild({
+				childId: "sa_fx1",
+				label: "Explorer 1",
+				promptHead: subagentLaunch.prompts[0],
+				status: "completed",
+				toolCalls: 6,
+				tokensIn: 8200,
+				tokensOut: 940,
+				cost: 0.0213,
+				recordPath: "subagents/sa_fx1.json",
+				calls: [
+					{ name: "search_files", approval: "auto", result: "ok" },
+					{ name: "read_file", approval: "auto", result: "ok" },
+				],
+			}),
+			subagentChild({
+				childId: "sa_fx2",
+				label: "Explorer 2",
+				promptHead: subagentLaunch.prompts[1],
+				status: "running",
+				lastTool: "get_session_summary",
+				toolCalls: 2,
+				tokensIn: 3100,
+				tokensOut: 210,
+			}),
+			subagentChild({
+				childId: "sa_fx3",
+				label: "Explorer 3",
+				promptHead: subagentLaunch.prompts[2],
+				status: "waiting",
+				toolCalls: 1,
+				tokensIn: 1500,
+				tokensOut: 90,
+			}),
+			subagentChild({
+				childId: "sa_fx4",
+				label: "Explorer 4",
+				promptHead: subagentLaunch.prompts[3],
+				status: "partial",
+				budgetStop: "tool_calls",
+				toolCalls: 30,
+				tokensIn: 41000,
+				tokensOut: 3800,
+				cost: 0.1342,
+			}),
+		]),
+	]
+})()
+
+/** A subagent's read approval pending at the tail: the chip names the explorer, and there is no Always. */
+export const subagentAskTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const origin = {
+		childId: "sa_fx3",
+		label: "Explorer 3",
+		profile: "explorer",
+		promptHead: subagentLaunch.prompts[2],
+	}
+	return [
+		task("Compare the three fixture scripts. Layout fixture."),
+		apiReq(c(), 0.0121),
+		subagentLaunchAsk(c(), { askOutcome: "approved" }),
+		subagentStatus(c(), [
+			subagentChild({
+				childId: "sa_fx1",
+				label: "Explorer 1",
+				status: "completed",
+				toolCalls: 4,
+				tokensIn: 5200,
+				tokensOut: 610,
+			}),
+			subagentChild({
+				childId: "sa_fx3",
+				label: "Explorer 3",
+				promptHead: subagentLaunch.prompts[2],
+				status: "waiting",
+				toolCalls: 1,
+				tokensIn: 1500,
+				tokensOut: 90,
+			}),
+		]),
+		ask(
+			c(),
+			"use_mcp_server",
+			toolJson({
+				serverName: "ai-hydro",
+				type: "use_mcp_tool",
+				toolName: "get_session_summary",
+				arguments: "{}",
+			}),
+			{ subagentOrigin: origin as AiHydroMessage["subagentOrigin"] },
+		),
 	]
 })()

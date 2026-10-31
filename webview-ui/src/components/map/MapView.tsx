@@ -71,6 +71,7 @@ import { meshTriangleCount } from "./inundation3d/meshCoordinates"
 import { hydrographFrameVisibilityUpdates } from "./inundation3d/syncHydrographFrame"
 import { terrainOffsetForManifest } from "./inundation3d/verticalAlignment"
 import { clusterGeoJSON, LayerClusterCache } from "./layerClusterCache"
+import { drawOrder } from "./layerModel"
 import { MapConnectionStatus } from "./MapConnectionStatus"
 import MapContextMenu from "./MapContextMenu"
 import { MapEmptyState, shouldShowEmptyState } from "./MapEmptyState"
@@ -79,7 +80,7 @@ import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
 import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext, mapLayerStudyHint } from "./mapAgentBridge"
-import { useMapChrome } from "./mapChrome"
+import { panelFamily, useMapChrome } from "./mapChrome"
 import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapHydroGuards"
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
 import { type CursorRasterReading, getLayerBounds, isGeoJsonLayer, sampleTopRasterAtPoint } from "./mapLayerAdapters"
@@ -95,6 +96,7 @@ import { MAP_Z } from "./mapZ"
 import PinCard from "./PinCard"
 import PinsPanel from "./PinsPanel"
 import { DASH_EXTENSION } from "./pathStyle"
+import { currentSaveToken, failOutstandingSaves, getPinSaveStatus, refusedSaveNotice, usePinSaveStatus } from "./pinSaveStatus"
 import {
 	ANNOTATIONS_LAYER_ID,
 	addPin,
@@ -865,7 +867,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			setActiveTool((current) => (open ? tool : current === tool ? null : current)),
 		[],
 	)
-	const chrome = useMapChrome(rootRef, activeTool !== null)
+	const chrome = useMapChrome(rootRef, activeTool !== null, panelFamily(activeTool))
+	const pinSaveStatus = usePinSaveStatus()
 	const searchOpen = activeTool === "search"
 	const exportOpen = activeTool === "export"
 	const setSearchOpen = useCallback((open: boolean) => setToolOpen("search", open), [setToolOpen])
@@ -913,7 +916,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	/** Put the cursor in the pin card's name field (a pin just placed, or "Rename pin"). */
 	const [pinFocusName, setPinFocusName] = useState(false)
 	const [pinToolArmed, setPinToolArmed] = useState(false)
-	const [pinToast, setPinToast] = useState<{ id: number; message: string; undoable: boolean } | null>(null)
+	const [pinToast, setPinToast] = useState<{ id: number; message: string; undoable: boolean; copy?: string } | null>(null)
+	/** What a refused save should say when the reload finishes (it names the pin, and carries the note to copy). */
+	const refusedToastRef = useRef<{ message: string; copy?: string } | null>(null)
 	const pinUndoStackRef = useRef(new PinHistory())
 	const lastPinPlacedAtRef = useRef(0)
 	/** What deck's click handler (memoised, so it would close over stale state) needs from the pin code. */
@@ -974,10 +979,14 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				saveAnnotations(merged, result.collections) // pins added before the reply
 			}
 			if (showToast) {
+				// One toast: the one that names the pin when a save was refused, else the generic reload notice.
+				const refused = refusedToastRef.current
+				refusedToastRef.current = null
 				setPinToast({
 					id: Date.now(),
-					message: "Map reloaded for the open folder; your last change was not saved",
+					message: refused?.message ?? "Map reloaded for the open folder; your last change was not saved",
 					undoable: false,
+					copy: refused?.copy,
 				})
 			}
 		})
@@ -988,11 +997,22 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		unmountedRef.current = false
 		loadPinsFromHost()
 		const onMessage = (event: MessageEvent) => {
-			const data = event.data as { type?: string; projectKey?: unknown; ids?: unknown } | undefined
+			const data = event.data as { type?: string; projectKey?: unknown; ids?: unknown; saveSeq?: unknown } | undefined
 			if (data?.type === "aihydro-map-pins-reload") {
+				// A refused save also asks for a reload: whatever was still waiting for an answer will not get one.
+				const pending = getPinSaveStatus()
+				const unanswered = pending.acked < pending.requested
+				const editedId = pinKeysRef.current.selected
+				const edited = annotationsRef.current.find((a) => a.id === editedId)
+				failOutstandingSaves()
+				if (unanswered) {
+					// Reloading replaces the list with the open project's pins, so the edit cannot be kept. Say which pin,
+					// and keep its note available to copy.
+					refusedToastRef.current = refusedSaveNotice(edited)
+				}
 				loadPinsFromHost(true)
 			} else if (data?.type === "aihydro-map-save-ack") {
-				acknowledgeSaved(data.projectKey, data.ids)
+				acknowledgeSaved(data.projectKey, data.ids, data.saveSeq)
 			}
 		}
 		window.addEventListener("message", onMessage)
@@ -2123,21 +2143,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		// rasterResourceRevision included so the reading refreshes after async colormap/preload updates
 	}, [cursorCoord, layers, visibleLayerIds, layerOrder, rasterResourceRevision])
 
-	// Sort layers by custom order for deck.gl (last = on top)
-	const sortedLayers = useMemo(() => {
-		if (layerOrder.length === 0) {
-			return layers
-		}
-		const byId = new Map(layers.map((l) => [l.id, l]))
-		const sorted = layerOrder.map((id) => byId.get(id)).filter(Boolean) as typeof layers
-		const inOrder = new Set(layerOrder)
-		for (const l of layers) {
-			if (!inOrder.has(l.id)) {
-				sorted.push(l)
-			}
-		}
-		return sorted
-	}, [layers, layerOrder])
+	// Sort layers by custom order for deck.gl (last = on top). The Layers panel shows the same order reversed.
+	const sortedLayers = useMemo(() => drawOrder(layers, layerOrder), [layers, layerOrder])
 
 	const handleMapClick = useCallback(
 		(info: any) => {
@@ -3826,6 +3833,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				{selectedPin && (
 					<PinCard
 						focusName={pinFocusName}
+						key={selectedPin.id}
 						mapStyle={mapStyle === "dark" ? "dark" : "light"}
 						onAsk={() => {
 							const [pinLon, pinLat] = pinCoords(selectedPin)
@@ -3841,13 +3849,21 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							const [pinLon, pinLat] = pinCoords(selectedPin)
 							void handleAgentDelineate({ lon: pinLon, lat: pinLat }, [])
 						}}
-						onNote={(notes) =>
-							applyPinEdit(patchPin(annotationsRef.current, selectedPin.id, { notes }), "Note saved")
-						}
-						onRename={(name) =>
-							applyPinEdit(patchPin(annotationsRef.current, selectedPin.id, { name }), "Pin renamed")
-						}
+						onRetry={() => {
+							saveAnnotations(annotationsRef.current)
+							return currentSaveToken()
+						}}
+						onSave={(patch) => {
+							const result = patchPin(annotationsRef.current, patch.id, patch)
+							if (!result.edit) {
+								return null
+							}
+							applyPinEdit(result, "Pin updated")
+							// saveAnnotations numbered the save (or marked it waiting for the project) synchronously.
+							return currentSaveToken()
+						}}
 						pin={selectedPin}
+						saveStatus={pinSaveStatus}
 					/>
 				)}
 
@@ -3886,13 +3902,30 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							gap: 10,
 							padding: "5px 6px 5px 12px",
 							background: "var(--vscode-editorWidget-background, #252526)",
-							color: "var(--vscode-editorWidget-foreground, #ccc)",
+							color: "var(--vscode-foreground, #ccc)",
 							border: "1px solid var(--vscode-editorWidget-border, #454545)",
 							borderRadius: 4,
 							fontSize: 12,
 							boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
 						}}>
 						<span>{pinToast.message}</span>
+						{pinToast.copy && (
+							<button
+								onClick={() => void navigator.clipboard?.writeText(pinToast.copy ?? "")}
+								style={{
+									minHeight: 24,
+									padding: "0 8px",
+									background: "transparent",
+									color: "var(--vscode-textLink-foreground, #3794ff)",
+									border: "1px solid var(--vscode-editorWidget-border, #454545)",
+									borderRadius: 3,
+									cursor: "pointer",
+									fontSize: 12,
+								}}
+								type="button">
+								Copy note
+							</button>
+						)}
 						{pinToast.undoable && (
 							<button
 								onClick={undoLastPinEdit}

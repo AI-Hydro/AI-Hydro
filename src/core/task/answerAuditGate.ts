@@ -71,6 +71,8 @@ export interface AnswerAuditGateState {
 	hidden?: HiddenDraft
 	/** Study id verified as bound to this chat by an earlier status call (refreshed on start_session). */
 	boundStudyId?: string
+	/** A first-party chat status ran in this task (a resumed task). Makes the gate eligible; never supplies a study id. */
+	bindingProbed?: boolean
 	/** A first-party start_session succeeded in this task: a study is (very likely) bound. */
 	sessionStarted: boolean
 	/** A graded audit outcome was observed in this task, so the server speaks the graded schema. */
@@ -101,6 +103,22 @@ export function resetGateCycle(state: AnswerAuditGateState): void {
 export function noteSessionStarted(state: AnswerAuditGateState): void {
 	state.boundStudyId = undefined
 	state.sessionStarted = true
+}
+
+/**
+ * A first-party `aihydro_chat_status` ran in this task, so the model has been told about the binding. It is NOT a
+ * study id: the call is model-invoked, so its output is not taken as host evidence of which study is bound. (Current tools
+ * servers refuse a differing `chat_id` with CHAT_ID_MISMATCH, so a spoof would not work there; this holds against any server.) The flag only makes a resumed task eligible; the audit then asks the server
+ * itself, with the host-issued chat id (`runFinalAnswerAudit` makes its own `aihydro_chat_status` call), and fails
+ * closed if no study is bound or the audited session differs.
+ */
+export function noteBindingProbed(state: AnswerAuditGateState): void {
+	state.bindingProbed = true
+}
+
+/** `aihydro_rebind_chat` ran: whatever study was cached may no longer be bound. */
+export function noteBindingChanged(state: AnswerAuditGateState): void {
+	state.boundStudyId = undefined
 }
 
 // ── Eligibility ───────────────────────────────────────────────────────────────────────────────────────────────────
@@ -159,7 +177,7 @@ export function computeGateEligibility(input: {
 	if (!input.state.gradedObserved && !auditToolAdvertisesGraded(server)) {
 		return { eligible: false, reason: "graded-schema-unknown" }
 	}
-	if (!input.state.boundStudyId && !input.state.sessionStarted) {
+	if (!input.state.boundStudyId && !input.state.sessionStarted && !input.state.bindingProbed) {
 		return { eligible: false, reason: "study-not-bound" }
 	}
 	return { eligible: true, serverName: server.name }

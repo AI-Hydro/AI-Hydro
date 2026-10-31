@@ -29,30 +29,6 @@ interface MessagesAreaProps {
 	isRunning: boolean
 }
 
-/** The checkpoint a "Rewind" on a user turn points at: the first one taken after it, before the next user turn. */
-function rewindTargets(view: TranscriptView): Map<number, number> {
-	const out = new Map<number, number>()
-	view.entries.forEach((entry, i) => {
-		if (entry.mode !== "presented" || entry.item.kind !== "user") {
-			return
-		}
-		for (let j = i + 1; j < view.entries.length; j++) {
-			const next = view.entries[j]
-			if (next.mode !== "presented" || next.item.kind === "user") {
-				break
-			}
-			if (next.item.kind === "group") {
-				const checkpoint = next.item.members.find((m) => m.say === "checkpoint_created")
-				if (checkpoint) {
-					out.set(i, checkpoint.ts)
-					return
-				}
-			}
-		}
-	})
-	return out
-}
-
 /**
  * The scrollable messages area with virtualized list
  * Handles rendering of chat rows and browser sessions
@@ -111,7 +87,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		],
 	)
 
-	const rewinds = useMemo(() => rewindTargets(view), [view])
+	const rewinds = view.rewinds
 	const ctx: TranscriptRenderContext = useMemo(
 		() => ({
 			allMessages: modifiedMessages,
@@ -151,7 +127,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 					ctx={ctx}
 					index={index}
 					item={entry.item}
-					rewindTs={rewinds.get(index)}
+					rewindTs={rewinds.get(entry.key)}
 				/>
 			),
 		[legacyContent, ctx, view.entries.length, rewinds],
@@ -194,7 +170,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 			const call = describeCall(last, [])
 			approvalAnnounced.current = {
 				ts: last.ts,
-				text: `Waiting for your approval: ${call.name}${call.target ? ` ${call.target}` : ""}`,
+				text: `${last.subagentOrigin ? `${last.subagentOrigin.label} (read-only) is waiting for your approval` : "Waiting for your approval"}: ${call.name}${call.target ? ` ${call.target}` : ""}`,
 			}
 		}
 		return approvalAnnounced.current.text

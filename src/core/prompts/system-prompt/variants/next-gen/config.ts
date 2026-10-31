@@ -47,6 +47,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		AiHydroDefaultTool.NEW_TASK,
 		AiHydroDefaultTool.PLAN_MODE,
 		AiHydroDefaultTool.MCP_DOCS,
+		AiHydroDefaultTool.SPAWN_SUBAGENTS,
 		AiHydroDefaultTool.TODO,
 	)
 	.placeholders({

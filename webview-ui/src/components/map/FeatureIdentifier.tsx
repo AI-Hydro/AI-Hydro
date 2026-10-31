@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react"
 import type { CursorRasterReading } from "./mapLayerAdapters"
+import { MAP_Z } from "./mapZ"
 import { PhotoStrip } from "./PhotoStrip"
 import { extractPhotoPaths } from "./photoPaths"
-import { MAP_Z } from "./mapZ"
 
 export interface ClickedFeature {
 	layerId: string
@@ -158,8 +158,8 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 		`${Math.abs(inspectPoint.lat).toFixed(5)}°${inspectPoint.lat >= 0 ? "N" : "S"}, ${Math.abs(inspectPoint.lon).toFixed(5)}°${inspectPoint.lon >= 0 ? "E" : "W"}`
 
 	const btnStyle: React.CSSProperties = {
-		width: 22,
-		height: 22,
+		width: 24,
+		height: 24,
 		padding: 0,
 		border: `1px solid ${bdClr}`,
 		background: "transparent",
@@ -175,8 +175,9 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 
 	const primaryBtn: React.CSSProperties = {
 		width: "100%",
-		padding: "5px 8px",
-		fontSize: 10,
+		minHeight: 24,
+		padding: "4px 8px",
+		fontSize: 11,
 		fontWeight: 600,
 		cursor: agentStarting ? "wait" : "pointer",
 		border: `1px solid ${bdClr}`,
@@ -210,7 +211,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 				zIndex: MAP_Z.panel,
 				width: "max-content",
 				minWidth: 200,
-				maxWidth: 260,
+				maxWidth: 280,
 				maxHeight: 360,
 				display: "flex",
 				flexDirection: "column",
@@ -253,7 +254,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 					{coordLine && (
 						<div
 							style={{
-								fontSize: 9,
+								fontSize: 11,
 								color: muted,
 								fontFamily: "var(--vscode-editor-font-family, monospace)",
 								marginTop: 2,
@@ -272,10 +273,10 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 								borderRadius: 3,
 								background: badge.bg,
 								color: badge.fg,
-								fontSize: 8,
+								fontSize: 11,
 								fontWeight: 700,
 								letterSpacing: 0,
-								textTransform: "uppercase",
+								textTransform: "none",
 							}}
 							title={badge.title}>
 							{badge.label}
@@ -285,21 +286,23 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 				{hasFeatures && features.length > 1 && (
 					<div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
 						<button
+							aria-label="Previous feature"
 							onClick={() => setCurrentIndex((i) => (i === 0 ? features.length - 1 : i - 1))}
 							style={btnStyle}
 							title="Previous feature"
 							type="button">
-							‹
+							<span aria-hidden="true" className="codicon codicon-chevron-left" />
 						</button>
-						<span style={{ fontSize: 9, color: muted, minWidth: 28, textAlign: "center" }}>
+						<span style={{ fontSize: 11, color: muted, minWidth: 28, textAlign: "center" }}>
 							{currentIndex + 1}/{features.length}
 						</span>
 						<button
+							aria-label="Next feature"
 							onClick={() => setCurrentIndex((i) => (i === features.length - 1 ? 0 : i + 1))}
 							style={btnStyle}
 							title="Next feature"
 							type="button">
-							›
+							<span aria-hidden="true" className="codicon codicon-chevron-right" />
 						</button>
 					</div>
 				)}
@@ -309,14 +312,14 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 					style={{ ...btnStyle, flexShrink: 0, opacity: 0.85 }}
 					title="Close"
 					type="button">
-					✕
+					<span aria-hidden="true" className="codicon codicon-close" />
 				</button>
 			</div>
 
 			{(rasterReading || entries.length > 0 || (!hasFeatures && !rasterReading) || showActions) && (
 				<div style={{ padding: "6px 8px", overflowY: "auto", flex: 1, minHeight: 0 }}>
 					{rasterReading && (
-						<div style={{ marginBottom: entries.length > 0 ? 6 : 0, fontSize: 10 }}>
+						<div style={{ marginBottom: entries.length > 0 ? 6 : 0, fontSize: 11 }}>
 							<span style={{ color: muted }}>{rasterReading.layerName}: </span>
 							<span style={{ color: accentText, fontFamily: "monospace" }}>
 								{Number.isFinite(rasterReading.value) ? rasterReading.value.toPrecision(4) : "—"}
@@ -325,7 +328,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 						</div>
 					)}
 					{!hasFeatures && !rasterReading && (
-						<div style={{ fontSize: 10, color: muted, fontStyle: "italic" }}>No features at this point.</div>
+						<div style={{ fontSize: 11, color: muted, fontStyle: "italic" }}>No features at this point.</div>
 					)}
 					{entries.map(([key, value]) => (
 						<div
@@ -335,7 +338,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 								gridTemplateColumns: "72px 1fr",
 								gap: "2px 8px",
 								marginBottom: 3,
-								fontSize: 10,
+								fontSize: 11,
 								alignItems: "start",
 							}}>
 							<span style={{ color: muted, overflow: "hidden", textOverflow: "ellipsis" }} title={key}>
@@ -352,10 +355,10 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 							</span>
 						</div>
 					))}
-					{extra > 0 && <div style={{ fontSize: 9, color: muted, fontStyle: "italic" }}>+{extra} more</div>}
+					{extra > 0 && <div style={{ fontSize: 11, color: muted, fontStyle: "italic" }}>+{extra} more</div>}
 					{photoPaths.length > 0 && (
 						<div style={{ marginTop: 8 }}>
-							<div style={{ fontSize: 9, color: muted, marginBottom: 4 }}>
+							<div style={{ fontSize: 11, color: muted, marginBottom: 4 }}>
 								{photoPaths.length} site photo{photoPaths.length > 1 ? "s" : ""}
 							</div>
 							<PhotoStrip paths={photoPaths} />
@@ -391,7 +394,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 										style={{
 											...secondaryBtn,
 											marginTop: 0,
-											fontSize: 9,
+											fontSize: 11,
 											padding: "3px 6px",
 											textDecoration: delineating ? "none" : "underline",
 											border: "none",
@@ -400,7 +403,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 										type="button">
 										{delineating ? "Delineating…" : "Quick delineate"}
 									</button>
-									<div style={{ marginTop: 4, fontSize: 8, color: muted, lineHeight: 1.35 }}>
+									<div style={{ marginTop: 4, fontSize: 11, color: muted, lineHeight: 1.35 }}>
 										{delineating
 											? "Delineating… (this may take several minutes)"
 											: "Interactive MERIT routing for small and medium basins. Large basins need Delineate with agent for hybrid routing."}
@@ -420,7 +423,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 									{onAddSelection && (
 										<button
 											onClick={() => onAddSelection(currentSelection)}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 9, padding: "4px 6px" }}
+											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
 											title="Add this feature to the multi-selection set. Shift-click features on the map to add/remove quickly."
 											type="button">
 											Select
@@ -429,7 +432,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 									{onSaveFeatures && (
 										<button
 											onClick={() => void onSaveFeatures(currentSelection, "geojson")}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 9, padding: "4px 6px" }}
+											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
 											title="Save this feature to workspace vectors/ as GeoJSON"
 											type="button">
 											GeoJSON
@@ -438,13 +441,13 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 									{onSaveFeatures && (
 										<button
 											onClick={() => void onSaveFeatures(currentSelection, "shapefile")}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 9, padding: "4px 6px" }}
+											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
 											title="Save this feature to workspace vectors/ as a zipped shapefile"
 											type="button">
 											SHP
 										</button>
 									)}
-									<div style={{ fontSize: 8, color: muted, lineHeight: 1.3, alignSelf: "center" }}>
+									<div style={{ fontSize: 11, color: muted, lineHeight: 1.3, alignSelf: "center" }}>
 										Shift-click map features to build a set.
 									</div>
 								</div>
@@ -464,31 +467,32 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 											alignItems: "center",
 											gap: 6,
 											marginBottom: 5,
-											fontSize: 9,
+											fontSize: 11,
 											color: muted,
 										}}>
 										<span style={{ flex: 1 }}>{selectedCount} selected</span>
 										{onClearSelection && (
 											<button
+												aria-label="Clear selected features"
 												onClick={onClearSelection}
-												style={{ ...btnStyle, width: 18, height: 18, fontSize: 9 }}
+												style={btnStyle}
 												title="Clear selected features"
 												type="button">
-												✕
+												<span aria-hidden="true" className="codicon codicon-close" />
 											</button>
 										)}
 									</div>
 									<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
 										<button
 											onClick={() => void onSaveFeatures(selectedFeatures, "geojson")}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 9, padding: "4px 6px" }}
+											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
 											title="Save selected features as GeoJSON"
 											type="button">
 											Save GeoJSON
 										</button>
 										<button
 											onClick={() => void onSaveFeatures(selectedFeatures, "shapefile")}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 9, padding: "4px 6px" }}
+											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
 											title="Save selected features as a zipped shapefile"
 											type="button">
 											Save SHP
@@ -497,7 +501,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 								</div>
 							)}
 							{(agentStatus || delineateStatus) && (
-								<div style={{ marginTop: 6, fontSize: 9, color: muted, lineHeight: 1.35 }}>
+								<div style={{ marginTop: 6, fontSize: 11, color: muted, lineHeight: 1.35 }}>
 									{agentStatus || delineateStatus}
 								</div>
 							)}

@@ -2882,3 +2882,673 @@ vscode-dropdown::part(listbox) {
 		scroll-behavior: auto !important;
 	}
 }
+
+/* Shared panel resize handles (PanelResizer.tsx). Thin hit areas on the panel's edges; a line shows on hover, focus and drag. */
+.map-panel-resizer {
+	position: absolute;
+	touch-action: none;
+	background: transparent;
+}
+.map-panel-resizer--w,
+.map-panel-resizer--e {
+	top: 0;
+	bottom: 0;
+	width: 6px;
+}
+.map-panel-resizer--n,
+.map-panel-resizer--s {
+	left: 0;
+	right: 0;
+	height: 6px;
+}
+.map-panel-resizer--w {
+	left: 0;
+}
+.map-panel-resizer--e {
+	right: 0;
+}
+.map-panel-resizer--n {
+	top: 0;
+}
+.map-panel-resizer--s {
+	bottom: 0;
+}
+.map-panel-resizer--ne,
+.map-panel-resizer--nw,
+.map-panel-resizer--se,
+.map-panel-resizer--sw {
+	width: 12px;
+	height: 12px;
+}
+.map-panel-resizer--ne {
+	top: 0;
+	right: 0;
+}
+.map-panel-resizer--nw {
+	top: 0;
+	left: 0;
+}
+.map-panel-resizer--se {
+	bottom: 0;
+	right: 0;
+}
+.map-panel-resizer--sw {
+	bottom: 0;
+	left: 0;
+}
+.map-panel-resizer--w:hover,
+.map-panel-resizer--w:focus-visible,
+.map-panel-resizer--w[data-dragging] {
+	box-shadow: inset 2px 0 0 var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+	outline: none;
+}
+.map-panel-resizer--e:hover,
+.map-panel-resizer--e[data-dragging] {
+	box-shadow: inset -2px 0 0 var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+}
+.map-panel-resizer--n:hover,
+.map-panel-resizer--n[data-dragging] {
+	box-shadow: inset 0 2px 0 var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+}
+.map-panel-resizer--s:hover,
+.map-panel-resizer--s:focus-visible,
+.map-panel-resizer--s[data-dragging] {
+	box-shadow: inset 0 -2px 0 var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+	outline: none;
+}
+.map-panel-resizer--ne:hover,
+.map-panel-resizer--nw:hover,
+.map-panel-resizer--se:hover,
+.map-panel-resizer--sw:hover {
+	background: color-mix(in srgb, var(--vscode-sash-hoverBorder, var(--vscode-focusBorder)) 35%, transparent);
+}
+@media (forced-colors: active) {
+	.map-panel-resizer--w:hover,
+	.map-panel-resizer--s:hover {
+		box-shadow: none;
+		background: Highlight;
+	}
+}
+
+/* ── Layers panel (LayerPanel.tsx, LayerRow.tsx) and the shared overflow menu (OverflowMenu.tsx) ── */
+.map-overflow-trigger {
+	min-width: 24px;
+	min-height: 24px;
+	padding: 0 4px;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	font-family: inherit;
+	font-size: var(--aih-text-label, 12px);
+	flex: none;
+}
+.map-overflow-trigger:hover,
+.map-overflow-trigger[aria-expanded="true"] {
+	background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+}
+.map-overflow-trigger:focus-visible,
+.map-layer-eye:focus-visible,
+.map-layer-name:focus-visible,
+.map-layer-flag:focus-visible,
+.map-chip:focus-visible,
+.map-layer-group__head:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+.map-overflow-trigger--text {
+	padding: 0 8px;
+	border: 1px solid var(--vscode-button-border, var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.5)));
+	background: var(--vscode-button-secondaryBackground, transparent);
+	color: var(--vscode-button-secondaryForeground, inherit);
+}
+.map-overflow-spacer {
+	display: inline-block;
+	width: 16px;
+	flex: none;
+}
+.map-chrome-menu__item--danger {
+	color: var(--vscode-errorForeground, #f48771);
+}
+
+.map-layers {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	color: var(--vscode-foreground);
+	font-family: var(--vscode-font-family, system-ui, sans-serif);
+	font-size: var(--aih-text-label, 12px);
+	position: relative;
+}
+.map-layers__toolbar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35));
+}
+.map-layers__summary {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--vscode-descriptionForeground);
+}
+.map-layers__status {
+	padding: 4px 8px;
+	font-size: var(--aih-text-caption, 11px);
+	color: var(--vscode-descriptionForeground);
+}
+.map-layers__status--err {
+	color: var(--vscode-errorForeground, #f48771);
+}
+.map-layers__list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 4px 6px 8px;
+}
+.map-layers__empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 24px 12px;
+	text-align: center;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+}
+.map-layers__empty .codicon {
+	font-size: 28px;
+}
+.map-layers__empty strong {
+	color: var(--vscode-foreground);
+}
+.map-layers__undo,
+.map-layers__confirm,
+.map-layers__foot {
+	/* Pinned to the bottom of the panel's scroll area, so Undo and the confirmation are never below the fold. */
+	position: sticky;
+	bottom: 0;
+	z-index: var(--map-z-local, 1);
+	background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 6px 8px;
+	border-top: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35));
+	box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.18);
+}
+.map-layers__undo > span,
+.map-layers__confirm > span,
+.map-layers__foot > span {
+	flex: 1;
+	min-width: 120px;
+}
+
+.map-layer-group {
+	margin-bottom: 4px;
+}
+.map-layer-group__head {
+	width: 100%;
+	min-height: 24px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 4px;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--vscode-foreground);
+	font-family: inherit;
+	font-size: var(--aih-text-label, 12px);
+	font-weight: 600;
+	text-align: left;
+	cursor: pointer;
+}
+.map-layer-group__head:hover {
+	background: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+}
+.map-layer-group__title {
+	flex: 1;
+}
+.map-layer-group__count {
+	font-weight: 400;
+	color: var(--vscode-descriptionForeground);
+}
+.map-layer-group__note {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	margin: 2px 4px 4px;
+	padding: 0;
+	font-size: var(--aih-text-caption, 11px);
+	line-height: 1.4;
+	color: var(--vscode-descriptionForeground);
+}
+.map-layer-group__note .codicon {
+	font-size: 14px;
+	flex: none;
+	margin-top: 1px;
+}
+.map-layer-group__note--action {
+	align-items: center;
+	flex-wrap: wrap;
+}
+.map-layer-group__note--action > span:nth-child(2) {
+	flex: 1;
+	min-width: 120px;
+}
+.map-layer-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.map-layer-row {
+	position: relative;
+	border-radius: 4px;
+}
+.map-layer-row[data-selected] {
+	background: color-mix(in srgb, var(--vscode-foreground) 7%, transparent);
+	box-shadow: inset 2px 0 0 var(--vscode-focusBorder);
+}
+.map-layer-row[data-dragging] {
+	opacity: 0.45;
+}
+.map-layer-row[data-drop="above"]::before,
+.map-layer-row[data-drop="below"]::after {
+	content: "";
+	position: absolute;
+	left: 4px;
+	right: 4px;
+	height: 2px;
+	background: var(--vscode-focusBorder);
+	border-radius: 1px;
+}
+.map-layer-row[data-drop="above"]::before {
+	top: -1px;
+}
+.map-layer-row[data-drop="below"]::after {
+	bottom: -1px;
+}
+.map-layer-row__line {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 28px;
+	padding: 2px 2px 2px 0;
+}
+.map-layer-row__line:hover {
+	background: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
+	border-radius: 4px;
+}
+.map-layer-grip {
+	flex: none;
+	width: 10px;
+	font-size: 14px;
+	cursor: grab;
+	color: var(--vscode-descriptionForeground);
+	opacity: 0.7;
+}
+.map-layer-eye {
+	flex: none;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.map-layer-eye[aria-pressed="false"] {
+	color: var(--vscode-descriptionForeground);
+}
+.map-layer-eye:hover {
+	background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+}
+.map-layer-swatch {
+	flex: none;
+	border: 1px solid color-mix(in srgb, var(--vscode-foreground) 45%, transparent);
+	box-sizing: border-box;
+}
+.map-layer-swatch--area {
+	width: 14px;
+	height: 14px;
+	border-radius: 2px;
+}
+.map-layer-swatch--line {
+	width: 16px;
+	height: 4px;
+	border-radius: 2px;
+}
+.map-layer-swatch--point {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+}
+.map-layer-swatch--ramp {
+	width: 28px;
+	height: 10px;
+	border-radius: 2px;
+}
+.map-layer-name {
+	flex: 1;
+	min-width: 0;
+	min-height: 24px;
+	padding: 0 4px;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	font-family: inherit;
+	font-size: var(--aih-text-label, 12px);
+	font-weight: 500;
+	text-align: left;
+	line-height: 1.3;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+}
+.map-layer-name > span {
+	overflow-wrap: anywhere;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.map-layer-row[data-selected] .map-layer-name > span {
+	-webkit-line-clamp: unset;
+	display: block;
+}
+.map-layer-row[data-hidden] .map-layer-name {
+	color: var(--vscode-descriptionForeground);
+}
+.map-layer-rename {
+	flex: 1;
+	min-width: 0;
+	min-height: 24px;
+	box-sizing: border-box;
+	padding: 1px 4px;
+	font-size: var(--aih-text-label, 12px);
+	border: 1px solid var(--vscode-focusBorder);
+	border-radius: 2px;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground, inherit);
+}
+.map-layer-flag {
+	flex: none;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--vscode-descriptionForeground);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.map-layer-flag:hover {
+	background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+}
+.map-layer-flag--warn {
+	color: var(--vscode-editorWarning-foreground, #cca700);
+}
+.map-layer-flag--static {
+	cursor: default;
+}
+.map-layer-drawer {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 2px 8px 8px 38px;
+}
+.map-layer-opacity {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--vscode-descriptionForeground);
+}
+.map-layer-opacity input[type="range"] {
+	flex: 1;
+	min-width: 0;
+	height: 24px;
+	margin: 0;
+	accent-color: var(--vscode-button-background);
+	cursor: pointer;
+}
+.map-layer-opacity output {
+	min-width: 32px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+.map-layer-hint {
+	font-size: var(--aih-text-caption, 11px);
+	color: var(--vscode-descriptionForeground);
+}
+.map-layer-drawer__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+.map-chip {
+	min-height: 24px;
+	padding: 0 8px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	border: 1px solid var(--vscode-button-border, var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.5)));
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	font-family: inherit;
+	font-size: var(--aih-text-caption, 11px);
+	cursor: pointer;
+}
+.map-chip:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+}
+.map-chip[aria-pressed="true"] {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border-color: transparent;
+}
+.map-chip:disabled {
+	cursor: default;
+	opacity: 0.6;
+}
+.map-chip--danger {
+	color: var(--vscode-errorForeground, #f48771);
+	border-color: currentColor;
+}
+.map-layer-segment {
+	display: flex;
+	gap: 4px;
+}
+.map-layer-segment button {
+	flex: 1;
+	min-height: 24px;
+	border: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.5));
+	border-radius: 3px;
+	background: transparent;
+	color: inherit;
+	font-family: inherit;
+	font-size: var(--aih-text-caption, 11px);
+	cursor: pointer;
+}
+.map-layer-segment button[aria-pressed="true"] {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border-color: transparent;
+}
+
+/* ── Shared map panel pieces (Search, Draw, Measure, Reference): one header, field, button and row style ── */
+.map-chip--primary {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border-color: transparent;
+}
+.map-chip--primary:hover:not(:disabled) {
+	background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+.map-section {
+	margin-top: 8px;
+}
+.map-section--ruled {
+	padding-top: 8px;
+	border-top: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35));
+}
+.map-section-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 24px;
+	margin-bottom: 4px;
+}
+.map-section-label {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: var(--aih-text-label, 12px);
+	font-weight: 600;
+}
+.map-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 4px;
+}
+.map-field {
+	flex: 1;
+	min-width: 0;
+	min-height: 24px;
+	box-sizing: border-box;
+	padding: 2px 6px;
+	font-family: inherit;
+	font-size: var(--aih-text-label, 12px);
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground, var(--vscode-foreground));
+	border: 1px solid var(--vscode-input-border, rgba(128, 128, 128, 0.4));
+	border-radius: 3px;
+}
+.map-field:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+.map-field[aria-invalid="true"] {
+	border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+}
+.map-hint {
+	font-size: var(--aih-text-caption, 11px);
+	line-height: 1.4;
+	color: var(--vscode-descriptionForeground);
+}
+.map-hint--error {
+	color: var(--vscode-errorForeground, #f48771);
+}
+.map-plainlist {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.map-listrow {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 28px;
+	padding: 0 2px 0 6px;
+	border-radius: 4px;
+}
+.map-listrow:hover {
+	background: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+}
+.map-listrow__main {
+	flex: 1;
+	min-width: 0;
+	min-height: 24px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font-family: inherit;
+	font-size: var(--aih-text-label, 12px);
+	text-align: left;
+	cursor: pointer;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.map-listrow__main:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+.map-chip--block {
+	width: 100%;
+	min-height: 28px;
+	justify-content: flex-start;
+	padding: 0 10px;
+	font-size: var(--aih-text-label, 12px);
+	margin-bottom: 4px;
+}
+.map-chip-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 4px;
+}
+.map-chip-grid .map-chip--block {
+	margin-bottom: 0;
+	justify-content: center;
+	padding: 0 4px;
+}
+.map-layer-group__warn {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--vscode-editorWarning-foreground, #cca700);
+	font-weight: 400;
+}
+
+/* Export: its controls are styled inline all over; one rule brings every target to 24 px. */
+.map-export button,
+.map-export select,
+.map-export input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+	min-height: 24px;
+	min-width: 24px;
+	box-sizing: border-box;
+}
+.map-export input[type="checkbox"],
+.map-export input[type="radio"] {
+	width: 24px;
+	height: 24px;
+	margin: 0;
+}
+.map-export input[type="range"] {
+	min-height: 24px;
+}
+
+/* Sketch tracker cards: many inline-styled controls; one rule brings every target to 24 px. */
+.map-tracker button,
+.map-tracker select,
+.map-tracker input:not([type="checkbox"]):not([type="radio"]) {
+	min-height: 24px;
+	min-width: 24px;
+	box-sizing: border-box;
+}

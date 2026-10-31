@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import React, { useRef } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { MapToolRibbon } from "../MapToolRibbon"
-import { useMapChrome } from "../mapChrome"
+import { panelFamily, useMapChrome } from "../mapChrome"
 
 const props: any = {
 	layerCount: 2,
@@ -25,7 +25,7 @@ const props: any = {
 /** MapView owns the chrome controller; here a tiny host does, measuring the window (jsdom has no layout). */
 const Host: React.FC<any> = (hostProps) => {
 	const ref = useRef<HTMLDivElement>(null)
-	const chrome = useMapChrome(ref, hostProps.activeTool != null)
+	const chrome = useMapChrome(ref, hostProps.activeTool != null, panelFamily(hostProps.activeTool ?? null))
 	return (
 		<div ref={ref}>
 			<MapToolRibbon {...props} {...hostProps} chrome={chrome} />
@@ -290,12 +290,15 @@ describe("MapToolRibbon chrome states", () => {
 	it("the bottom sheet has a keyboard-operable resize handle", () => {
 		setWidth(400)
 		render(<Host activeTool="search" searchPanel={<div>s</div>} />)
-		const handle = screen.getByRole("separator", { name: "Resize sheet" })
+		const handle = screen.getByRole("separator", { name: "Resize search panel height" })
 		expect(handle).toHaveAttribute("aria-valuenow", "55")
 		fireEvent.keyDown(handle, { key: "ArrowUp" })
 		expect(handle).toHaveAttribute("aria-valuenow", "60")
-		fireEvent.keyDown(handle, { key: "End" })
+		// Home goes to the smallest size, End to the largest (the separator pattern).
+		fireEvent.keyDown(handle, { key: "Home" })
 		expect(handle).toHaveAttribute("aria-valuenow", "30")
+		fireEvent.keyDown(handle, { key: "End" })
+		expect(handle).toHaveAttribute("aria-valuenow", "85")
 	})
 })
 
@@ -392,5 +395,63 @@ describe("MapToolRibbon basemap panel", () => {
 		const panel = document.querySelector(".map-ribbon-panel") as HTMLElement
 		expect(panel.textContent).not.toMatch(/Mapbox|Stadia/)
 		expect(panel.textContent).toContain("Hydrology default (muted)")
+	})
+})
+
+describe("MapToolRibbon panel resize", () => {
+	const widthHandle = (name: string) => screen.getByRole("separator", { name: `Resize ${name} panel width` })
+
+	it("a docked panel resizes from the keyboard, remembers the width per panel, and Home / End go to the limits", () => {
+		setWidth(1280)
+		const first = render(<Host activeTool="search" searchPanel={<div>s</div>} />)
+		expect(widthHandle("search")).toHaveAttribute("aria-valuenow", "300")
+		fireEvent.keyDown(widthHandle("search"), { key: "ArrowLeft" })
+		expect(widthHandle("search")).toHaveAttribute("aria-valuenow", "316")
+		fireEvent.keyDown(widthHandle("search"), { key: "ArrowLeft", shiftKey: true })
+		expect(widthHandle("search")).toHaveAttribute("aria-valuenow", "380")
+		// The panel element follows, and so does the canvas inset (rail 40 + panel).
+		expect((document.querySelector('[data-map-panel="search"]') as HTMLElement).style.width).toBe("380px")
+		first.unmount()
+
+		// Remembered across a reload, for that panel only.
+		render(<Host activeTool="search" searchPanel={<div>s</div>} />)
+		expect(widthHandle("search")).toHaveAttribute("aria-valuenow", "380")
+		cleanup()
+		render(<Host activeTool="annotations" annotationsPanel={<div>a</div>} />)
+		expect(widthHandle("pins")).toHaveAttribute("aria-valuenow", "300")
+		fireEvent.keyDown(widthHandle("pins"), { key: "End" })
+		expect(Number(widthHandle("pins").getAttribute("aria-valuenow"))).toBeGreaterThan(500)
+		fireEvent.keyDown(widthHandle("pins"), { key: "Home" })
+		expect(widthHandle("pins")).toHaveAttribute("aria-valuenow", "260")
+	})
+
+	it("double-click on the handle restores the default width", () => {
+		setWidth(1280)
+		render(<Host activeTool="search" searchPanel={<div>s</div>} />)
+		fireEvent.keyDown(widthHandle("search"), { key: "ArrowLeft", shiftKey: true })
+		expect(widthHandle("search")).toHaveAttribute("aria-valuenow", "364")
+		fireEvent.doubleClick(widthHandle("search"))
+		expect(widthHandle("search")).toHaveAttribute("aria-valuenow", "300")
+	})
+
+	it("keeps a separate size for each window state", () => {
+		setWidth(1280)
+		const docked = render(<Host activeTool="search" searchPanel={<div>s</div>} />)
+		fireEvent.keyDown(widthHandle("search"), { key: "ArrowLeft", shiftKey: true })
+		docked.unmount()
+		setWidth(800)
+		render(<Host activeTool="search" searchPanel={<div>s</div>} />)
+		// A floating panel starts from its own default, not the docked width.
+		expect(widthHandle("search")).toHaveAttribute("aria-valuenow", "300")
+	})
+
+	it("a floating panel has width and height separators and eight pointer handles", () => {
+		setWidth(800)
+		render(<Host activeTool="search" searchPanel={<div>s</div>} />)
+		expect(widthHandle("search")).toBeInTheDocument()
+		expect(screen.getByRole("separator", { name: "Resize search panel height" })).toBeInTheDocument()
+		expect(document.querySelectorAll(".map-panel-resizer").length).toBe(8)
+		fireEvent.keyDown(widthHandle("search"), { key: "ArrowLeft" })
+		expect(widthHandle("search")).toHaveAttribute("aria-valuenow", "316")
 	})
 })

@@ -224,6 +224,8 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 					config.taskState.lastResponseModelId,
 					// X1-P1: `_meta.project_id` for the chat's project, when it has one.
 					config.services.controller?.getChatProjectId(config.ulid),
+					// A subagent's calls say who made them; the main agent's calls carry no `agent` block.
+					config.agent,
 				)
 				argsWithChatId = callContext.args
 				callMeta = callContext.meta
