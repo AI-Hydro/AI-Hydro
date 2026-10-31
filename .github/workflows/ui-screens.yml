@@ -55,6 +55,13 @@ jobs:
       - name: Generate protos
         run: npm run protos
 
+      - name: Committed proto descriptor is current
+        run: |
+          cmp dist-standalone/proto/descriptor_set.pb proto/descriptor_set.pb || {
+            echo "proto/descriptor_set.pb is stale: run 'npm run protos' and copy dist-standalone/proto/descriptor_set.pb over it"
+            exit 1
+          }
+
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
 

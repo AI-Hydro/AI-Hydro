@@ -8,7 +8,7 @@ describe("screen harness registry", () => {
 		expect(new Set(ids).size).toBe(ids.length)
 		for (const s of screens) {
 			expect(["sidebar", "panel", "editor"]).toContain(s.surface)
-			expect(["chat", "evidence", "experiment", "replay", "map", "studio", "design"]).toContain(s.group)
+			expect(["chat", "evidence", "experiment", "replay", "map", "studio", "design", "nav"]).toContain(s.group)
 			expect(s.title.length).toBeGreaterThan(3)
 		}
 	})
@@ -98,5 +98,34 @@ describe("screen harness registry", () => {
 		expect([exit?.exitCode, exit?.execOutcome]).toEqual([2, "failed"])
 		expect(tx.contextTruncationTask.some((m) => m.infoNotice?.class === "context_truncated")).toBe(true)
 		expect(tx.rewindTask.some((m) => m.say === "deleted_api_reqs")).toBe(true)
+	})
+
+	it("registers every navigation surface, with fixture catalogues only on synthetic data", () => {
+		const nav = screens.map((s) => s.id)
+		expect(nav).toEqual(
+			expect.arrayContaining([
+				"settings-api",
+				"settings-features",
+				"settings-general",
+				"settings-about",
+				"settings-keyboard",
+				"mcp-configure",
+				"mcp-installed-unhealthy",
+				"mcp-marketplace",
+				"connectors",
+				"skills",
+				"skills-marketplace",
+				"onboarding-card",
+				"onboarding-card-unhealthy",
+				"chat-header-collapsed",
+			]),
+		)
+		for (const s of screens) {
+			const rows = [
+				...(s.catalogues?.mcpMarketplace ?? []).map((r) => r.name),
+				...[...(s.catalogues?.skillsInstalled ?? []), ...(s.catalogues?.skillsMarketplace ?? [])].map((r) => r.name),
+			]
+			for (const name of rows) expect(name.startsWith("Fixture"), `${s.id}/${name}`).toBe(true)
+		}
 	})
 })
