@@ -8,6 +8,14 @@ export function mayMoveCamera(lastInteractionMs: number, nowMs: number, idleMs =
 	return nowMs - lastInteractionMs >= idleMs
 }
 
+/** The host replays recent events on subscribe; a "show on map" older than this is stale and must not move the view. */
+export const FOCUS_TTL_MS = 30_000
+/** How long a request waits for its layers to arrive (the map may have just opened, still restoring layers). */
+export const FOCUS_WAIT_MS = 15_000
+
+export const focusExpired = (timestampMs: number | undefined, nowMs: number, ttlMs = FOCUS_TTL_MS): boolean =>
+	!timestampMs || nowMs - timestampMs > ttlMs
+
 /** What the map says after it shows layers. The text never claims a camera move that did not happen. */
 export function focusLayersMessage(shown: number, requested: number, moved: boolean): string {
 	if (shown === 0) {

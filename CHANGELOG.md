@@ -53,6 +53,7 @@ Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of
 
 - **On map (N)** on a tool card whose run made layers that are on the map, and **Show on map (N)** in a claim's popover when the claim's run evidence made layers there. Neither appears when no layer on the map came from that run, so a claim with no linked layer gets no button.
 - One host command does both: the chat sends run ids (`aihydro-show-on-map`); the host finds the layers by the run id in their own metadata (it never takes a layer id from the chat), opens the map and sends `command.focus_layers`. The map makes those layers visible, opens the Layers panel with the first one selected and its Details open, and **moves the camera only when the map has been left alone for 5 seconds**. Otherwise the status line says "Showing N layers from the run. The view did not move; use Zoom to layer."
+- **Review fixes.** A request whose layers have not arrived yet (the map just opened) waits up to 15 seconds for them, then says so. A replayed `command.focus_layers` older than 30 seconds, or with no timestamp, is ignored so it cannot move the view later.
 - Not in this change (the report leaves them out): the session lens, claim badges on the map and the shared timeline.
 
 ---
