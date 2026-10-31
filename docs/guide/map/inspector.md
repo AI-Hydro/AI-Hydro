@@ -14,6 +14,7 @@ Click anywhere on the map canvas (outside of any active drawing tool) to open th
 |---|---|
 | **Title and kind** | The layer's name, then what was clicked: Gauge, River reach, Basin, Feature or Map point, with the click's coordinates |
 | **Run line** | The tool and run that made the layer, with **Open** (opens the run in Replay). A MERIT, NWIS, WBD or NID layer no run made reads "Reference, not in any run" |
+| **Gauge** (a gauge only) | USGS site, name, drainage area and period of record when the layer reports them (otherwise "not reported"), and a link to the USGS monitoring-location page |
 | **Properties** | The first six, then **Show all (N)**. Photos show as a strip |
 | **Raster value** | Pixel value from the topmost visible analysis-ready raster at that point, with the layer name and units |
 

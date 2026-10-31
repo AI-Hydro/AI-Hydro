@@ -1,6 +1,7 @@
 import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import React, { useEffect, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
+import { GAUGE_BLOCK_KEYS, gaugeInfo } from "./gaugeInfo"
 import { actionTooltip, KIND_LABEL, type MapActionId, mapActions, objectKind } from "./mapActions"
 import type { CursorRasterReading } from "./mapLayerAdapters"
 import { MAP_Z } from "./mapZ"
@@ -95,8 +96,13 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 
 	const photoPaths = hasFeatures ? extractPhotoPaths(current.properties.photos) : []
 	const PHOTO_KEYS = new Set(["photos", "photo_count"])
+	const kindNow = objectKind(hasFeatures ? [current] : [])
+	const gauge = kindNow === "gauge" ? gaugeInfo(current.properties) : null
+	// The gauge block shows the site, name and label; the list below it does not repeat them.
 	const allEntries = hasFeatures
-		? Object.entries(current.properties).filter(([k]) => !k.startsWith("_") && !PHOTO_KEYS.has(k))
+		? Object.entries(current.properties).filter(
+				([k]) => !k.startsWith("_") && !PHOTO_KEYS.has(k) && !(gauge && GAUGE_BLOCK_KEYS.has(k)),
+			)
 		: []
 	const entries = showAll ? allEntries : allEntries.slice(0, PROPS_SHOWN)
 	const extra = allEntries.length - PROPS_SHOWN
@@ -317,7 +323,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 				</button>
 			</div>
 
-			{(rasterReading || entries.length > 0 || (!hasFeatures && !rasterReading) || showActions) && (
+			{(rasterReading || gauge || entries.length > 0 || (!hasFeatures && !rasterReading) || showActions) && (
 				<div style={{ padding: "6px 8px", overflowY: "auto", flex: 1, minHeight: 0 }}>
 					{rasterReading && (
 						<div style={{ marginBottom: entries.length > 0 ? 6 : 0, fontSize: 11 }}>
@@ -330,6 +336,48 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 					)}
 					{!hasFeatures && !rasterReading && (
 						<div style={{ fontSize: 11, color: muted, fontStyle: "italic" }}>No features at this point.</div>
+					)}
+					{gauge && (
+						<div aria-label="Gauge" role="group" style={{ marginBottom: 6 }}>
+							{(
+								[
+									["Site", `USGS ${gauge.siteNo}`],
+									["Name", gauge.name ?? "not reported"],
+									["Drainage area", gauge.drainageArea ?? "not reported"],
+									["Record", gauge.periodOfRecord ?? "not reported"],
+								] as const
+							).map(([label, value]) => (
+								<div
+									key={label}
+									style={{
+										display: "grid",
+										gridTemplateColumns: "72px 1fr",
+										gap: "2px 8px",
+										marginBottom: 3,
+										fontSize: 11,
+									}}>
+									<span style={{ color: muted }}>{label}</span>
+									<span
+										style={{
+											color: value === "not reported" ? muted : accentText,
+											fontStyle: value === "not reported" ? "italic" : undefined,
+											wordBreak: "break-word",
+											lineHeight: 1.35,
+										}}>
+										{value}
+									</span>
+								</div>
+							))}
+							{gauge.usgsUrl && (
+								<button
+									onClick={() => PLATFORM_CONFIG.postMessage({ type: "openExternal", url: gauge.usgsUrl })}
+									style={linkBtn}
+									title="Open the USGS monitoring-location page in your browser"
+									type="button">
+									USGS page
+								</button>
+							)}
+						</div>
 					)}
 					{entries.map(([key, value]) => (
 						<div

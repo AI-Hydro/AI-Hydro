@@ -54,6 +54,11 @@ Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of
 - One host command does both: the chat sends run ids (`aihydro-show-on-map`); the host finds the layers by the run id in their own metadata (it never takes a layer id from the chat), opens the map and sends `command.focus_layers`. The map makes those layers visible, opens the Layers panel with the first one selected and its Details open, and **moves the camera only when the map has been left alone for 5 seconds**. Otherwise the status line says "Showing N layers from the run. The view did not move; use Zoom to layer."
 - Not in this change (the report leaves them out): the session lens, claim badges on the map and the shared timeline.
 
+### Added — a gauge card (P7a, branch `vision2040/map-gauge-card`)
+
+- Clicking a gauge now opens a **Gauge** block on the selection card: USGS site, name, drainage area and record, and a **USGS page** link (opened by the host, http(s) only; the link is built only from an 8 to 15 digit site number). Drainage area and period of record are shown only if the layer reports them (`drainage_area_km2`, `drain_area_va` in mi², `record_begin` and `record_end`, `period_of_record`), converted only for the unit; otherwise they read "not reported". The map's NWIS gauge layer carries only site number, name and label today, so on real data both read "not reported" until the layer reports more. The property list no longer repeats the site, name and label.
+- **Not built, by the report's own gate (P7b):** "Fetch record" and the hydrograph drawer. The report says not to start them until `data_fetch` keeps the qualifier and approval columns (it still keeps numeric columns only, `tools_data_fetch.py` `_series_payload`, at aihydro-tools main `733d83a`) and the gap rule is closed; `information_class` is also still absent there. The list of runs that already hold a gauge's series needs a tools-side index and is not built either.
+
 ---
 
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
