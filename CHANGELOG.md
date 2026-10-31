@@ -9,6 +9,17 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — 2026-10-31 (agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
+
+### Fixed — four smaller defects from the agent-loop review (branch `vision2040/agent-small`)
+
+- **The next-gen and gpt-5 prompts had lost three rules.** Their `rules` templates were forks of `rules.ts` that never got the Skills rule, the Artifact Self-Review rule or the Citation Anti-Hallucination rule, so Claude and DeepSeek (next-gen) and GPT-5 users did not get them while the generic prompt did. The rules are now shared constants in `scientific_conduct.ts` and all three templates use them, so they cannot drift again. (If the Artifact Self-Review rule, which is specific to HTML modules, should not ship to these models, drop it in that one constant.)
+- **The citation grammar reached only users with a personal rule file.** It was taught by `Rules/CITATION_GRAMMAR.md` (the owner's global rule) and by a project-context line. One line with an example is now in the scientific-conduct rules every variant carries: `[run:<run_id>#key_outputs.<field>]`, "the part after `#` is required: a marker without it cannot be checked". A test fails if it is removed.
+- **`FRAME_HEAD` wrote `[run:]`** (no path), the form the same rule calls invalid. It now says `[run:<run_id>#key_outputs.<field>]` or `[claim:<claim_id>]`.
+- **MCP failures were not failures.** `TOOL_ERROR_MARKERS` matched four strings, none of them the text an MCP failure produces. `UseMcpToolHandler` now records, for the call it just ran, whether it failed from structure rather than text: the server's `isError`, a thrown call (a timeout or dropped connection), or a parsed `{"error": true}` body (`TaskState.mcpCallFailed`). The executor uses that for the row's `execOutcome` ("failed"), for the error-grounded decompose nudge, and so that a failed `start_session` or status no longer marks a study bound. The consecutive-mistake count is deliberately unchanged: a down server must not halt a task.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)

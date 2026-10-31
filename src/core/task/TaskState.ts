@@ -85,6 +85,10 @@ export class TaskState {
 	// Sliding window of the most recent tool failures (tool name + truncated error), used to
 	// ground the auto-decompose nudge in concrete failures instead of generic boilerplate.
 	recentToolErrors: string[] = []
+	// Set by the MCP tool handler for the call it just ran: true when the server reported an error (`isError`), the call
+	// threw (timeout, dropped connection) or the body is a structured {"error": true} result. Undefined when the handler
+	// did not get as far as calling. Read by the executor so a failure is known from structure, not from text.
+	mcpCallFailed: boolean | undefined = undefined
 	// Semantic loop detection (beyond byte-identical signatures):
 	// Consecutive zero-result searches on the SAME target path (regex may vary). Reset on any hit.
 	consecutiveZeroResultSearches = 0

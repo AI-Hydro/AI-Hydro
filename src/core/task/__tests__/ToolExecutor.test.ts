@@ -435,6 +435,36 @@ describe("ToolExecutor gate binding (model-invoked output is never a study id)",
 		;(state.boundStudyId === undefined).should.equal(true)
 	})
 
+	describe("MCP failures are known from what the handler observed", () => {
+		const { ToolExecutor } = require("../ToolExecutor")
+		const mcpBlock = { name: "use_mcp_tool", params: { server_name: "x", tool_name: "t" } }
+		const exec = (mcpCallFailed: boolean | undefined) => {
+			const ex = Object.create(ToolExecutor.prototype)
+			ex.taskState = { mcpCallFailed, recentToolErrors: [], consecutiveMistakeCount: 0 }
+			return ex
+		}
+		it("a failure the handler observed is recorded, whatever the text looks like", () => {
+			const ex = exec(true)
+			ex.recordIfToolError("Something the server said", mcpBlock)
+			ex.taskState.recentToolErrors.should.have.length(1)
+		})
+		it("a call the handler saw succeed is not a failure even if its text starts like an error", () => {
+			const ex = exec(false)
+			ex.recordIfToolError("Error:\nthis is quoted file content", mcpBlock)
+			ex.taskState.recentToolErrors.should.have.length(0)
+			ex.resultFailed("Error:\nthis is quoted file content", mcpBlock).should.equal(false)
+		})
+		it("with no handler observation the old text markers still decide; other tools never read the flag", () => {
+			exec(undefined).resultFailed("The tool execution failed with the following error: x", mcpBlock).should.equal(true)
+			exec(true).resultFailed("fine", { name: "read_file", params: {} }).should.equal(false)
+		})
+		it("a failure never feeds the mistake count (an environmental failure must not halt a task)", () => {
+			const ex = exec(true)
+			ex.recordIfToolError("timeout", mcpBlock)
+			ex.taskState.consecutiveMistakeCount.should.equal(0)
+		})
+	})
+
 	it("a rebind clears the cached study; an errored status or another server's status is ignored", () => {
 		const state = createGateState()
 		state.boundStudyId = "s1"
