@@ -435,6 +435,25 @@ describe("ToolExecutor gate binding (model-invoked output is never a study id)",
 		;(state.boundStudyId === undefined).should.equal(true)
 	})
 
+	describe("MCP failures count as failures", () => {
+		const { ToolExecutor } = require("../ToolExecutor")
+		const failed = (c: string): boolean => ToolExecutor.isToolErrorResult(c)
+		it("a thrown MCP call, an isError result and a structured error body are failures", () => {
+			// Shapes seen in the owner's real task 1793359576182 (T2).
+			failed("Error executing MCP tool: MCP error -32001: Request timed out").should.equal(true)
+			failed(
+				'Error:\n{"error": true, "code": "GAUGE_ID_NOT_APPLICABLE", "message": "gauge_id applies to USGS gauges"}',
+			).should.equal(true)
+			failed('{"error": true, "code": "X", "message": "m"}').should.equal(true)
+		})
+		it("a successful result that merely quotes such text is not a failure", () => {
+			failed('{"data": {"note": "the field error: true is documented"}}').should.equal(false)
+			failed("Contents of log.txt:\nError:\nsomething in a file").should.equal(false)
+			failed('{"data": {"q_mean_cms": 44.4}, "_run_id": "r"}').should.equal(false)
+			failed(`${"x".repeat(400)} Error executing MCP tool: far past the head`).should.equal(false)
+		})
+	})
+
 	it("a rebind clears the cached study; an errored status or another server's status is ignored", () => {
 		const state = createGateState()
 		state.boundStudyId = "s1"

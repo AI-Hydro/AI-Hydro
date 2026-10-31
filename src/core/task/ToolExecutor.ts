@@ -368,6 +368,8 @@ export class ToolExecutor {
 		"Missing value for required parameter",
 		"Invalid JSON argument used with",
 		"is blocked by the .aihydroignore",
+		// An MCP call that threw (a timeout, a dropped connection): the handler returns this text.
+		"Error executing MCP tool:",
 	]
 
 	/**
@@ -376,7 +378,13 @@ export class ToolExecutor {
 	 */
 	static isToolErrorResult(content: string): boolean {
 		const head = content.slice(0, 300)
-		return ToolExecutor.TOOL_ERROR_MARKERS.some((marker) => head.includes(marker))
+		if (ToolExecutor.TOOL_ERROR_MARKERS.some((marker) => head.includes(marker))) {
+			return true
+		}
+		// An MCP server's own failure result: the handler prefixes an `isError` result with "Error:\n", and a server
+		// can also return a structured body {"error": true, ...}. Anchored at the start, so a successful result that
+		// merely contains such text (a file that quotes one) is not marked failed.
+		return /^Error:\s*\n/.test(head) || /^\s*\{\s*"error"\s*:\s*true\b/.test(head)
 	}
 
 	private recordIfToolError(content: ToolResponse, block: ToolUse) {

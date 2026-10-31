@@ -39,6 +39,15 @@ describe("system prompt: scientific conduct and removed contradictions", () => {
 				expect(prompt).to.match(/modelled, simulated, or estimated/)
 			})
 
+			it("teaches the citation grammar with its #path, and carries the shared research rules (no variant fork drops them)", async () => {
+				const prompt = await getSystemPrompt(ctxFor(modelId))
+				expect(prompt).to.include("[run:<run_id>#key_outputs.<field>]")
+				expect(prompt).to.include("The part after `#` is required")
+				expect(prompt).to.match(/\*\*Skills:\*\* Consult the skill catalog/)
+				expect(prompt).to.match(/\*\*Citation Anti-Hallucination \(Mandatory\):\*\*/)
+				expect(prompt).to.match(/\*\*Artifact Self-Review \(Mandatory\):\*\*/)
+			})
+
 			it("has no web-development advice in the rules or objective", async () => {
 				const prompt = await getSystemPrompt(ctxFor(modelId))
 				expect(prompt).to.not.include("easily run without additional setup")
