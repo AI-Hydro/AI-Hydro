@@ -1,0 +1,147 @@
+[
+	{
+		"name": "read_text_file",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"path": {
+					"type": "string"
+				},
+				"tail": {
+					"type": "number",
+					"description": "If provided, returns only the last N lines of the file"
+				},
+				"head": {
+					"type": "number",
+					"description": "If provided, returns only the first N lines of the file"
+				}
+			},
+			"required": [
+				"path"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		}
+	},
+	{
+		"name": "search_issues",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"query": {
+					"type": "string",
+					"title": "Query"
+				},
+				"state": {
+					"type": "string",
+					"enum": [
+						"open",
+						"closed",
+						"all"
+					],
+					"default": "open"
+				},
+				"labels": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Label names"
+				},
+				"assignee": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null,
+					"title": "Assignee"
+				},
+				"milestone": {
+					"anyOf": [
+						{
+							"type": "integer"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "Milestone number, or null for none"
+				},
+				"per_page": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 30
+				}
+			},
+			"required": [
+				"query",
+				"milestone"
+			],
+			"additionalProperties": false,
+			"$schema": "http://json-schema.org/draft-07/schema#"
+		}
+	},
+	{
+		"name": "create_table",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"title": "Name"
+				},
+				"columns": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"type": {
+								"type": "string",
+								"enum": [
+									"text",
+									"integer",
+									"real",
+									"blob"
+								]
+							},
+							"nullable": {
+								"type": "boolean",
+								"default": true
+							},
+							"default": {
+								"anyOf": [
+									{
+										"type": "string"
+									},
+									{
+										"type": "number"
+									},
+									{
+										"type": "null"
+									}
+								]
+							}
+						},
+						"required": [
+							"name",
+							"type"
+						]
+					},
+					"minItems": 1
+				}
+			},
+			"required": [
+				"name",
+				"columns"
+			]
+		}
+	}
+]
