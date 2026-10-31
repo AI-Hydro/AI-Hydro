@@ -1,45 +1,20 @@
-import { workspaceResolver } from "@core/workspace"
+import { aihydroHome } from "@shared/aihydro/aihydroHome"
 import { BooleanResponse, StringRequest } from "@shared/proto/cline/common"
-import { getWorkspacePath } from "@utils/path"
-import * as fs from "fs"
 import { Controller } from ".."
-import { isInsideRoot } from "./workspaceScope"
+import { chipRoots, resolveChipPath } from "./workspaceScope"
 
 /**
- * Check if a file exists in the project using a relative path
- * @param controller The controller instance
- * @param request The request containing the relative file path to check
- * @returns BooleanResponse indicating whether the file exists
+ * Whether a chip may be shown for a path: it must be an existing file in ANY workspace root or in a tool-output
+ * location (see `workspaceScope.ts`). A model must not be able to offer a clickable `~/.ssh/...` link.
  */
 export async function ifFileExistsRelativePath(_controller: Controller, request: StringRequest): Promise<BooleanResponse> {
-	const workspacePath = await getWorkspacePath()
-
-	if (!workspacePath) {
-		// If no workspace is open, return false
-		console.error("Error in ifFileExistsRelativePath: No workspace path available") // TODO
+	const roots = await chipRoots()
+	if (roots.length === 0) {
+		console.error("Error in ifFileExistsRelativePath: No workspace path available")
 		return BooleanResponse.create({ value: false })
 	}
-
 	if (!request.value) {
-		// If no path provided, return false
 		return BooleanResponse.create({ value: false })
 	}
-
-	// Resolve the relative path to absolute path
-	const resolvedPath = workspaceResolver.resolveWorkspacePath(
-		workspacePath,
-		request.value,
-		"Controller.ifFileExistsRelativePath",
-	)
-	const absolutePath = typeof resolvedPath === "string" ? resolvedPath : resolvedPath.absolutePath
-	// Only files in the workspace get a chip (a model must not offer a clickable ~/.ssh/... path).
-	if (!isInsideRoot(workspacePath, absolutePath)) {
-		return BooleanResponse.create({ value: false })
-	}
-	// Check if the file exists
-	try {
-		return BooleanResponse.create({ value: fs.statSync(absolutePath).isFile() })
-	} catch {
-		return BooleanResponse.create({ value: false })
-	}
+	return BooleanResponse.create({ value: resolveChipPath(roots, aihydroHome(), request.value, true) !== undefined })
 }
