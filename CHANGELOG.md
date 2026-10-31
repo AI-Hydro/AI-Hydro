@@ -185,6 +185,17 @@ Reported on the installed 0.4.4 build: at about 400 px the study chip (`usgs_010
 - Layout and cost: the map opens in the second editor column (`ViewColumn.Two`, as the Map button does). With no editor open that creates a second editor group beside an empty first one, so the editor area is split with the map on the right. The map webview uses `retainContextWhenHidden`, so a map opened this way keeps its GPU context alive for the window even if you never use it; users who do not want that cost should turn the setting off.
 - The e2e profile turns it off (`E2E_DEFAULT_USER_SETTINGS`); the screen harness has no extension host, so it is unaffected.
 
+### Fixed — file chips for images, PDFs and data files open instead of "Could not open file!" (branch `vision2040/polish-open-file`)
+
+Reported on the installed 0.4.4 build: clicking `hydrograph_01013500.png` or `watershed_01031500_map.png` in an answer showed "Could not open file!". Cause: `openFile` (`src/integrations/misc/open-file.ts`) sent every path to the text-document API, which rejects binary files, and its catch block discarded the reason.
+
+- Files are classified first. Images, audio and video open in VS Code's own viewer (`vscode.open`) in the editor. A PDF opens in the system viewer unless a PDF viewer extension is installed (an extension id containing "pdf"), in which case it opens in `vscode.open`; never a binary notice. Text files still use the text-document API with the caller's `preserveFocus`/`preview`. Unknown extensions are sniffed (`isbinaryfile`).
+- GeoTIFF, netCDF, Parquet, HDF5, GeoPackage, NumPy, archives, office files and installers/packages (`.exe`, `.msi`, `.dmg`, `.pkg`, `.vsix`, `.app`; never run from a chat link) have no VS Code viewer: they are selected in the Explorer and a message names the format ("dem.tif is a GeoTIFF raster, which VS Code cannot display...") instead of an error.
+- A missing file says `File not found: <path>`; any other failure says `Could not open <path>: <reason>`. Directories are revealed in the Explorer.
+- `file://` URIs and quoted paths are accepted. Chips now also match absolute paths, Windows drive paths and names with spaces (the host still checks that the file exists before showing a chip).
+- Chips are scoped: a path gets a chip only if it is an existing file (after symlinks) in ANY workspace root (a relative path is tried against every root, not just the active folder) or in a place aihydro-tools 2.8.5 writes outputs when a study has no workspace: `$AIHYDRO_HOME/sessions/<id>/outputs`, `exports`, `models`, `surrogate`, `inundation_physics`, `inundation_surrogate`, `data_jobs`. The rest of `AIHYDRO_HOME` (`trust`, `approvals`, `registry`, session records) and anything else, such as `~/.ssh/...`, gets no chip, and `openFileRelativePath` refuses it.
+- 15 unit tests (`src/integrations/misc/__tests__/open-file.test.ts`).
+
 ## [0.4.4] — 2026-10-31 (owner feedback on 0.4.3: the "5 paused" chip; pairs with aihydro-tools 2.8.5)
 
 ### Changed — the paused-tools chip says which tools, which servers, and why, and offers Trust only where it applies (branch `vision2040/paused-chip`)
