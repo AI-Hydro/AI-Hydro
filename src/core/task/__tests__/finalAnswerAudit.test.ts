@@ -462,3 +462,27 @@ describe("final-answer audit", () => {
 		})
 	})
 })
+
+describe("completion args for the audit call (honest exit)", () => {
+	// eslint-disable-next-line @typescript-eslint/no-var-requires
+	const { completionArgs } = require("../finalAnswerAudit")
+	const partial = { outcome: "partial" as const, unmet: ["no observed record 2010-2015"] }
+	const server = (properties?: Record<string, unknown>) => ({
+		tools: [{ name: "audit_interpretation", inputSchema: properties ? { type: "object", properties } : undefined }],
+	})
+
+	it("sends outcome and unmet only when the audit tool declares them", () => {
+		expect(completionArgs(server({ prose: {}, session_id: {}, outcome: {}, unmet: {} }), partial)).to.deep.equal({
+			outcome: "partial",
+			unmet: ["no observed record 2010-2015"],
+		})
+		expect(completionArgs(server({ prose: {}, outcome: {} }), partial)).to.deep.equal({ outcome: "partial" })
+	})
+
+	it("an older server (no such parameters, no schema, no tool) is sent nothing it would reject", () => {
+		expect(completionArgs(server({ prose: {}, session_id: {} }), partial)).to.deep.equal({})
+		expect(completionArgs(server(undefined), partial)).to.deep.equal({})
+		expect(completionArgs({ tools: [] }, partial)).to.deep.equal({})
+		expect(completionArgs(server({ outcome: {} }), undefined)).to.deep.equal({})
+	})
+})

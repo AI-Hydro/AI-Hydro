@@ -5,7 +5,7 @@ import MarkdownBlock from "@/components/common/MarkdownBlock"
 import { ExtensionStateContext } from "@/context/ExtensionStateContext"
 import { APPROVED_TOKEN } from "../../../../design/evidenceStates"
 import { AnswerAuditFooter, auditFooterLine } from "../AnswerAuditFooter"
-import { AnswerBlock, ASK_TO_CITE_TEXT } from "../AnswerBlock"
+import { AnswerBlock, ASK_TO_CITE_TEXT, copyText } from "../AnswerBlock"
 
 const DIGEST = "sha256:abc"
 const claims: Record<string, Record<string, unknown>> = {
@@ -59,6 +59,15 @@ const audit = (p: Partial<AnswerAuditPayload> = {}): AnswerAuditPayload => ({
 const TEXT = "Answer prose [claim:c-approved] and [claim:c-integrity] with [run:fx-run-1#a.b]."
 
 describe("AnswerBlock honest exit", () => {
+	it("Copy carries the outcome so an exported answer cannot read as complete", () => {
+		expect(copyText("Fetched part.", undefined)).toBe("Fetched part.")
+		const partial = copyText("Fetched part.", { outcome: "partial", unmet: ["no record for 2010-2015"] })
+		expect(partial).toContain("Partly done (the agent says)")
+		expect(partial).toContain("- no record for 2010-2015")
+		expect(partial.endsWith("Fetched part.")).toBe(true)
+		expect(copyText("x", { outcome: "infeasible", unmet: [] })).toContain("Could not be done")
+	})
+
 	it("shows the outcome in the header and the unmet list, labelled as the agent's statement", () => {
 		const { getByTestId } = render(
 			<AnswerBlock

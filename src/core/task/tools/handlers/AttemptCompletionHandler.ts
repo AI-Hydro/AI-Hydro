@@ -115,7 +115,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		await compactPendingRows(config.messageState)
 	}
 
-	private async showFinalAnswerAudit(config: TaskConfig, answer: string): Promise<void> {
+	private async showFinalAnswerAudit(
+		config: TaskConfig,
+		answer: string,
+		completion?: { outcome: "partial" | "infeasible"; unmet: string[] },
+	): Promise<void> {
 		let emitted = false
 		try {
 			if (config.services.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled") === false) {
@@ -128,6 +132,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				answer,
 				modelIdReturned: config.taskState.lastResponseModelId,
 				projectId: config.services.controller?.getChatProjectId(config.ulid),
+				completion,
 			})
 			// Nothing to audit / no research session stays silent, as before: no row for chats outside a study.
 			if (outcome.status !== "skipped") {
@@ -210,6 +215,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				modelId: config.taskState.lastResponseModelId,
 				projectId: config.services.controller?.getChatProjectId(config.ulid),
 				result,
+				completion: outcomeRecord,
 				rows: () => config.messageState.getAiHydroMessages(),
 				emit: async (payload) => {
 					await sweepAuditProgress(config.messageState)
@@ -354,7 +360,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			// The audit already ran inside the gate; emit its record (with revisions, removed values, disclosure).
 			await finalizeGate()
 		} else {
-			await this.showFinalAnswerAudit(config, result)
+			await this.showFinalAnswerAudit(config, result, outcomeRecord)
 		}
 
 		const { response, text, images, files: completionFiles } = await config.callbacks.ask("completion_result", "", false)

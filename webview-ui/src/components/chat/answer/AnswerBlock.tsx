@@ -14,6 +14,15 @@ import { UntracedPlanContext } from "./UntracedNumber"
 export const ASK_TO_CITE_TEXT =
 	"The answer audit found numbers or claims in your last answer that are not traced to a recorded run. Revise the answer: cite each one with [run:<id>#<path>] or [claim:<id>], or remove the value, and do not add new unsupported numbers."
 
+/** What Copy puts on the clipboard: the answer, headed by the agent's own statement when it said it was not fully done. */
+export function copyText(text: string, outcome?: CompletionOutcome): string {
+	if (!outcome) {
+		return text
+	}
+	const unmet = outcome.unmet.map((u) => `- ${u}`).join("\n")
+	return `${OUTCOME_LABEL[outcome.outcome]} (the agent says)${unmet ? `. Not done:\n${unmet}` : ""}\n\n${text}`
+}
+
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /** What the transcript hands a completion row: the presenter's attached audit, the turn facts, and the reply action. */
@@ -217,7 +226,7 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 
 	const copy = () => {
 		try {
-			void navigator.clipboard?.writeText(text)
+			void navigator.clipboard?.writeText(copyText(text, outcome))
 			setCopied(true)
 			setTimeout(() => setCopied(false), 1500)
 		} catch {

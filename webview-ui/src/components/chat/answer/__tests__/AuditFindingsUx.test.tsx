@@ -52,6 +52,24 @@ const hardAudit = () =>
 		],
 	})
 
+describe("no_observed_lineage (tools-side check, advisory today; hard is reserved)", () => {
+	const lineage: AnswerAuditViolation = {
+		kind: "no_observed_lineage",
+		severity: "advisory",
+		category: "lineage",
+		excerpt: "mean flow 18.4 m3/s",
+		message: "The quantity '18.4' is not derived from any observed-data run.",
+	}
+	it("renders as a note, never as a hard finding, and offers no 'link these' action", () => {
+		const a = audit({ advisoryCount: 1, violations: [lineage] })
+		expect(auditSummaryView(a)).toEqual({ text: "1 note to review", tone: "note" })
+		expect(viewFinding(lineage).status).toBe("Not derived from observed data")
+		const { container, queryByText } = withDetail("normal", <AnswerAuditFooter audit={a} onAskToLink={() => {}} />)
+		expect(queryByText("Ask AI-Hydro to link these")).toBeNull()
+		expect(container.textContent).toContain("1 note to review")
+	})
+})
+
 describe("audit summary view", () => {
 	it("counts are accurate and the wording is for a human", () => {
 		expect(auditSummaryView(hardAudit())?.text).toBe("3 numbers aren't linked to a recorded run · 1 more note")

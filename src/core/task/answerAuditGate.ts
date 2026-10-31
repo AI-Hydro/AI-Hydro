@@ -203,6 +203,8 @@ export interface GateContext {
 	projectId?: string
 	/** The attempt_completion `result`. */
 	result: string
+	/** What the model declared (partial / infeasible and what is unmet), passed on to the audit. */
+	completion?: { outcome: "partial" | "infeasible"; unmet: string[] }
 	rows(): readonly GateRow[]
 	/** Persist one `answer_audit` row (replacing any progress line). */
 	emit(payload: AnswerAuditPayload): Promise<void>
@@ -320,6 +322,7 @@ export async function evaluateDraft(ctx: GateContext): Promise<GateDecision> {
 			boundStudy: state.boundStudyId,
 			serverName: ctx.serverName,
 			requireTrusted: true,
+			completion: ctx.completion,
 		}).catch(
 			(error): FinalAnswerAuditOutcome => ({
 				status: "unavailable",

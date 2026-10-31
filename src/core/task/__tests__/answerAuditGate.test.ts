@@ -862,6 +862,36 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(t.config.taskState.consecutiveMistakeCount).to.equal(0)
 		})
 
+		it("the declared outcome is sent to an audit tool that declares it, and not to one that does not", async () => {
+			const declaring = server({
+				tools: [
+					{
+						name: "audit_interpretation",
+						description: GRADED_DESC,
+						inputSchema: { type: "object", properties: { prose: {}, session_id: {}, outcome: {}, unmet: {} } },
+					} as any,
+					{ name: "aihydro_chat_status" } as any,
+				],
+			})
+			const t = build({ gate: false, servers: [declaring] })
+			const b = block("The ratio is 0.42 for part of it.")
+			b.params.outcome = "partial"
+			b.params.unmet = "- no record"
+			await new AttemptCompletionHandler().execute(t.config, b)
+			const call = t.hub.callTool.getCalls().find((c: any) => c.args[1] === "audit_interpretation")!
+			expect(call.args[2]).to.include({ outcome: "partial" })
+			expect(call.args[2].unmet).to.deep.equal(["no record"])
+		})
+
+		it("an audit tool without those parameters is not sent them", async () => {
+			const t = build({ gate: false })
+			const b = block("The ratio is 0.42 for part of it.")
+			b.params.outcome = "partial"
+			await new AttemptCompletionHandler().execute(t.config, b)
+			const call = t.hub.callTool.getCalls().find((c: any) => c.args[1] === "audit_interpretation")!
+			expect(call.args[2]).to.not.have.property("outcome")
+		})
+
 		it("a normal completion records no outcome (done, absent or unrecognised)", async () => {
 			for (const outcome of [undefined, "done", "finished-ish"]) {
 				sinon.restore() // build() stubs the notification module each time
