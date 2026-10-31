@@ -1,7 +1,12 @@
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
 import { expect } from "chai"
 import { describe, it } from "mocha"
 import type * as vscode from "vscode"
+import { HostProvider } from "@/hosts/host-provider"
 import { resetLegacySubagentsEnabled } from "../state-migrations"
+import { readGlobalStateFromDisk } from "../utils/state-helpers"
 
 function makeContext(initial: Record<string, unknown>, failUpdate = false) {
 	const state = new Map<string, unknown>(Object.entries(initial))
@@ -48,5 +53,43 @@ describe("resetLegacySubagentsEnabled", () => {
 		const { context, state } = makeContext({ subagentsEnabled: true }, true)
 		await resetLegacySubagentsEnabled(context)
 		expect(state.get("migrations.subagentsEnabledReset.v1")).to.equal(undefined)
+	})
+
+	it("the first read of global state after the migration sees false (what StateManager caches)", async () => {
+		HostProvider.reset()
+		HostProvider.initialize(
+			(() => {}) as any,
+			(() => {}) as any,
+			{ workspaceClient: { getWorkspacePaths: async () => ({ paths: [] }) } } as any,
+			() => {},
+			async () => "",
+			async () => "",
+			"/mock/extension",
+			path.join(os.tmpdir(), "aihydro-reset-storage"),
+		)
+		const state = new Map<string, unknown>([["subagentsEnabled", true]])
+		const context = {
+			globalState: {
+				get: (key: string) => state.get(key),
+				update: async (k: string, v: unknown) => void state.set(k, v),
+				keys: () => [...state.keys()],
+			},
+			workspaceState: { get: () => undefined, update: async () => {}, keys: () => [] },
+			secrets: { get: async () => undefined },
+			globalStorageUri: { fsPath: "/tmp" },
+		} as unknown as vscode.ExtensionContext
+		expect((await readGlobalStateFromDisk(context)).subagentsEnabled).to.equal(true) // the stale value, before
+		await resetLegacySubagentsEnabled(context)
+		expect((await readGlobalStateFromDisk(context)).subagentsEnabled).to.equal(false)
+		HostProvider.reset()
+	})
+
+	it("common.ts runs the reset before StateManager.initialize (a cache filled first would keep the stale true)", () => {
+		const source = fs.readFileSync(path.resolve(__dirname, "../../../common.ts"), "utf8")
+		const reset = source.indexOf("await resetLegacySubagentsEnabled(context)")
+		const init = source.indexOf("await StateManager.initialize(context)")
+		expect(reset).to.be.greaterThan(-1)
+		expect(init).to.be.greaterThan(-1)
+		expect(reset).to.be.lessThan(init)
 	})
 })

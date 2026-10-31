@@ -32,6 +32,11 @@ import { getLatestAnnouncementId } from "./utils/announcements"
  * @returns The webview provider
  */
 export async function initialize(context: vscode.ExtensionContext): Promise<WebviewProvider> {
+	// A stored `subagentsEnabled: true` came from the removed CLI subagent: do not let it enable explorers. This must run
+	// BEFORE StateManager.initialize, which reads global state once into its cache; after it, the first session would still
+	// see `true` until the next restart.
+	await resetLegacySubagentsEnabled(context)
+
 	try {
 		await StateManager.initialize(context)
 	} catch (error) {
@@ -60,9 +65,6 @@ export async function initialize(context: vscode.ExtensionContext): Promise<Webv
 
 	// Delete the retired cloud-account secrets once (X0-6)
 	await removeRetiredAccountSecrets(context)
-
-	// A stored `subagentsEnabled: true` came from the removed CLI subagent: do not let it enable explorers (once)
-	await resetLegacySubagentsEnabled(context)
 
 	// Clear the toggles of the removed Cursor/Windsurf rule dialects (X0-6b)
 	await removeRetiredRuleDialectState(context)
