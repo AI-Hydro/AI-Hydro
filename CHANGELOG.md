@@ -9,6 +9,16 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — 2026-10-31 (agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
+
+### Changed — tool schemas are listed compactly (A4, branch `vision2040/agent-compact`)
+
+Every request carried each hot tool's input schema pretty-printed, with pydantic boilerplate on every parameter (`title`, `default: null`, `anyOf: [X, {type: null}]`). `components/compactSchema.ts` renders one line of JSON per schema and drops exactly that boilerplate. `type`, `enum`, `const`, `required`, `format`, bounds, `description`, non-null defaults and every parameter name are kept (tests check this on the real input schemas of all 179 tools of the first-party server and on three third-party-style schemas). "Or null" is dropped only from an optional parameter (one not in the parent's `required`); a `title` is dropped only beside a `description`. It applies to every server's full-schema tools, but the saving was measured on the first-party listing only. `scripts/measure-mcp-schemas.ts <tools_list.json>` reproduces the measurement on any listing. `session_id` is NOT hidden (it is how a model switches study).
+
+Measured on the real listing of the first-party server (179 tools, 45 hot), the whole MCP section of the system prompt: **98,363 to 68,036 characters (-30,327, -30.8%)**, 3,267 to 1,073 lines. Token effect (no tokenizer for the production models is available offline, so this is a proxy and not a token count): pre-tokenizer pieces 21,378 to 14,879 (-30.4%); a WordPiece count that ignores whitespace 23,898 to 20,877 (-12.6%, boilerplate only). The real saving lies between the two: roughly 3k to 6.5k tokens per request. The first-request token drop on a real model run is still to be read from the meter.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)
