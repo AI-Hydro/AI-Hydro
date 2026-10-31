@@ -2,6 +2,7 @@ import { droppedEvidenceLines, isAuditProgressText } from "@shared/aihydro/answe
 import {
 	type AnswerAuditPayload,
 	type AnswerAuditViolation,
+	gateSkippedNote,
 	MAX_AUDIT_REVISIONS,
 	parseAnswerAuditPayload,
 } from "@shared/aihydro/transcriptContracts"
@@ -19,6 +20,12 @@ import { useTranscriptDetail } from "./answer/useTranscriptDetail"
  * a final answer after revisions states how many requests it cost, what the revision removed, and any findings left.
  */
 export function auditSummaryLine(p: AnswerAuditPayload): string {
+	const line = auditSummaryLineBase(p)
+	const note = gateSkippedNote(p)
+	return note ? `${line} · ${note}` : line
+}
+
+function auditSummaryLineBase(p: AnswerAuditPayload): string {
 	if (p.status === "unavailable" || p.status === "skipped") {
 		return `Audit not run: ${p.disclosure?.reason ?? "no reason recorded"}`
 	}

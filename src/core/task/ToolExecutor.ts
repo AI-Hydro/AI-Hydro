@@ -10,6 +10,7 @@ import { McpHub } from "@services/mcp/McpHub"
 import { telemetryService } from "@services/telemetry"
 import { callRowIndexToRecord } from "@shared/aihydro/askOutcome"
 import { execOutcomeFor } from "@shared/aihydro/commandEvidence"
+import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import type { SayEvidence } from "@shared/aihydro/infoNotice"
 import type { SubagentReport } from "@shared/aihydro/subagents"
 import { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
@@ -437,6 +438,7 @@ export class ToolExecutor {
 		// id (the audit asks the server itself, with the host's chat id). A result naming another chat counts for nothing.
 		if (
 			isAiHydroServerName(block.params.server_name) &&
+			this.isTrustedConnectedServer(block.params.server_name) &&
 			typeof content === "string" &&
 			!ToolExecutor.isToolErrorResult(content)
 		) {
@@ -453,6 +455,12 @@ export class ToolExecutor {
 		) {
 			noteBindingChanged(this.taskState.answerAuditGate)
 		}
+	}
+
+	/** The named server is connected and trusted (name plus recorded launcher), as the controller's binding observer requires. */
+	private isTrustedConnectedServer(serverName: string | undefined): boolean {
+		const server = this.mcpHub?.getServers?.().find((s) => s.name === serverName)
+		return !!server && server.status === "connected" && isServerTrusted(server as any)
 	}
 
 	private pushToolResult = (content: ToolResponse, block: ToolUse) => {

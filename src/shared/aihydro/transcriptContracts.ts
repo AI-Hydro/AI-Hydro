@@ -205,6 +205,11 @@ export interface AnswerAuditPayload extends AnswerDraftRecord {
 	gateSkipped?: AnswerAuditGateSkip
 }
 
+/** The technical, always-present form of a skipped gate, for exports and Verbose: it never depends on the skip's kind. */
+export function gateSkippedNote(p: Pick<AnswerAuditPayload, "gateSkipped">): string | undefined {
+	return p.gateSkipped ? `gate not run: ${p.gateSkipped}` : undefined
+}
+
 export function isHardFinding(v: Pick<AnswerAuditViolation, "severity">): boolean {
 	return v.severity === "hard"
 }

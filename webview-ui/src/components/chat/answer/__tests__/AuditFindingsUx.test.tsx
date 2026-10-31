@@ -4,7 +4,8 @@ import type { ReactNode } from "react"
 import { describe, expect, it, vi } from "vitest"
 import MarkdownBlock from "@/components/common/MarkdownBlock"
 import { ExtensionStateContext } from "@/context/ExtensionStateContext"
-import { AnswerAuditFooter } from "../AnswerAuditFooter"
+import { auditSummaryLine } from "../../AnswerAuditSummary"
+import { AnswerAuditFooter, auditFooterLine, gateSkipNeedsAttention } from "../AnswerAuditFooter"
 import { AnswerBlock } from "../AnswerBlock"
 import { auditSummaryView, contextSnippet, markUntracedNumbers, untracedPlan, viewFinding } from "../auditFindings"
 
@@ -262,6 +263,25 @@ describe("gate skipped line (A1)", () => {
 		const line = getByTestId("answer-audit-gate-skipped").textContent ?? ""
 		expect(line).toContain("not held back for checking")
 		expect(line).toContain("not trusted")
+	})
+
+	it("no-study skips are neutral; the same skip where a study exists is a warning; the technical line always carries it", () => {
+		const noStudy = audit({
+			status: "unavailable",
+			disclosure: { kind: "audit_unavailable", reason: "x" },
+			gateSkipped: "study-not-bound",
+		})
+		expect(gateSkipNeedsAttention(noStudy)).toBe(false)
+		expect(gateSkipNeedsAttention({ ...noStudy, sessionId: "s1" })).toBe(true)
+		expect(gateSkipNeedsAttention({ ...noStudy, gateSkipped: "no-trusted-server" })).toBe(true)
+		expect(gateSkipNeedsAttention({ ...noStudy, gateSkipped: "gate-setting-off" })).toBe(false)
+		// A passed audit with a skipped gate reads as such in the technical form used by exports and Verbose.
+		expect(auditFooterLine(audit({ status: "passed", cited: 2, total: 2, gateSkipped: "gate-setting-off" }))).toBe(
+			"Audit passed: 2/2 numbers traced · gate not run: gate-setting-off",
+		)
+		expect(auditSummaryLine(audit({ status: "passed", cited: 2, total: 2, gateSkipped: "no-trusted-server" }))).toContain(
+			"gate not run: no-trusted-server",
+		)
 	})
 
 	it("a setting the user chose shows only at verbose", () => {

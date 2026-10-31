@@ -1,5 +1,5 @@
 import { droppedEvidenceLines } from "@shared/aihydro/answerAuditGate"
-import { type AnswerAuditPayload, GATE_SKIP_TEXT, isCleanAudit } from "@shared/aihydro/transcriptContracts"
+import { type AnswerAuditPayload, GATE_SKIP_TEXT, gateSkippedNote, isCleanAudit } from "@shared/aihydro/transcriptContracts"
 import React, { useId, useState } from "react"
 import { DraftText, FindingsList, Icon, Unrevisable } from "../AnswerAuditSummary"
 import { auditSummaryView } from "./auditFindings"
@@ -16,6 +16,12 @@ import { useTranscriptDetail } from "./useTranscriptDetail"
  * `auditFooterLine` is the technical form of the same line (Verbose, tests).
  */
 export function auditFooterLine(p: AnswerAuditPayload): string | undefined {
+	const line = auditFooterLineBase(p)
+	const note = gateSkippedNote(p)
+	return note ? (line ? `${line} · ${note}` : note) : line
+}
+
+function auditFooterLineBase(p: AnswerAuditPayload): string | undefined {
 	if (p.status === "skipped") {
 		return undefined
 	}
@@ -42,6 +48,17 @@ export function gateSkippedLine(p: AnswerAuditPayload, verbose: boolean): string
 		return undefined
 	}
 	return `Answer was not held back for checking: ${skip.text}.`
+}
+
+/**
+ * A skip that is the user's own choice, or "no study bound" in a chat that has no study, is information; the same
+ * reason where a study IS expected (the audit found one: `sessionId` present) is a warning.
+ */
+export function gateSkipNeedsAttention(p: AnswerAuditPayload): boolean {
+	if (!p.gateSkipped || GATE_SKIP_TEXT[p.gateSkipped].chosen) {
+		return false
+	}
+	return p.gateSkipped === "study-not-bound" ? !!p.sessionId : true
 }
 
 /** True when the audit found something the agent could be asked to fix by citing: hard findings, or any legacy finding. */
@@ -155,7 +172,7 @@ export const AnswerAuditFooter: React.FC<FooterProps> = ({ audit, onAskToLink, a
 			)}
 			{skippedGate && (
 				<div className="opacity-80" data-testid="answer-audit-gate-skipped">
-					<Icon attention={!(audit.gateSkipped && GATE_SKIP_TEXT[audit.gateSkipped].chosen)} />
+					<Icon attention={gateSkipNeedsAttention(audit)} />
 					<span className="ph-no-capture">{skippedGate}</span>
 				</div>
 			)}

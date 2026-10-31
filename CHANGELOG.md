@@ -20,6 +20,8 @@ The gate is the revise-before-showing loop for uncited numbers. On the owner's t
 
 Changes:
 - Any first-party tool result that reports a `session_binding` for **this chat** now counts as bound (`bindingObserved`). Shape only, no tool-name list. It is a flag, never a study id: the audit still asks the server itself with the host's chat id, requires the audited session to match, and fails closed. The host's own chip (`controller.studyBinding`, bound for this chat) also counts, as a boolean.
+- A result counts as an observation only when the server that returned it is connected and trusted (name plus the recorded launcher), the same test the study chip uses.
+- "No study bound" is shown as information for a chat that has no study, and as a warning only where the audit found one. The technical audit line (Verbose, exports, copy) always ends with `gate not run: <reason>`, so a skipped gate can never read as an audited, held-back answer.
 - Trust is unchanged: an untrusted server is still never gated.
 - When the gate does not run, the shown answer's `answer_audit` row now carries `gateSkipped: <reason>` (additive field on the v1 payload). The footer says "Answer was not held back for checking: ..." for every reason where a safeguard could not engage; skips that are the user's own settings or Plan mode show at Verbose only.
 

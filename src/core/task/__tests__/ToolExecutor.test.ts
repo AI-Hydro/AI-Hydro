@@ -438,9 +438,24 @@ describe("ToolExecutor gate binding (model-invoked output is never a study id)",
 	describe("any first-party result that reports this chat's binding makes the gate eligible (flag only)", () => {
 		const { computeGateEligibility } = require("../answerAuditGate")
 		const CHAT = "01M668YZ3T3Q6W1CKYTXGTCB1N"
-		const ex = (state: any) => {
+		const LAUNCHER = { name: "aihydro-tools", command: "/opt/miniconda3/bin/aihydro-mcp", args: [] as string[] }
+		const hubWith = (command: string) => ({
+			getServers: () => [
+				{
+					name: "aihydro-tools",
+					status: "connected",
+					config: JSON.stringify({ type: "stdio", command, args: [] }),
+					tools: [],
+				},
+			],
+		})
+		const { setRecordedFirstPartyLauncher } = require("@/shared/aihydro/firstPartyServers")
+		beforeEach(() => setRecordedFirstPartyLauncher(LAUNCHER))
+		afterEach(() => setRecordedFirstPartyLauncher(undefined))
+		const ex = (state: any, command = LAUNCHER.command) => {
 			const e = executor(state)
 			e.ulid = CHAT
+			e.mcpHub = hubWith(command)
 			return e
 		}
 		// Shape of the real delineate_watershed result of task 1793359576182 (T2), trimmed to the fields that matter.
@@ -494,6 +509,10 @@ describe("ToolExecutor gate binding (model-invoked output is never a study id)",
 			ex(evil).noteStartSession(delineateResult(CHAT), {
 				params: { server_name: "evil", tool_name: "delineate_watershed" },
 			})
+			// The server carries the first-party name but is not the registered launcher: its output observes nothing.
+			const untrusted = createGateState()
+			ex(untrusted, "/tmp/evil").noteStartSession(delineateResult(CHAT), block("delineate_watershed"))
+			;(untrusted.bindingObserved === undefined).should.equal(true)
 			const none = createGateState()
 			ex(none).noteStartSession(JSON.stringify({ data: { area_km2: 1 } }), block("delineate_watershed"))
 			for (const s of [other, err, evil, none]) {
