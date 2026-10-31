@@ -122,4 +122,11 @@ describe("research inspection", () => {
 		expect(Object.fromEntries(rows)["Source file"]).toBe("/w/a.geojson")
 		expect(Object.fromEntries(rows).Claim).toBe("c-1")
 	})
+
+	it("says which run a layer's link was removed from when the file changed under it", () => {
+		const { rows } = provenanceOf(
+			layer({ id: "c", layerType: "polygon", geojson: "{}", metadata: { _prior_run_id: "R1", source: "user" } }),
+		)
+		expect(Object.fromEntries(rows)["File changed since run"]).toBe("R1")
+	})
 })

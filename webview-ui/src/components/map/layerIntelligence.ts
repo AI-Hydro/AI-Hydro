@@ -281,6 +281,7 @@ export function layerProvenance(layer: MapLayer, intelligence: LayerIntelligence
 		["Format", meta.source_format || meta.format],
 		["Converted artifact", meta.converted_artifact_path],
 		["Claim", meta.claim_id],
+		["File changed since run", meta._prior_run_id],
 		["Provenance record", intelligence.provenancePath],
 		["Product", meta.product_identity || meta.source_dataset_id || meta.gee_dataset_id || meta.dataset],
 		["Units", meta.units],
@@ -295,7 +296,17 @@ export function layerProvenance(layer: MapLayer, intelligence: LayerIntelligence
 	]
 	// Hidden when absent (not "not recorded"): they only exist for some layers.
 	// Run is not listed either: the Provenance tab says "No run record." on its own line.
-	const optional = new Set(["Tool", "Run", "Claim", "Agent step", "Format", "Converted artifact", "Time range", "Computed at"])
+	const optional = new Set([
+		"Tool",
+		"Run",
+		"Claim",
+		"File changed since run",
+		"Agent step",
+		"Format",
+		"Converted artifact",
+		"Time range",
+		"Computed at",
+	])
 	const rows: Array<[string, string]> = []
 	const notRecorded: string[] = []
 	for (const [label, value] of facts) {

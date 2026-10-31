@@ -378,7 +378,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				},
 			])
 			if (result.loaded > 0) {
-				say("ok", `Reloaded ${displayName}.`, 5000)
+				// The host says what happened (the file changed, or it is unchanged and already on the map).
+				say("ok", `Reload finished for ${displayName}.`, 5000)
 			} else {
 				say("err", result.errors[0] ?? "Reload failed.", 6000)
 			}

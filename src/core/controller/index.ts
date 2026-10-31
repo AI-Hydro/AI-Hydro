@@ -1,6 +1,8 @@
+import { realpathSync } from "node:fs"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
 import { LedgerEventWatcher } from "@core/ledger/LedgerEventWatcher"
+import { type AddOutcome, applyAddLayer } from "@core/map/applyAddLayer"
 import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
 import { buildMapLayerCatalogAsync, type MapLayerCatalogEntry, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
@@ -43,7 +45,6 @@ import { MAX_REMOTE_CATALOG_BYTES, MAX_REMOTE_CONNECTORS } from "@shared/connect
 import type { StudyBindingState } from "@shared/ExtensionMessage"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { HistoryItem, type HistoryOrigin } from "@shared/HistoryItem"
-import { findDuplicate, planMerge } from "@shared/map/layerIdentity"
 import { McpMarketplaceCatalog } from "@shared/mcp"
 import { HtmlPreviewItem, HtmlPreviewMode, LearningModuleCatalog } from "@shared/proto/cline/html_preview"
 import type { ClaimUpdate } from "@shared/proto/cline/ledger"
@@ -2038,7 +2039,7 @@ export class Controller {
 	 * Add or update a map layer
 	 * @param layer The layer to add/update
 	 */
-	addMapLayer(layer: MapLayer): void {
+	addMapLayer(layer: MapLayer, options: { replaceExisting?: boolean } = {}): void {
 		console.log(`[Controller] Adding map layer: ${layer.id}`)
 		const op = layer.metadata?.__operation
 		if (op === "remove") {
@@ -2049,41 +2050,53 @@ export class Controller {
 			this.clearMapLayers()
 			return
 		}
-		// One file is one layer: a file already on the map under another id is not added again (see layerIdentity.ts).
-		const duplicate = this.mapLayers.has(layer.id) ? undefined : findDuplicate(Array.from(this.mapLayers.values()), layer)
-		if (duplicate) {
-			this.mergeIntoExisting(duplicate, layer)
+		const outcome = applyAddLayer(
+			{ layers: this.mapLayers, order: this.mapLayerOrder, aliases: this.mapLayerAliases },
+			layer,
+			options,
+			this.realPathOf,
+		)
+		if (outcome.kind !== "added") {
+			this.afterMapMerge(outcome)
 			return
-		}
-		this.mapLayers.set(layer.id, layer)
-		if (!this.mapLayerOrder.includes(layer.id)) {
-			this.mapLayerOrder.push(layer.id)
 		}
 		this.notifyMapLayerSubscribers(layer)
 		void this.syncMapLayerCatalog()
 	}
 
+	/** Symlinks resolved, cached per path, so two routes to one file compare equal without a stat on every add. */
+	private readonly realPathCache = new Map<string, string>()
+	private readonly realPathOf = (p: string): string => {
+		const hit = this.realPathCache.get(p)
+		if (hit !== undefined) return hit
+		let real = p
+		try {
+			real = realpathSync(p)
+		} catch {
+			/* a file that is gone keeps its own path */
+		}
+		if (this.realPathCache.size > 2000) this.realPathCache.clear()
+		this.realPathCache.set(p, real)
+		return real
+	}
+
 	/** Duplicates merged since the map opened (restore and later adds). The Layers panel says so once. */
 	private mapMergedCount = 0
+	/** Ids that were merged away, and the layer that stands for each. Commands that name an old id still reach it. */
+	private readonly mapLayerAliases = new Map<string, string>()
 
-	/**
-	 * The same file arrived a second time. Keep one layer: the one with provenance, else the one already on the map.
-	 * The survivor takes the earlier of the two places in the order, keeps its own metadata and gains any run link
-	 * or source key the other had; a run link is never lost. Adding again selects the survivor and says so.
-	 */
-	private mergeIntoExisting(existing: MapLayer, incoming: MapLayer): void {
-		const plan = planMerge(existing, incoming, this.mapLayerOrder)
-		const source = plan.winner === "existing" ? existing : incoming
-		const kept = MapLayer.create({ ...source, metadata: plan.metadata })
-		this.mapLayerOrder = plan.order
-		if (plan.removedId) {
-			this.mapLayers.delete(plan.removedId)
-			this.notifyMapLayerSubscribers(
-				MapLayer.create({ id: plan.removedId, metadata: { __operation: "remove" }, visible: false }),
-			)
-		}
-		this.mapLayers.set(kept.id, kept)
-		this.notifyMapLayerSubscribers(kept)
+	/** The id a layer is known by now: itself, or the layer an earlier merge folded it into. */
+	resolveMapLayerId(id: string): string {
+		return this.mapLayerAliases.get(id) ?? id
+	}
+
+	getMapLayerAliases(): Record<string, string> {
+		return Object.fromEntries(this.mapLayerAliases)
+	}
+
+	/** Tell the map what a merge did: the survivor changed, and (after restore) the user is told once what happened. */
+	private afterMapMerge(outcome: Exclude<AddOutcome, { kind: "added" }>): void {
+		this.notifyMapLayerSubscribers(outcome.layer)
 		this.mapMergedCount++
 		if (this.mapHydrating) {
 			// Restore: the panel carries one note for all of them.
@@ -2092,10 +2105,7 @@ export class Controller {
 		}
 		this.mapSessionService.appendEvent({
 			type: "command.focus_layers",
-			payloadJson: JSON.stringify({
-				layerIds: [kept.id],
-				note: `Already on the map as “${kept.metadata?.display_name || kept.name}”. Selected it.`,
-			}),
+			payloadJson: JSON.stringify({ layerIds: [outcome.layer.id], note: outcome.note }),
 			timestampMs: Date.now(),
 			source: "user",
 		})
@@ -2105,7 +2115,8 @@ export class Controller {
 	/**
 	 * Update an existing layer's style/metadata without replacing geojson.
 	 */
-	updateMapLayer(layerId: string, patch: MapLayerPatch): MapLayer | undefined {
+	updateMapLayer(requestedId: string, patch: MapLayerPatch): MapLayer | undefined {
+		const layerId = this.resolveMapLayerId(requestedId)
 		const existing = this.mapLayers.get(layerId)
 		if (!existing) {
 			return undefined
@@ -2139,8 +2150,13 @@ export class Controller {
 		this.mapOverflowEntries = entries
 	}
 
-	getMapRestoreState(): { hydrating: boolean; olderCount: number; mergedCount: number } {
-		return { hydrating: this.mapHydrating, olderCount: this.mapOverflowEntries.length, mergedCount: this.mapMergedCount }
+	getMapRestoreState(): { hydrating: boolean; olderCount: number; mergedCount: number; aliases: Record<string, string> } {
+		return {
+			hydrating: this.mapHydrating,
+			olderCount: this.mapOverflowEntries.length,
+			mergedCount: this.mapMergedCount,
+			aliases: this.getMapLayerAliases(),
+		}
 	}
 
 	/** Tells map subscribers whether restore is still running and how many older layers are kept but not loaded. */
@@ -2155,6 +2171,7 @@ export class Controller {
 					hydrating: state.hydrating ? "1" : "0",
 					older_count: String(state.olderCount),
 					merged_count: String(state.mergedCount),
+					aliases: JSON.stringify(this.getMapLayerAliases()),
 				},
 			}),
 		)
@@ -2192,7 +2209,8 @@ export class Controller {
 	 * Remove a map layer
 	 * @param layerId The ID of the layer to remove
 	 */
-	removeMapLayer(layerId: string): void {
+	removeMapLayer(requestedId: string): void {
+		const layerId = this.resolveMapLayerId(requestedId)
 		console.log(`[Controller] Removing map layer: ${layerId}`)
 
 		const wasRemoved = this.mapLayers.delete(layerId)

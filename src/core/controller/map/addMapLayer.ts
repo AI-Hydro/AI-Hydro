@@ -23,7 +23,7 @@ export async function addMapLayer(controller: Controller, request: AddMapLayerRe
 	})
 
 	// Add layer to controller storage and notify subscribers
-	controller.addMapLayer(request.layer)
+	controller.addMapLayer(request.layer, { replaceExisting: request.replaceExisting })
 
 	if (request.autoZoom) {
 		console.log("[addMapLayer] Auto-zoom requested for layer:", request.layer.id)

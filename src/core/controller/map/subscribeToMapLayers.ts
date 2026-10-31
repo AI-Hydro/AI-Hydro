@@ -54,6 +54,7 @@ export async function subscribeToMapLayers(
 			hydrating: restore.hydrating ? "1" : "0",
 			older_count: String(restore.olderCount),
 			merged_count: String(restore.mergedCount),
+			aliases: JSON.stringify(restore.aliases),
 		}),
 	)
 	initializing = false

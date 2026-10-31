@@ -122,6 +122,7 @@ import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGal
 import { resolveFileUri } from "./resolveFileUri"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
+import { remapSceneIds } from "./sceneAliases"
 import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
 import {
@@ -710,6 +711,8 @@ const useEscToClosePanels = ({
 
 export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const { layers, connectionStatus, connectionError, reconnect, restoreState } = useMapContext()
+	const restoreStateRef = useRef(restoreState)
+	restoreStateRef.current = restoreState
 	const [resourceRetry, setResourceRetry] = useState(0)
 	const { states: rasterStates, revision: rasterResourceRevision } = useRasterResources(layers, resourceRetry)
 	const [rendererError, setRendererError] = useState<string | null>(null)
@@ -1638,7 +1641,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				return
 			} else if (msg?.type === "aihydro-open-map-scene" && typeof msg.scene === "string") {
 				try {
-					const scene = JSON.parse(msg.scene)
+					const scene = remapSceneIds(JSON.parse(msg.scene), restoreStateRef.current.aliases)
 					if (scene?.viewState) {
 						setViewState(sanitizeViewState(scene.viewState))
 					}
