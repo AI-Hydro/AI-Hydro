@@ -60,9 +60,13 @@ describe("research inspection", () => {
 		const labels = rows.map(([k]) => k)
 		expect(labels).not.toContain("Units")
 		expect(labels).not.toContain("Validation")
-		expect(notRecorded).toEqual(expect.arrayContaining(["Units", "CRS", "Validation", "Uncertainty", "Run", "Source status"]))
+		expect(notRecorded).toEqual(
+			expect.arrayContaining(["Units", "CRS", "Validation", "Uncertainty", "Source", "Source status"]),
+		)
 		// Recorded facts stay; absent optional fields are not listed at all.
-		expect(labels).toEqual(["Source"])
+		expect(labels).toEqual([])
+		// The run is said once, as its own line in the tab, not also in this list.
+		expect(notRecorded).not.toContain("Run")
 		expect(notRecorded).not.toContain("Agent step")
 	})
 	it("does not call provisional or unfamiliar sources current", () => {
@@ -104,5 +108,18 @@ describe("research inspection", () => {
 			layer({ id: "b", layerType: "polygon", geojson: "{}", metadata: { tool: "t", source: "merit" } }),
 		)
 		expect(differs.rows.map(([k]) => k)).toContain("Tool")
+	})
+
+	it("an empty string is not a recorded value, so a real path later in the chain is used; a claim id shows", () => {
+		const { rows } = provenanceOf(
+			layer({
+				id: "p",
+				layerType: "polygon",
+				geojson: "{}",
+				metadata: { source_path: "", path: "/w/a.geojson", claim_id: "c-1" },
+			}),
+		)
+		expect(Object.fromEntries(rows)["Source file"]).toBe("/w/a.geojson")
+		expect(Object.fromEntries(rows).Claim).toBe("c-1")
 	})
 })

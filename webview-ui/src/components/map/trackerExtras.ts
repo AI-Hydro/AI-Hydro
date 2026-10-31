@@ -5,21 +5,31 @@
  */
 export const TRACKER_EXTRAS_KEY = "aihydro.map.trackerExtras"
 
-export function trackerExtrasEnabled(): boolean {
+/** Anything on a sketch that only the tracker fields show. A user who filled these in has not opted out of them. */
+export function hasTrackerData(
+	annotations: Array<{ status?: string; priority?: string | null; tags?: string[]; collectionIds?: string[] }>,
+): boolean {
+	return annotations.some(
+		(a) =>
+			(a.status && a.status !== "open") || !!a.priority || (a.tags?.length ?? 0) > 0 || (a.collectionIds?.length ?? 0) > 0,
+	)
+}
+
+/** A saved choice wins. With none, the tracker is on only when saved sketches already hold tracker data. */
+export function trackerExtrasEnabled(annotations: Parameters<typeof hasTrackerData>[0] = []): boolean {
 	try {
-		return localStorage.getItem(TRACKER_EXTRAS_KEY) === "1"
+		const saved = localStorage.getItem(TRACKER_EXTRAS_KEY)
+		if (saved === "1") return true
+		if (saved === "0") return false
 	} catch {
-		return false
+		/* storage blocked: fall through to the data check */
 	}
+	return hasTrackerData(annotations)
 }
 
 export function setTrackerExtras(on: boolean): void {
 	try {
-		if (on) {
-			localStorage.setItem(TRACKER_EXTRAS_KEY, "1")
-		} else {
-			localStorage.removeItem(TRACKER_EXTRAS_KEY)
-		}
+		localStorage.setItem(TRACKER_EXTRAS_KEY, on ? "1" : "0")
 	} catch {
 		/* storage can be blocked; the choice then lasts until the panel closes */
 	}
