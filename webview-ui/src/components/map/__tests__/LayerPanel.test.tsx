@@ -166,6 +166,18 @@ describe("LayerPanel", () => {
 		expect(screen.queryByRole("button", { name: "Open run" })).toBeNull()
 	})
 
+	it("a Show on map request selects that row and opens its details, again on a new request", () => {
+		state.layers = [poly("a", "first"), poly("b", "second", { _run_id: "run-2.1" })]
+		const props = { ...baseProps(), focusLayerRequest: { layerId: "b", nonce: 1 } }
+		const { rerender } = render(<LayerPanelContent {...props} />)
+		expect(screen.getByRole("group", { name: /^Settings for second/ })).toBeInTheDocument()
+		expect(screen.queryByRole("group", { name: /^Settings for first/ })).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: /^first/ }))
+		expect(screen.getByRole("group", { name: /^Settings for first/ })).toBeInTheDocument()
+		rerender(<LayerPanelContent {...props} focusLayerRequest={{ layerId: "b", nonce: 2 }} />)
+		expect(screen.getByRole("group", { name: /^Settings for second/ })).toBeInTheDocument()
+	})
+
 	it("Save as… offers a workspace file and a GeoJSON download in the drawer", () => {
 		render(<LayerPanelContent {...baseProps()} />)
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for watershed_01031500/ }))

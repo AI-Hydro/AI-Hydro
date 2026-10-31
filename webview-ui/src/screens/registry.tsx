@@ -1004,6 +1004,14 @@ export const screens: ScreenDef[] = [
 	chatTx("chat-old-task-no-outcomes", "Old task without askOutcome/execOutcome", tx.oldTaskNoOutcomesTask, "Both steps ran."),
 	// ── Science tool-call cards (S3) ────────────────────────────────
 	toolCardScreen("toolcard-success", "Tool card: success, explicit gauge, area check pass", "recorded", successCall),
+	toolCardScreen("toolcard-on-map", "Tool card: success, with two map layers from its run (On map)", "recorded", successCall, {
+		layers: [1, 2].map((n) => ({
+			...gaugePoint,
+			id: `fx-on-map-${n}`,
+			name: `Layer ${n} from the run`,
+			metadata: { source_status: "synthetic", tool: "fetch_hydrology_data", _run_id: "dfetch.20261017.e2eproo.48d4b668" },
+		})),
+	}),
 	toolCardScreen("toolcard-refusal", "Tool card: terminal refusal (GAUGE_REQUIRED)", "spliced", refusalCall),
 	toolCardScreen("toolcard-area-fail", "Tool card: gauge area check failed", "spliced", areaFailCall),
 	toolCardScreen("toolcard-provisional", "Tool card: provisional 43/120", "spliced", provisionalCall),

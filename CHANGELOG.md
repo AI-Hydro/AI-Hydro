@@ -48,6 +48,12 @@ Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of
 - X1-C4 (the composer footer) is done and on main; this uses the existing "add to input" path, so no composer change was needed.
 - Not in this change: the long prompt templates in `mapAgentPrompts.ts` stay for a new chat (the report deletes them only after 18 of 20 scripted asks resolve the right object, which needs the agent and was not run), and `map_get_item` is a tools-repo tool.
 
+### Added — show on map, from the chat and from claims (P5, branch `vision2040/map-show-on-map`)
+
+- **On map (N)** on a tool card whose run made layers that are on the map, and **Show on map (N)** in a claim's popover when the claim's run evidence made layers there. Neither appears when no layer on the map came from that run, so a claim with no linked layer gets no button.
+- One host command does both: the chat sends run ids (`aihydro-show-on-map`); the host finds the layers by the run id in their own metadata (it never takes a layer id from the chat), opens the map and sends `command.focus_layers`. The map makes those layers visible, opens the Layers panel with the first one selected and its Details open, and **moves the camera only when the map has been left alone for 5 seconds**. Otherwise the status line says "Showing N layers from the run. The view did not move; use Zoom to layer."
+- Not in this change (the report leaves them out): the session lens, claim badges on the map and the shared timeline.
+
 ---
 
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)

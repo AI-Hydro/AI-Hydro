@@ -51,6 +51,8 @@ interface LayerPanelContentProps {
 	layerOpacities?: Record<string, number>
 	clusterLayerIds?: Set<string>
 	onClusterToggle?: (layerId: string, enabled: boolean) => void
+	/** Open and select this layer row. Each new `nonce` selects again. */
+	focusLayerRequest?: { layerId: string; nonce: number } | null
 	onShowAllLayers?: () => void
 	onHideAllLayers?: () => void
 }
@@ -188,6 +190,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	layerOpacities = {},
 	clusterLayerIds,
 	onClusterToggle,
+	focusLayerRequest,
 	onShowAllLayers,
 	onHideAllLayers,
 }) => {
@@ -271,6 +274,19 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		setSelectedId(id)
 		setDrawer({ ...CLOSED_DRAWER, ...view })
 	}
+
+	// A "Show on map" from the chat: open that row's drawer and scroll it into view.
+	useEffect(() => {
+		if (!focusLayerRequest) {
+			return
+		}
+		select(focusLayerRequest.layerId, { details: true })
+		window.setTimeout(() => {
+			document
+				.querySelector(`[data-layer-id="${CSS.escape(focusLayerRequest.layerId)}"]`)
+				?.scrollIntoView({ block: "nearest" })
+		}, 0)
+	}, [focusLayerRequest?.nonce])
 
 	const commitRename = async (layer: MapLayer) => {
 		const trimmed = renameDraft.trim()

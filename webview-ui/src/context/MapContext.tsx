@@ -286,6 +286,9 @@ export const MapContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 	)
 }
 
+/** The map layers, or none when there is no provider (a tool card or a claim chip can render without a map). */
+export const useOptionalMapLayers = (): MapLayer[] => useContext(MapContext)?.layers ?? []
+
 export const useMapContext = () => {
 	const context = useContext(MapContext)
 	if (!context) {

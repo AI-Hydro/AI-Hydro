@@ -8,9 +8,10 @@
  *  - a refusal is "Stopped: <code>" with the recovery options as text: no retry button, no fallback offer;
  *  - the run link is a link to Replay, not a verification; nothing here is green or says "verified".
  */
+
 import {
-	describeAreaRatio,
 	assertedGauge,
+	describeAreaRatio,
 	describeProvisional,
 	describeQualityExtras,
 	describeSiteResolution,
@@ -22,6 +23,7 @@ import {
 import React, { useMemo } from "react"
 import { PLATFORM_CONFIG } from "@/config/platform.config"
 import { Badge, Button, Disclosure, EvidenceBadge, KeyValue, stateForInformationClass, Text } from "@/design"
+import { useRunLayers } from "../map/layersOfRuns"
 import "./ScienceToolCard.css"
 
 export interface ScienceToolCardProps {
@@ -94,6 +96,7 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 		? [...(quality.provisional ? [describeProvisional(quality.provisional)] : []), ...describeQualityExtras(quality)]
 		: []
 
+	const onMap = useRunLayers(model.runId ? [model.runId] : [])
 	const openReplay = () => {
 		if (model.runId && sessionId) {
 			PLATFORM_CONFIG.postMessage({ type: "open_replay", session_id: sessionId, run_id: model.runId })
@@ -161,7 +164,7 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 			)}
 
 			{refusal && (
-				<div className="aih-toolcard__section" role="group" aria-label="Refusal">
+				<div aria-label="Refusal" className="aih-toolcard__section" role="group">
 					<div className="aih-toolcard__chips">
 						<EvidenceBadge label={`Stopped: ${refusal.code ?? "code not reported"}`} state="refused" />
 					</div>
@@ -295,6 +298,11 @@ export const ScienceToolCard: React.FC<ScienceToolCardProps> = ({
 											<Badge title="Replay opens a run within a session, and no session id was reported.">
 												Replay needs a session id
 											</Badge>
+										)}
+										{onMap.count > 0 && (
+											<Button icon="globe" onClick={onMap.show} variant="ghost">
+												{`On map (${onMap.count})`}
+											</Button>
 										)}
 									</span>
 								) : undefined,
