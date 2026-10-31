@@ -8,6 +8,7 @@ import {
 	getPinSaveStatus,
 	markUnscoped,
 	pinSavePhase,
+	refusedSaveNotice,
 	resetPinSaveStatus,
 } from "../pinSaveStatus"
 
@@ -55,5 +56,16 @@ describe("pin save status", () => {
 		const seq = beginHostSave()
 		expect(currentSaveToken()).toBe(seq)
 		expect(pinSavePhase(getPinSaveStatus(), "local")).toBe("saving")
+	})
+})
+
+describe("refused save notice", () => {
+	it("names the pin and carries its note to copy", () => {
+		expect(refusedSaveNotice({ name: "Outlet candidate", notes: "check NLDI snap" })).toEqual({
+			message: "Pin \u201COutlet candidate\u201D was not saved: the open folder changed, so pins were reloaded.",
+			copy: "check NLDI snap",
+		})
+		expect(refusedSaveNotice({ name: "Dam", notes: "" }).copy).toBeUndefined()
+		expect(refusedSaveNotice(undefined).message).toMatch(/^A pin edit was not saved/)
 	})
 })

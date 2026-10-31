@@ -147,7 +147,8 @@ export function duplicateKey(layer: MapLayer): string | null {
 }
 
 /**
- * Layers to drop to leave one of each duplicate: the first in map order stays (it is drawn on top), and a visible copy
+ * Layers to drop to leave one of each duplicate: the first in the list given stays (callers pass the list as the user
+ * reads it, top of the map first), and a visible copy
  * wins over a hidden one so removing duplicates never hides what the user was looking at.
  */
 export function duplicatesToRemove(layers: MapLayer[], visible: (id: string) => boolean): MapLayer[] {
@@ -182,4 +183,29 @@ export function duplicateIds(layers: MapLayer[]): Set<string> {
 /** A short, readable id suffix for telling two same-named layers apart (a run id's first segment). */
 export function shortRun(layer: MapLayer): string | undefined {
 	return layerRunId(layer.metadata)?.split(".")[0]
+}
+
+// ── stacking ────────────────────────────────────────────────────────────────
+
+/**
+ * The order the map draws layers in. `layerOrder` is persisted draw order: the LAST id is drawn last, so it is on top
+ * (MapView hands this order to deck.gl, and `sampleTopRasterAtPoint` scans it from the end). Layers not in
+ * `layerOrder` follow, so they draw on top of listed ones. MapView and the Layers panel both use this one function.
+ */
+export function drawOrder(layers: MapLayer[], layerOrder: string[]): MapLayer[] {
+	if (layerOrder.length === 0) return layers
+	const byId = new Map(layers.map((l) => [l.id, l]))
+	const sorted = layerOrder.map((id) => byId.get(id)).filter(Boolean) as MapLayer[]
+	const listed = new Set(layerOrder)
+	for (const l of layers) if (!listed.has(l.id)) sorted.push(l)
+	return sorted
+}
+
+/** The Layers list reads like a GIS legend: the top row is on top of the map, so it is the draw order reversed. */
+export const listOrder = (draw: MapLayer[]): MapLayer[] => [...draw].reverse()
+
+/** Where a layer sits in the stack, 1 being on top of the map. Null when it is not in the list. */
+export function stackPosition(draw: MapLayer[], id: string): { position: number; of: number } | null {
+	const i = draw.findIndex((l) => l.id === id)
+	return i < 0 ? null : { position: draw.length - i, of: draw.length }
 }

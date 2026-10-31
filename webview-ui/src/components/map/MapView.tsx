@@ -71,6 +71,7 @@ import { meshTriangleCount } from "./inundation3d/meshCoordinates"
 import { hydrographFrameVisibilityUpdates } from "./inundation3d/syncHydrographFrame"
 import { terrainOffsetForManifest } from "./inundation3d/verticalAlignment"
 import { clusterGeoJSON, LayerClusterCache } from "./layerClusterCache"
+import { drawOrder } from "./layerModel"
 import { MapConnectionStatus } from "./MapConnectionStatus"
 import MapContextMenu from "./MapContextMenu"
 import { MapEmptyState, shouldShowEmptyState } from "./MapEmptyState"
@@ -95,7 +96,7 @@ import { MAP_Z } from "./mapZ"
 import PinCard from "./PinCard"
 import PinsPanel from "./PinsPanel"
 import { DASH_EXTENSION } from "./pathStyle"
-import { currentSaveToken, failOutstandingSaves, getPinSaveStatus, usePinSaveStatus } from "./pinSaveStatus"
+import { currentSaveToken, failOutstandingSaves, getPinSaveStatus, refusedSaveNotice, usePinSaveStatus } from "./pinSaveStatus"
 import {
 	ANNOTATIONS_LAYER_ID,
 	addPin,
@@ -915,7 +916,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	/** Put the cursor in the pin card's name field (a pin just placed, or "Rename pin"). */
 	const [pinFocusName, setPinFocusName] = useState(false)
 	const [pinToolArmed, setPinToolArmed] = useState(false)
-	const [pinToast, setPinToast] = useState<{ id: number; message: string; undoable: boolean } | null>(null)
+	const [pinToast, setPinToast] = useState<{ id: number; message: string; undoable: boolean; copy?: string } | null>(null)
+	/** What a refused save should say when the reload finishes (it names the pin, and carries the note to copy). */
+	const refusedToastRef = useRef<{ message: string; copy?: string } | null>(null)
 	const pinUndoStackRef = useRef(new PinHistory())
 	const lastPinPlacedAtRef = useRef(0)
 	/** What deck's click handler (memoised, so it would close over stale state) needs from the pin code. */
@@ -976,10 +979,14 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				saveAnnotations(merged, result.collections) // pins added before the reply
 			}
 			if (showToast) {
+				// One toast: the one that names the pin when a save was refused, else the generic reload notice.
+				const refused = refusedToastRef.current
+				refusedToastRef.current = null
 				setPinToast({
 					id: Date.now(),
-					message: "Map reloaded for the open folder; your last change was not saved",
+					message: refused?.message ?? "Map reloaded for the open folder; your last change was not saved",
 					undoable: false,
+					copy: refused?.copy,
 				})
 			}
 		})
@@ -998,15 +1005,12 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				const editedId = pinKeysRef.current.selected
 				const edited = annotationsRef.current.find((a) => a.id === editedId)
 				failOutstandingSaves()
-				loadPinsFromHost(true)
 				if (unanswered) {
-					// Reloading replaces the list with the open project's pins, so the edit cannot be kept; say which one.
-					setPinToast({
-						id: Date.now(),
-						message: `${edited ? `Pin \u201C${edited.name}\u201D was` : "A pin edit was"} not saved: the open folder changed, so pins were reloaded.`,
-						undoable: false,
-					})
+					// Reloading replaces the list with the open project's pins, so the edit cannot be kept. Say which pin,
+					// and keep its note available to copy.
+					refusedToastRef.current = refusedSaveNotice(edited)
 				}
+				loadPinsFromHost(true)
 			} else if (data?.type === "aihydro-map-save-ack") {
 				acknowledgeSaved(data.projectKey, data.ids, data.saveSeq)
 			}
@@ -2139,21 +2143,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		// rasterResourceRevision included so the reading refreshes after async colormap/preload updates
 	}, [cursorCoord, layers, visibleLayerIds, layerOrder, rasterResourceRevision])
 
-	// Sort layers by custom order for deck.gl (last = on top)
-	const sortedLayers = useMemo(() => {
-		if (layerOrder.length === 0) {
-			return layers
-		}
-		const byId = new Map(layers.map((l) => [l.id, l]))
-		const sorted = layerOrder.map((id) => byId.get(id)).filter(Boolean) as typeof layers
-		const inOrder = new Set(layerOrder)
-		for (const l of layers) {
-			if (!inOrder.has(l.id)) {
-				sorted.push(l)
-			}
-		}
-		return sorted
-	}, [layers, layerOrder])
+	// Sort layers by custom order for deck.gl (last = on top). The Layers panel shows the same order reversed.
+	const sortedLayers = useMemo(() => drawOrder(layers, layerOrder), [layers, layerOrder])
 
 	const handleMapClick = useCallback(
 		(info: any) => {
@@ -3918,6 +3909,23 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
 						}}>
 						<span>{pinToast.message}</span>
+						{pinToast.copy && (
+							<button
+								onClick={() => void navigator.clipboard?.writeText(pinToast.copy ?? "")}
+								style={{
+									minHeight: 24,
+									padding: "0 8px",
+									background: "transparent",
+									color: "var(--vscode-textLink-foreground, #3794ff)",
+									border: "1px solid var(--vscode-editorWidget-border, #454545)",
+									borderRadius: 3,
+									cursor: "pointer",
+									fontSize: 12,
+								}}
+								type="button">
+								Copy note
+							</button>
+						)}
 						{pinToast.undoable && (
 							<button
 								onClick={undoLastPinEdit}
