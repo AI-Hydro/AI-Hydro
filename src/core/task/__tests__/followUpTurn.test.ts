@@ -88,7 +88,7 @@ describe("follow-up turns are conversation (A2)", () => {
 			expect(task.taskState.followUpHeldText).to.deep.equal({})
 		})
 
-		it("the reply runs with the in-flight mark (so its row is a reply, not a result) and the mark and progress line are cleared after", async () => {
+		it("the reply runs with the in-flight mark (so its row is a reply, not a result); the mark survives a gate revision and the progress line is cleared", async () => {
 			const seen: boolean[] = []
 			const { task } = build({ followUpTurn: true, followUpHeldText: { 0: "Redoing now." }, followUpProgressShown: true })
 			task.toolExecutor.executeTool = async () => {
@@ -102,7 +102,7 @@ describe("follow-up turns are conversation (A2)", () => {
 			}
 			await task.acceptFollowUpAnswer()
 			expect(seen).to.deep.equal([true])
-			expect(task.taskState.followUpAnswerInFlight).to.equal(false)
+			expect(task.taskState.followUpAnswerInFlight).to.equal(true) // kept through a possible gate revision
 			expect(task.taskState.followUpProgressShown).to.equal(false)
 		})
 
@@ -168,5 +168,36 @@ describe("follow-up turns are conversation (A2)", () => {
 			expect(await task.acceptFollowUpAnswer()).to.equal(false)
 			expect(executeTool.called).to.equal(false)
 		})
+	})
+})
+
+describe("follow-up reply mark lifetime", () => {
+	// eslint-disable-next-line @typescript-eslint/no-var-requires
+	const { Task } = require("../index")
+	it("the user's next message ends it; a tool other than attempt_completion ends it; attempt_completion keeps it", async () => {
+		const mk = () => {
+			const task = Object.create(Task.prototype)
+			task.toolExecutor = { executeTool: async () => true }
+			task.say = async () => undefined
+			task.taskState = {
+				followUpTurn: true,
+				followUpAnswerInFlight: true,
+				followUpHeldText: {},
+				followUpProgressShown: false,
+				presentAssistantMessageLocked: false,
+				currentStreamingContentIndex: 0,
+				assistantMessageContent: [],
+				didCompleteReadingStream: false,
+			}
+			return task
+		}
+		const attempt = mk()
+		attempt.taskState.assistantMessageContent = [{ type: "tool_use", name: "attempt_completion", params: {}, partial: false }]
+		await Task.prototype.presentAssistantMessage.call(attempt)
+		expect(attempt.taskState.followUpAnswerInFlight).to.equal(true)
+		const other = mk()
+		other.taskState.assistantMessageContent = [{ type: "tool_use", name: "read_file", params: {}, partial: false }]
+		await Task.prototype.presentAssistantMessage.call(other)
+		expect(other.taskState.followUpAnswerInFlight).to.equal(false)
 	})
 })

@@ -89,7 +89,7 @@ export class TaskState {
 	// While a follow-up turn streams, its text is held here (by block index) instead of shown: it is either the answer
 	// (accepted through attempt_completion, so it gets the audit) or narration before a tool call (shown then).
 	followUpHeldText: Record<number, string> = {}
-	// True only while a held follow-up reply is being run through attempt_completion: the answer row is marked as a reply.
+	// True from the moment a held follow-up reply is run through attempt_completion until the next user message (or a tool other than attempt_completion): answer rows in that span, including a gate revision, are marked as replies.
 	followUpAnswerInFlight = false
 	// The "drafting" activity line is showing for held follow-up text.
 	followUpProgressShown = false

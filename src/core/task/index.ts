@@ -710,6 +710,7 @@ export class Task {
 		if (type === "user_feedback") {
 			// Real user feedback starts a new completion cycle: the audit revision counter does not carry over.
 			resetGateCycle(this.taskState.answerAuditGate)
+			this.taskState.followUpAnswerInFlight = false
 		}
 
 		if (partial !== undefined) {
@@ -2165,6 +2166,9 @@ export class Task {
 					const held = Object.values(this.taskState.followUpHeldText).join("\n\n").trim()
 					this.taskState.followUpHeldText = {}
 					this.taskState.followUpTurn = false
+					if (block.name !== AiHydroDefaultTool.ATTEMPT) {
+						this.taskState.followUpAnswerInFlight = false
+					}
 					await this.clearFollowUpProgress()
 					if (held) {
 						await this.say("text", held)
@@ -2232,7 +2236,8 @@ export class Task {
 				partial: false,
 			})
 		} finally {
-			this.taskState.followUpAnswerInFlight = false
+			// The mark is NOT cleared here: an audit revision of this reply is still a reply. It ends with the user's next
+			// message, or when the model uses a tool other than attempt_completion.
 			await this.clearFollowUpProgress()
 		}
 		return true
