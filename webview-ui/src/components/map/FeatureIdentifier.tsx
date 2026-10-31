@@ -1,6 +1,11 @@
+import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import React, { useEffect, useState } from "react"
+import { PLATFORM_CONFIG } from "../../config/platform.config"
+import { originOf } from "./layerModel"
+import { actionTooltip, KIND_LABEL, type MapActionId, mapActions, objectKind, routingWarning } from "./mapActions"
 import type { CursorRasterReading } from "./mapLayerAdapters"
 import { MAP_Z } from "./mapZ"
+import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { PhotoStrip } from "./PhotoStrip"
 import { extractPhotoPaths } from "./photoPaths"
 
@@ -33,78 +38,18 @@ interface FeatureIdentifierProps {
 	agentStatus?: string | null
 	delineating?: boolean
 	delineateStatus?: string | null
+	/** Layer metadata by id, for the run line (tool, run, study). */
+	layerMetadata?: (layerId: string) => Record<string, string> | undefined
+	onAddPin?: (point: MapInspectPoint) => void
+	onMeasureFrom?: (point: MapInspectPoint) => void
+	onCopyCoords?: (point: MapInspectPoint) => void
+	onRemoveLayer?: (layerId: string) => void | Promise<void>
 }
 
-const QUICK_DELINEATE_MAX_MERIT_UPAREA_KM2 = 50_000
+/** How many properties show before "Show all". */
+const PROPS_SHOWN = 6
 
-function numberProp(props: Record<string, unknown> | undefined, keys: string[]): number | undefined {
-	if (!props) {
-		return undefined
-	}
-	for (const key of keys) {
-		const value = props[key]
-		if (typeof value === "number" && Number.isFinite(value)) {
-			return value
-		}
-		if (typeof value === "string") {
-			const parsed = Number(value)
-			if (Number.isFinite(parsed)) {
-				return parsed
-			}
-		}
-	}
-	return undefined
-}
-
-function routingBadge(
-	feature: ClickedFeature | undefined,
-	point: MapInspectPoint | null | undefined,
-):
-	| {
-			label: string
-			title: string
-			bg: string
-			fg: string
-	  }
-	| undefined {
-	if (!point) {
-		return undefined
-	}
-	const conus = point.lat >= 24 && point.lat <= 50 && point.lon >= -125 && point.lon <= -66.5
-	if (conus) {
-		return {
-			label: "NLDI first",
-			title: "CONUS outlet: quick delineation tries NLDI/NHDPlus before MERIT fallback.",
-			bg: "rgba(34,197,94,0.16)",
-			fg: "#86efac",
-		}
-	}
-	const uparea = numberProp(feature?.properties, ["uparea", "UPAREA", "upArea", "UpArea"])
-	if (uparea && uparea > QUICK_DELINEATE_MAX_MERIT_UPAREA_KM2) {
-		return {
-			label: "Hybrid",
-			title: "Large MERIT basin: use Delineate with agent so the MERIT-Basins hybrid workflow can run safely.",
-			bg: "rgba(251,146,60,0.18)",
-			fg: "#fdba74",
-		}
-	}
-	if (uparea && uparea > 0) {
-		return {
-			label: "Quick MERIT",
-			title: "Basin is within the interactive MERIT flowdir envelope.",
-			bg: "rgba(56,189,248,0.16)",
-			fg: "#7dd3fc",
-		}
-	}
-	return {
-		label: "Outlet check",
-		title: "Click a MERIT river/catchment feature for better area-aware routing guidance.",
-		bg: "rgba(148,163,184,0.18)",
-		fg: "#cbd5e1",
-	}
-}
-
-/** Bottom-right inspector — clear of the top-right tool ribbon. */
+/** Bottom-right selection card: what was clicked, the run behind it, and one action list (`mapActions`). */
 const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 	features,
 	inspectPoint,
@@ -122,12 +67,32 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 	agentStatus,
 	delineating = false,
 	delineateStatus,
+	layerMetadata,
+	onAddPin,
+	onMeasureFrom,
+	onCopyCoords,
+	onRemoveLayer,
 }) => {
 	const [currentIndex, setCurrentIndex] = useState(0)
+	const [showAll, setShowAll] = useState(false)
+	const [confirmRemove, setConfirmRemove] = useState(false)
 
 	useEffect(() => {
 		setCurrentIndex(0)
+		setShowAll(false)
+		setConfirmRemove(false)
 	}, [features])
+
+	// Escape closes the card, unless an open menu has it (the menu closes first).
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape" && !document.querySelector('[role="menu"]')) {
+				onClose()
+			}
+		}
+		window.addEventListener("keydown", onKey)
+		return () => window.removeEventListener("keydown", onKey)
+	}, [onClose])
 
 	if (features.length === 0 && !inspectPoint && !rasterReading) {
 		return null
@@ -144,18 +109,28 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 
 	const photoPaths = hasFeatures ? extractPhotoPaths(current.properties.photos) : []
 	const PHOTO_KEYS = new Set(["photos", "photo_count"])
-	const entries = hasFeatures
-		? Object.entries(current.properties)
-				.filter(([k]) => !k.startsWith("_") && !PHOTO_KEYS.has(k))
-				.slice(0, 6)
+	const allEntries = hasFeatures
+		? Object.entries(current.properties).filter(([k]) => !k.startsWith("_") && !PHOTO_KEYS.has(k))
 		: []
-	const extra = hasFeatures
-		? Object.entries(current.properties).filter(([k]) => !k.startsWith("_") && !PHOTO_KEYS.has(k)).length - entries.length
-		: 0
+	const entries = showAll ? allEntries : allEntries.slice(0, PROPS_SHOWN)
+	const extra = allEntries.length - PROPS_SHOWN
 
 	const coordLine =
 		inspectPoint &&
 		`${Math.abs(inspectPoint.lat).toFixed(5)}°${inspectPoint.lat >= 0 ? "N" : "S"}, ${Math.abs(inspectPoint.lon).toFixed(5)}°${inspectPoint.lon >= 0 ? "E" : "W"}`
+
+	const kind = objectKind(features.length > 0 ? [current] : [])
+	const meta = hasFeatures ? layerMetadata?.(current.layerId) : undefined
+	const tool = layerTool(meta)
+	const runId = layerRunId(meta)
+	const studyId = meta?.study_id
+	const runLine = runId
+		? `${tool ?? "run"} · run ${runId.slice(0, 8)}`
+		: meta && originOf({ metadata: meta } as never) === "reference"
+			? "Reference, not in any run"
+			: tool
+				? `${tool} · no run record`
+				: undefined
 
 	const btnStyle: React.CSSProperties = {
 		width: 24,
@@ -174,7 +149,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 	}
 
 	const primaryBtn: React.CSSProperties = {
-		width: "100%",
+		flex: 1,
 		minHeight: 24,
 		padding: "4px 8px",
 		fontSize: 11,
@@ -187,18 +162,57 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 		opacity: agentStarting ? 0.7 : 1,
 	}
 
-	const secondaryBtn: React.CSSProperties = {
-		...primaryBtn,
-		fontWeight: 500,
+	const linkBtn: React.CSSProperties = {
+		minHeight: 24,
+		padding: "0 4px",
+		border: "none",
 		background: "transparent",
-		marginTop: 4,
+		color: accentText,
+		cursor: "pointer",
+		fontSize: 11,
+		textDecoration: "underline",
 	}
 
-	const showActions = inspectPoint && (onAgentDelineate || onAgentAsk || onQuickDelineate)
-	const askLabel = hasFeatures ? "Ask about this outlet" : "Ask about map layers & outlet"
-	const badge = routingBadge(current, inspectPoint)
 	const currentSelection = current?.geometry ? [current] : []
 	const selectedCount = selectedFeatures.filter((feature) => feature.geometry).length
+	const point = inspectPoint ?? null
+
+	// One handler per action id. An action with no handler is not offered, so the card never shows a dead button.
+	const handlers: Partial<Record<MapActionId, () => void>> = point
+		? {
+				ask: onAgentAsk ? () => void onAgentAsk(point) : undefined,
+				delineate: onAgentDelineate ? () => void onAgentDelineate(point) : undefined,
+				"delineate-quick": onQuickDelineate ? () => void onQuickDelineate(point) : undefined,
+				"add-pin": onAddPin ? () => onAddPin(point) : undefined,
+				measure: onMeasureFrom ? () => onMeasureFrom(point) : undefined,
+				"copy-coords": () => {
+					void navigator.clipboard?.writeText(`${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`)
+					onCopyCoords?.(point)
+				},
+			}
+		: {}
+	if (currentSelection.length > 0) {
+		handlers.select = onAddSelection ? () => onAddSelection(currentSelection) : undefined
+		handlers["export-geojson"] = onSaveFeatures ? () => void onSaveFeatures(currentSelection, "geojson") : undefined
+		handlers["export-shapefile"] = onSaveFeatures ? () => void onSaveFeatures(currentSelection, "shapefile") : undefined
+	}
+	if (hasFeatures && onRemoveLayer) {
+		handlers["remove-layer"] = () => setConfirmRemove(true)
+	}
+	const offered = mapActions(kind, "card").filter((a) => handlers[a.id])
+	const primary = offered.filter((a) => a.id === "ask" || a.id === "delineate")
+	const overflow: OverflowItem[] = offered
+		.filter((a) => a.id !== "ask" && a.id !== "delineate")
+		.map((a) => ({
+			key: a.id,
+			label: a.label,
+			icon: a.icon,
+			danger: a.danger,
+			title: actionTooltip(a.id, current, point),
+			disabledReason: a.id === "delineate-quick" && (delineating || agentStarting) ? "Another run is starting" : undefined,
+			onSelect: () => handlers[a.id]?.(),
+		}))
+	const showActions = primary.length > 0 || overflow.length > 0
 
 	return (
 		<div
@@ -251,35 +265,36 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 					) : (
 						<div style={{ fontSize: 11, fontWeight: 600 }}>Map click</div>
 					)}
-					{coordLine && (
-						<div
-							style={{
-								fontSize: 11,
-								color: muted,
-								fontFamily: "var(--vscode-editor-font-family, monospace)",
-								marginTop: 2,
-								lineHeight: 1.3,
-							}}>
-							{coordLine}
-						</div>
-					)}
-					{badge && (
-						<div
-							style={{
-								display: "inline-flex",
-								alignItems: "center",
-								marginTop: 5,
-								padding: "1px 6px",
-								borderRadius: 3,
-								background: badge.bg,
-								color: badge.fg,
-								fontSize: 11,
-								fontWeight: 700,
-								letterSpacing: 0,
-								textTransform: "none",
-							}}
-							title={badge.title}>
-							{badge.label}
+					<div style={{ fontSize: 11, color: muted, marginTop: 2, lineHeight: 1.3 }}>
+						{KIND_LABEL[kind]}
+						{coordLine && (
+							<>
+								{" · "}
+								<span style={{ fontFamily: "var(--vscode-editor-font-family, monospace)" }}>{coordLine}</span>
+							</>
+						)}
+					</div>
+					{runLine && (
+						<div style={{ fontSize: 11, color: muted, marginTop: 2, lineHeight: 1.3 }}>
+							{runLine}
+							{runId && studyId && (
+								<>
+									{" · "}
+									<button
+										onClick={() =>
+											PLATFORM_CONFIG.postMessage({
+												type: "aihydro-map-open-run",
+												study_id: studyId,
+												run_id: runId,
+											})
+										}
+										style={linkBtn}
+										title="Open this run in Replay"
+										type="button">
+										Open
+									</button>
+								</>
+							)}
 						</div>
 					)}
 				</div>
@@ -355,7 +370,11 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 							</span>
 						</div>
 					))}
-					{extra > 0 && <div style={{ fontSize: 11, color: muted, fontStyle: "italic" }}>+{extra} more</div>}
+					{extra > 0 && (
+						<button aria-expanded={showAll} onClick={() => setShowAll((v) => !v)} style={linkBtn} type="button">
+							{showAll ? "Show fewer" : `Show all (${allEntries.length})`}
+						</button>
+					)}
 					{photoPaths.length > 0 && (
 						<div style={{ marginTop: 8 }}>
 							<div style={{ fontSize: 11, color: muted, marginBottom: 4 }}>
@@ -364,94 +383,61 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 							<PhotoStrip paths={photoPaths} />
 						</div>
 					)}
+					{confirmRemove && hasFeatures && onRemoveLayer && (
+						<div
+							aria-label="Confirm removal"
+							role="alertdialog"
+							style={{ marginTop: 8, padding: 6, border: `1px solid ${bdClr}`, borderRadius: 4, fontSize: 11 }}>
+							<div style={{ marginBottom: 4 }}>
+								Remove the layer “{current.layerName}” from the map? Its source file is not deleted.
+							</div>
+							<div style={{ display: "flex", gap: 4 }}>
+								<button
+									onClick={() => {
+										setConfirmRemove(false)
+										void onRemoveLayer(current.layerId)
+									}}
+									style={{ ...primaryBtn, color: "var(--vscode-errorForeground, #f87171)" }}
+									type="button">
+									Remove layer
+								</button>
+								<button
+									onClick={() => setConfirmRemove(false)}
+									style={{ ...primaryBtn, background: "transparent" }}
+									type="button">
+									Cancel
+								</button>
+							</div>
+						</div>
+					)}
 					{showActions && (
 						<div style={{ marginTop: 8 }}>
-							{onAgentDelineate && (
-								<button
-									disabled={agentStarting || delineating}
-									onClick={() => void onAgentDelineate(inspectPoint)}
-									style={primaryBtn}
-									title="Start an agent task to delineate and push the watershed to the map"
-									type="button">
-									{agentStarting ? "Opening chat…" : "Delineate with agent"}
-								</button>
-							)}
-							{onAgentAsk && (
-								<button
-									disabled={agentStarting || delineating}
-									onClick={() => void onAgentAsk(inspectPoint)}
-									style={secondaryBtn}
-									title="Ask the agent about this outlet, layers, or next steps"
-									type="button">
-									{askLabel}
-								</button>
-							)}
-							{onQuickDelineate && (
-								<div style={{ marginTop: 6 }}>
-									<button
-										disabled={delineating || agentStarting}
-										onClick={() => void onQuickDelineate(inspectPoint)}
-										style={{
-											...secondaryBtn,
-											marginTop: 0,
-											fontSize: 11,
-											padding: "3px 6px",
-											textDecoration: delineating ? "none" : "underline",
-											border: "none",
-										}}
-										title="Interactive MERIT flowdir delineation when the basin is within the raster safety envelope"
-										type="button">
-										{delineating ? "Delineating…" : "Quick delineate"}
-									</button>
-									<div style={{ marginTop: 4, fontSize: 11, color: muted, lineHeight: 1.35 }}>
-										{delineating
-											? "Delineating… (this may take several minutes)"
-											: "Interactive MERIT routing for small and medium basins. Large basins need Delineate with agent for hybrid routing."}
-									</div>
-								</div>
-							)}
-							{currentSelection.length > 0 && (onAddSelection || onSaveFeatures) && (
+							{routingWarning(current, point) && (
 								<div
+									role="note"
 									style={{
-										marginTop: 8,
-										paddingTop: 7,
-										borderTop: `1px dashed ${bdClr}`,
-										display: "grid",
-										gridTemplateColumns: "1fr 1fr",
-										gap: 4,
+										marginBottom: 6,
+										fontSize: 11,
+										lineHeight: 1.35,
+										color: "var(--vscode-editorWarning-foreground, #cca700)",
 									}}>
-									{onAddSelection && (
-										<button
-											onClick={() => onAddSelection(currentSelection)}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
-											title="Add this feature to the multi-selection set. Shift-click features on the map to add/remove quickly."
-											type="button">
-											Select
-										</button>
-									)}
-									{onSaveFeatures && (
-										<button
-											onClick={() => void onSaveFeatures(currentSelection, "geojson")}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
-											title="Save this feature to workspace vectors/ as GeoJSON"
-											type="button">
-											GeoJSON
-										</button>
-									)}
-									{onSaveFeatures && (
-										<button
-											onClick={() => void onSaveFeatures(currentSelection, "shapefile")}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
-											title="Save this feature to workspace vectors/ as a zipped shapefile"
-											type="button">
-											SHP
-										</button>
-									)}
-									<div style={{ fontSize: 11, color: muted, lineHeight: 1.3, alignSelf: "center" }}>
-										Shift-click map features to build a set.
-									</div>
+									{routingWarning(current, point)}
 								</div>
 							)}
+							<div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+								{primary.map((a) => (
+									<button
+										disabled={agentStarting || delineating}
+										key={a.id}
+										onClick={() => handlers[a.id]?.()}
+										style={primaryBtn}
+										title={actionTooltip(a.id, current, point)}
+										type="button">
+										{agentStarting && a.id === "delineate" ? "Opening chat…" : a.label}
+									</button>
+								))}
+								{overflow.length > 0 && <OverflowMenu items={overflow} label="More actions for this selection" />}
+							</div>
 							{selectedCount > 0 && onSaveFeatures && (
 								<div
 									style={{
@@ -485,17 +471,17 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 									<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
 										<button
 											onClick={() => void onSaveFeatures(selectedFeatures, "geojson")}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
+											style={{ ...primaryBtn, background: "transparent", fontWeight: 500 }}
 											title="Save selected features as GeoJSON"
 											type="button">
 											Save GeoJSON
 										</button>
 										<button
 											onClick={() => void onSaveFeatures(selectedFeatures, "shapefile")}
-											style={{ ...secondaryBtn, marginTop: 0, fontSize: 11, padding: "4px 6px" }}
+											style={{ ...primaryBtn, background: "transparent", fontWeight: 500 }}
 											title="Save selected features as a zipped shapefile"
 											type="button">
-											Save SHP
+											Save shapefile
 										</button>
 									</div>
 								</div>

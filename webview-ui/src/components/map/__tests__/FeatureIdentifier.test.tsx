@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { PLATFORM_CONFIG } from "../../../config/platform.config"
 import FeatureIdentifier, { type ClickedFeature } from "../FeatureIdentifier"
 
 afterEach(cleanup)
@@ -28,5 +29,142 @@ describe("feature identifier card", () => {
 		for (const b of container.querySelectorAll("button")) {
 			expect(b.getAttribute("style") ?? "").not.toMatch(/(width|height): (1\d|2[0-3])px/)
 		}
+	})
+
+	it("shows the first six properties, then Show all", () => {
+		const props = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`p${i}`, `v${i}`]))
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "l", layerName: "Wells", properties: props }]}
+				inspectPoint={{ lon: -90, lat: 40 }}
+				mapStyle="dark"
+				onClose={vi.fn()}
+			/>,
+		)
+		expect(screen.getByText("v5")).toBeInTheDocument()
+		expect(screen.queryByText("v6")).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: "Show all (9)" }))
+		expect(screen.getByText("v8")).toBeInTheDocument()
+		fireEvent.click(screen.getByRole("button", { name: "Show fewer" }))
+		expect(screen.queryByText("v8")).toBeNull()
+	})
+
+	it("names the kind and the run, and Open asks the host for that run", () => {
+		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation(() => {})
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "g", layerName: "Gauge 01013500", properties: { site_no: "01013500" } }]}
+				inspectPoint={{ lon: -68.5, lat: 47.2 }}
+				layerMetadata={() => ({ tool: "locate_gauge", _run_id: "abcdef123456", study_id: "study-1" })}
+				mapStyle="dark"
+				onClose={vi.fn()}
+			/>,
+		)
+		expect(document.body.textContent).toContain("Gauge · ")
+		expect(screen.getByText(/locate_gauge · run abcdef12/)).toBeInTheDocument()
+		fireEvent.click(screen.getByRole("button", { name: "Open" }))
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-map-open-run", study_id: "study-1", run_id: "abcdef123456" })
+		postMessage.mockRestore()
+	})
+
+	it("says Reference, not in any run for an NWIS layer, and offers no Open", () => {
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "r", layerName: "NWIS gauges in view", properties: { site_no: "1" } }]}
+				inspectPoint={{ lon: -68.5, lat: 47.2 }}
+				layerMetadata={() => ({ source: "nwis" })}
+				mapStyle="dark"
+				onClose={vi.fn()}
+			/>,
+		)
+		expect(screen.getByText("Reference, not in any run")).toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: "Open" })).toBeNull()
+	})
+
+	it("offers two primary actions and the rest under ..., with the same labels as the context menu", () => {
+		const onAgentAsk = vi.fn()
+		const onAgentDelineate = vi.fn()
+		const onQuickDelineate = vi.fn()
+		render(
+			<FeatureIdentifier
+				features={[
+					{ layerId: "l", layerName: "Wells", properties: { a: 1 }, geometry: { type: "Point", coordinates: [0, 0] } },
+				]}
+				inspectPoint={{ lon: -90, lat: 40 }}
+				mapStyle="dark"
+				onAddSelection={vi.fn()}
+				onAgentAsk={onAgentAsk}
+				onAgentDelineate={onAgentDelineate}
+				onClose={vi.fn()}
+				onQuickDelineate={onQuickDelineate}
+				onSaveFeatures={vi.fn()}
+			/>,
+		)
+		fireEvent.click(screen.getByRole("button", { name: "Ask AI-Hydro" }))
+		fireEvent.click(screen.getByRole("button", { name: "Delineate" }))
+		expect(onAgentAsk).toHaveBeenCalled()
+		expect(onAgentDelineate).toHaveBeenCalled()
+		// The routing badge and the quick-delineate paragraph are tooltips, not text on the card.
+		expect(screen.getByRole("button", { name: "Delineate" }).getAttribute("title")).toMatch(/NLDI first/)
+		expect(document.body.textContent).not.toMatch(/NLDI first|Interactive MERIT routing/)
+		fireEvent.click(screen.getByRole("button", { name: "More actions for this selection" }))
+		const names = screen.getAllByRole("menuitem").map((i) => i.textContent)
+		expect(names).toEqual(["Delineate without chat", "Select", "Save as GeoJSON", "Save as shapefile", "Copy coordinates"])
+		fireEvent.click(screen.getByRole("menuitem", { name: "Delineate without chat" }))
+		expect(onQuickDelineate).toHaveBeenCalled()
+	})
+
+	it("a layer with a tool name is not called Reference, even from a reference source", () => {
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "r", layerName: "Gauges", properties: { site_no: "1" } }]}
+				inspectPoint={{ lon: -68.5, lat: 47.2 }}
+				layerMetadata={() => ({ source: "nwis", tool: "fetch_gauges" })}
+				mapStyle="dark"
+				onClose={vi.fn()}
+			/>,
+		)
+		expect(screen.queryByText("Reference, not in any run")).toBeNull()
+		expect(screen.getByText("fetch_gauges · no run record")).toBeInTheDocument()
+	})
+
+	it("Remove layer asks first, and Escape closes the card", () => {
+		const onRemoveLayer = vi.fn()
+		const onClose = vi.fn()
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "l", layerName: "Wells", properties: { a: 1 } }]}
+				inspectPoint={{ lon: -90, lat: 40 }}
+				mapStyle="dark"
+				onAgentAsk={vi.fn()}
+				onClose={onClose}
+				onRemoveLayer={onRemoveLayer}
+			/>,
+		)
+		fireEvent.click(screen.getByRole("button", { name: "More actions for this selection" }))
+		fireEvent.click(screen.getByRole("menuitem", { name: "Remove layer" }))
+		expect(onRemoveLayer).not.toHaveBeenCalled()
+		const dialog = screen.getByRole("alertdialog", { name: "Confirm removal" })
+		fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
+		expect(onRemoveLayer).not.toHaveBeenCalled()
+		fireEvent.click(screen.getByRole("button", { name: "More actions for this selection" }))
+		fireEvent.click(screen.getByRole("menuitem", { name: "Remove layer" }))
+		fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Remove layer" }))
+		expect(onRemoveLayer).toHaveBeenCalledWith("l")
+		fireEvent.keyDown(window, { key: "Escape" })
+		expect(onClose).toHaveBeenCalled()
+	})
+
+	it("a large-basin routing warning is visible text, not only a tooltip", () => {
+		render(
+			<FeatureIdentifier
+				features={[{ layerId: "r", layerName: "Rivers", properties: { uparea: 90000 } }]}
+				inspectPoint={{ lon: 10, lat: 50 }}
+				mapStyle="dark"
+				onAgentDelineate={vi.fn()}
+				onClose={vi.fn()}
+			/>,
+		)
+		expect(screen.getByRole("note")).toHaveTextContent(/hybrid/i)
 	})
 })

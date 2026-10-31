@@ -32,6 +32,14 @@ Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of
 - The map plate sidecar keeps `tool`, `study_id` and `retrieved_at` for each visible layer (it kept only the run id). `chat_id` is deliberately not exported: a shared figure should not carry a chat id, and `sourceArtifacts[].provenanceRef` falls back to `run:<id>` when a layer has no file.
 - Not in this change (tools repo): reference layers do not yet carry `retrieved_at` and the query bbox, and gauge/dam queries are not yet wrapped in `recorded_call` when a study is bound.
 
+### Changed — one selection card and one action list (P3, branch `vision2040/map-selection-card`)
+
+- `mapActions.ts` is the one list of what you can do to a thing on the map, by kind: gauge, river reach, basin, other feature, pin, empty point. The selection card (`FeatureIdentifier`), the right-click menu and the pin card render from it, and an action with no handler on a surface is not shown. A unit test proves card and menu get the same actions for every kind; the only surface rule is that the card does not list Inspect (the card is what Inspect opens).
+- **One label per verb**: "Ask AI-Hydro", "Delineate", "Delineate without chat". They replace "Delineate with agent", "Delineate with AI-Hydro", "Delineate here", "Quick delineate", "Quick delineate (no chat)", "Ask about this outlet" and "Ask about this pin". Pin "Delete" is "Remove pin"; "Inspect watershed details" and its kin are "Inspect"; "Export GeoJSON/Shapefile" are "Save as GeoJSON" and "Save as shapefile".
+- **The card** shows the layer name, the kind and the click's coordinates, a run line ("delineate_watershed · run ab12cd34 · Open", or "Reference, not in any run"), the first six properties with **Show all (N)** (the "+N more" text had no way to expand), and two buttons, Ask AI-Hydro and Delineate, then `...`. The routing badge ("NLDI first", "Hybrid", "Quick MERIT") and the quick-delineate paragraph are now the tooltip of Delineate. The card is still floating; nothing is docked.
+- The card gains Select, Add pin, Measure from here, Copy coordinates and Remove layer under `...`; the menu gains Select.
+- `OverflowMenu` items accept a `title` tooltip.
+
 ---
 
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)

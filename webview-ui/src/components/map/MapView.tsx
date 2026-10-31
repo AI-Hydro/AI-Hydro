@@ -1283,6 +1283,18 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// Feature identifier — stores clicked vector features at a point
 	const [clickedFeatures, setClickedFeatures] = useState<ClickedFeature[]>([])
 	const [selectedFeatures, setSelectedFeatures] = useState<ClickedFeature[]>([])
+	/** Add features to the multi-selection set (the card's and the context menu's Select). */
+	const addToSelection = (features: ClickedFeature[]) => {
+		setSelectedFeatures((previous) => {
+			const selectedByKey = new Map(previous.map((feature) => [selectedFeatureKey(feature), feature]))
+			for (const feature of features.filter((item) => item.geometry)) {
+				selectedByKey.set(selectedFeatureKey(feature), feature)
+			}
+			const next = Array.from(selectedByKey.values())
+			reportMapEvent("selection.changed", selectedFeaturesPayload(next))
+			return next
+		})
+	}
 	const [inspectPoint, setInspectPoint] = useState<{ lon: number; lat: number } | null>(null)
 	const [delineating, setDelineating] = useState(false)
 	const [delineateStatus, setDelineateStatus] = useState<string | null>(null)
@@ -3753,18 +3765,10 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					delineating={delineating}
 					features={clickedFeatures}
 					inspectPoint={inspectPoint}
+					layerMetadata={(layerId) => layers.find((l) => l.id === layerId)?.metadata}
 					mapStyle={mapStyle}
-					onAddSelection={(features) => {
-						setSelectedFeatures((previous) => {
-							const selectedByKey = new Map(previous.map((feature) => [selectedFeatureKey(feature), feature]))
-							for (const feature of features.filter((item) => item.geometry)) {
-								selectedByKey.set(selectedFeatureKey(feature), feature)
-							}
-							const next = Array.from(selectedByKey.values())
-							reportMapEvent("selection.changed", selectedFeaturesPayload(next))
-							return next
-						})
-					}}
+					onAddPin={(pt) => placePin(pt.lon, pt.lat)}
+					onAddSelection={addToSelection}
 					onAgentAsk={(pt) => void handleAgentAsk(pt, clickedFeatures)}
 					onAgentDelineate={(pt) => void handleAgentDelineate(pt, clickedFeatures)}
 					onClearSelection={() => setSelectedFeatures([])}
@@ -3775,7 +3779,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						setDelineateStatus(null)
 						setAgentStatus(null)
 					}}
+					onCopyCoords={() => {}}
+					onMeasureFrom={(pt) => {
+						setPinToolArmed(false)
+						setMeasureMode("distance")
+						setTimeout(() => measureClickRef.current?.([pt.lon, pt.lat]), 50)
+					}}
 					onQuickDelineate={(pt) => void handleQuickDelineate(pt, clickedFeatures)}
+					onRemoveLayer={async (layerId) => {
+						try {
+							await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId }))
+						} catch (err) {
+							setAgentStatus(err instanceof Error ? err.message : "Could not remove layer")
+						}
+					}}
 					onSaveFeatures={saveFeaturesToWorkspace}
 					rasterReading={inspectRasterReading}
 					selectedFeatures={selectedFeatures}
@@ -3844,6 +3861,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						onRemovePin={menuPin ? () => deletePins([menuPin.id]) : undefined}
 						onRenamePin={menuPin ? () => selectPin(menuPin.id, true) : undefined}
 						onSaveFeature={(format) => void saveFeaturesToWorkspace(contextMenu.features, format)}
+						onSelectFeature={
+							contextMenu.features.length > 0 ? () => addToSelection(contextMenu.features.slice(0, 1)) : undefined
+						}
 						pin={menuPin ? { id: menuPin.id, name: menuPin.name } : undefined}
 						x={contextMenu.x}
 						y={contextMenu.y}

@@ -94,6 +94,6 @@ The bar at the bottom of the map shows:
 | [Transect Profiles](map/transects.md) | Profile charts, geomorphic metrics, overlay mode, batch analysis, export formats |
 | [Swipe Comparison](map/swipe.md) | Side-by-side layer comparison with a draggable divider |
 | [Map Plate Composer](map/map-plate.md) | Publication-quality map figures — templates, cartographic elements, print export |
-| [Feature Inspector](map/inspector.md) | Click-to-inspect vector properties and raster values, Quick Delineate |
+| [Feature Inspector](map/inspector.md) | Click-to-inspect vector properties, run line and raster values; one action list for card and menu |
 | [Hydrography & Gallery](map/hydrography.md) | MERIT rivers, WBD boundaries, gauges, dams; personal Gallery (save/import scenes, transects, annotations), bookmarks, community catalog |
 | [Agent Integration](map/agent-integration.md) | Python bridge, show_on_map, agent orchestration tools, workspace persistence |

@@ -9,7 +9,16 @@ const features: ClickedFeature[] = [
 	{
 		layerId: "fx-basin",
 		layerName: "Synthetic basin SYN-00000001",
-		properties: { name: "Synthetic basin", area_km2: 412.7, source_status: "synthetic", tool: "delineate_watershed" },
+		properties: {
+			name: "Synthetic basin",
+			area_km2: 412.7,
+			source_status: "synthetic",
+			tool: "delineate_watershed",
+			method: "nldi",
+			pfaf: "7",
+			outlet: "SYN-00000001",
+			perimeter_km: 98.2,
+		},
 		geometry: { type: "Point", coordinates: [-89.95, 39] },
 	},
 	{ layerId: "fx-rivers", layerName: "Synthetic river lines", properties: { order: 2 }, geometry: undefined },
@@ -21,11 +30,18 @@ export function MapIdentifyScreen() {
 			<FeatureIdentifier
 				features={features}
 				inspectPoint={{ lon: -89.95, lat: 39 }}
+				layerMetadata={(id) =>
+					id === "fx-basin"
+						? { tool: "delineate_watershed", _run_id: "fx-run-0003", study_id: "fx-study", source: "tool" }
+						: undefined
+				}
 				mapStyle="dark"
+				onAddSelection={() => {}}
 				onAgentAsk={() => {}}
 				onAgentDelineate={() => {}}
 				onClose={() => {}}
 				onQuickDelineate={() => {}}
+				onSaveFeatures={() => {}}
 				rasterReading={{ layerName: "Synthetic raster", value: 118.4, units: "synthetic units" } as never}
 			/>
 		</div>

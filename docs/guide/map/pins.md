@@ -25,7 +25,7 @@ Click a pin to open its card: the name (click it to edit), a note, the coordinat
 | Action | Does |
 |---|---|
 | **Ask AI-Hydro** | Opens a chat about this location, with the pin's name and note as context |
-| **Delineate here** | Opens a chat and the agent delineates the watershed at the pin |
+| **Delineate** | Opens a chat and the agent delineates the watershed at the pin |
 | **Copy coordinates** | Copies `lat, lon` |
 | **Delete** | Removes the pin (see Undo) |
 
@@ -41,9 +41,9 @@ Delete a pin from its card, from the Pins panel, from the right-click menu on th
 
 The menu is grouped: **AI-Hydro**, then the object under the pointer (a pin, or a layer feature), then **Map**.
 
-- **Ask AI-Hydro about this location…** opens a chat with your question.
-- **Delineate with AI-Hydro** opens a chat and the agent runs `delineate_watershed_from_point`, so the run is recorded.
-- **Quick delineate (no chat)** runs the interactive MERIT delineation directly and adds the basin to the map. It needs a CONUS point or a MERIT rivers layer on the map, and is meant for small and medium basins.
+- **Ask AI-Hydro…** opens a chat with your question.
+- **Delineate** opens a chat and the agent runs `delineate_watershed_from_point`, so the run is recorded.
+- **Delineate without chat** runs the interactive MERIT delineation directly and adds the basin to the map. It needs a CONUS point or a MERIT rivers layer on the map, and is meant for small and medium basins.
 - **Add pin**, **Measure from here**, **Copy coordinates**.
 - On a pin: **Rename pin**, **Ask about this pin**, **Remove pin**. On a layer feature: **Inspect**, export, **Remove layer**.
 
