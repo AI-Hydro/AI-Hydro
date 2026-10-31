@@ -1,3 +1,4 @@
+import { layerRetrievedAt, layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
 
 export type LayerDataState =
@@ -237,19 +238,55 @@ export function sourceStatusText(status?: string): string {
 	return `Reported source status: ${status}`
 }
 
-export function layerResearchDetails(layer: MapLayer): Array<[string, string]> {
+export interface LayerProvenance {
+	/** What is recorded, as label/value rows. */
+	rows: Array<[string, string]>
+	/** Labels of the facts that are not recorded, for the one "Not recorded" line. */
+	notRecorded: string[]
+}
+
+/**
+ * The Provenance tab: the facts that are recorded, then the ones that are not as a single list. Absence is
+ * stated, but it does not take a row each. One row per fact: the run is the run (not "Run" and "Run ID"),
+ * and the source file is the path (not "Source file" and "Path").
+ */
+export function layerProvenance(layer: MapLayer, intelligence: LayerIntelligence): LayerProvenance {
 	const meta = layer.metadata ?? {}
-	return [
-		["Source status", sourceStatusText(meta.source_status)],
-		["Units", meta.units || "Not recorded"],
-		["CRS", meta.crs || "Not recorded"],
-		[
-			"Product identity",
-			meta.product_identity || meta.source_dataset_id || meta.gee_dataset_id || meta.dataset || "Not recorded",
-		],
-		["Run", meta._run_id || meta.run_id || "Not linked"],
-		["Validation", meta.validation_status || "Not assessed"],
-		["Uncertainty", meta.uncertainty || "Not recorded"],
-		["Coverage", meta.coverage_status || "Not recorded"],
+	const tool = layerTool(meta)
+	const run = layerRunId(meta)
+	const timeRange = meta.time_start ? `${meta.time_start} – ${meta.time_end ?? "present"}` : undefined
+	const facts: Array<[string, string | undefined]> = [
+		["Source", intelligence.sourceLabel],
+		// The tool is the source for a tool layer; list it separately only when the two differ.
+		["Tool", tool && tool !== intelligence.sourceLabel ? tool : undefined],
+		["Run", run],
+		["Computed at", layerRetrievedAt(meta)],
+		["Agent step", meta.agent_step],
+		["Source file", meta.source_display_path ?? meta.source_path ?? meta.path ?? meta.raster_source_path ?? meta.raster_path],
+		["Format", meta.source_format ?? meta.format],
+		["Converted artifact", meta.converted_artifact_path],
+		["Provenance record", intelligence.provenancePath],
+		["Product", meta.product_identity || meta.source_dataset_id || meta.gee_dataset_id || meta.dataset],
+		["Units", meta.units],
+		["CRS", meta.crs],
+		["Time range", timeRange],
+		["Citation", intelligence.citation],
+		["License", intelligence.license],
+		["Source status", meta.source_status ? sourceStatusText(meta.source_status) : undefined],
+		["Validation", meta.validation_status],
+		["Uncertainty", meta.uncertainty],
+		["Coverage", meta.coverage_status],
 	]
+	// Hidden when absent (not "not recorded"): they only exist for some layers.
+	const optional = new Set(["Tool", "Agent step", "Format", "Converted artifact", "Time range", "Computed at"])
+	const rows: Array<[string, string]> = []
+	const notRecorded: string[] = []
+	for (const [label, value] of facts) {
+		if (value) {
+			rows.push([label, value])
+		} else if (!optional.has(label)) {
+			notRecorded.push(label)
+		}
+	}
+	return { rows, notRecorded }
 }

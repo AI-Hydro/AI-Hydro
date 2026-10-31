@@ -3,10 +3,10 @@
  * details inspector. Split from LayerPanel.tsx so the list, the row and the details can each stay small.
  */
 
-import { layerRetrievedAt, layerRunId, layerTool, NO_RUN_RECORD } from "@shared/map/provenanceEnvelope"
+import { layerRunId, layerTool, NO_RUN_RECORD } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
 import React, { useMemo, useState } from "react"
-import { type LayerIntelligence, layerResearchDetails, warningText } from "./layerIntelligence"
+import { type LayerIntelligence, layerProvenance, warningText } from "./layerIntelligence"
 import { geeDisplayLines } from "./mapLayerAdapters"
 import { MAP_Z } from "./mapZ"
 
@@ -336,8 +336,8 @@ export const LayerInspector: React.FC<{
 }> = ({ layer, intelligence, niceMeta, border, fg, onCopied, warnings }) => {
 	const [tab, setTab] = useState<"overview" | "data" | "provenance">("overview")
 	const meta = layer.metadata ?? {}
-	const all = allMetadata(layer)
 	const statusTone = statusColors(intelligence.dataState)
+	const provenance = layerProvenance(layer, intelligence)
 	const rasterRange =
 		meta.min || meta.max ? `${meta.min ?? "?"} – ${meta.max ?? "?"}${meta.units ? ` ${meta.units}` : ""}` : undefined
 	const resolution = meta.resolution || meta.pixel_size || meta.cell_size || meta.raster_resolution
@@ -395,9 +395,15 @@ export const LayerInspector: React.FC<{
 						<div style={{ opacity: 0.78, marginBottom: 8 }}>{intelligence.statusDetail}</div>
 						<InspectorGrid
 							border={border}
+							copyable={{
+								Source: layerTool(meta) && layerTool(meta) === intelligence.sourceLabel ? "tool name" : undefined,
+								Run: layerRunId(meta) ? "run ID" : undefined,
+							}}
+							onCopied={onCopied}
 							rows={[
 								["Type", intelligence.typeLabel],
 								["Source", intelligence.sourceLabel],
+								...(layerRunId(meta) ? ([["Run", layerRunId(meta) as string]] as Array<[string, string]>) : []),
 								...(rasterRange ? ([["Value range", rasterRange]] as Array<[string, string]>) : []),
 								...(resolution ? ([["Resolution", resolution]] as Array<[string, string]>) : []),
 								...niceMeta.slice(0, 5),
@@ -434,35 +440,21 @@ export const LayerInspector: React.FC<{
 					/>
 				)}
 				{tab === "provenance" && (
-					<InspectorGrid
-						border={border}
-						copyable={{
-							"MCP tool": layerTool(meta) ? "tool name" : undefined,
-							"Run ID": layerRunId(meta) ? "run ID" : undefined,
-						}}
-						onCopied={onCopied}
-						rows={[
-							["Source", intelligence.sourceLabel],
-							...layerResearchDetails(layer),
-							[
-								"Source file",
-								meta.source_display_path ?? meta.source_path ?? meta.path ?? "No local source path recorded",
-							],
-							["Source format", meta.source_format ?? meta.format ?? "Unknown"],
-							["Converted artifact", meta.converted_artifact_path ?? "Not a converted vector layer"],
-							["Provenance", intelligence.provenancePath ?? "No provenance record linked"],
-							["Citation", intelligence.citation ?? "No citation recorded"],
-							["License", intelligence.license ?? "No license recorded"],
-							["Path", meta.path ?? meta.raster_source_path ?? meta.raster_path ?? "No local source path recorded"],
-							["MCP tool", layerTool(meta) ?? "Not created by a tool"],
-							["Run ID", layerRunId(meta) ?? NO_RUN_RECORD],
-							["Agent step", meta.agent_step ?? "—"],
-							["Computed at", layerRetrievedAt(meta) ?? "—"],
-							["Time range", meta.time_start ? `${meta.time_start} – ${meta.time_end ?? "present"}` : "—"],
-							["Linked claim", meta.claim_id ?? "—"],
-							["Metadata fields", String(all.length)],
-						]}
-					/>
+					<>
+						<InspectorGrid
+							border={border}
+							copyable={{
+								Tool: layerTool(meta) ? "tool name" : undefined,
+								Run: layerRunId(meta) ? "run ID" : undefined,
+							}}
+							onCopied={onCopied}
+							rows={provenance.rows}
+						/>
+						{!layerRunId(meta) && <div style={{ marginTop: 6 }}>{NO_RUN_RECORD}.</div>}
+						{provenance.notRecorded.length > 0 && (
+							<div style={{ marginTop: 6, opacity: 0.75 }}>Not recorded: {provenance.notRecorded.join(", ")}.</div>
+						)}
+					</>
 				)}
 			</div>
 		</div>

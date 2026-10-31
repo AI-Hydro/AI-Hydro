@@ -6,7 +6,7 @@ import React, { createContext, useCallback, useContext, useState } from "react"
  * A single shared date range that both the map (time slider) and the
  * hydrography panel (hydrograph highlight) read and write.  When the user
  * drags a selection on the hydrograph, `setBrushExtent` is called with the
- * ISO date strings; the map time slider re-filters layers accordingly, and
+ * ISO date strings; the map date filter re-filters layers accordingly, and
  * vice versa.
  *
  * null = no active brush (all time steps visible).

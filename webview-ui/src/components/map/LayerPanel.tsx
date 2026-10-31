@@ -10,7 +10,6 @@
  * Positioning is the parent's responsibility (see MapToolRibbon).
  */
 
-import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import { StringRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
@@ -33,7 +32,6 @@ import {
 	ORIGIN_LABEL,
 	rowIndicators,
 	sharedNote,
-	stackPosition,
 } from "./layerModel"
 import { AttributeTable, LayerInspector, niceMetadata } from "./layerPanelParts"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
@@ -157,15 +155,15 @@ const saveLayerToWorkspace = async (layer: MapLayer, displayName: string): Promi
 	return res.workspacePath
 }
 
-const copyText = (text: string) => void navigator.clipboard?.writeText(text)
-
 /** What a selected row's drawer shows besides opacity. */
 interface DrawerView {
 	style: boolean
 	attrs: boolean
 	details: boolean
+	/** "Save as…": choose a workspace file or a GeoJSON download. */
+	saveAs: boolean
 }
-const CLOSED_DRAWER: DrawerView = { style: false, attrs: false, details: false }
+const CLOSED_DRAWER: DrawerView = { style: false, attrs: false, details: false, saveAs: false }
 
 /** A removal the user can take back. */
 interface UndoEntry {
@@ -529,11 +527,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	const menuFor = (layer: MapLayer, displayName: string): OverflowItem[] => {
 		const isRaster = layer.layerType === "raster"
-		const hasGeojson = !!layer.geojson && !isRaster
 		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
 		const provenancePath = layer.metadata?.provenance_path
-		const tool = layerTool(layer.metadata)
-		const run = layerRunId(layer.metadata)
 		const rank = displayIds.indexOf(layer.id)
 		const items: (OverflowItem | false)[] = [
 			{ key: "zoom", label: "Zoom to layer", icon: "zoom-in", onSelect: () => onZoomToLayer?.(layer) },
@@ -547,51 +542,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				},
 			},
 			{ key: "d1", divider: true },
-			{ key: "style", label: "Style…", icon: "symbol-color", onSelect: () => select(layer.id, { style: true }) },
-			{
-				key: "opacity",
-				label: "Opacity",
-				icon: "color-mode",
-				onSelect: () => {
-					select(layer.id)
-					window.setTimeout(() => document.getElementById(`map-layer-opacity-${layer.id}`)?.focus(), 0)
-				},
-			},
-			hasGeojson && {
-				key: "attrs",
-				label: "Attribute table",
-				icon: "table",
-				onSelect: () => select(layer.id, { attrs: true }),
-			},
-			!isRaster &&
-				hasGeojson &&
-				layer.layerType === "point" && {
-					key: "cluster",
-					label: "Cluster points",
-					checked: !!clusterLayerIds?.has(layer.id),
-					onSelect: () => onClusterToggle?.(layer.id, !clusterLayerIds?.has(layer.id)),
-				},
-			{
-				key: "details",
-				label: "Details and provenance",
-				icon: "info",
-				onSelect: () => select(layer.id, { details: true }),
-			},
-			{ key: "d2", divider: true },
 			!isRaster &&
 				layer.metadata?.source !== "workspace" && {
-					key: "save",
-					label: "Save to workspace",
+					key: "save-as",
+					label: "Save as…",
 					icon: "save",
-					onSelect: () => void handleSaveLayerToWorkspace(layer, displayName),
-				},
-			!isRaster &&
-				layer.metadata?.source !== "workspace" &&
-				hasGeojson && {
-					key: "export",
-					label: "Export as GeoJSON",
-					icon: "export",
-					onSelect: () => exportLayer(layer, displayName),
+					onSelect: () => select(layer.id, { saveAs: true }),
 				},
 			!!sourcePath && {
 				key: "open-source",
@@ -610,25 +566,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				label: "Open provenance record",
 				icon: "file-code",
 				onSelect: () => void openProvenance(provenancePath),
-			},
-			(!!tool || !!run) && { key: "d3", divider: true },
-			!!tool && {
-				key: "copy-tool",
-				label: "Copy tool name",
-				icon: "copy",
-				onSelect: () => {
-					copyText(tool)
-					say("ok", "Copied tool name.", 2500)
-				},
-			},
-			!!run && {
-				key: "copy-run",
-				label: "Copy run ID",
-				icon: "copy",
-				onSelect: () => {
-					copyText(run)
-					say("ok", "Copied run ID.", 2500)
-				},
 			},
 			{ key: "d4", divider: true },
 			{
@@ -733,14 +670,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 					<output>{Math.round(opacity * 100)}%</output>
 				</label>
 				{!visible && <div className="map-layer-hint">Hidden. Show the layer to change its opacity.</div>}
-				<div className="map-layer-hint">
-					{(() => {
-						const at = stackPosition(drawLayers, layer.id)
-						return at
-							? `Layer ${at.position} of ${at.of} from the top of the map (1 is on top), whatever its group.`
-							: ""
-					})()}
-				</div>
 				<div className="map-layer-drawer__actions">
 					<button
 						aria-pressed={drawer.style}
@@ -769,8 +698,44 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 						Details
 					</button>
 				</div>
+				{drawer.saveAs && !isRaster && (
+					<div aria-label="Save as" className="map-layer-drawer__actions" role="group">
+						<button
+							className="map-chip"
+							onClick={() => {
+								void handleSaveLayerToWorkspace(layer, displayName)
+								setDrawer((d) => ({ ...d, saveAs: false }))
+							}}
+							type="button">
+							<span aria-hidden="true" className="codicon codicon-save" />
+							Workspace file
+						</button>
+						{hasGeojson && (
+							<button
+								className="map-chip"
+								onClick={() => {
+									exportLayer(layer, displayName)
+									setDrawer((d) => ({ ...d, saveAs: false }))
+								}}
+								type="button">
+								<span aria-hidden="true" className="codicon codicon-export" />
+								GeoJSON download
+							</button>
+						)}
+					</div>
+				)}
 				{drawer.style && (
 					<>
+						{hasGeojson && layer.layerType === "point" && (
+							<label className="map-layer-opacity">
+								<input
+									checked={!!clusterLayerIds?.has(layer.id)}
+									onChange={(e) => onClusterToggle?.(layer.id, e.target.checked)}
+									type="checkbox"
+								/>
+								<span>Cluster points</span>
+							</label>
+						)}
 						{!isRaster && (
 							<div aria-label="Style type" className="map-layer-segment" role="group">
 								<button
@@ -820,8 +785,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	// ── render ────────────────────────────────────────────────────────────
 
-	const allVisible = layers.length > 0 && visibleCount === layers.length
-
 	return (
 		<div className="map-layers">
 			<input
@@ -840,16 +803,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 						? "No layers"
 						: `${layers.length} layer${layers.length === 1 ? "" : "s"} · ${visibleCount} visible`}
 				</span>
-				{layers.length > 0 && (
-					<button
-						aria-label={allVisible ? "Hide all layers" : "Show all layers"}
-						className="map-overflow-trigger"
-						onClick={() => (allVisible ? onHideAllLayers?.() : onShowAllLayers?.())}
-						title={allVisible ? "Hide all layers" : "Show all layers"}
-						type="button">
-						<span aria-hidden="true" className={`codicon codicon-${allVisible ? "eye" : "eye-closed"}`} />
-					</button>
-				)}
 				<OverflowMenu items={panelItems} label="Layers panel actions" />
 			</div>
 

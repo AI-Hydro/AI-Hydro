@@ -19,6 +19,7 @@ import { askAgentAboutAnnotation, askAgentAboutBatchAnnotations } from "./mapAge
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { PhotoStrip } from "./PhotoStrip"
 import { pickImages } from "./resolveFileUri"
+import { setTrackerExtras, trackerExtrasEnabled } from "./trackerExtras"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,6 +140,8 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 	const [activeCollectionId, setActiveCollectionId] = useState<string | "all">("all")
 	const [collections, setCollections] = useState<AnnotationCollection[]>(() => loadCollections())
 	const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
+	// Tracker fields are off by default; the data is kept either way.
+	const [extras, setExtras] = useState<boolean>(() => trackerExtrasEnabled())
 	// ── Helpers ─────────────────────────────────────────────────────────────
 
 	const saveAnns = useCallback(
@@ -342,6 +345,15 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 									} as OverflowItem,
 								]
 							: []),
+						{
+							key: "tracker",
+							label: "Tracker fields",
+							checked: extras,
+							onSelect: () => {
+								setTrackerExtras(!extras)
+								setExtras(!extras)
+							},
+						},
 						{ key: "d1", divider: true },
 						...(
 							[
@@ -367,7 +379,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 			</div>
 
 			{/* ── Collections tabs ── */}
-			{annotations.length > 0 && (
+			{extras && annotations.length > 0 && (
 				<div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
 					<button
 						onClick={() => setActiveCollectionId("all")}
@@ -486,7 +498,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 			)}
 
 			{/* ── Search + Filter ── */}
-			{annotations.length > 0 && (
+			{extras && annotations.length > 0 && (
 				<div style={{ display: "flex", gap: 4, marginBottom: 8, alignItems: "center" }}>
 					<input
 						onChange={(e) => setSearch(e.target.value)}
@@ -577,7 +589,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 			)}
 
 			{/* ── Batch Agent Composer ── */}
-			{batchOpen && (
+			{extras && batchOpen && (
 				<div
 					style={{
 						marginBottom: 10,
@@ -647,7 +659,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 			{filteredAnnotations.length === 0 ? (
 				<div className="map-hint" style={{ padding: "4px 0" }}>
 					{annotations.length === 0
-						? "No sketches yet. Choose Polygon, Line or Point above to draw one."
+						? "No sketches yet. Draw a Polygon or Line above, then choose Keep as sketch."
 						: "No sketches match your filter."}
 				</div>
 			) : (
@@ -689,8 +701,8 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										}}>
 										{ann.name}
 									</span>
-									<PriorityBadge priority={ann.priority} />
-									<StatusBadge status={ann.status} />
+									{extras && <PriorityBadge priority={ann.priority} />}
+									{extras && <StatusBadge status={ann.status} />}
 									<span style={{ fontSize: 11, opacity: 0.5, marginLeft: 2 }}>
 										<span
 											aria-hidden="true"
@@ -700,7 +712,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 								</div>
 
 								{/* ── Compact footer (notes preview) ── */}
-								{!isExpanded && (ann.notes || ann.tags.length > 0) && (
+								{!isExpanded && (ann.notes || (extras && ann.tags.length > 0)) && (
 									<div
 										style={{
 											padding: "4px 9px 5px",
@@ -721,7 +733,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 												{ann.notes}
 											</div>
 										)}
-										{ann.tags.length > 0 && (
+										{extras && ann.tags.length > 0 && (
 											<div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>
 												{ann.tags.map((t) => (
 													<span
@@ -905,193 +917,207 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 											/>
 										</div>
 
-										{/* Tags */}
-										<div>
-											<label
-												style={{
-													fontSize: 11,
-													opacity: 0.55,
-													display: "block",
-													marginBottom: 4,
-													fontWeight: 600,
-													textTransform: "uppercase",
-													letterSpacing: "0.05em",
-												}}>
-												Tags
-											</label>
-											<div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-												{ann.tags.map((tag) => (
-													<span
-														key={tag}
+										{extras && (
+											<>
+												{/* Tags */}
+												<div>
+													<label
 														style={{
 															fontSize: 11,
-															padding: "2px 7px",
-															borderRadius: 10,
-															background: "rgba(99,102,241,0.15)",
-															color: "var(--vscode-foreground)",
-															display: "flex",
-															alignItems: "center",
-															gap: 3,
+															opacity: 0.55,
+															display: "block",
+															marginBottom: 4,
+															fontWeight: 600,
+															textTransform: "uppercase",
+															letterSpacing: "0.05em",
 														}}>
-														#{tag}
-														<button
-															onClick={() =>
-																updateAnnotation(ann.id, {
-																	tags: ann.tags.filter((t) => t !== tag),
-																})
-															}
-															style={{
-																background: "none",
-																border: "none",
-																color: "var(--vscode-foreground)",
-																cursor: "pointer",
-																fontSize: 11,
-																padding: 0,
-																lineHeight: 1,
-															}}
-															type="button">
-															×
-														</button>
-													</span>
-												))}
-												<input
-													onChange={(e) =>
-														setTagDrafts((prev) => ({ ...prev, [ann.id]: e.target.value }))
-													}
-													onKeyDown={(e) => {
-														if (e.key === "Enter" || e.key === ",") {
-															const v = (tagDrafts[ann.id] ?? "").trim().replace(/,/g, "")
-															if (v && !ann.tags.includes(v)) {
-																updateAnnotation(ann.id, { tags: [...ann.tags, v] })
-															}
-															setTagDrafts((prev) => ({ ...prev, [ann.id]: "" }))
-															e.preventDefault()
-														}
-													}}
-													placeholder="+ tag"
-													style={{ ...inputStyle, width: 60, padding: "2px 6px", fontSize: 11 }}
-													value={tagDrafts[ann.id] ?? ""}
-												/>
-											</div>
-										</div>
-
-										{/* Status + Priority */}
-										<div style={{ display: "flex", gap: 8 }}>
-											<div style={{ flex: 1 }}>
-												<label
-													style={{
-														fontSize: 11,
-														opacity: 0.55,
-														display: "block",
-														marginBottom: 3,
-														fontWeight: 600,
-														textTransform: "uppercase",
-														letterSpacing: "0.05em",
-													}}>
-													Status
-												</label>
-												<select
-													onChange={(e) =>
-														updateAnnotation(ann.id, { status: e.target.value as AnnotationStatus })
-													}
-													style={{ ...inputStyle }}
-													value={ann.status}>
-													{STATUS_OPTS.map((s) => (
-														<option key={s.value} value={s.value}>
-															{s.label}
-														</option>
-													))}
-												</select>
-											</div>
-											<div style={{ flex: 1 }}>
-												<label
-													style={{
-														fontSize: 11,
-														opacity: 0.55,
-														display: "block",
-														marginBottom: 3,
-														fontWeight: 600,
-														textTransform: "uppercase",
-														letterSpacing: "0.05em",
-													}}>
-													Priority
-												</label>
-												<select
-													onChange={(e) =>
-														updateAnnotation(ann.id, {
-															priority: (e.target.value || null) as AnnotationPriority | null,
-														})
-													}
-													style={{ ...inputStyle }}
-													value={ann.priority ?? ""}>
-													<option value="">— None —</option>
-													{PRIORITY_OPTS.map((p) => (
-														<option key={p.value} value={p.value}>
-															{p.label}
-														</option>
-													))}
-												</select>
-											</div>
-										</div>
-
-										{/* Collections assignment */}
-										{collections.length > 0 && (
-											<div>
-												<label
-													style={{
-														fontSize: 11,
-														opacity: 0.55,
-														display: "block",
-														marginBottom: 4,
-														fontWeight: 600,
-														textTransform: "uppercase",
-														letterSpacing: "0.05em",
-													}}>
-													Collections
-												</label>
-												<div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-													{collections.map((col) => {
-														const inCol = ann.collectionIds.includes(col.id)
-														return (
-															<button
-																key={col.id}
-																onClick={() =>
-																	updateAnnotation(ann.id, {
-																		collectionIds: inCol
-																			? ann.collectionIds.filter((id) => id !== col.id)
-																			: [...ann.collectionIds, col.id],
-																	})
-																}
+														Tags
+													</label>
+													<div
+														style={{
+															display: "flex",
+															flexWrap: "wrap",
+															gap: 4,
+															alignItems: "center",
+														}}>
+														{ann.tags.map((tag) => (
+															<span
+																key={tag}
 																style={{
 																	fontSize: 11,
-																	padding: "2px 8px",
+																	padding: "2px 7px",
 																	borderRadius: 10,
-																	border: `1px solid ${inCol ? col.color : border}`,
-																	background: inCol ? `${col.color}22` : "transparent",
-																	color: inCol ? col.color : fg,
-																	cursor: "pointer",
-																	fontWeight: inCol ? 700 : 400,
-																}}
-																type="button">
-																<span
+																	background: "rgba(99,102,241,0.15)",
+																	color: "var(--vscode-foreground)",
+																	display: "flex",
+																	alignItems: "center",
+																	gap: 3,
+																}}>
+																#{tag}
+																<button
+																	onClick={() =>
+																		updateAnnotation(ann.id, {
+																			tags: ann.tags.filter((t) => t !== tag),
+																		})
+																	}
 																	style={{
-																		display: "inline-block",
-																		width: 6,
-																		height: 6,
-																		borderRadius: "50%",
-																		background: col.color,
-																		marginRight: 4,
-																		verticalAlign: "middle",
+																		background: "none",
+																		border: "none",
+																		color: "var(--vscode-foreground)",
+																		cursor: "pointer",
+																		fontSize: 11,
+																		padding: 0,
+																		lineHeight: 1,
 																	}}
-																/>
-																{col.name}
-															</button>
-														)
-													})}
+																	type="button">
+																	×
+																</button>
+															</span>
+														))}
+														<input
+															onChange={(e) =>
+																setTagDrafts((prev) => ({ ...prev, [ann.id]: e.target.value }))
+															}
+															onKeyDown={(e) => {
+																if (e.key === "Enter" || e.key === ",") {
+																	const v = (tagDrafts[ann.id] ?? "").trim().replace(/,/g, "")
+																	if (v && !ann.tags.includes(v)) {
+																		updateAnnotation(ann.id, { tags: [...ann.tags, v] })
+																	}
+																	setTagDrafts((prev) => ({ ...prev, [ann.id]: "" }))
+																	e.preventDefault()
+																}
+															}}
+															placeholder="+ tag"
+															style={{ ...inputStyle, width: 60, padding: "2px 6px", fontSize: 11 }}
+															value={tagDrafts[ann.id] ?? ""}
+														/>
+													</div>
 												</div>
-											</div>
-										)}
 
+												{/* Status + Priority */}
+												<div style={{ display: "flex", gap: 8 }}>
+													<div style={{ flex: 1 }}>
+														<label
+															style={{
+																fontSize: 11,
+																opacity: 0.55,
+																display: "block",
+																marginBottom: 3,
+																fontWeight: 600,
+																textTransform: "uppercase",
+																letterSpacing: "0.05em",
+															}}>
+															Status
+														</label>
+														<select
+															onChange={(e) =>
+																updateAnnotation(ann.id, {
+																	status: e.target.value as AnnotationStatus,
+																})
+															}
+															style={{ ...inputStyle }}
+															value={ann.status}>
+															{STATUS_OPTS.map((s) => (
+																<option key={s.value} value={s.value}>
+																	{s.label}
+																</option>
+															))}
+														</select>
+													</div>
+													<div style={{ flex: 1 }}>
+														<label
+															style={{
+																fontSize: 11,
+																opacity: 0.55,
+																display: "block",
+																marginBottom: 3,
+																fontWeight: 600,
+																textTransform: "uppercase",
+																letterSpacing: "0.05em",
+															}}>
+															Priority
+														</label>
+														<select
+															onChange={(e) =>
+																updateAnnotation(ann.id, {
+																	priority: (e.target.value ||
+																		null) as AnnotationPriority | null,
+																})
+															}
+															style={{ ...inputStyle }}
+															value={ann.priority ?? ""}>
+															<option value="">— None —</option>
+															{PRIORITY_OPTS.map((p) => (
+																<option key={p.value} value={p.value}>
+																	{p.label}
+																</option>
+															))}
+														</select>
+													</div>
+												</div>
+
+												{/* Collections assignment */}
+												{collections.length > 0 && (
+													<div>
+														<label
+															style={{
+																fontSize: 11,
+																opacity: 0.55,
+																display: "block",
+																marginBottom: 4,
+																fontWeight: 600,
+																textTransform: "uppercase",
+																letterSpacing: "0.05em",
+															}}>
+															Collections
+														</label>
+														<div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+															{collections.map((col) => {
+																const inCol = ann.collectionIds.includes(col.id)
+																return (
+																	<button
+																		key={col.id}
+																		onClick={() =>
+																			updateAnnotation(ann.id, {
+																				collectionIds: inCol
+																					? ann.collectionIds.filter(
+																							(id) => id !== col.id,
+																						)
+																					: [...ann.collectionIds, col.id],
+																			})
+																		}
+																		style={{
+																			fontSize: 11,
+																			padding: "2px 8px",
+																			borderRadius: 10,
+																			border: `1px solid ${inCol ? col.color : border}`,
+																			background: inCol ? `${col.color}22` : "transparent",
+																			color: inCol ? col.color : fg,
+																			cursor: "pointer",
+																			fontWeight: inCol ? 700 : 400,
+																		}}
+																		type="button">
+																		<span
+																			style={{
+																				display: "inline-block",
+																				width: 6,
+																				height: 6,
+																				borderRadius: "50%",
+																				background: col.color,
+																				marginRight: 4,
+																				verticalAlign: "middle",
+																			}}
+																		/>
+																		{col.name}
+																	</button>
+																)
+															})}
+														</div>
+													</div>
+												)}
+											</>
+										)}
 										{/* Colour */}
 										<div>
 											<label
@@ -1212,7 +1238,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 			)}
 
 			{/* Gallery save dialog */}
-			{gallerySaveOpen && annotations.length > 0 && (
+			{extras && gallerySaveOpen && annotations.length > 0 && (
 				<div
 					style={{
 						marginTop: 4,
@@ -1303,7 +1329,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 			)}
 
 			{/* ── Footer actions ── */}
-			{annotations.length > 0 && (
+			{extras && annotations.length > 0 && (
 				<div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end", gap: 6 }}>
 					<button
 						onClick={() => {

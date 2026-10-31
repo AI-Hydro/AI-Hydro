@@ -98,23 +98,66 @@ describe("LayerPanel", () => {
 		expect(screen.queryByRole("group", { name: /^Settings for/ })).toBeNull()
 	})
 
-	it("the overflow menu holds the actions, and keeps tool and run ID reachable and copyable", () => {
+	it("the row menu is nine items or fewer; style, opacity, attributes, details and copy sit in the drawer, two clicks away", () => {
 		const writeText = vi.fn()
 		Object.assign(navigator, { clipboard: { writeText } })
+		// The fullest layer: a vector with a source path and a provenance record.
+		state.layers = [
+			poly("a", "watershed_01031500", { source_path: "/w/a.geojson" }),
+			poly("b", "gauge", { source: "user", tool: "", _run_id: "" }),
+		]
 		render(<LayerPanelContent {...baseProps()} />)
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for watershed_01031500/ }))
 		const names = screen.getAllByRole("menuitem").map((i) => i.textContent)
-		expect(names.join("|")).toMatch(
-			/Zoom to layer.*Rename.*Style.*Opacity.*Details and provenance.*Copy tool name.*Copy run ID.*Move up.*Move down.*Remove layer/,
-		)
-		fireEvent.click(screen.getByRole("menuitem", { name: /Copy run ID/ }))
+		expect(names.length).toBeLessThanOrEqual(9)
+		expect(names.join("|")).toMatch(/Zoom to layer.*Rename.*Save as….*Move up.*Move down.*Remove layer/)
+		for (const gone of [/Style/, /Opacity/, /Attribute table/, /Details/, /Copy tool name/, /Copy run ID/, /Cluster/]) {
+			expect(names.some((n) => gone.test(n ?? ""))).toBe(false)
+		}
+		fireEvent.keyDown(document.body, { key: "Escape" })
+		fireEvent.click(document.body)
+		// Click 1 opens the row; click 2 opens Details, where the run and tool copy.
+		fireEvent.click(screen.getByRole("button", { name: /^watershed_01031500/ }))
+		const settings = screen.getByRole("group", { name: /^Settings for watershed_01031500/ })
+		for (const chip of ["Style", "Attributes", "Details"]) {
+			expect(within(settings).getByRole("button", { name: chip })).toBeInTheDocument()
+		}
+		expect(within(settings).getByRole("slider")).toBeInTheDocument()
+		fireEvent.click(within(settings).getByRole("button", { name: "Details" }))
+		fireEvent.click(screen.getByRole("button", { name: "Copy run ID" }))
 		expect(writeText).toHaveBeenCalledWith("run-7f3a.1")
-		// The details view shows both values with their own copy buttons.
+		fireEvent.click(screen.getByRole("button", { name: "Copy tool name" }))
+		expect(writeText).toHaveBeenCalledWith("delineate_watershed")
+	})
+
+	it("Save as… offers a workspace file and a GeoJSON download in the drawer", () => {
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for watershed_01031500/ }))
+		fireEvent.click(screen.getByRole("menuitem", { name: /Save as…/ }))
+		const save = screen.getByRole("group", { name: "Save as" })
+		expect(within(save).getByRole("button", { name: /Workspace file/ })).toBeInTheDocument()
+		expect(within(save).getByRole("button", { name: /GeoJSON download/ })).toBeInTheDocument()
+	})
+
+	it("Cluster points is a Style option for point layers, not a menu item", () => {
+		state.layers = [{ ...poly("p", "wells"), layerType: "point" } as MapLayer]
+		const onClusterToggle = vi.fn()
+		render(<LayerPanelContent {...baseProps()} onClusterToggle={onClusterToggle} />)
+		fireEvent.click(screen.getByRole("button", { name: /^wells/ }))
+		fireEvent.click(screen.getByRole("button", { name: "Style" }))
+		fireEvent.click(screen.getByRole("checkbox", { name: "Cluster points" }))
+		expect(onClusterToggle).toHaveBeenCalledWith("p", true)
+	})
+
+	it("Provenance shows the recorded rows, then one Not recorded line", () => {
+		render(<LayerPanelContent {...baseProps()} />)
 		fireEvent.click(screen.getByRole("button", { name: /^watershed_01031500/ }))
 		fireEvent.click(screen.getByRole("button", { name: "Details" }))
 		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
-		fireEvent.click(screen.getByRole("button", { name: "Copy tool name" }))
-		expect(writeText).toHaveBeenCalledWith("delineate_watershed")
+		expect(screen.getByText(/^Not recorded: /)).toHaveTextContent(/Units.*CRS.*Citation/)
+		expect(screen.queryByText("Metadata fields")).toBeNull()
+		expect(screen.queryByText("Run ID")).toBeNull()
+		expect(screen.queryByText("Path")).toBeNull()
 	})
 
 	it("Move up is disabled with its reason on the layer on top of the map", () => {
@@ -239,16 +282,12 @@ describe("LayerPanel", () => {
 		expect(props.onReorder).toHaveBeenCalledWith(["b", "a"])
 	})
 
-	it("reads like a GIS legend: the top row is the layer on top of the map, and the drawer says so", () => {
+	it("reads like a GIS legend: the top row is the layer on top of the map", () => {
 		state.layers = [poly("a", "bottom"), poly("b", "middle", { _run_id: "r2" }), poly("c", "top", { _run_id: "r3" })]
 		const props = { ...baseProps(), layerOrder: ["a", "b", "c"] }
 		render(<LayerPanelContent {...props} />)
 		const rows = Array.from(document.querySelectorAll("li.map-layer-row")).map((r) => r.getAttribute("data-layer-id"))
 		expect(rows).toEqual(["c", "b", "a"])
-		fireEvent.click(screen.getByRole("button", { name: /^top/ }))
-		expect(screen.getByRole("group", { name: /^Settings for top/ })).toHaveTextContent("Layer 1 of 3 from the top of the map")
-		fireEvent.click(screen.getByRole("button", { name: /^bottom/ }))
-		expect(screen.getByRole("group", { name: /^Settings for bottom/ })).toHaveTextContent("Layer 3 of 3")
 		// Move up on the middle row moves it toward the top of the map: it becomes the LAST id in draw order.
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for middle/ }))
 		fireEvent.click(screen.getByRole("menuitem", { name: /Move up/ }))

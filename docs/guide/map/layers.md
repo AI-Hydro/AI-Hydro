@@ -111,23 +111,23 @@ A **stale** badge appears when the source file has changed since the layer was l
 
 ## Per-Layer Controls
 
-| Control | Action |
-|---|---|
-| Checkbox | Toggle visibility |
-| Colour swatch | Open symbology editor |
-| 🔍 | Zoom map to layer bounding box |
-| 📋 | Open provenance record |
-| ↗ | Open source file in VS Code editor |
-| ⟳ | Reload layer from source file |
-| 🎨 | Symbology editor |
-| 🔘 / 🧩 | Toggle point clustering (point layers only) |
-| 📊 | View attribute table (vector layers) |
-| 📁 | Save to workspace vectors folder |
-| 💾 | Export layer as GeoJSON download |
-| ▾ / ▴ | Show / hide full metadata |
-| ↑ / ↓ | Move layer up / down in render order |
-| ⠿ | Drag handle for reordering |
-| ✕ | Remove layer (source file not deleted) |
+Each action lives in one place. Click a layer's name to open its drawer; the `...` menu holds the rest.
+
+| Where | Control | Action |
+|---|---|---|
+| Row | Eye | Show or hide the layer |
+| Row | Grip | Drag to reorder |
+| Drawer | Opacity slider | Layer opacity |
+| Drawer | **Style** | Symbology editor; **Cluster points** for point layers |
+| Drawer | **Attributes** | Attribute table (vector layers) |
+| Drawer | **Details** | Overview, Data and Provenance. The run and tool names copy from here |
+| `...` menu | Zoom to layer, Rename | |
+| `...` menu | **Save as…** | A workspace file, or a GeoJSON download |
+| `...` menu | Open source file, Reload source, Open provenance record | Only when the layer has them |
+| `...` menu | Move up, Move down | Render order |
+| `...` menu | Remove layer | Source file not deleted; Undo appears |
+
+Show all and Hide all are in the Layers panel `...` menu. The Provenance tab lists what is recorded and ends with one "Not recorded: ..." line for the facts that are not.
 
 ### Renaming
 
@@ -161,7 +161,7 @@ Drag a layer row using its ⠿ gripper, or use ↑/↓ buttons, to change render
 
 ## Point Clustering
 
-For dense point networks (USGS gauges, precipitation stations), enable **Cluster** in the layer row. Points within the same grid cell at low zoom are aggregated into a single marker sized by count.
+For dense point networks (USGS gauges, precipitation stations), open the layer's drawer, choose **Style** and tick **Cluster points**. Points within the same grid cell at low zoom are aggregated into a single marker sized by count.
 
 ---
 
