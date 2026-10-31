@@ -27,9 +27,9 @@ Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of
 ### Added — every layer can open its run (P2, branch `vision2040/map-run-link`)
 
 - **Open run** in the layer row menu and in Details opens the run that made the layer in Replay. It is offered only when the layer records both its study and its run. The host checks both ids against the same charset as the chat tool cards before it opens anything.
-- **Reference data** is a layer group: MERIT, NWIS, WBD and NID layers with no run are no longer filed under "Other". They read "Reference, not in any run. It cannot back a claim." A layer a study's run made stays under Tool output. Their source now reads "USGS NWIS", "USGS Watershed Boundary Dataset", "National Inventory of Dams".
+- **Reference data** is a layer group: MERIT, NWIS, WBD and NID layers with no run are no longer filed under "Other". They read "Reference, not in any run. It is not from a recorded run." A layer with a tool name is never filed here, even from one of these sources. A layer a study's run made stays under Tool output. Their source now reads "USGS NWIS", "USGS Watershed Boundary Dataset", "National Inventory of Dams".
 - "Open provenance record" moved from the row menu to Details, so the row menu stays at 9 items or fewer.
-- The map plate sidecar keeps `tool`, `study_id`, `chat_id` and `retrieved_at` for each visible layer (it kept only the run id), and `sourceArtifacts[].provenanceRef` falls back to `run:<id>` when a layer has no file.
+- The map plate sidecar keeps `tool`, `study_id` and `retrieved_at` for each visible layer (it kept only the run id). `chat_id` is deliberately not exported: a shared figure should not carry a chat id, and `sourceArtifacts[].provenanceRef` falls back to `run:<id>` when a layer has no file.
 - Not in this change (tools repo): reference layers do not yet carry `retrieved_at` and the query bbox, and gauge/dam queries are not yet wrapped in `recorded_call` when a study is bound.
 
 ---

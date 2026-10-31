@@ -43,6 +43,11 @@ describe("origin and groups", () => {
 		expect(groupLayers([layer("a", {}, { source: "wbd" })]).map((g) => g.origin)).toEqual(["reference"])
 	})
 
+	it("a tool-made layer from a reference source with no run is Tool output, not Reference data", () => {
+		expect(originOf(layer("t", {}, { source: "nwis", tool: "fetch_gauges" }))).toBe("tool")
+		expect(originOf(layer("m", {}, { source: "merit", tool: "extract_rivers" }))).toBe("tool")
+	})
+
 	it("opens a run only when the layer names both its study and its run", () => {
 		expect(openableRun(layer("a", {}, { _run_id: "run-1.1", study_id: "s1" }))).toEqual({ studyId: "s1", runId: "run-1.1" })
 		expect(openableRun(layer("b", {}, { _run_id: "run-1.1" }))).toBeNull()

@@ -129,7 +129,7 @@ Each action lives in one place. Click a layer's name to open its drawer; the `..
 | `...` menu | Move up, Move down | Render order |
 | `...` menu | Remove layer | Source file not deleted; Undo appears |
 
-Layers are grouped by origin. **Reference data** holds MERIT rivers, WBD boundaries, NWIS gauges and NID dams that no run made: they are labelled "Reference, not in any run" and cannot back a claim. The same layer made by a study's run sits under Tool output instead.
+Layers are grouped by origin. **Reference data** holds MERIT rivers, WBD boundaries, NWIS gauges and NID dams that no run made: they are labelled "Reference, not in any run" and are not from a recorded run. The same layer made by a study's run sits under Tool output instead.
 
 Show all and Hide all are in the Layers panel `...` menu. The Provenance tab lists what is recorded and ends with one "Not recorded: ..." line for the facts that are not.
 
