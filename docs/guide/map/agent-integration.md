@@ -98,7 +98,7 @@ Several map panels send context directly to the agent chat, pre-loading all the 
 
 | Source | What is sent |
 |---|---|
-| **Feature Inspector → Ask AI-Hydro** | Click coordinates, all visible layer names and types, vector feature properties at that point, raster pixel value |
+| **Feature Inspector → Ask AI-Hydro** (a new chat; with a chat open it adds a `[map-ref …]` line to the input instead) | Click coordinates, all visible layer names and types, vector feature properties at that point, raster pixel value |
 | **Feature Inspector → Delineate** | Click coordinates with a pre-filled delineation instruction |
 | **Annotations → Ask Agent** | Annotation geometry, My Notes, AI Prompt, visible layer list |
 | **Annotations → Batch Ask Agent** | Full collection as a coordinate/geometry/notes table |

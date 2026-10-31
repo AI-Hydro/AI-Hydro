@@ -40,6 +40,14 @@ Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of
 - The card gains Select, Add pin, Measure from here, Copy coordinates and Remove layer under `...`; the menu gains Select.
 - `OverflowMenu` items accept a `title` tooltip.
 
+### Changed — pointing at the map and asking keeps the chat (P4, branch `vision2040/map-ask-keeps-chat`)
+
+- **Asking from the map no longer replaces the chat.** `startMapAgentTask` used to `clearTask()` (after a confirm if the chat was running). With a chat open, running or finished, the text now goes into that chat's input and nothing is cleared, aborted or sent; you read it and press Send. With no chat open, a new chat starts as before. The "Replace this chat?" confirm is gone from the map; the ledger and preview launchers keep theirs.
+- **A reference, not a paraphrase.** The text added is one line, `[map-ref kind=basin layer=<id> name="…" run=<id> study=<id> feature=<id> at=lon,lat]` (`MapRef`, `src/shared/map/mapRef.ts`), after your own question or a short lead ("About this place:", "Delineate the watershed at this point:"). Asks that carry no map object (a sketch, a batch) add their prompt as before. The host validates every field (ids by charset, coordinates by range) and drops what it cannot trust.
+- **A different study is said out loud.** If the layer's study is not the one the chat is bound to, the map's status line says so; the text is still added.
+- X1-C4 (the composer footer) is done and on main; this uses the existing "add to input" path, so no composer change was needed.
+- Not in this change: the long prompt templates in `mapAgentPrompts.ts` stay for a new chat (the report deletes them only after 18 of 20 scripted asks resolve the right object, which needs the agent and was not run), and `map_get_item` is a tools-repo tool.
+
 ---
 
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)

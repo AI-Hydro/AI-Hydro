@@ -27,7 +27,7 @@ The card and the right-click menu offer the same actions, under the same names (
 
 | Action | What it does |
 |---|---|
-| **Ask AI-Hydro** | Opens the chat with the click point, the visible layers and the feature's properties, for any question |
+| **Ask AI-Hydro** | With a chat open, adds your question and one reference line to that chat's input (nothing is cleared, and you press Send); with no chat open, starts one. The line looks like `[map-ref kind=basin layer=… run=… study=… at=lon,lat]` and names the layer, the run and the study of what you pointed at. If the layer is from another study than the chat's, the card says so |
 | **Delineate** | Opens the chat and the agent delineates the watershed; the run is recorded. The tooltip says how it would be routed (NLDI first, hybrid or quick MERIT) |
 | **...** menu | **Delineate without chat** (runs here on the MERIT flow-direction raster, best for small and medium basins), **Select** (add to the selection set), **Save as GeoJSON**, **Save as shapefile**, **Add pin**, **Measure from here**, **Copy coordinates**, **Remove layer** |
 

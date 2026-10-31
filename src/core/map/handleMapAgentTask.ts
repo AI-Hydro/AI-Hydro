@@ -1,4 +1,5 @@
 import type { Controller } from "@core/controller"
+import { parseMapRef } from "@shared/map/mapRef"
 import { type MapLaunchContext, startMapAgentTask } from "./startMapAgentTask"
 
 /** Strings only, bounded: the hint comes from a webview and is passed to the server as a lookup key. */
@@ -14,11 +15,15 @@ export function parseMapLaunch(raw: unknown): MapLaunchContext | undefined {
 	const sessionId = cleanHint(r.sessionId)
 	const artifactPath = cleanHint(r.artifactPath)
 	const userQuestion = typeof r.userQuestion === "string" && r.userQuestion.trim() ? r.userQuestion.slice(0, 4000) : undefined
-	if (!sessionId && !artifactPath && !userQuestion) {
+	const ref = parseMapRef(r.ref)
+	const composerText = typeof r.composerText === "string" && r.composerText.trim() ? r.composerText.slice(0, 1000) : undefined
+	if (!sessionId && !artifactPath && !userQuestion && !ref && !composerText) {
 		return undefined
 	}
 	return {
 		...(userQuestion ? { userQuestion } : {}),
+		...(ref ? { ref } : {}),
+		...(composerText ? { composerText } : {}),
 		...(sessionId || artifactPath
 			? { studyHint: { ...(sessionId ? { sessionId } : {}), ...(artifactPath ? { artifactPath } : {}) } }
 			: {}),
@@ -39,5 +44,7 @@ export async function handleMapAgentTaskMessage(
 		ok: result.ok,
 		error: result.error,
 		cancelled: result.cancelled === true,
+		addedToChat: result.addedToChat === true,
+		warning: result.warning,
 	})
 }
