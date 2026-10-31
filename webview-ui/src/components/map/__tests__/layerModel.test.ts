@@ -1,6 +1,17 @@
 import type { MapLayer } from "@shared/proto/cline/map"
 import { describe, expect, it } from "vitest"
-import { duplicateIds, duplicateKey, duplicatesToRemove, groupLayers, originOf, rowIndicators, sharedNote } from "../layerModel"
+import {
+	drawOrder,
+	duplicateIds,
+	duplicateKey,
+	duplicatesToRemove,
+	groupLayers,
+	listOrder,
+	originOf,
+	rowIndicators,
+	sharedNote,
+	stackPosition,
+} from "../layerModel"
 
 const layer = (id: string, over: Partial<MapLayer> = {}, metadata: Record<string, string> = {}): MapLayer =>
 	({
@@ -96,5 +107,17 @@ describe("duplicates", () => {
 		expect(duplicateKey(a)).not.toBe(duplicateKey(b))
 		expect(duplicateKey(a)).toBe(duplicateKey(c))
 		expect(duplicateKey(d)).not.toBe(duplicateKey(e))
+	})
+
+	it("stacking: the last id of the draw order is on top, which is what MapView renders and the list shows first", () => {
+		const [a, b, c] = [layer("a"), layer("b"), layer("c")]
+		const draw = drawOrder([a, b, c], ["c", "a", "b"])
+		expect(draw.map((l) => l.id)).toEqual(["c", "a", "b"]) // MapView hands exactly this to deck.gl: b is drawn last, on top
+		expect(listOrder(draw).map((l) => l.id)).toEqual(["b", "a", "c"])
+		expect(stackPosition(draw, "b")).toEqual({ position: 1, of: 3 })
+		expect(stackPosition(draw, "c")).toEqual({ position: 3, of: 3 })
+		// Layers missing from the persisted order are appended, so they draw on top.
+		expect(drawOrder([a, b, c], ["c"]).map((l) => l.id)).toEqual(["c", "a", "b"])
+		expect(stackPosition(draw, "zzz")).toBeNull()
 	})
 })

@@ -119,7 +119,7 @@ describe("LayerPanel", () => {
 
 	it("Move up is disabled with its reason on the layer on top of the map", () => {
 		render(<LayerPanelContent {...baseProps()} />)
-		fireEvent.click(screen.getByRole("button", { name: /^Actions for watershed_01031500/ }))
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for gauge/ }))
 		const up = screen.getByRole("menuitem", { name: /Move up/ })
 		expect(up).toHaveAttribute("aria-disabled", "true")
 		expect(up.textContent).toMatch(/Already on top of the map/)
@@ -235,7 +235,23 @@ describe("LayerPanel", () => {
 		expect(screen.getByRole("img", { name: "1 layer with warnings" })).toBeInTheDocument()
 		fireEvent.click(screen.getByRole("button", { name: /Tool output/ }))
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for x/ }))
-		fireEvent.click(screen.getByRole("menuitem", { name: /Move down/ }))
+		fireEvent.click(screen.getByRole("menuitem", { name: /Move up/ }))
 		expect(props.onReorder).toHaveBeenCalledWith(["b", "a"])
+	})
+
+	it("reads like a GIS legend: the top row is the layer on top of the map, and the drawer says so", () => {
+		state.layers = [poly("a", "bottom"), poly("b", "middle", { _run_id: "r2" }), poly("c", "top", { _run_id: "r3" })]
+		const props = { ...baseProps(), layerOrder: ["a", "b", "c"] }
+		render(<LayerPanelContent {...props} />)
+		const rows = Array.from(document.querySelectorAll("li.map-layer-row")).map((r) => r.getAttribute("data-layer-id"))
+		expect(rows).toEqual(["c", "b", "a"])
+		fireEvent.click(screen.getByRole("button", { name: /^top/ }))
+		expect(screen.getByRole("group", { name: /^Settings for top/ })).toHaveTextContent("Layer 1 of 3 from the top of the map")
+		fireEvent.click(screen.getByRole("button", { name: /^bottom/ }))
+		expect(screen.getByRole("group", { name: /^Settings for bottom/ })).toHaveTextContent("Layer 3 of 3")
+		// Move up on the middle row moves it toward the top of the map: it becomes the LAST id in draw order.
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for middle/ }))
+		fireEvent.click(screen.getByRole("menuitem", { name: /Move up/ }))
+		expect(props.onReorder).toHaveBeenCalledWith(["a", "c", "b"])
 	})
 })

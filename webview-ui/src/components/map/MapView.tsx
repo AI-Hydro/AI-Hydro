@@ -71,6 +71,7 @@ import { meshTriangleCount } from "./inundation3d/meshCoordinates"
 import { hydrographFrameVisibilityUpdates } from "./inundation3d/syncHydrographFrame"
 import { terrainOffsetForManifest } from "./inundation3d/verticalAlignment"
 import { clusterGeoJSON, LayerClusterCache } from "./layerClusterCache"
+import { drawOrder } from "./layerModel"
 import { MapConnectionStatus } from "./MapConnectionStatus"
 import MapContextMenu from "./MapContextMenu"
 import { MapEmptyState, shouldShowEmptyState } from "./MapEmptyState"
@@ -2123,21 +2124,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		// rasterResourceRevision included so the reading refreshes after async colormap/preload updates
 	}, [cursorCoord, layers, visibleLayerIds, layerOrder, rasterResourceRevision])
 
-	// Sort layers by custom order for deck.gl (last = on top)
-	const sortedLayers = useMemo(() => {
-		if (layerOrder.length === 0) {
-			return layers
-		}
-		const byId = new Map(layers.map((l) => [l.id, l]))
-		const sorted = layerOrder.map((id) => byId.get(id)).filter(Boolean) as typeof layers
-		const inOrder = new Set(layerOrder)
-		for (const l of layers) {
-			if (!inOrder.has(l.id)) {
-				sorted.push(l)
-			}
-		}
-		return sorted
-	}, [layers, layerOrder])
+	// Sort layers by custom order for deck.gl (last = on top). The Layers panel shows the same order reversed.
+	const sortedLayers = useMemo(() => drawOrder(layers, layerOrder), [layers, layerOrder])
 
 	const handleMapClick = useCallback(
 		(info: any) => {
