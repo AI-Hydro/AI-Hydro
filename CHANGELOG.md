@@ -9,6 +9,14 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — 2026-10-31 (agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
+
+### Fixed — a flaky McpHub test (branch `vision2040/mcphub-flake`)
+
+`toggleAutoApproveRefusal.test.ts` removed its temp directory (`/tmp/mcphub-always-*`) while the hub's settings watcher could still be writing into it, which failed unrelated PRs with `ENOTEMPTY: rmdir`. The cleanup now retries (`maxRetries` 10, 50 ms). Test-only.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)
