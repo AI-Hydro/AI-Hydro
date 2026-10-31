@@ -173,7 +173,7 @@ export const referenceGauges: MapLayer = {
 	visible: true,
 	geojson: gaugePoint.geojson,
 	style: gaugePoint.style,
-	metadata: { source: "nwis", style_preset: "gauge", feature_count: "1" },
+	metadata: { source: "nwis", style_preset: "gauge", feature_count: "1", source_status: "synthetic" },
 }
 
 export const featureLayers = (): MapLayer[] => [rasterLayer(), basinPolygon, riverLines, gaugePoint]
