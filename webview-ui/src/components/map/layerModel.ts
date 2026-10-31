@@ -97,6 +97,37 @@ export function sharedNote(indicators: RowIndicators[]): string | undefined {
  * identity are compared (a run id, a tool, or a source path); anything else is never called a duplicate, because two
  * layers a user loaded by hand under one name may differ in ways this panel cannot see.
  */
+/** A cheap string hash (djb2 over at most the first 200 000 characters, plus the full length). */
+function hashText(text: string): string {
+	let h = 5381
+	const n = Math.min(text.length, 200_000)
+	for (let i = 0; i < n; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0
+	return `${text.length}:${(h >>> 0).toString(36)}`
+}
+
+/**
+ * What the layer actually draws: its geometry, raster bounds and source, tile URL, filter, time range and band. Two
+ * layers from the same run and source that differ in any of these are not the same thing (a different filter or date
+ * range on one dataset, a clipped copy), so they are never offered for removal as duplicates.
+ */
+export function contentFingerprint(layer: MapLayer): string {
+	const m = layer.metadata ?? {}
+	return [
+		layer.geojson ? hashText(layer.geojson) : "",
+		m.raster_bounds ?? "",
+		m.raster_data_url ? hashText(m.raster_data_url) : "",
+		m.raster_path ?? m.raster_source_path ?? "",
+		m.raster_colormap ?? "",
+		m.gee_tile_url_template ?? m.gee_remote_tile_url_template ?? "",
+		m.gee_dataset_id ?? "",
+		m.gee_start_date ?? m.time_start ?? "",
+		m.gee_end_date ?? m.time_end ?? "",
+		m.gee_bands ?? m.band ?? "",
+		m.gee_filter ?? m.filter ?? "",
+		m.gee_vis_params ?? "",
+	].join("|")
+}
+
 export function duplicateKey(layer: MapLayer): string | null {
 	const meta = layer.metadata ?? {}
 	const run = layerRunId(meta)
@@ -111,6 +142,7 @@ export function duplicateKey(layer: MapLayer): string | null {
 		run ?? "",
 		meta.workspace_folder ?? "",
 		path ?? "",
+		contentFingerprint(layer),
 	].join("\u0000")
 }
 

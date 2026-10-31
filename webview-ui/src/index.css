@@ -2636,17 +2636,6 @@ vscode-dropdown::part(listbox) {
 	overflow: hidden;
 }
 
-.history-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 10px 17px 10px 20px;
-}
-
-.history-header-title {
-	margin: 0;
-}
-
 .history-search-area {
 	padding: 5px 17px 6px 17px;
 }
@@ -3404,4 +3393,11 @@ vscode-dropdown::part(listbox) {
 	background: var(--vscode-button-background);
 	color: var(--vscode-button-foreground);
 	border-color: transparent;
+}
+.map-layer-group__warn {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--vscode-editorWarning-foreground, #cca700);
+	font-weight: 400;
 }

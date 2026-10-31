@@ -42,10 +42,12 @@ import { explainWithAiHydro } from "./core/controller/commands/explainWithAiHydr
 import { fixWithAiHydro } from "./core/controller/commands/fixWithAiHydro"
 import { improveWithAiHydro } from "./core/controller/commands/improveWithAiHydro"
 import { sendAddToInputEvent } from "./core/controller/ui/subscribeToAddToInput"
+import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
 import { sendFocusChatInputEvent } from "./core/controller/ui/subscribeToFocusChatInput"
 import { sendFocusPendingPromptEvent } from "./core/controller/ui/subscribeToFocusPendingPrompt"
 import { setWorkspaceTrustProvider } from "./core/task/workspaceTrust"
 import { workspaceResolver } from "./core/workspace"
+import { CODE_ACTION_SELECTOR, offeredCodeActions } from "./hosts/vscode/aiHydroCodeActions"
 import { focusChatInput, getContextForCommand } from "./hosts/vscode/commandUtils"
 import { VscodeDiffViewProvider } from "./hosts/vscode/VscodeDiffViewProvider"
 import { VscodeWebviewProvider } from "./hosts/vscode/VscodeWebviewProvider"
@@ -943,7 +945,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Register code action provider
 	context.subscriptions.push(
 		vscode.languages.registerCodeActionsProvider(
-			"*",
+			CODE_ACTION_SELECTOR,
 			new (class implements vscode.CodeActionProvider {
 				public static readonly providedCodeActionKinds = [vscode.CodeActionKind.QuickFix, vscode.CodeActionKind.Refactor]
 
@@ -987,35 +989,33 @@ export async function activate(context: vscode.ExtensionContext) {
 						)
 					}
 
-					// Add to AI-Hydro (Always available)
-					const addAction = new vscode.CodeAction("Add to AI-Hydro", vscode.CodeActionKind.QuickFix)
-					addAction.command = {
-						command: commands.AddToChat,
-						title: "Add to AI-Hydro",
-						arguments: [expandedRange, context.diagnostics],
-					}
-					actions.push(addAction)
+					const offered = offeredCodeActions(document.languageId, context.diagnostics.length > 0)
 
-					// Explain with AI-Hydro (Always available)
-					const explainAction = new vscode.CodeAction("Explain with AI-Hydro", vscode.CodeActionKind.RefactorExtract) // Using a refactor kind
-					explainAction.command = {
-						command: commands.ExplainCode,
-						title: "Explain with AI-Hydro",
-						arguments: [expandedRange],
+					if (offered.includes("add")) {
+						const addAction = new vscode.CodeAction("Add to AI-Hydro", vscode.CodeActionKind.QuickFix)
+						addAction.command = {
+							command: commands.AddToChat,
+							title: "Add to AI-Hydro",
+							arguments: [expandedRange, context.diagnostics],
+						}
+						actions.push(addAction)
 					}
-					actions.push(explainAction)
 
-					// Improve with AI-Hydro (Always available)
-					const improveAction = new vscode.CodeAction("Improve with AI-Hydro", vscode.CodeActionKind.RefactorRewrite) // Using a refactor kind
-					improveAction.command = {
-						command: commands.ImproveCode,
-						title: "Improve with AI-Hydro",
-						arguments: [expandedRange],
+					if (offered.includes("explain")) {
+						const explainAction = new vscode.CodeAction(
+							"Explain with AI-Hydro",
+							vscode.CodeActionKind.RefactorExtract,
+						) // Using a refactor kind
+						explainAction.command = {
+							command: commands.ExplainCode,
+							title: "Explain with AI-Hydro",
+							arguments: [expandedRange],
+						}
+						actions.push(explainAction)
 					}
-					actions.push(improveAction)
 
-					// Fix with AI-Hydro (Only if diagnostics exist)
-					if (context.diagnostics.length > 0) {
+					// Fix with AI-Hydro (only where the editor reports a problem, in Python and R)
+					if (offered.includes("fix")) {
 						const fixAction = new vscode.CodeAction("Fix with AI-Hydro", vscode.CodeActionKind.QuickFix)
 						fixAction.isPreferred = true
 						fixAction.command = {
@@ -1029,11 +1029,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				}
 			})(),
 			{
-				providedCodeActionKinds: [
-					vscode.CodeActionKind.QuickFix,
-					vscode.CodeActionKind.RefactorExtract,
-					vscode.CodeActionKind.RefactorRewrite,
-				],
+				providedCodeActionKinds: [vscode.CodeActionKind.QuickFix, vscode.CodeActionKind.RefactorExtract],
 			},
 		),
 	)
@@ -1076,6 +1072,16 @@ export async function activate(context: vscode.ExtensionContext) {
 				return
 			}
 			await improveWithAiHydro(context.controller, context.commandContext)
+		}),
+	)
+
+	// Show Chat: open the sidebar if it is closed or unresolved, return it to the chat from any sub-view, then focus
+	// the chat input. The study status item uses it; the palette does not list it.
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.ShowChat, async () => {
+			await vscode.commands.executeCommand("aihydro.SidebarProvider.focus")
+			await sendChatButtonClickedEvent()
+			sendFocusChatInputEvent()
 		}),
 	)
 
