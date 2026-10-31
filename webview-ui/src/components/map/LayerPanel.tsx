@@ -24,13 +24,16 @@ import GraduatedSymbologyEditor from "./GraduatedSymbologyEditor"
 import { LayerRow } from "./LayerRow"
 import { deriveLayerIntelligence } from "./layerIntelligence"
 import {
+	drawOrder,
 	duplicateIds,
 	duplicatesToRemove,
 	groupLayers,
 	type LayerOrigin,
+	listOrder,
 	ORIGIN_LABEL,
 	rowIndicators,
 	sharedNote,
+	stackPosition,
 } from "./layerModel"
 import { AttributeTable, LayerInspector, niceMetadata } from "./layerPanelParts"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
@@ -228,23 +231,10 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const visibleCount = useMemo(() => layers.filter((layer) => visibleLayerIds.has(layer.id)).length, [layers, visibleLayerIds])
 	const restoredNote = useMemo(() => restoredLayersNote(layers, restoreState.olderCount), [layers, restoreState.olderCount])
 
-	// Sorted layer list respects the custom order maintained in MapView
-	const orderedLayers = useMemo(() => {
-		if (layerOrder.length === 0) {
-			return layers
-		}
-		const byId = new Map(layers.map((l) => [l.id, l]))
-		const sorted = layerOrder.map((id) => byId.get(id)).filter(Boolean) as MapLayer[]
-		// Append any layers not yet in the order list
-		const inOrder = new Set(layerOrder)
-		for (const l of layers) {
-			if (!inOrder.has(l.id)) {
-				sorted.push(l)
-			}
-		}
-		return sorted
-	}, [layers, layerOrder])
-
+	// Draw order, shared with MapView (last = on top).
+	const drawLayers = useMemo(() => drawOrder(layers, layerOrder), [layers, layerOrder])
+	// The list reads like a GIS legend: the top row is on top of the map, so it is the draw order reversed.
+	const orderedLayers = useMemo(() => listOrder(drawLayers), [drawLayers])
 	const groups = useMemo(() => groupLayers(orderedLayers), [orderedLayers])
 	const twins = useMemo(() => duplicateIds(orderedLayers), [orderedLayers])
 	const intelligenceOf = useCallback(
@@ -388,7 +378,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	 */
 	const removeLayers = async (targets: MapLayer[], label: string) => {
 		if (targets.length === 0) return
-		const previousOrder = orderedLayers.map((l) => l.id)
+		const previousOrder = drawLayers.map((l) => l.id)
 		const captured = targets.map(capture)
 		const removed: MapLayer[] = []
 		let failed = 0
@@ -450,7 +440,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const handleClearAll = async () => {
 		setConfirm(null)
 		const previous = [...layers]
-		const previousOrder = orderedLayers.map((l) => l.id)
+		const previousOrder = drawLayers.map((l) => l.id)
 		const captured = previous.map(capture)
 		try {
 			await MapServiceClient.clearMapLayers({})
@@ -476,15 +466,19 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	// ── order ─────────────────────────────────────────────────────────────
 
-	/** The map draws the list in this order: the first layer is on top, whatever group it is shown in. */
-	const orderIds = orderedLayers.map((l) => l.id)
+	/** Draw order, as persisted: the last id is drawn last, so it is on top of the map. */
+	const orderIds = drawLayers.map((l) => l.id)
+	/** The list as shown: the top row is the layer on top of the map. */
+	const displayIds = orderedLayers.map((l) => l.id)
+	const reorderFromDisplay = (display: string[]) => onReorder([...display].reverse())
+	/** -1 moves the layer up the list, toward the top of the map; +1 moves it down. */
 	const moveLayer = (layer: MapLayer, dir: -1 | 1) => {
-		const i = orderIds.indexOf(layer.id)
+		const i = displayIds.indexOf(layer.id)
 		const j = i + dir
-		if (i < 0 || j < 0 || j >= orderIds.length) return
-		const next = [...orderIds]
+		if (i < 0 || j < 0 || j >= displayIds.length) return
+		const next = [...displayIds]
 		;[next[i], next[j]] = [next[j], next[i]]
-		onReorder(next)
+		reorderFromDisplay(next)
 	}
 
 	const finishDrag = () => {
@@ -502,10 +496,10 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const onRowDrop = (e: React.DragEvent, layer: MapLayer) => {
 		e.preventDefault()
 		if (!drag || !drop || drag.id === layer.id) return finishDrag()
-		const next = orderIds.filter((id) => id !== drag.id)
+		const next = displayIds.filter((id) => id !== drag.id)
 		const at = next.indexOf(layer.id)
 		next.splice(drop.pos === "above" ? at : at + 1, 0, drag.id)
-		onReorder(next)
+		reorderFromDisplay(next)
 		finishDrag()
 	}
 
@@ -540,7 +534,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const provenancePath = layer.metadata?.provenance_path
 		const tool = layerTool(layer.metadata)
 		const run = layerRunId(layer.metadata)
-		const rank = orderIds.indexOf(layer.id)
+		const rank = displayIds.indexOf(layer.id)
 		const items: (OverflowItem | false)[] = [
 			{ key: "zoom", label: "Zoom to layer", icon: "zoom-in", onSelect: () => onZoomToLayer?.(layer) },
 			{
@@ -648,7 +642,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				key: "down",
 				label: "Move down",
 				icon: "arrow-down",
-				disabledReason: rank >= orderIds.length - 1 ? "Already at the bottom of the map" : undefined,
+				disabledReason: rank >= displayIds.length - 1 ? "Already at the bottom of the map" : undefined,
 				onSelect: () => moveLayer(layer, 1),
 			},
 			{ key: "d5", divider: true },
@@ -740,7 +734,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				</label>
 				{!visible && <div className="map-layer-hint">Hidden. Show the layer to change its opacity.</div>}
 				<div className="map-layer-hint">
-					Draws {orderIds.indexOf(layer.id) + 1} of {orderIds.length} on the map (1 is on top), whatever its group.
+					{(() => {
+						const at = stackPosition(drawLayers, layer.id)
+						return at
+							? `Layer ${at.position} of ${at.of} from the top of the map (1 is on top), whatever its group.`
+							: ""
+					})()}
 				</div>
 				<div className="map-layer-drawer__actions">
 					<button
@@ -893,7 +892,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 											return next
 										})
 									}
-									title={`${label.hint}. Groups are by origin; the map draws all layers in one order, first on top.`}
+									title={`${label.hint}. Groups are by origin; the map stacks all layers in one order, and the list shows it from the top of the map down.`}
 									type="button">
 									<span
 										aria-hidden="true"
