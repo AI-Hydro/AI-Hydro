@@ -517,6 +517,8 @@ export const screens: ScreenDef[] = [
 	chatScreen("chat-task-text", "Task with plain text", {
 		state: taskState(plainTextTask),
 		expectVisible: ["text=Fixture text only"],
+		// A plain answer has no tool work, so no "Worked <1s" row before or after it.
+		expectAbsent: ["[data-testid=work-group]", "text=Worked"],
 		steps: SCROLL_TO_END,
 		pixelDiffThreshold: STRUCTURAL_ONLY,
 		scrollPinned: PINNED,
