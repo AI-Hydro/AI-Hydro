@@ -44,8 +44,13 @@ export async function focusChat(): Promise<void> {
 export interface MapLaunchDeps {
 	confirmReplace: () => Promise<boolean>
 	focusChat: () => Promise<void>
-	/** Put text into the open chat's input. */
-	addToInput?: (text: string) => Promise<void>
+}
+
+/** What asking from the map needs. It never replaces a chat, so there is no confirm. */
+export interface MapAskDeps {
+	focusChat: () => Promise<void>
+	/** Put text into the open chat's input. Resolves false when no chat input received it. */
+	addToInput: (text: string) => Promise<boolean>
 }
 
 /** True when a chat is open and alive. A finished chat is still the user's chat; asking from the map does not discard it. */
@@ -67,6 +72,30 @@ function studyMismatch(controller: Controller, ref: MapRef | undefined): string 
 }
 
 /**
+ * The line that goes into the chat input. When the ref's study is not the chat's (another study, or the chat is bound
+ * to none), the study is not asserted in the ref and the note is written in the input itself, so the user sees it
+ * before sending and the agent reads it as plain text.
+ */
+export function composerLine(controller: Controller, lead: string, ref: MapRef | undefined): { text: string; warning?: string } {
+	if (!ref) return { text: lead }
+	const warning = studyMismatch(controller, ref)
+	const taskId = (controller.task as { ulid?: string } | undefined)?.ulid
+	const b = controller.studyBinding
+	const bound = !!b && b.status === "bound" && !!b.studyId && b.chatId === taskId
+	if (ref.study_id && !bound) {
+		const note = `(This layer is from study ${ref.study_id}; this chat is not bound to a study.)`
+		return {
+			text: [lead, note, formatMapRef({ ...ref, study_id: undefined })].filter(Boolean).join(" "),
+			warning: note.slice(1, -1),
+		}
+	}
+	if (warning) {
+		return { text: [lead, `(${warning})`, formatMapRef({ ...ref, study_id: undefined })].filter(Boolean).join(" "), warning }
+	}
+	return { text: [lead, formatMapRef(ref)].filter(Boolean).join(" ") }
+}
+
+/**
  * Asking from the map. With a chat open, the text goes into that chat's input and nothing is cleared, aborted or
  * replaced: the user reads it and sends it. With no chat open, a new chat starts with the map-seeded prompt, bound
  * to the study the launch names (or asks the user to pick) before its first tool call.
@@ -75,7 +104,7 @@ export async function startMapAgentTask(
 	controller: Controller,
 	prompt: string,
 	launch?: MapLaunchContext,
-	deps: MapLaunchDeps = { confirmReplace: confirmReplaceChat, focusChat, addToInput: sendAddToInputEvent },
+	deps: MapAskDeps = { focusChat, addToInput: sendAddToInputEvent },
 ): Promise<MapLaunchResult> {
 	if (!prompt?.trim()) {
 		return { ok: false, error: "Empty prompt" }
@@ -83,10 +112,15 @@ export async function startMapAgentTask(
 	try {
 		if (hasOpenChat(controller)) {
 			const lead = launch?.composerText?.trim() || (launch?.ref ? "" : prompt.trim())
-			const text = [lead, launch?.ref ? formatMapRef(launch.ref) : ""].filter(Boolean).join(" ")
+			const line = composerLine(controller, lead, launch?.ref)
 			await deps.focusChat()
-			await (deps.addToInput ?? sendAddToInputEvent)(text)
-			return { ok: true, addedToChat: true, warning: studyMismatch(controller, launch?.ref) }
+			if (!(await deps.addToInput(line.text))) {
+				return {
+					ok: false,
+					error: "The chat input is not open, so nothing was added. Open the AI-Hydro chat and ask again.",
+				}
+			}
+			return { ok: true, addedToChat: true, warning: line.warning }
 		}
 		await controller.clearTask()
 		await controller.postStateToWebview()
