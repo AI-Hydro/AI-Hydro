@@ -95,7 +95,7 @@ import { MAP_Z } from "./mapZ"
 import PinCard from "./PinCard"
 import PinsPanel from "./PinsPanel"
 import { DASH_EXTENSION } from "./pathStyle"
-import { currentSaveToken, failOutstandingSaves, usePinSaveStatus } from "./pinSaveStatus"
+import { currentSaveToken, failOutstandingSaves, getPinSaveStatus, usePinSaveStatus } from "./pinSaveStatus"
 import {
 	ANNOTATIONS_LAYER_ID,
 	addPin,
@@ -993,8 +993,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			const data = event.data as { type?: string; projectKey?: unknown; ids?: unknown; saveSeq?: unknown } | undefined
 			if (data?.type === "aihydro-map-pins-reload") {
 				// A refused save also asks for a reload: whatever was still waiting for an answer will not get one.
+				const pending = getPinSaveStatus()
+				const unanswered = pending.acked < pending.requested
+				const editedId = pinKeysRef.current.selected
+				const edited = annotationsRef.current.find((a) => a.id === editedId)
 				failOutstandingSaves()
 				loadPinsFromHost(true)
+				if (unanswered) {
+					// Reloading replaces the list with the open project's pins, so the edit cannot be kept; say which one.
+					setPinToast({
+						id: Date.now(),
+						message: `${edited ? `Pin \u201C${edited.name}\u201D was` : "A pin edit was"} not saved: the open folder changed, so pins were reloaded.`,
+						undoable: false,
+					})
+				}
 			} else if (data?.type === "aihydro-map-save-ack") {
 				acknowledgeSaved(data.projectKey, data.ids, data.saveSeq)
 			}
@@ -3830,6 +3842,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				{selectedPin && (
 					<PinCard
 						focusName={pinFocusName}
+						key={selectedPin.id}
 						mapStyle={mapStyle === "dark" ? "dark" : "light"}
 						onAsk={() => {
 							const [pinLon, pinLat] = pinCoords(selectedPin)
@@ -3850,7 +3863,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							return currentSaveToken()
 						}}
 						onSave={(patch) => {
-							const result = patchPin(annotationsRef.current, selectedPin.id, patch)
+							const result = patchPin(annotationsRef.current, patch.id, patch)
 							if (!result.edit) {
 								return null
 							}
