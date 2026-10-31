@@ -626,6 +626,22 @@ export const answerAuditUnavailableTask: AiHydroMessage[] = (() => {
 	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
 })()
 
+/** Honest exit: the agent says the task was only partly done, with what was not done. */
+export const answerPartialTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	return [
+		task("Fetch the synthetic record for the synthetic basin. Layout fixture."),
+		apiReq(c()),
+		{
+			...completion(c(), "The synthetic record covers 2001 to 2009 only. Fixture answer, not a result."),
+			completionOutcome: {
+				outcome: "partial" as const,
+				unmet: ["no observed record for 2010 to 2015", "the synthetic forcing fetch timed out, so no water balance"],
+			},
+		},
+	]
+})()
+
 /** Context truncated to fit the window: the host now says so (structured warning notice) and the range is on the request row. */
 export const contextTruncationTask: AiHydroMessage[] = (() => {
 	const c = clock()

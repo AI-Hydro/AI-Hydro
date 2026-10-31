@@ -848,6 +848,65 @@ describe("answer-audit gate (W2-C)", () => {
 			expect(t.notify.calledOnce).to.equal(true)
 		})
 
+		it("honest exit: outcome partial is recorded on the answer row, and is not a mistake", async () => {
+			const t = build({ gate: false })
+			t.config.taskState.consecutiveMistakeCount = 3
+			const b = block("Streamflow fetched; no observed record for 2010-2015.")
+			b.params.outcome = "partial"
+			b.params.unmet = "- no observed streamflow for 2010-2015"
+			await new AttemptCompletionHandler().execute(t.config, b)
+			const completion = t.say.getCalls().find((c) => c.args[0] === "completion_result")!
+			expect(completion.args[5]).to.deep.equal({
+				completionOutcome: { outcome: "partial", unmet: ["no observed streamflow for 2010-2015"] },
+			})
+			expect(t.config.taskState.consecutiveMistakeCount).to.equal(0)
+		})
+
+		it("the declared outcome is sent to an audit tool that declares it, and not to one that does not", async () => {
+			const declaring = server({
+				tools: [
+					{
+						name: "audit_interpretation",
+						description: GRADED_DESC,
+						inputSchema: { type: "object", properties: { prose: {}, session_id: {}, outcome: {}, unmet: {} } },
+					} as any,
+					{ name: "aihydro_chat_status" } as any,
+				],
+			})
+			const t = build({ gate: false, servers: [declaring] })
+			const b = block("The ratio is 0.42 for part of it.")
+			b.params.outcome = "partial"
+			b.params.unmet = "- no record"
+			await new AttemptCompletionHandler().execute(t.config, b)
+			const call = t.hub.callTool.getCalls().find((c: any) => c.args[1] === "audit_interpretation")!
+			expect(call.args[2]).to.include({ outcome: "partial" })
+			expect(call.args[2].unmet).to.deep.equal(["no record"])
+		})
+
+		it("an audit tool without those parameters is not sent them", async () => {
+			const t = build({ gate: false })
+			const b = block("The ratio is 0.42 for part of it.")
+			b.params.outcome = "partial"
+			await new AttemptCompletionHandler().execute(t.config, b)
+			const call = t.hub.callTool.getCalls().find((c: any) => c.args[1] === "audit_interpretation")!
+			expect(call.args[2]).to.not.have.property("outcome")
+		})
+
+		it("a normal completion records no outcome (done, absent or unrecognised)", async () => {
+			for (const outcome of [undefined, "done", "finished-ish"]) {
+				sinon.restore() // build() stubs the notification module each time
+				setRecordedFirstPartyLauncher(LAUNCHER as any)
+				const t = build({ gate: false })
+				const b = block("The ratio is 0.42")
+				if (outcome) {
+					b.params.outcome = outcome
+				}
+				await new AttemptCompletionHandler().execute(t.config, b)
+				const completion = t.say.getCalls().find((c) => c.args[0] === "completion_result")!
+				expect(completion.args[5], String(outcome)).to.equal(undefined)
+			}
+		})
+
 		it("eligible: no completion_result streaming, one updating activity line", async () => {
 			const t = build({ gate: true })
 			const h = new AttemptCompletionHandler()

@@ -752,6 +752,9 @@ export class Task {
 					lastMessage.images = images
 					lastMessage.files = files // Ensure files is updated
 					lastMessage.partial = false
+					if (evidence) {
+						Object.assign(lastMessage, evidence) // evidence known only at completion (e.g. a completion outcome)
+					}
 
 					// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
 					await this.messageStateHandler.saveAiHydroMessagesAndUpdateHistory()

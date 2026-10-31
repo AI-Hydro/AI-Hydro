@@ -4,6 +4,7 @@ import { formatResponse } from "@core/prompts/responses"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { AUDIT_PROGRESS_DRAFTING } from "@shared/aihydro/answerAuditGate"
+import { completionOutcomeOf } from "@shared/aihydro/completionOutcome"
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import { findLastIndex } from "@shared/array"
 import { COMPLETION_RESULT_CHANGES_FLAG } from "@shared/ExtensionMessage"
@@ -114,7 +115,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		await compactPendingRows(config.messageState)
 	}
 
-	private async showFinalAnswerAudit(config: TaskConfig, answer: string): Promise<void> {
+	private async showFinalAnswerAudit(
+		config: TaskConfig,
+		answer: string,
+		completion?: { outcome: "partial" | "infeasible"; unmet: string[] },
+	): Promise<void> {
 		let emitted = false
 		try {
 			if (config.services.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled") === false) {
@@ -127,6 +132,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				answer,
 				modelIdReturned: config.taskState.lastResponseModelId,
 				projectId: config.services.controller?.getChatProjectId(config.ulid),
+				completion,
 			})
 			// Nothing to audit / no research session stays silent, as before: no row for chats outside a study.
 			if (outcome.status !== "skipped") {
@@ -181,6 +187,10 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "result")
 		}
 
+		// Honest exit: the model said it only partly did the task, or could not. Recorded on the answer row (a statement
+		// by the model, shown as such); `done`, absent or unrecognised records nothing, so a normal completion is unchanged.
+		const outcomeRecord = completionOutcomeOf(block.params.outcome, block.params.unmet)
+
 		// The pre-completion gate runs FIRST: before the notification, the completion say, the checkpoint,
 		// telemetry and the command ask. Not eligible: nothing below changes.
 		let gateDecision: Extract<GateDecision, { kind: "accept" }> | undefined
@@ -205,6 +215,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				modelId: config.taskState.lastResponseModelId,
 				projectId: config.services.controller?.getChatProjectId(config.ulid),
 				result,
+				completion: outcomeRecord,
 				rows: () => config.messageState.getAiHydroMessages(),
 				emit: async (payload) => {
 					await sweepAuditProgress(config.messageState)
@@ -247,6 +258,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			gateDecision = decision
 		}
 
+		const sayCompletion = () =>
+			outcomeRecord
+				? config.callbacks.say("completion_result", result, undefined, undefined, false, {
+						completionOutcome: outcomeRecord,
+					})
+				: config.callbacks.say("completion_result", result, undefined, undefined, false)
+
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Show notification if auto-approval is enabled
@@ -283,7 +301,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		if (command) {
 			if (lastMessage && lastMessage.ask !== "command") {
 				// haven't sent a command message yet so first send completion_result then command
-				const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+				const completionMessageTs = await sayCompletion()
 				config.taskState.answerAuditGate.hidden = undefined // shown: no longer a hidden draft
 				await config.callbacks.saveCheckpoint(true, completionMessageTs)
 				await addNewChangesFlagToLastCompletionResultMessage()
@@ -315,7 +333,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			// user didn't reject, but the command may have output
 			commandResult = execCommandResult
 		} else {
-			const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+			const completionMessageTs = await sayCompletion()
 			config.taskState.answerAuditGate.hidden = undefined // shown: no longer a hidden draft
 			await config.callbacks.saveCheckpoint(true, completionMessageTs)
 			await addNewChangesFlagToLastCompletionResultMessage()
@@ -342,7 +360,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			// The audit already ran inside the gate; emit its record (with revisions, removed values, disclosure).
 			await finalizeGate()
 		} else {
-			await this.showFinalAnswerAudit(config, result)
+			await this.showFinalAnswerAudit(config, result, outcomeRecord)
 		}
 
 		const { response, text, images, files: completionFiles } = await config.callbacks.ask("completion_result", "", false)

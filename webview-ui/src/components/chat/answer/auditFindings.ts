@@ -9,7 +9,14 @@ import type { AnswerAuditPayload, AnswerAuditViolation } from "@shared/aihydro/t
  */
 
 /** Finding kinds that are about one number in the prose. */
-const NUMBER_KINDS = new Set(["uncited_number", "untraced_number", "run_id_not_found", "json_path_not_found", "value_mismatch"])
+const NUMBER_KINDS = new Set([
+	"uncited_number",
+	"untraced_number",
+	"run_id_not_found",
+	"json_path_not_found",
+	"value_mismatch",
+	"no_observed_lineage",
+])
 
 /** Kinds meaning "no [run:] marker on this number" (`untraced_number` is the name older servers and fixtures use). */
 const UNLINKED_KINDS = new Set(["uncited_number", "untraced_number"])
@@ -20,6 +27,7 @@ const STATUS_BY_KIND: Record<string, string> = {
 	run_id_not_found: "Link points to a run that is not recorded",
 	json_path_not_found: "Link points to a value the run does not have",
 	value_mismatch: "Value differs from the run",
+	no_observed_lineage: "Not derived from observed data",
 	claim_not_found: "Claim not found",
 	claim_bad_status: "Claim is not in a citable state",
 	lit_unresolvable: "Literature reference not found in the index",

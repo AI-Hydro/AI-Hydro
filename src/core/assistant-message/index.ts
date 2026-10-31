@@ -48,6 +48,8 @@ export const toolParamNames = [
 	"key_findings",
 	"files_read",
 	"open_questions",
+	"outcome",
+	"unmet",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]

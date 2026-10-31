@@ -1,3 +1,4 @@
+import { type CompletionOutcome, OUTCOME_LABEL } from "@shared/aihydro/completionOutcome"
 import { extractEvidence } from "@shared/aihydro/evidenceMarkers"
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import type { TurnSummary } from "@shared/aihydro/turnSummary"
@@ -12,6 +13,15 @@ import { UntracedPlanContext } from "./UntracedNumber"
 /** The one fixed request "Ask AI-Hydro to link these" sends. Fixed so the action is reproducible and carries no model text. */
 export const ASK_TO_CITE_TEXT =
 	"The answer audit found numbers or claims in your last answer that are not traced to a recorded run. Revise the answer: cite each one with [run:<id>#<path>] or [claim:<id>], or remove the value, and do not add new unsupported numbers."
+
+/** What Copy puts on the clipboard: the answer, headed by the agent's own statement when it said it was not fully done. */
+export function copyText(text: string, outcome?: CompletionOutcome): string {
+	if (!outcome) {
+		return text
+	}
+	const unmet = outcome.unmet.map((u) => `- ${u}`).join("\n")
+	return `${OUTCOME_LABEL[outcome.outcome]} (the agent says)${unmet ? `. Not done:\n${unmet}` : ""}\n\n${text}`
+}
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
@@ -30,6 +40,8 @@ interface AnswerBlockProps {
 	audit?: AnswerAuditPayload
 	/** Presenter facts for the turn. Absent: no summary line. */
 	turn?: TurnSummary
+	/** The agent said it only partly did the task, or could not (honest exit). Absent: a normal completion. */
+	outcome?: CompletionOutcome
 	hasChanges?: boolean
 	seeChangesDisabled?: boolean
 	onSeeChanges?: () => void
@@ -148,6 +160,7 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 	partial,
 	audit,
 	turn,
+	outcome,
 	hasChanges,
 	seeChangesDisabled,
 	onSeeChanges,
@@ -213,7 +226,7 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 
 	const copy = () => {
 		try {
-			void navigator.clipboard?.writeText(text)
+			void navigator.clipboard?.writeText(copyText(text, outcome))
 			setCopied(true)
 			setTimeout(() => setCopied(false), 1500)
 		} catch {
@@ -226,7 +239,25 @@ export const AnswerBlock: React.FC<AnswerBlockProps> = ({
 			<div className="mb-2 flex items-center gap-1.5 font-bold">
 				<span aria-hidden="true" className="codicon codicon-comment-discussion" />
 				<span>Answer</span>
+				{outcome && (
+					<span className="font-normal text-xs opacity-90" data-outcome={outcome.outcome} data-testid="answer-outcome">
+						<span aria-hidden="true" className="codicon codicon-warning mr-1 align-middle" />
+						{OUTCOME_LABEL[outcome.outcome]} · the agent says
+					</span>
+				)}
 			</div>
+			{outcome && outcome.unmet.length > 0 && (
+				<div className="text-xs mb-1.5" data-testid="answer-unmet">
+					<div className="opacity-80">Not done:</div>
+					<ul className="m-0 pl-4">
+						{outcome.unmet.map((item) => (
+							<li className="ph-no-capture" key={item}>
+								{item}
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
 			<div className="pt-1">
 				<UntracedPlanContext.Provider value={plan}>{children}</UntracedPlanContext.Provider>
 			</div>

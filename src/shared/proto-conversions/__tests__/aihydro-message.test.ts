@@ -149,6 +149,19 @@ describe("aihydro-message proto round trip (W2-0 M2)", () => {
 		})
 	})
 
+	it("a completion outcome survives the proto; an old completion row gains none", () => {
+		const m: AiHydroMessage = {
+			ts: 6,
+			type: "say",
+			say: "completion_result",
+			text: "Done in part.",
+			completionOutcome: { outcome: "partial", unmet: ["no observed record"] },
+		}
+		expect(roundTrip(m)).to.deep.equal(m)
+		const plain: AiHydroMessage = { ts: 7, type: "say", say: "completion_result", text: "Done." }
+		expect(roundTrip(plain)).to.not.have.property("completionOutcome")
+	})
+
 	it("an old message without outcome fields round-trips without gaining any", () => {
 		const m: AiHydroMessage = { ts: 5, type: "ask", ask: "command", text: "ls" }
 		const back = roundTrip(m)

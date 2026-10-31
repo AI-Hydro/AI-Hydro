@@ -102,6 +102,28 @@ function findAuditServer(hub: AuditHub, opts: { serverName?: string; requireTrus
 	return trusted ?? (opts.requireTrusted ? undefined : candidates[0])
 }
 
+/**
+ * `outcome` and `unmet` for the audit call, when the connected audit tool declares them (tools with the sealed-outcome
+ * check). An older server has no such parameters and is never sent them: the audit then simply does not see the outcome.
+ */
+export function completionArgs(
+	server: Pick<McpServer, "tools">,
+	completion: { outcome: "partial" | "infeasible"; unmet: string[] } | undefined,
+): Record<string, unknown> {
+	if (!completion) {
+		return {}
+	}
+	const tool = server.tools?.find((t) => t.name === AUDIT_TOOL_NAME)
+	const props = (tool?.inputSchema as { properties?: Record<string, unknown> } | undefined)?.properties
+	if (!props || !Object.hasOwn(props, "outcome")) {
+		return {}
+	}
+	return {
+		outcome: completion.outcome,
+		...(Object.hasOwn(props, "unmet") ? { unmet: completion.unmet } : {}),
+	}
+}
+
 function unavailable(reason: string): FinalAnswerAuditOutcome {
 	return { status: "unavailable", reason: reason.replace(/\s+/g, " ").trim().slice(0, 300) || "unknown error" }
 }
@@ -143,6 +165,11 @@ export async function runFinalAnswerAudit(args: {
 	/** The exact server to audit on (the gate's eligible server) and whether it must be trusted. */
 	serverName?: string
 	requireTrusted?: boolean
+	/**
+	 * What the model declared in `attempt_completion` (honest exit). Sent to the audit tool only when its input schema
+	 * declares `outcome`, so an older server never receives an argument it would reject.
+	 */
+	completion?: { outcome: "partial" | "infeasible"; unmet: string[] }
 }): Promise<FinalAnswerAuditOutcome> {
 	const { hub, ulid, workspaceRoot, answer } = args
 	const server = findAuditServer(hub, { serverName: args.serverName, requireTrusted: args.requireTrusted })
@@ -201,7 +228,11 @@ export async function runFinalAnswerAudit(args: {
 	let response: McpToolCallResponse
 	try {
 		const ctx = buildAiHydroCallContext(
-			{ prose: answer, session_id: boundStudy },
+			{
+				prose: answer,
+				session_id: boundStudy,
+				...completionArgs(server, args.completion),
+			},
 			ulid,
 			workspaceRoot,
 			args.modelIdReturned,

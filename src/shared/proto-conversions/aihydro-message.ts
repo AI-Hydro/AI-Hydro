@@ -1,4 +1,5 @@
 import type { CommandPolicyClass } from "@shared/aihydro/commandEvidence"
+import { parseCompletionOutcome } from "@shared/aihydro/completionOutcome"
 import { INFO_CLASS_SEVERITY, INFO_CLASSES, type InfoNotice, type McpNotificationLevel } from "@shared/aihydro/infoNotice"
 import { parseSubagentOrigin } from "@shared/aihydro/subagents"
 import {
@@ -230,6 +231,7 @@ export function convertAiHydroMessageToProto(message: AppAiHydroMessage): ProtoC
 		askOutcome: message.askOutcome ?? "",
 		execOutcome: message.execOutcome ?? "",
 		commandCompleted: message.commandCompleted === true,
+		completionOutcomeJson: message.completionOutcome ? JSON.stringify(message.completionOutcome) : "",
 	}
 
 	return protoMessage
@@ -291,6 +293,10 @@ export function convertProtoToAiHydroMessage(protoMessage: ProtoClineMessage): A
 	}
 	if (protoMessage.commandCompleted) {
 		message.commandCompleted = true
+	}
+	const completionOutcome = parseCompletionOutcome(protoMessage.completionOutcomeJson)
+	if (completionOutcome) {
+		message.completionOutcome = completionOutcome
 	}
 	if (protoMessage.isCheckpointCheckedOut) {
 		message.isCheckpointCheckedOut = protoMessage.isCheckpointCheckedOut
