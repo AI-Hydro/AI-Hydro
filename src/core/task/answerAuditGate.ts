@@ -107,8 +107,8 @@ export function noteSessionStarted(state: AnswerAuditGateState): void {
 
 /**
  * A first-party `aihydro_chat_status` ran in this task, so the model has been told about the binding. It is NOT a
- * study id: that tool takes `chat_id` from its arguments, so its output is model-invoked and never trusted as
- * evidence of which study is bound. The flag only makes a resumed task eligible; the audit then asks the server
+ * study id: the call is model-invoked, so its output is not taken as host evidence of which study is bound. (Current tools
+ * servers refuse a differing `chat_id` with CHAT_ID_MISMATCH, so a spoof would not work there; this holds against any server.) The flag only makes a resumed task eligible; the audit then asks the server
  * itself, with the host-issued chat id (`runFinalAnswerAudit` makes its own `aihydro_chat_status` call), and fails
  * closed if no study is bound or the audited session differs.
  */

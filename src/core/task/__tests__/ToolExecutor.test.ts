@@ -393,6 +393,7 @@ describe("ToolExecutor Hook Integration", () => {
 	})
 })
 
+// Tools >= 2.8.2 refuse a differing chat_id (CHAT_ID_MISMATCH); the gate still never trusts model-invoked output.
 describe("ToolExecutor gate binding (model-invoked output is never a study id)", () => {
 	// eslint-disable-next-line @typescript-eslint/no-var-requires
 	const { ToolExecutor } = require("../ToolExecutor")

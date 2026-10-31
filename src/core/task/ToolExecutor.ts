@@ -330,7 +330,7 @@ export class ToolExecutor {
 		) {
 			noteSessionStarted(this.taskState.answerAuditGate)
 		}
-		// Model-invoked, so never a source of a study id (its chat_id is an argument): it only marks that the binding was
+		// Model-invoked, so never a source of a study id (holds against any server, whatever it does with a differing chat_id): it only marks that the binding was
 		// probed, which makes a resumed task eligible. The audit asks the server itself with the host's chat id.
 		if (
 			block.params.tool_name === CHAT_STATUS_TOOL_NAME &&
