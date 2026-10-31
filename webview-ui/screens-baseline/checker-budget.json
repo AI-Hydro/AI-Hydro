@@ -2824,6 +2824,40 @@
         "contrastIndeterminate": 0
       },
       "cells": 6
+    },
+    "chat-header-long-study": {
+      "ref": {
+        "noName": 0,
+        "smallTarget": 1,
+        "smallText": 0,
+        "contrast": 0,
+        "contrastIndeterminate": 0
+      },
+      "matrixTotal": {
+        "noName": 0,
+        "smallTarget": 40,
+        "smallText": 0,
+        "contrast": 20,
+        "contrastIndeterminate": 0
+      },
+      "cells": 40
+    },
+    "chat-header-long-study-collapsed": {
+      "ref": {
+        "noName": 0,
+        "smallTarget": 1,
+        "smallText": 0,
+        "contrast": 0,
+        "contrastIndeterminate": 0
+      },
+      "matrixTotal": {
+        "noName": 0,
+        "smallTarget": 40,
+        "smallText": 0,
+        "contrast": 20,
+        "contrastIndeterminate": 0
+      },
+      "cells": 40
     }
   },
   "subsets": {
@@ -4503,6 +4537,26 @@
           "matrixTotal": {
             "noName": 0,
             "smallTarget": 18,
+            "smallText": 0,
+            "contrast": 3,
+            "contrastIndeterminate": 0
+          },
+          "cells": 6
+        },
+        "chat-header-long-study": {
+          "matrixTotal": {
+            "noName": 0,
+            "smallTarget": 6,
+            "smallText": 0,
+            "contrast": 3,
+            "contrastIndeterminate": 0
+          },
+          "cells": 6
+        },
+        "chat-header-long-study-collapsed": {
+          "matrixTotal": {
+            "noName": 0,
+            "smallTarget": 6,
             "smallText": 0,
             "contrast": 3,
             "contrastIndeterminate": 0

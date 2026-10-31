@@ -35,7 +35,10 @@ interface TaskHeaderProps {
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
 }
 
-const BUTTON_CLASS = "max-h-3 border-0 font-bold bg-transparent hover:opacity-100 text-foreground"
+/** 24 px minimum pointer target (WCAG 2.5.8); the old max-h-3 clipped these to 10 px. */
+const BUTTON_CLASS = "min-h-[24px] h-[24px] border-0 font-bold bg-transparent hover:opacity-100 text-foreground"
+const ICON_BUTTON_CLASS =
+	"inline-flex items-center justify-center w-[24px] h-[24px] p-0 border-0 bg-transparent text-foreground cursor-pointer hover:bg-muted/10 rounded-sm focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--vscode-focusBorder)]"
 
 const TaskHeader: React.FC<TaskHeaderProps> = ({
 	task,
@@ -107,12 +110,20 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 				style={{
 					borderColor: environmentBorderColor,
 				}}>
-				{/* Task Title */}
-				<div className="flex justify-between items-center cursor-pointer" onClick={toggleTaskExpanded}>
-					<div className="flex justify-between items-center">
-						{isTaskExpanded ? <ChevronDownIcon size="16" /> : <ChevronRightIcon size="16" />}
+				{/* Task Title. Wraps rather than overlaps: the controls and chips drop to a second row when the sidebar is narrow. */}
+				<div className="flex flex-wrap items-center gap-x-1 gap-y-1" data-testid="task-header-row">
+					<div className="flex items-center shrink-0">
+						<button
+							aria-expanded={isTaskExpanded}
+							aria-label={isTaskExpanded ? "Hide task details" : "Show task details"}
+							className={ICON_BUTTON_CLASS}
+							onClick={toggleTaskExpanded}
+							title={isTaskExpanded ? "Hide task details" : "Show task details"}
+							type="button">
+							{isTaskExpanded ? <ChevronDownIcon size="16" /> : <ChevronRightIcon size="16" />}
+						</button>
 						{isTaskExpanded && (
-							<div className="mt-1 max-h-3 flex justify-end flex-wrap cursor-pointer opacity-80">
+							<div className="flex items-center opacity-80">
 								<CopyTaskButton className={BUTTON_CLASS} taskText={task.text} />
 								<DeleteTaskButton
 									className={BUTTON_CLASS}
@@ -126,17 +137,18 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							</div>
 						)}
 					</div>
-					<div className="flex items-center select-none flex-grow min-w-0 gap-1 justify-between">
-						{!isTaskExpanded && (
-							<div className="text-sm whitespace-nowrap overflow-hidden text-ellipsis flex-grow min-w-0">
-								<span className="ph-no-capture">{highlightText(task.text, false)}</span>
-							</div>
-						)}
-					</div>
-					<div className="inline-flex items-center justify-end select-none flex-shrink-0">
+					{!isTaskExpanded && (
+						// A mouse convenience on the text only; the chevron button is the keyboard and screen-reader control.
+						<div
+							className="text-sm whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-[5rem] select-none cursor-pointer"
+							onClick={toggleTaskExpanded}>
+							<span className="ph-no-capture">{highlightText(task.text, false)}</span>
+						</div>
+					)}
+					<div className="flex flex-wrap items-center justify-end gap-1 ml-auto min-w-0 max-w-full select-none">
 						<StudyChip />
 						{isCostAvailable && (
-							<div className="task-header-chip mr-1" id="price-tag">
+							<div className="task-header-chip shrink-0" id="price-tag" title="Cost of this task so far">
 								<span className="codicon codicon-credit-card text-[10px] opacity-70"></span>
 								<span>${totalCost?.toFixed(4)}</span>
 							</div>
