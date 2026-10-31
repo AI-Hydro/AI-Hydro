@@ -2722,6 +2722,23 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 6
+		},
+		"map-identify-card": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
 		}
 	},
 	"subsets": {
@@ -4338,6 +4355,16 @@
 					"cells": 6
 				},
 				"map-reference-tab": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-identify-card": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,
