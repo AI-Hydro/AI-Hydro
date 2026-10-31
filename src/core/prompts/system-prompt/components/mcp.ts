@@ -3,6 +3,7 @@ import type { McpServer, McpTool } from "@/shared/mcp"
 import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
+import { renderSchema } from "./compactSchema"
 
 const MCP_TEMPLATE_TEXT = `MCP SERVERS
 
@@ -128,10 +129,7 @@ function summaryLine(tool: McpTool): string {
 }
 
 function renderFullTool(tool: McpTool): string {
-	const schemaStr = tool.inputSchema
-		? `    Input Schema:
-    ${JSON.stringify(tool.inputSchema, null, 2).split("\n").join("\n    ")}`
-		: ""
+	const schemaStr = tool.inputSchema ? `    Input Schema: ${renderSchema(tool.inputSchema)}` : ""
 	return `- ${tool.name}: ${tool.description}\n${schemaStr}`
 }
 

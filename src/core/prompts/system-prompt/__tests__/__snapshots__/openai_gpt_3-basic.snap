@@ -454,11 +454,7 @@ When a server is connected, you can use the server's tools via the `use_mcp_tool
 
 ### Available Tools
 - test_tool: A test tool
-    Input Schema:
-    {
-      "type": "object",
-      "properties": {}
-    }
+    Input Schema: {"type":"object","properties":{}}
 
 ====
 
