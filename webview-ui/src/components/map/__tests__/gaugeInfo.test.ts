@@ -4,9 +4,13 @@ import { gaugeInfo } from "../gaugeInfo"
 describe("gaugeInfo", () => {
 	it("reports only what the layer carries: the gauge layer has site, name and label", () => {
 		expect(
-			gaugeInfo({ site_no: "01013500", name: "Fish River near Fort Kent, Maine", label: "01013500 — Fish River" }),
+			gaugeInfo(
+				{ site_no: "01013500", name: "Fish River near Fort Kent, Maine", label: "01013500 — Fish River" },
+				{ source: "nwis" },
+			),
 		).toEqual({
 			siteNo: "01013500",
+			usgs: true,
 			name: "Fish River near Fort Kent, Maine",
 			usgsUrl: "https://waterdata.usgs.gov/monitoring-location/01013500/",
 		})
@@ -35,5 +39,15 @@ describe("gaugeInfo", () => {
 		expect(gaugeInfo({ site_no: "USGS-01013500" })?.siteNo).toBe("01013500")
 		expect(gaugeInfo({ name: "x" })).toBeNull()
 		expect(gaugeInfo(undefined)).toBeNull()
+	})
+
+	it("calls an id USGS only when something says so: USGS- prefix, NWIS source or an agency of USGS", () => {
+		expect(gaugeInfo({ site_no: "08MF005" })).toMatchObject({ siteNo: "08MF005", usgs: false })
+		expect(gaugeInfo({ site_no: "08MF005" })?.usgsUrl).toBeUndefined()
+		expect(gaugeInfo({ site_no: "08MF005" }, { source: "user" })?.usgs).toBe(false)
+		expect(gaugeInfo({ site_no: "01013500" })?.usgsUrl).toBeUndefined()
+		expect(gaugeInfo({ site_no: "USGS-01013500" })?.usgs).toBe(true)
+		expect(gaugeInfo({ site_no: "01013500" }, { source: "nwis" })?.usgsUrl).toMatch(/01013500/)
+		expect(gaugeInfo({ site_no: "01013500", agency_cd: "USGS" })?.usgs).toBe(true)
 	})
 })

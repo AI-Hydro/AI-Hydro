@@ -1,5 +1,5 @@
 import type { Controller } from "@core/controller"
-import { parseMapRef } from "@shared/map/mapRef"
+import { parseMapRef, stripInvisible } from "@shared/map/mapRef"
 import { type MapLaunchContext, startMapAgentTask } from "./startMapAgentTask"
 
 /** Strings only, bounded: the hint comes from a webview and is passed to the server as a lookup key. */
@@ -14,9 +14,11 @@ export function parseMapLaunch(raw: unknown): MapLaunchContext | undefined {
 	const r = raw as Record<string, unknown>
 	const sessionId = cleanHint(r.sessionId)
 	const artifactPath = cleanHint(r.artifactPath)
-	const userQuestion = typeof r.userQuestion === "string" && r.userQuestion.trim() ? r.userQuestion.slice(0, 4000) : undefined
+	const questionClean = typeof r.userQuestion === "string" ? stripInvisible(r.userQuestion).trim() : ""
+	const userQuestion = questionClean ? questionClean.slice(0, 4000) : undefined
 	const ref = parseMapRef(r.ref)
-	const composerText = typeof r.composerText === "string" && r.composerText.trim() ? r.composerText.slice(0, 1000) : undefined
+	const composerClean = typeof r.composerText === "string" ? stripInvisible(r.composerText).trim() : ""
+	const composerText = composerClean ? composerClean.slice(0, 1000) : undefined
 	if (!sessionId && !artifactPath && !userQuestion && !ref && !composerText) {
 		return undefined
 	}

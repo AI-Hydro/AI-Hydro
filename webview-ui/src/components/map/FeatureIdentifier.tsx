@@ -2,7 +2,8 @@ import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import React, { useEffect, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { GAUGE_BLOCK_KEYS, gaugeInfo } from "./gaugeInfo"
-import { actionTooltip, KIND_LABEL, type MapActionId, mapActions, objectKind } from "./mapActions"
+import { originOf } from "./layerModel"
+import { actionTooltip, KIND_LABEL, type MapActionId, mapActions, objectKind, routingWarning } from "./mapActions"
 import type { CursorRasterReading } from "./mapLayerAdapters"
 import { MAP_Z } from "./mapZ"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
@@ -75,11 +76,24 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 }) => {
 	const [currentIndex, setCurrentIndex] = useState(0)
 	const [showAll, setShowAll] = useState(false)
+	const [confirmRemove, setConfirmRemove] = useState(false)
 
 	useEffect(() => {
 		setCurrentIndex(0)
 		setShowAll(false)
+		setConfirmRemove(false)
 	}, [features])
+
+	// Escape closes the card, unless an open menu has it (the menu closes first).
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape" && !document.querySelector('[role="menu"]')) {
+				onClose()
+			}
+		}
+		window.addEventListener("keydown", onKey)
+		return () => window.removeEventListener("keydown", onKey)
+	}, [onClose])
 
 	if (features.length === 0 && !inspectPoint && !rasterReading) {
 		return null
@@ -97,7 +111,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 	const photoPaths = hasFeatures ? extractPhotoPaths(current.properties.photos) : []
 	const PHOTO_KEYS = new Set(["photos", "photo_count"])
 	const kindNow = objectKind(hasFeatures ? [current] : [])
-	const gauge = kindNow === "gauge" ? gaugeInfo(current.properties) : null
+	const gauge = kindNow === "gauge" ? gaugeInfo(current.properties, layerMetadata?.(current.layerId)) : null
 	// The gauge block shows the site, name and label; the list below it does not repeat them.
 	const allEntries = hasFeatures
 		? Object.entries(current.properties).filter(
@@ -118,7 +132,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 	const studyId = meta?.study_id
 	const runLine = runId
 		? `${tool ?? "run"} · run ${runId.slice(0, 8)}`
-		: meta?.source && ["merit", "wbd", "nwis", "nid"].includes(meta.source)
+		: meta && originOf({ metadata: meta } as never) === "reference"
 			? "Reference, not in any run"
 			: tool
 				? `${tool} · no run record`
@@ -189,7 +203,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 		handlers["export-shapefile"] = onSaveFeatures ? () => void onSaveFeatures(currentSelection, "shapefile") : undefined
 	}
 	if (hasFeatures && onRemoveLayer) {
-		handlers["remove-layer"] = () => void onRemoveLayer(current.layerId)
+		handlers["remove-layer"] = () => setConfirmRemove(true)
 	}
 	const offered = mapActions(kind, "card").filter((a) => handlers[a.id])
 	const primary = offered.filter((a) => a.id === "ask" || a.id === "delineate")
@@ -341,7 +355,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 						<div aria-label="Gauge" role="group" style={{ marginBottom: 6 }}>
 							{(
 								[
-									["Site", `USGS ${gauge.siteNo}`],
+									["Site", gauge.usgs ? `USGS ${gauge.siteNo}` : gauge.siteNo],
 									["Name", gauge.name ?? "not reported"],
 									["Drainage area", gauge.drainageArea ?? "not reported"],
 									["Record", gauge.periodOfRecord ?? "not reported"],
@@ -417,8 +431,47 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 							<PhotoStrip paths={photoPaths} />
 						</div>
 					)}
+					{confirmRemove && hasFeatures && onRemoveLayer && (
+						<div
+							aria-label="Confirm removal"
+							role="alertdialog"
+							style={{ marginTop: 8, padding: 6, border: `1px solid ${bdClr}`, borderRadius: 4, fontSize: 11 }}>
+							<div style={{ marginBottom: 4 }}>
+								Remove the layer “{current.layerName}” from the map? Its source file is not deleted.
+							</div>
+							<div style={{ display: "flex", gap: 4 }}>
+								<button
+									onClick={() => {
+										setConfirmRemove(false)
+										void onRemoveLayer(current.layerId)
+									}}
+									style={{ ...primaryBtn, color: "var(--vscode-errorForeground, #f87171)" }}
+									type="button">
+									Remove layer
+								</button>
+								<button
+									onClick={() => setConfirmRemove(false)}
+									style={{ ...primaryBtn, background: "transparent" }}
+									type="button">
+									Cancel
+								</button>
+							</div>
+						</div>
+					)}
 					{showActions && (
 						<div style={{ marginTop: 8 }}>
+							{routingWarning(current, point) && (
+								<div
+									role="note"
+									style={{
+										marginBottom: 6,
+										fontSize: 11,
+										lineHeight: 1.35,
+										color: "var(--vscode-editorWarning-foreground, #cca700)",
+									}}>
+									{routingWarning(current, point)}
+								</div>
+							)}
 							<div style={{ display: "flex", alignItems: "center", gap: 4 }}>
 								{primary.map((a) => (
 									<button

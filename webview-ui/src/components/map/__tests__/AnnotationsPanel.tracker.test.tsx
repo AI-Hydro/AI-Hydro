@@ -36,17 +36,24 @@ beforeEach(() => localStorage.clear())
 afterEach(cleanup)
 
 describe("Sketches panel", () => {
-	it("hides the tracker (collections, search, status, priority, gallery, batch) by default and keeps the data", () => {
+	it("shows the tracker by default when a saved sketch holds tracker data, so nothing becomes invisible", () => {
+		render(panel())
+		expect(screen.getByText(/\+ Collection/)).toBeInTheDocument()
+	})
+
+	it("hides the tracker (collections, search, status, priority, gallery, batch) once chosen off, and keeps the data", () => {
+		localStorage.setItem(TRACKER_EXTRAS_KEY, "0")
 		const { container } = render(panel())
 		expect(screen.queryByText(/\+ Collection/)).toBeNull()
 		expect(screen.queryByPlaceholderText(/Search name, notes, tags/)).toBeNull()
 		expect(screen.queryByText(/Save to My Gallery/)).toBeNull()
 		expect(screen.queryByText(/Batch Ask Agent/)).toBeNull()
 		expect(container.textContent).not.toMatch(/#basin|In Progress|High/)
-		expect(trackerExtrasEnabled()).toBe(false)
+		expect(trackerExtrasEnabled([])).toBe(false)
 	})
 
 	it("shows the tracker again from the Sketches menu, and remembers the choice", () => {
+		localStorage.setItem(TRACKER_EXTRAS_KEY, "0")
 		render(panel())
 		fireEvent.click(screen.getByRole("button", { name: "Sketches actions" }))
 		fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Tracker fields" }))

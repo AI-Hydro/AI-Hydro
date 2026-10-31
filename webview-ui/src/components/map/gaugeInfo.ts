@@ -5,6 +5,8 @@
  */
 export interface GaugeInfo {
 	siteNo: string
+	/** True only when the id is known to be a USGS site: it came as `USGS-…`, or the layer says NWIS or USGS. */
+	usgs: boolean
 	name?: string
 	/** The USGS monitoring-location page for this site. */
 	usgsUrl?: string
@@ -38,11 +40,18 @@ function fmtKm2(km2: number): string {
 	return km2 >= 100 ? `${Math.round(km2).toLocaleString("en-US")} km²` : `${km2.toFixed(1)} km²`
 }
 
-export function gaugeInfo(props: Record<string, unknown> | undefined): GaugeInfo | null {
-	const siteNo = str(props?.site_no ?? props?.siteNo ?? props?.monitoring_location_id)?.replace(/^USGS-/i, "")
-	if (!siteNo) {
+export function gaugeInfo(props: Record<string, unknown> | undefined, layerMeta?: Record<string, string>): GaugeInfo | null {
+	const rawId = str(props?.site_no ?? props?.siteNo ?? props?.monitoring_location_id)
+	const siteNo = rawId?.replace(/^USGS-/i, "")
+	if (!rawId || !siteNo) {
 		return null
 	}
+	// An id like "08MF005" (a Mexican or Canadian station) is not a USGS number just because it is on a gauge layer.
+	const usgs =
+		/^USGS-/i.test(rawId) ||
+		/^(nwis|usgs)$/i.test(layerMeta?.source ?? "") ||
+		/usgs/i.test(`${layerMeta?.agency ?? ""} ${layerMeta?.provider ?? ""}`) ||
+		/^usgs$/i.test(str(props?.agency_cd ?? props?.agency) ?? "")
 	const km2 = num(props?.drainage_area_km2 ?? props?.drain_area_km2)
 	const sqmi = num(props?.drainage_area_sqmi ?? props?.drain_area_va)
 	const drainageArea = km2
@@ -55,8 +64,9 @@ export function gaugeInfo(props: Record<string, unknown> | undefined): GaugeInfo
 	const periodOfRecord = str(props?.period_of_record) ?? (begin && end ? `${begin} to ${end}` : undefined)
 	return {
 		siteNo,
+		usgs,
 		name: str(props?.name),
-		...(SITE_NO.test(siteNo) ? { usgsUrl: `https://waterdata.usgs.gov/monitoring-location/${siteNo}/` } : {}),
+		...(usgs && SITE_NO.test(siteNo) ? { usgsUrl: `https://waterdata.usgs.gov/monitoring-location/${siteNo}/` } : {}),
 		...(drainageArea ? { drainageArea } : {}),
 		...(periodOfRecord ? { periodOfRecord } : {}),
 	}
