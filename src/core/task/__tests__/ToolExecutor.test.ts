@@ -435,6 +435,74 @@ describe("ToolExecutor gate binding (model-invoked output is never a study id)",
 		;(state.boundStudyId === undefined).should.equal(true)
 	})
 
+	describe("any first-party result that reports this chat's binding makes the gate eligible (flag only)", () => {
+		const { computeGateEligibility } = require("../answerAuditGate")
+		const CHAT = "01M668YZ3T3Q6W1CKYTXGTCB1N"
+		const ex = (state: any) => {
+			const e = executor(state)
+			e.ulid = CHAT
+			return e
+		}
+		// Shape of the real delineate_watershed result of task 1793359576182 (T2), trimmed to the fields that matter.
+		const delineateResult = (chat: string) =>
+			`[use_mcp_tool for 'aihydro-tools'] Result:\n\n${JSON.stringify({
+				data: { area_km2: 2258.516, gauge_id: "01013500" },
+				_run_id: "watershed.292646055248",
+				session_binding: {
+					chat_id: chat,
+					study_id: "01013500",
+					label: "01013500 (unnamed study)",
+					previous_study_id: null,
+					bound_by: "auto_create",
+				},
+			})}`
+		const eligible = (state: any) =>
+			computeGateEligibility({
+				toolName: "attempt_completion",
+				mode: "act",
+				gateSetting: true,
+				auditEnabled: true,
+				servers: [
+					{
+						name: "aihydro-tools",
+						status: "connected",
+						tools: [{ name: "audit_interpretation", description: "advisories" }],
+					},
+				],
+				state,
+				isTrusted: () => true,
+			})
+
+		it("T2 replay: delineate_watershed bound by auto_create is eligible, with no study id taken from the result", () => {
+			const state = createGateState()
+			eligible(state).should.have.property("reason", "study-not-bound")
+			ex(state).noteStartSession(delineateResult(CHAT), block("delineate_watershed"))
+			state.should.have.property("bindingObserved", true)
+			;(state.boundStudyId === undefined).should.equal(true)
+			eligible(state).eligible.should.equal(true)
+		})
+
+		it("a result bound to another chat, an error, another server, or no binding counts for nothing", () => {
+			const other = createGateState()
+			ex(other).noteStartSession(delineateResult("01OTHERCHAT0000000000000000"), block("delineate_watershed"))
+			const err = createGateState()
+			ex(err).noteStartSession(
+				`The tool execution failed with the following error: ${delineateResult(CHAT)}`,
+				block("delineate_watershed"),
+			)
+			const evil = createGateState()
+			ex(evil).noteStartSession(delineateResult(CHAT), {
+				params: { server_name: "evil", tool_name: "delineate_watershed" },
+			})
+			const none = createGateState()
+			ex(none).noteStartSession(JSON.stringify({ data: { area_km2: 1 } }), block("delineate_watershed"))
+			for (const s of [other, err, evil, none]) {
+				;(s.bindingObserved === undefined).should.equal(true)
+				eligible(s).should.have.property("eligible", false)
+			}
+		})
+	})
+
 	it("a rebind clears the cached study; an errored status or another server's status is ignored", () => {
 		const state = createGateState()
 		state.boundStudyId = "s1"

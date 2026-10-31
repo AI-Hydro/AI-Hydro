@@ -252,3 +252,22 @@ describe("pathless wording is about the reference the number binds to (nearest a
 		expect(viewFinding(num(`area 774.15 km² ${pathless} then ${valid}`)).status).toContain("no #path")
 	})
 })
+
+describe("gate skipped line (A1)", () => {
+	it("an untrusted server is always said, with the reason, at normal detail", () => {
+		const { getByTestId } = withDetail(
+			"normal",
+			<AnswerAuditFooter audit={audit({ status: "violations", hardCount: 1, gateSkipped: "no-trusted-server" })} />,
+		)
+		const line = getByTestId("answer-audit-gate-skipped").textContent ?? ""
+		expect(line).toContain("not held back for checking")
+		expect(line).toContain("not trusted")
+	})
+
+	it("a setting the user chose shows only at verbose", () => {
+		const skipped = audit({ status: "passed", cited: 2, total: 2, gateSkipped: "gate-setting-off" })
+		expect(withDetail("normal", <AnswerAuditFooter audit={skipped} />).queryByTestId("answer-audit-gate-skipped")).toBeNull()
+		const v = withDetail("verbose", <AnswerAuditFooter audit={skipped} />)
+		expect(v.getByTestId("answer-audit-gate-skipped").textContent).toContain("turned off in settings")
+	})
+})

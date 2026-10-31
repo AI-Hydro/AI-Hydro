@@ -9,6 +9,22 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — 2026-10-31 (agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
+
+### Fixed — the pre-completion audit gate ran on none of three real answers, and nothing said why (A1, branch `vision2040/agent-gate`)
+
+The gate is the revise-before-showing loop for uncited numbers. On the owner's three real answers it never ran and left no trace. Cause, from the two saved tasks:
+
+- **Task `...989672` (T1)**: `start_session` succeeded, but the tools server was not trusted ("not the registered first-party server, or its launch identity changed" is on the approval rows). The gate requires a trusted server by design, so it was ineligible with `no-trusted-server`. The display-only audit still ran against the untrusted server, so the answer looked audited. The reason was computed and thrown away.
+- **Task `...576182` (T2)**: the study was bound by `delineate_watershed` (`bound_by: auto_create`). Only `start_session` and `aihydro_chat_status` made a task eligible, so the normal first step never did (`study-not-bound`).
+
+Changes:
+- Any first-party tool result that reports a `session_binding` for **this chat** now counts as bound (`bindingObserved`). Shape only, no tool-name list. It is a flag, never a study id: the audit still asks the server itself with the host's chat id, requires the audited session to match, and fails closed. The host's own chip (`controller.studyBinding`, bound for this chat) also counts, as a boolean.
+- Trust is unchanged: an untrusted server is still never gated.
+- When the gate does not run, the shown answer's `answer_audit` row now carries `gateSkipped: <reason>` (additive field on the v1 payload). The footer says "Answer was not held back for checking: ..." for every reason where a safeguard could not engage; skips that are the user's own settings or Plan mode show at Verbose only.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)

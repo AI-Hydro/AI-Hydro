@@ -134,6 +134,34 @@ export interface AnswerRevisionEvent extends AnswerDraftRecord {
 	costUsd?: number
 }
 
+/**
+ * Why the pre-completion gate (the revise-before-showing loop) did not run for an answer. Recorded on the shown
+ * answer's `answer_audit` row, so a skip is never silent. The first four are the user's own settings or mode; the
+ * rest mean the safeguard could not engage and the answer was shown with the display-only audit instead.
+ */
+export type AnswerAuditGateSkip =
+	| "gate-setting-off"
+	| "audit-disabled"
+	| "plan-mode"
+	| "no-trusted-server"
+	| "no-audit-tool"
+	| "graded-schema-unknown"
+	| "study-not-bound"
+
+/** What a reader is told for each skip reason. `chosen` skips are the user's own choice and show only at Verbose. */
+export const GATE_SKIP_TEXT: Record<AnswerAuditGateSkip, { text: string; chosen: boolean }> = {
+	"gate-setting-off": { text: "the answer check before showing is turned off in settings", chosen: true },
+	"audit-disabled": { text: "the answer audit is turned off in settings", chosen: true },
+	"plan-mode": { text: "Plan mode", chosen: true },
+	"no-trusted-server": {
+		text: "the AI-Hydro tools server is not trusted (its launch identity changed or it is not the registered one)",
+		chosen: false,
+	},
+	"no-audit-tool": { text: "the connected tools server has no audit tool", chosen: false },
+	"graded-schema-unknown": { text: "the tools server is too old for graded audits", chosen: false },
+	"study-not-bound": { text: "no study was bound to this chat when the answer was written", chosen: false },
+}
+
 /** Body (JSON in `text`) of the `answer_audit` say. */
 export interface AnswerAuditPayload extends AnswerDraftRecord {
 	v: typeof ANSWER_AUDIT_PAYLOAD_VERSION
@@ -170,6 +198,11 @@ export interface AnswerAuditPayload extends AnswerDraftRecord {
 	exemptByReason?: Record<string, number>
 	/** Earlier attempts, oldest first. */
 	history?: AnswerRevisionEvent[]
+	/**
+	 * Additive (0.4.6): the reason the revise-before-showing gate did not run for this answer. Absent when it ran. The
+	 * answer then carries the display-only audit, if that ran.
+	 */
+	gateSkipped?: AnswerAuditGateSkip
 }
 
 export function isHardFinding(v: Pick<AnswerAuditViolation, "severity">): boolean {
@@ -290,5 +323,8 @@ export function parseAnswerAuditPayload(text: string | undefined): AnswerAuditPa
 		...(isNum(raw.quantitiesRemaining) ? { quantitiesRemaining: raw.quantitiesRemaining } : {}),
 		...(parseExempt(raw.exemptByReason) ? { exemptByReason: parseExempt(raw.exemptByReason) } : {}),
 		...(Array.isArray(raw.history) ? { history: raw.history as AnswerRevisionEvent[] } : {}),
+		...(isStr(raw.gateSkipped) && Object.hasOwn(GATE_SKIP_TEXT, raw.gateSkipped)
+			? { gateSkipped: raw.gateSkipped as AnswerAuditGateSkip }
+			: {}),
 	}
 }

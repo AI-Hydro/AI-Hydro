@@ -17,7 +17,7 @@ import { AiHydroDefaultTool } from "@shared/tools"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
 import * as vscode from "vscode"
 import type { AiHydroAgentIdentity } from "@/core/mcp/aihydroContext"
-import { REBIND_CHAT_TOOL } from "@/integrations/aihydro-session/studyBinding"
+import { parseBindingSignal, REBIND_CHAT_TOOL } from "@/integrations/aihydro-session/studyBinding"
 import { getModelCapabilityTier, recommendedMaxMistakes } from "@/utils/model-capabilities"
 import { modelDoesntSupportWebp } from "@/utils/model-utils"
 import { ToolUse } from "../assistant-message"
@@ -28,7 +28,13 @@ import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
-import { noteBindingChanged, noteBindingProbed, noteSessionStarted, START_SESSION_TOOL_NAME } from "./answerAuditGate"
+import {
+	noteBindingChanged,
+	noteBindingObserved,
+	noteBindingProbed,
+	noteSessionStarted,
+	START_SESSION_TOOL_NAME,
+} from "./answerAuditGate"
 import type { AskMeta } from "./askMeta"
 import { browserToolRefusal } from "./browserGate"
 import { explorerBlockReason } from "./explorerPolicy"
@@ -425,6 +431,19 @@ export class ToolExecutor {
 			!ToolExecutor.isToolErrorResult(content)
 		) {
 			noteBindingProbed(this.taskState.answerAuditGate)
+		}
+		// Any first-party tool whose result reports a binding for THIS chat (delineation binds one too, `bound_by:
+		// auto_create`): a study is bound, so the gate is eligible. Shape only, no tool-name list; a flag, never a study
+		// id (the audit asks the server itself, with the host's chat id). A result naming another chat counts for nothing.
+		if (
+			isAiHydroServerName(block.params.server_name) &&
+			typeof content === "string" &&
+			!ToolExecutor.isToolErrorResult(content)
+		) {
+			const signal = parseBindingSignal(content)
+			if (signal?.kind === "binding" && signal.binding.chatId === this.ulid) {
+				noteBindingObserved(this.taskState.answerAuditGate)
+			}
 		}
 		if (
 			block.params.tool_name === REBIND_CHAT_TOOL &&
