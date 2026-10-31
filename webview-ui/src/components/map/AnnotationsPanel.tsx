@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useState } from "react"
 import { type ExportFormat, exportAnnotations } from "./annotationExport"
 import {
 	type AnnotationCollection,
@@ -16,7 +16,7 @@ import {
 } from "./annotationStorage"
 import { addToMyGallery } from "./galleryStorage"
 import { askAgentAboutAnnotation, askAgentAboutBatchAnnotations } from "./mapAgentBridge"
-import { MAP_Z } from "./mapZ"
+import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { PhotoStrip } from "./PhotoStrip"
 import { pickImages } from "./resolveFileUri"
 
@@ -38,25 +38,37 @@ interface AnnotationsPanelProps {
 // ─── Status / Priority labels ─────────────────────────────────────────────────
 
 const STATUS_OPTS: { value: AnnotationStatus; label: string; color: string }[] = [
-	{ value: "open", label: "● Open", color: "#6b7280" },
-	{ value: "in-progress", label: "◑ In Progress", color: "#f59e0b" },
-	{ value: "reviewed", label: "◉ Reviewed", color: "#06b6d4" },
-	{ value: "done", label: "✓ Done", color: "#22c55e" },
+	{ value: "open", label: "Open", color: "#6b7280" },
+	{ value: "in-progress", label: "In Progress", color: "#f59e0b" },
+	{ value: "reviewed", label: "Reviewed", color: "#06b6d4" },
+	{ value: "done", label: "Done", color: "#22c55e" },
 ]
 
 const PRIORITY_OPTS: { value: AnnotationPriority; label: string; color: string }[] = [
-	{ value: "low", label: "▽ Low", color: "#6b7280" },
-	{ value: "medium", label: "◈ Medium", color: "#f59e0b" },
-	{ value: "high", label: "⚡ High", color: "#ef4444" },
+	{ value: "low", label: "Low", color: "#6b7280" },
+	{ value: "medium", label: "Medium", color: "#f59e0b" },
+	{ value: "high", label: "High", color: "#ef4444" },
 ]
 
-const TYPE_ICONS: Record<string, string> = { point: "📍", polygon: "⬠", line: "〰" }
+const TYPE_ICONS: Record<string, string> = { point: "pin", polygon: "symbol-field", line: "graph-line" }
 
 // ─── Small sub-components ────────────────────────────────────────────────────
 
 const StatusBadge: React.FC<{ status: AnnotationStatus }> = ({ status }) => {
 	const opt = STATUS_OPTS.find((s) => s.value === status) ?? STATUS_OPTS[0]
-	return <span style={{ fontSize: 9, color: opt.color, whiteSpace: "nowrap", fontWeight: 600, opacity: 0.9 }}>{opt.label}</span>
+	return (
+		<span
+			style={{
+				fontSize: 11,
+				color: "var(--vscode-foreground)",
+				borderLeft: `3px solid ${opt.color}`,
+				paddingLeft: 4,
+				whiteSpace: "nowrap",
+				fontWeight: 600,
+			}}>
+			{opt.label}
+		</span>
+	)
 }
 
 const PriorityBadge: React.FC<{ priority: AnnotationPriority | null }> = ({ priority }) => {
@@ -66,8 +78,8 @@ const PriorityBadge: React.FC<{ priority: AnnotationPriority | null }> = ({ prio
 	return (
 		<span
 			style={{
-				fontSize: 9,
-				color: opt.color,
+				fontSize: 11,
+				color: "var(--vscode-foreground)",
 				whiteSpace: "nowrap",
 				fontWeight: 600,
 				padding: "1px 5px",
@@ -126,22 +138,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 	const [filterStatus, setFilterStatus] = useState<AnnotationStatus | "all">("all")
 	const [activeCollectionId, setActiveCollectionId] = useState<string | "all">("all")
 	const [collections, setCollections] = useState<AnnotationCollection[]>(() => loadCollections())
-	const [showExportMenu, setShowExportMenu] = useState(false)
 	const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
-	const exportBtnRef = useRef<HTMLDivElement>(null)
-
-	// Close export dropdown when user clicks outside it
-	useEffect(() => {
-		if (!showExportMenu) return
-		const handler = (e: MouseEvent) => {
-			if (exportBtnRef.current && !exportBtnRef.current.contains(e.target as Node)) {
-				setShowExportMenu(false)
-			}
-		}
-		document.addEventListener("mousedown", handler)
-		return () => document.removeEventListener("mousedown", handler)
-	}, [showExportMenu])
-
 	// ── Helpers ─────────────────────────────────────────────────────────────
 
 	const saveAnns = useCallback(
@@ -310,7 +307,6 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 	// ── Export ───────────────────────────────────────────────────────────────
 
 	const handleExport = async (format: ExportFormat) => {
-		setShowExportMenu(false)
 		const target = filteredAnnotations.length > 0 ? filteredAnnotations : annotations
 		const col = collections.find((c) => c.id === activeCollectionId)
 		await exportAnnotations(format, target, col)
@@ -321,299 +317,196 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 	const sectionBorder = `1px solid ${border}`
 
 	return (
-		<div style={{ marginTop: 12, paddingTop: 12, borderTop: sectionBorder }}>
-			{/* ── Toolbar ── */}
-			<div style={{ display: "flex", alignItems: "center", marginBottom: 8, gap: 4, flexWrap: "wrap" }}>
-				<span
-					style={{
-						fontSize: 11,
-						fontWeight: 700,
-						flex: 1,
-						opacity: 0.9,
-						whiteSpace: "nowrap",
-						letterSpacing: "0.01em",
-					}}>
-					Sketches &amp; tracker
+		<div className="map-tracker" style={{ marginTop: 12, paddingTop: 12, borderTop: sectionBorder }}>
+			{/* ── Toolbar: one title and one menu. Drawing is started by the Polygon / Line / Point buttons above. ── */}
+			<div className="map-section-head">
+				<span className="map-section-label">
+					<span aria-hidden="true" className="codicon codicon-list-unordered" />
+					Sketches
+					<span className="map-hint">({annotations.length})</span>
 				</span>
-				<button
-					onClick={() => {
-						setAgentError(null)
-						onStartDrawing("polygon")
-					}}
-					style={{
-						fontSize: 10,
-						padding: "2px 7px",
-						background: "transparent",
-						color: fg,
-						border: `1px solid ${border}`,
-						borderRadius: 4,
-						cursor: "pointer",
-					}}
-					title="Draw a polygon"
-					type="button">
-					⬠ Poly
-				</button>
-				<button
-					onClick={() => {
-						setAgentError(null)
-						onStartDrawing("line")
-					}}
-					style={{
-						fontSize: 10,
-						padding: "2px 7px",
-						background: "transparent",
-						color: fg,
-						border: `1px solid ${border}`,
-						borderRadius: 4,
-						cursor: "pointer",
-					}}
-					title="Draw a line"
-					type="button">
-					〰 Line
-				</button>
-				<button
-					onClick={handleImport}
-					style={{
-						fontSize: 10,
-						padding: "2px 7px",
-						background: "transparent",
-						color: fg,
-						border: `1px solid ${border}`,
-						borderRadius: 4,
-						cursor: "pointer",
-					}}
-					title="Import from CSV"
-					type="button">
-					⬆ Import
-				</button>
-				{onSeedFromLayer && (
-					<button
-						onClick={() => {
-							setAgentError(null)
-							setAgentStatus(null)
-							const msg = onSeedFromLayer()
-							setAgentStatus(msg)
-						}}
-						style={{
-							fontSize: 10,
-							padding: "2px 7px",
-							background: "transparent",
-							color: fg,
-							border: `1px solid ${border}`,
-							borderRadius: 4,
-							cursor: "pointer",
-						}}
-						title="Create one tracker annotation per point in the active layer"
-						type="button">
-						⊕ Seed from layer
-					</button>
-				)}
-
-				{/* Export dropdown */}
-				<div ref={exportBtnRef} style={{ position: "relative" }}>
-					<button
-						disabled={annotations.length === 0}
-						onClick={() => setShowExportMenu((v) => !v)}
-						style={{
-							fontSize: 10,
-							padding: "2px 7px",
-							background: "transparent",
-							color: fg,
-							border: `1px solid ${border}`,
-							borderRadius: 4,
-							cursor: annotations.length > 0 ? "pointer" : "default",
-							opacity: annotations.length > 0 ? 1 : 0.4,
-						}}
-						title="Export sketches"
-						type="button">
-						⬇ Export ▾
-					</button>
-					{showExportMenu && (
-						<div
-							style={{
-								position: "absolute",
-								right: 0,
-								top: "calc(100% + 4px)",
-								zIndex: MAP_Z.menu,
-								background: isDark ? "#1e1e2e" : "#fff",
-								border: sectionBorder,
-								borderRadius: 6,
-								padding: "4px 0",
-								minWidth: 140,
-								boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
-							}}>
-							{(["csv", "geojson", "kml", "kmz", "shapefile", "markdown"] as ExportFormat[]).map((fmt) => (
-								<button
-									key={fmt}
-									onClick={() => handleExport(fmt)}
-									style={{
-										display: "block",
-										width: "100%",
-										padding: "5px 12px",
-										fontSize: 10,
-										background: "none",
-										color: fg,
-										border: "none",
-										textAlign: "left",
-										cursor: "pointer",
-										whiteSpace: "nowrap",
-									}}
-									type="button">
-									{fmt === "csv"
-										? "📊 CSV"
-										: fmt === "geojson"
-											? "🌐 GeoJSON"
-											: fmt === "kml"
-												? "🌍 KML"
-												: fmt === "kmz"
-													? "🌍 KMZ (zipped)"
-													: fmt === "shapefile"
-														? "📦 Shapefile (.zip)"
-														: "📝 Markdown Report"}
-								</button>
-							))}
-						</div>
-					)}
-				</div>
+				<OverflowMenu
+					items={[
+						{ key: "import", label: "Import from CSV…", icon: "cloud-upload", onSelect: handleImport },
+						...(onSeedFromLayer
+							? [
+									{
+										key: "seed",
+										label: "One sketch per point of the active layer",
+										icon: "layers",
+										onSelect: () => {
+											setAgentError(null)
+											setAgentStatus(null)
+											setAgentStatus(onSeedFromLayer())
+										},
+									} as OverflowItem,
+								]
+							: []),
+						{ key: "d1", divider: true },
+						...(
+							[
+								["csv", "CSV", "table"],
+								["geojson", "GeoJSON", "json"],
+								["kml", "KML", "globe"],
+								["kmz", "KMZ (zipped)", "file-zip"],
+								["shapefile", "Shapefile (.zip)", "package"],
+								["markdown", "Markdown report", "markdown"],
+							] as [ExportFormat, string, string][]
+						).map(
+							([fmt, text, icon]): OverflowItem => ({
+								key: `export-${fmt}`,
+								label: `Export as ${text}`,
+								icon,
+								disabledReason: annotations.length === 0 ? "No sketches to export" : undefined,
+								onSelect: () => void handleExport(fmt),
+							}),
+						),
+					]}
+					label="Sketches actions"
+				/>
 			</div>
 
 			{/* ── Collections tabs ── */}
-			<div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
-				<button
-					onClick={() => setActiveCollectionId("all")}
-					style={{
-						fontSize: 9,
-						padding: "2px 8px",
-						borderRadius: 12,
-						border: `1px solid ${activeCollectionId === "all" ? accent : border}`,
-						background: activeCollectionId === "all" ? `${accent}22` : "transparent",
-						color: activeCollectionId === "all" ? "#a5b4fc" : fg,
-						cursor: "pointer",
-						fontWeight: activeCollectionId === "all" ? 700 : 400,
-					}}
-					type="button">
-					All ({annotations.length})
-				</button>
-				{collections.map((col) => {
-					const count = annotations.filter((a) => a.collectionIds.includes(col.id)).length
-					const isActive = activeCollectionId === col.id
-					return editingCollectionId === col.id ? (
-						<input
-							autoFocus
-							key={col.id}
-							onBlur={() => setEditingCollectionId(null)}
-							onChange={(e) => {
-								const next = collections.map((c) => (c.id === col.id ? { ...c, name: e.target.value } : c))
-								saveCols(next)
-							}}
-							onKeyDown={(e) => {
-								if (e.key === "Enter") setEditingCollectionId(null)
-							}}
-							style={{ ...inputStyle, width: 90, padding: "1px 6px", fontSize: 9 }}
-							value={col.name}
-						/>
-					) : (
-						<div key={col.id} style={{ display: "flex", alignItems: "center", gap: 1 }}>
-							<button
-								onClick={() => setActiveCollectionId(col.id)}
-								style={{
-									fontSize: 9,
-									padding: "2px 8px",
-									borderRadius: "12px 0 0 12px",
-									border: `1px solid ${isActive ? col.color : border}`,
-									background: isActive ? `${col.color}22` : "transparent",
-									color: isActive ? col.color : fg,
-									cursor: "pointer",
-									fontWeight: isActive ? 700 : 400,
+			{annotations.length > 0 && (
+				<div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
+					<button
+						onClick={() => setActiveCollectionId("all")}
+						style={{
+							fontSize: 11,
+							padding: "2px 8px",
+							borderRadius: 12,
+							border: `1px solid ${activeCollectionId === "all" ? accent : border}`,
+							background: activeCollectionId === "all" ? `${accent}22` : "transparent",
+							color: activeCollectionId === "all" ? "var(--vscode-foreground)" : fg,
+							cursor: "pointer",
+							fontWeight: activeCollectionId === "all" ? 700 : 400,
+						}}
+						type="button">
+						All ({annotations.length})
+					</button>
+					{collections.map((col) => {
+						const count = annotations.filter((a) => a.collectionIds.includes(col.id)).length
+						const isActive = activeCollectionId === col.id
+						return editingCollectionId === col.id ? (
+							<input
+								autoFocus
+								key={col.id}
+								onBlur={() => setEditingCollectionId(null)}
+								onChange={(e) => {
+									const next = collections.map((c) => (c.id === col.id ? { ...c, name: e.target.value } : c))
+									saveCols(next)
 								}}
-								type="button">
-								<span
+								onKeyDown={(e) => {
+									if (e.key === "Enter") setEditingCollectionId(null)
+								}}
+								style={{ ...inputStyle, width: 90, padding: "1px 6px", fontSize: 11 }}
+								value={col.name}
+							/>
+						) : (
+							<div key={col.id} style={{ display: "flex", alignItems: "center", gap: 1 }}>
+								<button
+									onClick={() => setActiveCollectionId(col.id)}
 									style={{
-										display: "inline-block",
-										width: 7,
-										height: 7,
-										borderRadius: "50%",
-										background: col.color,
-										marginRight: 4,
-										verticalAlign: "middle",
+										fontSize: 11,
+										padding: "2px 8px",
+										borderRadius: "12px 0 0 12px",
+										border: `1px solid ${isActive ? col.color : border}`,
+										background: isActive ? `${col.color}22` : "transparent",
+										color: isActive ? col.color : fg,
+										cursor: "pointer",
+										fontWeight: isActive ? 700 : 400,
 									}}
-								/>
-								{col.name} ({count})
-							</button>
-							<button
-								onClick={() => setEditingCollectionId(col.id)}
-								style={{
-									fontSize: 8,
-									padding: "2px 4px",
-									borderRadius: 0,
-									border: `1px solid ${isActive ? col.color : border}`,
-									borderLeft: "none",
-									background: "transparent",
-									color: fg,
-									cursor: "pointer",
-									opacity: 0.5,
-								}}
-								title="Rename collection"
-								type="button">
-								✏
-							</button>
-							<button
-								onClick={() => handleDeleteCollection(col.id)}
-								style={{
-									fontSize: 8,
-									padding: "2px 4px",
-									borderRadius: "0 12px 12px 0",
-									border: `1px solid ${isActive ? col.color : border}`,
-									borderLeft: "none",
-									background: "transparent",
-									color: "#ef4444",
-									cursor: "pointer",
-									opacity: 0.6,
-								}}
-								title="Delete collection"
-								type="button">
-								✕
-							</button>
-						</div>
-					)
-				})}
-				<button
-					onClick={handleNewCollection}
-					style={{
-						fontSize: 9,
-						padding: "2px 7px",
-						borderRadius: 12,
-						border: `1px dashed ${border}`,
-						background: "transparent",
-						color: fg,
-						cursor: "pointer",
-						opacity: 0.6,
-					}}
-					type="button">
-					+ Collection
-				</button>
-			</div>
+									type="button">
+									<span
+										style={{
+											display: "inline-block",
+											width: 7,
+											height: 7,
+											borderRadius: "50%",
+											background: col.color,
+											marginRight: 4,
+											verticalAlign: "middle",
+										}}
+									/>
+									{col.name} ({count})
+								</button>
+								<button
+									onClick={() => setEditingCollectionId(col.id)}
+									style={{
+										fontSize: 11,
+										padding: "2px 4px",
+										borderRadius: 0,
+										border: `1px solid ${isActive ? col.color : border}`,
+										borderLeft: "none",
+										background: "transparent",
+										color: fg,
+										cursor: "pointer",
+										opacity: 0.5,
+									}}
+									title="Rename collection"
+									type="button">
+									<span aria-hidden="true" className="codicon codicon-edit" />
+								</button>
+								<button
+									onClick={() => handleDeleteCollection(col.id)}
+									style={{
+										fontSize: 11,
+										padding: "2px 4px",
+										borderRadius: "0 12px 12px 0",
+										border: `1px solid ${isActive ? col.color : border}`,
+										borderLeft: "none",
+										background: "transparent",
+										color: "#ef4444",
+										cursor: "pointer",
+										opacity: 0.6,
+									}}
+									title="Delete collection"
+									type="button">
+									<span aria-hidden="true" className="codicon codicon-close" />
+								</button>
+							</div>
+						)
+					})}
+					<button
+						onClick={handleNewCollection}
+						style={{
+							fontSize: 11,
+							padding: "2px 7px",
+							borderRadius: 12,
+							border: `1px dashed ${border}`,
+							background: "transparent",
+							color: fg,
+							cursor: "pointer",
+							opacity: 1,
+						}}
+						type="button">
+						+ Collection
+					</button>
+				</div>
+			)}
 
 			{/* ── Search + Filter ── */}
-			<div style={{ display: "flex", gap: 4, marginBottom: 8, alignItems: "center" }}>
-				<input
-					onChange={(e) => setSearch(e.target.value)}
-					placeholder="Search name, notes, tags…"
-					style={{ ...inputStyle, flex: 1 }}
-					value={search}
-				/>
-				<select
-					onChange={(e) => setFilterStatus(e.target.value as AnnotationStatus | "all")}
-					style={{ ...inputStyle, width: "auto", cursor: "pointer" }}
-					value={filterStatus}>
-					<option value="all">All status</option>
-					{STATUS_OPTS.map((s) => (
-						<option key={s.value} value={s.value}>
-							{s.label}
-						</option>
-					))}
-				</select>
-			</div>
+			{annotations.length > 0 && (
+				<div style={{ display: "flex", gap: 4, marginBottom: 8, alignItems: "center" }}>
+					<input
+						onChange={(e) => setSearch(e.target.value)}
+						placeholder="Search name, notes, tags…"
+						style={{ ...inputStyle, flex: 1 }}
+						value={search}
+					/>
+					<select
+						onChange={(e) => setFilterStatus(e.target.value as AnnotationStatus | "all")}
+						style={{ ...inputStyle, width: "auto", cursor: "pointer" }}
+						value={filterStatus}>
+						<option value="all">All status</option>
+						{STATUS_OPTS.map((s) => (
+							<option key={s.value} value={s.value}>
+								{s.label}
+							</option>
+						))}
+					</select>
+				</div>
+			)}
 
 			{/* ── Error banner ── */}
 			{agentError && (
@@ -624,13 +517,15 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 						background: "rgba(239,68,68,0.1)",
 						border: "1px solid rgba(239,68,68,0.3)",
 						borderRadius: 4,
-						fontSize: 10,
+						fontSize: 11,
 						color: "#f87171",
 						display: "flex",
 						alignItems: "center",
 						gap: 6,
 					}}>
-					<span style={{ flex: 1 }}>⚠ {agentError}</span>
+					<span style={{ flex: 1 }}>
+						<span aria-hidden="true" className="codicon codicon-warning" /> {agentError}
+					</span>
 					<button
 						onClick={() => setAgentError(null)}
 						style={{
@@ -642,7 +537,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 							padding: 0,
 						}}
 						type="button">
-						✕
+						<span aria-hidden="true" className="codicon codicon-close" />
 					</button>
 				</div>
 			)}
@@ -656,13 +551,15 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 						background: "rgba(34,197,94,0.1)",
 						border: "1px solid rgba(34,197,94,0.3)",
 						borderRadius: 4,
-						fontSize: 10,
+						fontSize: 11,
 						color: "#4ade80",
 						display: "flex",
 						alignItems: "center",
 						gap: 6,
 					}}>
-					<span style={{ flex: 1 }}>✓ {agentStatus}</span>
+					<span style={{ flex: 1 }}>
+						<span aria-hidden="true" className="codicon codicon-check" /> {agentStatus}
+					</span>
 					<button
 						onClick={() => setAgentStatus(null)}
 						style={{
@@ -674,7 +571,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 							padding: 0,
 						}}
 						type="button">
-						✕
+						<span aria-hidden="true" className="codicon codicon-close" />
 					</button>
 				</div>
 			)}
@@ -690,12 +587,14 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 						borderRadius: 6,
 					}}>
 					<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-						<span style={{ fontSize: 11, fontWeight: 700, color: "#a5b4fc", flex: 1 }}>✨ Batch Agent Analysis</span>
-						<span style={{ fontSize: 9, opacity: 0.6 }}>
+						<span style={{ fontSize: 11, fontWeight: 700, color: "var(--vscode-foreground)", flex: 1 }}>
+							<span aria-hidden="true" className="codicon codicon-sparkle" /> Batch Agent Analysis
+						</span>
+						<span style={{ fontSize: 11, opacity: 0.6 }}>
 							{filteredAnnotations.length} annotation{filteredAnnotations.length !== 1 ? "s" : ""}
 						</span>
 					</div>
-					<div style={{ fontSize: 10, opacity: 0.65, lineHeight: 1.5, marginBottom: 6 }}>
+					<div style={{ fontSize: 11, opacity: 0.65, lineHeight: 1.5, marginBottom: 6 }}>
 						All annotation coordinates, geometry, notes, and tags will be sent as a CSV table. Add batch-level
 						instructions below (optional).
 					</div>
@@ -713,7 +612,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 								setAgentError(null)
 							}}
 							style={{
-								fontSize: 10,
+								fontSize: 11,
 								padding: "4px 10px",
 								background: "transparent",
 								color: fg,
@@ -728,7 +627,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 							disabled={Boolean(agentBusy)}
 							onClick={handleBatchAskAgent}
 							style={{
-								fontSize: 10,
+								fontSize: 11,
 								padding: "4px 14px",
 								background: agentBusy ? "rgba(99,102,241,0.4)" : "rgba(99,102,241,0.85)",
 								color: "#fff",
@@ -738,7 +637,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 								fontWeight: 600,
 							}}
 							type="button">
-							{agentBusy === "batch" ? "⏳ Sending…" : "✨ Send to Agent"}
+							{agentBusy === "batch" ? "Sending…" : "Send to Agent"}
 						</button>
 					</div>
 				</div>
@@ -746,9 +645,9 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 
 			{/* ── Annotation cards ── */}
 			{filteredAnnotations.length === 0 ? (
-				<div style={{ fontSize: 10, opacity: 0.5, fontStyle: "italic", padding: "8px 0" }}>
+				<div className="map-hint" style={{ padding: "4px 0" }}>
 					{annotations.length === 0
-						? "No sketches yet — click ⬠ Poly or 〰 Line to draw one."
+						? "No sketches yet. Choose Polygon, Line or Point above to draw one."
 						: "No sketches match your filter."}
 				</div>
 			) : (
@@ -778,7 +677,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										alignItems: "center",
 										gap: 6,
 									}}>
-									<span style={{ fontSize: 12 }}>{TYPE_ICONS[ann.type] ?? "📌"}</span>
+									<span aria-hidden="true" className={`codicon codicon-${TYPE_ICONS[ann.type] ?? "pin"}`} />
 									<span
 										style={{
 											fontSize: 11,
@@ -792,7 +691,12 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 									</span>
 									<PriorityBadge priority={ann.priority} />
 									<StatusBadge status={ann.status} />
-									<span style={{ fontSize: 10, opacity: 0.5, marginLeft: 2 }}>{isExpanded ? "▲" : "▼"}</span>
+									<span style={{ fontSize: 11, opacity: 0.5, marginLeft: 2 }}>
+										<span
+											aria-hidden="true"
+											className={`codicon codicon-chevron-${isExpanded ? "up" : "down"}`}
+										/>
+									</span>
 								</div>
 
 								{/* ── Compact footer (notes preview) ── */}
@@ -806,7 +710,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										{ann.notes && (
 											<div
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													opacity: 0.65,
 													display: "-webkit-box",
 													WebkitLineClamp: 2,
@@ -823,11 +727,11 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													<span
 														key={t}
 														style={{
-															fontSize: 8,
+															fontSize: 11,
 															padding: "1px 5px",
 															borderRadius: 8,
 															background: "rgba(99,102,241,0.15)",
-															color: "#a5b4fc",
+															color: "var(--vscode-foreground)",
 														}}>
 														#{t}
 													</span>
@@ -844,7 +748,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										<div>
 											<label
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													opacity: 0.55,
 													display: "block",
 													marginBottom: 3,
@@ -863,7 +767,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										</div>
 
 										{/* Coordinates */}
-										<div style={{ fontSize: 9, opacity: 0.5, fontFamily: "monospace" }}>
+										<div style={{ fontSize: 11, opacity: 0.5, fontFamily: "monospace" }}>
 											{TYPE_ICONS[ann.type]} {Math.abs(lat).toFixed(5)}°{lat >= 0 ? "N" : "S"},{" "}
 											{Math.abs(lon).toFixed(5)}°{lon >= 0 ? "E" : "W"}
 										</div>
@@ -872,7 +776,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										<div>
 											<label
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													opacity: 0.55,
 													display: "block",
 													marginBottom: 3,
@@ -880,7 +784,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													textTransform: "uppercase",
 													letterSpacing: "0.05em",
 												}}>
-												📓 My Notes
+												<span aria-hidden="true" className="codicon codicon-notebook" /> My Notes
 											</label>
 											<textarea
 												onChange={(e) => updateAnnotation(ann.id, { notes: e.target.value })}
@@ -895,7 +799,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										<div>
 											<label
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													opacity: 0.55,
 													display: "block",
 													marginBottom: 3,
@@ -903,7 +807,8 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													textTransform: "uppercase",
 													letterSpacing: "0.05em",
 												}}>
-												📷 Site Photos {ann.images.length > 0 ? `(${ann.images.length})` : ""}
+												<span aria-hidden="true" className="codicon codicon-device-camera" /> Site Photos{" "}
+												{ann.images.length > 0 ? `(${ann.images.length})` : ""}
 											</label>
 											{ann.images.length > 0 && (
 												<div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>
@@ -926,7 +831,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 																	border: "none",
 																	background: "rgba(0,0,0,0.7)",
 																	color: "#fff",
-																	fontSize: 9,
+																	fontSize: 11,
 																	lineHeight: "14px",
 																	padding: 0,
 																	cursor: "pointer",
@@ -955,7 +860,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													...inputStyle,
 													width: "auto",
 													cursor: "pointer",
-													fontSize: 10,
+													fontSize: 11,
 													padding: "3px 8px",
 												}}
 												type="button">
@@ -967,7 +872,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										<div>
 											<label
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													opacity: 0.55,
 													display: "block",
 													marginBottom: 3,
@@ -975,9 +880,14 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													textTransform: "uppercase",
 													letterSpacing: "0.05em",
 												}}>
-												🤖 AI Prompt{" "}
+												<span aria-hidden="true" className="codicon codicon-hubot" /> AI Prompt{" "}
 												<span
-													style={{ fontWeight: 400, textTransform: "none", fontSize: 9, opacity: 0.7 }}>
+													style={{
+														fontWeight: 400,
+														textTransform: "none",
+														fontSize: 11,
+														opacity: 0.7,
+													}}>
 													(optional — overrides smart default)
 												</span>
 											</label>
@@ -999,7 +909,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										<div>
 											<label
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													opacity: 0.55,
 													display: "block",
 													marginBottom: 4,
@@ -1014,11 +924,11 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													<span
 														key={tag}
 														style={{
-															fontSize: 9,
+															fontSize: 11,
 															padding: "2px 7px",
 															borderRadius: 10,
 															background: "rgba(99,102,241,0.15)",
-															color: "#a5b4fc",
+															color: "var(--vscode-foreground)",
 															display: "flex",
 															alignItems: "center",
 															gap: 3,
@@ -1033,9 +943,9 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 															style={{
 																background: "none",
 																border: "none",
-																color: "#a5b4fc",
+																color: "var(--vscode-foreground)",
 																cursor: "pointer",
-																fontSize: 9,
+																fontSize: 11,
 																padding: 0,
 																lineHeight: 1,
 															}}
@@ -1059,7 +969,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 														}
 													}}
 													placeholder="+ tag"
-													style={{ ...inputStyle, width: 60, padding: "2px 6px", fontSize: 9 }}
+													style={{ ...inputStyle, width: 60, padding: "2px 6px", fontSize: 11 }}
 													value={tagDrafts[ann.id] ?? ""}
 												/>
 											</div>
@@ -1070,7 +980,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 											<div style={{ flex: 1 }}>
 												<label
 													style={{
-														fontSize: 9,
+														fontSize: 11,
 														opacity: 0.55,
 														display: "block",
 														marginBottom: 3,
@@ -1096,7 +1006,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 											<div style={{ flex: 1 }}>
 												<label
 													style={{
-														fontSize: 9,
+														fontSize: 11,
 														opacity: 0.55,
 														display: "block",
 														marginBottom: 3,
@@ -1129,7 +1039,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 											<div>
 												<label
 													style={{
-														fontSize: 9,
+														fontSize: 11,
 														opacity: 0.55,
 														display: "block",
 														marginBottom: 4,
@@ -1153,7 +1063,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 																	})
 																}
 																style={{
-																	fontSize: 9,
+																	fontSize: 11,
 																	padding: "2px 8px",
 																	borderRadius: 10,
 																	border: `1px solid ${inCol ? col.color : border}`,
@@ -1186,7 +1096,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 										<div>
 											<label
 												style={{
-													fontSize: 9,
+													fontSize: 11,
 													opacity: 0.55,
 													display: "block",
 													marginBottom: 4,
@@ -1233,7 +1143,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 											<button
 												onClick={() => onFlyTo(lon, lat)}
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													padding: "3px 8px",
 													background: "transparent",
 													color: fg,
@@ -1242,12 +1152,12 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													cursor: "pointer",
 												}}
 												type="button">
-												📍 Fly to
+												<span aria-hidden="true" className="codicon codicon-target" /> Fly to
 											</button>
 											<button
 												onClick={() => duplicateAnn(ann)}
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													padding: "3px 8px",
 													background: "transparent",
 													color: fg,
@@ -1256,12 +1166,12 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													cursor: "pointer",
 												}}
 												type="button">
-												📋 Duplicate
+												<span aria-hidden="true" className="codicon codicon-copy" /> Duplicate
 											</button>
 											<button
 												onClick={() => deleteAnn(ann.id)}
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													padding: "3px 8px",
 													background: "transparent",
 													color: "#ef4444",
@@ -1270,7 +1180,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													cursor: "pointer",
 												}}
 												type="button">
-												🗑 Delete
+												<span aria-hidden="true" className="codicon codicon-trash" /> Delete
 											</button>
 											<div style={{ flex: 1 }} />
 											<button
@@ -1280,7 +1190,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													handleAskAgent(ann)
 												}}
 												style={{
-													fontSize: 10,
+													fontSize: 11,
 													padding: "4px 12px",
 													background: isBusy ? "rgba(99,102,241,0.4)" : "rgba(99,102,241,0.85)",
 													color: "#fff",
@@ -1290,7 +1200,7 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 													fontWeight: 600,
 												}}
 												type="button">
-												{isBusy ? "⏳ Sending…" : "✨ Ask Agent"}
+												{isBusy ? "Sending…" : "Ask Agent"}
 											</button>
 										</div>
 									</div>
@@ -1406,17 +1316,17 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 							setGallerySaveOpen((v) => !v)
 						}}
 						style={{
-							fontSize: 10,
+							fontSize: 11,
 							padding: "4px 10px",
 							background: gallerySaveOpen ? "rgba(16,185,129,0.2)" : "rgba(16,185,129,0.1)",
-							color: "#6ee7b7",
+							color: "var(--vscode-foreground)",
 							border: `1px solid ${gallerySaveOpen ? "rgba(16,185,129,0.5)" : "rgba(16,185,129,0.3)"}`,
 							borderRadius: 4,
 							cursor: "pointer",
 							fontWeight: 600,
 						}}
 						type="button">
-						📌 Save to My Gallery
+						<span aria-hidden="true" className="codicon codicon-star" /> Save to My Gallery
 					</button>
 					<button
 						disabled={Boolean(agentBusy)}
@@ -1425,17 +1335,17 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 							setBatchOpen(!batchOpen)
 						}}
 						style={{
-							fontSize: 10,
+							fontSize: 11,
 							padding: "4px 12px",
 							background: batchOpen ? "rgba(99,102,241,0.25)" : "rgba(99,102,241,0.1)",
-							color: batchOpen ? "#a5b4fc" : fg,
+							color: batchOpen ? "var(--vscode-foreground)" : fg,
 							border: `1px solid ${batchOpen ? "rgba(99,102,241,0.5)" : border}`,
 							borderRadius: 4,
 							cursor: agentBusy ? "wait" : "pointer",
 							fontWeight: 600,
 						}}
 						type="button">
-						{agentBusy === "batch" ? "⏳ Sending…" : `✨ Batch Ask Agent (${filteredAnnotations.length})`}
+						{agentBusy === "batch" ? "Sending…" : `Batch Ask Agent (${filteredAnnotations.length})`}
 					</button>
 				</div>
 			)}

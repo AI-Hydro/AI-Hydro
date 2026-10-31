@@ -15,6 +15,7 @@
 
 import type { MapViewState } from "@deck.gl/core"
 import { DEFAULT_BASEMAP_ID, isKnownBaseMap, removedBaseMapReason } from "./basemaps"
+import { type PanelSizes, sanitizePanelSizes } from "./panelSizes"
 
 const STORAGE_KEY = "aihydro.map.workspace.v1"
 
@@ -70,6 +71,8 @@ export interface MapWorkspace {
 	chromeRestore?: "collapsed" | "rail"
 	/** Named saved view bookmarks. */
 	bookmarks?: MapBookmark[]
+	/** Panel sizes the user chose, per panel and per window state (docked, overlay, sheet). See panelSizes.ts. */
+	panelSizes?: PanelSizes
 }
 
 const DEFAULT_WORKSPACE: MapWorkspace = {
@@ -288,6 +291,7 @@ export function loadMapWorkspace(): MapWorkspace {
 			chromeRestore:
 				parsed.chromeRestore === "collapsed" || parsed.chromeRestore === "rail" ? parsed.chromeRestore : undefined,
 			bookmarks: sanitizeBookmarks(parsed.bookmarks),
+			panelSizes: sanitizePanelSizes(parsed.panelSizes),
 			layerPanel: {
 				...DEFAULT_WORKSPACE.layerPanel!,
 				...(parsed.layerPanel && typeof parsed.layerPanel === "object" ? parsed.layerPanel : {}),

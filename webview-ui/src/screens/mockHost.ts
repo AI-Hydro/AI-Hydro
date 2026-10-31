@@ -70,6 +70,10 @@ export function hostCall(service: string, method: string, _request: unknown): Pr
 		}))
 		return Promise.resolve({ ok: true, outputs, message: "" })
 	}
+	if (service === "MapServiceClient" && method === "listWorkspaceGeoFiles") {
+		const files = screen?.workspaceFiles ?? []
+		return Promise.resolve({ files, totalCount: files.length })
+	}
 	if (service === "MapServiceClient" && method === "getMapState") {
 		return Promise.resolve({ layers: screen?.layers ?? [] })
 	}

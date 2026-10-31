@@ -80,28 +80,15 @@ function hydroHitsToResults(
 		}))
 }
 
+/** Codicons, so the result list matches the rail and the panels. */
 const SOURCE_ICON: Record<SearchResult["source"], string> = {
-	gauge: "🌊",
-	dam: "🏗",
-	coordinate: "📍",
-	nominatim: "🌍",
+	gauge: "pulse",
+	dam: "symbol-structure",
+	coordinate: "location",
+	nominatim: "globe",
 }
 
-const fg = "var(--vscode-foreground)"
-const border = "var(--vscode-input-border, rgba(128,128,128,0.3))"
-const subtle = "var(--vscode-list-hoverBackground, rgba(128,128,128,0.06))"
-const accent = "var(--vscode-button-background, #0e639c)"
-
-const smallBtn = (active?: boolean): React.CSSProperties => ({
-	fontSize: 10,
-	padding: "2px 7px",
-	background: active ? accent : "transparent",
-	color: active ? "#fff" : fg,
-	border: `1px solid ${active ? accent : border}`,
-	borderRadius: 3,
-	cursor: "pointer",
-	whiteSpace: "nowrap" as const,
-})
+const chip = (primary?: boolean) => `map-chip${primary ? " map-chip--primary" : ""}`
 
 // ─── Bookmarks Panel ──────────────────────────────────────────────────────────
 
@@ -141,24 +128,30 @@ const BookmarksPanel: React.FC<{
 	}
 
 	return (
-		<div style={{ marginTop: 8 }}>
-			<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-				<span style={{ fontSize: 10, fontWeight: 600, opacity: 0.8, flex: 1 }}>📌 Bookmarks</span>
+		<div className="map-section">
+			<div className="map-section-head">
+				<span className="map-section-label">
+					<span aria-hidden="true" className="codicon codicon-bookmark" />
+					Bookmarks
+				</span>
 				{currentView && !naming && (
 					<button
+						className={chip()}
 						onClick={() => setNaming(true)}
-						style={smallBtn()}
 						title="Save current view as bookmark"
 						type="button">
-						＋ Save view
+						<span aria-hidden="true" className="codicon codicon-add" />
+						Save view
 					</button>
 				)}
 			</div>
 
 			{naming && (
-				<div style={{ display: "flex", gap: 5, marginBottom: 6 }}>
+				<div className="map-row">
 					<input
+						aria-label="Bookmark name"
 						autoFocus
+						className="map-field"
 						maxLength={40}
 						onChange={(e) => setNewName(e.target.value)}
 						onKeyDown={(e) => {
@@ -170,92 +163,52 @@ const BookmarksPanel: React.FC<{
 								setNewName("")
 							}
 						}}
-						placeholder="Bookmark name…"
-						style={{
-							flex: 1,
-							fontSize: 11,
-							padding: "3px 6px",
-							background: "var(--vscode-input-background)",
-							color: fg,
-							border: `1px solid ${border}`,
-							borderRadius: 3,
-						}}
+						placeholder="Bookmark name"
 						type="text"
 						value={newName}
 					/>
-					<button onClick={saveBookmark} style={smallBtn(true)} title="Save" type="button">
-						✓
+					<button aria-label="Save bookmark" className={chip(true)} onClick={saveBookmark} title="Save" type="button">
+						<span aria-hidden="true" className="codicon codicon-check" />
 					</button>
 					<button
+						aria-label="Cancel"
+						className={chip()}
 						onClick={() => {
 							setNaming(false)
 							setNewName("")
 						}}
-						style={smallBtn()}
 						title="Cancel"
 						type="button">
-						✕
+						<span aria-hidden="true" className="codicon codicon-close" />
 					</button>
 				</div>
 			)}
 
 			{bookmarks.length === 0 ? (
-				<div style={{ fontSize: 10, opacity: 0.5, padding: "4px 0", textAlign: "center" }}>
-					No bookmarks yet. Navigate to a location and click ＋ Save view.
-				</div>
+				<div className="map-hint">No bookmarks yet. Move the map where you want it and choose Save view.</div>
 			) : (
-				<div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+				<ul className="map-plainlist">
 					{bookmarks.map((bk) => (
-						<div
-							key={bk.id}
-							style={{
-								display: "flex",
-								alignItems: "center",
-								gap: 5,
-								padding: "3px 6px",
-								background: subtle,
-								border: `1px solid ${border}`,
-								borderRadius: 3,
-							}}>
+						<li className="map-listrow" key={bk.id}>
 							<button
+								className="map-listrow__main"
 								onClick={() => onFlyTo(bk)}
-								style={{
-									flex: 1,
-									textAlign: "left",
-									background: "transparent",
-									border: "none",
-									color: fg,
-									cursor: "pointer",
-									fontSize: 11,
-									padding: 0,
-									overflow: "hidden",
-									textOverflow: "ellipsis",
-									whiteSpace: "nowrap",
-								}}
 								title={`${bk.latitude.toFixed(4)}, ${bk.longitude.toFixed(4)} · zoom ${bk.zoom.toFixed(1)}`}
 								type="button">
 								{bk.name}
 							</button>
-							<span style={{ fontSize: 9, opacity: 0.45, whiteSpace: "nowrap" }}>z{bk.zoom.toFixed(1)}</span>
+							<span className="map-hint">z{bk.zoom.toFixed(1)}</span>
 							<button
+								aria-label={`Remove bookmark ${bk.name}`}
+								className="map-overflow-trigger"
 								onClick={() => removeBookmark(bk.id)}
-								style={{
-									background: "transparent",
-									border: "none",
-									color: "rgba(220,53,69,0.7)",
-									cursor: "pointer",
-									fontSize: 12,
-									padding: 0,
-									lineHeight: 1,
-									flexShrink: 0,
-								}}
 								title="Remove bookmark"
 								type="button">
-								✕
+								<span aria-hidden="true" className="codicon codicon-trash" />
 							</button>
-						</div>
+						</li>
 					))}
-				</div>
+				</ul>
 			)}
 		</div>
 	)
@@ -445,9 +398,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 		<div className={rootClass}>
 			{/* ── Place / gauge / name search ── */}
 			<div className="map-search-field-wrap">
-				<span aria-hidden="true" className="map-search-field-icon">
-					🔍
-				</span>
+				<span aria-hidden="true" className="map-search-field-icon codicon codicon-search" />
 				<input
 					aria-autocomplete="list"
 					aria-controls="search-results-list"
@@ -463,18 +414,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 				/>
 				<button
 					aria-label="Search place names"
-					className="map-search-go"
+					className={`map-search-go ${chip(query.trim().length >= 2)}`}
 					disabled={query.trim().length < 2}
 					onClick={() => void doPlaceSearch(query)}
-					style={smallBtn(query.trim().length >= 2)}
 					title="Search place names (OpenStreetMap Nominatim)"
 					type="button">
 					Search
 				</button>
 				{loading && (
-					<span aria-hidden="true" className="map-search-field-spinner">
-						⏳
-					</span>
+					<span aria-hidden="true" className="map-search-field-spinner codicon codicon-loading codicon-modifier-spin" />
 				)}
 			</div>
 
@@ -508,14 +456,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 							onClick={() => handleSelect(r)}
 							role="option"
 							type="button">
-							<span aria-hidden="true" className="map-search-result-icon">
-								{SOURCE_ICON[r.source]}
-							</span>
+							<span
+								aria-hidden="true"
+								className={`map-search-result-icon codicon codicon-${SOURCE_ICON[r.source]}`}
+							/>
 							<span className="map-search-result-label">{r.label}</span>
 						</button>
 					))}
 					{searchedPlaces && results.some((r) => r.source === "nominatim") && (
-						<div style={{ fontSize: 11, opacity: 0.7, padding: "3px 8px" }}>
+						<div className="map-hint" style={{ padding: "3px 8px" }}>
 							Place names © OpenStreetMap contributors (Nominatim)
 						</div>
 					)}
@@ -523,10 +472,19 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 			)}
 
 			{/* ── Go to coordinates ── */}
-			<div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${border}` }}>
-				<div style={{ fontSize: 10, fontWeight: 600, opacity: 0.8, marginBottom: 4 }}>📍 Go to coordinates</div>
-				<div style={{ display: "flex", gap: 5 }}>
+			<div className="map-section map-section--ruled">
+				<div className="map-section-head">
+					<span className="map-section-label">
+						<span aria-hidden="true" className="codicon codicon-location" />
+						Go to coordinates
+					</span>
+				</div>
+				<div className="map-row">
 					<input
+						aria-describedby="map-coord-hint"
+						aria-invalid={coordError ? true : undefined}
+						aria-label="Coordinates"
+						className="map-field"
 						onChange={(e) => {
 							setCoordInput(e.target.value)
 							setCoordError("")
@@ -537,39 +495,25 @@ export const SearchBar: React.FC<SearchBarProps> = ({ embedded = false, viewBbox
 							}
 						}}
 						placeholder="28.45, 77.02  or  44N 269000 3042000"
-						style={{
-							flex: 1,
-							fontSize: 10,
-							padding: "3px 6px",
-							background: "rgba(255,255,255,0.07)",
-							color: fg,
-							border: `1px solid ${coordError ? "rgba(220,53,69,0.6)" : border}`,
-							borderRadius: 3,
-							minWidth: 0,
-						}}
 						type="text"
 						value={coordInput}
 					/>
 					<button
+						className={chip(!!coordInput.trim())}
 						onClick={handleGoToCoord}
-						style={smallBtn(!!coordInput.trim())}
 						title="Fly to coordinates"
 						type="button">
 						Go
 					</button>
 				</div>
 				{coordError && (
-					<div
-						style={{
-							fontSize: 9,
-							color: "var(--vscode-editorError-foreground, #f48771)",
-							marginTop: 3,
-							lineHeight: 1.3,
-						}}>
+					<div className="map-hint map-hint--error" role="alert">
 						{coordError}
 					</div>
 				)}
-				<div style={{ fontSize: 9, opacity: 0.4, marginTop: 3 }}>Accepts decimal · DMS · UTM (zone easting northing)</div>
+				<div className="map-hint" id="map-coord-hint">
+					Accepts decimal, DMS or UTM (zone easting northing).
+				</div>
 			</div>
 
 			{/* ── Bookmarks ── */}

@@ -2,7 +2,7 @@
 	"_note": "Per-file counts of text-[8px|9px|10px] and emoji in guarded component dirs. May shrink, never grow.",
 	"totals": {
 		"smallText": 304,
-		"emoji": 230
+		"emoji": 193
 	},
 	"files": {
 		"components/evidence-board/EvidenceBoard.tsx": {
@@ -48,10 +48,6 @@
 		"components/map/InundationScrubberPanel.tsx": {
 			"smallText": 5,
 			"emoji": 1
-		},
-		"components/map/LayerPanel.tsx": {
-			"smallText": 0,
-			"emoji": 37
 		},
 		"components/map/MapContextMenu.tsx": {
 			"smallText": 7,

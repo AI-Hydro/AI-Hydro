@@ -176,9 +176,12 @@ export const framedWorkspace = (
 	zoom = 8.5,
 	/** The user's saved chrome state; omitted, the map width picks the default. */
 	chrome?: "collapsed" | "rail" | "hidden",
+	/** Extra saved workspace fields, e.g. `panelSizes` for a panel the user already resized. */
+	extra: Record<string, unknown> = {},
 ): string =>
 	JSON.stringify({
 		version: 2,
+		...extra,
 		...(chrome ? { chrome } : {}),
 		...(basemap ? { basemap, basemapExplicit: true } : {}),
 		viewState: { longitude: center[0], latitude: center[1], zoom, pitch: 0, bearing: 0 },
@@ -211,3 +214,175 @@ export const fixturePins = (): Record<string, unknown>[] =>
 		createdAt: "2026-01-01T00:00:00.000Z",
 		updatedAt: "2026-01-01T00:00:00.000Z",
 	}))
+
+// ── Layers panel states (polish-map) ────────────────────────────────────────
+
+const polygonLayer = (
+	id: string,
+	name: string,
+	metadata: Record<string, string>,
+	fill = "#1f78b4",
+	geojson = basinPolygon.geojson,
+): MapLayer => ({
+	id,
+	name,
+	layerType: "polygon",
+	visible: true,
+	geojson,
+	style: style({ color: fill, fillColor: fill, strokeColor: fill, fillOpacity: 0.2 }),
+	metadata: { source_status: "synthetic", ...metadata },
+})
+
+/** Names as the owner saw them truncated: tool output named from the gauge, the method and the run. */
+export const longNameLayers = (): MapLayer[] => [
+	polygonLayer("ln-1", "watershed_01031500_basin_boundary_nldi_merit_snap_v2", {
+		tool: "delineate_watershed",
+		_run_id: "run-7f3a9c.1",
+		provenance_path: "/fixture/provenance/ln-1.json",
+	}),
+	polygonLayer(
+		"ln-2",
+		"watershed_01031500_basin_boundary_nldi_merit_snap_v2_buffered_5km_for_climate_extraction",
+		{ tool: "delineate_watershed", _run_id: "run-7f3a9c.2", provenance_path: "/fixture/provenance/ln-2.json" },
+		"#33a02c",
+	),
+	{ ...gaugePoint, id: "ln-3", name: "USGS 01031500 Piscataquis River near Dover-Foxcroft, Maine (gauge)" },
+]
+
+/**
+ * Layers restored from earlier sessions: the same delineation twice (same run, same source), plus a layer whose geometry
+ * is not loaded, so AI-Hydro can only show it ("Limited layer"). Every one of them sits in the Tool output group.
+ */
+export const restoredLayers = (): MapLayer[] => {
+	const restored = { _hydrated: "1", _hydrated_of: "6" }
+	const basin = (id: string) =>
+		polygonLayer(id, "watershed_01031500", {
+			tool: "delineate_watershed",
+			_run_id: "run-7f3a9c.1",
+			provenance_path: "/fixture/provenance/run-7f3a9c.json",
+			...restored,
+		})
+	const limited = (id: string, name: string) => ({
+		...polygonLayer(id, name, { tool: "extract_rivers", _run_id: "run-2b44d0.1", ...restored }, "#e31a1c", ""),
+	})
+	return [
+		basin("rs-1"),
+		basin("rs-2"),
+		basin("rs-3"),
+		limited("rs-4", "flowlines_01031500"),
+		limited("rs-5", "catchments_01031500"),
+	]
+}
+
+/** A busy session: tool output, workspace files and files the user loaded, with one duplicated run. */
+export const manyLayers = (): MapLayer[] => {
+	const tool = (i: number, name: string, over: Record<string, string> = {}, id = `ml-t${i}`) =>
+		polygonLayer(
+			id,
+			name,
+			{
+				tool: "delineate_watershed",
+				_run_id: `run-${i}a1f.1`,
+				provenance_path: `/fixture/provenance/ml-t${i}.json`,
+				...over,
+			},
+			["#1f78b4", "#33a02c", "#e31a1c", "#ff7f00", "#6a3d9a"][i % 5],
+		)
+	const file = (i: number, source: "workspace" | "user", name: string) =>
+		polygonLayer(
+			`ml-${source[0]}${i}`,
+			name,
+			{ source, path: `data/${name}.geojson` },
+			["#a6cee3", "#b2df8a", "#fb9a99"][i % 3],
+		)
+	return [
+		tool(0, "watershed_01031500"),
+		tool(1, "watershed_01013500"),
+		tool(2, "watershed_01022500"),
+		tool(2, "watershed_01022500", {}, "ml-t2-restored"),
+		tool(3, "basin_clip_01047000"),
+		rasterLayer(),
+		file(0, "workspace", "huc8_boundaries"),
+		file(1, "workspace", "study_area"),
+		file(2, "workspace", "stations_snapped"),
+		file(0, "user", "my_sites"),
+		file(1, "user", "dams_nid_subset"),
+	]
+}
+
+/** Two sketches (an area and a line) as the host returns them next to the pins: the tracker cards in the Draw panel. */
+export const fixtureSketches = (): Record<string, unknown>[] =>
+	[
+		{
+			id: "fx-sketch-1",
+			name: "Study area",
+			notes: "Outer boundary of the low-flow study.",
+			type: "polygon",
+			geometry: {
+				type: "Polygon",
+				coordinates: [
+					[
+						[-90.2, 38.85],
+						[-89.7, 38.85],
+						[-89.7, 39.2],
+						[-90.2, 39.2],
+						[-90.2, 38.85],
+					],
+				],
+			},
+			status: "in_progress",
+			priority: "high",
+			tags: ["low-flow", "draft"],
+		},
+		{
+			id: "fx-sketch-2",
+			name: "Transect to gauge",
+			notes: "",
+			type: "line",
+			geometry: {
+				type: "LineString",
+				coordinates: [
+					[-90.1, 38.9],
+					[-89.9, 38.85],
+				],
+			},
+			status: "open",
+			priority: null,
+			tags: [],
+		},
+	].map((s) => ({
+		aiPrompt: "",
+		color: "#2d9f6f",
+		images: [],
+		collectionIds: [],
+		createdAt: "2026-01-01T00:00:00.000Z",
+		updatedAt: "2026-01-01T00:00:00.000Z",
+		...s,
+	}))
+
+/** One saved transect, in the key the Transect panel reads. */
+export const TRANSECTS_STORAGE_KEY = "aihydro.map.transects.v1"
+export const fixtureTransectsJson = (): string =>
+	JSON.stringify([
+		{
+			id: "fx-transect-1",
+			name: "Gauge to outlet",
+			notes: "Check the bank slope.",
+			aiPrompt: "",
+			geometry: {
+				type: "LineString",
+				coordinates: [
+					[-90.2, 38.9],
+					[-89.95, 38.95],
+					[-89.8, 39.05],
+				],
+			},
+			color: "#f97316",
+			tags: [],
+			collectionIds: [],
+			status: "open",
+			priority: null,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		},
+	])

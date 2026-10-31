@@ -32,12 +32,26 @@ import {
 import { finalAnswerTask, mcpCallTask, plainTextTask, refusalTask, taskItem } from "./fixtures/chat"
 import { approvalClaims, claim, driftClaims, FIXTURE_SESSION, statusClaims } from "./fixtures/claims"
 import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/experiments"
-import { basinPolygon, featureLayers, fixturePins, framedWorkspace, gaugePoint, MAP_STORAGE_KEY } from "./fixtures/map"
+import {
+	basinPolygon,
+	featureLayers,
+	fixturePins,
+	fixtureSketches,
+	fixtureTransectsJson,
+	framedWorkspace,
+	gaugePoint,
+	longNameLayers,
+	MAP_STORAGE_KEY,
+	manyLayers,
+	restoredLayers,
+	TRANSECTS_STORAGE_KEY,
+} from "./fixtures/map"
 import { fixtureInstalledSkills, fixtureMarketplaceSkills, fixtureMcpMarketplace } from "./fixtures/nav"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
 import * as tx from "./fixtures/transcripts"
 import { MapBannerVariantsScreen } from "./MapBannerVariantsScreen"
+import { MapIdentifyScreen } from "./MapIdentifyScreen"
 import { PrimitivesScreen } from "./PrimitivesScreen"
 import type { ScreenDef, ScreenStep } from "./types"
 
@@ -100,12 +114,28 @@ const mapScreen = (id: string, title: string, extra: Partial<ScreenDef> = {}): S
 	...extra,
 })
 
-/** The extension host's answer to "which pins does this project have": the fixture pins, optionally as imported. */
+/**
+ * The extension host's answer to "which pins does this project have": the fixture pins, optionally as imported. It also
+ * answers saves the way the host does: `save` is "ack" (acknowledges the numbered save), "refuse" (asks the map to
+ * reload, as it does for a project that is not open; the map reloads the pins and closes the card) or "silent" (never
+ * answers: the card reads Saving, and Not saved once ten seconds have passed).
+ */
 const pinsHost =
-	(imported = false): ScreenDef["onMessage"] =>
+	(imported = false, save: "ack" | "refuse" | "silent" = "ack", sketches = false): ScreenDef["onMessage"] =>
 	(msg, reply) => {
+		if (msg.type === "aihydro-map-save-annotations") {
+			if (save === "ack") {
+				const ids = (Array.isArray(msg.annotations) ? msg.annotations : []).map((a: { id?: string }) => a?.id)
+				reply({ type: "aihydro-map-save-ack", projectKey: msg.projectKey, saveSeq: msg.saveSeq, ids })
+			} else if (save === "refuse") {
+				reply({ type: "aihydro-map-pins-reload" })
+			}
+			return
+		}
 		if (msg.type !== "aihydro-map-load-annotations") return
-		const annotations = fixturePins().map((pin) => (imported ? { ...pin, imported: true } : pin))
+		const annotations = [...fixturePins(), ...(sketches ? fixtureSketches() : [])].map((pin) =>
+			imported ? { ...pin, imported: true } : pin,
+		)
 		reply({
 			type: "aihydro-map-load-annotations-result",
 			requestId: msg.requestId,
@@ -1157,6 +1187,14 @@ export const screens: ScreenDef[] = [
 		surface: "editor",
 		render: () => <MapBannerVariantsScreen />,
 	},
+	{
+		id: "map-identify-card",
+		title: "Identify card with two features, a click point, a raster reading and the agent actions",
+		group: "map",
+		surface: "editor",
+		render: () => <MapIdentifyScreen />,
+		expectVisible: ['[aria-label="Feature inspector"]'],
+	},
 	mapScreen("map-error-imagery", "Map with every basemap tile failing (alert, Retry imagery)", { layers: [basinPolygon] }),
 	mapScreen("map-error-partial-tiles", "Map with one basemap tile missing (quiet note, no alert)", { layers: [basinPolygon] }),
 	mapScreen("map-empty-panel-open", "No layers with a tool panel open (no empty-state card)", {
@@ -1164,7 +1202,7 @@ export const screens: ScreenDef[] = [
 	}),
 	mapScreen("map-sync-hydrating", "Saved layers still restoring (no empty-state card)", { mapHydrating: true }),
 	mapScreen("map-sync-loading", "Layer sync still loading (no empty-state card)", { mapConnection: "loading" }),
-	// Ribbon badge counts visible layers only (2 of 4 shown); the tooltip and panel header read "N visible · M hidden".
+	// Ribbon badge counts visible layers only (2 of 4 shown); the tooltip reads "N visible · M hidden" and the Layers toolbar shows the counts.
 	mapScreen("map-layer-badge-counts", "Layer badge counts visible layers only", {
 		layers: featureLayers().map((layer, index) => (index % 2 === 1 ? { ...layer, visible: false } : layer)),
 	}),
@@ -1177,11 +1215,59 @@ export const screens: ScreenDef[] = [
 		layers: featureLayers(),
 		steps: [
 			...openTool("Layer manager"),
-			{ click: 'button[title="Show details"]', nth: 2 },
+			{ click: 'button.map-layer-name:has-text("river lines")' },
+			{ click: 'button.map-chip:text-is("Details")' },
 			{ wait: 300 },
 			{ click: 'button:text-is("Provenance")' },
 			{ wait: 300 },
 			{ scroll: "text=No provenance record linked" },
+		],
+	}),
+	// Layers panel (polish-map): one compact row per layer, grouped by origin; selecting a row opens its drawer.
+	mapScreen("map-layers-selected", "Layers: a selected row opens opacity, style, attributes and details", {
+		layers: featureLayers(),
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("Synthetic basin")' }, { wait: 300 }],
+		expectVisible: ['[aria-label^="Settings for"]'],
+	}),
+	mapScreen("map-layers-menu-open", "Layers: the row overflow menu open (zoom, style, save, copy run ID, move, remove)", {
+		layers: featureLayers(),
+		steps: [...openTool("Layer manager"), { click: 'button[aria-label^="Actions for Synthetic basin"]' }, { wait: 300 }],
+		// The first item has focus once the menu is placed (it is hidden while it measures, and a hidden element cannot focus).
+		expectVisible: ['[role="menu"]', '[role="menuitem"]:focus'],
+	}),
+	mapScreen("map-layers-long-names", "Layers: long names wrap to two lines instead of truncating", {
+		layers: longNameLayers(),
+		steps: openTool("Layer manager"),
+	}),
+	mapScreen("map-layers-many", "Layers: a busy session grouped by origin, one run duplicated", {
+		layers: manyLayers(),
+		steps: openTool("Layer manager"),
+	}),
+	mapScreen(
+		"map-layers-restored",
+		"Layers: restored duplicates flagged with Remove duplicates, one group note for Limited layers",
+		{
+			layers: restoredLayers(),
+			steps: openTool("Layer manager"),
+			expectVisible: ['button:text-is("Remove duplicates")'],
+		},
+	),
+	mapScreen("map-layers-confirm-undo", "Layers: Remove duplicates confirmed, then the Undo bar", {
+		layers: restoredLayers(),
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button:text-is("Remove duplicates")' },
+			{ click: "button.map-chip--danger" },
+			{ wait: 400 },
+		],
+		expectVisible: ['button:text-is("Undo")'],
+	}),
+	mapScreen("map-layers-collapsed-group", "Layers: a group collapsed to its header", {
+		layers: manyLayers(),
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button.map-layer-group__head:has-text("Workspace files")' },
+			{ wait: 200 },
 		],
 	}),
 	mapScreen("map-time-slider", "Map time slider", {
@@ -1225,6 +1311,65 @@ export const screens: ScreenDef[] = [
 		steps: [...openTool("Pins"), { click: 'button[aria-label="Open pin Outlet candidate"]' }, { wait: 400 }],
 		expectVisible: ['[data-testid="pin-card"]'],
 		expectAbsent: ["text=__annotations-overlay", "text=#f97316"],
+	}),
+	// The pin card's save states: a draft, a save the host acknowledged, one it refused, and one still waiting.
+	mapScreen("map-pin-dirty", "Pin card with an edited note: Unsaved changes and a Save button", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: [
+			...openTool("Pins"),
+			{ click: 'button[aria-label="Open pin Outlet candidate"]' },
+			{
+				fill: [
+					'textarea[aria-label="Pin note"]',
+					"Upstream of the bridge. Snap to the NLDI flowline, then check the area.",
+				],
+			},
+			{ wait: 300 },
+		],
+		expectVisible: ['[data-save-state="dirty"]', 'button:text-is("Save")'],
+	}),
+	mapScreen("map-pin-saved", "Pin card after Save: Saved appears once the host acknowledged it", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: [
+			...openTool("Pins"),
+			{ click: 'button[aria-label="Open pin Outlet candidate"]' },
+			{
+				fill: [
+					'textarea[aria-label="Pin note"]',
+					"Upstream of the bridge. Snap to the NLDI flowline, then check the area.",
+				],
+			},
+			{ click: 'button:text-is("Save")' },
+			{ wait: 500 },
+		],
+		expectVisible: ['[data-save-state="saved"]'],
+	}),
+	mapScreen("map-pin-saving", "Pin card after Save while the host has not answered yet: Saving, never Saved", {
+		layers: featureLayers(),
+		onMessage: pinsHost(false, "silent"),
+		steps: [
+			...openTool("Pins"),
+			{ click: 'button[aria-label="Open pin Outlet candidate"]' },
+			{ fill: ['textarea[aria-label="Pin note"]', "Upstream of the bridge."] },
+			{ click: 'button:text-is("Save")' },
+			{ wait: 500 },
+		],
+		expectVisible: ['[data-save-state="saving"]'],
+		expectAbsent: ['[data-save-state="saved"]'],
+	}),
+	mapScreen("map-pin-save-failed", "Pin card when the host never answered the save within 10 s: Not saved, Retry", {
+		layers: featureLayers(),
+		onMessage: pinsHost(false, "silent"),
+		steps: [
+			...openTool("Pins"),
+			{ click: 'button[aria-label="Open pin Outlet candidate"]' },
+			{ fill: ['textarea[aria-label="Pin note"]', "Upstream of the bridge."] },
+			{ click: 'button:text-is("Save")' },
+			{ wait: 10600 },
+		],
+		expectVisible: ['[data-save-state="failed"]', 'button:text-is("Retry")'],
 	}),
 	mapScreen("map-pins-imported-banner", "Pins from before projects, with the one-time Keep / Clear banner", {
 		layers: featureLayers(),
@@ -1271,7 +1416,86 @@ export const screens: ScreenDef[] = [
 		layers: featureLayers(),
 		steps: openTool("Measure"),
 	}),
+	// Resizable panels (X1-M3 / polish-map): a size the user chose is remembered per panel and per window state.
+	mapScreen("map-panel-docked-resized", "Layers panel docked, widened to 460 px (canvas gives up the width)", {
+		layers: featureLayers(),
+		storage: {
+			[MAP_STORAGE_KEY]: framedWorkspace(undefined, false, undefined, undefined, undefined, {
+				panelSizes: { layers: { docked: { width: 460 } } },
+			}),
+		},
+		steps: openTool("Layer manager"),
+	}),
+	mapScreen("map-panel-overlay-resized", "Pins panel floating, resized and moved by its edges", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		storage: {
+			[MAP_STORAGE_KEY]: framedWorkspace(undefined, false, undefined, undefined, undefined, {
+				panelSizes: { annotations: { overlay: { width: 360, height: 300, right: 40, top: 56 } } },
+			}),
+		},
+		steps: openTool("Pins"),
+	}),
+	mapScreen("map-panel-resize-keyboard", "Panel widened from the keyboard: arrow keys on the focused separator", {
+		layers: featureLayers(),
+		onMessage: pinsHost(),
+		steps: [
+			...openTool("Pins"),
+			{ click: '[role="separator"][aria-label^="Resize pins panel"]' },
+			{ press: "Shift+ArrowLeft" },
+			{ wait: 300 },
+		],
+	}),
 	// No layers: Swipe, Time and Flood are listed but disabled, each with its reason.
+	// The other rail panels and in-canvas chrome (polish-map audit): each opened the way a user opens it.
+	mapScreen("map-search-panel", "Search panel: field, coordinates and bookmarks", {
+		layers: featureLayers(),
+		steps: openTool("Search"),
+	}),
+	mapScreen("map-draw-panel", "Draw ROI panel: three shapes and the saved sketches", {
+		layers: featureLayers(),
+		steps: openTool("Draw ROI"),
+	}),
+	mapScreen("map-measure-panel", "Measure panel: distance and area", {
+		layers: featureLayers(),
+		steps: openTool("Measure"),
+	}),
+	mapScreen("map-reference-tab", "Layers > Reference tab: MERIT rivers, HUCs, gauges and dams", {
+		layers: featureLayers(),
+		steps: [...openTool("Layer manager"), { click: "#map-chrome-tab-hydrography" }, { wait: 500 }],
+	}),
+	// The remaining panels: tracker cards under Draw, the Transect panel with a saved transect, workspace files to add.
+	mapScreen("map-draw-sketches", "Draw ROI with two sketches: tracker cards, collections and filters", {
+		layers: featureLayers(),
+		onMessage: pinsHost(false, "ack", true),
+		steps: [...openTool("Draw ROI"), { wait: 300 }],
+	}),
+	mapScreen("map-transect-saved", "Transect panel with one saved transect", {
+		layers: featureLayers(),
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace(), [TRANSECTS_STORAGE_KEY]: fixtureTransectsJson() },
+		steps: openTool("Transect profile", true),
+	}),
+	mapScreen("map-layers-workspace-files", "Layers with workspace files that can be added", {
+		layers: featureLayers(),
+		workspaceFiles: [
+			{
+				relativePath: "data/huc8_boundaries.geojson",
+				name: "huc8_boundaries.geojson",
+				extension: ".geojson",
+				workspaceFolder: "/fixture",
+				folderName: "fixture",
+			},
+			{
+				relativePath: "roi/active.json",
+				name: "active.json",
+				extension: ".json",
+				workspaceFolder: "/fixture",
+				folderName: "fixture",
+			},
+		],
+		steps: openTool("Layer manager"),
+		expectVisible: ['[aria-label="Workspace files you can add"]'],
+	}),
 	mapScreen("map-more-flyout", "More menu with Swipe, Time and Flood disabled and why", {
 		steps: [
 			{ click: 'button[aria-label^="Map tools"]', optional: true },
