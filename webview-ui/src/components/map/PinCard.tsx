@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import type { MapAnnotation } from "./annotationStorage"
+import { actionLabel, MAP_ACTIONS } from "./mapActions"
 import { MAP_Z } from "./mapZ"
 import { type PinSaveStatus, pinSavePhase } from "./pinSaveStatus"
 import { formatPinCoords, pinCoords } from "./pins"
@@ -265,11 +266,11 @@ const PinCard: React.FC<PinCardProps> = ({
 			/>
 
 			<div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-				{action("sparkle", "Ask AI-Hydro", onAsk, accent)}
-				{action("symbol-field", "Delineate here", onDelineate)}
+				{action(MAP_ACTIONS.ask.icon, actionLabel("ask"), onAsk, accent)}
+				{action(MAP_ACTIONS.delineate.icon, actionLabel("delineate"), onDelineate)}
 				{action(
 					copied ? "check" : "copy",
-					copied ? "Copied" : "Copy coordinates",
+					copied ? "Copied" : actionLabel("copy-coords"),
 					() => {
 						onCopy()
 						setCopied(true)
@@ -277,7 +278,7 @@ const PinCard: React.FC<PinCardProps> = ({
 					},
 					undefined,
 				)}
-				{action("trash", "Delete", onDelete, danger)}
+				{action(MAP_ACTIONS["remove-pin"].icon, actionLabel("remove-pin"), onDelete, danger)}
 			</div>
 			<div style={{ color: muted, fontSize: 11 }}>Your note. Not a measurement.</div>
 			<div
