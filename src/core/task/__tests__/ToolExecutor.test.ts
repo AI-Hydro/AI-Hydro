@@ -435,22 +435,33 @@ describe("ToolExecutor gate binding (model-invoked output is never a study id)",
 		;(state.boundStudyId === undefined).should.equal(true)
 	})
 
-	describe("MCP failures count as failures", () => {
+	describe("MCP failures are known from what the handler observed", () => {
 		const { ToolExecutor } = require("../ToolExecutor")
-		const failed = (c: string): boolean => ToolExecutor.isToolErrorResult(c)
-		it("a thrown MCP call, an isError result and a structured error body are failures", () => {
-			// Shapes seen in the owner's real task 1793359576182 (T2).
-			failed("Error executing MCP tool: MCP error -32001: Request timed out").should.equal(true)
-			failed(
-				'Error:\n{"error": true, "code": "GAUGE_ID_NOT_APPLICABLE", "message": "gauge_id applies to USGS gauges"}',
-			).should.equal(true)
-			failed('{"error": true, "code": "X", "message": "m"}').should.equal(true)
+		const mcpBlock = { name: "use_mcp_tool", params: { server_name: "x", tool_name: "t" } }
+		const exec = (mcpCallFailed: boolean | undefined) => {
+			const ex = Object.create(ToolExecutor.prototype)
+			ex.taskState = { mcpCallFailed, recentToolErrors: [], consecutiveMistakeCount: 0 }
+			return ex
+		}
+		it("a failure the handler observed is recorded, whatever the text looks like", () => {
+			const ex = exec(true)
+			ex.recordIfToolError("Something the server said", mcpBlock)
+			ex.taskState.recentToolErrors.should.have.length(1)
 		})
-		it("a successful result that merely quotes such text is not a failure", () => {
-			failed('{"data": {"note": "the field error: true is documented"}}').should.equal(false)
-			failed("Contents of log.txt:\nError:\nsomething in a file").should.equal(false)
-			failed('{"data": {"q_mean_cms": 44.4}, "_run_id": "r"}').should.equal(false)
-			failed(`${"x".repeat(400)} Error executing MCP tool: far past the head`).should.equal(false)
+		it("a call the handler saw succeed is not a failure even if its text starts like an error", () => {
+			const ex = exec(false)
+			ex.recordIfToolError("Error:\nthis is quoted file content", mcpBlock)
+			ex.taskState.recentToolErrors.should.have.length(0)
+			ex.resultFailed("Error:\nthis is quoted file content", mcpBlock).should.equal(false)
+		})
+		it("with no handler observation the old text markers still decide; other tools never read the flag", () => {
+			exec(undefined).resultFailed("The tool execution failed with the following error: x", mcpBlock).should.equal(true)
+			exec(true).resultFailed("fine", { name: "read_file", params: {} }).should.equal(false)
+		})
+		it("a failure never feeds the mistake count (an environmental failure must not halt a task)", () => {
+			const ex = exec(true)
+			ex.recordIfToolError("timeout", mcpBlock)
+			ex.taskState.consecutiveMistakeCount.should.equal(0)
 		})
 	})
 

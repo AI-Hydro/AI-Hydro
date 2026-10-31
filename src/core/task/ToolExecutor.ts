@@ -368,8 +368,6 @@ export class ToolExecutor {
 		"Missing value for required parameter",
 		"Invalid JSON argument used with",
 		"is blocked by the .aihydroignore",
-		// An MCP call that threw (a timeout, a dropped connection): the handler returns this text.
-		"Error executing MCP tool:",
 	]
 
 	/**
@@ -378,20 +376,27 @@ export class ToolExecutor {
 	 */
 	static isToolErrorResult(content: string): boolean {
 		const head = content.slice(0, 300)
-		if (ToolExecutor.TOOL_ERROR_MARKERS.some((marker) => head.includes(marker))) {
-			return true
+		return ToolExecutor.TOOL_ERROR_MARKERS.some((marker) => head.includes(marker))
+	}
+
+	/**
+	 * Whether a tool call failed. An MCP call is judged by what the handler observed (`isError`, a thrown call, a
+	 * structured error body), not by its text; every other result by the stable text markers. Environmental failures (a
+	 * timeout, a down server) are recorded for the UI and the nudge, and deliberately do NOT feed the mistake count: they
+	 * must not halt a task.
+	 */
+	private resultFailed(content: ToolResponse, block: ToolUse): boolean {
+		if (block.name === AiHydroDefaultTool.MCP_USE && this.taskState.mcpCallFailed !== undefined) {
+			return this.taskState.mcpCallFailed || (typeof content === "string" && ToolExecutor.isToolErrorResult(content))
 		}
-		// An MCP server's own failure result: the handler prefixes an `isError` result with "Error:\n", and a server
-		// can also return a structured body {"error": true, ...}. Anchored at the start, so a successful result that
-		// merely contains such text (a file that quotes one) is not marked failed.
-		return /^Error:\s*\n/.test(head) || /^\s*\{\s*"error"\s*:\s*true\b/.test(head)
+		return typeof content === "string" && ToolExecutor.isToolErrorResult(content)
 	}
 
 	private recordIfToolError(content: ToolResponse, block: ToolUse) {
 		if (typeof content !== "string") {
 			return
 		}
-		if (!ToolExecutor.isToolErrorResult(content)) {
+		if (!this.resultFailed(content, block)) {
 			return
 		}
 		const entry = `[${block.name}] ${content.replace(/\s+/g, " ").trim()}`.slice(0, 300)
@@ -405,8 +410,8 @@ export class ToolExecutor {
 	 * Record on the call's UI row that its result came back, so the transcript can say "ran" or "failed" from evidence
 	 * instead of inferring it from the approval. A denied call never ran, so it is not marked.
 	 */
-	private async recordExecution(content: ToolResponse): Promise<void> {
-		const failed = typeof content === "string" && ToolExecutor.isToolErrorResult(content)
+	private async recordExecution(content: ToolResponse, block: ToolUse): Promise<void> {
+		const failed = this.resultFailed(content, block)
 		const messages = this.messageStateHandler.getAiHydroMessages()
 		const index = callRowIndexToRecord(messages)
 		if (index >= 0) {
@@ -420,7 +425,7 @@ export class ToolExecutor {
 			block.params.tool_name === START_SESSION_TOOL_NAME &&
 			isAiHydroServerName(block.params.server_name) &&
 			typeof content === "string" &&
-			!ToolExecutor.isToolErrorResult(content)
+			!this.resultFailed(content, block)
 		) {
 			noteSessionStarted(this.taskState.answerAuditGate)
 		}
@@ -430,7 +435,7 @@ export class ToolExecutor {
 			block.params.tool_name === CHAT_STATUS_TOOL_NAME &&
 			isAiHydroServerName(block.params.server_name) &&
 			typeof content === "string" &&
-			!ToolExecutor.isToolErrorResult(content)
+			!this.resultFailed(content, block)
 		) {
 			noteBindingProbed(this.taskState.answerAuditGate)
 		}
@@ -438,7 +443,7 @@ export class ToolExecutor {
 			block.params.tool_name === REBIND_CHAT_TOOL &&
 			isAiHydroServerName(block.params.server_name) &&
 			typeof content === "string" &&
-			!ToolExecutor.isToolErrorResult(content)
+			!this.resultFailed(content, block)
 		) {
 			noteBindingChanged(this.taskState.answerAuditGate)
 		}
@@ -447,7 +452,9 @@ export class ToolExecutor {
 	private pushToolResult = (content: ToolResponse, block: ToolUse) => {
 		this.recordIfToolError(content, block)
 		this.noteStartSession(content, block)
-		void this.recordExecution(content).catch((error) => console.error("Failed to record tool execution outcome", error))
+		void this.recordExecution(content, block).catch((error) =>
+			console.error("Failed to record tool execution outcome", error),
+		)
 		// Use the ToolResultUtils to properly format and push the tool result
 		ToolResultUtils.pushToolResult(
 			content,
