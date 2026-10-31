@@ -117,12 +117,12 @@ describe("LayerPanel", () => {
 		expect(writeText).toHaveBeenCalledWith("delineate_watershed")
 	})
 
-	it("Move up is disabled with its reason on the first layer of a group", () => {
+	it("Move up is disabled with its reason on the layer on top of the map", () => {
 		render(<LayerPanelContent {...baseProps()} />)
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for watershed_01031500/ }))
 		const up = screen.getByRole("menuitem", { name: /Move up/ })
 		expect(up).toHaveAttribute("aria-disabled", "true")
-		expect(up.textContent).toMatch(/Already first/)
+		expect(up.textContent).toMatch(/Already on top of the map/)
 	})
 
 	it("removing a layer is one menu action with Undo, and Undo puts it back through the host", async () => {
@@ -158,5 +158,84 @@ describe("LayerPanel", () => {
 		expect(container.querySelector(".map-layer-group__note")?.textContent).toMatch(/Limited layer/)
 		// Missing provenance on both rows is a warning, so each row still carries its own.
 		expect(container.querySelectorAll(".map-layer-flag--warn").length).toBe(2)
+	})
+
+	it("shows every warning in Details, readable without hover", () => {
+		state.layers = [
+			poly("a", "big", {
+				display_mode: "preview",
+				preview_feature_count: "10",
+				original_feature_count: "500",
+				simplified: "true",
+				source_status: "source_changed",
+			}),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: /^Warning for big/ }))
+		const list = screen.getByRole("list", { name: "Warnings" })
+		expect(list).toHaveTextContent("Rendering a preview: 10 of 500")
+		expect(list).toHaveTextContent("Auto-simplified")
+		expect(list).toHaveTextContent("source file changed")
+	})
+
+	it("Rename from the menu leaves the name field focused after the menu's focus timer", async () => {
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for watershed_01031500/ }))
+		fireEvent.click(screen.getByRole("menuitem", { name: /Rename/ }))
+		const input = screen.getByRole("textbox", { name: "Layer display name" })
+		await new Promise((r) => setTimeout(r, 30))
+		expect(document.activeElement).toBe(input)
+	})
+
+	it("scrolling inside the open menu keeps it open; scrolling elsewhere closes it", () => {
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for gauge/ }))
+		const menu = screen.getByRole("menu")
+		fireEvent.scroll(menu)
+		expect(screen.getByRole("menu")).toBeInTheDocument()
+		fireEvent.scroll(document.body)
+		expect(screen.queryByRole("menu")).toBeNull()
+	})
+
+	it("Undo gives back opacity and clustering, and back-to-back removals each stay undoable", async () => {
+		state.layers = [poly("a", "one"), poly("b", "two", { _run_id: "run-2.1" })]
+		const props = { ...baseProps(), layerOpacities: { a: 0.4 }, clusterLayerIds: new Set(["a"]), onClusterToggle: vi.fn() }
+		const { rerender } = render(<LayerPanelContent {...props} />)
+		const remove = async (name: string) => {
+			fireEvent.click(screen.getByRole("button", { name: `Actions for ${name}` }))
+			fireEvent.click(screen.getByRole("menuitem", { name: /Remove layer/ }))
+			await waitFor(() => expect(state.layers.find((l) => l.name === name)).toBeUndefined())
+			rerender(<LayerPanelContent {...props} />)
+		}
+		await remove("one")
+		await remove("two")
+		fireEvent.click(await screen.findByRole("button", { name: "Undo" }))
+		await waitFor(() => expect(addMapLayer).toHaveBeenCalledTimes(1))
+		rerender(<LayerPanelContent {...props} />)
+		fireEvent.click(await screen.findByRole("button", { name: "Undo" }))
+		await waitFor(() => expect(addMapLayer).toHaveBeenCalledTimes(2))
+		expect(props.onOpacityChange).toHaveBeenCalledWith("a", 0.4)
+		expect(props.onClusterToggle).toHaveBeenCalledWith("a", true)
+	})
+
+	it("a layer the host refuses to remove stays in the list", async () => {
+		removeMapLayer.mockImplementationOnce(() => Promise.reject(new Error("no")))
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for gauge/ }))
+		fireEvent.click(screen.getByRole("menuitem", { name: /Remove layer/ }))
+		await screen.findByText(/Could not remove the layer/)
+		expect(state.layers.map((l) => l.id)).toContain("b")
+	})
+
+	it("a collapsed group still counts its warnings, and Move down crosses groups", () => {
+		state.layers = [poly("a", "x", { provenance_path: "" }), poly("b", "y", { source: "user", tool: "", _run_id: "" })]
+		const props = baseProps()
+		render(<LayerPanelContent {...props} />)
+		fireEvent.click(screen.getByRole("button", { name: /Tool output/ }))
+		expect(screen.getByRole("img", { name: "1 layer with warnings" })).toBeInTheDocument()
+		fireEvent.click(screen.getByRole("button", { name: /Tool output/ }))
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for x/ }))
+		fireEvent.click(screen.getByRole("menuitem", { name: /Move down/ }))
+		expect(props.onReorder).toHaveBeenCalledWith(["b", "a"])
 	})
 })

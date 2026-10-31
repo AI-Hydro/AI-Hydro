@@ -331,7 +331,9 @@ export const LayerInspector: React.FC<{
 	fg: string
 	/** Called after a value is copied, with what was copied ("tool name", "run ID"). */
 	onCopied?: (what: string) => void
-}> = ({ layer, intelligence, niceMeta, border, fg, onCopied }) => {
+	/** Every warning the row's icon stands for, in full (the tooltip is not the only place to read them). */
+	warnings?: string[]
+}> = ({ layer, intelligence, niceMeta, border, fg, onCopied, warnings }) => {
 	const [tab, setTab] = useState<"overview" | "data" | "provenance">("overview")
 	const meta = layer.metadata ?? {}
 	const all = allMetadata(layer)
@@ -401,17 +403,20 @@ export const LayerInspector: React.FC<{
 								...niceMeta.slice(0, 5),
 							]}
 						/>
-						{intelligence.warnings.length > 0 && (
-							<div
+						{(warnings ?? intelligence.warnings.map(warningText)).length > 0 && (
+							<ul
+								aria-label="Warnings"
 								style={{
-									marginTop: 8,
-									padding: "5px 7px",
+									margin: "8px 0 0",
+									padding: "5px 7px 5px 22px",
 									borderRadius: 4,
 									background: "rgba(255, 190, 80, 0.10)",
 									color: "var(--vscode-editorWarning-foreground, #cca700)",
 								}}>
-								{intelligence.warnings.map(warningText).join(" · ")}
-							</div>
+								{(warnings ?? intelligence.warnings.map(warningText)).map((w) => (
+									<li key={w}>{w}</li>
+								))}
+							</ul>
 						)}
 					</>
 				)}

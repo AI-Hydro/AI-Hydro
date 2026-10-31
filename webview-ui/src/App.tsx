@@ -1,5 +1,5 @@
-import type { Boolean, EmptyRequest } from "@shared/proto/cline/common"
-import { Component, lazy, type ReactNode, Suspense, useEffect } from "react"
+import { type Boolean, type EmptyRequest, StringRequest } from "@shared/proto/cline/common"
+import { Component, lazy, type ReactNode, Suspense, useEffect, useRef } from "react"
 import ChatView from "./components/chat/ChatView"
 import ConnectorsView from "./components/connectors/ConnectorsView"
 import HistoryView from "./components/history/HistoryView"
@@ -16,6 +16,7 @@ import WelcomeView from "./components/welcome/WelcomeView"
 import { useExtensionState } from "./context/ExtensionStateContext"
 import { Providers } from "./Providers"
 import { UiServiceClient } from "./services/grpc-client"
+import { isChatRunning, nothingHasFocus } from "./utils/chatRunning"
 
 // Lazy-loaded: a crash while rendering one of these reproducibility panels
 // must not blank the rest of the webview (chat, map, etc. share this bundle).
@@ -117,6 +118,7 @@ const AppContent = () => {
 		hideConnectors,
 		hideSkills,
 		hideAnnouncement,
+		aihydroMessages,
 	} = useExtensionState()
 
 	useEffect(() => {
@@ -133,6 +135,36 @@ const AppContent = () => {
 				})
 		}
 	}, [shouldShowAnnouncement, setShouldShowAnnouncement, setShowAnnouncement])
+
+	// Tell the host which view is showing (the view-title buttons toggle on it), and when a sub-view closes, put the
+	// keyboard back in the composer instead of dropping it on the page.
+	const sidebarView = showSettings
+		? "settings"
+		: showHistory
+			? "history"
+			: showMcp
+				? "mcp"
+				: showConnectors
+					? "connectors"
+					: showSkills
+						? "skills"
+						: showMap
+							? "map"
+							: "chat"
+	const previousView = useRef("chat")
+	useEffect(() => {
+		UiServiceClient.setSidebarView(StringRequest.create({ value: sidebarView })).catch(() => {})
+		// Not while a run is in progress (Escape in the composer stops it, and a double tap would end a long task),
+		// and not if something else already took the focus (the "Focus pending prompt" command lands on the approval).
+		if (sidebarView === "chat" && previousView.current !== "chat" && !isChatRunning(aihydroMessages)) {
+			requestAnimationFrame(() => {
+				if (nothingHasFocus()) {
+					window.dispatchEvent(new CustomEvent("focusChatInput"))
+				}
+			})
+		}
+		previousView.current = sidebarView
+	}, [sidebarView])
 
 	// Show loading screen with spinner
 	if (!didHydrateState) {

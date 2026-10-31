@@ -167,7 +167,8 @@ const CLOSED_DRAWER: DrawerView = { style: false, attrs: false, details: false }
 /** A removal the user can take back. */
 interface UndoEntry {
 	label: string
-	layers: { layer: MapLayer; visible: boolean }[]
+	/** The layer and what the user had set on it, so Undo gives back more than the geometry. */
+	layers: { layer: MapLayer; visible: boolean; opacity?: number; clustered: boolean }[]
 	order: string[]
 }
 const UNDO_MS = 10_000
@@ -198,11 +199,16 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [drawer, setDrawer] = useState<DrawerView>(CLOSED_DRAWER)
 	const [symbologyMode, setSymbologyMode] = useState<"basic" | "graduated">("basic")
-	const [confirm, setConfirm] = useState<null | { kind: "all" } | { kind: "duplicates"; count: number }>(null)
+	const [confirm, setConfirm] = useState<null | { kind: "all" } | { kind: "duplicates"; names: string[] }>(null)
 	const [loadStatus, setLoadStatus] = useState<{ kind: "idle" | "ok" | "err"; msg: string }>({ kind: "idle", msg: "" })
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<LayerOrigin>>(new Set())
-	const [undo, setUndo] = useState<UndoEntry | null>(null)
-	const [drag, setDrag] = useState<{ id: string; origin: LayerOrigin } | null>(null)
+	// Back-to-back removals each stay undoable (most recent first); the whole stack expires together.
+	const [undoStack, setUndoStack] = useState<UndoEntry[]>([])
+	const undo = undoStack[undoStack.length - 1] ?? null
+	const stackRef = useRef<UndoEntry[]>([])
+	/** Raster values of removed layers: kept until the undo window closes, so Undo gets the values back too. */
+	const staleRasters = useRef<Set<string>>(new Set())
+	const [drag, setDrag] = useState<{ id: string } | null>(null)
 	const [drop, setDrop] = useState<{ id: string; pos: "above" | "below" } | null>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const undoTimer = useRef<number | undefined>(undefined)
@@ -210,7 +216,13 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	useEffect(() => {
 		saveMapWorkspace({ layerAliases })
 	}, [layerAliases])
-	useEffect(() => () => window.clearTimeout(undoTimer.current), [])
+	useEffect(
+		() => () => {
+			window.clearTimeout(undoTimer.current)
+			for (const id of staleRasters.current) rasterCache.delete(id)
+		},
+		[],
+	)
 
 	const displayNames = useMemo(() => buildDisplayNames(layers, layerAliases), [layers, layerAliases])
 	const visibleCount = useMemo(() => layers.filter((layer) => visibleLayerIds.has(layer.id)).length, [layers, visibleLayerIds])
@@ -344,94 +356,116 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	// ── removal, with undo ────────────────────────────────────────────────
 
-	const offerUndo = useCallback((entry: UndoEntry) => {
-		window.clearTimeout(undoTimer.current)
-		setUndo(entry)
-		undoTimer.current = window.setTimeout(() => setUndo(null), UNDO_MS)
+	/** The window closes: nothing can be undone any more, so the raster values of removed layers can go. */
+	const expireUndo = useCallback(() => {
+		for (const id of staleRasters.current) rasterCache.delete(id)
+		staleRasters.current.clear()
+		stackRef.current = []
+		setUndoStack([])
 	}, [])
+	const armUndoTimer = useCallback(() => {
+		window.clearTimeout(undoTimer.current)
+		undoTimer.current = window.setTimeout(expireUndo, UNDO_MS)
+	}, [expireUndo])
+	const pushUndo = useCallback(
+		(entry: UndoEntry) => {
+			stackRef.current = [...stackRef.current.slice(-4), entry]
+			setUndoStack(stackRef.current)
+			armUndoTimer()
+		},
+		[armUndoTimer],
+	)
+	const capture = (layer: MapLayer) => ({
+		layer,
+		visible: visibleLayerIds.has(layer.id),
+		opacity: layerOpacities[layer.id],
+		clustered: !!clusterLayerIds?.has(layer.id),
+	})
 
-	/** Remove layers from the map and the host. A failed host call puts that layer back and says so. */
+	/**
+	 * Remove layers. The host is asked first and the panel changes only for what it accepted, so the two never disagree:
+	 * a layer the host refused is still on the map and still in the list, and the message says so.
+	 */
 	const removeLayers = async (targets: MapLayer[], label: string) => {
 		if (targets.length === 0) return
 		const previousOrder = orderedLayers.map((l) => l.id)
-		const entry: UndoEntry = {
-			label,
-			layers: targets.map((layer) => ({ layer, visible: visibleLayerIds.has(layer.id) })),
-			order: previousOrder,
-		}
-		const gone = new Set(targets.map((l) => l.id))
-		for (const layer of targets) {
+		const captured = targets.map(capture)
+		const removed: MapLayer[] = []
+		let failed = 0
+		await Promise.all(
+			targets.map(async (layer) => {
+				try {
+					await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId: layer.id }))
+					removed.push(layer)
+				} catch (err) {
+					console.error("Failed to remove layer:", err)
+					failed++
+				}
+			}),
+		)
+		if (failed > 0) say("err", `Could not remove ${failed === 1 ? "the layer" : `${failed} layers`}.`, 6000)
+		if (removed.length === 0) return
+		const gone = new Set(removed.map((l) => l.id))
+		for (const layer of removed) {
 			removeLayer(layer.id)
-			rasterCache.delete(layer.id)
+			staleRasters.current.add(layer.id)
 			onVisibilityChange(layer.id, false)
 		}
 		onReorder(previousOrder.filter((id) => !gone.has(id)))
 		if (selectedId && gone.has(selectedId)) select(null)
 		if (renamingId && gone.has(renamingId)) setRenamingId(null)
-		const failed: MapLayer[] = []
-		await Promise.all(
-			targets.map(async (layer) => {
-				try {
-					await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId: layer.id }))
-				} catch (err) {
-					console.error("Failed to remove layer:", err)
-					failed.push(layer)
-				}
-			}),
-		)
-		for (const layer of failed) addLayer(layer)
-		if (failed.length > 0) {
-			say("err", `Could not remove ${failed.length === 1 ? "the layer" : `${failed.length} layers`}.`, 6000)
-			entry.layers = entry.layers.filter((e) => !failed.includes(e.layer))
-		}
-		if (entry.layers.length > 0) offerUndo(entry)
+		pushUndo({ label, layers: captured.filter((c) => gone.has(c.layer.id)), order: previousOrder })
 	}
 
+	/** Undo the latest removal. The host is asked first; only layers it took back reappear in the panel. */
 	const handleUndo = async () => {
-		const entry = undo
+		const entry = stackRef.current[stackRef.current.length - 1]
 		if (!entry) return
-		window.clearTimeout(undoTimer.current)
-		setUndo(null)
+		stackRef.current = stackRef.current.slice(0, -1)
+		setUndoStack(stackRef.current)
+		if (stackRef.current.length > 0) armUndoTimer()
+		else window.clearTimeout(undoTimer.current)
 		const failed: string[] = []
-		for (const { layer, visible } of entry.layers) {
-			addLayer(layer)
+		const back = new Set<string>()
+		for (const c of entry.layers) {
 			try {
-				await MapServiceClient.addMapLayer(AddMapLayerRequest.create({ layer, replaceExisting: true }))
-				onVisibilityChange(layer.id, visible)
+				await MapServiceClient.addMapLayer(AddMapLayerRequest.create({ layer: c.layer, replaceExisting: true }))
 			} catch (err) {
 				console.error("Failed to restore layer:", err)
-				failed.push(layer.name || layer.id)
+				failed.push(c.layer.name || c.layer.id)
+				continue
 			}
+			back.add(c.layer.id)
+			staleRasters.current.delete(c.layer.id)
+			addLayer(c.layer)
+			onVisibilityChange(c.layer.id, c.visible)
+			if (c.opacity !== undefined) onOpacityChange?.(c.layer.id, c.opacity)
+			if (c.clustered) onClusterToggle?.(c.layer.id, true)
 		}
-		onReorder(entry.order)
+		const present = new Set([...orderIds, ...back])
+		onReorder([...entry.order.filter((id) => present.has(id)), ...orderIds.filter((id) => !entry.order.includes(id))])
 		say(failed.length ? "err" : "ok", failed.length ? `Could not restore ${failed.join(", ")}.` : "Restored.", 4000)
 	}
 
 	const handleClearAll = async () => {
 		setConfirm(null)
 		const previous = [...layers]
-		clearLayers()
-		for (const layer of previous) {
-			rasterCache.delete(layer.id)
-		}
 		const previousOrder = orderedLayers.map((l) => l.id)
-		const visibleBefore = new Set(visibleLayerIds)
+		const captured = previous.map(capture)
+		try {
+			await MapServiceClient.clearMapLayers({})
+		} catch (err) {
+			console.error("Failed to clear layers:", err)
+			say("err", err instanceof Error ? err.message : "Failed to clear layers.", 6000)
+			return
+		}
+		clearLayers()
+		for (const layer of previous) staleRasters.current.add(layer.id)
 		onReorder([])
 		onHideAllLayers?.()
 		select(null)
 		setRenamingId(null)
-		try {
-			await MapServiceClient.clearMapLayers({})
-			offerUndo({
-				label: `Removed ${previous.length} layers`,
-				layers: previous.map((layer) => ({ layer, visible: visibleBefore.has(layer.id) })),
-				order: previousOrder,
-			})
-		} catch (err) {
-			console.error("Failed to clear layers:", err)
-			previous.forEach(addLayer)
-			say("err", err instanceof Error ? err.message : "Failed to clear layers.", 6000)
-		}
+		pushUndo({ label: `Removed ${previous.length} layers`, layers: captured, order: previousOrder })
 	}
 
 	const handleRemoveDuplicates = async () => {
@@ -442,17 +476,14 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	// ── order ─────────────────────────────────────────────────────────────
 
+	/** The map draws the list in this order: the first layer is on top, whatever group it is shown in. */
 	const orderIds = orderedLayers.map((l) => l.id)
-	const moveWithinGroup = (layer: MapLayer, dir: -1 | 1) => {
-		const group = groups.find((g) => g.layers.some((l) => l.id === layer.id))
-		if (!group) return
-		const ids = group.layers.map((l) => l.id)
-		const neighbour = ids[ids.indexOf(layer.id) + dir]
-		if (!neighbour) return
+	const moveLayer = (layer: MapLayer, dir: -1 | 1) => {
+		const i = orderIds.indexOf(layer.id)
+		const j = i + dir
+		if (i < 0 || j < 0 || j >= orderIds.length) return
 		const next = [...orderIds]
-		const a = next.indexOf(layer.id)
-		const b = next.indexOf(neighbour)
-		;[next[a], next[b]] = [next[b], next[a]]
+		;[next[i], next[j]] = [next[j], next[i]]
 		onReorder(next)
 	}
 
@@ -460,8 +491,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		setDrag(null)
 		setDrop(null)
 	}
-	const onRowDragOver = (e: React.DragEvent, layer: MapLayer, origin: LayerOrigin) => {
-		if (!drag || drag.origin !== origin || drag.id === layer.id) return
+	const onRowDragOver = (e: React.DragEvent, layer: MapLayer) => {
+		if (!drag || drag.id === layer.id) return
 		e.preventDefault()
 		e.dataTransfer.dropEffect = "move"
 		const rect = e.currentTarget.getBoundingClientRect()
@@ -502,14 +533,14 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	// ── menus ─────────────────────────────────────────────────────────────
 
-	const menuFor = (layer: MapLayer, displayName: string, group: MapLayer[]): OverflowItem[] => {
+	const menuFor = (layer: MapLayer, displayName: string): OverflowItem[] => {
 		const isRaster = layer.layerType === "raster"
 		const hasGeojson = !!layer.geojson && !isRaster
 		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
 		const provenancePath = layer.metadata?.provenance_path
 		const tool = layerTool(layer.metadata)
 		const run = layerRunId(layer.metadata)
-		const at = group.findIndex((l) => l.id === layer.id)
+		const rank = orderIds.indexOf(layer.id)
 		const items: (OverflowItem | false)[] = [
 			{ key: "zoom", label: "Zoom to layer", icon: "zoom-in", onSelect: () => onZoomToLayer?.(layer) },
 			{
@@ -610,15 +641,15 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				key: "up",
 				label: "Move up",
 				icon: "arrow-up",
-				disabledReason: at <= 0 ? "Already first in this group" : undefined,
-				onSelect: () => moveWithinGroup(layer, -1),
+				disabledReason: rank <= 0 ? "Already on top of the map" : undefined,
+				onSelect: () => moveLayer(layer, -1),
 			},
 			{
 				key: "down",
 				label: "Move down",
 				icon: "arrow-down",
-				disabledReason: at >= group.length - 1 ? "Already last in this group" : undefined,
-				onSelect: () => moveWithinGroup(layer, 1),
+				disabledReason: rank >= orderIds.length - 1 ? "Already at the bottom of the map" : undefined,
+				onSelect: () => moveLayer(layer, 1),
 			},
 			{ key: "d5", divider: true },
 			{
@@ -708,6 +739,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 					<output>{Math.round(opacity * 100)}%</output>
 				</label>
 				{!visible && <div className="map-layer-hint">Hidden. Show the layer to change its opacity.</div>}
+				<div className="map-layer-hint">
+					Draws {orderIds.indexOf(layer.id) + 1} of {orderIds.length} on the map (1 is on top), whatever its group.
+				</div>
 				<div className="map-layer-drawer__actions">
 					<button
 						aria-pressed={drawer.style}
@@ -778,6 +812,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 						layer={layer}
 						niceMeta={niceMeta}
 						onCopied={(what) => say("ok", `Copied ${what}.`, 2500)}
+						warnings={rowIndicators(layer, intelligence).warnings}
 					/>
 				)}
 			</div>
@@ -844,6 +879,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 						const collapsed = collapsedGroups.has(group.origin)
 						const indicators = group.layers.map((l) => rowIndicators(l, intelligenceOf(l)))
 						const groupNote = sharedNote(indicators)
+						const warnCount = indicators.filter((i) => i.warnings.length > 0).length
 						const groupTwins = group.layers.filter((l) => twins.has(l.id)).length
 						return (
 							<section aria-label={label.title} className="map-layer-group" key={group.origin}>
@@ -857,13 +893,23 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 											return next
 										})
 									}
-									title={label.hint}
+									title={`${label.hint}. Groups are by origin; the map draws all layers in one order, first on top.`}
 									type="button">
 									<span
 										aria-hidden="true"
 										className={`codicon codicon-chevron-${collapsed ? "right" : "down"}`}
 									/>
 									<span className="map-layer-group__title">{label.title}</span>
+									{collapsed && warnCount > 0 && (
+										<span
+											aria-label={`${warnCount} layer${warnCount === 1 ? "" : "s"} with warnings`}
+											className="map-layer-group__warn"
+											role="img"
+											title={`${warnCount} layer${warnCount === 1 ? "" : "s"} in this group ${warnCount === 1 ? "has" : "have"} warnings`}>
+											<span aria-hidden="true" className="codicon codicon-warning" />
+											{warnCount}
+										</span>
+									)}
 									<span className="map-layer-group__count">{group.layers.length}</span>
 								</button>
 								{!collapsed && (
@@ -885,9 +931,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 													onClick={() =>
 														setConfirm({
 															kind: "duplicates",
-															count: duplicatesToRemove(orderedLayers, (id) =>
+															names: duplicatesToRemove(orderedLayers, (id) =>
 																visibleLayerIds.has(id),
-															).length,
+															).map((l) => displayNames.get(l.id) ?? l.name ?? l.id),
 														})
 													}
 													type="button">
@@ -907,14 +953,14 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 														duplicate={twins.has(layer.id)}
 														key={layer.id}
 														layer={layer}
-														menuItems={menuFor(layer, displayName, group.layers)}
+														menuItems={menuFor(layer, displayName)}
 														note={groupNote ? undefined : indicators[i].note}
 														onDragEnd={finishDrag}
-														onDragOver={(e) => onRowDragOver(e, layer, group.origin)}
+														onDragOver={(e) => onRowDragOver(e, layer)}
 														onDragStart={(e) => {
 															e.dataTransfer.effectAllowed = "move"
 															e.dataTransfer.setData("text/plain", layer.id)
-															setDrag({ id: layer.id, origin: group.origin })
+															setDrag({ id: layer.id })
 														}}
 														onDrop={(e) => onRowDrop(e, layer)}
 														onRenameCancel={() => {
@@ -988,7 +1034,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 					<span>
 						{confirm.kind === "all"
 							? `Remove all ${layers.length} layers from the map?`
-							: `Remove ${confirm.count} duplicate layer${confirm.count === 1 ? "" : "s"}? One copy of each stays.`}
+							: `Remove ${confirm.names.length} duplicate layer${confirm.names.length === 1 ? "" : "s"}? One copy of each stays: ${confirm.names.join(", ")}.`}
 					</span>
 					<button
 						className="map-chip map-chip--danger"

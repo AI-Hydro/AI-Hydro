@@ -86,4 +86,15 @@ describe("duplicates", () => {
 		expect(duplicatesToRemove([a, b, c], () => false).map((l) => l.id)).toEqual(["b", "c"])
 		expect([...duplicateIds([a, b, c])].sort()).toEqual(["a", "b", "c"])
 	})
+
+	it("layers from one run that differ in geometry or time range are not duplicates", () => {
+		const a = layer("a", { name: "w", geojson: '{"type":"A"}' }, run)
+		const b = layer("b", { name: "w", geojson: '{"type":"B"}' }, run)
+		const c = layer("c", { name: "w", geojson: '{"type":"A"}' }, run)
+		const d = layer("d", { name: "ndvi", layerType: "gee_tile", geojson: "" }, { ...run, gee_start_date: "2020-01-01" })
+		const e = layer("e", { name: "ndvi", layerType: "gee_tile", geojson: "" }, { ...run, gee_start_date: "2021-01-01" })
+		expect(duplicateKey(a)).not.toBe(duplicateKey(b))
+		expect(duplicateKey(a)).toBe(duplicateKey(c))
+		expect(duplicateKey(d)).not.toBe(duplicateKey(e))
+	})
 })

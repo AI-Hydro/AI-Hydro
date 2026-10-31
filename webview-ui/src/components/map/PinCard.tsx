@@ -13,7 +13,7 @@ export interface PinCardProps {
 	 * Save the name and note together. Returns where the save went: the host save number, "local" when it could not be
 	 * sent yet (the project is not known), or null when nothing changed.
 	 */
-	onSave: (patch: { name: string; notes: string }) => number | "local" | null
+	onSave: (patch: { id: string; name: string; notes: string }) => number | "local" | null
 	/** Send the current pins to the host again after a failed save. */
 	onRetry: () => number | "local"
 	/** What the host has acknowledged so far. "Saved" is shown only when it covers this card's last save. */
@@ -77,7 +77,7 @@ const PinCard: React.FC<PinCardProps> = ({
 		}
 		const changed = (next !== "" && next !== d.pinName) || d.note !== d.pinNotes
 		if (!changed) return
-		const result = saveRef.current({ name: next === "" ? d.pinName : next, notes: d.note })
+		const result = saveRef.current({ id: d.id, name: next === "" ? d.pinName : next, notes: d.note })
 		if (result !== null) setAwaiting(result)
 		// Reflect the commit at once so a second trigger (Enter, then blur) does not save twice.
 		draft.current = { ...d, name: next === "" ? d.pinName : next, pinName: next === "" ? d.pinName : next, pinNotes: d.note }
@@ -89,7 +89,7 @@ const PinCard: React.FC<PinCardProps> = ({
 			const d = draft.current
 			const next = d.name.trim()
 			if ((next !== "" && next !== d.pinName) || d.note !== d.pinNotes) {
-				saveRef.current({ name: next === "" ? d.pinName : next, notes: d.note })
+				saveRef.current({ id: d.id, name: next === "" ? d.pinName : next, notes: d.note })
 			}
 		},
 		[pin.id],

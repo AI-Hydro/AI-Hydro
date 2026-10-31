@@ -118,6 +118,9 @@ const isLocal = (u) => {
 		return false
 	}
 }
+/** A basemap tile or other image: what the harness answers from fixtures (see tiles.mjs). */
+const isTileRequest = (request) =>
+	request.resourceType() === "image" || /\/(tile|\d+\/\d+\/\d+)|\.png|\.jpe?g|\.webp/i.test(request.url())
 const noteUnrouted = (url, how) => {
 	unrouted++
 	unroutedUrls.add(`${how} ${url.slice(0, 160)}`)
@@ -134,7 +137,7 @@ async function newContext() {
 			const url = request.url()
 			const host = new URL(url).host
 			externalHosts.set(host, (externalHosts.get(host) ?? 0) + 1)
-			const looksLikeTile = request.resourceType() === "image" || /\/(tile|\d+\/\d+\/\d+)|\.png|\.jpe?g|\.webp/i.test(url)
+			const looksLikeTile = isTileRequest(request)
 			if (looksLikeTile) {
 				// Error screens inject tile failures keyed by screen id (still a harness-answered response).
 				let screenId = ""
@@ -179,12 +182,14 @@ async function newContext() {
 		const url = response.url()
 		if (!isLocal(url) && !response.headers()[FIXTURE_HEADER]) noteUnrouted(url, "response")
 	})
-	// A routed request the page itself cancelled (tiles dropped on pan/unmount) reports ERR_ABORTED: not an escape.
-	// Any other failure, or a failure of a request the router never saw, means traffic left the harness.
+	// A request the page itself cancelled reports ERR_ABORTED. Tiles are dropped on pan and unmount, and at teardown the
+	// page cancels tiles the router has not yet been handed, so those never reach `handled`; a cancelled request
+	// delivers no response (a live one would still trip the "response" check above), so a cancelled tile is not an
+	// escape. Any other failure, or a cancelled non-tile request the router never saw, means traffic left the harness.
 	context.on("requestfailed", (request) => {
 		if (isLocal(request.url())) return
 		const aborted = /ERR_ABORTED/.test(request.failure()?.errorText ?? "")
-		if (!(handled.has(request) && aborted))
+		if (!(aborted && (handled.has(request) || isTileRequest(request))))
 			noteUnrouted(request.url(), `requestfailed(${request.failure()?.errorText ?? "?"})`)
 	})
 	context.on("page", (page) => {

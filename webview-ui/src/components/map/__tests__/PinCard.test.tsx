@@ -44,7 +44,7 @@ describe("pin card", () => {
 		const input = screen.getByLabelText("Pin name") as HTMLInputElement
 		fireEvent.change(input, { target: { value: "  Dam site  " } })
 		fireEvent.keyDown(input, { key: "Enter" })
-		expect(onSave).toHaveBeenCalledWith({ name: "Dam site", notes: "check NLDI snap" })
+		expect(onSave).toHaveBeenCalledWith({ id: "pin_1", name: "Dam site", notes: "check NLDI snap" })
 		onSave.mockClear()
 		fireEvent.change(input, { target: { value: "   " } })
 		fireEvent.keyDown(input, { key: "Enter" })
@@ -63,7 +63,7 @@ describe("pin card", () => {
 		fireEvent.keyDown(note, { key: "Enter" })
 		expect(onSave).not.toHaveBeenCalled() // a plain Enter is a new line
 		fireEvent.keyDown(note, { key: "Enter", ctrlKey: true })
-		expect(onSave).toHaveBeenCalledWith({ name: "Outlet candidate", notes: "upstream of the bridge" })
+		expect(onSave).toHaveBeenCalledWith({ id: "pin_1", name: "Outlet candidate", notes: "upstream of the bridge" })
 	})
 
 	it("Save commits once, and Escape in a field throws its draft away", () => {
@@ -91,11 +91,11 @@ describe("pin card", () => {
 		note.focus()
 		fireEvent.change(note, { target: { value: "left by blur" } })
 		screen.getByRole("button", { name: "elsewhere" }).focus()
-		await waitFor(() => expect(onSave).toHaveBeenCalledWith({ name: "Outlet candidate", notes: "left by blur" }))
+		await waitFor(() => expect(onSave).toHaveBeenCalledWith({ id: "pin_1", name: "Outlet candidate", notes: "left by blur" }))
 		onSave.mockClear()
 		fireEvent.change(note, { target: { value: "left by close" } })
 		unmount()
-		expect(onSave).toHaveBeenCalledWith({ name: "Outlet candidate", notes: "left by close" })
+		expect(onSave).toHaveBeenCalledWith({ id: "pin_1", name: "Outlet candidate", notes: "left by close" })
 	})
 
 	it("says Saved only after the host acknowledged that save, and Not saved with Retry when it did not", () => {
@@ -145,5 +145,15 @@ describe("pin card", () => {
 	it("focuses the name field for a pin just placed", () => {
 		render(<PinCard {...props({ focusName: true })} />)
 		expect(document.activeElement).toBe(screen.getByLabelText("Pin name"))
+	})
+
+	it("a draft typed for pin A is saved onto A, not onto B, when the card switches without a focus change", () => {
+		const onSave = vi.fn(() => 1)
+		const b = { ...pin, id: "pin_2", name: "Dam", notes: "" }
+		const { rerender } = render(<PinCard {...props({ onSave })} />)
+		fireEvent.change(screen.getByLabelText("Pin note"), { target: { value: "for A only" } })
+		rerender(<PinCard {...props({ onSave, pin: b })} />)
+		expect(onSave).toHaveBeenCalledWith({ id: "pin_1", name: "Outlet candidate", notes: "for A only" })
+		expect((screen.getByLabelText("Pin note") as HTMLTextAreaElement).value).toBe("")
 	})
 })

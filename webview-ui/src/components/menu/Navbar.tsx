@@ -49,7 +49,7 @@ export const Navbar = () => {
 			{
 				id: "mcp",
 				name: "MCP",
-				tooltip: "MCP Servers",
+				tooltip: "Hydro Tools & Data Sources",
 				icon: ServerIcon,
 				isActive: showMcp,
 				navigate: navigateToMcp,
@@ -104,8 +104,8 @@ export const Navbar = () => {
 
 	return (
 		<nav
-			className="flex-none inline-flex justify-end bg-transparent gap-1 mb-1 z-10 border-none items-center mr-3"
 			aria-label="AI-Hydro navigation"
+			className="flex-none inline-flex justify-end bg-transparent gap-1 mb-1 z-10 border-none items-center mr-3"
 			id="aihydro-navbar-container"
 			style={{ gap: "2px" }}>
 			{SETTINGS_TABS.map((tab, index) => (

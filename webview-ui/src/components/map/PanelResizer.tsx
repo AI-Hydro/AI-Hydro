@@ -13,7 +13,7 @@
  * Sizes are remembered per panel and per window state (panelSizes.ts); limits live there.
  */
 
-import React, { type RefObject, useCallback, useRef } from "react"
+import React, { type RefObject, useCallback } from "react"
 import { type MapChromeController, SHEET_HEIGHT } from "./mapChrome"
 import { MAP_Z } from "./mapZ"
 import {
@@ -52,7 +52,6 @@ const cursorFor = (h: ResizeHandle) =>
 
 export const PanelResizer: React.FC<PanelResizerProps> = ({ chrome, panelRef, name }) => {
 	const { mode } = chrome
-	const dragging = useRef(false)
 
 	const area: Area = { width: chrome.width - chrome.railReserve, height: chrome.height }
 	const overlay = chrome.overlay
@@ -68,7 +67,6 @@ export const PanelResizer: React.FC<PanelResizerProps> = ({ chrome, panelRef, na
 			const target = e.currentTarget
 			const startX = e.clientX
 			const startY = e.clientY
-			dragging.current = true
 			target.setPointerCapture?.(e.pointerId)
 			target.dataset.dragging = "true"
 			let commit: (() => void) | undefined
@@ -80,7 +78,6 @@ export const PanelResizer: React.FC<PanelResizerProps> = ({ chrome, panelRef, na
 				target.removeEventListener("pointerup", onUp)
 				target.removeEventListener("pointercancel", onUp)
 				delete target.dataset.dragging
-				dragging.current = false
 				commit?.()
 			}
 			target.addEventListener("pointermove", onMove)

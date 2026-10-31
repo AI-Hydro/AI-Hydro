@@ -10,6 +10,8 @@ Only the harness server's own origin (exact host and port, plus its `ws:` twin) 
 request is answered from fixtures. The run fails ("unrouted") on a non-local response that did not come from the
 harness, a non-local `requestfailed`, or any non-local WebSocket.
 
+`externalRoutedRequests` in `summary.json` counts the external requests the harness *answered from fixtures* (tiles get a generated PNG, anything else a 404): a large number there is the harness working, not traffic leaving. A cancelled tile (`net::ERR_ABORTED`, from a pan, an unmount or page teardown, including one cancelled before the router was handed it) is not an escape: it delivers no response, and a live response would still fail the run.
+
 ## Map chrome coverage
 
 Every `map` screen that renders the map chrome (`[data-map-chrome-root]`) is checked against the coverage budget in
