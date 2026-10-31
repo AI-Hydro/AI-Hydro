@@ -14,6 +14,7 @@ import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import {
 	ANSWER_AUDIT_PAYLOAD_VERSION,
 	type AnswerAuditDisclosure,
+	type AnswerAuditGateSkip,
 	type AnswerAuditPayload,
 	type AnswerAuditViolation,
 	type AnswerRevisionEvent,
@@ -73,6 +74,11 @@ export interface AnswerAuditGateState {
 	boundStudyId?: string
 	/** A first-party chat status ran in this task (a resumed task). Makes the gate eligible; never supplies a study id. */
 	bindingProbed?: boolean
+	/**
+	 * A first-party tool result in this task carried a `session_binding` for THIS chat (any tool: delineation binds a
+	 * study too, `bound_by: auto_create`). Like `bindingProbed` it is a flag, never a study id.
+	 */
+	bindingObserved?: boolean
 	/** A first-party start_session succeeded in this task: a study is (very likely) bound. */
 	sessionStarted: boolean
 	/** A graded audit outcome was observed in this task, so the server speaks the graded schema. */
@@ -81,6 +87,8 @@ export interface AnswerAuditGateState {
 	eligibleForBlock?: boolean
 	/** The server the eligibility check chose: the gate audits on exactly this one and requires it to be trusted. */
 	eligibleServer?: string
+	/** Why the gate did not run for the current completion attempt (set by the eligibility check, shown on the answer). */
+	skipReason?: AnswerAuditGateSkip
 	/** Why the task was interrupted (set by the caller of abortTask: "stopped by user" is the default). */
 	interruptReason?: string
 }
@@ -116,6 +124,15 @@ export function noteBindingProbed(state: AnswerAuditGateState): void {
 	state.bindingProbed = true
 }
 
+/**
+ * A first-party tool result carried a `session_binding` for this chat: the server itself reports a study bound
+ * (`start_session`, `delineate_watershed` with `bound_by: auto_create`, ...). Model-invoked output again, so it is a flag only
+ * and the audit still asks the server with the host's chat id and fails closed.
+ */
+export function noteBindingObserved(state: AnswerAuditGateState): void {
+	state.bindingObserved = true
+}
+
 /** `aihydro_rebind_chat` ran: whatever study was cached may no longer be bound. */
 export function noteBindingChanged(state: AnswerAuditGateState): void {
 	state.boundStudyId = undefined
@@ -123,15 +140,7 @@ export function noteBindingChanged(state: AnswerAuditGateState): void {
 
 // ── Eligibility ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type GateIneligibleReason =
-	| "gate-setting-off"
-	| "audit-disabled"
-	| "not-attempt-completion"
-	| "plan-mode"
-	| "no-trusted-server"
-	| "no-audit-tool"
-	| "graded-schema-unknown"
-	| "study-not-bound"
+export type GateIneligibleReason = AnswerAuditGateSkip | "not-attempt-completion"
 
 export interface GateEligibility {
 	eligible: boolean
@@ -153,6 +162,8 @@ export function computeGateEligibility(input: {
 	servers: readonly McpServer[]
 	state: AnswerAuditGateState
 	isTrusted?: (server: McpServer) => boolean
+	/** The host's own record says a study is bound to this chat (the chip; a boolean, never a study id). */
+	hostBound?: boolean
 }): GateEligibility {
 	if (input.toolName && input.toolName !== "attempt_completion") {
 		return { eligible: false, reason: "not-attempt-completion" } // plan_mode_respond is never gated
@@ -177,7 +188,8 @@ export function computeGateEligibility(input: {
 	if (!input.state.gradedObserved && !auditToolAdvertisesGraded(server)) {
 		return { eligible: false, reason: "graded-schema-unknown" }
 	}
-	if (!input.state.boundStudyId && !input.state.sessionStarted && !input.state.bindingProbed) {
+	const s = input.state
+	if (!s.boundStudyId && !s.sessionStarted && !s.bindingProbed && !s.bindingObserved && !input.hostBound) {
 		return { eligible: false, reason: "study-not-bound" }
 	}
 	return { eligible: true, serverName: server.name }

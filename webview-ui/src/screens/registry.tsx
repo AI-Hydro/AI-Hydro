@@ -5,8 +5,8 @@
  */
 
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
-import type { ReactNode } from "react"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
+import type { ReactNode } from "react"
 import App from "../App"
 import { ScienceToolCard } from "../components/chat/ScienceToolCard"
 import ConnectorsView from "../components/connectors/ConnectorsView"
@@ -952,6 +952,15 @@ export const screens: ScreenDef[] = [
 		tx.answerAuditCleanUxTask,
 		"Fixture answer, not a result.",
 		{ expectVisible: ["text=All 4 numbers traced"], expectAbsent: ["[data-testid=untraced-number]"] },
+	),
+	chatTx(
+		"chat-answer-audit-gate-skipped",
+		"Answer audit that ran display-only because the gate could not engage: the footer says why",
+		tx.answerAuditGateSkippedTask,
+		"Fixture answer, not a result.",
+		{
+			expectVisible: ["text=Answer was not held back for checking", "text=Audit not run: timed out after 15s"],
+		},
 	),
 	chatTx("chat-answer-audit-graded", "Answer audit (structured, graded)", tx.answerAuditGradedTask, "linked to a recorded run"),
 	chatTx(

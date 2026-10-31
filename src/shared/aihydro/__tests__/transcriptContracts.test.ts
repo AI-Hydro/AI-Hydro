@@ -67,6 +67,13 @@ describe("answer audit payload", () => {
 		expect(parseAnswerAuditPayload(JSON.stringify(p))).to.deep.equal(p)
 	})
 
+	it("keeps a known gateSkipped reason and drops an unknown one", () => {
+		expect(parseAnswerAuditPayload(JSON.stringify({ ...payload(), gateSkipped: "no-trusted-server" }))?.gateSkipped).to.equal(
+			"no-trusted-server",
+		)
+		expect(parseAnswerAuditPayload(JSON.stringify({ ...payload(), gateSkipped: "made-up" }))?.gateSkipped).to.equal(undefined)
+	})
+
 	it("ignores other versions and garbage", () => {
 		expect(parseAnswerAuditPayload(JSON.stringify({ ...payload(), v: 2 }))).to.equal(undefined)
 		expect(parseAnswerAuditPayload("not json")).to.equal(undefined)
