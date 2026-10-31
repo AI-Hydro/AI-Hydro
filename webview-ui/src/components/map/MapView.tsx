@@ -3690,6 +3690,26 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							a.click()
 							URL.revokeObjectURL(url)
 						}}
+						onKeepSketch={() => {
+							try {
+								const geojson = JSON.parse(pendingDraw.geojson)
+								const feature = geojson.type === "FeatureCollection" ? geojson.features?.[0] : geojson
+								if (!feature?.geometry) {
+									setDropStatus({ kind: "err", msg: "This shape has no geometry to keep. Draw it again." })
+									window.setTimeout(() => setDropStatus(null), 6000)
+									return
+								}
+								commitAnnotations([
+									...annotationsRef.current,
+									newAnnotation(pendingDraw.mode, feature.geometry, annotationsRef.current),
+								])
+							} catch {
+								/* a shape that cannot be read stays pending so the user can still save or export it */
+								return
+							}
+							setPendingDraw(null)
+							setDrawGeometry(null)
+						}}
 						onSave={async (name) => {
 							setSaveVectorBusy(true)
 							try {

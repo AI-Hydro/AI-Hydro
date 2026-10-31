@@ -24,7 +24,6 @@ The right-edge ribbon provides quick access to every map tool. Click an icon to 
 |---|---|---|
 | 🗺️ | Basemap | [Basemaps](#basemaps) |
 | 📑 | Layers | [Layers & Symbology](map/layers.md) |
-| 🧭 | Gallery (Mine / Starred / Community) | [Hydrography & Gallery](map/hydrography.md) |
 | 🌊 | Hydrography | [Hydrography & Gallery](map/hydrography.md) |
 | ⛶ | Fit extent | Zooms to all visible layers |
 | 🔍 | Search | [Hydrography & Gallery](map/hydrography.md) |

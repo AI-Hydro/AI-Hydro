@@ -5,8 +5,8 @@
  */
 
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
-import type { ReactNode } from "react"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
+import type { ReactNode } from "react"
 import App from "../App"
 import { ScienceToolCard } from "../components/chat/ScienceToolCard"
 import ConnectorsView from "../components/connectors/ConnectorsView"
@@ -1313,7 +1313,7 @@ export const screens: ScreenDef[] = [
 			{ wait: 300 },
 			{ click: 'button:text-is("Provenance")' },
 			{ wait: 300 },
-			{ scroll: "text=No provenance record linked" },
+			{ scroll: "text=Not recorded:" },
 		],
 	}),
 	// Layers panel (polish-map): one compact row per layer, grouped by origin; selecting a row opens its drawer.
@@ -1322,7 +1322,7 @@ export const screens: ScreenDef[] = [
 		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("Synthetic basin")' }, { wait: 300 }],
 		expectVisible: ['[aria-label^="Settings for"]'],
 	}),
-	mapScreen("map-layers-menu-open", "Layers: the row overflow menu open (zoom, style, save, copy run ID, move, remove)", {
+	mapScreen("map-layers-menu-open", "Layers: the row overflow menu open (zoom, rename, save as, move, remove)", {
 		layers: featureLayers(),
 		steps: [...openTool("Layer manager"), { click: 'button[aria-label^="Actions for Synthetic basin"]' }, { wait: 300 }],
 		// The first item has focus once the menu is placed (it is hidden while it measures, and a hidden element cannot focus).
@@ -1363,9 +1363,9 @@ export const screens: ScreenDef[] = [
 			{ wait: 200 },
 		],
 	}),
-	mapScreen("map-time-slider", "Map time slider", {
+	mapScreen("map-time-slider", "Map date filter", {
 		layers: featureLayers(),
-		steps: openTool("Time slider", true),
+		steps: openTool("Date filter", true),
 	}),
 	mapScreen("map-swipe", "Map swipe compare", {
 		layers: [basinPolygon, ...featureLayers().slice(0, 1)],

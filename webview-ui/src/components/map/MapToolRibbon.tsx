@@ -56,20 +56,25 @@ const TOOL_META: Record<ToolId, { icon: string; title: string }> = {
 	draw: { icon: "edit", title: "Draw ROI" },
 	transect: { icon: "graph-line", title: "Transect profile" },
 	swipe: { icon: "split-horizontal", title: "Swipe" },
-	time: { icon: "clock", title: "Time slider" },
+	time: { icon: "clock", title: "Date filter" },
 	flood: { icon: "pulse", title: "Flood inundation" },
 	export: { icon: "export", title: "Export" },
 	gallery: { icon: "compass", title: "Research Gallery" },
 }
 
 const RAIL_TOOLS: Exclude<RailId, "more">[] = ["layers", "search", "annotations", "measure", "draw"]
-type MoreId = "transect" | "swipe" | "time" | "flood" | "export" | "gallery"
-const MORE_TOOLS: MoreId[] = ["transect", "swipe", "time", "flood", "export", "gallery"]
+type MoreId = "transect" | "swipe" | "time" | "flood" | "export"
+/** What the More menu lists. The Research Gallery is not here (it opens only from the host's command). */
+const MORE_TOOLS: MoreId[] = ["transect", "swipe", "time", "flood", "export"]
 /** Panels that are dialogs rather than sidebars: centred, with a scrim. */
 const MODAL_TOOLS: ToolId[] = ["export", "gallery"]
 
 const railOf = (tool: ToolId): RailId =>
-	tool === "basemap" || tool === "hydrography" ? "layers" : (MORE_TOOLS as ToolId[]).includes(tool) ? "more" : (tool as RailId)
+	tool === "basemap" || tool === "hydrography"
+		? "layers"
+		: tool === "gallery" || (MORE_TOOLS as ToolId[]).includes(tool)
+			? "more"
+			: (tool as RailId)
 
 const LAYER_TABS: { tool: "layers" | "basemap" | "hydrography"; label: string; hint: string }[] = [
 	{ tool: "layers", label: "Layers", hint: "Layers on the map" },
@@ -80,10 +85,9 @@ const LAYER_TABS: { tool: "layers" | "basemap" | "hydrography"; label: string; h
 const MORE_LABEL: Record<MoreId, { text: string; label: string }> = {
 	transect: { text: "Transect", label: "Transect profile" },
 	swipe: { text: "Swipe", label: "Swipe / Compare layers" },
-	time: { text: "Time", label: "Time slider — filter layers by date range" },
+	time: { text: "Date filter", label: "Date filter — show layers within a date range" },
 	flood: { text: "Flood", label: "Flood inundation — stage scrubber & 3D view" },
 	export: { text: "Export", label: "Export snapshot" },
-	gallery: { text: "Gallery", label: "Research Gallery" },
 }
 
 interface MapToolRibbonProps {
@@ -144,7 +148,6 @@ interface MapToolRibbonProps {
 	/** Flood inundation stage scrubber */
 	floodPanel?: React.ReactNode
 	/** Claim ID this map state is bound to — shows a chip beside the chrome */
-	boundClaimId?: string
 }
 
 // ── menu ────────────────────────────────────────────────────────────────────
@@ -325,7 +328,6 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	galleryPanel,
 	timeSliderPanel,
 	floodPanel,
-	boundClaimId,
 }) => {
 	const [internalActive, setInternalActive] = useState<RibbonTool>(null)
 	const active: RibbonTool = activeTool !== undefined ? activeTool : internalActive
@@ -611,7 +613,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 			{active === "measure" && (
 				<div style={{ padding: 10 }}>
 					<p className="map-hint" style={{ margin: "0 0 8px" }}>
-						Distance and area measurements are temporary. They are not saved to the workspace.
+						Approximate: measured on a sphere, so values can be off by a fraction of a percent. Nothing is saved.
 					</p>
 					<div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
 						{modeButton("symbol-ruler", "Distance", measureMode === "distance", () =>
@@ -631,15 +633,14 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 			{active === "draw" && (
 				<div style={{ padding: 10 }}>
 					<p className="map-hint" style={{ margin: "0 0 8px" }}>
-						Draw a shape, then save it to <code>vectors/</code> in your workspace or export it. The shape stays on the
-						map until you choose.
+						Draw a shape, then save it as an ROI in <code>vectors/</code>, keep it as a sketch, or export it. The
+						shape stays on the map until you choose.
 					</p>
 					<div className="map-chip-grid">
 						{(
 							[
 								["polygon", "symbol-field", "Polygon"],
 								["line", "graph-line", "Line"],
-								["point", "circle-filled", "Point"],
 							] as const
 						).map(([kind, icon, text]) => (
 							<React.Fragment key={kind}>
@@ -841,20 +842,6 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 							{active === "export" ? exportBody : galleryBody}
 						</div>
 					</div>
-				</div>
-			)}
-
-			{/* Bound-claim chip */}
-			{boundClaimId && state !== "hidden" && (
-				<div
-					className="map-chrome-claim"
-					style={{
-						top: 12,
-						right: cornerRight + (state === "collapsed" ? COLLAPSED_SIZE + 6 : 6),
-						zIndex: MAP_Z.panel,
-					}}
-					title={`Map state is linked to claim ${boundClaimId}`}>
-					<span aria-hidden="true" className="codicon codicon-link" /> {boundClaimId}
 				</div>
 			)}
 

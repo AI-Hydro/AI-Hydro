@@ -9,6 +9,23 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — unreleased (map: fewer places for one action, and every layer knows its run)
+
+### Changed — P1 subtraction pass on the map (branch `vision2040/map-subtract`)
+
+Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of 2026-10-31: D4 (tracker extras out of the default Draw panel, data kept) and D5 (Gallery out of the map's More menu) are taken.
+
+- **Layer row menu: 17 items to 9 or fewer.** Style, Opacity, Attribute table, Details, Cluster points, Copy tool name and Copy run ID are gone from the menu. Opacity, Style (now holding **Cluster points**), Attributes and Details are in the row drawer; the run and tool copy buttons are in Details. "Save to workspace" and "Export as GeoJSON" are one **Save as...**. The eye in the panel bar and the "Layer 3 of 4 from the top" sentence are gone (Show all and Hide all stay in the panel `...` menu).
+- **Provenance** lists the recorded facts, then one "Not recorded: units, CRS, ..." line. Run and Run ID are one row, Source file and Path are one row, the tool is named separately only when it differs from the source. "Metadata fields" is dropped. A "Claim" row shows when the layer's metadata carries `claim_id`. "Source" is shown only when something names it, not as a guess, and a layer with no run says "No run record." once. "Converted artifact" shows only when present.
+- **Draw is for regions and sketches.** Polygon and Line only; a finished shape offers **Save as ROI**, **Keep as sketch** or **Export GeoJSON**. Points are Pins. The tracker (status, priority, tags, collections, search, Save to My Gallery, Batch Ask Agent) is hidden; **Tracker fields** in the Sketches menu shows it again, and the data on each annotation is untouched.
+- **Gallery** is out of the More menu. The panel and its saved items stay (the host command that opens it still works).
+- "Time slider" is **Date filter**: it is two date inputs. The screen id `map-time-slider` is kept for the budget.
+- Measure says once that values are approximate.
+- Removed `MapStatusBar.tsx` (no importer) and the unreachable bound-claim chip in the tool ribbon. Not removed: `bookmarks` in `mapWorkspace.ts`, which the report called unused; `SearchBar` uses it for saved views.
+- Docs: `docs/guide/map/{layers,draw-measure,hydrography}.md` and `map.md` match the code.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)
