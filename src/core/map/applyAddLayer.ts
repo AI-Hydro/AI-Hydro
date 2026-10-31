@@ -1,6 +1,14 @@
 import { findDuplicate, type PathResolver, planMerge } from "@shared/map/layerIdentity"
 import { MapLayer } from "@shared/proto/cline/map"
 
+/** The id a layer is known by now: itself, or the layer an earlier merge folded it into. */
+export const resolveAlias = (aliases: Map<string, string>, id: string): string => aliases.get(id) ?? id
+
+/** A layer left the map: ids that stood for it no longer stand for anything. */
+export function dropAliasesFor(aliases: Map<string, string>, id: string): void {
+	for (const [alias, target] of [...aliases]) if (target === id || alias === id) aliases.delete(alias)
+}
+
 export interface LayerStoreState {
 	layers: Map<string, MapLayer>
 	order: string[]
@@ -41,7 +49,7 @@ export function applyAddLayer(
 	const plan = planMerge(existing, layer, found.match)
 	const kept = MapLayer.create({
 		...existing,
-		...(plan.takeContent ? { geojson: layer.geojson } : {}),
+		...(plan.takeContent && layer.geojson ? { geojson: layer.geojson } : {}),
 		metadata: plan.metadata,
 	})
 	state.layers.set(kept.id, kept)

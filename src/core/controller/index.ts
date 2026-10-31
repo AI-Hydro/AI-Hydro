@@ -2,7 +2,7 @@ import { realpathSync } from "node:fs"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
 import { LedgerEventWatcher } from "@core/ledger/LedgerEventWatcher"
-import { type AddOutcome, applyAddLayer } from "@core/map/applyAddLayer"
+import { type AddOutcome, applyAddLayer, dropAliasesFor, resolveAlias } from "@core/map/applyAddLayer"
 import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
 import { buildMapLayerCatalogAsync, type MapLayerCatalogEntry, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
@@ -2070,13 +2070,18 @@ export class Controller {
 		const hit = this.realPathCache.get(p)
 		if (hit !== undefined) return hit
 		let real = p
+		let resolved = false
 		try {
 			real = realpathSync(p)
+			resolved = true
 		} catch {
 			/* a file that is gone keeps its own path */
 		}
-		if (this.realPathCache.size > 2000) this.realPathCache.clear()
-		this.realPathCache.set(p, real)
+		// Only a path that resolved is cached; a file that was missing may exist by the next add.
+		if (resolved) {
+			if (this.realPathCache.size > 2000) this.realPathCache.clear()
+			this.realPathCache.set(p, real)
+		}
 		return real
 	}
 
@@ -2087,7 +2092,7 @@ export class Controller {
 
 	/** The id a layer is known by now: itself, or the layer an earlier merge folded it into. */
 	resolveMapLayerId(id: string): string {
-		return this.mapLayerAliases.get(id) ?? id
+		return resolveAlias(this.mapLayerAliases, id)
 	}
 
 	getMapLayerAliases(): Record<string, string> {
@@ -2214,6 +2219,7 @@ export class Controller {
 		console.log(`[Controller] Removing map layer: ${layerId}`)
 
 		const wasRemoved = this.mapLayers.delete(layerId)
+		if (wasRemoved) dropAliasesFor(this.mapLayerAliases, layerId)
 		if (!wasRemoved) {
 			return
 		}
@@ -2240,6 +2246,7 @@ export class Controller {
 		}
 
 		this.mapLayers.clear()
+		this.mapLayerAliases.clear()
 		this.mapLayerOrder = []
 		void this.syncMapLayerCatalog()
 		this.notifyMapLayerSubscribers(

@@ -96,12 +96,13 @@ export function matchFile(existing: IdentityLayer, incoming: IdentityLayer, real
 		const same = sameContent(existing, incoming)
 		if (same === false) return "changed"
 		if (same === undefined) {
-			// One side has no content here (a restore). A recorded size that changed says the file changed.
+			// One side has no content here. Only an incoming layer that brings content can change the existing one: an
+			// empty incoming side (a restored layer) has nothing to put in its place, so it is the same file.
 			const se = existing.metadata?.source_size_bytes
 			const si = incoming.metadata?.source_size_bytes
-			return se && si && se !== si ? "changed" : "same"
+			return incoming.geojson && se && si && se !== si ? "changed" : "same"
 		}
-		return "same"
+		return same ? "same" : "changed"
 	}
 	// One or both name no file: only identical content says they are the same, and sizes must not disagree.
 	const se = existing.metadata?.source_size_bytes
@@ -182,6 +183,23 @@ export function preferKept<T extends IdentityLayer>(a: T, b: T, order: string[])
 const USER_KEYS = ["display_name", "symbology_user_override", "graduated_attr", "graduated_breaks", "graduated_colors", "legend"]
 /** Keys that belong to the run that made the content. They leave with it when the content changes under them. */
 const RUN_KEYS = ["_run_id", "tool", "provenance_path", "retrieved_at", "agent_step", "claim_id"]
+/**
+ * Annotations that describe the run's result, not the file. When the run link goes, these go too unless the incoming
+ * layer supplies them, so old annotations never sit beside new content.
+ */
+const RUN_ANNOTATION_KEYS = [
+	"study_id",
+	"session_id",
+	"chat_id",
+	"run_id",
+	"uncertainty",
+	"validation_status",
+	"coverage_status",
+	"citation",
+	"license",
+	"units",
+	"crs",
+]
 
 export interface MergePlan {
 	/** "merge": same content, one layer. "update": the file changed, the layer takes the new content. */
@@ -212,7 +230,11 @@ export function planMerge(existing: IdentityLayer, incoming: IdentityLayer, matc
 			takeContent: false,
 		}
 	}
-	const meta: Record<string, string> = { ...(existing.metadata ?? {}), ...(incoming.metadata ?? {}) }
+	// An empty value from the incoming side never overwrites a real one.
+	const meta: Record<string, string> = { ...(existing.metadata ?? {}) }
+	for (const [key, value] of Object.entries(incoming.metadata ?? {})) {
+		if (value !== "" && value !== undefined) meta[key] = value
+	}
 	for (const key of USER_KEYS) {
 		if (existing.metadata?.[key]) meta[key] = existing.metadata[key]
 	}
@@ -222,6 +244,9 @@ export function planMerge(existing: IdentityLayer, incoming: IdentityLayer, matc
 	if (re && !ri) {
 		// The content is no longer what the run produced: say so instead of keeping the link.
 		for (const key of RUN_KEYS) delete meta[key]
+		for (const key of RUN_ANNOTATION_KEYS) {
+			if (!incoming.metadata?.[key]) delete meta[key]
+		}
 		meta._prior_run_id = re
 		priorRun = re
 	}
@@ -231,7 +256,7 @@ export function planMerge(existing: IdentityLayer, incoming: IdentityLayer, matc
 		keptId: existing.id,
 		aliasId: incoming.id,
 		metadata: meta,
-		takeContent: true,
+		takeContent: !!incoming.geojson,
 		...(priorRun ? { priorRun } : {}),
 	}
 }

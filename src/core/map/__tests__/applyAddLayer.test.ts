@@ -1,7 +1,7 @@
 import { MapLayer } from "@shared/proto/cline/map"
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import { applyAddLayer, type LayerStoreState } from "../applyAddLayer"
+import { applyAddLayer, dropAliasesFor, type LayerStoreState, resolveAlias } from "../applyAddLayer"
 
 const GJ = '{"type":"FeatureCollection","features":[{"a":1}]}'
 const GJ2 = GJ.replace("1", "2")
@@ -128,5 +128,22 @@ describe("applyAddLayer: one file is one layer", () => {
 		expect(s.aliases.get("n")).to.equal("e")
 		applyAddLayer(s, layer("n", P, GJ), { replaceExisting: true })
 		expect(s.aliases.has("n")).to.equal(false)
+	})
+
+	it("an id that was merged away resolves to the survivor, and stops resolving once the survivor is removed", () => {
+		const s = store(layer("e", P, GJ))
+		applyAddLayer(s, layer("n", P, GJ))
+		expect(resolveAlias(s.aliases, "n")).to.equal("e")
+		expect(resolveAlias(s.aliases, "other")).to.equal("other")
+		dropAliasesFor(s.aliases, "e")
+		expect(resolveAlias(s.aliases, "n")).to.equal("n")
+	})
+
+	it("a restored (empty) layer for a file already on the map neither updates nor empties it", () => {
+		const s = store(layer("e", { ...P, units: "mm" }, GJ))
+		const out = applyAddLayer(s, layer("n", { source_path: "/w/v/a.geojson", source_size_bytes: "99", units: "" }, ""))
+		expect(out.kind).to.equal("merged")
+		expect(s.layers.get("e")!.geojson).to.equal(GJ)
+		expect(s.layers.get("e")!.metadata.units).to.equal("mm")
 	})
 })

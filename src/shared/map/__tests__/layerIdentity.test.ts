@@ -190,7 +190,9 @@ describe("layer identity: one file is one layer", () => {
 		expect(plan.metadata.tool).to.equal(undefined)
 		expect(plan.metadata.provenance_path).to.equal(undefined)
 		expect(plan.metadata._prior_run_id).to.equal("R1")
-		expect(plan.metadata.study_id).to.equal("s1")
+		// Annotations about the run go with it, so they do not sit beside content they did not describe.
+		for (const key of ["study_id", "uncertainty", "validation_status", "units", "crs"])
+			expect(plan.metadata[key], key).to.equal(undefined)
 	})
 
 	it("an agent re-push with the same run and path updates the layer and keeps the run", () => {
@@ -200,5 +202,30 @@ describe("layer identity: one file is one layer", () => {
 		const plan = planMerge(existing, push, "changed")
 		expect(plan.priorRun).to.equal(undefined)
 		expect(plan.metadata._run_id).to.equal("R1")
+	})
+
+	it("run annotations the incoming layer supplies are kept; the rest go with the run link", () => {
+		const existing = L("e", { _run_id: "R1", units: "mm", crs: "EPSG:4326", source_path: "/w/a.geojson" }, GJ)
+		const plan = planMerge(existing, L("n", { source: "user", source_path: "/w/a.geojson", units: "m3/s" }, GJ2), "changed")
+		expect(plan.metadata.units).to.equal("m3/s")
+		expect(plan.metadata.crs).to.equal(undefined)
+	})
+
+	it("an empty incoming layer (a restore) is the same file and never overwrites; an empty value never replaces a real one", () => {
+		const onMap = L("e", { source_path: "/w/a.geojson", source_size_bytes: "52", units: "mm" }, GJ)
+		const restored = L("n", { source_path: "/w/a.geojson", source_size_bytes: "99", units: "" }, "")
+		expect(matchFile(onMap, restored)).to.equal("same")
+		const plan = planMerge(onMap, restored, "same")
+		expect(plan.takeContent).to.equal(false)
+		expect(plan.metadata).to.include({ source_size_bytes: "52", units: "mm" })
+		expect(
+			matchFile(
+				L("r", { source_path: "/w/a.geojson", source_size_bytes: "52" }, ""),
+				L("n2", { source_path: "/w/a.geojson", source_size_bytes: "99" }, GJ),
+			),
+		).to.equal("changed")
+		expect(planMerge(onMap, L("n3", { source_path: "/w/a.geojson", units: "" }, GJ2), "changed").metadata.units).to.equal(
+			"mm",
+		)
 	})
 })
