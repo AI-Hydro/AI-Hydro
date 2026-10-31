@@ -35,11 +35,19 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 		cursor: "pointer",
 	}
 
+	// `window.prompt` does nothing in a VS Code webview, so the name is asked for in the strip itself.
+	const [naming, setNaming] = useState(false)
+	const [nameDraft, setNameDraft] = useState("")
+	const startSave = () => {
+		setNameDraft(roi?.name?.replace(/\s+/g, "_") || "basin")
+		setNaming(true)
+	}
 	const handleSave = async () => {
-		const name = window.prompt("Save ROI as (filename slug):", roi?.name?.replace(/\s+/g, "_") || "basin")
+		const name = nameDraft.trim().replace(/\s+/g, "_")
 		if (!name) {
 			return
 		}
+		setNaming(false)
 		setBusy(true)
 		setStatus(null)
 		try {
@@ -152,12 +160,7 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 				</span>
 				{roi.source && <span style={{ opacity: 0.65 }}>({roi.source})</span>}
 				{area && <span style={{ opacity: 0.65 }}>{area}</span>}
-				<button
-					disabled={busy}
-					onClick={() => void handleSave()}
-					style={btnStyle}
-					title="Save to workspace roi/"
-					type="button">
+				<button disabled={busy} onClick={startSave} style={btnStyle} title="Save to workspace roi/" type="button">
 					Save
 				</button>
 				<button
@@ -179,6 +182,49 @@ export const MapRoiStrip: React.FC<MapRoiStripProps> = ({ roi, mapStyle, onClear
 					</button>
 				)}
 			</div>
+			{naming && (
+				<div
+					style={{
+						display: "flex",
+						alignItems: "center",
+						gap: 6,
+						padding: "4px 8px",
+						background: bg,
+						border: `1px solid ${border}`,
+						borderRadius: 4,
+						pointerEvents: "auto",
+					}}>
+					<label htmlFor="map-roi-name" style={{ fontSize: 11, color: fg }}>
+						Save ROI as
+					</label>
+					<input
+						autoFocus
+						id="map-roi-name"
+						onChange={(e) => setNameDraft(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") void handleSave()
+							if (e.key === "Escape") setNaming(false)
+						}}
+						style={{
+							minHeight: 24,
+							fontSize: 11,
+							padding: "0 6px",
+							color: "var(--vscode-input-foreground, inherit)",
+							background: "var(--vscode-input-background)",
+							border: `1px solid ${border}`,
+							borderRadius: 3,
+						}}
+						type="text"
+						value={nameDraft}
+					/>
+					<button disabled={!nameDraft.trim()} onClick={() => void handleSave()} style={btnStyle} type="button">
+						Save
+					</button>
+					<button onClick={() => setNaming(false)} style={btnStyle} type="button">
+						Cancel
+					</button>
+				</div>
+			)}
 			{status && <span style={{ fontSize: 11, color: fg, opacity: 0.85, pointerEvents: "none" }}>{status}</span>}
 		</div>
 	)

@@ -48,6 +48,7 @@ import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replayS
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
 import * as tx from "./fixtures/transcripts"
 import { MapBannerVariantsScreen } from "./MapBannerVariantsScreen"
+import { MapIdentifyScreen } from "./MapIdentifyScreen"
 import { PrimitivesScreen } from "./PrimitivesScreen"
 import type { ScreenDef, ScreenStep } from "./types"
 
@@ -1180,6 +1181,14 @@ export const screens: ScreenDef[] = [
 		group: "map",
 		surface: "editor",
 		render: () => <MapBannerVariantsScreen />,
+	},
+	{
+		id: "map-identify-card",
+		title: "Identify card with two features, a click point, a raster reading and the agent actions",
+		group: "map",
+		surface: "editor",
+		render: () => <MapIdentifyScreen />,
+		expectVisible: ['[aria-label="Feature inspector"]'],
 	},
 	mapScreen("map-error-imagery", "Map with every basemap tile failing (alert, Retry imagery)", { layers: [basinPolygon] }),
 	mapScreen("map-error-partial-tiles", "Map with one basemap tile missing (quiet note, no alert)", { layers: [basinPolygon] }),
