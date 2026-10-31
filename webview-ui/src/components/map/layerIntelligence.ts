@@ -207,6 +207,11 @@ export function warningText(warning: LayerQualityWarning): string {
 	}
 }
 
+function sourceKnown(layer: MapLayer): boolean {
+	const meta = layer.metadata ?? {}
+	return Boolean(meta.source || meta.tool || meta.path)
+}
+
 function sourceLabel(layer: MapLayer): string {
 	const meta = layer.metadata ?? {}
 	const source = meta.source
@@ -256,15 +261,17 @@ export function layerProvenance(layer: MapLayer, intelligence: LayerIntelligence
 	const run = layerRunId(meta)
 	const timeRange = meta.time_start ? `${meta.time_start} – ${meta.time_end ?? "present"}` : undefined
 	const facts: Array<[string, string | undefined]> = [
-		["Source", intelligence.sourceLabel],
+		// "Map session" is the fallback label when nothing names a source; it is not a recorded source.
+		["Source", sourceKnown(layer) ? intelligence.sourceLabel : undefined],
 		// The tool is the source for a tool layer; list it separately only when the two differ.
 		["Tool", tool && tool !== intelligence.sourceLabel ? tool : undefined],
 		["Run", run],
 		["Computed at", layerRetrievedAt(meta)],
 		["Agent step", meta.agent_step],
-		["Source file", meta.source_display_path ?? meta.source_path ?? meta.path ?? meta.raster_source_path ?? meta.raster_path],
-		["Format", meta.source_format ?? meta.format],
+		["Source file", meta.source_display_path || meta.source_path || meta.path || meta.raster_source_path || meta.raster_path],
+		["Format", meta.source_format || meta.format],
 		["Converted artifact", meta.converted_artifact_path],
+		["Claim", meta.claim_id],
 		["Provenance record", intelligence.provenancePath],
 		["Product", meta.product_identity || meta.source_dataset_id || meta.gee_dataset_id || meta.dataset],
 		["Units", meta.units],
@@ -278,7 +285,8 @@ export function layerProvenance(layer: MapLayer, intelligence: LayerIntelligence
 		["Coverage", meta.coverage_status],
 	]
 	// Hidden when absent (not "not recorded"): they only exist for some layers.
-	const optional = new Set(["Tool", "Agent step", "Format", "Converted artifact", "Time range", "Computed at"])
+	// Run is not listed either: the Provenance tab says "No run record." on its own line.
+	const optional = new Set(["Tool", "Run", "Claim", "Agent step", "Format", "Converted artifact", "Time range", "Computed at"])
 	const rows: Array<[string, string]> = []
 	const notRecorded: string[] = []
 	for (const [label, value] of facts) {
