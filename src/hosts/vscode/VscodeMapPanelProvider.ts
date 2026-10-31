@@ -742,7 +742,20 @@ export class VscodeMapPanelProvider {
 		}
 	}
 
-	public static async createOrShow() {
+	/** True when a map tab exists in any editor group, including one this provider does not hold (restored by VS Code). */
+	public static hasMapTab(): boolean {
+		if (VscodeMapPanelProvider.currentPanel) {
+			return true
+		}
+		return vscode.window.tabGroups.all.some((group) =>
+			group.tabs.some(
+				(tab) => tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith("aihydroMapView"),
+			),
+		)
+	}
+
+	/** `preserveFocus` keeps the keyboard where it is (the chat), for opens the user did not ask for. */
+	public static async createOrShow(options: { preserveFocus?: boolean } = {}) {
 		if (!VscodeMapPanelProvider.context) {
 			console.warn("[VscodeMapPanelProvider] Not yet initialized — cannot open map panel")
 			return
@@ -752,20 +765,25 @@ export class VscodeMapPanelProvider {
 
 		// If we already have a panel, show it
 		if (VscodeMapPanelProvider.currentPanel) {
-			VscodeMapPanelProvider.currentPanel.reveal(column)
+			VscodeMapPanelProvider.currentPanel.reveal(column, options.preserveFocus)
 			return
 		}
 
 		// Otherwise, create a new panel
 		const workspaceRoots = vscode.workspace.workspaceFolders?.map((folder) => folder.uri) ?? []
-		const panel = vscode.window.createWebviewPanel("aihydroMapView", "AI-Hydro Map", column, {
-			enableScripts: true,
-			retainContextWhenHidden: true,
-			localResourceRoots: [
-				vscode.Uri.joinPath(VscodeMapPanelProvider.context.extensionUri, "webview-ui", "build"),
-				...workspaceRoots,
-			],
-		})
+		const panel = vscode.window.createWebviewPanel(
+			"aihydroMapView",
+			"AI-Hydro Map",
+			{ viewColumn: column, preserveFocus: options.preserveFocus },
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+				localResourceRoots: [
+					vscode.Uri.joinPath(VscodeMapPanelProvider.context.extensionUri, "webview-ui", "build"),
+					...workspaceRoots,
+				],
+			},
+		)
 
 		VscodeMapPanelProvider.currentPanel = panel
 

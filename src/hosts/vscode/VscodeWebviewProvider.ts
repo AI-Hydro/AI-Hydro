@@ -49,6 +49,9 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 		return this.webview?.visible || false
 	}
 
+	/** Called when the sidebar chat view is resolved visible or becomes visible (the map auto-open hooks in here). */
+	public onSidebarShown?: () => void
+
 	public getWebview(): vscode.WebviewView | undefined {
 		return this.webview
 	}
@@ -90,6 +93,7 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 			async () => {
 				if (this.webview?.visible) {
 					await sendDidBecomeVisibleEvent()
+					this.onSidebarShown?.()
 				}
 			},
 			null,
@@ -138,6 +142,9 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 		this.controller.clearTask()
 
 		HostProvider.get().logToChannel("Webview view resolved")
+		if (webviewView.visible) {
+			this.onSidebarShown?.()
+		}
 
 		// Title setting logic removed to allow VSCode to use the container title primarily.
 	}

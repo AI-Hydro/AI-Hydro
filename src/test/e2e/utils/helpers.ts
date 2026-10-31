@@ -43,9 +43,14 @@ export function writeUserSettings(userDataDir: string, settings: Record<string, 
 /**
  * Test-profile default: render modals inside the workbench so Playwright can see and click them. With the native
  * dialogs (macOS, Windows) a modal such as the "stop the running chat" confirmation is invisible to the page and
- * would hang the test. This is a test-environment setting only; the product always shows a modal.
+ * would hang the test. This is a test-environment setting only; the product always shows a modal. The map
+ * auto-open is off for the same reason: the tests own the editor layout.
  */
-export const E2E_DEFAULT_USER_SETTINGS = { "window.dialogStyle": "custom" } as const
+export const E2E_DEFAULT_USER_SETTINGS = {
+	"window.dialogStyle": "custom",
+	// The map would open beside the chat after the sidebar shows and change the editor layout the tests click through.
+	"aihydro.map.openWithChat": false,
+} as const
 
 /** Accept the "A chat is still running" modal that "New task" raises while a chat is running. */
 export async function acceptStopRunningChatModal(page: Page): Promise<void> {
