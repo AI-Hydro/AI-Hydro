@@ -1,7 +1,8 @@
 import type { MapLayer } from "@shared/proto/cline/map"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { restoredLayersNote, WorkspaceFilesSection } from "../WorkspaceFilesSection"
+import { restoredLayersNote, useWorkspaceCandidates, WorkspaceFilePicker } from "../WorkspaceFilesSection"
 
 const mock = vi.hoisted(() => ({ list: vi.fn(), add: vi.fn() }))
 vi.mock("../../../services/grpc-client", () => ({
@@ -27,32 +28,71 @@ afterEach(() => {
 	mock.add.mockReset()
 })
 
-describe("WorkspaceFilesSection", () => {
-	it("lists workspace files as candidates and registers nothing on its own", async () => {
-		render(<WorkspaceFilesSection layers={[]} {...styleProps} />)
-		await screen.findByRole("region", { name: "Workspace files you can add" })
-		expect(screen.getByText("Workspace files you can add (2)")).toBeTruthy()
+/** The hook and the picker together, as the Layers panel uses them. */
+const Harness: React.FC<{ layers: MapLayer[]; onStatus?: (kind: "ok" | "err", msg: string) => void }> = ({
+	layers,
+	onStatus = () => {},
+}) => {
+	const ws = useWorkspaceCandidates(layers)
+	const [open, setOpen] = React.useState(false)
+	return (
+		<div>
+			<span data-testid="count">{ws.addable.length}</span>
+			<button onClick={() => setOpen(true)} type="button">
+				open
+			</button>
+			{open && (
+				<WorkspaceFilePicker
+					addable={ws.addable}
+					files={ws.files}
+					onClose={() => setOpen(false)}
+					onStatus={onStatus}
+					totalCount={ws.totalCount}
+					{...styleProps}
+				/>
+			)}
+		</div>
+	)
+}
+const openPicker = async (n: string) => {
+	await waitFor(() => expect(screen.getByTestId("count").textContent).toBe(n))
+	fireEvent.click(screen.getByRole("button", { name: "open" }))
+}
+
+describe("workspace file candidates", () => {
+	it("count what can be added, and register nothing on their own", async () => {
+		render(<Harness layers={[]} />)
+		await waitFor(() => expect(screen.getByTestId("count").textContent).toBe("2"))
 		expect(mock.add).not.toHaveBeenCalled()
+		expect(screen.queryByRole("region", { name: "From this workspace" })).toBeNull()
 	})
 
-	it("adds exactly the file the user chose", async () => {
-		render(<WorkspaceFilesSection layers={[]} {...styleProps} />)
-		fireEvent.click(await screen.findByRole("button", { name: "Add a/one.geojson to the map" }))
+	it("adds exactly the file the user chose, and reports through the expiring status, not a line of its own", async () => {
+		const onStatus = vi.fn()
+		render(<Harness layers={[]} onStatus={onStatus} />)
+		await openPicker("2")
+		fireEvent.click(screen.getByRole("button", { name: "Add a/one.geojson to the map" }))
 		await waitFor(() => expect(mock.add).toHaveBeenCalledOnce())
 		expect(mock.add.mock.calls[0][0].relativePath).toBe("a/one.geojson")
-		await screen.findByText("Added one.geojson.")
+		await waitFor(() => expect(onStatus).toHaveBeenCalledWith("ok", "Added one.geojson."))
+		expect(screen.queryByText("Added one.geojson.")).toBeNull()
 	})
 
-	it("does not list files already on the map", async () => {
+	it("do not list a file already on the map by any route: workspace layer, or a user-added layer with the same path", async () => {
 		const onMap = [
-			{ id: "workspace_a_one_geojson", name: "one.geojson", metadata: { path: "a/one.geojson" } },
+			{
+				id: "workspace_a_one_geojson",
+				name: "one.geojson",
+				metadata: { source: "workspace", path: "a/one.geojson", workspace_folder: "/ws" },
+			},
+			{ id: "polygon-17-x", name: "two", metadata: { source: "user", source_path: "/ws/b/two.geojson" } },
 		] as unknown as MapLayer[]
-		render(<WorkspaceFilesSection layers={onMap} {...styleProps} />)
-		await screen.findByText("Workspace files you can add (1)")
-		expect(screen.queryByRole("button", { name: "Add a/one.geojson to the map" })).toBeNull()
+		render(<Harness layers={onMap} />)
+		await waitFor(() => expect(mock.list).toHaveBeenCalled())
+		await waitFor(() => expect(screen.getByTestId("count").textContent).toBe("0"))
 	})
 
-	it("keys multi-root files by folder plus path: the same relative path in two folders stays two rows", async () => {
+	it("key multi-root files by folder plus path: the same relative path in two folders stays two rows", async () => {
 		mock.list.mockResolvedValue({
 			files: [file("data/basin.geojson", "/one", "one"), file("data/basin.geojson", "/two", "two")],
 			totalCount: 2,
@@ -60,24 +100,24 @@ describe("WorkspaceFilesSection", () => {
 		const onMap = [
 			{ id: "workspace_one_data", name: "basin", metadata: { path: "data/basin.geojson", workspace_folder: "/one" } },
 		] as unknown as MapLayer[]
-		render(<WorkspaceFilesSection layers={onMap} {...styleProps} />)
-		// /one's copy is on the map; /two's is still addable, and the add request names its folder.
-		await screen.findByText("Workspace files you can add (1)")
+		render(<Harness layers={onMap} />)
+		await openPicker("1")
 		fireEvent.click(screen.getByRole("button", { name: "Add data/basin.geojson to the map" }))
 		await waitFor(() => expect(mock.add).toHaveBeenCalledOnce())
 		expect(mock.add.mock.calls[0][0]).toMatchObject({ relativePath: "data/basin.geojson", workspaceFolder: "/two" })
 		expect(screen.getByText(/two \//)).toBeTruthy()
 	})
 
-	it("says when the list is truncated, and renders nothing when the workspace has no geo files", async () => {
+	it("says when the list is truncated, and offers nothing when the workspace has no geo files", async () => {
 		mock.list.mockResolvedValue({ files: [file("a/one.geojson")], totalCount: 450 })
-		const { unmount } = render(<WorkspaceFilesSection layers={[]} {...styleProps} />)
+		const { unmount } = render(<Harness layers={[]} />)
+		await openPicker("1")
 		await screen.findByText("Showing the first 1 of 450 files found.")
 		unmount()
 		mock.list.mockResolvedValue({ files: [], totalCount: 0 })
-		const { container } = render(<WorkspaceFilesSection layers={[]} {...styleProps} />)
+		render(<Harness layers={[]} />)
 		await waitFor(() => expect(mock.list).toHaveBeenCalledTimes(2))
-		expect(container.textContent).toBe("")
+		expect(screen.getByTestId("count").textContent).toBe("0")
 	})
 })
 

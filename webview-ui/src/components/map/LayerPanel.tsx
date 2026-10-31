@@ -38,7 +38,7 @@ import { AttributeTable, LayerInspector, niceMetadata } from "./layerPanelParts"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { SymbologyEditor } from "./SymbologyEditor"
-import { restoredLayersNote, WorkspaceFilesSection } from "./WorkspaceFilesSection"
+import { restoredLayersNote, useWorkspaceCandidates, WorkspaceFilePicker } from "./WorkspaceFilesSection"
 
 interface LayerPanelContentProps {
 	onZoomToLayer?: (layer: MapLayer) => void
@@ -166,6 +166,9 @@ interface DrawerView {
 	/** "Save as…": choose a workspace file or a GeoJSON download. */
 	saveAs: boolean
 }
+/** The merged-duplicates note is shown once per webview session. */
+let mergeNoteShown = false
+
 const CLOSED_DRAWER: DrawerView = { style: false, attrs: false, details: false, saveAs: false }
 
 /** A removal the user can take back. */
@@ -249,6 +252,23 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		setLoadStatus({ kind, msg })
 		if (msg) window.setTimeout(() => setLoadStatus((cur) => (cur.msg === msg ? { kind: "idle", msg: "" } : cur)), ms)
 	}, [])
+
+	// Workspace files not on the map yet are offered from the Add menu; the list opens only when asked for.
+	const workspace = useWorkspaceCandidates(layers)
+	const [pickerOpen, setPickerOpen] = useState(false)
+	const closePicker = useCallback(() => setPickerOpen(false), [])
+
+	// "N layers were the same file": said once per session, then it expires like any status line.
+	useEffect(() => {
+		if (restoreState.mergedCount > 0 && !mergeNoteShown) {
+			mergeNoteShown = true
+			say(
+				"ok",
+				`${restoreState.mergedCount} layer${restoreState.mergedCount === 1 ? " was" : "s were"} the same file as another and ${restoreState.mergedCount === 1 ? "is" : "are"} now one.`,
+				10_000,
+			)
+		}
+	}, [restoreState.mergedCount, say])
 
 	const restoreOlder = async () => {
 		setRestoringOlder(true)
@@ -627,6 +647,16 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 			icon: "link",
 			onSelect: () => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-add-url-command" }),
 		},
+		...(workspace.addable.length > 0
+			? [
+					{
+						key: "workspace",
+						label: `From this workspace (${workspace.addable.length})`,
+						icon: "folder",
+						onSelect: () => setPickerOpen(true),
+					} as OverflowItem,
+				]
+			: []),
 	]
 	const panelItems: OverflowItem[] = [
 		{
@@ -1005,12 +1035,17 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				</div>
 			)}
 
-			<WorkspaceFilesSection
-				border="var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
-				fg="var(--vscode-foreground)"
-				layers={layers}
-				subtle="color-mix(in srgb, var(--vscode-foreground) 6%, transparent)"
-			/>
+			{pickerOpen && workspace.addable.length > 0 && (
+				<WorkspaceFilePicker
+					addable={workspace.addable}
+					border="var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
+					fg="var(--vscode-foreground)"
+					files={workspace.files}
+					onClose={closePicker}
+					onStatus={(kind, msg) => say(kind, msg, kind === "err" ? 8000 : 4000)}
+					totalCount={workspace.totalCount}
+				/>
+			)}
 
 			{confirm && (
 				<div aria-label="Confirm removal" className="map-layers__confirm" role="alertdialog">

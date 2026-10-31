@@ -1391,11 +1391,7 @@ export const screens: ScreenDef[] = [
 	}),
 	mapScreen("map-layers-collapsed-group", "Layers: a group collapsed to its header", {
 		layers: manyLayers(),
-		steps: [
-			...openTool("Layer manager"),
-			{ click: 'button.map-layer-group__head:has-text("Workspace files")' },
-			{ wait: 200 },
-		],
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-group__head:has-text("Your files")' }, { wait: 200 }],
 	}),
 	mapScreen("map-time-slider", "Map date filter", {
 		layers: featureLayers(),
@@ -1602,7 +1598,7 @@ export const screens: ScreenDef[] = [
 		storage: { [MAP_STORAGE_KEY]: framedWorkspace(), [TRANSECTS_STORAGE_KEY]: fixtureTransectsJson() },
 		steps: openTool("Transect profile", true),
 	}),
-	mapScreen("map-layers-workspace-files", "Layers with workspace files that can be added", {
+	mapScreen("map-layers-workspace-files", "Layers: Add menu offers From this workspace (2), and its list is open", {
 		layers: featureLayers(),
 		workspaceFiles: [
 			{
@@ -1620,8 +1616,14 @@ export const screens: ScreenDef[] = [
 				folderName: "fixture",
 			},
 		],
-		steps: openTool("Layer manager"),
-		expectVisible: ['[aria-label="Workspace files you can add"]'],
+		steps: [
+			...openTool("Layer manager"),
+			{ wait: 500 },
+			{ click: 'button[aria-label="Add layer"]' },
+			{ click: '[role="menuitem"]:has-text("From this workspace")' },
+			{ wait: 300 },
+		],
+		expectVisible: ['[aria-label="From this workspace"]'],
 	}),
 	mapScreen("map-more-flyout", "More menu with Swipe, Time and Flood disabled and why", {
 		steps: [

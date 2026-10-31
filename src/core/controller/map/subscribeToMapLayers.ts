@@ -53,6 +53,7 @@ export async function subscribeToMapLayers(
 		marker("snapshot_complete", {
 			hydrating: restore.hydrating ? "1" : "0",
 			older_count: String(restore.olderCount),
+			merged_count: String(restore.mergedCount),
 		}),
 	)
 	initializing = false

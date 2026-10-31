@@ -43,6 +43,7 @@ import { MAX_REMOTE_CATALOG_BYTES, MAX_REMOTE_CONNECTORS } from "@shared/connect
 import type { StudyBindingState } from "@shared/ExtensionMessage"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { HistoryItem, type HistoryOrigin } from "@shared/HistoryItem"
+import { findDuplicate, planMerge } from "@shared/map/layerIdentity"
 import { McpMarketplaceCatalog } from "@shared/mcp"
 import { HtmlPreviewItem, HtmlPreviewMode, LearningModuleCatalog } from "@shared/proto/cline/html_preview"
 import type { ClaimUpdate } from "@shared/proto/cline/ledger"
@@ -2048,11 +2049,56 @@ export class Controller {
 			this.clearMapLayers()
 			return
 		}
+		// One file is one layer: a file already on the map under another id is not added again (see layerIdentity.ts).
+		const duplicate = this.mapLayers.has(layer.id) ? undefined : findDuplicate(Array.from(this.mapLayers.values()), layer)
+		if (duplicate) {
+			this.mergeIntoExisting(duplicate, layer)
+			return
+		}
 		this.mapLayers.set(layer.id, layer)
 		if (!this.mapLayerOrder.includes(layer.id)) {
 			this.mapLayerOrder.push(layer.id)
 		}
 		this.notifyMapLayerSubscribers(layer)
+		void this.syncMapLayerCatalog()
+	}
+
+	/** Duplicates merged since the map opened (restore and later adds). The Layers panel says so once. */
+	private mapMergedCount = 0
+
+	/**
+	 * The same file arrived a second time. Keep one layer: the one with provenance, else the one already on the map.
+	 * The survivor takes the earlier of the two places in the order, keeps its own metadata and gains any run link
+	 * or source key the other had; a run link is never lost. Adding again selects the survivor and says so.
+	 */
+	private mergeIntoExisting(existing: MapLayer, incoming: MapLayer): void {
+		const plan = planMerge(existing, incoming, this.mapLayerOrder)
+		const source = plan.winner === "existing" ? existing : incoming
+		const kept = MapLayer.create({ ...source, metadata: plan.metadata })
+		this.mapLayerOrder = plan.order
+		if (plan.removedId) {
+			this.mapLayers.delete(plan.removedId)
+			this.notifyMapLayerSubscribers(
+				MapLayer.create({ id: plan.removedId, metadata: { __operation: "remove" }, visible: false }),
+			)
+		}
+		this.mapLayers.set(kept.id, kept)
+		this.notifyMapLayerSubscribers(kept)
+		this.mapMergedCount++
+		if (this.mapHydrating) {
+			// Restore: the panel carries one note for all of them.
+			void this.syncMapLayerCatalog()
+			return
+		}
+		this.mapSessionService.appendEvent({
+			type: "command.focus_layers",
+			payloadJson: JSON.stringify({
+				layerIds: [kept.id],
+				note: `Already on the map as “${kept.metadata?.display_name || kept.name}”. Selected it.`,
+			}),
+			timestampMs: Date.now(),
+			source: "user",
+		})
 		void this.syncMapLayerCatalog()
 	}
 
@@ -2093,8 +2139,8 @@ export class Controller {
 		this.mapOverflowEntries = entries
 	}
 
-	getMapRestoreState(): { hydrating: boolean; olderCount: number } {
-		return { hydrating: this.mapHydrating, olderCount: this.mapOverflowEntries.length }
+	getMapRestoreState(): { hydrating: boolean; olderCount: number; mergedCount: number } {
+		return { hydrating: this.mapHydrating, olderCount: this.mapOverflowEntries.length, mergedCount: this.mapMergedCount }
 	}
 
 	/** Tells map subscribers whether restore is still running and how many older layers are kept but not loaded. */
@@ -2108,6 +2154,7 @@ export class Controller {
 					__operation: "restore_state",
 					hydrating: state.hydrating ? "1" : "0",
 					older_count: String(state.olderCount),
+					merged_count: String(state.mergedCount),
 				},
 			}),
 		)

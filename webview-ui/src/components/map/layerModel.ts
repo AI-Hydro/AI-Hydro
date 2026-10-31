@@ -12,20 +12,20 @@ import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { deriveLayerIntelligence, type LayerIntelligence, warningText } from "./layerIntelligence"
 
-export type LayerOrigin = "tool" | "reference" | "workspace" | "user" | "gee" | "pushed"
+/** What a layer is, not how it reached the map: a result of a run, a file of the user's, reference data, Earth Engine. */
+export type LayerOrigin = "tool" | "files" | "reference" | "gee" | "pushed"
 
 /** Groups appear in this order. */
-export const ORIGIN_ORDER: LayerOrigin[] = ["tool", "reference", "user", "workspace", "gee", "pushed"]
+export const ORIGIN_ORDER: LayerOrigin[] = ["tool", "files", "reference", "gee", "pushed"]
 
 export const ORIGIN_LABEL: Record<LayerOrigin, { title: string; icon: string; hint: string }> = {
-	tool: { title: "Tool output", icon: "beaker", hint: "Layers an AI-Hydro tool produced" },
+	tool: { title: "Results", icon: "beaker", hint: "Layers made by an AI-Hydro tool run, wherever the file is saved" },
 	reference: {
 		title: "Reference data",
 		icon: "book",
 		hint: "Reference, not in any run. These layers are not from a recorded run",
 	},
-	workspace: { title: "Workspace files", icon: "folder", hint: "Files from your workspace" },
-	user: { title: "Loaded by you", icon: "cloud-download", hint: "Layers you added from a file or URL" },
+	files: { title: "Your files", icon: "folder", hint: "Files from disk, in the workspace or not" },
 	gee: { title: "Earth Engine", icon: "globe", hint: "Google Earth Engine layers" },
 	pushed: { title: "Other", icon: "layers", hint: "Layers pushed to the map without a recorded origin" },
 }
@@ -38,9 +38,9 @@ export function originOf(layer: MapLayer): LayerOrigin {
 	// A reference layer with no run is labelled for what it is. One a study's run made is that run's output.
 	if (source && REFERENCE_SOURCES.has(source) && !layerRunId(layer.metadata) && !layerTool(layer.metadata)) return "reference"
 	if (source === "gee") return "gee"
-	if (source === "workspace") return "workspace"
-	if (source === "user") return "user"
+	// A file a tool made stays a result even when it sits in the workspace folder; its path is in Details.
 	if (layerRunId(layer.metadata) || layerTool(layer.metadata) || source === "tool" || source === "session") return "tool"
+	if (source === "workspace" || source === "user") return "files"
 	return "pushed"
 }
 
