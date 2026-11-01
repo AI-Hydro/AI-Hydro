@@ -10,6 +10,7 @@ import { McpHub } from "@services/mcp/McpHub"
 import { telemetryService } from "@services/telemetry"
 import { callRowIndexToRecord } from "@shared/aihydro/askOutcome"
 import { execOutcomeFor } from "@shared/aihydro/commandEvidence"
+import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import type { SayEvidence } from "@shared/aihydro/infoNotice"
 import type { SubagentReport } from "@shared/aihydro/subagents"
 import { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
@@ -17,7 +18,7 @@ import { AiHydroDefaultTool } from "@shared/tools"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
 import * as vscode from "vscode"
 import type { AiHydroAgentIdentity } from "@/core/mcp/aihydroContext"
-import { REBIND_CHAT_TOOL } from "@/integrations/aihydro-session/studyBinding"
+import { parseBindingSignal, REBIND_CHAT_TOOL } from "@/integrations/aihydro-session/studyBinding"
 import { getModelCapabilityTier, recommendedMaxMistakes } from "@/utils/model-capabilities"
 import { modelDoesntSupportWebp } from "@/utils/model-utils"
 import { ToolUse } from "../assistant-message"
@@ -28,13 +29,20 @@ import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
-import { noteBindingChanged, noteBindingProbed, noteSessionStarted, START_SESSION_TOOL_NAME } from "./answerAuditGate"
+import {
+	noteBindingChanged,
+	noteBindingObserved,
+	noteBindingProbed,
+	noteSessionStarted,
+	START_SESSION_TOOL_NAME,
+} from "./answerAuditGate"
 import type { AskMeta } from "./askMeta"
 import { browserToolRefusal } from "./browserGate"
 import { explorerBlockReason } from "./explorerPolicy"
 import { CHAT_STATUS_TOOL_NAME } from "./finalAnswerAudit"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
+import { planModeBlockReason } from "./planModePolicy"
 import type { EffectiveCapabilities } from "./subagents/agentProfile"
 import { TaskState } from "./TaskState"
 import { AutoApprove } from "./tools/autoApprove"
@@ -379,11 +387,24 @@ export class ToolExecutor {
 		return ToolExecutor.TOOL_ERROR_MARKERS.some((marker) => head.includes(marker))
 	}
 
+	/**
+	 * Whether a tool call failed. An MCP call is judged by what the handler observed (`isError`, a thrown call, a
+	 * structured error body), not by its text; every other result by the stable text markers. Environmental failures (a
+	 * timeout, a down server) are recorded for the UI and the nudge, and deliberately do NOT feed the mistake count: they
+	 * must not halt a task.
+	 */
+	private resultFailed(content: ToolResponse, block: ToolUse): boolean {
+		if (block.name === AiHydroDefaultTool.MCP_USE && this.taskState.mcpCallFailed !== undefined) {
+			return this.taskState.mcpCallFailed || (typeof content === "string" && ToolExecutor.isToolErrorResult(content))
+		}
+		return typeof content === "string" && ToolExecutor.isToolErrorResult(content)
+	}
+
 	private recordIfToolError(content: ToolResponse, block: ToolUse) {
 		if (typeof content !== "string") {
 			return
 		}
-		if (!ToolExecutor.isToolErrorResult(content)) {
+		if (!this.resultFailed(content, block)) {
 			return
 		}
 		const entry = `[${block.name}] ${content.replace(/\s+/g, " ").trim()}`.slice(0, 300)
@@ -397,8 +418,8 @@ export class ToolExecutor {
 	 * Record on the call's UI row that its result came back, so the transcript can say "ran" or "failed" from evidence
 	 * instead of inferring it from the approval. A denied call never ran, so it is not marked.
 	 */
-	private async recordExecution(content: ToolResponse): Promise<void> {
-		const failed = typeof content === "string" && ToolExecutor.isToolErrorResult(content)
+	private async recordExecution(content: ToolResponse, block: ToolUse): Promise<void> {
+		const failed = this.resultFailed(content, block)
 		const messages = this.messageStateHandler.getAiHydroMessages()
 		const index = callRowIndexToRecord(messages)
 		if (index >= 0) {
@@ -412,7 +433,7 @@ export class ToolExecutor {
 			block.params.tool_name === START_SESSION_TOOL_NAME &&
 			isAiHydroServerName(block.params.server_name) &&
 			typeof content === "string" &&
-			!ToolExecutor.isToolErrorResult(content)
+			!this.resultFailed(content, block)
 		) {
 			noteSessionStarted(this.taskState.answerAuditGate)
 		}
@@ -422,24 +443,46 @@ export class ToolExecutor {
 			block.params.tool_name === CHAT_STATUS_TOOL_NAME &&
 			isAiHydroServerName(block.params.server_name) &&
 			typeof content === "string" &&
-			!ToolExecutor.isToolErrorResult(content)
+			!this.resultFailed(content, block)
 		) {
 			noteBindingProbed(this.taskState.answerAuditGate)
+		}
+		// Any first-party tool whose result reports a binding for THIS chat (delineation binds one too, `bound_by:
+		// auto_create`): a study is bound, so the gate is eligible. Shape only, no tool-name list; a flag, never a study
+		// id (the audit asks the server itself, with the host's chat id). A result naming another chat counts for nothing.
+		if (
+			isAiHydroServerName(block.params.server_name) &&
+			this.isTrustedConnectedServer(block.params.server_name) &&
+			typeof content === "string" &&
+			!this.resultFailed(content, block)
+		) {
+			const signal = parseBindingSignal(content)
+			if (signal?.kind === "binding" && signal.binding.chatId === this.ulid) {
+				noteBindingObserved(this.taskState.answerAuditGate)
+			}
 		}
 		if (
 			block.params.tool_name === REBIND_CHAT_TOOL &&
 			isAiHydroServerName(block.params.server_name) &&
 			typeof content === "string" &&
-			!ToolExecutor.isToolErrorResult(content)
+			!this.resultFailed(content, block)
 		) {
 			noteBindingChanged(this.taskState.answerAuditGate)
 		}
 	}
 
+	/** The named server is connected and trusted (name plus recorded launcher), as the controller's binding observer requires. */
+	private isTrustedConnectedServer(serverName: string | undefined): boolean {
+		const server = this.mcpHub?.getServers?.().find((s) => s.name === serverName)
+		return !!server && server.status === "connected" && isServerTrusted(server as any)
+	}
+
 	private pushToolResult = (content: ToolResponse, block: ToolUse) => {
 		this.recordIfToolError(content, block)
 		this.noteStartSession(content, block)
-		void this.recordExecution(content).catch((error) => console.error("Failed to record tool execution outcome", error))
+		void this.recordExecution(content, block).catch((error) =>
+			console.error("Failed to record tool execution outcome", error),
+		)
 		// Use the ToolResultUtils to properly format and push the tool result
 		ToolResultUtils.pushToolResult(
 			content,
@@ -453,16 +496,6 @@ export class ToolExecutor {
 			this.coordinator,
 		)
 	}
-
-	/**
-	 * Tools that are restricted in plan mode and can only be used in act mode
-	 */
-	private static readonly PLAN_MODE_RESTRICTED_TOOLS: AiHydroDefaultTool[] = [
-		AiHydroDefaultTool.FILE_NEW,
-		AiHydroDefaultTool.FILE_EDIT,
-		AiHydroDefaultTool.MULTI_FILE_EDIT,
-		AiHydroDefaultTool.NEW_RULE,
-	]
 
 	/**
 	 * Execute a tool through the coordinator if it's registered
@@ -512,18 +545,23 @@ export class ToolExecutor {
 				return true
 			}
 
-			// Logic for plan-mode tool call restrictions
+			// Plan mode is read-only (planModePolicy.ts): file writers, non-READ MCP tools and non-read-only commands are
+			// refused with a result that says so. A partial block is swallowed silently; the complete one reports once.
 			if (
 				this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled") &&
 				this.stateManager.getGlobalSettingsKey("mode") === "plan" &&
-				block.name &&
-				this.isPlanModeToolRestricted(block.name)
+				block.name
 			) {
-				const errorMessage = `Tool '${block.name}' is not available in PLAN MODE. This tool is restricted to ACT MODE for file modifications. Only use tools available for PLAN MODE when in that mode.`
-				await this.say("error", errorMessage)
-				this.pushToolResult(formatResponse.toolError(errorMessage), block)
-				await this.saveCheckpoint()
-				return true
+				const planRefusal = planModeBlockReason(block.name, block.params, this.mcpHub)
+				if (planRefusal) {
+					if (block.partial) {
+						return true
+					}
+					await this.say("error", planRefusal)
+					this.pushToolResult(formatResponse.toolError(planRefusal), block)
+					await this.saveCheckpoint()
+					return true
+				}
 			}
 
 			// The browser tool is off by default (X0-5); refuse a call the prompt no longer offers (see browserGate.ts).
@@ -555,13 +593,6 @@ export class ToolExecutor {
 			await this.saveCheckpoint()
 			return true
 		}
-	}
-
-	/**
-	 * Check if a tool is restricted in plan mode
-	 */
-	private isPlanModeToolRestricted(toolName: AiHydroDefaultTool): boolean {
-		return ToolExecutor.PLAN_MODE_RESTRICTED_TOOLS.includes(toolName)
 	}
 
 	/**

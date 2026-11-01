@@ -39,7 +39,7 @@ export async function subscribeToAddToInput(
  * Send an addToInput event to all active subscribers
  * @param text The text to add to the input
  */
-export async function sendAddToInputEvent(text: string): Promise<void> {
+export async function sendAddToInputEvent(text: string): Promise<boolean> {
 	// Send the event to all active subscribers
 	const promises = Array.from(activeAddToInputSubscriptions).map(async (responseStream) => {
 		try {
@@ -51,12 +51,15 @@ export async function sendAddToInputEvent(text: string): Promise<void> {
 				false, // Not the last message
 			)
 			console.log("[DEBUG] sending addToInput event", text.length, "chars")
+			return true
 		} catch (error) {
 			console.error("Error sending addToInput event:", error)
 			// Remove the subscription if there was an error
 			activeAddToInputSubscriptions.delete(responseStream)
+			return false
 		}
 	})
 
-	await Promise.all(promises)
+	// True only when at least one open chat input received the text; with none, nothing was added.
+	return (await Promise.all(promises)).some(Boolean)
 }

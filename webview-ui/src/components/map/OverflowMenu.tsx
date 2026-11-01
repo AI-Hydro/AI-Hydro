@@ -26,6 +26,8 @@ export type OverflowItem =
 			/** A toggle's state, announced as `aria-checked`. */
 			checked?: boolean
 			shortcut?: string
+			/** What the item does, as a tooltip. */
+			title?: string
 	  }
 	| { key: string; divider: true }
 
@@ -194,7 +196,7 @@ export const OverflowMenu: React.FC<OverflowMenuProps> = ({ label, items, icon =
 									}}
 									role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
 									tabIndex={-1}
-									title={item.disabledReason ? `${item.label} (${item.disabledReason})` : undefined}
+									title={item.disabledReason ? `${item.label} (${item.disabledReason})` : item.title}
 									type="button">
 									<span
 										aria-hidden="true"

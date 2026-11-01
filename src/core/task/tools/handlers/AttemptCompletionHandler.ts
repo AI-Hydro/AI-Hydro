@@ -4,6 +4,7 @@ import { formatResponse } from "@core/prompts/responses"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { AUDIT_PROGRESS_DRAFTING } from "@shared/aihydro/answerAuditGate"
+import { completionOutcomeOf } from "@shared/aihydro/completionOutcome"
 import type { AnswerAuditPayload } from "@shared/aihydro/transcriptContracts"
 import { findLastIndex } from "@shared/array"
 import { COMPLETION_RESULT_CHANGES_FLAG } from "@shared/ExtensionMessage"
@@ -75,9 +76,19 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			auditEnabled: settings.getGlobalSettingsKey("finalAnswerAuditEnabled"),
 			servers: config.services.mcpHub.getServers(),
 			state: config.taskState.answerAuditGate,
+			hostBound: this.hostBound(config),
 		})
-		config.taskState.answerAuditGate.eligibleServer = result.eligible ? result.serverName : undefined
+		const gate = config.taskState.answerAuditGate
+		gate.eligibleServer = result.eligible ? result.serverName : undefined
+		// Remembered so the shown answer's record can say why the safeguard did not run (never a silent skip).
+		gate.skipReason = result.eligible || result.reason === "not-attempt-completion" ? undefined : result.reason
 		return result.eligible
+	}
+
+	/** The host's own chip says a study is bound to this chat (boolean only; the audit asks the server itself). */
+	private hostBound(config: TaskConfig): boolean {
+		const binding = config.services.controller?.studyBinding
+		return !!binding && binding.chatId === config.ulid && binding.status === "bound"
 	}
 
 	/** Emit one structured `answer_audit` row (never prose): the webview renders it, copy/notification text is derived. */
@@ -93,7 +104,8 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			answerTs: answerRow?.ts ?? Date.now(),
 			answer,
 		})
-		await config.callbacks.say("answer_audit", JSON.stringify(payload))
+		const gateSkipped = config.taskState.answerAuditGate.skipReason
+		await config.callbacks.say("answer_audit", JSON.stringify(gateSkipped ? { ...payload, gateSkipped } : payload))
 	}
 
 	/** Emit the final-stage row for a gate-accepted answer (the audit already ran inside the gate). */
@@ -114,7 +126,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		await compactPendingRows(config.messageState)
 	}
 
-	private async showFinalAnswerAudit(config: TaskConfig, answer: string): Promise<void> {
+	private async showFinalAnswerAudit(
+		config: TaskConfig,
+		answer: string,
+		completion?: { outcome: "partial" | "infeasible"; unmet: string[] },
+	): Promise<void> {
 		let emitted = false
 		try {
 			if (config.services.stateManager.getGlobalSettingsKey("finalAnswerAuditEnabled") === false) {
@@ -127,6 +143,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				answer,
 				modelIdReturned: config.taskState.lastResponseModelId,
 				projectId: config.services.controller?.getChatProjectId(config.ulid),
+				completion,
 			})
 			// Nothing to audit / no research session stays silent, as before: no row for chats outside a study.
 			if (outcome.status !== "skipped") {
@@ -181,6 +198,10 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "result")
 		}
 
+		// Honest exit: the model said it only partly did the task, or could not. Recorded on the answer row (a statement
+		// by the model, shown as such); `done`, absent or unrecognised records nothing, so a normal completion is unchanged.
+		const outcomeRecord = completionOutcomeOf(block.params.outcome, block.params.unmet)
+
 		// The pre-completion gate runs FIRST: before the notification, the completion say, the checkpoint,
 		// telemetry and the command ask. Not eligible: nothing below changes.
 		let gateDecision: Extract<GateDecision, { kind: "accept" }> | undefined
@@ -205,6 +226,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				modelId: config.taskState.lastResponseModelId,
 				projectId: config.services.controller?.getChatProjectId(config.ulid),
 				result,
+				completion: outcomeRecord,
 				rows: () => config.messageState.getAiHydroMessages(),
 				emit: async (payload) => {
 					await sweepAuditProgress(config.messageState)
@@ -242,10 +264,22 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			if (decision.kind === "user_feedback") {
 				await this.revealDraft(config, "you sent a message while the answer was being checked")
 				await config.callbacks.say("user_feedback", decision.text ?? "", decision.images, decision.files)
-				return await this.feedbackResult(undefined, decision.text, decision.images, decision.files)
+				return await this.feedbackResult(undefined, decision.text, decision.images, decision.files, false)
 			}
 			gateDecision = decision
 		}
+
+		// A text-only reply to a follow-up is an answer to the user, not a finished-task result: the row says so, and it
+		// is not counted as a completed task. The honest-exit outcome the model declared rides on the same row.
+		const followUpAnswer = config.taskState.followUpAnswerInFlight
+		const evidence = {
+			...(outcomeRecord ? { completionOutcome: outcomeRecord } : {}),
+			...(followUpAnswer ? { followUpAnswer: true } : {}),
+		}
+		const sayCompletion = () =>
+			Object.keys(evidence).length > 0
+				? config.callbacks.say("completion_result", result, undefined, undefined, false, evidence)
+				: config.callbacks.say("completion_result", result, undefined, undefined, false)
 
 		config.taskState.consecutiveMistakeCount = 0
 
@@ -283,11 +317,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		if (command) {
 			if (lastMessage && lastMessage.ask !== "command") {
 				// haven't sent a command message yet so first send completion_result then command
-				const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+				const completionMessageTs = await sayCompletion()
 				config.taskState.answerAuditGate.hidden = undefined // shown: no longer a hidden draft
 				await config.callbacks.saveCheckpoint(true, completionMessageTs)
 				await addNewChangesFlagToLastCompletionResultMessage()
-				telemetryService.captureTaskCompleted(config.ulid)
+				if (!followUpAnswer) {
+					telemetryService.captureTaskCompleted(config.ulid)
+				}
 				await finalizeGate()
 			} else {
 				config.taskState.answerAuditGate.hidden = undefined
@@ -315,11 +351,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			// user didn't reject, but the command may have output
 			commandResult = execCommandResult
 		} else {
-			const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+			const completionMessageTs = await sayCompletion()
 			config.taskState.answerAuditGate.hidden = undefined // shown: no longer a hidden draft
 			await config.callbacks.saveCheckpoint(true, completionMessageTs)
 			await addNewChangesFlagToLastCompletionResultMessage()
-			telemetryService.captureTaskCompleted(config.ulid)
+			if (!followUpAnswer) {
+				telemetryService.captureTaskCompleted(config.ulid)
+			}
 		}
 
 		// The chat has an answer: one more automatic title, from the whole exchange, unless the user named it (X1-P2).
@@ -342,7 +380,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			// The audit already ran inside the gate; emit its record (with revisions, removed values, disclosure).
 			await finalizeGate()
 		} else {
-			await this.showFinalAnswerAudit(config, result)
+			await this.showFinalAnswerAudit(config, result, outcomeRecord)
 		}
 
 		const { response, text, images, files: completionFiles } = await config.callbacks.ask("completion_result", "", false)
@@ -351,6 +389,8 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 
 		await config.callbacks.say("user_feedback", text ?? "", images, completionFiles)
+		// What the user writes after a shown answer is a follow-up until the model has to use a tool again.
+		config.taskState.followUpTurn = true
 		return await this.feedbackResult(commandResult, text, images, completionFiles)
 	}
 
@@ -360,6 +400,8 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		text: string | undefined,
 		images: string[] | undefined,
 		completionFiles: string[] | undefined,
+		/** The feedback answers a SHOWN answer. False when the user wrote during the audit gate: the draft was never shown. */
+		followUp = true,
 	): Promise<ToolResponse> {
 		const toolResults: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
 		if (commandResult) {
@@ -374,7 +416,9 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 		toolResults.push({
 			type: "text",
-			text: `The user has provided feedback on the results. Consider their input to continue the task, and then attempt completion again.\n<feedback>\n${text}\n</feedback>`,
+			text: followUp
+				? `The user sent a new message after your answer. If it is a question, answer it directly and briefly: do not repeat the earlier report, and use a tool only if the answer needs new information. If it asks for a change, make it, then attempt completion again.\n<feedback>\n${text}\n</feedback>`
+				: `The user has provided feedback on the results. Consider their input to continue the task, and then attempt completion again.\n<feedback>\n${text}\n</feedback>`,
 		})
 		toolResults.push(...formatResponse.imageBlocks(images))
 

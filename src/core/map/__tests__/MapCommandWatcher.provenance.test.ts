@@ -9,7 +9,11 @@ const GEOJSON = JSON.stringify({ type: "FeatureCollection", features: [] })
 
 function apply(command: Record<string, unknown>) {
 	const added: any[] = []
-	const controller = { addMapLayer: (l: any) => added.push(l), mapSessionService: { appendEvent: () => {} } }
+	const controller = {
+		addMapLayer: (l: any) => added.push(l),
+		resolveMapLayerId: (id: string) => id,
+		mapSessionService: { appendEvent: () => {} },
+	}
 	const watcher = new MapCommandWatcher(controller as any)
 	const parsed = mapCommandSchema.parse(command)
 	return (watcher as any).applyCommand(parsed).then(() => added)

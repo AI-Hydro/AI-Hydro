@@ -20,6 +20,19 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 describe("citation grammar canon", () => {
+	it("the grammar reaches every user through the system prompt, with the #path the auditor requires", () => {
+		const { SCIENTIFIC_CONDUCT_RULES } = require("../system-prompt/components/scientific_conduct")
+		expect(SCIENTIFIC_CONDUCT_RULES).to.include("[run:<run_id>#key_outputs.<field>]")
+		expect(SCIENTIFIC_CONDUCT_RULES).to.include("a marker without it cannot be checked")
+	})
+
+	it("the project-context frame names the full marker form, never a pathless [run:]", () => {
+		const { formatProjectContextSection } = require("../../task/projectContextSection")
+		const frame = formatProjectContextSection("x")
+		expect(frame).to.include("[run:<run_id>#key_outputs.<field>]")
+		expect(frame).to.not.include("[run:]")
+	})
+
 	it("no extension prompt text teaches [run:<id>#data.<field>] (canonical form is key_outputs.<field>)", () => {
 		const promptsDir = path.resolve(__dirname, "..")
 		const offenders = walk(promptsDir).filter((f) => /\[run:[^\]\n]*#(evidence\.)?data\./.test(fs.readFileSync(f, "utf8")))

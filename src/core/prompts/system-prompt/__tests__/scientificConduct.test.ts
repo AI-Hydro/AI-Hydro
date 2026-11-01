@@ -39,6 +39,15 @@ describe("system prompt: scientific conduct and removed contradictions", () => {
 				expect(prompt).to.match(/modelled, simulated, or estimated/)
 			})
 
+			it("teaches the citation grammar with its #path, and carries the shared research rules (no variant fork drops them)", async () => {
+				const prompt = await getSystemPrompt(ctxFor(modelId))
+				expect(prompt).to.include("[run:<run_id>#key_outputs.<field>]")
+				expect(prompt).to.include("The part after `#` is required")
+				expect(prompt).to.match(/\*\*Skills:\*\* Consult the skill catalog/)
+				expect(prompt).to.match(/\*\*Citation Anti-Hallucination \(Mandatory\):\*\*/)
+				expect(prompt).to.match(/\*\*Artifact Self-Review \(Mandatory\):\*\*/)
+			})
+
 			it("has no web-development advice in the rules or objective", async () => {
 				const prompt = await getSystemPrompt(ctxFor(modelId))
 				expect(prompt).to.not.include("easily run without additional setup")
@@ -72,6 +81,21 @@ describe("system prompt: scientific conduct and removed contradictions", () => {
 			expect(prompt, key).to.match(/Abstain when the evidence is insufficient/)
 			expect(prompt, key).to.not.match(/(?<!never )assume (the terminal|success)/i)
 			expect(prompt, key).to.not.match(/Mandatory Pre-Flight/)
+		}
+	})
+
+	it("EVERY variant claims Plan mode is read-only only when strictPlanModeEnabled is on", async () => {
+		await getSystemPrompt(ctxFor("gpt-3"))
+		const registry = PromptRegistry.getInstance() as any
+		for (const [key, variant] of [...registry.variants.entries()] as Array<[string, any]>) {
+			const off = await new PromptBuilder(variant, ctxFor("gpt-3"), registry.components).build()
+			const on = await new PromptBuilder(
+				variant,
+				{ ...ctxFor("gpt-3"), strictPlanModeEnabled: true } as SystemPromptContext,
+				registry.components,
+			).build()
+			expect(off, key).to.not.match(/PLAN MODE \(read-only|PLAN MODE is read-only/)
+			expect(on, key).to.match(/PLAN MODE \(read-only|PLAN MODE is read-only/)
 		}
 	})
 })

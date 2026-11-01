@@ -1637,9 +1637,11 @@ export const ChatRowContent = memo(
 						return (
 							<AnswerBlock
 								audit={answer?.audit}
+								followUpAnswer={message.followUpAnswer}
 								hasChanges={message.partial !== true && hasChanges}
 								onSeeChanges={viewCompletionChanges}
 								onSendFeedback={isLast ? answer?.onSendFeedback : undefined}
+								outcome={message.completionOutcome}
 								partial={message.partial}
 								seeChangesDisabled={seeNewChangesDisabled}
 								text={text}

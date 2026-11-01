@@ -38,16 +38,18 @@ Click the **✏️** icon to sketch geometry that can be saved as a vector file 
 |---|---|
 | **⬡ Polygon** | Click each vertex; double-click to close |
 | **〰 Line** | Click each vertex; double-click to finish |
-| **● Point** | Single click to place |
+
+To mark a single place, use a Pin ([Pins](pins.md)); Draw no longer places points.
 
 ### After drawing
 
-A green draft overlay appears on the map, and three action buttons appear at the bottom of the panel:
+A green draft overlay appears on the map, and a card with four buttons appears at the bottom:
 
 | Button | Action |
 |---|---|
-| **Save** | Writes `vectors/<name>.geojson` in the workspace root, registers the geometry as the active ROI under `sessionId='map'`, and adds it as a layer |
-| **Export** | Downloads the draft as a `.geojson` file to your Downloads folder without saving to the workspace |
+| **Save as ROI** | Writes `vectors/<name>.geojson` in the workspace root, registers the geometry as the active ROI under `sessionId='map'`, and adds it as a layer |
+| **Keep as sketch** | Keeps the shape in the Sketches list under the Draw tools. Nothing is written to the workspace |
+| **Export GeoJSON** | Downloads the draft as a `.geojson` file to your Downloads folder without saving to the workspace |
 | **Discard** | Clears the draft without saving |
 
 ### Using the saved ROI

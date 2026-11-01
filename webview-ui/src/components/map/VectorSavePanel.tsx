@@ -1,13 +1,15 @@
 import React, { useState } from "react"
 import { fmtArea, fmtDist } from "./geoMeasureMath"
-import type { CompletedVectorDraw } from "./VectorDrawTool"
 import { MAP_Z } from "./mapZ"
+import type { CompletedVectorDraw } from "./VectorDrawTool"
 
 interface VectorSavePanelProps {
 	draw: CompletedVectorDraw
 	mapStyle: string
 	busy?: boolean
 	onSave: (name: string) => void
+	/** Keep the shape as a sketch in the Draw panel instead of a file. */
+	onKeepSketch?: () => void
 	onExport: () => void
 	onDiscard: () => void
 }
@@ -17,6 +19,7 @@ export const VectorSavePanel: React.FC<VectorSavePanelProps> = ({
 	mapStyle,
 	busy = false,
 	onSave,
+	onKeepSketch,
 	onExport,
 	onDiscard,
 }) => {
@@ -61,11 +64,11 @@ export const VectorSavePanel: React.FC<VectorSavePanelProps> = ({
 				fontSize: 12,
 				pointerEvents: "auto",
 			}}>
-			<div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: accent }}>Vector ready — save to workspace</div>
+			<div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: accent }}>Shape ready</div>
 			<div style={{ fontSize: 11, opacity: 0.85, marginBottom: 10, lineHeight: 1.5 }}>
 				{draw.mode === "polygon" && draw.areaKm2 != null && <>Area: {fmtArea(draw.areaKm2)} · </>}
 				{draw.mode === "line" && draw.lengthKm != null && <>Length: {fmtDist(draw.lengthKm)} · </>}
-				{draw.pointCount} vertex{draw.pointCount === 1 ? "" : "es"} — file will appear in Layers after save
+				{draw.pointCount} vertex{draw.pointCount === 1 ? "" : "es"} — a saved ROI appears in Layers
 			</div>
 			<label style={{ display: "block", fontSize: 11, marginBottom: 4, opacity: 0.8 }}>File name (slug)</label>
 			<input
@@ -101,6 +104,16 @@ export const VectorSavePanel: React.FC<VectorSavePanelProps> = ({
 					type="button">
 					Export GeoJSON
 				</button>
+				{onKeepSketch && (
+					<button
+						disabled={busy}
+						onClick={onKeepSketch}
+						style={{ ...btn, background: "transparent", color: fg }}
+						title="Keep the shape in the Sketches list; nothing is written to your workspace"
+						type="button">
+						Keep as sketch
+					</button>
+				)}
 				<button
 					disabled={busy || !name.trim()}
 					onClick={() => onSave(name.trim())}
@@ -112,7 +125,7 @@ export const VectorSavePanel: React.FC<VectorSavePanelProps> = ({
 						fontWeight: 600,
 					}}
 					type="button">
-					{busy ? "Saving…" : "Save to workspace"}
+					{busy ? "Saving…" : "Save as ROI"}
 				</button>
 			</div>
 		</div>

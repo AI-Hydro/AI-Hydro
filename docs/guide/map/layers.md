@@ -35,7 +35,7 @@ The **Layers panel** (📑) is the central control surface for everything on the
 
 ### Workspace files you can add
 
-Opening the map no longer registers every GeoJSON/KML/… file in the workspace as a layer. The Layer manager lists them under **Workspace files you can add** (dependency, `.git`, `.worktrees`, `_archive` and build folders are skipped); **Add** puts one on the map. The ribbon badge counts **visible** layers; its tooltip reads "N visible · M hidden". Layers restored from an earlier session are scoped to the current workspace and capped at the 40 most recent; older layers are kept on disk (never dropped) and the panel offers **Restore older layers (N)** to load them. The old unscoped `map_layer_catalog.json` is imported once, by the first workspace that opens it; a `map_layer_catalog.migrated` marker records that, and no other workspace imports it. After that the unscoped file is a **mirror of the active workspace's catalog**, rewritten atomically on every catalog write, because the agent's map layer tools (aihydro-tools) still read it. The mirror can be removed once aihydro-tools reads the scoped catalogs. Before the first mirror write, the previous unscoped file is copied byte-for-byte to `map_layer_catalog.legacy-backup.json` (never overwritten); if that copy fails the unscoped file is left untouched. Workspace files are keyed by folder plus path (multi-root safe), symlinks leaving the folder are not listed, and `env`, `.tox`, `site-packages`, `.ipynb_checkpoints`, `.cache` and `target` are skipped too. "No layers yet" appears only after restore has finished.
+Opening the map no longer registers every GeoJSON/KML/… file in the workspace as a layer. **Add**, then **From this workspace (N)** lists them (dependency, `.git`, `.worktrees`, `_archive` and build folders are skipped); **Add** on a row puts one on the map. With none to add, the item is not there. A file already on the map, however it got there, is not listed. The ribbon badge counts **visible** layers; its tooltip reads "N visible · M hidden". Layers restored from an earlier session are scoped to the current workspace and capped at the 40 most recent; older layers are kept on disk (never dropped) and the panel offers **Restore older layers (N)** to load them. The old unscoped `map_layer_catalog.json` is imported once, by the first workspace that opens it; a `map_layer_catalog.migrated` marker records that, and no other workspace imports it. After that the unscoped file is a **mirror of the active workspace's catalog**, rewritten atomically on every catalog write, because the agent's map layer tools (aihydro-tools) still read it. The mirror can be removed once aihydro-tools reads the scoped catalogs. Before the first mirror write, the previous unscoped file is copied byte-for-byte to `map_layer_catalog.legacy-backup.json` (never overwritten); if that copy fails the unscoped file is left untouched. Workspace files are keyed by folder plus path (multi-root safe), symlinks leaving the folder are not listed, and `env`, `.tox`, `site-packages`, `.ipynb_checkpoints`, `.cache` and `target` are skipped too. "No layers yet" appears only after restore has finished.
 
 ---
 
@@ -111,23 +111,27 @@ A **stale** badge appears when the source file has changed since the layer was l
 
 ## Per-Layer Controls
 
-| Control | Action |
-|---|---|
-| Checkbox | Toggle visibility |
-| Colour swatch | Open symbology editor |
-| 🔍 | Zoom map to layer bounding box |
-| 📋 | Open provenance record |
-| ↗ | Open source file in VS Code editor |
-| ⟳ | Reload layer from source file |
-| 🎨 | Symbology editor |
-| 🔘 / 🧩 | Toggle point clustering (point layers only) |
-| 📊 | View attribute table (vector layers) |
-| 📁 | Save to workspace vectors folder |
-| 💾 | Export layer as GeoJSON download |
-| ▾ / ▴ | Show / hide full metadata |
-| ↑ / ↓ | Move layer up / down in render order |
-| ⠿ | Drag handle for reordering |
-| ✕ | Remove layer (source file not deleted) |
+Each action lives in one place. Click a layer's name to open its drawer; the `...` menu holds the rest.
+
+| Where | Control | Action |
+|---|---|---|
+| Row | Eye | Show or hide the layer |
+| Row | Grip | Drag to reorder |
+| Drawer | Opacity slider | Layer opacity |
+| Drawer | **Style** | Symbology editor; **Cluster points** for point layers |
+| Drawer | **Attributes** | Attribute table (vector layers) |
+| Drawer | **Details** | Overview, Data and Provenance. The run and tool names copy from here |
+| `...` menu | Zoom to layer, Rename | |
+| `...` menu | **Save as…** | A workspace file, or a GeoJSON download |
+| `...` menu | Open source file, Reload source | Only when the layer has a source file |
+| `...` menu and Details | **Open run** | Opens the run that made the layer in Replay. Shown only when the layer records both its study and its run |
+| Details, Provenance | Open provenance record | When the layer has one |
+| `...` menu | Move up, Move down | Render order |
+| `...` menu | Remove layer | Source file not deleted; Undo appears |
+
+Layers are grouped by what they are, not by how they got there: **Results** (made by a tool run, even if saved in the workspace; Details shows the path), **Your files** (any file from disk, in the workspace or not), **Reference data**, **Earth Engine**. One file is one layer: adding a file that is already on the map (same source path, else the same content) selects the existing layer and says so, and layers from two different runs are never merged. **Reference data** holds MERIT rivers, WBD boundaries, NWIS gauges and NID dams that no run made: they are labelled "Reference, not in any run" and are not from a recorded run. The same layer made by a study's run sits under Results instead.
+
+Show all and Hide all are in the Layers panel `...` menu. The Provenance tab lists what is recorded and ends with one "Not recorded: ..." line for the facts that are not.
 
 ### Renaming
 
@@ -161,7 +165,7 @@ Drag a layer row using its ⠿ gripper, or use ↑/↓ buttons, to change render
 
 ## Point Clustering
 
-For dense point networks (USGS gauges, precipitation stations), enable **Cluster** in the layer row. Points within the same grid cell at low zoom are aggregated into a single marker sized by count.
+For dense point networks (USGS gauges, precipitation stations), open the layer's drawer, choose **Style** and tick **Cluster points**. Points within the same grid cell at low zoom are aggregated into a single marker sized by count.
 
 ---
 

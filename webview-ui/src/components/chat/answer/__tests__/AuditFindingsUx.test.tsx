@@ -4,7 +4,8 @@ import type { ReactNode } from "react"
 import { describe, expect, it, vi } from "vitest"
 import MarkdownBlock from "@/components/common/MarkdownBlock"
 import { ExtensionStateContext } from "@/context/ExtensionStateContext"
-import { AnswerAuditFooter } from "../AnswerAuditFooter"
+import { auditSummaryLine } from "../../AnswerAuditSummary"
+import { AnswerAuditFooter, auditFooterLine, gateSkipNeedsAttention } from "../AnswerAuditFooter"
 import { AnswerBlock } from "../AnswerBlock"
 import { auditSummaryView, contextSnippet, markUntracedNumbers, untracedPlan, viewFinding } from "../auditFindings"
 
@@ -51,6 +52,24 @@ const hardAudit = () =>
 			{ kind: "stale_claim", severity: "advisory", excerpt: "baseflow index" },
 		],
 	})
+
+describe("no_observed_lineage (tools-side check, advisory today; hard is reserved)", () => {
+	const lineage: AnswerAuditViolation = {
+		kind: "no_observed_lineage",
+		severity: "advisory",
+		category: "lineage",
+		excerpt: "mean flow 18.4 m3/s",
+		message: "The quantity '18.4' is not derived from any observed-data run.",
+	}
+	it("renders as a note, never as a hard finding, and offers no 'link these' action", () => {
+		const a = audit({ advisoryCount: 1, violations: [lineage] })
+		expect(auditSummaryView(a)).toEqual({ text: "1 note to review", tone: "note" })
+		expect(viewFinding(lineage).status).toBe("Not derived from observed data")
+		const { container, queryByText } = withDetail("normal", <AnswerAuditFooter audit={a} onAskToLink={() => {}} />)
+		expect(queryByText("Ask AI-Hydro to link these")).toBeNull()
+		expect(container.textContent).toContain("1 note to review")
+	})
+})
 
 describe("audit summary view", () => {
 	it("counts are accurate and the wording is for a human", () => {
@@ -250,5 +269,43 @@ describe("pathless wording is about the reference the number binds to (nearest a
 
 	it("the nearest following reference being pathless does", () => {
 		expect(viewFinding(num(`area 774.15 km² ${pathless} then ${valid}`)).status).toContain("no #path")
+	})
+})
+
+describe("gate skipped line (A1)", () => {
+	it("an untrusted server is always said, with the reason, at normal detail", () => {
+		const { getByTestId } = withDetail(
+			"normal",
+			<AnswerAuditFooter audit={audit({ status: "violations", hardCount: 1, gateSkipped: "no-trusted-server" })} />,
+		)
+		const line = getByTestId("answer-audit-gate-skipped").textContent ?? ""
+		expect(line).toContain("not held back for checking")
+		expect(line).toContain("not trusted")
+	})
+
+	it("no-study skips are neutral; the same skip where a study exists is a warning; the technical line always carries it", () => {
+		const noStudy = audit({
+			status: "unavailable",
+			disclosure: { kind: "audit_unavailable", reason: "x" },
+			gateSkipped: "study-not-bound",
+		})
+		expect(gateSkipNeedsAttention(noStudy)).toBe(false)
+		expect(gateSkipNeedsAttention({ ...noStudy, sessionId: "s1" })).toBe(true)
+		expect(gateSkipNeedsAttention({ ...noStudy, gateSkipped: "no-trusted-server" })).toBe(true)
+		expect(gateSkipNeedsAttention({ ...noStudy, gateSkipped: "gate-setting-off" })).toBe(false)
+		// A passed audit with a skipped gate reads as such in the technical form used by exports and Verbose.
+		expect(auditFooterLine(audit({ status: "passed", cited: 2, total: 2, gateSkipped: "gate-setting-off" }))).toBe(
+			"Audit passed: 2/2 numbers traced · gate not run: gate-setting-off",
+		)
+		expect(auditSummaryLine(audit({ status: "passed", cited: 2, total: 2, gateSkipped: "no-trusted-server" }))).toContain(
+			"gate not run: no-trusted-server",
+		)
+	})
+
+	it("a setting the user chose shows only at verbose", () => {
+		const skipped = audit({ status: "passed", cited: 2, total: 2, gateSkipped: "gate-setting-off" })
+		expect(withDetail("normal", <AnswerAuditFooter audit={skipped} />).queryByTestId("answer-audit-gate-skipped")).toBeNull()
+		const v = withDetail("verbose", <AnswerAuditFooter audit={skipped} />)
+		expect(v.getByTestId("answer-audit-gate-skipped").textContent).toContain("turned off in settings")
 	})
 })

@@ -30,6 +30,7 @@ import {
 	interruptedFromRevision,
 	interruptedPayload,
 	noteBindingChanged,
+	noteBindingObserved,
 	noteBindingProbed,
 	noteSessionStarted,
 	resetGateCycle,
@@ -129,6 +130,29 @@ describe("answer-audit gate (W2-C)", () => {
 			noteBindingProbed(state)
 			expect(computeGateEligibility(eligibleInput({ state }) as any).eligible).to.equal(true)
 			expect(state.boundStudyId).to.equal(undefined)
+		})
+
+		it("an observed binding or the host's own bound chip makes the gate eligible without supplying a study id", () => {
+			const observed = createGateState()
+			expect(computeGateEligibility(eligibleInput({ state: observed }) as any)).to.deep.include({
+				reason: "study-not-bound",
+			})
+			noteBindingObserved(observed)
+			expect(computeGateEligibility(eligibleInput({ state: observed }) as any).eligible).to.equal(true)
+			expect(observed.boundStudyId).to.equal(undefined)
+			expect(computeGateEligibility(eligibleInput({ state: createGateState(), hostBound: true }) as any).eligible).to.equal(
+				true,
+			)
+		})
+
+		it("an observed binding never overrides trust: an untrusted server stays ineligible", () => {
+			const state = createGateState()
+			noteBindingObserved(state)
+			const untrusted = server({ config: JSON.stringify({ type: "stdio", command: "/tmp/evil", args: [] }) })
+			expect(computeGateEligibility(eligibleInput({ state, servers: [untrusted] }) as any)).to.deep.include({
+				eligible: false,
+				reason: "no-trusted-server",
+			})
 		})
 
 		it("a rebind clears the cached study", () => {
@@ -846,6 +870,124 @@ describe("answer-audit gate (W2-C)", () => {
 				"say:user_feedback",
 			])
 			expect(t.notify.calledOnce).to.equal(true)
+		})
+
+		// Replayed from the owner's real task 1793340989672 (T1): start_session succeeded but the server's launch identity
+		// had changed, so it was not trusted; the old build dropped the reason and the answer looked audited.
+		it("T1 replay: untrusted server, graded audit still runs, and the shown row says the gate did not run and why", async () => {
+			const untrusted = server({ config: JSON.stringify({ type: "stdio", command: "/tmp/other", args: [] }) })
+			const t = build({ gate: true, servers: [untrusted], audit: [hardAudit()] })
+			const h = new AttemptCompletionHandler()
+			await h.handlePartialBlock(block("The ratio is 0.4", true), {
+				getConfig: () => t.config,
+				say: t.config.callbacks.say,
+				removeClosingTag: (_b: any, _t: any, x: any) => x,
+			} as any)
+			expect(t.config.taskState.answerAuditGate.eligibleForBlock).to.equal(false)
+			await h.execute(t.config, block("The ratio is 0.42"))
+			const audit = parseAnswerAuditPayload(t.rows.filter((r) => r.say === "answer_audit").at(-1).text)!
+			expect(audit.stage).to.equal("final")
+			expect(audit.status).to.equal("violations")
+			expect(audit.gateSkipped).to.equal("no-trusted-server")
+		})
+
+		const lastAudit = (t: { rows: any[] }) =>
+			parseAnswerAuditPayload(t.rows.filter((r) => r.say === "answer_audit").at(-1)?.text)
+
+		it("a skipped gate is recorded with its reason: setting off", async () => {
+			const t = build({ gate: false, audit: [hardAudit()] })
+			await new AttemptCompletionHandler().execute(t.config, block("The ratio is 0.42"))
+			expect(lastAudit(t)!.gateSkipped).to.equal("gate-setting-off")
+		})
+
+		it("a skipped gate is recorded with its reason: study not bound", async () => {
+			const t = build({ gate: true, state: createGateState(), audit: [hardAudit()] })
+			await new AttemptCompletionHandler().execute(t.config, block("The ratio is 0.42"))
+			expect(lastAudit(t)!.gateSkipped).to.equal("study-not-bound")
+		})
+
+		it("an eligible run records no skip on any row", async () => {
+			const t = build({ gate: true })
+			await new AttemptCompletionHandler().execute(t.config, block("The ratio is 0.42"))
+			for (const r of t.rows.filter((x) => x.say === "answer_audit")) {
+				expect(parseAnswerAuditPayload(r.text)?.gateSkipped).to.equal(undefined)
+			}
+		})
+
+		it("a text-only follow-up reply is marked as a reply on its row and is not counted as a completed task", async () => {
+			const t = build({ gate: false })
+			t.config.taskState.followUpAnswerInFlight = true
+			await new AttemptCompletionHandler().execute(t.config, block("Re-running for 2005-2015 now."))
+			const completion = t.say.getCalls().find((c) => c.args[0] === "completion_result")!
+			expect(completion.args[5]).to.deep.equal({ followUpAnswer: true })
+		})
+
+		it("feedback on a shown answer is a follow-up: the state is set and the result text asks for a direct answer", async () => {
+			const t = build({ gate: false })
+			const out = (await new AttemptCompletionHandler().execute(t.config, block("The ratio is 0.42"))) as any[]
+			expect(t.config.taskState.followUpTurn).to.equal(true)
+			const text = out.map((b) => b.text ?? "").join("\n")
+			expect(text).to.include("answer it directly and briefly")
+			expect(text).to.not.include("continue the task")
+		})
+
+		it("honest exit: outcome partial is recorded on the answer row, and is not a mistake", async () => {
+			const t = build({ gate: false })
+			t.config.taskState.consecutiveMistakeCount = 3
+			const b = block("Streamflow fetched; no observed record for 2010-2015.")
+			b.params.outcome = "partial"
+			b.params.unmet = "- no observed streamflow for 2010-2015"
+			await new AttemptCompletionHandler().execute(t.config, b)
+			const completion = t.say.getCalls().find((c) => c.args[0] === "completion_result")!
+			expect(completion.args[5]).to.deep.equal({
+				completionOutcome: { outcome: "partial", unmet: ["no observed streamflow for 2010-2015"] },
+			})
+			expect(t.config.taskState.consecutiveMistakeCount).to.equal(0)
+		})
+
+		it("the declared outcome is sent to an audit tool that declares it, and not to one that does not", async () => {
+			const declaring = server({
+				tools: [
+					{
+						name: "audit_interpretation",
+						description: GRADED_DESC,
+						inputSchema: { type: "object", properties: { prose: {}, session_id: {}, outcome: {}, unmet: {} } },
+					} as any,
+					{ name: "aihydro_chat_status" } as any,
+				],
+			})
+			const t = build({ gate: false, servers: [declaring] })
+			const b = block("The ratio is 0.42 for part of it.")
+			b.params.outcome = "partial"
+			b.params.unmet = "- no record"
+			await new AttemptCompletionHandler().execute(t.config, b)
+			const call = t.hub.callTool.getCalls().find((c: any) => c.args[1] === "audit_interpretation")!
+			expect(call.args[2]).to.include({ outcome: "partial" })
+			expect(call.args[2].unmet).to.deep.equal(["no record"])
+		})
+
+		it("an audit tool without those parameters is not sent them", async () => {
+			const t = build({ gate: false })
+			const b = block("The ratio is 0.42 for part of it.")
+			b.params.outcome = "partial"
+			await new AttemptCompletionHandler().execute(t.config, b)
+			const call = t.hub.callTool.getCalls().find((c: any) => c.args[1] === "audit_interpretation")!
+			expect(call.args[2]).to.not.have.property("outcome")
+		})
+
+		it("a normal completion records no outcome (done, absent or unrecognised)", async () => {
+			for (const outcome of [undefined, "done", "finished-ish"]) {
+				sinon.restore() // build() stubs the notification module each time
+				setRecordedFirstPartyLauncher(LAUNCHER as any)
+				const t = build({ gate: false })
+				const b = block("The ratio is 0.42")
+				if (outcome) {
+					b.params.outcome = outcome
+				}
+				await new AttemptCompletionHandler().execute(t.config, b)
+				const completion = t.say.getCalls().find((c) => c.args[0] === "completion_result")!
+				expect(completion.args[5], String(outcome)).to.equal(undefined)
+			}
 		})
 
 		it("eligible: no completion_result streaming, one updating activity line", async () => {

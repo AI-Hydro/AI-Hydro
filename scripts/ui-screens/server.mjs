@@ -89,6 +89,7 @@ export const useMapContext = () => {
   }
   return cached;
 };
+export const useOptionalMapLayers = () => getActiveScreen()?.layers ?? [];
 export const MapContextProvider = ({children}) => React.createElement(React.Fragment, null, children);`
 	const server = await createServer({
 		configFile: false,

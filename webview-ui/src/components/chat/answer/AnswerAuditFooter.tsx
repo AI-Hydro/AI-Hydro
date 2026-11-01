@@ -1,5 +1,5 @@
 import { droppedEvidenceLines } from "@shared/aihydro/answerAuditGate"
-import { type AnswerAuditPayload, isCleanAudit } from "@shared/aihydro/transcriptContracts"
+import { type AnswerAuditPayload, GATE_SKIP_TEXT, gateSkippedNote, isCleanAudit } from "@shared/aihydro/transcriptContracts"
 import React, { useId, useState } from "react"
 import { DraftText, FindingsList, Icon, Unrevisable } from "../AnswerAuditSummary"
 import { auditSummaryView } from "./auditFindings"
@@ -16,6 +16,12 @@ import { useTranscriptDetail } from "./useTranscriptDetail"
  * `auditFooterLine` is the technical form of the same line (Verbose, tests).
  */
 export function auditFooterLine(p: AnswerAuditPayload): string | undefined {
+	const line = auditFooterLineBase(p)
+	const note = gateSkippedNote(p)
+	return note ? (line ? `${line} · ${note}` : note) : line
+}
+
+function auditFooterLineBase(p: AnswerAuditPayload): string | undefined {
 	if (p.status === "skipped") {
 		return undefined
 	}
@@ -30,6 +36,29 @@ export function auditFooterLine(p: AnswerAuditPayload): string | undefined {
 		return `Audit (ungraded server): ${p.violations.length} ${p.violations.length === 1 ? "finding" : "findings"}`
 	}
 	return `Audit: ${[traced, `${p.hardCount} hard`, `${p.advisoryCount} advisory`].filter(Boolean).join(" · ")}`
+}
+
+/**
+ * The line saying the revise-before-showing gate did not run, with its reason. Settings and Plan mode are the user's
+ * own choices and show at Verbose only; every other reason means a safeguard could not engage, so it always shows.
+ */
+export function gateSkippedLine(p: AnswerAuditPayload, verbose: boolean): string | undefined {
+	const skip = p.gateSkipped ? GATE_SKIP_TEXT[p.gateSkipped] : undefined
+	if (!skip || (skip.chosen && !verbose)) {
+		return undefined
+	}
+	return `Answer was not held back for checking: ${skip.text}.`
+}
+
+/**
+ * A skip that is the user's own choice, or "no study bound" in a chat that has no study, is information; the same
+ * reason where a study IS expected (the audit found one: `sessionId` present) is a warning.
+ */
+export function gateSkipNeedsAttention(p: AnswerAuditPayload): boolean {
+	if (!p.gateSkipped || GATE_SKIP_TEXT[p.gateSkipped].chosen) {
+		return false
+	}
+	return p.gateSkipped === "study-not-bound" ? !!p.sessionId : true
 }
 
 /** True when the audit found something the agent could be asked to fix by citing: hard findings, or any legacy finding. */
@@ -67,6 +96,7 @@ export const AnswerAuditFooter: React.FC<FooterProps> = ({ audit, onAskToLink, a
 	const heldDrafts = (audit.history ?? []).filter((e) => e.draftText !== undefined)
 	const unrevisable = audit.unrevisableFindings ?? []
 	const notRun = audit.status === "unavailable" ? auditFooterLine(audit) : undefined
+	const skippedGate = gateSkippedLine(audit, verbose)
 	const clean = isCleanAudit(audit)
 	const cleanLine =
 		clean && detail !== "focus"
@@ -80,6 +110,7 @@ export const AnswerAuditFooter: React.FC<FooterProps> = ({ audit, onAskToLink, a
 		!cleanLine &&
 		audit.attempt === 0 &&
 		!findingsRemain &&
+		!skippedGate &&
 		disclosures.length === 0 &&
 		unrevisable.length === 0
 	) {
@@ -137,6 +168,12 @@ export const AnswerAuditFooter: React.FC<FooterProps> = ({ audit, onAskToLink, a
 				<div className="ph-no-capture opacity-80">
 					Shown after {audit.attempt} silent {audit.attempt === 1 ? "revision" : "revisions"} · audit revisions:{" "}
 					{audit.attempt} {audit.attempt === 1 ? "request" : "requests"}
+				</div>
+			)}
+			{skippedGate && (
+				<div className="opacity-80" data-testid="answer-audit-gate-skipped">
+					<Icon attention={gateSkipNeedsAttention(audit)} />
+					<span className="ph-no-capture">{skippedGate}</span>
 				</div>
 			)}
 			{findingsRemain && <div className="ph-no-capture opacity-80">{audit.disclosure?.reason}</div>}

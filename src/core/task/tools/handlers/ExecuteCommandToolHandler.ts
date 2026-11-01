@@ -222,7 +222,11 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 
 		// Execute the command in the correct directory
 		// If executionDir is different from cwd, prepend cd command
-		let finalCommand: string = commandToExecute(actualCommand, policy)
+		let finalCommand: string = commandToExecute(
+			actualCommand,
+			policy,
+			config.services.stateManager.getGlobalSettingsKey("mode") === "plan",
+		)
 		if (executionDir !== config.cwd) {
 			// Use && to chain commands so they run in sequence
 			finalCommand = `cd "${executionDir}" && ${finalCommand}`

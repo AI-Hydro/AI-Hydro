@@ -130,7 +130,9 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 		setRecordedFirstPartyLauncher(undefined)
 		await hub?.dispose()
 		HostProvider.reset()
-		await fs.rm(dir, { recursive: true, force: true })
+		// The hub's settings watcher or a late write can still be creating a file in `dir` as it is removed, which fails with
+		// ENOTEMPTY ("rmdir /tmp/mcphub-always-*"). rm retries exactly that error (and EBUSY/EPERM) when asked to.
+		await fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 	})
 
 	it("(a) an untrusted server is refused for every tool and the settings file is byte-identical", async () => {

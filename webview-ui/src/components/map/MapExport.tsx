@@ -1,4 +1,5 @@
 import type { MapViewState } from "@deck.gl/core"
+import { layerRunId } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { MapExportArtifact, PrepareMapExportRequest, SaveMapExportRequest } from "@shared/proto/cline/map"
 import { jsPDF } from "jspdf"
@@ -608,7 +609,11 @@ export function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSce
 					? Number(layer.metadata?.raster_opacity ?? "0.75")
 					: 1),
 			exportSupport: layerSupport(layer),
-			sourceRef: layer.metadata?.provenance_path || layer.metadata?.source_uri || layer.metadata?.source_path,
+			sourceRef:
+				layer.metadata?.provenance_path ||
+				layer.metadata?.source_uri ||
+				layer.metadata?.source_path ||
+				(layerRunId(layer.metadata) ? `run:${layerRunId(layer.metadata)}` : undefined),
 			metadata: captureLayerMetadata(layer),
 		})),
 		citations,

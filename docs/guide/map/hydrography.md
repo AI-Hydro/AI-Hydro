@@ -48,9 +48,9 @@ Loaded gauge layers are point features. Each gauge carries the USGS site number,
 
 ---
 
-## Gallery  🧭
+## Gallery
 
-Click the **🧭** icon to open the Gallery panel. It has three tabs:
+The Gallery is no longer in the map's More menu. It opens from the AI-Hydro command that sends `aihydro-open-research-gallery`; saved items stay in `localStorage`. It has three tabs:
 
 | Tab | What it holds |
 |---|---|

@@ -56,6 +56,7 @@ export const formatResponse = {
 			"- Cite each quantity with [run:<run_id>#key_outputs.<field>] in the same sentence, bullet or table cell. Use [claim:<claim_id>] for a claim already in the ledger and [lit:<tag>] for literature.",
 			"- Take run ids and field names from get_session_summary (_run_log). Never invent a run id, path or marker: a marker that does not resolve is a finding too.",
 			"- If a value has no recorded source, state that it is not available from the recorded runs, or run the analysis that produces it. Do not drop a requested value silently; values removed in a revision are disclosed to the user.",
+			"- If the task cannot be finished because the evidence does not exist, call attempt_completion with outcome partial (or infeasible) and list what is unmet. That is a valid answer.",
 			"- Only findings that must be fixed are listed here.",
 			"This is a normal revision step, not a tool error.",
 		].join("\n")
@@ -119,6 +120,7 @@ ${toolUseInstructionsReminder}
 # Next Steps
 
 If you have completed the user's task, use the attempt_completion tool. 
+If you could not complete it, use attempt_completion with outcome partial or infeasible and list what is unmet: saying so is not an error. 
 If you require additional information from the user, use the ask_followup_question tool. 
 Otherwise, if you have not completed the task and do not need additional information, then proceed with the next step of the task. 
 (This is an automated message, so do not respond to it conversationally.)`,
@@ -260,7 +262,15 @@ Otherwise, if you have not completed the task and do not need additional informa
 		wasRecent: boolean | 0 | undefined,
 		responseText?: string,
 		hasPendingFileContextWarnings?: boolean,
+		/** The task had already finished with an answer and the user has now sent a message: a follow-up, not a restart. */
+		followUp?: boolean,
 	): [string, string] => {
+		if (followUp && mode !== "plan" && responseText) {
+			return [
+				`[TASK RESUMPTION] The user sent a new message after the task finished (${agoText}). Answer it directly. Do not repeat earlier results unless asked. Use a tool only if the answer needs new information. Files and data may have changed since.`,
+				`<user_message>\n${responseText}\n</user_message>`,
+			]
+		}
 		const taskResumptionMessage = `[TASK RESUMPTION] ${
 			mode === "plan"
 				? `This task was interrupted ${agoText}. The conversation may have been incomplete. Be aware that the project state may have changed since then. The current working directory is now '${cwd.toPosix()}'.\n\nNote: If you previously attempted a tool use that the user did not provide a result for, you should assume the tool use was not successful. However you are in PLAN MODE, so rather than continuing the task, you must respond to the user's message.`

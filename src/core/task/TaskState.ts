@@ -82,9 +82,24 @@ export class TaskState {
 	// for the first few such turns — only once they exceed the grace window do they count, so a
 	// model stuck purely thinking still trips the guard eventually.
 	consecutiveThinkingOnlyTurns = 0
+	// The model is answering a message the user sent AFTER a completed answer (a resumed finished task, or feedback on
+	// a shown completion). A follow-up is conversation, not a task: no resumption "retry", no to-do prompt, and a
+	// text-only reply is accepted as the answer. Cleared as soon as the model uses a tool (it is then working again).
+	followUpTurn = false
+	// While a follow-up turn streams, its text is held here (by block index) instead of shown: it is either the answer
+	// (accepted through attempt_completion, so it gets the audit) or narration before a tool call (shown then).
+	followUpHeldText: Record<number, string> = {}
+	// True from the moment a held follow-up reply is run through attempt_completion until the next user message (or a tool other than attempt_completion): answer rows in that span, including a gate revision, are marked as replies.
+	followUpAnswerInFlight = false
+	// The "drafting" activity line is showing for held follow-up text.
+	followUpProgressShown = false
 	// Sliding window of the most recent tool failures (tool name + truncated error), used to
 	// ground the auto-decompose nudge in concrete failures instead of generic boilerplate.
 	recentToolErrors: string[] = []
+	// Set by the MCP tool handler for the call it just ran: true when the server reported an error (`isError`), the call
+	// threw (timeout, dropped connection) or the body is a structured {"error": true} result. Undefined when the handler
+	// did not get as far as calling. Read by the executor so a failure is known from structure, not from text.
+	mcpCallFailed: boolean | undefined = undefined
 	// Semantic loop detection (beyond byte-identical signatures):
 	// Consecutive zero-result searches on the SAME target path (regex may vary). Reset on any hit.
 	consecutiveZeroResultSearches = 0

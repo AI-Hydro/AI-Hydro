@@ -1,7 +1,12 @@
 import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
-import { SCIENTIFIC_CONDUCT_RULES, SKILLS_RULE } from "./scientific_conduct"
+import {
+	ARTIFACT_SELF_REVIEW_RULE,
+	CITATION_ANTI_HALLUCINATION_RULE,
+	SCIENTIFIC_CONDUCT_RULES,
+	SKILLS_RULE,
+} from "./scientific_conduct"
 
 const BROWSER_RULES = `- The user may ask generic non-development tasks, such as "what\\'s the latest news" or "look up the weather in San Diego", in which case you might use the browser_action tool to complete the task if it makes sense to do so, rather than trying to create a website or using curl to answer the question. However, if an available MCP server tool or resource can be used instead, you should prefer to use it over browser_action.\n`
 
@@ -21,8 +26,8 @@ const getRulesTemplateText = (context: SystemPromptContext) => `RULES
 - Do not ask for more information than necessary. Use the tools provided to accomplish the user's request efficiently and effectively. When you've completed your task, you must use the attempt_completion tool to present the result to the user. The user may provide feedback, which you can use to make improvements and try again.
 - ${context.yoloModeToggled !== true ? "You are only allowed to ask the user questions using the ask_followup_question tool. Use this tool only when you need additional details to complete a task, and be sure to use a clear and concise question that will help you move forward with the task. However if you can use the available tools to avoid having to ask the user questions, you should do so" : "Use your available tools and apply your best judgment to accomplish the task without asking the user any followup questions, making reasonable assumptions from the provided context"}. For example, if the user mentions a file that may be in an outside directory like the Desktop, you should use the list_files tool to list the files in the Desktop and check if the file they are talking about is there, rather than asking the user to provide the file path themselves.
 - The user may provide a file's contents directly in their message, in which case you shouldn't use the read_file tool to get the file contents again since you already have it.
-- Your goal is to try to accomplish the user's task, NOT engage in a back and forth conversation.
-{{BROWSER_RULES}}- NEVER end attempt_completion result with a question or request to engage in further conversation! Formulate the end of your result in a way that is final and does not require further input from the user.
+- Your goal is to accomplish the user's task. If the user asks a question about work already done, answer it directly and briefly; do not repeat an earlier report.
+{{BROWSER_RULES}}- Do not pad an attempt_completion result with offers of further help or a closing question. End it with what the data show and what was not done.
 - You are STRICTLY FORBIDDEN from starting your messages with "Great", "Certainly", "Okay", "Sure". You should NOT be conversational in your responses, but rather direct and to the point. For example you should NOT say "Great, I've updated the config" but instead something like "I've updated the config". It is important you be clear and technical in your messages.
 - When presented with images, utilize your vision capabilities to thoroughly examine them and extract meaningful information. Incorporate these insights into your thought process as you accomplish the user's task.
 - At the end of each user message, you will automatically receive environment_details. This information is not written by the user themselves, but is auto-generated to provide potentially relevant context about the project structure and environment. While this information can be valuable for understanding the project context, do not treat it as a direct part of the user's request or response. Use it to inform your actions and decisions, but don't assume the user is explicitly asking about or referring to this information unless they clearly do so in their message. When using environment_details, explain your actions clearly to ensure the user understands, as they may not be aware of these details.
@@ -33,8 +38,8 @@ const getRulesTemplateText = (context: SystemPromptContext) => `RULES
 - It is critical you wait for the user's response after each tool use, in order to confirm the success of the tool use. For example, if asked to write a data-processing script, you would create the file, wait for the user's response it was created successfully, then create another file if needed, wait for the user's response it was created successfully, etc.{{BROWSER_WAIT_RULES}}
 - MCP operations should be used one at a time, similar to other tool usage. Wait for confirmation of success before proceeding with additional operations.
 ${SKILLS_RULE}
-- **Artifact Self-Review (Mandatory):** After writing any HTML module or multi-section artifact, re-read the saved file before presenting it to the user. Verify: (1) no Python cell contains \`matplotlib.use()\` or \`plt.show()\` — the kernel handles both automatically; (2) no cell uses file I/O — all data embedded as constants; (3) no matplotlib call uses CSS \`rgba()\` strings — only hex or tuple; (4) every cell has correct class names and attributes per the skill contract. Fix any issue before calling \`show_html_preview\`. This self-review catches 90% of runtime errors before the user ever sees them.
-- **Citation Anti-Hallucination (Mandatory):** NEVER invent, guess, or paraphrase a DOI, journal name, volume, or page number in any module or research output. For every non-trivial method or dataset reference: (1) call \`lookup_citation(query)\`; (2) if it returns a result, use the \`formatted_apa\` and \`doi\` EXACTLY as returned; (3) if it returns \`not_found\`, write "No peer-reviewed citation found for this method." — never substitute a plausible-sounding DOI from memory. A hallucinated citation is worse than no citation: it permanently damages scientific credibility.
+${ARTIFACT_SELF_REVIEW_RULE}
+${CITATION_ANTI_HALLUCINATION_RULE}
 ${SCIENTIFIC_CONDUCT_RULES}`
 
 export async function getRulesSection(variant: PromptVariant, context: SystemPromptContext): Promise<string> {

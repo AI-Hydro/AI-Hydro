@@ -29,6 +29,8 @@ vi.mock("../../../services/grpc-client", () => ({
 	FileServiceClient: { openFile: vi.fn() },
 }))
 
+import { PLATFORM_CONFIG } from "../../../config/platform.config"
+import { MapServiceClient } from "../../../services/grpc-client"
 import { LayerPanelContent } from "../LayerPanel"
 
 const poly = (id: string, name: string, metadata: Record<string, string> = {}): MapLayer =>
@@ -77,12 +79,63 @@ describe("LayerPanel", () => {
 		expect(container.querySelectorAll('input[type="range"]').length).toBe(0)
 	})
 
+	it("workspace files not on the map are offered in the Add menu, not as a panel section; none means nothing", async () => {
+		const list = MapServiceClient.listWorkspaceGeoFiles as unknown as ReturnType<typeof vi.fn>
+		const f = (relativePath: string) => ({
+			relativePath,
+			workspaceFolder: "/w",
+			folderName: "w",
+			name: relativePath,
+			extension: ".geojson",
+		})
+		list.mockResolvedValueOnce({ files: [f("a.geojson"), f("b.geojson")], totalCount: 2 })
+		const { unmount } = render(<LayerPanelContent {...baseProps()} />)
+		expect(screen.queryByRole("region", { name: /workspace/i })).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: "Add layer" }))
+		const item = await screen.findByRole("menuitem", { name: "From this workspace (2)" })
+		fireEvent.click(item)
+		expect(await screen.findByRole("region", { name: "From this workspace" })).toBeInTheDocument()
+		unmount()
+		list.mockResolvedValueOnce({ files: [], totalCount: 0 })
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: "Add layer" }))
+		expect(screen.queryByRole("menuitem", { name: /From this workspace/ })).toBeNull()
+	})
+
+	it("groups say what a layer is: a user file and a workspace file are both Your files, a tool file in the workspace is a Result with its path in Details", () => {
+		state.layers = [
+			poly("t", "watershed_01013500", {
+				source: "workspace",
+				path: "vectors/watershed_01013500.geojson",
+				workspace_folder: "/w",
+			}),
+			poly("u", "mine", { source: "user", tool: "", _run_id: "", source_path: "/elsewhere/mine.geojson" }),
+			poly("w", "also mine", {
+				source: "workspace",
+				tool: "",
+				_run_id: "",
+				path: "vectors/b.geojson",
+				workspace_folder: "/w",
+			}),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		expect(screen.queryByRole("button", { name: /Loaded by you|Workspace files/ })).toBeNull()
+		const files = screen.getByRole("region", { name: "Your files" })
+		expect(within(files).getAllByRole("listitem")).toHaveLength(2)
+		const results = screen.getByRole("region", { name: "Results" })
+		expect(within(results).getByText("watershed_01013500")).toBeInTheDocument()
+		fireEvent.click(within(results).getByRole("button", { name: /^watershed_01013500/ }))
+		fireEvent.click(screen.getByRole("button", { name: "Details" }))
+		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
+		expect(screen.getByText("vectors/watershed_01013500.geojson")).toBeInTheDocument()
+	})
+
 	it("groups by origin, and a group collapses", () => {
 		render(<LayerPanelContent {...baseProps()} />)
-		expect(screen.getByRole("button", { name: /Tool output/ })).toHaveAttribute("aria-expanded", "true")
-		expect(screen.getByRole("button", { name: /Loaded by you/ })).toBeInTheDocument()
-		fireEvent.click(screen.getByRole("button", { name: /Tool output/ }))
-		expect(screen.getByRole("button", { name: /Tool output/ })).toHaveAttribute("aria-expanded", "false")
+		expect(screen.getByRole("button", { name: /Results/ })).toHaveAttribute("aria-expanded", "true")
+		expect(screen.getByRole("button", { name: /Your files/ })).toBeInTheDocument()
+		fireEvent.click(screen.getByRole("button", { name: /Results/ }))
+		expect(screen.getByRole("button", { name: /Results/ })).toHaveAttribute("aria-expanded", "false")
 		expect(document.querySelector('[data-layer-id="a"]')).toBeNull()
 	})
 
@@ -98,23 +151,113 @@ describe("LayerPanel", () => {
 		expect(screen.queryByRole("group", { name: /^Settings for/ })).toBeNull()
 	})
 
-	it("the overflow menu holds the actions, and keeps tool and run ID reachable and copyable", () => {
+	it("the row menu is nine items or fewer; style, opacity, attributes, details and copy sit in the drawer, two clicks away", () => {
 		const writeText = vi.fn()
 		Object.assign(navigator, { clipboard: { writeText } })
+		// The fullest layer: a vector with a source path and a provenance record.
+		state.layers = [
+			poly("a", "watershed_01031500", { source_path: "/w/a.geojson" }),
+			poly("b", "gauge", { source: "user", tool: "", _run_id: "" }),
+		]
 		render(<LayerPanelContent {...baseProps()} />)
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for watershed_01031500/ }))
 		const names = screen.getAllByRole("menuitem").map((i) => i.textContent)
-		expect(names.join("|")).toMatch(
-			/Zoom to layer.*Rename.*Style.*Opacity.*Details and provenance.*Copy tool name.*Copy run ID.*Move up.*Move down.*Remove layer/,
-		)
-		fireEvent.click(screen.getByRole("menuitem", { name: /Copy run ID/ }))
+		expect(names.length).toBeLessThanOrEqual(9)
+		expect(names.join("|")).toMatch(/Zoom to layer.*Rename.*Save as….*Move up.*Move down.*Remove layer/)
+		for (const gone of [/Style/, /Opacity/, /Attribute table/, /Details/, /Copy tool name/, /Copy run ID/, /Cluster/]) {
+			expect(names.some((n) => gone.test(n ?? ""))).toBe(false)
+		}
+		fireEvent.keyDown(document.body, { key: "Escape" })
+		fireEvent.click(document.body)
+		// Click 1 opens the row; click 2 opens Details, where the run and tool copy.
+		fireEvent.click(screen.getByRole("button", { name: /^watershed_01031500/ }))
+		const settings = screen.getByRole("group", { name: /^Settings for watershed_01031500/ })
+		for (const chip of ["Style", "Attributes", "Details"]) {
+			expect(within(settings).getByRole("button", { name: chip })).toBeInTheDocument()
+		}
+		expect(within(settings).getByRole("slider")).toBeInTheDocument()
+		fireEvent.click(within(settings).getByRole("button", { name: "Details" }))
+		fireEvent.click(screen.getByRole("button", { name: "Copy run ID" }))
 		expect(writeText).toHaveBeenCalledWith("run-7f3a.1")
-		// The details view shows both values with their own copy buttons.
+		fireEvent.click(screen.getByRole("button", { name: "Copy tool name" }))
+		expect(writeText).toHaveBeenCalledWith("delineate_watershed")
+	})
+
+	it("Open run is a menu item and a Details button only when the layer names its study and run, and it asks the host", () => {
+		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation(() => {})
+		state.layers = [
+			poly("a", "with run", { source_path: "/w/a.geojson", study_id: "study-1" }),
+			poly("b", "no study", { _run_id: "run-9.1" }),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for no study/ }))
+		expect(screen.queryByRole("menuitem", { name: "Open run" })).toBeNull()
+		fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" })
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for with run/ }))
+		expect(within(screen.getByRole("menu")).getAllByRole("menuitem").length).toBeLessThanOrEqual(9)
+		fireEvent.click(screen.getByRole("menuitem", { name: "Open run" }))
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-map-open-run", study_id: "study-1", run_id: "run-7f3a.1" })
+		postMessage.mockClear()
+		fireEvent.click(screen.getByRole("button", { name: /^with run/ }))
+		fireEvent.click(screen.getByRole("button", { name: "Details" }))
+		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
+		fireEvent.click(screen.getByRole("button", { name: "Open run" }))
+		expect(postMessage).toHaveBeenCalledTimes(1)
+		postMessage.mockRestore()
+	})
+
+	it("a reference layer with no study open sits under Reference data and says it is not in any run", () => {
+		state.layers = [poly("g", "NWIS gauges", { source: "nwis", tool: "", _run_id: "", provenance_path: "" })]
+		render(<LayerPanelContent {...baseProps()} />)
+		expect(screen.getByRole("button", { name: /Reference data/ })).toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: /^Other/ })).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: /^NWIS gauges/ }))
+		fireEvent.click(screen.getByRole("button", { name: "Details" }))
+		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
+		expect(screen.getByText(/Reference, not in any run/)).toBeInTheDocument()
+		expect(screen.queryByRole("button", { name: "Open run" })).toBeNull()
+	})
+
+	it("a Show on map request selects that row and opens its details, again on a new request", () => {
+		state.layers = [poly("a", "first"), poly("b", "second", { _run_id: "run-2.1" })]
+		const props = { ...baseProps(), focusLayerRequest: { layerId: "b", nonce: 1 } }
+		const { rerender } = render(<LayerPanelContent {...props} />)
+		expect(screen.getByRole("group", { name: /^Settings for second/ })).toBeInTheDocument()
+		expect(screen.queryByRole("group", { name: /^Settings for first/ })).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: /^first/ }))
+		expect(screen.getByRole("group", { name: /^Settings for first/ })).toBeInTheDocument()
+		rerender(<LayerPanelContent {...props} focusLayerRequest={{ layerId: "b", nonce: 2 }} />)
+		expect(screen.getByRole("group", { name: /^Settings for second/ })).toBeInTheDocument()
+	})
+
+	it("Save as… offers a workspace file and a GeoJSON download in the drawer", () => {
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for watershed_01031500/ }))
+		fireEvent.click(screen.getByRole("menuitem", { name: /Save as…/ }))
+		const save = screen.getByRole("group", { name: "Save as" })
+		expect(within(save).getByRole("button", { name: /Workspace file/ })).toBeInTheDocument()
+		expect(within(save).getByRole("button", { name: /GeoJSON download/ })).toBeInTheDocument()
+	})
+
+	it("Cluster points is a Style option for point layers, not a menu item", () => {
+		state.layers = [{ ...poly("p", "wells"), layerType: "point" } as MapLayer]
+		const onClusterToggle = vi.fn()
+		render(<LayerPanelContent {...baseProps()} onClusterToggle={onClusterToggle} />)
+		fireEvent.click(screen.getByRole("button", { name: /^wells/ }))
+		fireEvent.click(screen.getByRole("button", { name: "Style" }))
+		fireEvent.click(screen.getByRole("checkbox", { name: "Cluster points" }))
+		expect(onClusterToggle).toHaveBeenCalledWith("p", true)
+	})
+
+	it("Provenance shows the recorded rows, then one Not recorded line", () => {
+		render(<LayerPanelContent {...baseProps()} />)
 		fireEvent.click(screen.getByRole("button", { name: /^watershed_01031500/ }))
 		fireEvent.click(screen.getByRole("button", { name: "Details" }))
 		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
-		fireEvent.click(screen.getByRole("button", { name: "Copy tool name" }))
-		expect(writeText).toHaveBeenCalledWith("delineate_watershed")
+		expect(screen.getByText(/^Not recorded: /)).toHaveTextContent(/Units.*CRS.*Citation/)
+		expect(screen.queryByText("Metadata fields")).toBeNull()
+		expect(screen.queryByText("Run ID")).toBeNull()
+		expect(screen.queryByText("Path")).toBeNull()
 	})
 
 	it("Move up is disabled with its reason on the layer on top of the map", () => {
@@ -231,24 +374,20 @@ describe("LayerPanel", () => {
 		state.layers = [poly("a", "x", { provenance_path: "" }), poly("b", "y", { source: "user", tool: "", _run_id: "" })]
 		const props = baseProps()
 		render(<LayerPanelContent {...props} />)
-		fireEvent.click(screen.getByRole("button", { name: /Tool output/ }))
+		fireEvent.click(screen.getByRole("button", { name: /Results/ }))
 		expect(screen.getByRole("img", { name: "1 layer with warnings" })).toBeInTheDocument()
-		fireEvent.click(screen.getByRole("button", { name: /Tool output/ }))
+		fireEvent.click(screen.getByRole("button", { name: /Results/ }))
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for x/ }))
 		fireEvent.click(screen.getByRole("menuitem", { name: /Move up/ }))
 		expect(props.onReorder).toHaveBeenCalledWith(["b", "a"])
 	})
 
-	it("reads like a GIS legend: the top row is the layer on top of the map, and the drawer says so", () => {
+	it("reads like a GIS legend: the top row is the layer on top of the map", () => {
 		state.layers = [poly("a", "bottom"), poly("b", "middle", { _run_id: "r2" }), poly("c", "top", { _run_id: "r3" })]
 		const props = { ...baseProps(), layerOrder: ["a", "b", "c"] }
 		render(<LayerPanelContent {...props} />)
 		const rows = Array.from(document.querySelectorAll("li.map-layer-row")).map((r) => r.getAttribute("data-layer-id"))
 		expect(rows).toEqual(["c", "b", "a"])
-		fireEvent.click(screen.getByRole("button", { name: /^top/ }))
-		expect(screen.getByRole("group", { name: /^Settings for top/ })).toHaveTextContent("Layer 1 of 3 from the top of the map")
-		fireEvent.click(screen.getByRole("button", { name: /^bottom/ }))
-		expect(screen.getByRole("group", { name: /^Settings for bottom/ })).toHaveTextContent("Layer 3 of 3")
 		// Move up on the middle row moves it toward the top of the map: it becomes the LAST id in draw order.
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for middle/ }))
 		fireEvent.click(screen.getByRole("menuitem", { name: /Move up/ }))

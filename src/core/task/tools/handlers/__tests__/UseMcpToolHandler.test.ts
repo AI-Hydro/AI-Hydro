@@ -125,3 +125,74 @@ describe("host-audience tools are refused to the model (X1-P1)", () => {
 		expect(r.mistakes).to.equal(1)
 	})
 })
+
+describe("the handler reports whether the MCP call failed, from structure (A9)", () => {
+	const run = async (callTool: () => Promise<any>) => {
+		const taskState: any = { consecutiveMistakeCount: 0, mcpCallFailed: "stale" }
+		const config: any = {
+			ulid: "01JCHAT",
+			cwd: "/w",
+			taskState,
+			api: { getModel: () => ({ info: { supportsImages: false } }) },
+			autoApprovalSettings: { enabled: true, actions: {} },
+			services: {
+				mcpHub: {
+					connections: [
+						{
+							server: {
+								name: "other",
+								status: "connected",
+								tools: [{ name: "t", autoApprove: true }],
+							},
+						},
+					],
+					callTool,
+					getPendingNotifications: () => [],
+				},
+				stateManager: { getGlobalSettingsKey: () => undefined },
+			},
+			callbacks: {
+				removeLastPartialMessageIfExistsWithType: async () => {},
+				say: async () => {},
+				ask: async () => ({ response: "yesButtonClicked" }),
+				shouldAutoApproveTool: () => true,
+				saveCheckpoint: async () => {},
+			},
+			autoApprover: { shouldAutoApproveTool: () => true },
+		}
+		await new UseMcpToolHandler()
+			.execute(config, {
+				name: "use_mcp_tool",
+				params: { server_name: "other", tool_name: "t", arguments: "{}" },
+				partial: false,
+			} as any)
+			.catch(() => undefined)
+		return taskState.mcpCallFailed
+	}
+
+	it("isError, a thrown call and a structured error body are failures; an ordinary result is not", async () => {
+		expect(await run(async () => ({ isError: true, content: [{ type: "text", text: "boom" }] }))).to.equal(true)
+		expect(
+			await run(async () => {
+				throw new Error("MCP error -32001: Request timed out")
+			}),
+		).to.equal(true)
+		expect(await run(async () => ({ content: [{ type: "text", text: '{"error": true, "code": "X"}' }] }))).to.equal(true)
+		expect(
+			await run(async () => ({ content: [{ type: "text", text: '{"data": {"q": 1}, "note": "error: true"}' }] })),
+		).to.equal(false)
+	})
+})
+
+describe("hasStructuredError", () => {
+	// eslint-disable-next-line @typescript-eslint/no-var-requires
+	const { hasStructuredError } = require("../UseMcpToolHandler")
+	it("parses, it does not pattern-match", () => {
+		expect(hasStructuredError('{"error": true, "message": "m"}')).to.equal(true)
+		expect(hasStructuredError('Error:\n{"error": true}')).to.equal(true)
+		expect(hasStructuredError('{"error": "a string"}')).to.equal(false)
+		expect(hasStructuredError('{"data": 1}')).to.equal(false)
+		expect(hasStructuredError('plain text mentioning {"error": true}')).to.equal(false)
+		expect(hasStructuredError("{not json")).to.equal(false)
+	})
+})

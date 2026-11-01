@@ -3,6 +3,7 @@ import type { ClaimRecord } from "@shared/proto/cline/ledger"
 import React, { useState } from "react"
 import { useLedgerContext } from "../../context/LedgerContext"
 import { type EvidenceStateId, evidenceState } from "../../design"
+import { useRunLayers } from "../map/layersOfRuns"
 
 interface ClaimChipProps {
 	claimId: string
@@ -90,6 +91,8 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId, variant = "strip"
 	const { getClaim } = useLedgerContext()
 	const [open, setOpen] = useState(false)
 	const claim = getClaim(claimId)
+	// A claim links to the map through the runs its evidence names; no run on the map, no button.
+	const onMap = useRunLayers(claim?.evidenceSpans.filter((e) => e.sourceType === "run").map((e) => e.sourceId) ?? [])
 
 	const { statusKey, approval, approved } = claimApprovalState(claim)
 	const def = evidenceState(chipState(statusKey, approved, approval?.tone))
@@ -176,6 +179,15 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId, variant = "strip"
 								</p>
 							))}
 						</div>
+					)}
+					{onMap.count > 0 && (
+						<button
+							className="mt-1 cursor-pointer rounded border border-[var(--vscode-panel-border)] bg-transparent px-2 text-xs"
+							onClick={onMap.show}
+							style={{ minHeight: 24, color: "inherit" }}
+							type="button">
+							<span aria-hidden="true" className="codicon codicon-globe" /> Show on map ({onMap.count})
+						</button>
 					)}
 					{claim.limitations.length > 0 && (
 						<div className="mt-1">

@@ -15,7 +15,7 @@ interface TimeSliderPanelProps {
 }
 
 /**
- * Time slider panel — Phase 3.4.3.
+ * Date filter panel — Phase 3.4.3 (two date inputs; there is no slider and no play).
  *
  * Reads `time_start` / `time_end` from `MapLayer.metadata` (via LiveLayer) and
  * shows a date range picker that hides layers whose temporal window falls

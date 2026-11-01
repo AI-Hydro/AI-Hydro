@@ -9,6 +9,138 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — 2026-11-01 (map: fewer places for one action, one file one layer; agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
+
+### Changed — P1 subtraction pass on the map (branch `vision2040/map-subtract`)
+
+Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of 2026-10-31: D4 (tracker extras out of the default Draw panel, data kept) and D5 (Gallery out of the map's More menu) are taken.
+
+- **Layer row menu: 17 items to 9 or fewer.** Style, Opacity, Attribute table, Details, Cluster points, Copy tool name and Copy run ID are gone from the menu. Opacity, Style (now holding **Cluster points**), Attributes and Details are in the row drawer; the run and tool copy buttons are in Details. "Save to workspace" and "Export as GeoJSON" are one **Save as...**. The eye in the panel bar and the "Layer 3 of 4 from the top" sentence are gone (Show all and Hide all stay in the panel `...` menu).
+- **Provenance** lists the recorded facts, then one "Not recorded: units, CRS, ..." line. Run and Run ID are one row, Source file and Path are one row, the tool is named separately only when it differs from the source. "Metadata fields" is dropped. A "Claim" row shows when the layer's metadata carries `claim_id`. "Source" is shown only when something names it, not as a guess, and a layer with no run says "No run record." once. "Converted artifact" shows only when present.
+- **Draw is for regions and sketches.** Polygon and Line only; a finished shape offers **Save as ROI**, **Keep as sketch** or **Export GeoJSON**. Points are Pins. The tracker (status, priority, tags, collections, search, Save to My Gallery, Batch Ask Agent) is hidden; **Tracker fields** in the Sketches menu shows it again, and the data on each annotation is untouched.
+- **Gallery** is out of the More menu. The panel and its saved items stay (the host command that opens it still works).
+- "Time slider" is **Date filter**: it is two date inputs. The screen id `map-time-slider` is kept for the budget.
+- Measure says once that values are approximate.
+- Removed `MapStatusBar.tsx` (no importer) and the unreachable bound-claim chip in the tool ribbon. Not removed: `bookmarks` in `mapWorkspace.ts`, which the report called unused; `SearchBar` uses it for saved views.
+- Docs: `docs/guide/map/{layers,draw-measure,hydrography}.md` and `map.md` match the code.
+
+### Added — every layer can open its run (P2, branch `vision2040/map-run-link`)
+
+- **Open run** in the layer row menu and in Details opens the run that made the layer in Replay. It is offered only when the layer records both its study and its run. The host checks both ids against the same charset as the chat tool cards before it opens anything.
+- **Reference data** is a layer group: MERIT, NWIS, WBD and NID layers with no run are no longer filed under "Other". They read "Reference, not in any run. It is not from a recorded run." A layer with a tool name is never filed here, even from one of these sources. A layer a study's run made stays under Tool output. Their source now reads "USGS NWIS", "USGS Watershed Boundary Dataset", "National Inventory of Dams".
+- "Open provenance record" moved from the row menu to Details, so the row menu stays at 9 items or fewer.
+- The map plate sidecar keeps `tool`, `study_id` and `retrieved_at` for each visible layer (it kept only the run id). `chat_id` is deliberately not exported: a shared figure should not carry a chat id, and `sourceArtifacts[].provenanceRef` falls back to `run:<id>` when a layer has no file.
+- Not in this change (tools repo): reference layers do not yet carry `retrieved_at` and the query bbox, and gauge/dam queries are not yet wrapped in `recorded_call` when a study is bound.
+
+### Changed — one selection card and one action list (P3, branch `vision2040/map-selection-card`)
+
+- `mapActions.ts` is the one list of what you can do to a thing on the map, by kind: gauge, river reach, basin, other feature, pin, empty point. The selection card (`FeatureIdentifier`), the right-click menu and the pin card render from it, and an action with no handler on a surface is not shown. A unit test proves card and menu get the same actions for every kind; the only surface rule is that the card does not list Inspect (the card is what Inspect opens).
+- **One label per verb**: "Ask AI-Hydro", "Delineate", "Delineate without chat". They replace "Delineate with agent", "Delineate with AI-Hydro", "Delineate here", "Quick delineate", "Quick delineate (no chat)", "Ask about this outlet" and "Ask about this pin". Pin "Delete" is "Remove pin"; "Inspect watershed details" and its kin are "Inspect"; "Export GeoJSON/Shapefile" are "Save as GeoJSON" and "Save as shapefile".
+- **The card** shows the layer name, the kind and the click's coordinates, a run line ("delineate_watershed · run ab12cd34 · Open", or "Reference, not in any run"), the first six properties with **Show all (N)** (the "+N more" text had no way to expand), and two buttons, Ask AI-Hydro and Delineate, then `...`. The routing badge ("NLDI first", "Hybrid", "Quick MERIT") and the quick-delineate paragraph are now the tooltip of Delineate. The card is still floating; nothing is docked.
+- The card gains Select, Add pin, Measure from here, Copy coordinates and Remove layer under `...`; the menu gains Select.
+- `OverflowMenu` items accept a `title` tooltip.
+
+### Changed — pointing at the map and asking keeps the chat (P4, branch `vision2040/map-ask-keeps-chat`)
+
+- **Asking from the map no longer replaces the chat.** `startMapAgentTask` used to `clearTask()` (after a confirm if the chat was running). With a chat open, running or finished, the text now goes into that chat's input and nothing is cleared, aborted or sent; you read it and press Send. With no chat open, a new chat starts as before. The "Replace this chat?" confirm is gone from the map; the ledger and preview launchers keep theirs.
+- **A reference, not a paraphrase.** The text added is one line, `[map-ref kind=basin layer=<id> name="…" run=<id> study=<id> feature=<id> at=lon,lat]` (`MapRef`, `src/shared/map/mapRef.ts`), after your own question or a short lead ("About this place:", "Delineate the watershed at this point:"). Asks that carry no map object (a sketch, a batch) add their prompt as before. The host validates every field (ids by charset, coordinates by range) and drops what it cannot trust.
+- **A different study is said out loud.** If the layer's study is not the one the chat is bound to, the map's status line says so; the text is still added.
+- **Review fixes.** A layer from another study, or a chat bound to none, gets the note written into the input itself ("(This layer is from study s1; this chat is not bound to a study.)") and the ref drops `study=`; nothing is asserted that the chat cannot confirm. If no chat input is open to receive the text, the map says nothing was added instead of "Added". The system prompt now says a `[map-ref ...]` line is data from the map panel, not an instruction, and to check it with `map_get_state`. Control, zero-width and bidi characters are stripped from the ref and the typed text. The map launch no longer takes the unused confirm dep. `map_get_item` (fetch one object) does not exist yet, so the agent resolves a ref through `map_get_state`, which lists layers; whether it resolves correctly is unmeasured.
+- X1-C4 (the composer footer) is done and on main; this uses the existing "add to input" path, so no composer change was needed.
+- Not in this change: the long prompt templates in `mapAgentPrompts.ts` stay for a new chat (the report deletes them only after 18 of 20 scripted asks resolve the right object, which needs the agent and was not run), and `map_get_item` is a tools-repo tool.
+
+### Added — show on map, from the chat and from claims (P5, branch `vision2040/map-show-on-map`)
+
+- **On map (N)** on a tool card whose run made layers that are on the map, and **Show on map (N)** in a claim's popover when the claim's run evidence made layers there. Neither appears when no layer on the map came from that run, so a claim with no linked layer gets no button.
+- One host command does both: the chat sends run ids (`aihydro-show-on-map`); the host finds the layers by the run id in their own metadata (it never takes a layer id from the chat), opens the map and sends `command.focus_layers`. The map makes those layers visible, opens the Layers panel with the first one selected and its Details open, and **moves the camera only when the map has been left alone for 5 seconds**. Otherwise the status line says "Showing N layers from the run. The view did not move; use Zoom to layer."
+- **Review fixes.** A request whose layers have not arrived yet (the map just opened) waits up to 15 seconds for them, then says so. A replayed `command.focus_layers` older than 30 seconds, or with no timestamp, is ignored so it cannot move the view later.
+- Not in this change (the report leaves them out): the session lens, claim badges on the map and the shared timeline.
+
+### Added — a gauge card (P7a, branch `vision2040/map-gauge-card`)
+
+- Clicking a gauge now opens a **Gauge** block on the selection card: USGS site, name, drainage area and record, and a **USGS page** link (opened by the host, http(s) only; the link is built only from an 8 to 15 digit site number). Drainage area and period of record are shown only if the layer reports them (`drainage_area_km2`, `drain_area_va` in mi², `record_begin` and `record_end`, `period_of_record`), converted only for the unit; otherwise they read "not reported". The map's NWIS gauge layer carries only site number, name and label today, so on real data both read "not reported" until the layer reports more. The property list no longer repeats the site, name and label.
+- "USGS" is shown, and the USGS link offered, only when the id came as `USGS-…`, the layer's source is NWIS or USGS, or the agency is USGS. Any other id (for example `08MF005`) is shown bare with no link.
+- **Not built, by the report's own gate (P7b):** "Fetch record" and the hydrograph drawer. The report says not to start them until `data_fetch` keeps the qualifier and approval columns (it still keeps numeric columns only, `tools_data_fetch.py` `_series_payload`, at aihydro-tools main `733d83a`) and the gap rule is closed; `information_class` is also still absent there. The list of runs that already hold a gauge's series needs a tools-side index and is not built either.
+
+### Changed — one file is one layer; groups say what a layer is (owner report on 0.4.5, branch `vision2040/map-one-file-one-layer`)
+
+- **Why one file made two layers.** Two routes created a layer from the same file. A file added from the Explorer menu, "Add file" or a restore becomes a layer with a generated id, the name without its extension and `source_path` set (source `user`). A file added from "Workspace files you can add" becomes `workspace_<path>` with the extension in the name and only a workspace-relative `path` (source `workspace`). Nothing compared them, and the list of addable files matched on the relative `path` alone, so it hid the file the second time but not the first. Two ids, two names, two sets of keys, one file.
+- **One file is one layer.** The host (`Controller.addMapLayer`, which every route passes through: workspace add, Add file, restore, agent push) checks `src/shared/map/layerIdentity.ts`. Identity is the resolved source path (`.` and `..` resolved, symlinks resolved on the host) or, when either layer names no path, the same content. There are three outcomes. **Different**: two layers (different runs, different tools, different paths or recorded sizes; a copy at another path is its own file). **Same**: the layer already on the map stays and the map says "Already on the map as ...". **Changed** (same path, different content: Reload source, an overwritten file, an agent re-push): the layer is updated in place and the map says "Updated ...". Content is compared directly, not hashed, so nothing is hashed or cached per add.
+- **The layer already on the map always survives.** Its id, style, visibility (a hidden layer stays hidden), opacity and place in the order do not move. It gains any run, provenance or source key the other had (including size, mtime, status, units, CRS, validation, uncertainty and coverage). A merged-away id is kept as an alias: agent commands that name it reach the survivor, and opening an older saved scene maps its visibility, order and opacity to the survivor and does not bring the duplicate back.
+- **A run link never stays on content it did not produce.** If a layer with run R1 sits on a file that was then overwritten and added again plain, the layer shows the new content, the run link is removed, the layer says "File changed since run R1" in Provenance, and the map says so ("Updated ...: the file changed since run R1, so the run link was removed."), never "Already on the map". An agent re-push with the same run and path updates the content and keeps the run.
+- **Dropping the run link also drops what described the run's result:** `study_id`, `session_id`, `chat_id`, `run_id`, `uncertainty`, `validation_status`, `coverage_status`, `citation`, `license`, `units` and `crs`, unless the new content supplies them. An empty incoming layer (a restored one) is the same file: it never updates the layer and an empty value never replaces a real one. `realpath` misses are not cached, and removing a layer drops the aliases that pointed at it. Not done: the alias map is in memory only, not in the catalog.
+- **Undo and scenes restore exactly.** Undo and opening a scene send `replaceExisting`, which the host now honours: nothing is folded into another layer.
+- On restore the same rules apply, and the panel says once, for 10 seconds, "N layers were the same file as another and are now one."
+- **Groups say what a layer is:** Results, Your files, Reference data, Earth Engine (and Other). "Loaded by you" and "Workspace files" are gone. A file a tool made stays under Results even if it is in the workspace folder; its path is in Details.
+- **The "you can add" list is in the Add menu** as "From this workspace (N)", and opens a list only when asked. With none to add there is no item and no empty section. The "Added x." line is a normal status that expires.
+
+### Fixed — a flaky McpHub test (branch `vision2040/mcphub-flake`)
+
+`toggleAutoApproveRefusal.test.ts` removed its temp directory (`/tmp/mcphub-always-*`) while the hub's settings watcher could still be writing into it, which failed unrelated PRs with `ENOTEMPTY: rmdir`. The cleanup now retries (`maxRetries` 10, 50 ms). Test-only.
+
+### Fixed — the pre-completion audit gate ran on none of three real answers, and nothing said why (A1, branch `vision2040/agent-gate`)
+
+The gate is the revise-before-showing loop for uncited numbers. On the owner's three real answers it never ran and left no trace. Cause, from the two saved tasks:
+
+- **Task `...989672` (T1)**: `start_session` succeeded, but the tools server was not trusted ("not the registered first-party server, or its launch identity changed" is on the approval rows). The gate requires a trusted server by design, so it was ineligible with `no-trusted-server`. The display-only audit still ran against the untrusted server, so the answer looked audited. The reason was computed and thrown away.
+- **Task `...576182` (T2)**: the study was bound by `delineate_watershed` (`bound_by: auto_create`). Only `start_session` and `aihydro_chat_status` made a task eligible, so the normal first step never did (`study-not-bound`).
+
+Changes:
+- Any first-party tool result that reports a `session_binding` for **this chat** now counts as bound (`bindingObserved`). Shape only, no tool-name list. It is a flag, never a study id: the audit still asks the server itself with the host's chat id, requires the audited session to match, and fails closed. The host's own chip (`controller.studyBinding`, bound for this chat) also counts, as a boolean.
+- A result counts as an observation only when the server that returned it is connected and trusted (name plus the recorded launcher), the same test the study chip uses.
+- "No study bound" is shown as information for a chat that has no study, and as a warning only where the audit found one. The technical audit line (Verbose, exports, copy) always ends with `gate not run: <reason>`, so a skipped gate can never read as an audited, held-back answer.
+- Trust is unchanged: an untrusted server is still never gated.
+- When the gate does not run, the shown answer's `answer_audit` row now carries `gateSkipped: <reason>` (additive field on the v1 payload). The footer says "Answer was not held back for checking: ..." for every reason where a safeguard could not engage; skips that are the user's own settings or Plan mode show at Verbose only.
+
+### Fixed — four smaller defects from the agent-loop review (branch `vision2040/agent-small`)
+
+- **The next-gen and gpt-5 prompts had lost three rules.** Their `rules` templates were forks of `rules.ts` that never got the Skills rule, the Artifact Self-Review rule or the Citation Anti-Hallucination rule, so Claude and DeepSeek (next-gen) and GPT-5 users did not get them while the generic prompt did. The rules are now shared constants in `scientific_conduct.ts` and all three templates use them, so they cannot drift again. (If the Artifact Self-Review rule, which is specific to HTML modules, should not ship to these models, drop it in that one constant.)
+- **The citation grammar reached only users with a personal rule file.** It was taught by `Rules/CITATION_GRAMMAR.md` (the owner's global rule) and by a project-context line. One line with an example is now in the scientific-conduct rules every variant carries: `[run:<run_id>#key_outputs.<field>]`, "the part after `#` is required: a marker without it cannot be checked". A test fails if it is removed.
+- **`FRAME_HEAD` wrote `[run:]`** (no path), the form the same rule calls invalid. It now says `[run:<run_id>#key_outputs.<field>]` or `[claim:<claim_id>]`.
+- **MCP failures were not failures.** `TOOL_ERROR_MARKERS` matched four strings, none of them the text an MCP failure produces. `UseMcpToolHandler` now records, for the call it just ran, whether it failed from structure rather than text: the server's `isError`, a thrown call (a timeout or dropped connection), or a parsed `{"error": true}` body (`TaskState.mcpCallFailed`). The executor uses that for the row's `execOutcome` ("failed"), for the error-grounded decompose nudge, and so that a failed `start_session` or status no longer marks a study bound. The consecutive-mistake count is deliberately unchanged: a down server must not halt a task.
+
+### Fixed — a follow-up question is answered, not treated as a restarted task (A2, branch `vision2040/agent-followup`)
+
+"whats the status?" after a finished task got a 1,268-character repeat of the report, a file list, a new to-do list and a tool call. Five things pushed the model there:
+
+- The resume text said "It may or may not be complete, so please reassess ... retry the last step" even when the UI knew the task had completed (`resume_completed_task`). A finished task plus a message now gets one short instruction: answer it directly, do not repeat earlier results unless asked, use a tool only if the answer needs new information.
+- The to-do prompt ("TODO LIST RECOMMENDED ... When starting a new task") was added because the resumed request looked early. It is skipped for a follow-up turn.
+- A text-only reply was rejected as `[ERROR] You did not use a tool`. In the follow-up state only, the text is now held while it streams and, if no tool follows, becomes the `attempt_completion` result: it appears as an answer card and goes through the same answer audit as any other answer. Inside a running task the nudge stays. If a tool call follows, the held text is shown first and the normal loop applies.
+- The same applies to a message typed after a shown answer in a live task: the feedback result now says "The user sent a new message after your answer", not "continue the task".
+- Three prompt rules forbade conversation ("NOT engage in a back and forth", "NEVER end ... with a question", "don't end your responses with questions"). They are replaced, in every variant (`rules`, `objective`, `next-gen`, `gpt-5`), by: answer a question about finished work directly and briefly; do not pad a result with offers of further help.
+
+A text-only reply is an answer, not a finished-task result: its row is marked `followUpAnswer` (new proto field `follow_up_answer = 1013`), headed "Reply" instead of "Answer", is not counted as a completed task, and is never treated as "done" in the honest-exit sense. While the reply is held, the same "Drafting answer…" activity line a gated answer shows is displayed. The offline scorecard gains a `follow-up` category, including the "redo with 2005-2015" case.
+
+There is no text classifier: the state is set by the host when the user writes after a finished answer and is cleared the moment the model uses a tool.
+
+### Fixed — Plan mode is read-only (branch `vision2040/agent-plan`)
+
+Plan mode blocked four file tools and nothing else: every MCP writer, `run_python` (an MCP tool) and any shell command still ran, so planning a study could create runs and fill study slots.
+
+- One policy, `src/core/task/planModePolicy.ts`, built from predicates that already decide for the explorer subagent and for command auto-run. `use_mcp_tool` runs in Plan mode only for a READ-class tool (`readOnlyHint` true and `openWorldHint` false) on a **trusted** first-party server (`explorerMcpBlockReason`: another server's labels are untrusted hints, an unannotated tool is not read-only, and `start_session`, rebind, claim and approval tools are refused by name). `execute_command` runs only if the host's read-only classifier accepts every part of it (fail closed). `preview_html` joins the refused file writers.
+- A refused call comes back as a tool result that starts "PLAN MODE is read-only, so this call did not run", names the reason, and tells the model to put the step in the plan or ask the user to switch to Act mode. The tool list does not change, so the prompt cache is not disturbed. The system prompt's Plan-mode section says the same in one line.
+- Also refused in Plan: `browser_action`, `new_task` and `report_bug` (effects outside the workspace); `access_mcp_resource` goes through the trusted-server check; `spawn_subagents` stays (its children are read-only explorers). A git command that runs in Plan, auto-run or approved, is wrapped in the hardened git environment.
+- The Plan-mode prompt line is shown only when `strictPlanModeEnabled` is on, so the prompt never claims an enforcement that is off.
+- No approval is weakened: the refusal happens before any approval is asked. The existing `strictPlanModeEnabled` setting (default on) still governs.
+
+### Changed — tool schemas are listed compactly (A4, branch `vision2040/agent-compact`)
+
+Every request carried each hot tool's input schema pretty-printed, with pydantic boilerplate on every parameter (`title`, `default: null`, `anyOf: [X, {type: null}]`). `components/compactSchema.ts` renders one line of JSON per schema and drops exactly that boilerplate. `type`, `enum`, `const`, `required`, `format`, bounds, `description`, non-null defaults and every parameter name are kept (tests check this on the real input schemas of all 179 tools of the first-party server and on three third-party-style schemas). "Or null" is dropped only from an optional parameter (one not in the parent's `required`); a `title` is dropped only beside a `description`. It applies to every server's full-schema tools, but the saving was measured on the first-party listing only. `scripts/measure-mcp-schemas.ts <tools_list.json>` reproduces the measurement on any listing. `session_id` is NOT hidden (it is how a model switches study).
+
+Measured on the real listing of the first-party server (179 tools, 45 hot), the whole MCP section of the system prompt: **98,363 to 68,036 characters (-30,327, -30.8%)**, 3,267 to 1,073 lines. Token effect (no tokenizer for the production models is available offline, so this is a proxy and not a token count): pre-tokenizer pieces 21,378 to 14,879 (-30.4%); a WordPiece count that ignores whitespace 23,898 to 20,877 (-12.6%, boilerplate only). The real saving lies between the two: roughly 3k to 6.5k tokens per request. The first-request token drop on a real model run is still to be read from the meter.
+
+### Added — an honest exit: `attempt_completion` can say partial or infeasible (N1, branch `vision2040/agent-exit`)
+
+Until now `attempt_completion` meant "done", and the prompt pressed toward it ("code corruption and system failure"), so a model that could not finish had no first-class way to say so.
+
+- `attempt_completion` gains two optional parameters: `outcome` (`done` | `partial` | `infeasible`; `done`, absent or unrecognised records nothing) and `unmet` (what was not done and why, one item per line). A partial or infeasible completion is a normal completion: it resets the mistake count, never triggers the "you did not use a tool" nudge, and goes through the same answer gate and audit.
+- The answer card shows it in the header ("Partly done" or "Could not be done", always followed by "the agent says": it is the model's statement, not evidence) and lists the unmet items under the header, above the prose. Stored on the row as `completionOutcome` (new proto field `completion_outcome_json = 1012`, additive).
+- The completion-pressure paragraph is gone from the tool description. The `noToolsUsed` text and the audit revision request now say that stopping honestly (partial or infeasible, with what is unmet) is a valid answer.
+- The audit-finding view knows a new kind, `no_observed_lineage` ("Not derived from observed data"), for the tools-side check of numbers with no observed-data lineage. It is **advisory today**: it renders as a note and never gates. `hard` is reserved and would go through the gate like `uncited_number`. Nothing in the extension reads `outcome` as evidence.
+- The declared `outcome` and `unmet` are sent to `audit_interpretation` only when that tool's input schema declares them (tools with the sealed-outcome check, tools PR #34); an older server is never sent an argument it would reject. Until #34 is on tools main, the sealed outcome on the tools side is inert: nothing sends it. Copy puts the outcome ("Partly done (the agent says)", the unmet list) in front of the answer, so a copied or exported answer cannot read as complete.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)
