@@ -1,3 +1,4 @@
+import type { MapRef } from "@shared/map/mapRef"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import {
 	buildAnnotationAgentPrompt,
@@ -36,9 +37,21 @@ export interface MapLaunchHint {
 	artifactPath?: string
 	/** The user's own question when the prompt wraps it. */
 	userQuestion?: string
+	/** What was pointed at. An open chat gets this as one line; a new chat gets the full prompt. */
+	ref?: MapRef
+	/** The short text that leads the line added to an open chat. */
+	composerText?: string
 }
 
-export type MapAgentStartResult = { ok: boolean; error?: string; cancelled?: boolean }
+export type MapAgentStartResult = {
+	ok: boolean
+	error?: string
+	cancelled?: boolean
+	/** An open chat took the text into its input; no new chat was started. */
+	addedToChat?: boolean
+	/** The host's note, e.g. the layer is from another study than the chat's. */
+	warning?: string
+}
 
 export function startMapAgentTask(prompt: string, launch?: MapLaunchHint): Promise<MapAgentStartResult> {
 	const requestId = newRequestId()
@@ -55,7 +68,13 @@ export function startMapAgentTask(prompt: string, launch?: MapLaunchHint): Promi
 			}
 			window.clearTimeout(timeout)
 			window.removeEventListener("message", onMessage)
-			resolve({ ok: Boolean(data.ok), error: data.error, cancelled: Boolean(data.cancelled) })
+			resolve({
+				ok: Boolean(data.ok),
+				error: data.error,
+				cancelled: Boolean(data.cancelled),
+				addedToChat: Boolean(data.addedToChat),
+				warning: typeof data.warning === "string" ? data.warning : undefined,
+			})
 		}
 		window.addEventListener("message", onMessage)
 		PLATFORM_CONFIG.postMessage({
@@ -68,8 +87,10 @@ export function startMapAgentTask(prompt: string, launch?: MapLaunchHint): Promi
 }
 
 /** What the launch can say about the study the clicked layer belongs to (lookup keys only; the host resolves them). */
-function launchHint(ctx: MapAgentInspectContext, userQuestion?: string): MapLaunchHint | undefined {
+function launchHint(ctx: MapAgentInspectContext, userQuestion?: string, composerText?: string): MapLaunchHint | undefined {
 	const hint: MapLaunchHint = {
+		...(ctx.ref ? { ref: ctx.ref } : {}),
+		...(ctx.ref && composerText ? { composerText } : {}),
 		...(ctx.studyHint?.sessionId ? { sessionId: ctx.studyHint.sessionId } : {}),
 		...(ctx.studyHint?.artifactPath ? { artifactPath: ctx.studyHint.artifactPath } : {}),
 		...(userQuestion?.trim() ? { userQuestion: userQuestion.trim() } : {}),
@@ -79,12 +100,12 @@ function launchHint(ctx: MapAgentInspectContext, userQuestion?: string): MapLaun
 
 export async function askAgentToDelineate(ctx: MapAgentInspectContext): Promise<MapAgentStartResult> {
 	const prompt = buildDelineateAgentPrompt(ctx)
-	return startMapAgentTask(prompt, launchHint(ctx))
+	return startMapAgentTask(prompt, launchHint(ctx, undefined, "Delineate the watershed at this point:"))
 }
 
 export async function askAgentAboutMap(ctx: MapAgentInspectContext, userQuestion?: string): Promise<MapAgentStartResult> {
 	const prompt = buildAskAboutMapAgentPrompt({ ...ctx, userQuestion })
-	return startMapAgentTask(prompt, launchHint(ctx, userQuestion))
+	return startMapAgentTask(prompt, launchHint(ctx, userQuestion, userQuestion?.trim() || "About this place:"))
 }
 
 export async function askAgentAboutTransect(

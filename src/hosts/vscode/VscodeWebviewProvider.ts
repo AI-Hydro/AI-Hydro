@@ -12,15 +12,13 @@ import { handleHydroMapCommand } from "@/services/hydrology/handleHydroMapComman
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { WebviewMessage } from "@/shared/WebviewMessage"
 import { applyPendingAsk } from "./pendingAskSink"
+import { REPLAY_ID_PATTERN } from "./replayIds"
 import { applySidebarView } from "./sidebarViewSink"
 
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
 https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
 */
-
-/** Session and run ids accepted from the webview for open_replay (same charset the panel operations use). */
-const REPLAY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 
 export class VscodeWebviewProvider extends WebviewProvider implements vscode.WebviewViewProvider {
 	// Used in package.json as the view's id. This value cannot be changed due to how vscode caches
@@ -234,6 +232,15 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				await handleMapAgentTaskMessage(this.controller, message, async (response) => {
 					await this.webview?.webview.postMessage(response)
 				})
+				break
+			}
+			case "aihydro-show-on-map": {
+				// "On map" on a tool card or a claim: the webview sends run ids; the host finds the layers.
+				const { showRunsOnMap } = require("@core/map/showOnMap")
+				const result = await showRunsOnMap(this.controller, message.run_ids)
+				if (!result.ok) {
+					void vscode.window.showInformationMessage("No layer on the map came from that run.")
+				}
 				break
 			}
 			case "aihydro-study-binding": {

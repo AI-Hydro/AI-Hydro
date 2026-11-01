@@ -84,11 +84,12 @@ describe("MapToolRibbon rail", () => {
 	it("keeps Swipe, Time and Flood and the rest in the More menu, not on the rail", () => {
 		setWidth(1280)
 		render(<Host />)
-		expect(rail().queryByRole("button", { name: /Swipe|Time slider|Flood|Export|Transect/ })).toBeNull()
+		expect(rail().queryByRole("button", { name: /Swipe|Date filter|Flood|Export|Transect/ })).toBeNull()
 		openMore()
-		for (const name of [/^Transect/, /^Swipe/, /^Time slider/, /^Flood/, /^Export/, /^Research Gallery/, /^Hide map tools/]) {
+		for (const name of [/^Transect/, /^Swipe/, /^Date filter/, /^Flood/, /^Export/, /^Hide map tools/]) {
 			expect(moreItem(name)).toBeInTheDocument()
 		}
+		expect(screen.queryByRole("menuitem", { name: /Gallery/ })).toBeNull()
 	})
 })
 
@@ -163,7 +164,7 @@ describe("MapToolRibbon conditional tools", () => {
 		openMore()
 		for (const [name, reason] of [
 			[/^Swipe/, /Needs a layer/],
-			[/^Time slider/, "No time-tagged layers"],
+			[/^Date filter/, "No time-tagged layers"],
 			[/^Flood/, "No flood layers"],
 		] as const) {
 			const item = moreItem(name)
@@ -189,7 +190,7 @@ describe("MapToolRibbon conditional tools", () => {
 		render(<Host layers={[time, flood]} />)
 		openMore()
 		expect(moreItem(/^Swipe/)).not.toHaveAttribute("aria-disabled")
-		expect(moreItem(/^Time slider/)).not.toHaveAttribute("aria-disabled")
+		expect(moreItem(/^Date filter/)).not.toHaveAttribute("aria-disabled")
 		expect(moreItem(/^Flood/)).not.toHaveAttribute("aria-disabled")
 	})
 })
@@ -284,7 +285,8 @@ describe("MapToolRibbon chrome states", () => {
 		fireEvent.click(button)
 		expect(button).toHaveAttribute("aria-expanded", "true")
 		const names = screen.getAllByRole("menuitem").map((i) => i.textContent)
-		expect(names.join(" ")).toMatch(/Layers.*Search.*Pins.*Measure.*Draw ROI.*Transect.*Swipe.*Time.*Flood.*Export.*Gallery/)
+		expect(names.join(" ")).toMatch(/Layers.*Search.*Pins.*Measure.*Draw ROI.*Transect.*Swipe.*Date filter.*Flood.*Export/)
+		expect(names.join(" ")).not.toMatch(/Gallery/)
 	})
 
 	it("the bottom sheet has a keyboard-operable resize handle", () => {

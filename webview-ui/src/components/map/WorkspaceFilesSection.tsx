@@ -1,3 +1,4 @@
+import { resolvedSourcePath } from "@shared/map/layerIdentity"
 import { EmptyRequest } from "@shared/proto/cline/common"
 import { AddWorkspaceGeoFileRequest, type MapLayer, type WorkspaceGeoFile } from "@shared/proto/cline/map"
 import React, { useCallback, useEffect, useMemo, useState } from "react"
@@ -6,27 +7,23 @@ import { MapServiceClient } from "../../services/grpc-client"
 /** Rows shown before "Show all". */
 const COLLAPSED_ROWS = 8
 
-/**
- * "Workspace files you can add": geo files found in the open workspace. They are candidates only; opening the
- * map no longer registers every `*.json` as a layer (that flooded the layer list and the badge). The user adds
- * a file with one click and it becomes an ordinary visible layer.
- *
- * Files already on the map (matched by the `path` metadata of workspace layers) are not listed again.
- */
 const workspaceFileKey = (folder: string | undefined, relativePath: string) => `${folder ?? ""}\u0000${relativePath}`
 
-export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; border: string; subtle: string }> = ({
-	layers,
-	fg,
-	border,
-	subtle,
-}) => {
+/**
+ * Geo files found in the open workspace that are not on the map yet. They are candidates only: opening the map does
+ * not register every `*.json` as a layer (that flooded the layer list). They are offered from the Add menu as
+ * "From this workspace (N)"; there is no section for them in the panel.
+ *
+ * A file is "on the map" when a layer has the same resolved source path, however that layer got there (this list,
+ * Add file, the Explorer menu, a restore or an agent), so a file already added never shows up here again.
+ */
+export function useWorkspaceCandidates(layers: MapLayer[]): {
+	addable: WorkspaceGeoFile[]
+	files: WorkspaceGeoFile[]
+	totalCount: number
+} {
 	const [files, setFiles] = useState<WorkspaceGeoFile[]>([])
 	const [totalCount, setTotalCount] = useState(0)
-	const [loaded, setLoaded] = useState(false)
-	const [showAll, setShowAll] = useState(false)
-	const [busyKey, setBusyKey] = useState<string | null>(null)
-	const [status, setStatus] = useState<{ kind: "ok" | "err"; msg: string } | null>(null)
 
 	useEffect(() => {
 		let cancelled = false
@@ -35,73 +32,92 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 				if (cancelled) return
 				setFiles(response.files ?? [])
 				setTotalCount(response.totalCount ?? response.files?.length ?? 0)
-				setLoaded(true)
 			})
-			.catch(() => {
-				if (!cancelled) setLoaded(true)
-			})
+			.catch(() => {})
 		return () => {
 			cancelled = true
 		}
 	}, [])
 
-	// Identity is workspace folder + relative path (two folders may hold the same relative path). Layers saved
-	// before the folder was recorded match by path alone.
 	const onMap = useMemo(() => {
-		const keyed = new Set<string>()
+		const resolved = new Set<string>()
 		const pathOnly = new Set<string>()
 		for (const layer of layers) {
-			const layerPath = layer.metadata?.path
-			if (!layerPath) continue
-			const folder = layer.metadata?.workspace_folder
-			if (folder) keyed.add(workspaceFileKey(folder, layerPath))
-			else pathOnly.add(layerPath)
+			const key = resolvedSourcePath(layer.metadata)
+			if (key) resolved.add(key)
+			// Layers saved before the folder was recorded match by relative path alone.
+			if (layer.metadata?.path && !layer.metadata.workspace_folder) pathOnly.add(layer.metadata.path)
 		}
-		return { keyed, pathOnly }
+		return { resolved, pathOnly }
 	}, [layers])
+
 	const addable = useMemo(
 		() =>
 			files.filter(
 				(file) =>
-					!onMap.keyed.has(workspaceFileKey(file.workspaceFolder, file.relativePath)) &&
-					!onMap.pathOnly.has(file.relativePath),
+					!onMap.resolved.has(
+						resolvedSourcePath({ path: file.relativePath, workspace_folder: file.workspaceFolder }) ?? "",
+					) && !onMap.pathOnly.has(file.relativePath),
 			),
 		[files, onMap],
 	)
+	return { addable, files, totalCount }
+}
+
+/** The list opened by "From this workspace (N)". Closes itself when the last file is added. */
+export const WorkspaceFilePicker: React.FC<{
+	addable: WorkspaceGeoFile[]
+	files: WorkspaceGeoFile[]
+	totalCount: number
+	border: string
+	fg: string
+	onClose: () => void
+	/** A one-line result for the panel's status area, which expires on its own. */
+	onStatus: (kind: "ok" | "err", msg: string) => void
+}> = ({ addable, files, totalCount, border, fg, onClose, onStatus }) => {
+	const [showAll, setShowAll] = useState(false)
+	const [busyKey, setBusyKey] = useState<string | null>(null)
 	const multiRoot = useMemo(() => new Set(files.map((file) => file.workspaceFolder).filter(Boolean)).size > 1, [files])
 
-	const add = useCallback(async (file: WorkspaceGeoFile) => {
-		setBusyKey(workspaceFileKey(file.workspaceFolder, file.relativePath))
-		setStatus(null)
-		try {
-			await MapServiceClient.addWorkspaceGeoFile(
-				AddWorkspaceGeoFileRequest.create({ relativePath: file.relativePath, workspaceFolder: file.workspaceFolder }),
-			)
-			setStatus({ kind: "ok", msg: `Added ${file.name}.` })
-		} catch (error) {
-			setStatus({ kind: "err", msg: error instanceof Error ? error.message : `Could not add ${file.name}.` })
-		} finally {
-			setBusyKey(null)
-		}
-	}, [])
+	useEffect(() => {
+		if (addable.length === 0) onClose()
+	}, [addable.length, onClose])
 
-	if (!loaded || (addable.length === 0 && totalCount === 0)) {
-		return null
-	}
+	const add = useCallback(
+		async (file: WorkspaceGeoFile) => {
+			setBusyKey(workspaceFileKey(file.workspaceFolder, file.relativePath))
+			try {
+				await MapServiceClient.addWorkspaceGeoFile(
+					AddWorkspaceGeoFileRequest.create({ relativePath: file.relativePath, workspaceFolder: file.workspaceFolder }),
+				)
+				onStatus("ok", `Added ${file.name}.`)
+			} catch (error) {
+				onStatus("err", error instanceof Error ? error.message : `Could not add ${file.name}.`)
+			} finally {
+				setBusyKey(null)
+			}
+		},
+		[onStatus],
+	)
 
 	const shown = showAll ? addable : addable.slice(0, COLLAPSED_ROWS)
-	const truncated = totalCount > files.length
 	return (
 		<section
-			aria-label="Workspace files you can add"
+			aria-label="From this workspace"
 			style={{ borderTop: `1px solid ${border}`, padding: "6px 8px", fontSize: 11, color: fg }}>
 			<div className="map-section-head">
 				<span className="map-section-label">
 					<span aria-hidden="true" className="codicon codicon-folder" />
-					{`Workspace files you can add (${addable.length})`}
+					{`From this workspace (${addable.length})`}
 				</span>
+				<button
+					aria-label="Close the workspace file list"
+					className="map-overflow-trigger"
+					onClick={onClose}
+					type="button">
+					<span aria-hidden="true" className="codicon codicon-close" />
+				</button>
 			</div>
-			{addable.length === 0 && <div className="map-hint">All workspace geo files found are already on the map.</div>}
 			{shown.map((file) => (
 				<div
 					key={workspaceFileKey(file.workspaceFolder, file.relativePath)}
@@ -127,14 +143,9 @@ export const WorkspaceFilesSection: React.FC<{ layers: MapLayer[]; fg: string; b
 					{showAll ? "Show fewer" : `Show all ${addable.length}`}
 				</button>
 			)}
-			{truncated && (
+			{totalCount > files.length && (
 				<div style={{ opacity: 0.75, marginTop: 4 }}>
 					Showing the first {files.length} of {totalCount} files found.
-				</div>
-			)}
-			{status && (
-				<div role="status" style={{ marginTop: 4, color: status.kind === "err" ? "#dc3545" : undefined }}>
-					{status.msg}
 				</div>
 			)}
 		</section>

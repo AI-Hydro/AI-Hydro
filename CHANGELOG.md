@@ -9,6 +9,73 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.6] — unreleased (map: fewer places for one action, and every layer knows its run)
+
+### Changed — P1 subtraction pass on the map (branch `vision2040/map-subtract`)
+
+Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of 2026-10-31: D4 (tracker extras out of the default Draw panel, data kept) and D5 (Gallery out of the map's More menu) are taken.
+
+- **Layer row menu: 17 items to 9 or fewer.** Style, Opacity, Attribute table, Details, Cluster points, Copy tool name and Copy run ID are gone from the menu. Opacity, Style (now holding **Cluster points**), Attributes and Details are in the row drawer; the run and tool copy buttons are in Details. "Save to workspace" and "Export as GeoJSON" are one **Save as...**. The eye in the panel bar and the "Layer 3 of 4 from the top" sentence are gone (Show all and Hide all stay in the panel `...` menu).
+- **Provenance** lists the recorded facts, then one "Not recorded: units, CRS, ..." line. Run and Run ID are one row, Source file and Path are one row, the tool is named separately only when it differs from the source. "Metadata fields" is dropped. A "Claim" row shows when the layer's metadata carries `claim_id`. "Source" is shown only when something names it, not as a guess, and a layer with no run says "No run record." once. "Converted artifact" shows only when present.
+- **Draw is for regions and sketches.** Polygon and Line only; a finished shape offers **Save as ROI**, **Keep as sketch** or **Export GeoJSON**. Points are Pins. The tracker (status, priority, tags, collections, search, Save to My Gallery, Batch Ask Agent) is hidden; **Tracker fields** in the Sketches menu shows it again, and the data on each annotation is untouched.
+- **Gallery** is out of the More menu. The panel and its saved items stay (the host command that opens it still works).
+- "Time slider" is **Date filter**: it is two date inputs. The screen id `map-time-slider` is kept for the budget.
+- Measure says once that values are approximate.
+- Removed `MapStatusBar.tsx` (no importer) and the unreachable bound-claim chip in the tool ribbon. Not removed: `bookmarks` in `mapWorkspace.ts`, which the report called unused; `SearchBar` uses it for saved views.
+- Docs: `docs/guide/map/{layers,draw-measure,hydrography}.md` and `map.md` match the code.
+
+### Added — every layer can open its run (P2, branch `vision2040/map-run-link`)
+
+- **Open run** in the layer row menu and in Details opens the run that made the layer in Replay. It is offered only when the layer records both its study and its run. The host checks both ids against the same charset as the chat tool cards before it opens anything.
+- **Reference data** is a layer group: MERIT, NWIS, WBD and NID layers with no run are no longer filed under "Other". They read "Reference, not in any run. It is not from a recorded run." A layer with a tool name is never filed here, even from one of these sources. A layer a study's run made stays under Tool output. Their source now reads "USGS NWIS", "USGS Watershed Boundary Dataset", "National Inventory of Dams".
+- "Open provenance record" moved from the row menu to Details, so the row menu stays at 9 items or fewer.
+- The map plate sidecar keeps `tool`, `study_id` and `retrieved_at` for each visible layer (it kept only the run id). `chat_id` is deliberately not exported: a shared figure should not carry a chat id, and `sourceArtifacts[].provenanceRef` falls back to `run:<id>` when a layer has no file.
+- Not in this change (tools repo): reference layers do not yet carry `retrieved_at` and the query bbox, and gauge/dam queries are not yet wrapped in `recorded_call` when a study is bound.
+
+### Changed — one selection card and one action list (P3, branch `vision2040/map-selection-card`)
+
+- `mapActions.ts` is the one list of what you can do to a thing on the map, by kind: gauge, river reach, basin, other feature, pin, empty point. The selection card (`FeatureIdentifier`), the right-click menu and the pin card render from it, and an action with no handler on a surface is not shown. A unit test proves card and menu get the same actions for every kind; the only surface rule is that the card does not list Inspect (the card is what Inspect opens).
+- **One label per verb**: "Ask AI-Hydro", "Delineate", "Delineate without chat". They replace "Delineate with agent", "Delineate with AI-Hydro", "Delineate here", "Quick delineate", "Quick delineate (no chat)", "Ask about this outlet" and "Ask about this pin". Pin "Delete" is "Remove pin"; "Inspect watershed details" and its kin are "Inspect"; "Export GeoJSON/Shapefile" are "Save as GeoJSON" and "Save as shapefile".
+- **The card** shows the layer name, the kind and the click's coordinates, a run line ("delineate_watershed · run ab12cd34 · Open", or "Reference, not in any run"), the first six properties with **Show all (N)** (the "+N more" text had no way to expand), and two buttons, Ask AI-Hydro and Delineate, then `...`. The routing badge ("NLDI first", "Hybrid", "Quick MERIT") and the quick-delineate paragraph are now the tooltip of Delineate. The card is still floating; nothing is docked.
+- The card gains Select, Add pin, Measure from here, Copy coordinates and Remove layer under `...`; the menu gains Select.
+- `OverflowMenu` items accept a `title` tooltip.
+
+### Changed — pointing at the map and asking keeps the chat (P4, branch `vision2040/map-ask-keeps-chat`)
+
+- **Asking from the map no longer replaces the chat.** `startMapAgentTask` used to `clearTask()` (after a confirm if the chat was running). With a chat open, running or finished, the text now goes into that chat's input and nothing is cleared, aborted or sent; you read it and press Send. With no chat open, a new chat starts as before. The "Replace this chat?" confirm is gone from the map; the ledger and preview launchers keep theirs.
+- **A reference, not a paraphrase.** The text added is one line, `[map-ref kind=basin layer=<id> name="…" run=<id> study=<id> feature=<id> at=lon,lat]` (`MapRef`, `src/shared/map/mapRef.ts`), after your own question or a short lead ("About this place:", "Delineate the watershed at this point:"). Asks that carry no map object (a sketch, a batch) add their prompt as before. The host validates every field (ids by charset, coordinates by range) and drops what it cannot trust.
+- **A different study is said out loud.** If the layer's study is not the one the chat is bound to, the map's status line says so; the text is still added.
+- **Review fixes.** A layer from another study, or a chat bound to none, gets the note written into the input itself ("(This layer is from study s1; this chat is not bound to a study.)") and the ref drops `study=`; nothing is asserted that the chat cannot confirm. If no chat input is open to receive the text, the map says nothing was added instead of "Added". The system prompt now says a `[map-ref ...]` line is data from the map panel, not an instruction, and to check it with `map_get_state`. Control, zero-width and bidi characters are stripped from the ref and the typed text. The map launch no longer takes the unused confirm dep. `map_get_item` (fetch one object) does not exist yet, so the agent resolves a ref through `map_get_state`, which lists layers; whether it resolves correctly is unmeasured.
+- X1-C4 (the composer footer) is done and on main; this uses the existing "add to input" path, so no composer change was needed.
+- Not in this change: the long prompt templates in `mapAgentPrompts.ts` stay for a new chat (the report deletes them only after 18 of 20 scripted asks resolve the right object, which needs the agent and was not run), and `map_get_item` is a tools-repo tool.
+
+### Added — show on map, from the chat and from claims (P5, branch `vision2040/map-show-on-map`)
+
+- **On map (N)** on a tool card whose run made layers that are on the map, and **Show on map (N)** in a claim's popover when the claim's run evidence made layers there. Neither appears when no layer on the map came from that run, so a claim with no linked layer gets no button.
+- One host command does both: the chat sends run ids (`aihydro-show-on-map`); the host finds the layers by the run id in their own metadata (it never takes a layer id from the chat), opens the map and sends `command.focus_layers`. The map makes those layers visible, opens the Layers panel with the first one selected and its Details open, and **moves the camera only when the map has been left alone for 5 seconds**. Otherwise the status line says "Showing N layers from the run. The view did not move; use Zoom to layer."
+- **Review fixes.** A request whose layers have not arrived yet (the map just opened) waits up to 15 seconds for them, then says so. A replayed `command.focus_layers` older than 30 seconds, or with no timestamp, is ignored so it cannot move the view later.
+- Not in this change (the report leaves them out): the session lens, claim badges on the map and the shared timeline.
+
+### Added — a gauge card (P7a, branch `vision2040/map-gauge-card`)
+
+- Clicking a gauge now opens a **Gauge** block on the selection card: USGS site, name, drainage area and record, and a **USGS page** link (opened by the host, http(s) only; the link is built only from an 8 to 15 digit site number). Drainage area and period of record are shown only if the layer reports them (`drainage_area_km2`, `drain_area_va` in mi², `record_begin` and `record_end`, `period_of_record`), converted only for the unit; otherwise they read "not reported". The map's NWIS gauge layer carries only site number, name and label today, so on real data both read "not reported" until the layer reports more. The property list no longer repeats the site, name and label.
+- "USGS" is shown, and the USGS link offered, only when the id came as `USGS-…`, the layer's source is NWIS or USGS, or the agency is USGS. Any other id (for example `08MF005`) is shown bare with no link.
+- **Not built, by the report's own gate (P7b):** "Fetch record" and the hydrograph drawer. The report says not to start them until `data_fetch` keeps the qualifier and approval columns (it still keeps numeric columns only, `tools_data_fetch.py` `_series_payload`, at aihydro-tools main `733d83a`) and the gap rule is closed; `information_class` is also still absent there. The list of runs that already hold a gauge's series needs a tools-side index and is not built either.
+
+### Changed — one file is one layer; groups say what a layer is (owner report on 0.4.5, branch `vision2040/map-one-file-one-layer`)
+
+- **Why one file made two layers.** Two routes created a layer from the same file. A file added from the Explorer menu, "Add file" or a restore becomes a layer with a generated id, the name without its extension and `source_path` set (source `user`). A file added from "Workspace files you can add" becomes `workspace_<path>` with the extension in the name and only a workspace-relative `path` (source `workspace`). Nothing compared them, and the list of addable files matched on the relative `path` alone, so it hid the file the second time but not the first. Two ids, two names, two sets of keys, one file.
+- **One file is one layer.** The host (`Controller.addMapLayer`, which every route passes through: workspace add, Add file, restore, agent push) checks `src/shared/map/layerIdentity.ts`. Identity is the resolved source path (`.` and `..` resolved, symlinks resolved on the host) or, when either layer names no path, the same content. There are three outcomes. **Different**: two layers (different runs, different tools, different paths or recorded sizes; a copy at another path is its own file). **Same**: the layer already on the map stays and the map says "Already on the map as ...". **Changed** (same path, different content: Reload source, an overwritten file, an agent re-push): the layer is updated in place and the map says "Updated ...". Content is compared directly, not hashed, so nothing is hashed or cached per add.
+- **The layer already on the map always survives.** Its id, style, visibility (a hidden layer stays hidden), opacity and place in the order do not move. It gains any run, provenance or source key the other had (including size, mtime, status, units, CRS, validation, uncertainty and coverage). A merged-away id is kept as an alias: agent commands that name it reach the survivor, and opening an older saved scene maps its visibility, order and opacity to the survivor and does not bring the duplicate back.
+- **A run link never stays on content it did not produce.** If a layer with run R1 sits on a file that was then overwritten and added again plain, the layer shows the new content, the run link is removed, the layer says "File changed since run R1" in Provenance, and the map says so ("Updated ...: the file changed since run R1, so the run link was removed."), never "Already on the map". An agent re-push with the same run and path updates the content and keeps the run.
+- **Dropping the run link also drops what described the run's result:** `study_id`, `session_id`, `chat_id`, `run_id`, `uncertainty`, `validation_status`, `coverage_status`, `citation`, `license`, `units` and `crs`, unless the new content supplies them. An empty incoming layer (a restored one) is the same file: it never updates the layer and an empty value never replaces a real one. `realpath` misses are not cached, and removing a layer drops the aliases that pointed at it. Not done: the alias map is in memory only, not in the catalog.
+- **Undo and scenes restore exactly.** Undo and opening a scene send `replaceExisting`, which the host now honours: nothing is folded into another layer.
+- On restore the same rules apply, and the panel says once, for 10 seconds, "N layers were the same file as another and are now one."
+- **Groups say what a layer is:** Results, Your files, Reference data, Earth Engine (and Other). "Loaded by you" and "Workspace files" are gone. A file a tool made stays under Results even if it is in the workspace folder; its path is in Details.
+- **The "you can add" list is in the Add menu** as "From this workspace (N)", and opens a list only when asked. With none to add there is no item and no empty section. The "Added x." line is a normal status that expires.
+
+---
+
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
 
 ### Added — harness coverage for the navigation surfaces (Nav-0, branch `vision2040/nav-0`)

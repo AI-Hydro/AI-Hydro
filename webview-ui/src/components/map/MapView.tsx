@@ -39,6 +39,7 @@ import {
 } from "./basemaps"
 import FeatureIdentifier, { type ClickedFeature, type MapInspectPoint } from "./FeatureIdentifier"
 import { flyToTransition } from "./flyToTransition"
+import { FOCUS_WAIT_MS, focusExpired, focusLayersMessage, mayMoveCamera } from "./focusLayers"
 import { loadAndPushFileEntries, loadAndPushFiles } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
 import { freshLayers } from "./freshLayers"
@@ -80,6 +81,7 @@ import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
 import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext, mapLayerStudyHint } from "./mapAgentBridge"
+import { buildMapRef } from "./mapAgentRef"
 import { panelFamily, useMapChrome } from "./mapChrome"
 import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapHydroGuards"
 import { sendHydroMapCommand } from "./mapHydrologyBridge"
@@ -120,6 +122,7 @@ import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGal
 import { resolveFileUri } from "./resolveFileUri"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
+import { remapSceneIds } from "./sceneAliases"
 import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
 import {
@@ -347,12 +350,19 @@ function meritCatchmentVisual(
 	}
 }
 
+/** What to tell the user after a launch: an open chat took the text into its input; otherwise a new chat opened. */
+function agentLaunchStatus(result: { addedToChat?: boolean; warning?: string }, newChatText: string): string {
+	if (!result.addedToChat) return newChatText
+	return `Added to the current chat's input. Send it when ready.${result.warning ? ` ${result.warning}` : ""}`
+}
+
 function buildMapAgentContext(
 	pt: MapInspectPoint,
 	features: ClickedFeature[],
 	layers: MapLayer[],
 	visibleLayerIds: Set<string>,
 	selectedFeatures: ClickedFeature[] = [],
+	pinId?: string,
 ): MapAgentInspectContext {
 	const primary = features[0]
 	const primaryLayer = primary ? layers.find((l) => l.id === primary.layerId) : undefined
@@ -360,6 +370,7 @@ function buildMapAgentContext(
 		lat: pt.lat,
 		lon: pt.lon,
 		layerName: primary?.layerName,
+		ref: buildMapRef({ point: pt, features, layers, pinId }),
 		studyHint: mapLayerStudyHint(primaryLayer),
 		featureProperties: primary?.properties,
 		visibleLayerNames: layers.filter((l) => visibleLayerIds.has(l.id)).map((l) => l.name),
@@ -700,6 +711,8 @@ const useEscToClosePanels = ({
 
 export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const { layers, connectionStatus, connectionError, reconnect, restoreState } = useMapContext()
+	const restoreStateRef = useRef(restoreState)
+	restoreStateRef.current = restoreState
 	const [resourceRetry, setResourceRetry] = useState(0)
 	const { states: rasterStates, revision: rasterResourceRevision } = useRasterResources(layers, resourceRetry)
 	const [rendererError, setRendererError] = useState<string | null>(null)
@@ -1277,12 +1290,25 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 
 	// Drag-and-drop state — drop zone visibility + last-drop status
 	const [isDragOver, setIsDragOver] = useState(false)
+	const [focusLayerRequest, setFocusLayerRequest] = useState<{ layerId: string; nonce: number } | null>(null)
 	const [dropStatus, setDropStatus] = useState<{ kind: "ok" | "err"; msg: string } | null>(null)
 	const dragDepthRef = useRef(0) // dragenter/leave fire for child elements; track depth
 
 	// Feature identifier — stores clicked vector features at a point
 	const [clickedFeatures, setClickedFeatures] = useState<ClickedFeature[]>([])
 	const [selectedFeatures, setSelectedFeatures] = useState<ClickedFeature[]>([])
+	/** Add features to the multi-selection set (the card's and the context menu's Select). */
+	const addToSelection = (features: ClickedFeature[]) => {
+		setSelectedFeatures((previous) => {
+			const selectedByKey = new Map(previous.map((feature) => [selectedFeatureKey(feature), feature]))
+			for (const feature of features.filter((item) => item.geometry)) {
+				selectedByKey.set(selectedFeatureKey(feature), feature)
+			}
+			const next = Array.from(selectedByKey.values())
+			reportMapEvent("selection.changed", selectedFeaturesPayload(next))
+			return next
+		})
+	}
 	const [inspectPoint, setInspectPoint] = useState<{ lon: number; lat: number } | null>(null)
 	const [delineating, setDelineating] = useState(false)
 	const [delineateStatus, setDelineateStatus] = useState<string | null>(null)
@@ -1615,7 +1641,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				return
 			} else if (msg?.type === "aihydro-open-map-scene" && typeof msg.scene === "string") {
 				try {
-					const scene = JSON.parse(msg.scene)
+					const scene = remapSceneIds(JSON.parse(msg.scene), restoreStateRef.current.aliases)
 					if (scene?.viewState) {
 						setViewState(sanitizeViewState(scene.viewState))
 					}
@@ -1990,6 +2016,63 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		setViewState((previousViewState) => fitViewStateToBounds(bounds, dimensions, previousViewState))
 	}, [layers, visibleLayerIds, dimensions])
 
+	// Any input in the map panel counts as "the user is working here".
+	const lastInteractionRef = useRef(0)
+	useEffect(() => {
+		const touch = () => {
+			lastInteractionRef.current = Date.now()
+		}
+		const events = ["pointerdown", "wheel", "keydown"] as const
+		for (const name of events) window.addEventListener(name, touch, true)
+		return () => {
+			for (const name of events) window.removeEventListener(name, touch, true)
+		}
+	}, [])
+
+	/** "On map" from a tool card or claim: show the layers, select the first, move the camera only if the map is idle. */
+	const pendingFocusRef = useRef<{ ids: string[]; until: number } | null>(null)
+	const handleFocusLayers = (layerIds: string[], fromQueue = false, note?: string) => {
+		const found = layersRef.current.filter((l) => layerIds.includes(l.id))
+		if (found.length === 0) {
+			// The map may have just opened and still be restoring its layers: wait for them, then give up out loud.
+			if (!fromQueue) {
+				pendingFocusRef.current = { ids: layerIds, until: Date.now() + FOCUS_WAIT_MS }
+				window.setTimeout(() => {
+					if (pendingFocusRef.current && pendingFocusRef.current.until <= Date.now()) {
+						pendingFocusRef.current = null
+						setDropStatus({ kind: "err", msg: focusLayersMessage(0, layerIds.length, false) })
+						window.setTimeout(() => setDropStatus(null), 6000)
+					}
+				}, FOCUS_WAIT_MS + 50)
+			}
+			return
+		}
+		pendingFocusRef.current = null
+		for (const layer of found) {
+			handleVisibilityChange(layer.id, true)
+		}
+		setToolOpen("layers", true)
+		setFocusLayerRequest({ layerId: found[0].id, nonce: Date.now() })
+		const bounds = mergeBounds(
+			found.map((l) => getLayerBounds(l, rasterCache)).filter((value): value is BoundingBox => value !== undefined),
+		)
+		const move = !!bounds && mayMoveCamera(lastInteractionRef.current, Date.now())
+		if (move && bounds) {
+			setViewState((previous) => fitViewStateToBounds(bounds, dimensions, previous))
+		}
+		setDropStatus({ kind: "ok", msg: note ?? focusLayersMessage(found.length, layerIds.length, move) })
+		window.setTimeout(() => setDropStatus(null), 6000)
+	}
+	const handleFocusLayersRef = useRef(handleFocusLayers)
+	handleFocusLayersRef.current = handleFocusLayers
+	// A queued request runs when its layers arrive.
+	useEffect(() => {
+		const pending = pendingFocusRef.current
+		if (pending && pending.until > Date.now() && layers.some((l) => pending.ids.includes(l.id))) {
+			handleFocusLayersRef.current(pending.ids, true)
+		}
+	}, [layers])
+
 	const handleFitExtentRef = useRef(handleFitExtent)
 	const handleZoomToLayerRef = useRef(handleZoomToLayer)
 	handleFitExtentRef.current = handleFitExtent
@@ -2011,6 +2094,24 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				}
 				if (event.type === "command.fit_extent") {
 					handleFitExtentRef.current()
+					return
+				}
+				if (event.type === "command.focus_layers") {
+					try {
+						const payload = JSON.parse(event.payloadJson || "{}") as { layerIds?: unknown; note?: unknown }
+						const ids = Array.isArray(payload.layerIds)
+							? payload.layerIds.filter((v): v is string => typeof v === "string")
+							: []
+						if (!focusExpired(event.timestampMs, Date.now())) {
+							handleFocusLayersRef.current(
+								ids,
+								false,
+								typeof payload.note === "string" ? payload.note.slice(0, 300) : undefined,
+							)
+						}
+					} catch {
+						/* ignore */
+					}
 					return
 				}
 				if (event.type === "command.fit_layer") {
@@ -3216,16 +3317,16 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	}, [])
 
 	const handleAgentAsk = useCallback(
-		async (pt: MapInspectPoint, features: ClickedFeature[], userQuestion?: string) => {
+		async (pt: MapInspectPoint, features: ClickedFeature[], userQuestion?: string, pinId?: string) => {
 			setAgentStarting(true)
 			setAgentStatus(null)
 			setDelineateStatus(null)
-			const ctx = buildMapAgentContext(pt, features, sortedLayers, visibleLayerIds, selectedFeatures)
+			const ctx = buildMapAgentContext(pt, features, sortedLayers, visibleLayerIds, selectedFeatures, pinId)
 			try {
 				const result = await askAgentAboutMap(ctx, userQuestion)
 				setAgentStatus(
 					result.ok
-						? "Chat opened — edit the prompt and send when ready."
+						? agentLaunchStatus(result, "Chat opened — edit the prompt and send when ready.")
 						: result.cancelled
 							? "Kept the current chat."
 							: result.error || "Could not start agent task",
@@ -3249,7 +3350,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				const result = await askAgentToDelineate(ctx)
 				setAgentStatus(
 					result.ok
-						? "Chat opened — agent will delineate and push to map."
+						? agentLaunchStatus(result, "Chat opened — agent will delineate and push to map.")
 						: result.cancelled
 							? "Kept the current chat."
 							: result.error || "Could not start agent task",
@@ -3272,7 +3373,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			const expectedAreaKm2 = selectedMeritUpareaKm2(features)
 			if (expectedAreaKm2 && expectedAreaKm2 > QUICK_DELINEATE_MAX_MERIT_UPAREA_KM2) {
 				setDelineateStatus(
-					`Large basin (~${Math.round(expectedAreaKm2).toLocaleString()} km²). Quick raster delineation exceeds the interactive envelope; use Delineate with agent so the hybrid workflow can stage MERIT-Basins assets.`,
+					`Large basin (~${Math.round(expectedAreaKm2).toLocaleString()} km²). Quick raster delineation exceeds the interactive envelope; use Delineate so the hybrid workflow can stage MERIT-Basins assets.`,
 				)
 				return
 			}
@@ -3690,6 +3791,26 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							a.click()
 							URL.revokeObjectURL(url)
 						}}
+						onKeepSketch={() => {
+							try {
+								const geojson = JSON.parse(pendingDraw.geojson)
+								const feature = geojson.type === "FeatureCollection" ? geojson.features?.[0] : geojson
+								if (!feature?.geometry) {
+									setDropStatus({ kind: "err", msg: "This shape has no geometry to keep. Draw it again." })
+									window.setTimeout(() => setDropStatus(null), 6000)
+									return
+								}
+								commitAnnotations([
+									...annotationsRef.current,
+									newAnnotation(pendingDraw.mode, feature.geometry, annotationsRef.current),
+								])
+							} catch {
+								/* a shape that cannot be read stays pending so the user can still save or export it */
+								return
+							}
+							setPendingDraw(null)
+							setDrawGeometry(null)
+						}}
 						onSave={async (name) => {
 							setSaveVectorBusy(true)
 							try {
@@ -3733,18 +3854,10 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					delineating={delineating}
 					features={clickedFeatures}
 					inspectPoint={inspectPoint}
+					layerMetadata={(layerId) => layers.find((l) => l.id === layerId)?.metadata}
 					mapStyle={mapStyle}
-					onAddSelection={(features) => {
-						setSelectedFeatures((previous) => {
-							const selectedByKey = new Map(previous.map((feature) => [selectedFeatureKey(feature), feature]))
-							for (const feature of features.filter((item) => item.geometry)) {
-								selectedByKey.set(selectedFeatureKey(feature), feature)
-							}
-							const next = Array.from(selectedByKey.values())
-							reportMapEvent("selection.changed", selectedFeaturesPayload(next))
-							return next
-						})
-					}}
+					onAddPin={(pt) => placePin(pt.lon, pt.lat)}
+					onAddSelection={addToSelection}
 					onAgentAsk={(pt) => void handleAgentAsk(pt, clickedFeatures)}
 					onAgentDelineate={(pt) => void handleAgentDelineate(pt, clickedFeatures)}
 					onClearSelection={() => setSelectedFeatures([])}
@@ -3755,7 +3868,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						setDelineateStatus(null)
 						setAgentStatus(null)
 					}}
+					onCopyCoords={() => {}}
+					onMeasureFrom={(pt) => {
+						setPinToolArmed(false)
+						setMeasureMode("distance")
+						setTimeout(() => measureClickRef.current?.([pt.lon, pt.lat]), 50)
+					}}
 					onQuickDelineate={(pt) => void handleQuickDelineate(pt, clickedFeatures)}
+					onRemoveLayer={async (layerId) => {
+						try {
+							await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId }))
+						} catch (err) {
+							setAgentStatus(err instanceof Error ? err.message : "Could not remove layer")
+						}
+					}}
 					onSaveFeatures={saveFeaturesToWorkspace}
 					rasterReading={inspectRasterReading}
 					selectedFeatures={selectedFeatures}
@@ -3777,7 +3903,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							menuPin
 								? () => {
 										const [pinLon, pinLat] = pinCoords(menuPin)
-										void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(menuPin))
+										void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(menuPin), menuPin.id)
 									}
 								: undefined
 						}
@@ -3824,6 +3950,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						onRemovePin={menuPin ? () => deletePins([menuPin.id]) : undefined}
 						onRenamePin={menuPin ? () => selectPin(menuPin.id, true) : undefined}
 						onSaveFeature={(format) => void saveFeaturesToWorkspace(contextMenu.features, format)}
+						onSelectFeature={
+							contextMenu.features.length > 0 ? () => addToSelection(contextMenu.features.slice(0, 1)) : undefined
+						}
 						pin={menuPin ? { id: menuPin.id, name: menuPin.name } : undefined}
 						x={contextMenu.x}
 						y={contextMenu.y}
@@ -3837,7 +3966,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						mapStyle={mapStyle === "dark" ? "dark" : "light"}
 						onAsk={() => {
 							const [pinLon, pinLat] = pinCoords(selectedPin)
-							void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(selectedPin))
+							void handleAgentAsk({ lon: pinLon, lat: pinLat }, [], pinQuestion(selectedPin), selectedPin.id)
 						}}
 						onClose={() => selectPin(null)}
 						onCopy={() => {
@@ -4091,6 +4220,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						/>
 					</>
 				}
+				focusLayerRequest={focusLayerRequest}
 				galleryPanel={(() => {
 					const galleryImportCallbacks: GalleryImportCallbacks = {
 						onImportScene: (item) => {

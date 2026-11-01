@@ -27,7 +27,7 @@ describe("pin card", () => {
 		expect((screen.getByLabelText("Pin name") as HTMLInputElement).value).toBe("Outlet candidate")
 		expect((screen.getByLabelText("Pin note") as HTMLTextAreaElement).value).toBe("check NLDI snap")
 		expect(screen.getByText("45.46120°N, 69.59310°W")).toBeTruthy()
-		for (const name of ["Ask AI-Hydro", "Delineate here", "Copy coordinates", "Delete"]) {
+		for (const name of ["Ask AI-Hydro", "Delineate", "Copy coordinates", "Remove pin"]) {
 			expect(screen.getByRole("button", { name })).toBeTruthy()
 		}
 		const text = container.textContent ?? ""
@@ -131,9 +131,9 @@ describe("pin card", () => {
 		const p = props()
 		render(<PinCard {...p} />)
 		fireEvent.click(screen.getByRole("button", { name: "Ask AI-Hydro" }))
-		fireEvent.click(screen.getByRole("button", { name: "Delineate here" }))
+		fireEvent.click(screen.getByRole("button", { name: "Delineate" }))
 		fireEvent.click(screen.getByRole("button", { name: "Copy coordinates" }))
-		fireEvent.click(screen.getByRole("button", { name: "Delete" }))
+		fireEvent.click(screen.getByRole("button", { name: "Remove pin" }))
 		fireEvent.click(screen.getByRole("button", { name: "Close pin card" }))
 		expect(p.onAsk).toHaveBeenCalled()
 		expect(p.onDelineate).toHaveBeenCalled()

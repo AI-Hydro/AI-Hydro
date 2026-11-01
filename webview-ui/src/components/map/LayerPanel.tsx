@@ -10,7 +10,6 @@
  * Positioning is the parent's responsibility (see MapToolRibbon).
  */
 
-import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import { StringRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
@@ -31,15 +30,15 @@ import {
 	type LayerOrigin,
 	listOrder,
 	ORIGIN_LABEL,
+	openableRun,
 	rowIndicators,
 	sharedNote,
-	stackPosition,
 } from "./layerModel"
 import { AttributeTable, LayerInspector, niceMetadata } from "./layerPanelParts"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { SymbologyEditor } from "./SymbologyEditor"
-import { restoredLayersNote, WorkspaceFilesSection } from "./WorkspaceFilesSection"
+import { restoredLayersNote, useWorkspaceCandidates, WorkspaceFilePicker } from "./WorkspaceFilesSection"
 
 interface LayerPanelContentProps {
 	onZoomToLayer?: (layer: MapLayer) => void
@@ -52,6 +51,8 @@ interface LayerPanelContentProps {
 	layerOpacities?: Record<string, number>
 	clusterLayerIds?: Set<string>
 	onClusterToggle?: (layerId: string, enabled: boolean) => void
+	/** Open and select this layer row. Each new `nonce` selects again. */
+	focusLayerRequest?: { layerId: string; nonce: number } | null
 	onShowAllLayers?: () => void
 	onHideAllLayers?: () => void
 }
@@ -157,15 +158,18 @@ const saveLayerToWorkspace = async (layer: MapLayer, displayName: string): Promi
 	return res.workspacePath
 }
 
-const copyText = (text: string) => void navigator.clipboard?.writeText(text)
-
 /** What a selected row's drawer shows besides opacity. */
 interface DrawerView {
 	style: boolean
 	attrs: boolean
 	details: boolean
+	/** "Save as…": choose a workspace file or a GeoJSON download. */
+	saveAs: boolean
 }
-const CLOSED_DRAWER: DrawerView = { style: false, attrs: false, details: false }
+/** The merged-duplicates note is shown once per webview session. */
+let mergeNoteShown = false
+
+const CLOSED_DRAWER: DrawerView = { style: false, attrs: false, details: false, saveAs: false }
 
 /** A removal the user can take back. */
 interface UndoEntry {
@@ -189,6 +193,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	layerOpacities = {},
 	clusterLayerIds,
 	onClusterToggle,
+	focusLayerRequest,
 	onShowAllLayers,
 	onHideAllLayers,
 }) => {
@@ -248,6 +253,23 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		if (msg) window.setTimeout(() => setLoadStatus((cur) => (cur.msg === msg ? { kind: "idle", msg: "" } : cur)), ms)
 	}, [])
 
+	// Workspace files not on the map yet are offered from the Add menu; the list opens only when asked for.
+	const workspace = useWorkspaceCandidates(layers)
+	const [pickerOpen, setPickerOpen] = useState(false)
+	const closePicker = useCallback(() => setPickerOpen(false), [])
+
+	// "N layers were the same file": said once per session, then it expires like any status line.
+	useEffect(() => {
+		if (restoreState.mergedCount > 0 && !mergeNoteShown) {
+			mergeNoteShown = true
+			say(
+				"ok",
+				`${restoreState.mergedCount} layer${restoreState.mergedCount === 1 ? " was" : "s were"} the same file as another and ${restoreState.mergedCount === 1 ? "is" : "are"} now one.`,
+				10_000,
+			)
+		}
+	}, [restoreState.mergedCount, say])
+
 	const restoreOlder = async () => {
 		setRestoringOlder(true)
 		setRestoreError(null)
@@ -260,10 +282,31 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		}
 	}
 
+	/** Replay opens in its own panel; the host checks the ids before it opens anything. */
+	const openRun = (layer: MapLayer) => {
+		const run = openableRun(layer)
+		if (run) {
+			PLATFORM_CONFIG.postMessage({ type: "aihydro-map-open-run", study_id: run.studyId, run_id: run.runId })
+		}
+	}
+
 	const select = (id: string | null, view: Partial<DrawerView> = {}) => {
 		setSelectedId(id)
 		setDrawer({ ...CLOSED_DRAWER, ...view })
 	}
+
+	// A "Show on map" from the chat: open that row's drawer and scroll it into view.
+	useEffect(() => {
+		if (!focusLayerRequest) {
+			return
+		}
+		select(focusLayerRequest.layerId, { details: true })
+		window.setTimeout(() => {
+			document
+				.querySelector(`[data-layer-id="${CSS.escape(focusLayerRequest.layerId)}"]`)
+				?.scrollIntoView({ block: "nearest" })
+		}, 0)
+	}, [focusLayerRequest?.nonce])
 
 	const commitRename = async (layer: MapLayer) => {
 		const trimmed = renameDraft.trim()
@@ -335,7 +378,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				},
 			])
 			if (result.loaded > 0) {
-				say("ok", `Reloaded ${displayName}.`, 5000)
+				// The host says what happened (the file changed, or it is unchanged and already on the map).
+				say("ok", `Reload finished for ${displayName}.`, 5000)
 			} else {
 				say("err", result.errors[0] ?? "Reload failed.", 6000)
 			}
@@ -529,11 +573,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	const menuFor = (layer: MapLayer, displayName: string): OverflowItem[] => {
 		const isRaster = layer.layerType === "raster"
-		const hasGeojson = !!layer.geojson && !isRaster
 		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
-		const provenancePath = layer.metadata?.provenance_path
-		const tool = layerTool(layer.metadata)
-		const run = layerRunId(layer.metadata)
+		const openable = openableRun(layer)
 		const rank = displayIds.indexOf(layer.id)
 		const items: (OverflowItem | false)[] = [
 			{ key: "zoom", label: "Zoom to layer", icon: "zoom-in", onSelect: () => onZoomToLayer?.(layer) },
@@ -547,51 +588,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				},
 			},
 			{ key: "d1", divider: true },
-			{ key: "style", label: "Style…", icon: "symbol-color", onSelect: () => select(layer.id, { style: true }) },
-			{
-				key: "opacity",
-				label: "Opacity",
-				icon: "color-mode",
-				onSelect: () => {
-					select(layer.id)
-					window.setTimeout(() => document.getElementById(`map-layer-opacity-${layer.id}`)?.focus(), 0)
-				},
-			},
-			hasGeojson && {
-				key: "attrs",
-				label: "Attribute table",
-				icon: "table",
-				onSelect: () => select(layer.id, { attrs: true }),
-			},
-			!isRaster &&
-				hasGeojson &&
-				layer.layerType === "point" && {
-					key: "cluster",
-					label: "Cluster points",
-					checked: !!clusterLayerIds?.has(layer.id),
-					onSelect: () => onClusterToggle?.(layer.id, !clusterLayerIds?.has(layer.id)),
-				},
-			{
-				key: "details",
-				label: "Details and provenance",
-				icon: "info",
-				onSelect: () => select(layer.id, { details: true }),
-			},
-			{ key: "d2", divider: true },
 			!isRaster &&
 				layer.metadata?.source !== "workspace" && {
-					key: "save",
-					label: "Save to workspace",
+					key: "save-as",
+					label: "Save as…",
 					icon: "save",
-					onSelect: () => void handleSaveLayerToWorkspace(layer, displayName),
-				},
-			!isRaster &&
-				layer.metadata?.source !== "workspace" &&
-				hasGeojson && {
-					key: "export",
-					label: "Export as GeoJSON",
-					icon: "export",
-					onSelect: () => exportLayer(layer, displayName),
+					onSelect: () => select(layer.id, { saveAs: true }),
 				},
 			!!sourcePath && {
 				key: "open-source",
@@ -605,30 +607,11 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				icon: "refresh",
 				onSelect: () => void handleReloadSource(layer, displayName),
 			},
-			!!provenancePath && {
-				key: "provenance",
-				label: "Open provenance record",
-				icon: "file-code",
-				onSelect: () => void openProvenance(provenancePath),
-			},
-			(!!tool || !!run) && { key: "d3", divider: true },
-			!!tool && {
-				key: "copy-tool",
-				label: "Copy tool name",
-				icon: "copy",
-				onSelect: () => {
-					copyText(tool)
-					say("ok", "Copied tool name.", 2500)
-				},
-			},
-			!!run && {
-				key: "copy-run",
-				label: "Copy run ID",
-				icon: "copy",
-				onSelect: () => {
-					copyText(run)
-					say("ok", "Copied run ID.", 2500)
-				},
+			!!openable && {
+				key: "open-run",
+				label: "Open run",
+				icon: "history",
+				onSelect: () => openRun(layer),
 			},
 			{ key: "d4", divider: true },
 			{
@@ -665,6 +648,16 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 			icon: "link",
 			onSelect: () => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-add-url-command" }),
 		},
+		...(workspace.addable.length > 0
+			? [
+					{
+						key: "workspace",
+						label: `From this workspace (${workspace.addable.length})`,
+						icon: "folder",
+						onSelect: () => setPickerOpen(true),
+					} as OverflowItem,
+				]
+			: []),
 	]
 	const panelItems: OverflowItem[] = [
 		{
@@ -733,14 +726,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 					<output>{Math.round(opacity * 100)}%</output>
 				</label>
 				{!visible && <div className="map-layer-hint">Hidden. Show the layer to change its opacity.</div>}
-				<div className="map-layer-hint">
-					{(() => {
-						const at = stackPosition(drawLayers, layer.id)
-						return at
-							? `Layer ${at.position} of ${at.of} from the top of the map (1 is on top), whatever its group.`
-							: ""
-					})()}
-				</div>
 				<div className="map-layer-drawer__actions">
 					<button
 						aria-pressed={drawer.style}
@@ -769,8 +754,44 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 						Details
 					</button>
 				</div>
+				{drawer.saveAs && !isRaster && (
+					<div aria-label="Save as" className="map-layer-drawer__actions" role="group">
+						<button
+							className="map-chip"
+							onClick={() => {
+								void handleSaveLayerToWorkspace(layer, displayName)
+								setDrawer((d) => ({ ...d, saveAs: false }))
+							}}
+							type="button">
+							<span aria-hidden="true" className="codicon codicon-save" />
+							Workspace file
+						</button>
+						{hasGeojson && (
+							<button
+								className="map-chip"
+								onClick={() => {
+									exportLayer(layer, displayName)
+									setDrawer((d) => ({ ...d, saveAs: false }))
+								}}
+								type="button">
+								<span aria-hidden="true" className="codicon codicon-export" />
+								GeoJSON download
+							</button>
+						)}
+					</div>
+				)}
 				{drawer.style && (
 					<>
+						{hasGeojson && layer.layerType === "point" && (
+							<label className="map-layer-opacity">
+								<input
+									checked={!!clusterLayerIds?.has(layer.id)}
+									onChange={(e) => onClusterToggle?.(layer.id, e.target.checked)}
+									type="checkbox"
+								/>
+								<span>Cluster points</span>
+							</label>
+						)}
 						{!isRaster && (
 							<div aria-label="Style type" className="map-layer-segment" role="group">
 								<button
@@ -811,6 +832,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 						layer={layer}
 						niceMeta={niceMeta}
 						onCopied={(what) => say("ok", `Copied ${what}.`, 2500)}
+						onOpenProvenance={
+							layer.metadata?.provenance_path
+								? () => void openProvenance(layer.metadata?.provenance_path as string)
+								: undefined
+						}
+						onOpenRun={openableRun(layer) ? () => openRun(layer) : undefined}
 						warnings={rowIndicators(layer, intelligence).warnings}
 					/>
 				)}
@@ -819,8 +846,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	}
 
 	// ── render ────────────────────────────────────────────────────────────
-
-	const allVisible = layers.length > 0 && visibleCount === layers.length
 
 	return (
 		<div className="map-layers">
@@ -840,16 +865,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 						? "No layers"
 						: `${layers.length} layer${layers.length === 1 ? "" : "s"} · ${visibleCount} visible`}
 				</span>
-				{layers.length > 0 && (
-					<button
-						aria-label={allVisible ? "Hide all layers" : "Show all layers"}
-						className="map-overflow-trigger"
-						onClick={() => (allVisible ? onHideAllLayers?.() : onShowAllLayers?.())}
-						title={allVisible ? "Hide all layers" : "Show all layers"}
-						type="button">
-						<span aria-hidden="true" className={`codicon codicon-${allVisible ? "eye" : "eye-closed"}`} />
-					</button>
-				)}
 				<OverflowMenu items={panelItems} label="Layers panel actions" />
 			</div>
 
@@ -1021,12 +1036,17 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				</div>
 			)}
 
-			<WorkspaceFilesSection
-				border="var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
-				fg="var(--vscode-foreground)"
-				layers={layers}
-				subtle="color-mix(in srgb, var(--vscode-foreground) 6%, transparent)"
-			/>
+			{pickerOpen && workspace.addable.length > 0 && (
+				<WorkspaceFilePicker
+					addable={workspace.addable}
+					border="var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
+					fg="var(--vscode-foreground)"
+					files={workspace.files}
+					onClose={closePicker}
+					onStatus={(kind, msg) => say(kind, msg, kind === "err" ? 8000 : 4000)}
+					totalCount={workspace.totalCount}
+				/>
+			)}
 
 			{confirm && (
 				<div aria-label="Confirm removal" className="map-layers__confirm" role="alertdialog">

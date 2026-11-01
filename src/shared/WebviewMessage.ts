@@ -6,10 +6,13 @@ export interface WebviewMessage {
 		| "aihydro-hydro-command"
 		| "aihydro-map-agent-task"
 		| "open_replay"
+		| "aihydro-show-on-map"
 		| "aihydro-study-binding"
 	/** open_replay: the session and run a tool-call card links to. Both are validated host-side. */
 	session_id?: string
 	run_id?: string
+	/** aihydro-show-on-map: runs whose layers to show on the map. The host finds the layers; ids are validated there. */
+	run_ids?: string[]
 	grpc_request?: GrpcRequest
 	grpc_request_cancel?: GrpcCancel
 	command?: string

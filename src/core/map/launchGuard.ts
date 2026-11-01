@@ -1,5 +1,5 @@
 /**
- * Guard for actions that replace the current chat (a map "Ask" or "Delineate here" opens a new chat). Starting one
+ * Guard for actions that replace the current chat (a ledger or preview launch opens a new chat; a map "Ask" no longer does, it adds to the open chat). Starting one
  * calls `clearTask()`, which aborts a running task and removes a pending ask from view, so it needs the user's
  * word first. A finished chat (its last message is the completion) has nothing to lose, and neither does a chat
  * that was just reopened and only offers to resume. See `confirmAbortRunningTask` (core/controller/abortGuard.ts),

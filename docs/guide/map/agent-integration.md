@@ -98,14 +98,18 @@ Several map panels send context directly to the agent chat, pre-loading all the 
 
 | Source | What is sent |
 |---|---|
-| **Feature Inspector → Ask AI** | Click coordinates, all visible layer names and types, vector feature properties at that point, raster pixel value |
-| **Feature Inspector → Delineate (agent)** | Click coordinates with a pre-filled delineation instruction |
+| **Feature Inspector → Ask AI-Hydro** (a new chat; with a chat open it adds a `[map-ref …]` line to the input instead) | Click coordinates, all visible layer names and types, vector feature properties at that point, raster pixel value |
+| **Feature Inspector → Delineate** | Click coordinates with a pre-filled delineation instruction |
 | **Annotations → Ask Agent** | Annotation geometry, My Notes, AI Prompt, visible layer list |
 | **Annotations → Batch Ask Agent** | Full collection as a coordinate/geometry/notes table |
 | **Transects → Ask Agent** | Waypoints, full 200-point profile, geomorphic metrics, sampled layer name/units |
 | **Transects → Batch Ask Agent** | Collection as a CSV table with per-transect profile statistics |
 
 ---
+
+## From the chat to the map
+
+A tool card whose run made layers that are on the map shows **On map (N)**, and a claim whose run evidence made layers shows **Show on map (N)** in its popover. Either one opens the map, shows those layers and selects the first in the Layers panel. The map moves its view only when you have not touched it for 5 seconds; otherwise it says the view did not move. The layers are matched by the run id recorded on each layer, so a layer with no run record is never linked.
 
 ## Camera, Run-Output and Time Control
 

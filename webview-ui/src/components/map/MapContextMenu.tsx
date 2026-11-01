@@ -1,17 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react"
 import type { ClickedFeature } from "./FeatureIdentifier"
+import { actionLabel, actionTooltip, MAP_ACTIONS, mapActions, objectKind } from "./mapActions"
 import { MAP_Z } from "./mapZ"
 import { formatPinCoords, pinLabel } from "./pins"
-
-export type FeatureContext = "watershed" | "river" | "feature" | "empty"
-
-function detectContext(features: ClickedFeature[]): FeatureContext {
-	if (features.length === 0) return "empty"
-	const props = features[0].properties
-	if (props.area_km2 != null && (props.method != null || props.pfaf != null || props.routing != null)) return "watershed"
-	if (props.uparea != null || props.strmOrder != null || props.COMID != null || props.comid != null) return "river"
-	return "feature"
-}
 
 function fmtArea(km2: number): string {
 	return km2 >= 1000 ? `${(km2 / 1000).toFixed(1)} ×10³ km²` : `${km2.toFixed(0)} km²`
@@ -38,6 +29,8 @@ export interface MapContextMenuProps {
 	onCopyCoords: () => void
 	onInspect: () => void
 	onSaveFeature: (format: "geojson" | "shapefile") => void
+	/** Add the feature under the pointer to the selection set (the card's Select). */
+	onSelectFeature?: () => void
 	onRemoveLayer?: () => void
 	onRenamePin?: () => void
 	onRemovePin?: () => void
@@ -63,6 +56,7 @@ const MapContextMenu: React.FC<MapContextMenuProps> = ({
 	onCopyCoords,
 	onInspect,
 	onSaveFeature,
+	onSelectFeature,
 	onRemoveLayer,
 	onRenamePin,
 	onRemovePin,
@@ -76,7 +70,11 @@ const MapContextMenu: React.FC<MapContextMenuProps> = ({
 	const rootRef = useRef<HTMLDivElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-	const ctx = detectContext(features)
+	const kind = objectKind(features)
+	const ctx = kind === "basin" ? "watershed" : kind === "empty" ? "empty" : kind === "river" ? "river" : "feature"
+	// What the menu offers comes from the shared list; a handler this surface was not given hides its action.
+	const featureActions = mapActions(kind, "menu")
+	const inSection = (section: string) => featureActions.filter((a) => a.section === section)
 	const primary = features[0]
 	const props = primary?.properties ?? {}
 	const busy = agentStarting || delineating
@@ -284,8 +282,9 @@ const MapContextMenu: React.FC<MapContextMenuProps> = ({
 						<Btn
 							color={accentText}
 							icon="sparkle"
-							label={`Ask AI-Hydro about this ${subject}…`}
+							label={`${actionLabel("ask")}…`}
 							onClick={() => setAskOpen(true)}
+							title={actionTooltip("ask")}
 						/>
 					) : (
 						<div aria-label="Ask AI-Hydro" role="group" style={{ padding: "4px 10px 8px" }}>
@@ -368,20 +367,16 @@ const MapContextMenu: React.FC<MapContextMenuProps> = ({
 							</div>
 						</div>
 					)}
-					<Btn
-						disabled={busy}
-						hint="Opens a chat; the agent records the run"
-						icon="symbol-field"
-						label={ctx === "watershed" ? "Delineate sub-basin with AI-Hydro" : "Delineate with AI-Hydro"}
-						onClick={act(onAgentDelineate)}
-					/>
-					<Btn
-						disabled={busy}
-						hint="Runs here without a chat; best for small and medium basins"
-						icon="zap"
-						label="Quick delineate (no chat)"
-						onClick={act(onQuickDelineate)}
-					/>
+					{(["delineate", "delineate-quick"] as const).map((id) => (
+						<Btn
+							disabled={busy}
+							icon={MAP_ACTIONS[id].icon}
+							key={id}
+							label={actionLabel(id)}
+							onClick={act(id === "delineate" ? onAgentDelineate : onQuickDelineate)}
+							title={actionTooltip(id, primary, { lon, lat })}
+						/>
+					))}
 				</>,
 			)}
 
@@ -393,11 +388,29 @@ const MapContextMenu: React.FC<MapContextMenuProps> = ({
 					{group(
 						`Pin: ${pinLabel(pin)}`,
 						<>
-							{onRenamePin && <Btn icon="edit" label="Rename pin" onClick={act(onRenamePin)} />}
-							{onAskAboutPin && (
-								<Btn color={accentText} icon="sparkle" label="Ask about this pin" onClick={act(onAskAboutPin)} />
+							{onRenamePin && (
+								<Btn
+									icon={MAP_ACTIONS["rename-pin"].icon}
+									label={actionLabel("rename-pin")}
+									onClick={act(onRenamePin)}
+								/>
 							)}
-							{onRemovePin && <Btn color={dangerText} icon="trash" label="Remove pin" onClick={act(onRemovePin)} />}
+							{onAskAboutPin && (
+								<Btn
+									color={accentText}
+									icon={MAP_ACTIONS.ask.icon}
+									label={actionLabel("ask")}
+									onClick={act(onAskAboutPin)}
+								/>
+							)}
+							{onRemovePin && (
+								<Btn
+									color={dangerText}
+									icon={MAP_ACTIONS["remove-pin"].icon}
+									label={actionLabel("remove-pin")}
+									onClick={act(onRemovePin)}
+								/>
+							)}
 						</>,
 					)}
 					{separator}
@@ -418,30 +431,27 @@ const MapContextMenu: React.FC<MapContextMenuProps> = ({
 									{ctx === "river" && props.uparea != null && `upstream ${Number(props.uparea).toFixed(0)} km²`}
 								</div>
 							)}
-							<Btn
-								icon="search"
-								label={
-									ctx === "watershed"
-										? "Inspect watershed details"
-										: ctx === "river"
-											? "Inspect stream attributes"
-											: "Inspect feature"
+							{inSection("object").map((a) => {
+								const handler: Record<string, (() => void) | undefined> = {
+									inspect: onInspect,
+									select: onSelectFeature,
+									"export-geojson": () => onSaveFeature("geojson"),
+									"export-shapefile": () => onSaveFeature("shapefile"),
+									"remove-layer": onRemoveLayer,
 								}
-								onClick={act(onInspect)}
-							/>
-							<Btn icon="export" label="Export GeoJSON" onClick={act(() => onSaveFeature("geojson"))} />
-							{ctx !== "river" && (
-								<Btn icon="file-zip" label="Export Shapefile" onClick={act(() => onSaveFeature("shapefile"))} />
-							)}
-							{onRemoveLayer && (
-								<Btn
-									color={dangerText}
-									icon="trash"
-									label="Remove layer"
-									onClick={act(onRemoveLayer)}
-									title="Remove this layer from the map"
-								/>
-							)}
+								const run = handler[a.id]
+								if (!run) return null
+								return (
+									<Btn
+										color={a.danger ? dangerText : undefined}
+										icon={a.icon}
+										key={a.id}
+										label={a.label}
+										onClick={act(run)}
+										title={a.tooltip}
+									/>
+								)
+							})}
 						</>,
 					)}
 					{separator}
@@ -452,14 +462,24 @@ const MapContextMenu: React.FC<MapContextMenuProps> = ({
 			{group(
 				"Map",
 				<>
-					<Btn icon="pin" label="Add pin" onClick={act(onAddPin)} />
-					<Btn icon="symbol-ruler" label="Measure from here" onClick={act(onMeasureFrom)} />
-					<Btn
-						color={copiedFeedback ? accentText : undefined}
-						icon={copiedFeedback ? "check" : "copy"}
-						label={copiedFeedback ? "Copied" : "Copy coordinates"}
-						onClick={handleCopy}
-					/>
+					{inSection("map").map((a) =>
+						a.id === "copy-coords" ? (
+							<Btn
+								color={copiedFeedback ? accentText : undefined}
+								icon={copiedFeedback ? "check" : a.icon}
+								key={a.id}
+								label={copiedFeedback ? "Copied" : a.label}
+								onClick={handleCopy}
+							/>
+						) : (
+							<Btn
+								icon={a.icon}
+								key={a.id}
+								label={a.label}
+								onClick={act(a.id === "add-pin" ? onAddPin : onMeasureFrom)}
+							/>
+						),
+					)}
 				</>,
 			)}
 		</div>

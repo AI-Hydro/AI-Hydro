@@ -5,8 +5,8 @@
  */
 
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
-import type { ReactNode } from "react"
 import type { AiHydroMessage } from "@shared/ExtensionMessage"
+import type { ReactNode } from "react"
 import App from "../App"
 import { ScienceToolCard } from "../components/chat/ScienceToolCard"
 import ConnectorsView from "../components/connectors/ConnectorsView"
@@ -44,6 +44,7 @@ import {
 	longNameLayers,
 	MAP_STORAGE_KEY,
 	manyLayers,
+	referenceGauges,
 	restoredLayers,
 	TRANSECTS_STORAGE_KEY,
 } from "./fixtures/map"
@@ -52,7 +53,7 @@ import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replayS
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
 import * as tx from "./fixtures/transcripts"
 import { MapBannerVariantsScreen } from "./MapBannerVariantsScreen"
-import { MapIdentifyScreen } from "./MapIdentifyScreen"
+import { MapIdentifyGaugeScreen, MapIdentifyScreen } from "./MapIdentifyScreen"
 import { PrimitivesScreen } from "./PrimitivesScreen"
 import type { ScreenDef, ScreenStep } from "./types"
 
@@ -1003,6 +1004,14 @@ export const screens: ScreenDef[] = [
 	chatTx("chat-old-task-no-outcomes", "Old task without askOutcome/execOutcome", tx.oldTaskNoOutcomesTask, "Both steps ran."),
 	// ── Science tool-call cards (S3) ────────────────────────────────
 	toolCardScreen("toolcard-success", "Tool card: success, explicit gauge, area check pass", "recorded", successCall),
+	toolCardScreen("toolcard-on-map", "Tool card: success, with two map layers from its run (On map)", "recorded", successCall, {
+		layers: [1, 2].map((n) => ({
+			...gaugePoint,
+			id: `fx-on-map-${n}`,
+			name: `Layer ${n} from the run`,
+			metadata: { source_status: "synthetic", tool: "fetch_hydrology_data", _run_id: "dfetch.20261017.e2eproo.48d4b668" },
+		})),
+	}),
 	toolCardScreen("toolcard-refusal", "Tool card: terminal refusal (GAUGE_REQUIRED)", "spliced", refusalCall),
 	toolCardScreen("toolcard-area-fail", "Tool card: gauge area check failed", "spliced", areaFailCall),
 	toolCardScreen("toolcard-provisional", "Tool card: provisional 43/120", "spliced", provisionalCall),
@@ -1288,6 +1297,14 @@ export const screens: ScreenDef[] = [
 		render: () => <MapIdentifyScreen />,
 		expectVisible: ['[aria-label="Feature inspector"]'],
 	},
+	{
+		id: "map-identify-gauge",
+		title: "Identify card for a gauge: site, name, what the layer does not report, USGS page, actions",
+		group: "map",
+		surface: "editor",
+		render: () => <MapIdentifyGaugeScreen />,
+		expectVisible: ['[aria-label="Gauge"]'],
+	},
 	mapScreen("map-error-imagery", "Map with every basemap tile failing (alert, Retry imagery)", { layers: [basinPolygon] }),
 	mapScreen("map-error-partial-tiles", "Map with one basemap tile missing (quiet note, no alert)", { layers: [basinPolygon] }),
 	mapScreen("map-empty-panel-open", "No layers with a tool panel open (no empty-state card)", {
@@ -1313,7 +1330,7 @@ export const screens: ScreenDef[] = [
 			{ wait: 300 },
 			{ click: 'button:text-is("Provenance")' },
 			{ wait: 300 },
-			{ scroll: "text=No provenance record linked" },
+			{ scroll: "text=Not recorded:" },
 		],
 	}),
 	// Layers panel (polish-map): one compact row per layer, grouped by origin; selecting a row opens its drawer.
@@ -1322,7 +1339,7 @@ export const screens: ScreenDef[] = [
 		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("Synthetic basin")' }, { wait: 300 }],
 		expectVisible: ['[aria-label^="Settings for"]'],
 	}),
-	mapScreen("map-layers-menu-open", "Layers: the row overflow menu open (zoom, style, save, copy run ID, move, remove)", {
+	mapScreen("map-layers-menu-open", "Layers: the row overflow menu open (zoom, rename, save as, move, remove)", {
 		layers: featureLayers(),
 		steps: [...openTool("Layer manager"), { click: 'button[aria-label^="Actions for Synthetic basin"]' }, { wait: 300 }],
 		// The first item has focus once the menu is placed (it is hidden while it measures, and a hidden element cannot focus).
@@ -1355,17 +1372,30 @@ export const screens: ScreenDef[] = [
 		],
 		expectVisible: ['button:text-is("Undo")'],
 	}),
-	mapScreen("map-layers-collapsed-group", "Layers: a group collapsed to its header", {
-		layers: manyLayers(),
+	mapScreen("map-layers-menu-run", "Layers: the row menu of a layer that names its study and run (Open run)", {
+		layers: featureLayers(),
+		steps: [...openTool("Layer manager"), { click: 'button[aria-label^="Actions for Synthetic gauge"]' }, { wait: 300 }],
+		expectVisible: ['[role="menu"]', '[role="menuitem"]:has-text("Open run")'],
+	}),
+	mapScreen("map-layers-reference-group", "Layers: a reference layer under Reference data, not in any run", {
+		layers: [...featureLayers(), referenceGauges],
 		steps: [
 			...openTool("Layer manager"),
-			{ click: 'button.map-layer-group__head:has-text("Workspace files")' },
-			{ wait: 200 },
+			{ click: 'button.map-layer-name:has-text("NWIS gauges")' },
+			{ click: 'button.map-chip:text-is("Details")' },
+			{ click: 'button:text-is("Provenance")' },
+			{ wait: 300 },
+			{ scroll: "text=Reference, not in any run" },
 		],
+		expectVisible: ["text=Reference, not in any run"],
 	}),
-	mapScreen("map-time-slider", "Map time slider", {
+	mapScreen("map-layers-collapsed-group", "Layers: a group collapsed to its header", {
+		layers: manyLayers(),
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-group__head:has-text("Your files")' }, { wait: 200 }],
+	}),
+	mapScreen("map-time-slider", "Map date filter", {
 		layers: featureLayers(),
-		steps: openTool("Time slider", true),
+		steps: openTool("Date filter", true),
 	}),
 	mapScreen("map-swipe", "Map swipe compare", {
 		layers: [basinPolygon, ...featureLayers().slice(0, 1)],
@@ -1568,7 +1598,7 @@ export const screens: ScreenDef[] = [
 		storage: { [MAP_STORAGE_KEY]: framedWorkspace(), [TRANSECTS_STORAGE_KEY]: fixtureTransectsJson() },
 		steps: openTool("Transect profile", true),
 	}),
-	mapScreen("map-layers-workspace-files", "Layers with workspace files that can be added", {
+	mapScreen("map-layers-workspace-files", "Layers: Add menu offers From this workspace (2), and its list is open", {
 		layers: featureLayers(),
 		workspaceFiles: [
 			{
@@ -1586,8 +1616,14 @@ export const screens: ScreenDef[] = [
 				folderName: "fixture",
 			},
 		],
-		steps: openTool("Layer manager"),
-		expectVisible: ['[aria-label="Workspace files you can add"]'],
+		steps: [
+			...openTool("Layer manager"),
+			{ wait: 500 },
+			{ click: 'button[aria-label="Add layer"]' },
+			{ click: '[role="menuitem"]:has-text("From this workspace")' },
+			{ wait: 300 },
+		],
+		expectVisible: ['[aria-label="From this workspace"]'],
 	}),
 	mapScreen("map-more-flyout", "More menu with Swipe, Time and Flood disabled and why", {
 		steps: [
