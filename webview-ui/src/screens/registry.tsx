@@ -963,6 +963,13 @@ export const screens: ScreenDef[] = [
 			expectVisible: ["text=Answer was not held back for checking", "text=Audit not run: timed out after 15s"],
 		},
 	),
+	chatTx(
+		"chat-answer-partial",
+		"Answer where the agent says the task was only partly done: outcome in the header, what was not done listed",
+		tx.answerPartialTask,
+		"Fixture answer, not a result.",
+		{ expectVisible: ["text=Partly done", "text=Not done:", "text=no observed record for 2010 to 2015"] },
+	),
 	chatTx("chat-answer-audit-graded", "Answer audit (structured, graded)", tx.answerAuditGradedTask, "linked to a recorded run"),
 	chatTx(
 		"chat-answer-audit-unavailable",

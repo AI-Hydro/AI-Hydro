@@ -129,6 +129,16 @@ Every request carried each hot tool's input schema pretty-printed, with pydantic
 
 Measured on the real listing of the first-party server (179 tools, 45 hot), the whole MCP section of the system prompt: **98,363 to 68,036 characters (-30,327, -30.8%)**, 3,267 to 1,073 lines. Token effect (no tokenizer for the production models is available offline, so this is a proxy and not a token count): pre-tokenizer pieces 21,378 to 14,879 (-30.4%); a WordPiece count that ignores whitespace 23,898 to 20,877 (-12.6%, boilerplate only). The real saving lies between the two: roughly 3k to 6.5k tokens per request. The first-request token drop on a real model run is still to be read from the meter.
 
+### Added — an honest exit: `attempt_completion` can say partial or infeasible (N1, branch `vision2040/agent-exit`)
+
+Until now `attempt_completion` meant "done", and the prompt pressed toward it ("code corruption and system failure"), so a model that could not finish had no first-class way to say so.
+
+- `attempt_completion` gains two optional parameters: `outcome` (`done` | `partial` | `infeasible`; `done`, absent or unrecognised records nothing) and `unmet` (what was not done and why, one item per line). A partial or infeasible completion is a normal completion: it resets the mistake count, never triggers the "you did not use a tool" nudge, and goes through the same answer gate and audit.
+- The answer card shows it in the header ("Partly done" or "Could not be done", always followed by "the agent says": it is the model's statement, not evidence) and lists the unmet items under the header, above the prose. Stored on the row as `completionOutcome` (new proto field `completion_outcome_json = 1012`, additive).
+- The completion-pressure paragraph is gone from the tool description. The `noToolsUsed` text and the audit revision request now say that stopping honestly (partial or infeasible, with what is unmet) is a valid answer.
+- The audit-finding view knows a new kind, `no_observed_lineage` ("Not derived from observed data"), for the tools-side check of numbers with no observed-data lineage. It is **advisory today**: it renders as a note and never gates. `hard` is reserved and would go through the gate like `uncited_number`. Nothing in the extension reads `outcome` as evidence.
+- The declared `outcome` and `unmet` are sent to `audit_interpretation` only when that tool's input schema declares them (tools with the sealed-outcome check, tools PR #34); an older server is never sent an argument it would reject. Until #34 is on tools main, the sealed outcome on the tools side is inert: nothing sends it. Copy puts the outcome ("Partly done (the agent says)", the unmet list) in front of the answer, so a copied or exported answer cannot read as complete.
+
 ---
 
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)

@@ -9,6 +9,7 @@
  * W2-0's `transcriptContracts.ts` registry should import `InfoNotice`/`InfoClass`/`InfoSeverity` from here (or this
  * file re-exports from there): whichever PR merges second reconciles. Pure types and constants, no imports.
  */
+import type { CompletionOutcome } from "./completionOutcome"
 
 export type InfoSeverity = "info" | "warning"
 
@@ -69,4 +70,6 @@ export interface SayEvidence {
 	mcpLevel?: McpNotificationLevel
 	/** `completion_result` rows: a text-only reply to a follow-up message. It answers the user; it is not a finished-task result. */
 	followUpAnswer?: boolean
+	/** `completion_result` rows: the model said the task was only partly done or could not be done (honest exit). */
+	completionOutcome?: CompletionOutcome
 }

@@ -1641,6 +1641,7 @@ export const ChatRowContent = memo(
 								hasChanges={message.partial !== true && hasChanges}
 								onSeeChanges={viewCompletionChanges}
 								onSendFeedback={isLast ? answer?.onSendFeedback : undefined}
+								outcome={message.completionOutcome}
 								partial={message.partial}
 								seeChangesDisabled={seeNewChangesDisabled}
 								text={text}

@@ -8,14 +8,28 @@ const generic: AiHydroToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "attempt_completion",
-	description: `After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. Optionally you may provide a CLI command to showcase the result of your work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
-IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user that any previous tool uses were successful. Failure to do so will result in code corruption and system failure. Before using this tool, you must ask yourself in <thinking></thinking> tags if you've confirmed from the user that any previous tool uses were successful. If not, then DO NOT use this tool.`,
+	description: `After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses, use this tool to present the result of your work to the user. Optionally you may provide a CLI command to showcase the result of your work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
+Do not use this tool while a previous tool call's result is still missing. If you could not finish the task, use this tool anyway with outcome partial (some of it is done) or infeasible (it cannot be done with the data and tools available) and list what is unmet. Saying so is correct; presenting unfinished work as complete, or filling a gap with an invented or assumed value, is not.`,
 	parameters: [
 		{
 			name: "result",
 			required: true,
 			instruction: "The result of the tool use. This should be a clear, specific description of the result.",
 			usage: "Your final result description here",
+		},
+		{
+			name: "outcome",
+			required: false,
+			instruction:
+				"done (the default, leave it out), partial (part of the task is not done) or infeasible (the task cannot be done as asked). Use partial or infeasible whenever data, a run or a step you needed is missing, failed or was assumed.",
+			usage: "done | partial | infeasible (optional)",
+		},
+		{
+			name: "unmet",
+			required: false,
+			instruction:
+				"With outcome partial or infeasible: what was not done and why, one item per line (for example: no observed streamflow for 2010-2015; the forcing fetch timed out).",
+			usage: "One unmet item per line (optional)",
 		},
 		{
 			name: "command",
