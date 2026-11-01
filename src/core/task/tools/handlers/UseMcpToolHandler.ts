@@ -55,6 +55,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		config.taskState.mcpCallFailed = undefined
 		const server_name: string | undefined = block.params.server_name
 		const tool_name: string | undefined = block.params.tool_name
 		const mcp_arguments: string | undefined = block.params.arguments
@@ -305,6 +306,9 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 						.filter(Boolean)
 						.join("\n\n") || "(No response)"
 
+			// Failure from structure, not text: the server's `isError`, or a structured {"error": true, ...} body.
+			config.taskState.mcpCallFailed = !!toolResult?.isError || hasStructuredError(toolResultText)
+
 			// ADR-002b A4: an APPROVAL_REQUIRED refusal offers "Approve in
 			// terminal" (types the command; the human presses Enter). No signing here.
 			notifyApprovalRequired(
@@ -328,7 +332,21 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			// Return formatted result (only pass images if model supports them)
 			return formatResponse.toolResult(toolResultText, supportsImages ? toolResultImages : undefined)
 		} catch (error) {
+			config.taskState.mcpCallFailed = true // the call threw: a timeout or a dropped connection
 			return `Error executing MCP tool: ${(error as Error)?.message}`
 		}
+	}
+}
+
+/** True when a result body is a JSON object with `error: true` (a server's structured failure). Parsed, not pattern-matched. */
+export function hasStructuredError(text: string): boolean {
+	const body = text.replace(/^Error:\n/, "").trim()
+	if (!body.startsWith("{")) {
+		return false
+	}
+	try {
+		return JSON.parse(body)?.error === true
+	} catch {
+		return false
 	}
 }

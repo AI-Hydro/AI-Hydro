@@ -1,5 +1,10 @@
+import {
+	ARTIFACT_SELF_REVIEW_RULE,
+	CITATION_ANTI_HALLUCINATION_RULE,
+	SCIENTIFIC_CONDUCT_RULES,
+	SKILLS_RULE,
+} from "../../components/scientific_conduct"
 import { SystemPromptSection } from "../../templates/placeholders"
-import { SCIENTIFIC_CONDUCT_RULES } from "../../components/scientific_conduct"
 import type { SystemPromptContext } from "../../types"
 
 export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
@@ -76,4 +81,7 @@ export const rules_template = (context: SystemPromptContext) => `RULES
 - When using the replace_in_file tool, Do NOT add extra characters to the markers (e.g., ------- SEARCH> is INVALID). Do NOT forget to use the closing +++++++ REPLACE marker. Do NOT modify the marker format in any way. Malformed XML will cause complete tool failure and break the entire editing process.
 - It is critical you wait for the user's response after each tool use, in order to confirm the success of the tool use. For example, if asked to write a data-processing script, you would create the file, wait for the user's response it was created successfully, then create another file if needed, wait for the user's response it was created successfully, etc.{{BROWSER_WAIT_RULES}}
 - MCP operations should be used one at a time, similar to other tool usage. Wait for confirmation of success before proceeding with additional operations.
+${SKILLS_RULE}
+${ARTIFACT_SELF_REVIEW_RULE}
+${CITATION_ANTI_HALLUCINATION_RULE}
 ${SCIENTIFIC_CONDUCT_RULES}`

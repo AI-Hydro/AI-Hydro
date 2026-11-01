@@ -1,7 +1,12 @@
 import { SystemPromptSection } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
-import { SCIENTIFIC_CONDUCT_RULES, SKILLS_RULE } from "./scientific_conduct"
+import {
+	ARTIFACT_SELF_REVIEW_RULE,
+	CITATION_ANTI_HALLUCINATION_RULE,
+	SCIENTIFIC_CONDUCT_RULES,
+	SKILLS_RULE,
+} from "./scientific_conduct"
 
 const BROWSER_RULES = `- The user may ask generic non-development tasks, such as "what\\'s the latest news" or "look up the weather in San Diego", in which case you might use the browser_action tool to complete the task if it makes sense to do so, rather than trying to create a website or using curl to answer the question. However, if an available MCP server tool or resource can be used instead, you should prefer to use it over browser_action.\n`
 
@@ -33,8 +38,8 @@ const getRulesTemplateText = (context: SystemPromptContext) => `RULES
 - It is critical you wait for the user's response after each tool use, in order to confirm the success of the tool use. For example, if asked to write a data-processing script, you would create the file, wait for the user's response it was created successfully, then create another file if needed, wait for the user's response it was created successfully, etc.{{BROWSER_WAIT_RULES}}
 - MCP operations should be used one at a time, similar to other tool usage. Wait for confirmation of success before proceeding with additional operations.
 ${SKILLS_RULE}
-- **Artifact Self-Review (Mandatory):** After writing any HTML module or multi-section artifact, re-read the saved file before presenting it to the user. Verify: (1) no Python cell contains \`matplotlib.use()\` or \`plt.show()\` — the kernel handles both automatically; (2) no cell uses file I/O — all data embedded as constants; (3) no matplotlib call uses CSS \`rgba()\` strings — only hex or tuple; (4) every cell has correct class names and attributes per the skill contract. Fix any issue before calling \`show_html_preview\`. This self-review catches 90% of runtime errors before the user ever sees them.
-- **Citation Anti-Hallucination (Mandatory):** NEVER invent, guess, or paraphrase a DOI, journal name, volume, or page number in any module or research output. For every non-trivial method or dataset reference: (1) call \`lookup_citation(query)\`; (2) if it returns a result, use the \`formatted_apa\` and \`doi\` EXACTLY as returned; (3) if it returns \`not_found\`, write "No peer-reviewed citation found for this method." — never substitute a plausible-sounding DOI from memory. A hallucinated citation is worse than no citation: it permanently damages scientific credibility.
+${ARTIFACT_SELF_REVIEW_RULE}
+${CITATION_ANTI_HALLUCINATION_RULE}
 ${SCIENTIFIC_CONDUCT_RULES}`
 
 export async function getRulesSection(variant: PromptVariant, context: SystemPromptContext): Promise<string> {
