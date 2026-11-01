@@ -74,6 +74,10 @@ Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`. Owner decisions of
 - **Groups say what a layer is:** Results, Your files, Reference data, Earth Engine (and Other). "Loaded by you" and "Workspace files" are gone. A file a tool made stays under Results even if it is in the workspace folder; its path is in Details.
 - **The "you can add" list is in the Add menu** as "From this workspace (N)", and opens a list only when asked. With none to add there is no item and no empty section. The "Added x." line is a normal status that expires.
 
+### Fixed — a flaky McpHub test (branch `vision2040/mcphub-flake`)
+
+`toggleAutoApproveRefusal.test.ts` removed its temp directory (`/tmp/mcphub-always-*`) while the hub's settings watcher could still be writing into it, which failed unrelated PRs with `ENOTEMPTY: rmdir`. The cleanup now retries (`maxRetries` 10, 50 ms). Test-only.
+
 ---
 
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)
