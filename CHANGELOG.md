@@ -9,7 +9,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [0.4.6] — unreleased (map: fewer places for one action, and every layer knows its run)
+## [0.4.6] — 2026-11-01 (map: fewer places for one action, one file one layer; agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
 
 ### Changed — P1 subtraction pass on the map (branch `vision2040/map-subtract`)
 
