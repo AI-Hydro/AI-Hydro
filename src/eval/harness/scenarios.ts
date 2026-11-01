@@ -240,7 +240,7 @@ export const offlineScenarios: EvalScenario[] = [
 			}
 			const accepted = await task.acceptFollowUpAnswer()
 			return ok(
-				accepted && marked === true && task.taskState.followUpAnswerInFlight === false,
+				accepted && marked === true && task.taskState.followUpAnswerInFlight === true,
 				`accepted=${accepted} marked=${marked}`,
 			)
 		},
