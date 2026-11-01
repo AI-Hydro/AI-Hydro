@@ -352,10 +352,18 @@ export const HOST_READ_ONLY_REASON = "host classified read-only"
  * The text to execute for an approved command. A host-classified read-only command that runs git is wrapped so git
  * sees a hardened environment (see gitHardening.ts); everything else runs unchanged.
  */
-export function commandToExecute(command: string, decision: CommandPolicyResult): string {
-	return decision.action === "run" && decision.reason === HOST_READ_ONLY_REASON && commandRunsGit(command)
-		? hardenGitEnvironment(command)
-		: command
+export function commandToExecute(
+	command: string,
+	decision: CommandPolicyResult,
+	planMode = false,
+	shellEnvironment?: ShellEnvironment,
+): string {
+	// In Plan mode a command only runs because the classifier accepted it, whether it auto-ran or the user approved it,
+	// so a git command is always hardened there. Elsewhere only an auto-run read-only command is.
+	const classifiedRun = planMode
+		? classifyCommand(command, shellEnvironment).readOnly
+		: decision.action === "run" && decision.reason === HOST_READ_ONLY_REASON
+	return classifiedRun && commandRunsGit(command) ? hardenGitEnvironment(command) : command
 }
 
 export function decideCommand(input: CommandPolicyInput): CommandPolicyResult {

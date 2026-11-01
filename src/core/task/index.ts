@@ -1867,6 +1867,7 @@ export class Task {
 			preferredLanguageInstructions,
 			browserSettings: this.stateManager.getGlobalSettingsKey("browserSettings"),
 			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
+			strictPlanModeEnabled: this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled"),
 			subagentsEnabled: this.stateManager.getGlobalSettingsKey("subagentsEnabled") === true,
 			isMultiRootEnabled: multiRootEnabled,
 			workspaceRoots,

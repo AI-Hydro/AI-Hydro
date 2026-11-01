@@ -1,14 +1,14 @@
 import { SCIENTIFIC_CONDUCT_RULES } from "../../components/scientific_conduct"
 import { SystemPromptSection } from "../../templates/placeholders"
-import { PromptVariant } from "../../types"
+import { PromptVariant, SystemPromptContext } from "../../types"
 
 const XS_EDITING_FILES = `FILE EDITING RULES
 - Default: replace_in_file; write_to_file for new files or full rewrites.
 - Match the file’s **final** (auto-formatted) state in SEARCH; use complete lines.
 - Use multiple small blocks in file order. Delete = empty REPLACE. Move = delete block + insert block.`
 
-const XS_ACT_PLAN_MODE = `MODES (STRICT)
-**PLAN MODE (read-only, collaborative & curious):**
+const XS_ACT_PLAN_MODE = (context: SystemPromptContext) => `MODES (STRICT)
+**PLAN MODE (${context.strictPlanModeEnabled ? "read-only, " : ""}collaborative & curious):**
 - Allowed: plan_mode_respond, read_file, list_files, search_files, ask_followup_question, new_task, load_mcp_documentation.
 - **Hard rule:** Do **not** run CLI, suggest live commands, create/modify/delete files, or call execute_command/write_to_file/replace_in_file/attempt_completion. If commands/edits are needed, list them as future ACT steps.
 - Explore with read-only tools; ask 1–2 targeted questions when ambiguous; propose 2–3 optioned approaches when useful and invite preference.

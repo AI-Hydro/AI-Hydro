@@ -113,6 +113,16 @@ A text-only reply is an answer, not a finished-task result: its row is marked `f
 
 There is no text classifier: the state is set by the host when the user writes after a finished answer and is cleared the moment the model uses a tool.
 
+### Fixed — Plan mode is read-only (branch `vision2040/agent-plan`)
+
+Plan mode blocked four file tools and nothing else: every MCP writer, `run_python` (an MCP tool) and any shell command still ran, so planning a study could create runs and fill study slots.
+
+- One policy, `src/core/task/planModePolicy.ts`, built from predicates that already decide for the explorer subagent and for command auto-run. `use_mcp_tool` runs in Plan mode only for a READ-class tool (`readOnlyHint` true and `openWorldHint` false) on a **trusted** first-party server (`explorerMcpBlockReason`: another server's labels are untrusted hints, an unannotated tool is not read-only, and `start_session`, rebind, claim and approval tools are refused by name). `execute_command` runs only if the host's read-only classifier accepts every part of it (fail closed). `preview_html` joins the refused file writers.
+- A refused call comes back as a tool result that starts "PLAN MODE is read-only, so this call did not run", names the reason, and tells the model to put the step in the plan or ask the user to switch to Act mode. The tool list does not change, so the prompt cache is not disturbed. The system prompt's Plan-mode section says the same in one line.
+- Also refused in Plan: `browser_action`, `new_task` and `report_bug` (effects outside the workspace); `access_mcp_resource` goes through the trusted-server check; `spawn_subagents` stays (its children are read-only explorers). A git command that runs in Plan, auto-run or approved, is wrapped in the hardened git environment.
+- The Plan-mode prompt line is shown only when `strictPlanModeEnabled` is on, so the prompt never claims an enforcement that is off.
+- No approval is weakened: the refusal happens before any approval is asked. The existing `strictPlanModeEnabled` setting (default on) still governs.
+
 ---
 
 ## [0.4.5] — 2026-10-31 (owner feedback on 0.4.4: chat chips and file opening, map panels and pins, navigation, explorer subagents)

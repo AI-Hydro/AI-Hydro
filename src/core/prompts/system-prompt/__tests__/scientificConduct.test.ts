@@ -83,4 +83,19 @@ describe("system prompt: scientific conduct and removed contradictions", () => {
 			expect(prompt, key).to.not.match(/Mandatory Pre-Flight/)
 		}
 	})
+
+	it("EVERY variant claims Plan mode is read-only only when strictPlanModeEnabled is on", async () => {
+		await getSystemPrompt(ctxFor("gpt-3"))
+		const registry = PromptRegistry.getInstance() as any
+		for (const [key, variant] of [...registry.variants.entries()] as Array<[string, any]>) {
+			const off = await new PromptBuilder(variant, ctxFor("gpt-3"), registry.components).build()
+			const on = await new PromptBuilder(
+				variant,
+				{ ...ctxFor("gpt-3"), strictPlanModeEnabled: true } as SystemPromptContext,
+				registry.components,
+			).build()
+			expect(off, key).to.not.match(/PLAN MODE \(read-only|PLAN MODE is read-only/)
+			expect(on, key).to.match(/PLAN MODE \(read-only|PLAN MODE is read-only/)
+		}
+	})
 })
