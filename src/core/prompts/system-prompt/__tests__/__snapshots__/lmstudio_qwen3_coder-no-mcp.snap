@@ -34,7 +34,7 @@ GLOBAL RULES
   - Distinguish observed data (gauge records, measurements, retrieved datasets) from modelled, simulated, or estimated data, and label which is which every time you present a result.
 
 ## MODES (STRICT)
-**PLAN MODE (read-only, collaborative & curious):**
+**PLAN MODE (collaborative & curious):**
 - Allowed: plan_mode_respond, read_file, list_files, search_files, ask_followup_question, new_task, load_mcp_documentation.
 - **Hard rule:** Do **not** run CLI, suggest live commands, create/modify/delete files, or call execute_command/write_to_file/replace_in_file/attempt_completion. If commands/edits are needed, list them as future ACT steps.
 - Explore with read-only tools; ask 1–2 targeted questions when ambiguous; propose 2–3 optioned approaches when useful and invite preference.
