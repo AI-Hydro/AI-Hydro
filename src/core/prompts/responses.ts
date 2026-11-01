@@ -260,7 +260,15 @@ Otherwise, if you have not completed the task and do not need additional informa
 		wasRecent: boolean | 0 | undefined,
 		responseText?: string,
 		hasPendingFileContextWarnings?: boolean,
+		/** The task had already finished with an answer and the user has now sent a message: a follow-up, not a restart. */
+		followUp?: boolean,
 	): [string, string] => {
+		if (followUp && mode !== "plan" && responseText) {
+			return [
+				`[TASK RESUMPTION] The user sent a new message after the task finished (${agoText}). Answer it directly. Do not repeat earlier results unless asked. Use a tool only if the answer needs new information. Files and data may have changed since.`,
+				`<user_message>\n${responseText}\n</user_message>`,
+			]
+		}
 		const taskResumptionMessage = `[TASK RESUMPTION] ${
 			mode === "plan"
 				? `This task was interrupted ${agoText}. The conversation may have been incomplete. Be aware that the project state may have changed since then. The current working directory is now '${cwd.toPosix()}'.\n\nNote: If you previously attempted a tool use that the user did not provide a result for, you should assume the tool use was not successful. However you are in PLAN MODE, so rather than continuing the task, you must respond to the user's message.`

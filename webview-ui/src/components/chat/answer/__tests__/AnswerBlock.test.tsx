@@ -58,6 +58,17 @@ const audit = (p: Partial<AnswerAuditPayload> = {}): AnswerAuditPayload => ({
 
 const TEXT = "Answer prose [claim:c-approved] and [claim:c-integrity] with [run:fx-run-1#a.b]."
 
+describe("AnswerBlock follow-up reply", () => {
+	it("a text-only reply to a follow-up is headed Reply, not Answer", () => {
+		const { container } = render(
+			<AnswerBlock followUpAnswer text="Re-running for 2005-2015.">
+				<p>Re-running for 2005-2015.</p>
+			</AnswerBlock>,
+		)
+		expect(container.querySelector("[data-follow-up-answer='true']")?.textContent).toBe("Reply")
+	})
+})
+
 describe("AnswerBlock", () => {
 	it("the summary row holds exactly one approved element for one approved and one integrity-only claim", () => {
 		const { container } = render(

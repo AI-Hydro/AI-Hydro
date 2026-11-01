@@ -230,6 +230,7 @@ export function convertAiHydroMessageToProto(message: AppAiHydroMessage): ProtoC
 		askOutcome: message.askOutcome ?? "",
 		execOutcome: message.execOutcome ?? "",
 		commandCompleted: message.commandCompleted === true,
+		followUpAnswer: message.followUpAnswer === true,
 	}
 
 	return protoMessage
@@ -291,6 +292,9 @@ export function convertProtoToAiHydroMessage(protoMessage: ProtoClineMessage): A
 	}
 	if (protoMessage.commandCompleted) {
 		message.commandCompleted = true
+	}
+	if (protoMessage.followUpAnswer) {
+		message.followUpAnswer = true
 	}
 	if (protoMessage.isCheckpointCheckedOut) {
 		message.isCheckpointCheckedOut = protoMessage.isCheckpointCheckedOut

@@ -67,4 +67,6 @@ export function isElevatedMcpLevel(level: string | undefined): boolean {
 export interface SayEvidence {
 	infoNotice?: InfoNotice
 	mcpLevel?: McpNotificationLevel
+	/** `completion_result` rows: a text-only reply to a follow-up message. It answers the user; it is not a finished-task result. */
+	followUpAnswer?: boolean
 }
