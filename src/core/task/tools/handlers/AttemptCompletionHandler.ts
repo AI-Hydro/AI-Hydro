@@ -75,9 +75,19 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			auditEnabled: settings.getGlobalSettingsKey("finalAnswerAuditEnabled"),
 			servers: config.services.mcpHub.getServers(),
 			state: config.taskState.answerAuditGate,
+			hostBound: this.hostBound(config),
 		})
-		config.taskState.answerAuditGate.eligibleServer = result.eligible ? result.serverName : undefined
+		const gate = config.taskState.answerAuditGate
+		gate.eligibleServer = result.eligible ? result.serverName : undefined
+		// Remembered so the shown answer's record can say why the safeguard did not run (never a silent skip).
+		gate.skipReason = result.eligible || result.reason === "not-attempt-completion" ? undefined : result.reason
 		return result.eligible
+	}
+
+	/** The host's own chip says a study is bound to this chat (boolean only; the audit asks the server itself). */
+	private hostBound(config: TaskConfig): boolean {
+		const binding = config.services.controller?.studyBinding
+		return !!binding && binding.chatId === config.ulid && binding.status === "bound"
 	}
 
 	/** Emit one structured `answer_audit` row (never prose): the webview renders it, copy/notification text is derived. */
@@ -93,7 +103,8 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			answerTs: answerRow?.ts ?? Date.now(),
 			answer,
 		})
-		await config.callbacks.say("answer_audit", JSON.stringify(payload))
+		const gateSkipped = config.taskState.answerAuditGate.skipReason
+		await config.callbacks.say("answer_audit", JSON.stringify(gateSkipped ? { ...payload, gateSkipped } : payload))
 	}
 
 	/** Emit the final-stage row for a gate-accepted answer (the audit already ran inside the gate). */

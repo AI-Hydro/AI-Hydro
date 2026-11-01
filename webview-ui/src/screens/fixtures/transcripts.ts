@@ -626,6 +626,31 @@ export const answerAuditUnavailableTask: AiHydroMessage[] = (() => {
 	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
 })()
 
+/** The audit ran display-only because the revise-before-showing gate could not engage (untrusted server): the footer says why. */
+export const answerAuditGateSkippedTask: AiHydroMessage[] = (() => {
+	const c = clock()
+	const messages = [
+		task("Summarise the synthetic basin. Layout fixture."),
+		apiReq(c()),
+		completion(c(), "The synthetic runoff ratio is 0.42. Fixture answer, not a result."),
+	]
+	const payload: AnswerAuditPayload = {
+		v: 1,
+		stage: "final",
+		status: "unavailable",
+		hardCount: 0,
+		advisoryCount: 0,
+		violations: [],
+		schema: "legacy",
+		attempt: 0,
+		answerTs: messages[2].ts,
+		draftHash: FIXTURE_DRAFT_HASH,
+		disclosure: { kind: "audit_unavailable", reason: "timed out after 15s" },
+		gateSkipped: "no-trusted-server",
+	}
+	return [...messages, say(c(), "answer_audit", JSON.stringify(payload))]
+})()
+
 /** Context truncated to fit the window: the host now says so (structured warning notice) and the range is on the request row. */
 export const contextTruncationTask: AiHydroMessage[] = (() => {
 	const c = clock()

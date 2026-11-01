@@ -954,6 +954,15 @@ export const screens: ScreenDef[] = [
 		"Fixture answer, not a result.",
 		{ expectVisible: ["text=All 4 numbers traced"], expectAbsent: ["[data-testid=untraced-number]"] },
 	),
+	chatTx(
+		"chat-answer-audit-gate-skipped",
+		"Answer audit that ran display-only because the gate could not engage: the footer says why",
+		tx.answerAuditGateSkippedTask,
+		"Fixture answer, not a result.",
+		{
+			expectVisible: ["text=Answer was not held back for checking", "text=Audit not run: timed out after 15s"],
+		},
+	),
 	chatTx("chat-answer-audit-graded", "Answer audit (structured, graded)", tx.answerAuditGradedTask, "linked to a recorded run"),
 	chatTx(
 		"chat-answer-audit-unavailable",
