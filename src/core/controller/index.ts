@@ -2096,6 +2096,17 @@ export class Controller {
 		return resolveAlias(this.mapLayerAliases, id)
 	}
 
+	/** Layers the restore pass folded into others before they were added (see `migrateCatalogEntries`). */
+	recordRestoreMerges(aliases: Record<string, string>): void {
+		for (const [alias, target] of Object.entries(aliases)) this.mapLayerAliases.set(alias, target)
+		this.mapMergedCount += Object.keys(aliases).length
+	}
+
+	/** Aliases the catalog kept from an earlier session. They are not new merges, so they are not counted. */
+	restorePersistedAliases(aliases: Record<string, string>): void {
+		for (const [alias, target] of Object.entries(aliases)) this.mapLayerAliases.set(alias, target)
+	}
+
 	getMapLayerAliases(): Record<string, string> {
 		return Object.fromEntries(this.mapLayerAliases)
 	}
@@ -2147,6 +2158,7 @@ export class Controller {
 			this.mapLayerOrder,
 			this.currentMapScope(),
 			this.mapOverflowEntries,
+			this.getMapLayerAliases(),
 		)
 		await persistMapLayerCatalog(catalog)
 	}

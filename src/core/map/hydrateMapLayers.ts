@@ -18,11 +18,13 @@ import type { Controller } from "@core/controller"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { resolvedSourcePath } from "@shared/map/layerIdentity"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
+import { constants as fsConstants, realpathSync } from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 import { buildInundation3dLayerFromPath } from "./inundation3dLayer"
-import { type MapLayerCatalogEntry, readMapLayerCatalog } from "./mapLayerCatalog"
+import { type MapLayerCatalogEntry, readMapLayerCatalog, scopedMapLayerCatalogFile } from "./mapLayerCatalog"
+import { migrateCatalogEntries } from "./restoreMigration"
 import { selectCatalogEntriesToRestore } from "./restoreSelection"
 import { MAX_INLINE_GEOJSON_BYTES } from "./sanitizeMapLayerForWebview"
 
@@ -253,6 +255,17 @@ export async function restoreCatalogEntries(
 	return added
 }
 
+/** Copy of the catalog taken before the first merge. Never overwritten: it is the file as an older build left it. */
+export async function backUpCatalogBeforeMerge(catalogFile: string): Promise<void> {
+	try {
+		await fs.copyFile(catalogFile, catalogFile.replace(/\.json$/, ".pre-merge-backup.json"), fsConstants.COPYFILE_EXCL)
+	} catch (err) {
+		// EEXIST: a backup from an earlier merge stays as it is. ENOENT: nothing to keep.
+		const code = (err as NodeJS.ErrnoException).code
+		if (code !== "EEXIST" && code !== "ENOENT") console.warn("[hydrateMapLayers] catalog backup failed:", err)
+	}
+}
+
 /**
  * Read the persisted catalog and restore layers into the controller.
  * Called from Controller constructor (after mapSessionService.initialize).
@@ -273,7 +286,20 @@ export async function hydrateMapLayersFromCatalog(controller: Controller, curren
 	const selection = selectCatalogEntriesToRestore(catalog, currentScope)
 	controller.setMapOverflowEntries(selection.overflow)
 
-	const restored = await restoreCatalogEntries(controller, selection.entries, selection.total)
+	// Persisted duplicates (older builds kept one file under several ids) are one layer before anything is added.
+	controller.restorePersistedAliases(catalog.layer_aliases ?? {})
+	const migration = await migrateCatalogEntries(selection.entries, {
+		workspaceRoot: catalog.workspace_root || currentScope || undefined,
+		cacheDir: aihydroPath("map_layer_geojson_cache"),
+		realpath: (p) => realpathSync(p),
+	})
+	if (migration.mergedCount > 0 && currentScope) {
+		// The merge is written to the catalog by the next layer change. Keep the catalog as it was first, once.
+		await backUpCatalogBeforeMerge(scopedMapLayerCatalogFile(currentScope))
+	}
+	controller.recordRestoreMerges(migration.aliases)
+
+	const restored = await restoreCatalogEntries(controller, migration.entries, selection.total)
 
 	console.log(
 		`[hydrateMapLayers] Restored ${restored.length} / ${selection.total} layers from catalog` +

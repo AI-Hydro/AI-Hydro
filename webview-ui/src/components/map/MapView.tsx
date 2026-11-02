@@ -1789,6 +1789,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		if (addedVisibleLayerIds.length > 0) {
 			pendingAutoFitLayerIdsRef.current = addedVisibleLayerIds
 		}
+		const liveLayerIds = new Set(layers.map((layer) => layer.id))
 		setVisibleLayerIds((previousVisibleLayers) => {
 			const nextVisibleLayers = new Set<string>()
 			layers.forEach((layer) => {
@@ -1800,6 +1801,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					nextVisibleLayers.add(layer.id)
 				}
 			})
+			// A layer merged into another because they were the same file: if the one that went away was shown, the one
+			// that stayed is shown. Once: the id is gone from the remembered set after this pass.
+			for (const [alias, target] of Object.entries(restoreStateRef.current.aliases)) {
+				if (previousVisibleLayers.has(alias) && liveLayerIds.has(target)) nextVisibleLayers.add(target)
+			}
 			return nextVisibleLayers
 		})
 		knownLayerIdsRef.current = new Set(layers.map((layer) => layer.id))
@@ -1811,7 +1817,16 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		})
 		setLayerOpacities((previousOpacities) => {
 			const nextOpacities = Object.fromEntries(Object.entries(previousOpacities).filter(([id]) => liveIds.has(id)))
-			return Object.keys(nextOpacities).length === Object.keys(previousOpacities).length ? previousOpacities : nextOpacities
+			// The opacity set on a layer that was merged into another carries over, unless the one that stayed has its own.
+			for (const [alias, target] of Object.entries(restoreStateRef.current.aliases)) {
+				if (previousOpacities[alias] !== undefined && liveIds.has(target) && nextOpacities[target] === undefined) {
+					nextOpacities[target] = previousOpacities[alias]
+				}
+			}
+			const unchanged =
+				Object.keys(nextOpacities).length === Object.keys(previousOpacities).length &&
+				Object.keys(nextOpacities).every((id) => previousOpacities[id] === nextOpacities[id])
+			return unchanged ? previousOpacities : nextOpacities
 		})
 		setClusterLayerIds((previousClusterLayerIds) => {
 			const nextClusterLayerIds = new Set([...previousClusterLayerIds].filter((id) => liveIds.has(id)))
