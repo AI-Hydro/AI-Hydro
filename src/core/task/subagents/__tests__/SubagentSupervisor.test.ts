@@ -224,20 +224,41 @@ describe("SubagentSupervisor", () => {
 		expect(together).to.deep.equal([])
 	})
 
-	it("a cancel during the stagger wait ends the waiting child as cancelled without a request", async () => {
-		let release: () => void = () => {}
+	it("cancelAll wakes a child sleeping in the stagger wait: no request, nothing left waiting", async () => {
 		const apis = [scriptedApi([report("one")]), scriptedApi([report("two")])]
+		// A sleep that never ends on its own: only the cancel can wake the second child.
 		const { supervisor } = supervisorFor(h, apis, {
 			staggerMs: 1_000,
 			now: () => 0,
-			sleep: () => new Promise<void>((resolve) => (release = resolve)),
+			sleep: () => new Promise<void>(() => {}),
 		})
 		const running = supervisor.run(["a", "b"])
 		await new Promise((r) => setTimeout(r, 50))
 		supervisor.cancelAll()
-		release()
-		const results = await running
+		const results = await Promise.race([
+			running,
+			new Promise<never>((_, reject) => setTimeout(() => reject(new Error("cancel did not wake the stagger wait")), 2_000)),
+		])
 		expect(results[1].status).to.equal("cancelled")
+		expect(apis[1].requests).to.equal(0)
+	})
+
+	it("cancel(childId) wakes only that child's wait; the others still start", async () => {
+		const apis = [1, 2, 3].map((n) => scriptedApi([report(`r${n}`)]))
+		const { supervisor } = supervisorFor(h, apis, {
+			staggerMs: 1_000,
+			now: () => 0,
+			// the second child's wait (1000) never ends by itself; the third's (2000) ends at once
+			sleep: (ms: number) => (ms >= 2_000 ? Promise.resolve() : new Promise<void>(() => {})),
+		})
+		const running = supervisor.run(["a", "b", "c"])
+		await new Promise((r) => setTimeout(r, 50))
+		expect(supervisor.cancel(supervisor.children[1].childId)).to.equal(true)
+		const results = await Promise.race([
+			running,
+			new Promise<never>((_, reject) => setTimeout(() => reject(new Error("cancel did not wake the stagger wait")), 2_000)),
+		])
+		expect(results.map((r) => r.status)).to.deep.equal(["completed", "cancelled", "completed"])
 		expect(apis[1].requests).to.equal(0)
 	})
 })

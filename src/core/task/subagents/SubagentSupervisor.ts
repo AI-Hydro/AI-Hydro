@@ -49,6 +49,9 @@ export class SubagentSupervisor {
 	private runners: SubagentRunner[] = []
 	private summaries = new Map<string, SubagentChildSummary>()
 	private cancelledAll = false
+	private readonly cancelledIds = new Set<string>()
+	/** Wakes a child sleeping in the stagger wait, by id. */
+	private readonly wakers = new Map<string, () => void>()
 	readonly caps: EffectiveCapabilities
 
 	constructor(private readonly deps: SupervisorDeps) {
@@ -69,12 +72,19 @@ export class SubagentSupervisor {
 		for (const runner of this.runners) {
 			runner.cancel()
 		}
+		for (const wake of [...this.wakers.values()]) {
+			wake()
+		}
 	}
 
 	/** Stop one child. A child waiting on the user stops now; its ask stays the parent's to resolve. */
 	cancel(childId: string): boolean {
 		const runner = this.runners.find((candidate) => candidate.childId === childId)
 		runner?.cancel()
+		if (runner) {
+			this.cancelledIds.add(runner.childId)
+			this.wakers.get(runner.childId)?.()
+		}
 		return !!runner
 	}
 
@@ -113,15 +123,32 @@ export class SubagentSupervisor {
 		let next = 0
 		const stagger = Math.max(0, this.deps.staggerMs ?? DEFAULT_STAGGER_MS)
 		const now = this.deps.now ?? Date.now
-		const sleep = this.deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
 		let lastStart = Number.NEGATIVE_INFINITY
-		// Reserve the next start time synchronously, so two workers freeing up together still start a gap apart.
-		const waitForStartSlot = async () => {
+		const isCancelled = (runner: SubagentRunner) => this.cancelledAll || this.cancelledIds.has(runner.childId)
+		// Reserve the next start time synchronously, so two workers freeing up together still start a gap apart. The wait
+		// races a cancel: a cancelled child wakes at once, makes no request, and gives its reserved slot back.
+		const waitForStartSlot = async (runner: SubagentRunner) => {
+			const previous = lastStart
 			const at = Math.max(now(), lastStart + stagger)
 			const wait = at - now()
 			lastStart = at
-			if (wait > 0 && !this.cancelledAll) {
-				await sleep(wait)
+			if (wait <= 0 || isCancelled(runner)) {
+				return
+			}
+			let timer: ReturnType<typeof setTimeout> | undefined
+			const woken = new Promise<void>((resolve) => this.wakers.set(runner.childId, resolve))
+			const slept = this.deps.sleep
+				? this.deps.sleep(wait)
+				: new Promise<void>((resolve) => {
+						timer = setTimeout(resolve, wait)
+					})
+			await Promise.race([slept, woken])
+			if (timer) {
+				clearTimeout(timer)
+			}
+			this.wakers.delete(runner.childId)
+			if (isCancelled(runner) && lastStart === at) {
+				lastStart = previous
 			}
 		}
 		const worker = async () => {
@@ -131,8 +158,8 @@ export class SubagentSupervisor {
 					return
 				}
 				const runner = this.runners[index]
-				await waitForStartSlot()
-				results[index] = this.cancelledAll ? await runner.cancelQueued() : await runner.run()
+				await waitForStartSlot(runner)
+				results[index] = isCancelled(runner) ? await runner.cancelQueued() : await runner.run()
 			}
 		}
 		const width = Math.min(this.deps.maxConcurrent ?? MAX_CONCURRENT_CHILDREN, MAX_CONCURRENT_CHILDREN, this.runners.length)

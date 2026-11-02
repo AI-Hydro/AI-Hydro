@@ -49,8 +49,8 @@ export function SubagentLaunchCard({ tool, state }: { tool: AiHydroSayTool; stat
 					className="pt-[2px] text-[12px] text-[var(--vscode-descriptionForeground)]"
 					data-testid="subagent-launch-task-budget">
 					{taskBudget.priced
-						? `Each explorer stops at $${launch.budget.maxCostUsd.toFixed(2)}. All subagents in this task together stop at $${taskBudget.budgetUsd.toFixed(2)}; ${taskBudget.unpricedChildren > 0 ? "at least " : ""}$${taskBudget.spentUsd.toFixed(2)} used so far. A request already under way when a cap is reached still finishes, so the final cost can run a little over.`
-						: `This model has no verified price, so its cost is unknown and the dollar caps ($${launch.budget.maxCostUsd.toFixed(2)} per explorer, $${taskBudget.budgetUsd.toFixed(2)} per task) cannot stop it. The tool-call, time and output limits above still apply.`}
+						? `Each explorer stops at $${launch.budget.maxCostUsd.toFixed(2)}. All subagents in this task together stop at $${taskBudget.budgetUsd.toFixed(2)}; ${taskBudget.unpricedChildren > 0 ? "at least " : ""}$${taskBudget.spentUsd.toFixed(2)} used so far. A cap is a stop, not a guarantee: a request already under way when it is reached still finishes, and explorers launched together can each spend before the others are stopped, so the final cost can run over.`
+						: `This model has no verified price, so its cost is unknown and the dollar caps ($${launch.budget.maxCostUsd.toFixed(2)} per explorer, $${taskBudget.budgetUsd.toFixed(2)} per task) cannot stop it, and the task budget does not apply. The per-explorer output-token, tool-call and time limits above are the only limits.`}
 				</div>
 			)}
 		</section>

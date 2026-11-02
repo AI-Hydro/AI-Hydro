@@ -1,5 +1,5 @@
 {
-	"source": "aihydro-tools train/2.8.7 ai_hydro/mcp/tool_annotations.toml",
+	"source": "aihydro-tools 2.8.7 (e567b7e) ai_hydro/mcp/tool_annotations.toml",
 	"tools": {
 		"add_assumption": {
 			"readOnlyHint": false,

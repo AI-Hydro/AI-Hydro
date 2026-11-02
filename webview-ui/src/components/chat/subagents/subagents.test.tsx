@@ -183,7 +183,9 @@ describe("SubagentLaunchCard", () => {
 				}}
 			/>,
 		)
-		expect(screen.getByTestId("subagent-launch-task-budget").textContent).toMatch(/\$2\.00.*\$5\.00.*\$0\.42 used/)
+		expect(screen.getByTestId("subagent-launch-task-budget").textContent).toMatch(
+			/\$2\.00.*\$5\.00.*\$0\.42 used.*not a guarantee.*launched together/,
+		)
 		rerender(
 			<SubagentLaunchCard
 				state="pending"
@@ -193,7 +195,9 @@ describe("SubagentLaunchCard", () => {
 				}}
 			/>,
 		)
-		expect(screen.getByTestId("subagent-launch-task-budget").textContent).toMatch(/no verified price.*cannot stop it/)
+		expect(screen.getByTestId("subagent-launch-task-budget").textContent).toMatch(
+			/no verified price.*cannot stop it.*task budget does not apply.*only limits/,
+		)
 	})
 	it("uses past tense only once it was decided", () => {
 		const { rerender } = render(<SubagentLaunchCard state="executed" tool={{ tool: "spawnSubagents", subagents: launch }} />)
