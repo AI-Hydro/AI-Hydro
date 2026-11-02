@@ -287,6 +287,8 @@ const PROTECTED_PATH_PATTERNS: readonly RegExp[] = [
 	/\.aihydro\/(approvals|trust|registry)(\/|\s|$)/,
 	/\$\{?aihydro_home\}?|%aihydro_home%/,
 	/aihydro_mcp_settings\.json/,
+	// User-defined agents: prompt text a child runs with (subagents/agentFiles.ts).
+	/\.aihydrorules\/agents(\/|\s|$)/,
 	// A repository's config and hooks can make git run programs (core.pager, core.fsmonitor, hooks).
 	/(^|[/\s=:])\.git\/(config|hooks)/,
 ]

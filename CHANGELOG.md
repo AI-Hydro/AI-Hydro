@@ -50,6 +50,22 @@ Reports: `docs/vision-2040/findings/agent-orchestration-2026-10-31.md` (5.1, 5.2
 - The S30 test (30 answers with seeded overclaims; recall at least 70 percent, false alarms at most 20 percent) **was not run**: it needs a real model, and this change makes no model call. The reviewer's value is unmeasured. The kill rule (precision under 60 percent) is untested.
 - The eval set and arms A, B and C were not run against any model. The thresholds in the report are proposals.
 
+### Stage 3 (agent files)
+
+Report: `docs/vision-2040/findings/agent-orchestration-2026-10-31.md`, Stage 3. Owner decision D8 taken: workspace agent files load only in trusted workspaces, and only narrow.
+
+#### Added
+
+- **User-defined agents** (`subagents/agentFiles.ts`). A `*.md` file in `~/Documents/AI-Hydro/Agents/` or a workspace's `.aihydrorules/agents/` defines a narrower variant of a built-in: `extends` is required; it can remove tools, add prompt text, lower budgets and set a model id on the chat's provider. It cannot add a tool, MCP access or a budget, change the report schema, MCP policy, auto-approve ceiling or `canSpawn`, or name a provider. A derived definition is the base with only those four fields replaced, and `assertNarrower` repeats the comparison so a later edit that copies another field fails a test. Unknown settings are refused by name. The format is a small YAML subset parsed in the file; no YAML library is loaded.
+- **Trust.** A workspace file loads only in a trusted workspace. In an untrusted one the folder is not opened (names only are counted), nothing from it loads, and the launch card and an error row say how many files were left out. An invalid file is reported with its path and reason on the card of any launch and, when it is asked for by id, in the chat; nothing is skipped silently. A workspace file cannot reuse a built-in's id or an id the global folder defined; a symbolic link, an oversized file, an agents folder that points out of the repository and more than 50 files per folder are each refused with a reason.
+- **Source and hash everywhere the agent ran.** The launch card names the file, its base and the first 12 characters of its sha256. The child's record carries the definition's id, source, path and full sha256 (of the file's bytes). The lead's result carries `definition`, `source` and `sha256` on a user file's report block, so an export of the conversation names the exact text that ran. A built-in adds none of these attributes, so the explorer's result is unchanged.
+- **Protected paths.** `.aihydrorules/agents/` in any workspace and the global `Agents` folder join the protected paths: an agent's write there, or a command that mentions it, always asks, even with auto-approve and YOLO on.
+
+#### Not done
+
+- The model learns the ids of your agents only when it asks for one that does not exist; the tool description stays static for the prompt cache. There is no settings screen listing agent files or their problems yet.
+- The owner has not yet written an agent file in real use; the report's kill criterion (none in four weeks) starts when this ships.
+
 ---
 
 ## [0.4.6] — 2026-11-01 (map: fewer places for one action, one file one layer; agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)

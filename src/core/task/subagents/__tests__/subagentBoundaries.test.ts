@@ -11,6 +11,7 @@ import { describe, it } from "mocha"
 const SRC = path.resolve(__dirname, "../../../..")
 const SUBAGENT_FILES = [
 	"core/task/subagents/agentDefinition.ts",
+	"core/task/subagents/agentFiles.ts",
 	"core/task/subagents/agentModel.ts",
 	"core/task/subagents/launchBrake.ts",
 	"core/task/subagents/childRuntime.ts",

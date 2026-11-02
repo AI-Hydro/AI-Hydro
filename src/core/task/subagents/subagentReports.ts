@@ -17,6 +17,8 @@ export interface ReportableResult {
 	report?: SubagentReport
 	/** A reviewer's check, for a definition whose report schema is "review". Advice from a second model run. */
 	review?: SubagentReviewReport
+	/** The definition the child ran. A user file's id, source and hash are in the text the lead gets, and so in any export of it. */
+	definition?: { id: string; source: "builtin" | "global" | "workspace"; sha256: string }
 	/** The definition's report schema, so the wrapper can say what kind of text this is. */
 	reportSchema?: "findings" | "review"
 	lastAssistantText?: string
@@ -107,6 +109,13 @@ export function formatReportsForParent(results: ReportableResult[]): string {
 			`id="${result.childId}"`,
 			`label="${inert(result.label)}"`,
 			`status="${result.status}"`,
+			...(result.definition && result.definition.source !== "builtin"
+				? [
+						`definition="${inert(result.definition.id)}"`,
+						`source="${result.definition.source}"`,
+						`sha256="${inert(result.definition.sha256)}"`,
+					]
+				: []),
 			`tool_calls="${result.usage.toolCalls}"`,
 			`tokens_in="${result.usage.tokensIn}"`,
 			`tokens_out="${result.usage.tokensOut}"`,

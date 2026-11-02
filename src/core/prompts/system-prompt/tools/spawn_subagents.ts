@@ -65,7 +65,7 @@ const generic: AiHydroToolSpec = {
 		{
 			name: "profile",
 			required: false,
-			instruction: `The subagent profile: ${[...BUILTIN_DEFINITIONS.keys()].join(" or ")}. Leave it out for ${DEFAULT_AGENT_ID}.`,
+			instruction: `The subagent profile: ${[...BUILTIN_DEFINITIONS.keys()].join(" or ")}, or the id of one of the user's own agent files when they name it. Leave it out for ${DEFAULT_AGENT_ID}.`,
 			usage: DEFAULT_AGENT_ID,
 		},
 		TASK_PROGRESS_PARAMETER,

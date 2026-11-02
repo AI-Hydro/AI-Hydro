@@ -306,6 +306,76 @@ describe("SubagentLaunchCard", () => {
 			/study brief the host read from the server.*model did not write it/,
 		)
 	})
+	it("names a user-defined agent's source file and hash, and that it can only narrow its base", () => {
+		const sha = "0123456789abcdef".repeat(4)
+		render(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{
+					tool: "spawnSubagents",
+					subagents: {
+						...launch,
+						profile: "scoped",
+						label: "Scoped",
+						definition: {
+							id: "scoped",
+							source: "workspace",
+							sha256: sha,
+							path: "/w/.aihydrorules/agents/scoped.md",
+							extends: "explorer",
+						},
+					},
+				}}
+			/>,
+		)
+		const line = screen.getByTestId("subagent-launch-definition")
+		expect(line.textContent).toContain(
+			'Agent "scoped" is your workspace file /w/.aihydrorules/agents/scoped.md, narrowing explorer',
+		)
+		expect(line.textContent).toContain("can only remove tools, lower limits and add prompt text")
+		expect(line.textContent).toContain("sha256 0123456789ab…")
+		expect(line.querySelector("[title]")?.getAttribute("title")).toBe(sha)
+	})
+	it("shows no definition line for a built-in", () => {
+		render(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{
+					tool: "spawnSubagents",
+					subagents: { ...launch, definition: { id: "explorer", source: "builtin", sha256: "a".repeat(64) } },
+				}}
+			/>,
+		)
+		expect(screen.queryByTestId("subagent-launch-definition")).toBeNull()
+	})
+	it("lists agent files that did not load, and files left out of an untrusted workspace, as a note", () => {
+		render(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{
+					tool: "spawnSubagents",
+					subagents: {
+						...launch,
+						agentFiles: {
+							notes: ["2 agent files in /w/.aihydrorules/agents were not loaded: this workspace is not trusted."],
+							problems: [
+								{
+									path: "/w/.aihydrorules/agents/bad.md",
+									reason: "tool 'run_python' is not one of the tools of 'explorer'.",
+								},
+							],
+						},
+					},
+				}}
+			/>,
+		)
+		const note = screen.getByTestId("subagent-launch-agent-files")
+		expect(note.getAttribute("role")).toBe("note")
+		expect(note.textContent).toContain(
+			"2 agent files in /w/.aihydrorules/agents were not loaded: this workspace is not trusted.",
+		)
+		expect(note.textContent).toContain("Agent file not loaded: /w/.aihydrorules/agents/bad.md: tool 'run_python'")
+	})
 	it("shows the task budget and what is used, or says the cost is unknown for an unpriced model", () => {
 		const { rerender } = render(
 			<SubagentLaunchCard

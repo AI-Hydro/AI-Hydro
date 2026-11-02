@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -90,7 +91,9 @@ describe("spawn_subagents end to end", () => {
 			async () => false,
 		)
 		// Production builds each child's handler from the user's API settings; the test hands out scripted ones.
-		;(exec as any).coordinator.register(new SpawnSubagentsToolHandler({ buildApi: () => childApis.shift() }))
+		;(exec as any).coordinator.register(
+			new SpawnSubagentsToolHandler({ buildApi: () => childApis.shift(), globalAgentsDir: async () => undefined }),
+		)
 		return exec
 	}
 
@@ -624,6 +627,7 @@ describe("spawn_subagents end to end", () => {
 						seen.push(resolved)
 						return childApis.shift()
 					},
+					globalAgentsDir: async () => undefined,
 				}),
 			)
 		}
@@ -695,6 +699,161 @@ describe("spawn_subagents end to end", () => {
 			await executor.executeTool(spawn(["x"], { profile: "reviewer" }))
 			expect(resultText()).to.include("is not { modelId, providerId? }")
 			expect(h.asks).to.have.length(0)
+		})
+	})
+
+	describe("user-defined agents (agent files)", () => {
+		const SCOPED =
+			"---\nextends: explorer\nname: Scoped\ntools: [read_file]\nbudget:\n  maxToolCalls: 5\n---\nLook only at README.md.\n"
+		const BAD = "---\nextends: explorer\ntools: [read_file, run_python]\n---\n"
+		const agentsDir = () => path.join(h.dir, ".aihydrorules", "agents")
+		const writeAgent = (name: string, text: string) => {
+			fs.mkdirSync(agentsDir(), { recursive: true })
+			fs.writeFileSync(path.join(agentsDir(), name), text)
+		}
+		// The real loader on the temp workspace; the global folder is out of the test.
+		const useFiles = (seen: any[] = []) => {
+			;(executor as any).coordinator.unregister("spawn_subagents")
+			;(executor as any).coordinator.register(
+				new SpawnSubagentsToolHandler({
+					buildApi: (_config, resolved) => {
+						seen.push(resolved)
+						return childApis.shift()
+					},
+					globalAgentsDir: async () => undefined,
+				}),
+			)
+		}
+		const card = () => JSON.parse(h.asks.find((a) => a.type === "tool")!.text!).subagents
+
+		it("a trusted workspace's file runs as its own narrower agent, and the card, the record and the lead's result carry its source and hash", async () => {
+			setWorkspaceTrustProvider(() => true)
+			try {
+				writeAgent("scoped.md", SCOPED)
+				const sha = createHash("sha256").update(SCOPED).digest("hex")
+				useFiles()
+				childApis.push(
+					scriptedApi([
+						tool("search_files", { path: ".", regex: "Demo" }), // removed by the file: refused
+						tool("read_file", { path: "README.md" }),
+						report("README says Demo."),
+					]),
+				)
+				await executor.executeTool(spawn(["What does the README say?"], { profile: "scoped" }))
+				const launch = card()
+				expect(launch.label).to.equal("Scoped")
+				expect(launch.definition).to.deep.equal({
+					id: "scoped",
+					source: "workspace",
+					sha256: sha,
+					path: path.join(agentsDir(), "scoped.md"),
+					extends: "explorer",
+				})
+				expect(launch.budget.maxToolCalls).to.equal(5)
+				expect(launch.limits).to.include("No file writes")
+				const [record] = diskRecords()
+				expect(record.definition).to.deep.include({ id: "scoped", source: "workspace", sha256: sha, extends: "explorer" })
+				expect(record.toolCalls.map((c: any) => [c.name, c.result])).to.deep.equal([
+					["search_files", "refused"],
+					["read_file", "ok"],
+					["report_findings", "ok"],
+				])
+				expect(record.allowlistSha256).to.not.equal(undefined)
+				// the lead's result (and so any export of the conversation) names the file and its hash
+				expect(resultText()).to.include(`definition="scoped" source="workspace" sha256="${sha}"`)
+				expect(resultText()).to.include('label="Scoped 1"')
+			} finally {
+				setWorkspaceTrustProvider(undefined)
+			}
+		})
+
+		it("the file's prompt text is in the child's system prompt, after the role, and the file added no tool to the registry", async () => {
+			setWorkspaceTrustProvider(() => true)
+			try {
+				writeAgent("scoped.md", SCOPED)
+				useFiles()
+				let system = ""
+				childApis.push(scriptedApi([report("done")], { onRequest: (s) => (system = s) }))
+				await executor.executeTool(spawn(["x"], { profile: "scoped" }))
+				expect(system).to.include("You are a read-only research subagent of AI-Hydro.")
+				expect(system.indexOf("Look only at README.md.")).to.be.greaterThan(
+					system.indexOf("You are a read-only research subagent"),
+				)
+				expect(system).to.not.include("## search_files")
+				expect(system).to.not.include("## use_mcp_tool")
+			} finally {
+				setWorkspaceTrustProvider(undefined)
+			}
+		})
+
+		it("in an untrusted workspace the same file does not load: the request is told why, the user sees a note, and nothing starts", async () => {
+			writeAgent("scoped.md", SCOPED)
+			useFiles()
+			await executor.executeTool(spawn(["x"], { profile: "scoped" }))
+			expect(resultText()).to.include("Unknown profile")
+			expect(resultText()).to.include("1 agent file")
+			expect(resultText()).to.include("not trusted")
+			expect(parentSays.some((say) => say.type === "error" && /not trusted/.test(say.text ?? ""))).to.equal(true)
+			expect(h.asks).to.have.length(0)
+			expect(childApis).to.have.length(0)
+
+			// an ordinary launch in that workspace still shows the note on its card
+			taskState.userMessageContent = []
+			taskState.didAlreadyUseTool = false
+			childApis.push(scriptedApi([report("done")]))
+			await executor.executeTool(spawn(["y"]))
+			expect(card().agentFiles.notes[0]).to.include("not trusted")
+			expect(card().agentFiles.problems).to.deep.equal([])
+		})
+
+		it("an invalid file is an error with its reason, not a silent skip: on the card of any launch, and in the chat when it is asked for", async () => {
+			setWorkspaceTrustProvider(() => true)
+			try {
+				writeAgent("bad.md", BAD)
+				useFiles()
+				await executor.executeTool(spawn(["x"], { profile: "bad" }))
+				expect(resultText()).to.include("Agent 'bad' did not load")
+				expect(resultText()).to.include("tool 'run_python'")
+				expect(resultText()).to.include("A file can only remove tools, never add one")
+				expect(parentSays.some((say) => say.type === "error" && /did not load/.test(say.text ?? ""))).to.equal(true)
+				expect(h.asks).to.have.length(0)
+
+				taskState.userMessageContent = []
+				taskState.didAlreadyUseTool = false
+				childApis.push(scriptedApi([report("done")]))
+				await executor.executeTool(spawn(["y"]))
+				const problems = card().agentFiles.problems
+				expect(problems).to.have.length(1)
+				expect(problems[0].path).to.equal(path.join(agentsDir(), "bad.md"))
+				expect(problems[0].reason).to.include("run_python")
+			} finally {
+				setWorkspaceTrustProvider(undefined)
+			}
+		})
+
+		it("a file's model id runs on the parent's provider, and a file cannot name a provider", async () => {
+			setWorkspaceTrustProvider(() => true)
+			try {
+				;(h.runnerBase.stateManager as any).getApiConfiguration = () => ({
+					actModeApiProvider: "anthropic",
+					actModeApiModelId: "claude-parent",
+				})
+				writeAgent("cheap.md", "---\nextends: explorer\nmodel: claude-haiku\n---\n")
+				writeAgent("elsewhere.md", "---\nextends: explorer\nmodel: gpt-x\nprovider: openai-native\n---\n")
+				const seen: any[] = []
+				useFiles(seen)
+				childApis.push(scriptedApi([report("done")]), scriptedApi([report("done")]))
+				await executor.executeTool(spawn(["x"], { profile: "cheap" }))
+				expect(seen[0].config.actModeApiModelId).to.equal("claude-haiku")
+				expect(seen[0].config.actModeApiProvider).to.equal("anthropic")
+				expect(seen[0].otherProvider).to.equal(false)
+				taskState.userMessageContent = []
+				taskState.didAlreadyUseTool = false
+				await executor.executeTool(spawn(["x"], { profile: "elsewhere" }))
+				expect(resultText()).to.include("unknown setting 'provider'")
+			} finally {
+				setWorkspaceTrustProvider(undefined)
+			}
 		})
 	})
 })

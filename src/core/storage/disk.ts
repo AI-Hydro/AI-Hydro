@@ -81,6 +81,18 @@ export async function ensureRulesDirectoryExists(): Promise<string> {
 	return aihydroRulesDir
 }
 
+/**
+ * The user's global agents folder, beside `Rules`. Not created: an agent file is the user's own, and a missing folder
+ * means no agents. Falls back to the home directory's Documents the same way the Rules folder does.
+ */
+export async function getAgentsDirectoryPath(): Promise<string> {
+	try {
+		return path.join(await getDocumentsPath(), "AI-Hydro", "Agents")
+	} catch {
+		return path.join(os.homedir(), "Documents", "AI-Hydro", "Agents")
+	}
+}
+
 export async function ensureWorkflowsDirectoryExists(): Promise<string> {
 	const userDocumentsPath = await getDocumentsPath()
 	const aihydroWorkflowsDir = path.join(userDocumentsPath, "AI-Hydro", "Workflows")
