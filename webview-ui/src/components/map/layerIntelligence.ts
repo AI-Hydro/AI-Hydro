@@ -248,6 +248,7 @@ function sourceLabel(layer: MapLayer): string {
 export function sourceStatusText(status?: string): string {
 	if (!status) return "Not checked"
 	if (status === "source_changed") return "Source changed — reload recommended"
+	if (status === "source_missing") return "File not found — showing the last saved copy"
 	if (status === "current") return "Reported current (not scientific validation)"
 	return `Reported source status: ${status}`
 }

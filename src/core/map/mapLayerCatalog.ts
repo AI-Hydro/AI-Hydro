@@ -236,7 +236,7 @@ export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = "", disp
 		visible: layer.visible !== false,
 		source: resolveLayerSource(layer),
 		workspace_path: workspacePath,
-		geojson_cache_path: geojsonCachePath,
+		geojson_cache_path: geojsonCachePath || meta.geojson_cache_path || "",
 		raster_path: meta.raster_path || "",
 		raster_bounds: meta.raster_bounds || "",
 		raster_colormap: meta.raster_colormap || "viridis",
@@ -267,7 +267,9 @@ async function cacheLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 	}
 	const geojson = layer.geojson?.trim()
 	if (!geojson) {
-		return ""
+		// A restored layer holds no content here. Its cache copy is still its only copy: keep naming it, or the next
+		// restart finds neither a cache path nor a file and the layer is gone.
+		return meta.geojson_cache_path ?? ""
 	}
 	const bytes = Buffer.byteLength(geojson, "utf8")
 	const cap = isToolPushedLayer(layer) ? MAX_GEOJSON_CACHE_BYTES_TOOL : MAX_GEOJSON_CACHE_BYTES_USER

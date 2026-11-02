@@ -17,7 +17,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useMapContext } from "../../context/MapContext"
 import { FileServiceClient, MapServiceClient } from "../../services/grpc-client"
-import { ACCEPTED_EXTENSIONS, loadAndPushFileEntries, loadAndPushFiles } from "./formats"
+import { loadAndPushFileEntries } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
 import GraduatedSymbologyEditor from "./GraduatedSymbologyEditor"
 import { LayerRow } from "./LayerRow"
@@ -37,6 +37,7 @@ import {
 import { AttributeTable, LayerInspector, niceMetadata } from "./layerPanelParts"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
+import { resolveFileUri } from "./resolveFileUri"
 import { SymbologyEditor } from "./SymbologyEditor"
 import { restoredLayersNote, useWorkspaceCandidates, WorkspaceFilePicker } from "./WorkspaceFilesSection"
 
@@ -67,36 +68,11 @@ const openProvenance = async (path: string) => {
 	}
 }
 
-const openSourceFile = (filePath: string) => {
-	PLATFORM_CONFIG.postMessage({ type: "aihydro-open-source-file", path: filePath })
-}
-
-function newUiRequestId(prefix: string): string {
-	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-}
-
-function resolveSourceFileUri(filePath: string): Promise<{ uri: string; name: string }> {
-	const requestId = newUiRequestId("source")
-	return new Promise((resolve, reject) => {
-		const timeout = window.setTimeout(() => {
-			window.removeEventListener("message", onMessage)
-			reject(new Error("Timed out resolving source file"))
-		}, 30_000)
-		const onMessage = (event: MessageEvent) => {
-			const data = event.data
-			if (!data || data.type !== "aihydro-resolve-file-uri-result" || data.requestId !== requestId) {
-				return
-			}
-			window.clearTimeout(timeout)
-			window.removeEventListener("message", onMessage)
-			if (data.ok && typeof data.uri === "string") {
-				resolve({ uri: data.uri, name: data.name ?? filePath.split("/").pop() ?? "layer" })
-			} else {
-				reject(new Error(data.error ?? "Could not resolve source file"))
-			}
-		}
-		window.addEventListener("message", onMessage)
-		PLATFORM_CONFIG.postMessage({ type: "aihydro-resolve-file-uri", requestId, path: filePath })
+const openSourceFile = (filePath: string, workspaceFolder?: string) => {
+	PLATFORM_CONFIG.postMessage({
+		type: "aihydro-open-source-file",
+		path: filePath,
+		...(workspaceFolder ? { workspaceFolder } : {}),
 	})
 }
 
@@ -218,7 +194,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const staleRasters = useRef<Set<string>>(new Set())
 	const [drag, setDrag] = useState<{ id: string } | null>(null)
 	const [drop, setDrop] = useState<{ id: string; pos: "above" | "below" } | null>(null)
-	const fileInputRef = useRef<HTMLInputElement>(null)
 	const undoTimer = useRef<number | undefined>(undefined)
 
 	useEffect(() => {
@@ -359,7 +334,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		}
 		say("idle", `Reloading ${displayName}…`, 15_000)
 		try {
-			const resolved = await resolveSourceFileUri(sourcePath)
+			const resolved = await resolveFileUri(sourcePath, {
+				workspaceFolder: layer.metadata?.workspace_folder,
+				kind: "project",
+			})
+			// One file has one path: the absolute one the host found it at, whatever spelling the layer stored.
+			const absolutePath = resolved.path ?? sourcePath
 			const response = await fetch(resolved.uri)
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}`)
@@ -370,7 +350,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				{
 					file,
 					source: {
-						path: sourcePath,
+						path: absolutePath,
 						uri: layer.metadata?.source_uri,
 						displayPath: layer.metadata?.source_display_path ?? sourcePath,
 						format: layer.metadata?.source_format ?? layer.metadata?.format,
@@ -548,26 +528,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	}
 
 	// ── file picker ───────────────────────────────────────────────────────
-	const onPickFiles = () => fileInputRef.current?.click()
-
-	const onFilesPicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
-		const files = e.target.files
-		if (!files || files.length === 0) {
-			return
-		}
-		say("idle", "Loading…", 15_000)
-		const result = await loadAndPushFiles(files)
-		if (result.loaded > 0 && result.errors.length === 0) {
-			say("ok", `Loaded ${result.loaded} layer${result.loaded > 1 ? "s" : ""}.`, 5000)
-		} else if (result.loaded > 0) {
-			say("ok", `Loaded ${result.loaded}, ${result.errors.length} error${result.errors.length > 1 ? "s" : ""}.`, 5000)
-		} else {
-			say("err", result.errors[0] ?? "No files loaded.", 6000)
-		}
-		if (fileInputRef.current) {
-			fileInputRef.current.value = ""
-		}
-	}
+	// The host's own picker, so the file arrives with its absolute path (a webview file input cannot report one). The
+	// map says "Loading…" and "Loaded …" itself when the file reaches it.
+	const onPickFiles = () => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-add-file-command" })
 
 	// ── menus ─────────────────────────────────────────────────────────────
 
@@ -599,7 +562,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				key: "open-source",
 				label: "Open source file",
 				icon: "go-to-file",
-				onSelect: () => openSourceFile(sourcePath),
+				onSelect: () => openSourceFile(sourcePath, layer.metadata?.workspace_folder),
 			},
 			!!sourcePath && {
 				key: "reload",
@@ -849,15 +812,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	return (
 		<div className="map-layers">
-			<input
-				accept={ACCEPTED_EXTENSIONS}
-				multiple
-				onChange={onFilesPicked}
-				ref={fileInputRef}
-				style={{ display: "none" }}
-				type="file"
-			/>
-
 			<div className="map-layers__toolbar">
 				<OverflowMenu icon="add" items={addItems} label="Add layer" text="Add" />
 				<span className="map-layers__summary" title={restoredNote ?? undefined}>

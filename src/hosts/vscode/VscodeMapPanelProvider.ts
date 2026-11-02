@@ -3,6 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import type { Controller } from "@core/controller"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
+import { resolveMapFilePath as resolveMapFilePathIn } from "@core/map/resolveMapFilePath"
 import { checkSaveTarget, loadPinsForProject, NO_FOLDER_KEY, quarantinePins, savePinsForProject } from "@core/project/pinStore"
 import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
@@ -18,35 +19,28 @@ import { handleHydroMapCommand } from "@/services/hydrology/handleHydroMapComman
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
 import { validReplayIds } from "./replayIds"
 
-function expandHomePath(filePath: string): string {
-	if (filePath === "~") {
-		return os.homedir()
-	}
-	if (filePath.startsWith("~/")) {
-		return path.join(os.homedir(), filePath.slice(2))
-	}
-	return filePath
-}
-
-async function resolveMapFilePath(filePath: string): Promise<string> {
-	const expanded = expandHomePath(filePath)
-	const candidates = [expanded]
-	if (!path.isAbsolute(expanded)) {
-		candidates.push(aihydroPath("map_layer_geojson_cache", expanded))
-		candidates.push(aihydroPath(expanded))
-		for (const folder of vscode.workspace.workspaceFolders ?? []) {
-			candidates.push(path.join(folder.uri.fsPath, expanded))
-		}
-	}
-	for (const candidate of candidates) {
-		try {
-			await vscode.workspace.fs.stat(vscode.Uri.file(candidate))
-			return candidate
-		} catch {
-			/* try next candidate */
-		}
-	}
-	return expanded
+/** The file a layer's path names. A project path is never answered with a cache copy (see `resolveMapFilePath`). */
+function resolveMapFilePath(filePath: string, hint: { workspaceFolder?: unknown; kind?: unknown } = {}): Promise<string> {
+	return resolveMapFilePathIn(
+		filePath,
+		{
+			homedir: os.homedir(),
+			workspaceFolders: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+			cacheDirs: [aihydroPath("map_layer_geojson_cache"), aihydroPath()],
+			exists: async (candidate) => {
+				try {
+					await vscode.workspace.fs.stat(vscode.Uri.file(candidate))
+					return true
+				} catch {
+					return false
+				}
+			},
+		},
+		{
+			workspaceFolder: typeof hint.workspaceFolder === "string" ? hint.workspaceFolder : undefined,
+			kind: hint.kind === "project" || hint.kind === "cache" ? hint.kind : "any",
+		},
+	)
 }
 
 const MAP_SUPPORTED_EXTENSIONS = new Set([
@@ -344,6 +338,25 @@ export class VscodeMapPanelProvider {
 				...(sourceExtras[uri.fsPath] ?? {}),
 			})
 		}
+	}
+
+	/**
+	 * Add file: the native picker, so every file that reaches the map this way carries its absolute path (the webview's
+	 * own file input cannot tell the page where the file is). Same route as the Explorer menu.
+	 */
+	public static async addFilesFromDialog(): Promise<void> {
+		const picked = await vscode.window.showOpenDialog({
+			title: "AI-Hydro Map: Add File",
+			canSelectMany: true,
+			defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri,
+			filters: {
+				"Map files": Array.from(MAP_SUPPORTED_EXTENSIONS).map((ext) => ext.slice(1)),
+			},
+		})
+		if (!picked || picked.length === 0) {
+			return
+		}
+		await VscodeMapPanelProvider.sendFileUrisToMap(picked)
 	}
 
 	public static async addLayerFromUrl(initialUrl?: string): Promise<void> {
@@ -862,7 +875,7 @@ export class VscodeMapPanelProvider {
 					}
 					case "aihydro-resolve-file-uri": {
 						const requestId = message.requestId
-						const filePath = typeof message.path === "string" ? await resolveMapFilePath(message.path) : ""
+						const filePath = typeof message.path === "string" ? await resolveMapFilePath(message.path, message) : ""
 						try {
 							if (!filePath) {
 								throw new Error("Missing file path")
@@ -875,6 +888,9 @@ export class VscodeMapPanelProvider {
 								ok: true,
 								name: path.basename(uri.fsPath),
 								uri: panel.webview.asWebviewUri(uri).toString(),
+								// The one absolute path this file has, so a reload records the file and not the spelling it was asked
+								// for. A copy found in AI-Hydro's own directories is not the project file, so it is not offered as one.
+								...(path.relative(aihydroPath(), uri.fsPath).startsWith("..") ? { path: uri.fsPath } : {}),
 							})
 						} catch (err) {
 							await panel.webview.postMessage({
@@ -887,13 +903,16 @@ export class VscodeMapPanelProvider {
 						break
 					}
 					case "aihydro-open-source-file": {
-						const filePath = typeof message.path === "string" ? expandHomePath(message.path) : ""
+						const filePath =
+							typeof message.path === "string"
+								? await resolveMapFilePath(message.path, { ...message, kind: "project" })
+								: ""
 						try {
 							if (!filePath) {
 								throw new Error("Missing source file path")
 							}
-							const uri = vscode.Uri.file(filePath)
-							await vscode.window.showTextDocument(uri, { preview: false })
+							// vscode.open picks the right editor for the file (a GeoTIFF is not a text document).
+							await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(filePath), { preview: false })
 						} catch (err) {
 							vscode.window.showWarningMessage(
 								`AI-Hydro Map: Could not open source file: ${err instanceof Error ? err.message : String(err)}`,
@@ -914,6 +933,10 @@ export class VscodeMapPanelProvider {
 							requestId,
 							paths,
 						})
+						break
+					}
+					case "aihydro-map-add-file-command": {
+						await VscodeMapPanelProvider.addFilesFromDialog()
 						break
 					}
 					case "aihydro-map-add-url-command": {
