@@ -1,0 +1,942 @@
+{
+	"source": "aihydro-tools train/2.8.7 ai_hydro/mcp/tool_annotations.toml",
+	"tools": {
+		"add_assumption": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"add_claim": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"add_journal_entry": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"add_note": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"add_project_study": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"audience": "host"
+		},
+		"add_session_to_project": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"aihydro_chat_status": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"aihydro_describe_capability": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"aihydro_rebind_chat": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"archive_session": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"audit_interpretation": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"bind_claim_to_item": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"bind_map_to_claim": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"bootstrap_statistic": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"cancel_job": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"check_record_length": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"check_registry_staleness": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"check_regulated_basin": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"check_stationarity": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"check_temporal_alignment": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"check_unit_consistency": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"check_usgs_qualification_codes": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"check_water_balance_consistency": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"clear_session": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"compare_series": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"compute_design_hydrograph": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"compute_drought_index": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"compute_flood_frequency": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"compute_flow_duration_curve": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"compute_soil_loss_rusle": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"compute_spectral_index": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"compute_twi": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"course_get_curriculum": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"course_get_state": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"course_navigate": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"course_scaffold": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"course_set_progress": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"create_cn_grid": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"data_batch_fetch": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"data_describe_product": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"data_doctor": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"data_fetch": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"data_fetch_background": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"data_get_cache_status": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"data_help": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"data_invalidate_cache": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"data_list_products": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"data_validate_request": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"define_experiment": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"delineate_watershed": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"delineate_watershed_from_point": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"delineation_doctor": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"describe_model_space": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"describe_tool": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"describe_tools": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"detect_threshold_runs": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"draft_claim_from_run": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"ensure_project": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"audience": "host"
+		},
+		"export_inundation_surrogate_dataset": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"export_session": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"extract_geomorphic_parameters": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"extract_hydrological_signatures": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"fetch_camels_us": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"fetch_forcing_data": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"fetch_soil_attributes_ssurgo": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"fetch_streamflow_data": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"find_studies_for_gauge": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"gauge_flowlines": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"gauge_network_context": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"gee.extract_timeseries": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"gee.preview_layer": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"gee.status": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"get_citation_by_doi": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false,
+			"effect": "lookup"
+		},
+		"get_data_fetch_result": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_dataset_info": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_equation_definition": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_experiment_table": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_inundation_physics_result": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_inundation_surrogate_result": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_leaderboard": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_library_reference": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_metric_definition": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_model_results": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_project_summary": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_researcher_profile": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_session_health": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_session_raw_state": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_session_summary": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_training_status": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_variable_definition": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"get_workflow_manifest": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"index_literature": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"index_passages": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_assumptions": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_available_tools": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_available_workflows": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_cached_citations": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_claims": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_features": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_jobs": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_known_datasets": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_known_metrics": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_known_variables": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_registry_claims": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_relevant_clis": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_skills": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"list_spectral_indices": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"load_skill": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"log_researcher_observation": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"requiresConsent": true
+		},
+		"lookup_citation": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false,
+			"effect": "lookup"
+		},
+		"lsh_attribute_info": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"lsh_attributes": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"lsh_batch": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"lsh_compare_to_ref": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"lsh_dynamic_attributes": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"lsh_events": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"lsh_families": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"lsh_forcing": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"lsh_geomorphic_attributes": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"lsh_recipe_status": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"lsh_reliability_matrix": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"map_add_layer_from_run": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"map_apply_symbology": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"map_fit_extent": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"map_fit_layer": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"map_flood_inundation": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"map_flood_inundation_hydrograph": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"map_fly_to": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"map_get_state": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"map_list_layers": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"map_remove_layer": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"map_save_roi": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"map_set_basemap": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"map_set_roi": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"map_set_time_range": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"map_set_working_geometry": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"map_show": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"map_update_layer": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"measure_feature": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"merge_session_shards": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"merit_add_map_layers": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"merit_ensure_basin": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"merit_ensure_basins_region": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"merit_ensure_region": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"merit_ensure_routing_region": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"preview_address_comment": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"preview_focus_cell": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"preview_get_pending_changes": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"preview_get_state": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"preview_list_modules": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"preview_recent_events": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"preview_revise_section": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"effect": "ui"
+		},
+		"promote_claim_to_registry": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"propose_and_train": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"register_feature": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"register_research_plan": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"remove_project_study": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"audience": "host"
+		},
+		"rename_project": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"audience": "host"
+		},
+		"resolve_passage": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"run_autoresearch": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"run_experiment": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": false
+		},
+		"run_inundation_physics_validation": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"run_python": {
+			"readOnlyHint": false,
+			"openWorldHint": true,
+			"destructiveHint": true
+		},
+		"run_skeptic": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"save_skill": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"search_experiments": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"search_literature": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"search_passages_tool": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"separate_baseflow": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"set_active_feature": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"set_project_default_study": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false,
+			"audience": "host"
+		},
+		"show_html_preview": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"show_on_map": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"start_project": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"start_session": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"summarize_series": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"trace_lineage": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"train_hydro_model": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"train_inundation_surrogate": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"update_claim_status": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		},
+		"update_researcher_profile": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true,
+			"requiresConsent": true
+		},
+		"wait_for_job": {
+			"readOnlyHint": true,
+			"openWorldHint": false,
+			"destructiveHint": false
+		},
+		"write_research_interpretation": {
+			"readOnlyHint": false,
+			"openWorldHint": false,
+			"destructiveHint": true
+		}
+	}
+}

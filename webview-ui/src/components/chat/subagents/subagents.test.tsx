@@ -76,6 +76,16 @@ describe("SubagentStatusRow", () => {
 		expect(usageLine(child({ cost: 0.0123 }))).toContain("$0.0123")
 	})
 
+	it("says unknown when a cost is unknown, and marks a lower bound", () => {
+		expect(usageLine(child({ cost: undefined, costStatus: "unavailable" }))).toContain("cost unknown")
+		expect(usageLine(child({ cost: 0.5, costStatus: "lower-bound" }))).toContain("\u2265$0.5000")
+		expect(usageLine(child({ cost: 0.5 }))).not.toContain("\u2265")
+	})
+
+	it("names the task budget as the reason a child stopped", () => {
+		expect(statusLabel({ status: "partial", budgetStop: "task_cost" })).toBe("Stopped early: task agent budget used")
+	})
+
 	it("expands to the calls and how each ended, without arguments", () => {
 		render(
 			<SubagentStatusRow
@@ -162,6 +172,28 @@ describe("SubagentLaunchCard", () => {
 		expect(screen.getByTestId("subagent-launch-prompts").textContent).toContain("Find every use of nse")
 		expect(screen.getByTestId("subagent-launch-limits").textContent).toContain("No file writes")
 		expect(screen.getByTestId("subagent-launch-budget").textContent).toMatch(/claude-sonnet-4.*30 tool calls.*10 minutes/)
+	})
+	it("shows the task budget and what is used, or says the cost is unknown for an unpriced model", () => {
+		const { rerender } = render(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{
+					tool: "spawnSubagents",
+					subagents: { ...launch, taskBudget: { budgetUsd: 5, spentUsd: 0.42, priced: true, unpricedChildren: 0 } },
+				}}
+			/>,
+		)
+		expect(screen.getByTestId("subagent-launch-task-budget").textContent).toMatch(/\$2\.00.*\$5\.00.*\$0\.42 used/)
+		rerender(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{
+					tool: "spawnSubagents",
+					subagents: { ...launch, taskBudget: { budgetUsd: 5, spentUsd: 0, priced: false, unpricedChildren: 0 } },
+				}}
+			/>,
+		)
+		expect(screen.getByTestId("subagent-launch-task-budget").textContent).toMatch(/no verified price.*cannot stop it/)
 	})
 	it("uses past tense only once it was decided", () => {
 		const { rerender } = render(<SubagentLaunchCard state="executed" tool={{ tool: "spawnSubagents", subagents: launch }} />)

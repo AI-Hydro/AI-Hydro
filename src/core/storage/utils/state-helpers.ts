@@ -281,6 +281,8 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 		const openTelemetryLogMaxQueueSize =
 			context.globalState.get<GlobalStateAndSettings["openTelemetryLogMaxQueueSize"]>("openTelemetryLogMaxQueueSize")
 		const subagentsEnabled = context.globalState.get<GlobalStateAndSettings["subagentsEnabled"]>("subagentsEnabled")
+		const agentBudgetUsd = context.globalState.get<GlobalStateAndSettings["agentBudgetUsd"]>("agentBudgetUsd")
+		const subagentStaggerMs = context.globalState.get<GlobalStateAndSettings["subagentStaggerMs"]>("subagentStaggerMs")
 		const finalAnswerAuditEnabled =
 			context.globalState.get<GlobalStateAndSettings["finalAnswerAuditEnabled"]>("finalAnswerAuditEnabled")
 		const transcriptDetail = context.globalState.get<GlobalStateAndSettings["transcriptDetail"]>("transcriptDetail")
@@ -611,6 +613,8 @@ export async function readGlobalStateFromDisk(context: ExtensionContext): Promis
 			// Hooks require explicit user opt-in
 			hooksEnabled: hooksEnabled ?? false,
 			subagentsEnabled: subagentsEnabled ?? false,
+			agentBudgetUsd,
+			subagentStaggerMs,
 			// Final-answer audit is default-on; it never blocks or alters the answer
 			finalAnswerAuditEnabled: finalAnswerAuditEnabled ?? true,
 			// Anything but a known level reads as the default (Normal)

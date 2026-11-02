@@ -28,8 +28,10 @@ import type { TaskServices } from "../tools/types/TaskConfig"
 import type { EffectiveCapabilities } from "./agentProfile"
 import { ChildMessageState, newChildTaskState, nullFileContextTracker } from "./childRuntime"
 import type { ParentAskBridge } from "./ParentAskBridge"
+import { CostTally, emptyRequestUsage, priceRequest, type RequestUsage } from "./subagentCost"
 import { buildSubagentSystemPrompt, subagentTaskMessage } from "./subagentPrompt"
 import { allowlistSha256, type SubagentRecord, type SubagentRecordWriter, sha256 } from "./subagentRecord"
+import type { TaskAgentLedger } from "./taskLedger"
 
 /** Largest single tool-result text a child keeps. The cut is stated in the text, never silent. */
 const MAX_RESULT_CHARS = 40_000
@@ -41,6 +43,28 @@ const MAX_CALL_LINES = 30
 const MAX_BLOCKED_IN_A_ROW = 3
 /** Handlers' own failures in a row (bad arguments, missing files) before the child gives up as partial. */
 const MAX_ERRORS_IN_A_ROW = 6
+/** A transient stream error is retried this many times before the child fails. */
+export const MAX_STREAM_RETRIES = 2
+/** First retry waits this long, the second twice as long. Injectable for tests. */
+const RETRY_BASE_MS = 1_500
+
+/**
+ * Whether a request failure is worth one more try: rate limits, overload, a server hiccup, a dropped connection.
+ * Anything else (a bad key, a bad request, a policy error) fails the child at once. Matched on the status when the
+ * SDK gives one, and on the message otherwise, because providers wrap errors differently.
+ */
+export function isTransientStreamError(error: unknown): boolean {
+	const status =
+		(error as { status?: unknown; statusCode?: unknown } | undefined)?.status ??
+		(error as { statusCode?: unknown } | undefined)?.statusCode
+	if (typeof status === "number") {
+		return status === 408 || status === 409 || status === 429 || status >= 500
+	}
+	const message = error instanceof Error ? `${error.name} ${error.message}` : String(error)
+	return /rate.?limit|overloaded|too many requests|\b(429|502|503|504|529)\b|ECONNRESET|ETIMEDOUT|EPIPE|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|network error|terminated|stream (ended|closed)|timed? ?out/i.test(
+		message,
+	)
+}
 
 export interface SubagentRunnerInit {
 	childId: string
@@ -65,11 +89,15 @@ export interface SubagentRunnerInit {
 	bridge: ParentAskBridge
 	/** The parent's abort flag. Polled; a child stops within one poll interval of it turning true. */
 	isParentAborted: () => boolean
+	/** The task's agent ledger. Every child adds its cost to it and stops once it is exceeded. */
+	ledger?: TaskAgentLedger
 	writeRecord: SubagentRecordWriter
 	onUpdate?: (summary: SubagentChildSummary) => void
 	/** Clock and poll interval are injectable so the abort and budget paths are testable without waiting. */
 	now?: () => number
 	pollMs?: number
+	/** Base delay of the stream-error retry; 0 in tests. */
+	retryBaseMs?: number
 }
 
 export interface SubagentResult {
@@ -124,6 +152,7 @@ export class SubagentRunner {
 
 	private status: SubagentStatus = "queued"
 	private readonly usage: SubagentUsage = emptyUsage()
+	private readonly costs = new CostTally()
 	private readonly toolCalls: SubagentToolCallRecord[] = []
 	private readonly now: () => number
 	private readonly pollMs: number
@@ -177,6 +206,7 @@ export class SubagentRunner {
 			cacheWrites: this.usage.cacheWrites,
 			cacheReads: this.usage.cacheReads,
 			...(this.usage.cost !== undefined ? { cost: this.usage.cost } : {}),
+			...(this.usage.costStatus ? { costStatus: this.usage.costStatus } : {}),
 			...(this.budgetStop ? { budgetStop: this.budgetStop } : {}),
 			...(this.recordPath ? { recordPath: this.recordPath } : {}),
 			calls: this.toolCalls.slice(-MAX_CALL_LINES).map((call) => ({
@@ -245,7 +275,7 @@ export class SubagentRunner {
 			const executor = this.buildExecutor(taskState, messages)
 			const system = this.systemPrompt()
 			const history: Anthropic.MessageParam[] = [
-				{ role: "user", content: [{ type: "text", text: subagentTaskMessage(init.prompt) }] },
+				{ role: "user", content: [{ type: "text", text: subagentTaskMessage(init.prompt, this.label) }] },
 			]
 			let toolLessTurns = 0
 			let blockedInARow = 0
@@ -260,52 +290,101 @@ export class SubagentRunner {
 					return this.finish("partial", { budgetStop: stop })
 				}
 
-				// ---- one model request ----
+				// ---- one model request (retried a bounded number of times on a transient stream error) ----
 				this.usage.turns++
-				this.lastRequestInputTokens = 0
 				let text = ""
 				const thinking: Array<Anthropic.Messages.ThinkingBlock | Anthropic.Messages.RedactedThinkingBlock> = []
-				const iterator = init.api.createMessage(system, history)[Symbol.asyncIterator]()
-				activeIterator = iterator
-				for (;;) {
-					const next = await race(iterator.next())
-					if (next.done) {
-						break
-					}
-					const chunk = next.value
-					if (!chunk) {
-						continue
-					}
-					switch (chunk.type) {
-						case "text":
-							text += chunk.text
-							this.lastAssistantText = text
-							break
-						case "usage":
-							this.usage.tokensIn += chunk.inputTokens
-							this.usage.tokensOut += chunk.outputTokens
-							this.usage.cacheWrites += chunk.cacheWriteTokens ?? 0
-							this.usage.cacheReads += chunk.cacheReadTokens ?? 0
-							this.lastRequestInputTokens +=
-								chunk.inputTokens + (chunk.cacheReadTokens ?? 0) + (chunk.cacheWriteTokens ?? 0)
-							if (chunk.totalCost !== undefined) {
-								this.usage.cost = (this.usage.cost ?? 0) + chunk.totalCost
+				for (let attempt = 0; ; attempt++) {
+					text = ""
+					thinking.length = 0
+					this.lastRequestInputTokens = 0
+					const request = emptyRequestUsage()
+					try {
+						const iterator = init.api.createMessage(system, history)[Symbol.asyncIterator]()
+						activeIterator = iterator
+						for (;;) {
+							const next = await race(iterator.next())
+							if (next.done) {
+								break
 							}
-							break
-						case "response_model":
-							this.modelIdReturned = chunk.modelId
-							break
-						case "ant_thinking":
-							thinking.push({ type: "thinking", thinking: chunk.thinking, signature: chunk.signature })
-							break
-						case "ant_redacted_thinking":
-							thinking.push({ type: "redacted_thinking", data: chunk.data })
-							break
-						default:
-							break
+							const chunk = next.value
+							if (!chunk) {
+								continue
+							}
+							switch (chunk.type) {
+								case "text":
+									text += chunk.text
+									this.lastAssistantText = text
+									break
+								case "usage":
+									request.received = true
+									request.inputTokens += chunk.inputTokens
+									request.outputTokens += chunk.outputTokens
+									request.cacheWriteTokens += chunk.cacheWriteTokens ?? 0
+									request.cacheReadTokens += chunk.cacheReadTokens ?? 0
+									request.totalCost = chunk.totalCost
+									this.usage.tokensIn += chunk.inputTokens
+									this.usage.tokensOut += chunk.outputTokens
+									this.usage.cacheWrites += chunk.cacheWriteTokens ?? 0
+									this.usage.cacheReads += chunk.cacheReadTokens ?? 0
+									this.lastRequestInputTokens +=
+										chunk.inputTokens + (chunk.cacheReadTokens ?? 0) + (chunk.cacheWriteTokens ?? 0)
+									break
+								case "response_model":
+									this.modelIdReturned = chunk.modelId
+									break
+								case "ant_thinking":
+									thinking.push({ type: "thinking", thinking: chunk.thinking, signature: chunk.signature })
+									break
+								case "ant_redacted_thinking":
+									thinking.push({ type: "redacted_thinking", data: chunk.data })
+									break
+								default:
+									break
+							}
+						}
+						activeIterator = undefined
+						if (!request.received) {
+							// The parent asks the handler for the stream's usage when no chunk carried it; so does a child.
+							const late = await race(Promise.resolve(init.api.getApiStreamUsage?.()).catch(() => undefined))
+							if (late) {
+								request.received = true
+								request.inputTokens += late.inputTokens
+								request.outputTokens += late.outputTokens
+								request.cacheWriteTokens += late.cacheWriteTokens ?? 0
+								request.cacheReadTokens += late.cacheReadTokens ?? 0
+								request.totalCost = late.totalCost
+								this.usage.tokensIn += late.inputTokens
+								this.usage.tokensOut += late.outputTokens
+								this.usage.cacheWrites += late.cacheWriteTokens ?? 0
+								this.usage.cacheReads += late.cacheReadTokens ?? 0
+							}
+						}
+						this.settleRequest(request)
+						break
+					} catch (error) {
+						void (activeIterator as AsyncIterator<unknown> | undefined)?.return?.()?.catch?.(() => {})
+						activeIterator = undefined
+						// Whatever the failed attempt measured is billed and counted; the partial text is discarded.
+						if (request.received) {
+							this.settleRequest(request)
+						}
+						if (
+							error instanceof Interrupt ||
+							attempt >= MAX_STREAM_RETRIES ||
+							!isTransientStreamError(error) ||
+							this.cancelRequested ||
+							init.isParentAborted()
+						) {
+							throw error
+						}
+						await race(
+							new Promise<void>((resolve) =>
+								setTimeout(resolve, (init.retryBaseMs ?? RETRY_BASE_MS) * 2 ** attempt),
+							),
+						)
 					}
 				}
-				activeIterator = undefined
 				this.emit()
 
 				history.push({
@@ -487,7 +566,6 @@ export class SubagentRunner {
 		const servers = init.services.mcpHub.getServers()
 		return buildSubagentSystemPrompt({
 			caps: init.caps,
-			label: this.label,
 			cwd: init.cwd,
 			workspaceRoots: init.workspaceManager?.getRoots().map((root) => ({ path: root.path, name: root.name ?? root.path })),
 			servers,
@@ -508,6 +586,15 @@ export class SubagentRunner {
 		return { servers }
 	}
 
+	/** Price one finished request, add it to the child's total and to the task ledger. */
+	private settleRequest(request: RequestUsage): void {
+		const priced = priceRequest(this.init.api.getModel().info, request)
+		const dollars = this.costs.add(priced)
+		this.usage.cost = this.costs.cost
+		this.usage.costStatus = this.costs.status
+		this.init.ledger?.add(dollars)
+	}
+
 	private budgetBreach(budget: EffectiveCapabilities["budget"]): SubagentBudgetStop | undefined {
 		if (this.usage.tokensOut >= budget.maxOutputTokens) {
 			return "output_tokens"
@@ -516,9 +603,12 @@ export class SubagentRunner {
 		if (window && this.lastRequestInputTokens >= window * budget.contextStopFraction) {
 			return "context"
 		}
-		// A USD cap applies only when the provider reports cost.
+		// A USD cap applies only when the cost is known; an unknown cost is never treated as zero spent.
 		if (this.usage.cost !== undefined && this.usage.cost >= budget.maxCostUsd) {
 			return "cost"
+		}
+		if (this.init.ledger?.exceeded()) {
+			return "task_cost"
 		}
 		return undefined
 	}
@@ -551,6 +641,9 @@ export class SubagentRunner {
 		this.status = status
 		this.budgetStop = extra.budgetStop
 		const { init } = this
+		if (this.usage.costStatus) {
+			init.ledger?.noteUnpriced()
+		}
 		const keepText = status !== "completed" && status !== "cancelled" && this.lastAssistantText.trim()
 		const record: SubagentRecord = {
 			schema: "aihydro.subagent-record/1",

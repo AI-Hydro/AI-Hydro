@@ -16,23 +16,35 @@ const SUBAGENT_FILES = [
 	"core/task/subagents/SubagentRunner.ts",
 	"core/task/subagents/SubagentSupervisor.ts",
 	"core/task/subagents/subagentPrompt.ts",
+	"core/task/subagents/subagentCost.ts",
 	"core/task/subagents/subagentRecord.ts",
 	"core/task/subagents/subagentReports.ts",
+	"core/task/subagents/taskLedger.ts",
 	"core/task/tools/handlers/ReportFindingsHandler.ts",
 	"core/prompts/system-prompt/tools/report_findings.ts",
 	"shared/aihydro/subagents.ts",
 ]
 
-const FORBIDDEN = [
+/**
+ * Tool names the server really registers (checked against the tool list below, so a name that does not exist fails),
+ * plus the owner's approval command, which is not an MCP tool.
+ */
+const FORBIDDEN_TOOLS = [
 	"add_claim",
-	"revise_claim",
-	"promote_claim",
+	"update_claim_status",
 	"promote_claim_to_registry",
+	"add_assumption",
+	"bind_claim_to_item",
+	"bind_map_to_claim",
 	"register_research_plan",
 	"write_research_interpretation",
-	"aihydro-approve",
-	"approve_claim",
+	"clear_session",
 ]
+const FORBIDDEN = [...FORBIDDEN_TOOLS, "aihydro-approve"]
+
+const SURFACE: { tools: Record<string, unknown> } = JSON.parse(
+	fs.readFileSync(path.join(SRC, "core/task/__tests__/fixtures/aihydro-tool-surface.json"), "utf8"),
+)
 
 describe("subagent boundaries", () => {
 	it("every subagent module exists (the list above is current)", () => {
@@ -43,6 +55,12 @@ describe("subagent boundaries", () => {
 		const present = fs.readdirSync(dir).filter((name) => name.endsWith(".ts"))
 		for (const name of present) {
 			expect(SUBAGENT_FILES, `${name} is not in the boundary list`).to.include(`core/task/subagents/${name}`)
+		}
+	})
+
+	it("the forbidden tool names are tools the server registers (the list names nothing that does not exist)", () => {
+		for (const name of FORBIDDEN_TOOLS) {
+			expect(Object.hasOwn(SURFACE.tools, name), name).to.equal(true)
 		}
 	})
 

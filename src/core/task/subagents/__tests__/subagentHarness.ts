@@ -19,7 +19,16 @@ export const TRUSTED_CONFIG = JSON.stringify({ type: "stdio", command: LAUNCHER.
 /** What a scripted model says on one request: text, optional usage. A function sees the history so far. */
 export type ScriptedTurn =
 	| string
-	| { text: string; usage?: { inputTokens: number; outputTokens: number; totalCost?: number } }
+	| {
+			text: string
+			usage?: {
+				inputTokens: number
+				outputTokens: number
+				cacheWriteTokens?: number
+				cacheReadTokens?: number
+				totalCost?: number
+			}
+	  }
 	| ((history: any[]) => string)
 
 export function tool(name: string, params: Record<string, string>): string {
@@ -31,7 +40,13 @@ export function tool(name: string, params: Record<string, string>): string {
 /** A model that plays the given turns in order, then keeps repeating the last. `onRequest` observes each call. */
 export function scriptedApi(
 	turns: ScriptedTurn[],
-	opts: { contextWindow?: number; onRequest?: (system: string, history: any[]) => void; hang?: boolean } = {},
+	opts: {
+		contextWindow?: number
+		onRequest?: (system: string, history: any[]) => void
+		hang?: boolean
+		/** Extra model info (prices, supportsPromptCache, pricingUnverified) merged over the unpriced default. */
+		modelInfo?: Record<string, unknown>
+	} = {},
 ): ApiHandler & { requests: number; streamsOpen: number } {
 	let index = 0
 	const api = {
@@ -39,7 +54,7 @@ export function scriptedApi(
 		streamsOpen: 0,
 		getModel: () => ({
 			id: "scripted-model",
-			info: { contextWindow: opts.contextWindow ?? 200_000, supportsImages: false } as any,
+			info: { contextWindow: opts.contextWindow ?? 200_000, supportsImages: false, ...opts.modelInfo } as any,
 		}),
 		createMessage(system: string, history: any[]) {
 			api.requests++
@@ -59,6 +74,12 @@ export function scriptedApi(
 						type: "usage" as const,
 						inputTokens: (resolved as any).usage?.inputTokens ?? 100,
 						outputTokens: (resolved as any).usage?.outputTokens ?? 20,
+						...((resolved as any).usage?.cacheWriteTokens !== undefined
+							? { cacheWriteTokens: (resolved as any).usage.cacheWriteTokens }
+							: {}),
+						...((resolved as any).usage?.cacheReadTokens !== undefined
+							? { cacheReadTokens: (resolved as any).usage.cacheReadTokens }
+							: {}),
 						...((resolved as any).usage?.totalCost !== undefined
 							? { totalCost: (resolved as any).usage.totalCost }
 							: {}),
@@ -161,6 +182,8 @@ export function makeParent(overrides: { mcpTools?: FakeTool[]; settings?: Record
 		browserSettings: { disableToolUse: true },
 		focusChainSettings: { enabled: false },
 		maxConsecutiveMistakes: 3,
+		// Tests do not wait on the stagger between child starts; subagentStaggerMs has its own test.
+		subagentStaggerMs: 0,
 		multiRootEnabled: false,
 		autoApprovalSettings: {
 			...DEFAULT_AUTO_APPROVAL_SETTINGS,

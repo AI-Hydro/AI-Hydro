@@ -27,6 +27,7 @@ const STOP_WORDS: Record<SubagentBudgetStop, string> = {
 	output_tokens: "it used its output budget",
 	context: "it filled most of its context window",
 	cost: "it reached its cost cap",
+	task_cost: "the task's subagent budget was used up",
 }
 
 function list(name: string, items: string[]): string {

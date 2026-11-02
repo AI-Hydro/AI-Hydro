@@ -17,6 +17,7 @@ function supervisorFor(h: ParentHarness, apis: any[], overrides: Record<string, 
 		parent: PARENT_CAPS,
 		runnerBase: h.runnerBase,
 		buildApi: () => apis[next++],
+		staggerMs: 0,
 		onUpdate: (children: SubagentChildSummary[]) => updates.push(children.map((c) => c.status)),
 		newId: (() => {
 			let n = 0
@@ -177,5 +178,66 @@ describe("SubagentSupervisor", () => {
 			expect(error, JSON.stringify(bad)).to.be.instanceOf(SpawnRefused)
 		}
 		expect(() => supervisorFor(h, [], { parent: { ...PARENT_CAPS, parentIsChild: true } })).to.throw(SpawnRefused)
+	})
+
+	it("sibling system prompts are byte-equal: the label rides in the first user message, not the system prompt", async () => {
+		const systems: string[] = []
+		const firstUser: string[] = []
+		const observe = (system: string, history: any[]) => {
+			systems.push(system)
+			firstUser.push(history[0].content[0].text)
+		}
+		const apis = [1, 2, 3].map(() => scriptedApi([report("done")], { onRequest: observe }))
+		const { supervisor } = supervisorFor(h, apis)
+		await supervisor.run(["a", "b", "c"])
+
+		expect(systems).to.have.length(3)
+		expect(systems[1]).to.equal(systems[0])
+		expect(systems[2]).to.equal(systems[0])
+		expect(Buffer.from(systems[1]).equals(Buffer.from(systems[0]))).to.equal(true)
+		expect(systems[0]).to.not.match(/Explorer \d/)
+		expect(firstUser.some((text) => text.startsWith("You are Explorer 1."))).to.equal(true)
+		expect(firstUser.some((text) => text.startsWith("You are Explorer 3."))).to.equal(true)
+	})
+
+	it("starts children one stagger apart, and 0 starts them together", async () => {
+		const sleeps: number[] = []
+		const apis = [1, 2, 3].map(() => scriptedApi([report("done")]))
+		const { supervisor } = supervisorFor(h, apis, {
+			staggerMs: 700,
+			now: () => 5_000,
+			sleep: async (ms: number) => void sleeps.push(ms),
+		})
+		await supervisor.run(["a", "b", "c"])
+		expect(sleeps).to.deep.equal([700, 1400])
+
+		const together: number[] = []
+		const { supervisor: flat } = supervisorFor(
+			h,
+			[1, 2, 3].map(() => scriptedApi([report("done")])),
+			{
+				staggerMs: 0,
+				sleep: async (ms: number) => void together.push(ms),
+			},
+		)
+		await flat.run(["a", "b", "c"])
+		expect(together).to.deep.equal([])
+	})
+
+	it("a cancel during the stagger wait ends the waiting child as cancelled without a request", async () => {
+		let release: () => void = () => {}
+		const apis = [scriptedApi([report("one")]), scriptedApi([report("two")])]
+		const { supervisor } = supervisorFor(h, apis, {
+			staggerMs: 1_000,
+			now: () => 0,
+			sleep: () => new Promise<void>((resolve) => (release = resolve)),
+		})
+		const running = supervisor.run(["a", "b"])
+		await new Promise((r) => setTimeout(r, 50))
+		supervisor.cancelAll()
+		release()
+		const results = await running
+		expect(results[1].status).to.equal("cancelled")
+		expect(apis[1].requests).to.equal(0)
 	})
 })

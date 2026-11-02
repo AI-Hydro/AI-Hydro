@@ -92,7 +92,6 @@ function toolDocs(caps: EffectiveCapabilities, context: SystemPromptContext): st
 
 export interface SubagentPromptInput {
 	caps: EffectiveCapabilities
-	label: string
 	cwd: string
 	workspaceRoots?: Array<{ path: string; name: string }>
 	servers: McpServer[]
@@ -105,10 +104,10 @@ export interface SubagentPromptInput {
  * as the parent's, filtered to what the child can call.
  */
 export function buildSubagentSystemPrompt(input: SubagentPromptInput): string {
-	const { caps, label, cwd, workspaceRoots, servers, context } = input
+	const { caps, cwd, workspaceRoots, servers, context } = input
 	const budget = caps.budget
 	const minutes = Math.round(budget.wallClockMs / 60_000)
-	const body = `You are ${label}, a read-only research subagent of AI-Hydro. Another agent (the parent) gave you one focused question. You read the workspace and call read-only tools, then report what you found. You cannot change anything.
+	const body = `You are a read-only research subagent of AI-Hydro. Another agent (the parent) gave you one focused question. You read the workspace and call read-only tools, then report what you found. You cannot change anything.
 
 # What you can and cannot do
 
@@ -147,7 +146,11 @@ Current working directory: ${cwd}${
 	return new TemplateEngine().resolve(body, context, { CWD: cwd, MULTI_ROOT_HINT: "" })
 }
 
-/** The first user message: the parent's prompt, marked as the task. */
-export function subagentTaskMessage(prompt: string): string {
-	return `<task>\n${prompt.trim()}\n</task>`
+/**
+ * The first user message: the parent's prompt, marked as the task. The child's label rides here, never in the system
+ * prompt: siblings then share one system prompt byte for byte, which is what lets a provider's prompt cache serve the
+ * second and third child from the first one's prefix.
+ */
+export function subagentTaskMessage(prompt: string, label?: string): string {
+	return `${label ? `You are ${label}.\n` : ""}<task>\n${prompt.trim()}\n</task>`
 }

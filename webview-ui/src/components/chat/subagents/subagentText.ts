@@ -39,6 +39,8 @@ export function stopLabel(stop: SubagentBudgetStop): string {
 			return "context nearly full"
 		case "cost":
 			return "cost cap reached"
+		case "task_cost":
+			return "task agent budget used"
 	}
 }
 
@@ -53,14 +55,19 @@ export const STATUS_ICON: Record<SubagentStatus, string> = {
 	cancelled: "stop-circle",
 }
 
-/** "12 calls · 4.2k tokens · $0.0123". Cost only when the provider reported one; never "$0.0000". */
+/** "12 calls · 4.2k tokens · $0.0123". Cost only when it is known; never "$0.0000". A lower bound says so; an unknown cost says unknown. */
 export function usageLine(
-	child: Pick<SubagentChildSummary, "toolCalls" | "tokensIn" | "tokensOut" | "cacheReads" | "cacheWrites" | "cost">,
+	child: Pick<
+		SubagentChildSummary,
+		"toolCalls" | "tokensIn" | "tokensOut" | "cacheReads" | "cacheWrites" | "cost" | "costStatus"
+	>,
 ): string {
 	const tokens = child.tokensIn + child.tokensOut + (child.cacheReads || 0) + (child.cacheWrites || 0)
 	const parts = [`${child.toolCalls} call${child.toolCalls === 1 ? "" : "s"}`, `${formatCompactTokens(tokens)} tokens`]
 	if (child.cost !== undefined && child.cost > 0) {
-		parts.push(`$${child.cost.toFixed(4)}`)
+		parts.push(`${child.costStatus === "lower-bound" ? "\u2265" : ""}$${child.cost.toFixed(4)}`)
+	} else if (child.costStatus === "unavailable") {
+		parts.push("cost unknown")
 	}
 	return parts.join(" · ")
 }

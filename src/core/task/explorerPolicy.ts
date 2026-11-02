@@ -28,23 +28,39 @@ const READ_ONLY_TOOL_LIST =
 	"read_file, search_files, list_files, load_mcp_documentation, report_findings, and read-only MCP tools (readOnlyHint=true, openWorldHint=false) or resources on the trusted first-party server"
 
 /**
- * MCP tools an explorer may never call whatever the server annotates: the ones that bind a chat to a study, and the
- * claim, registry and approval tools. They are not READ class on a correct server, but this list means the guarantee
- * does not rest on a server's annotations alone (a mislabelled or changed tool is still refused). A name match, applied
- * before any annotation is read, on the trusted server's tools and every other.
+ * MCP tools an explorer may never call whatever the server annotates: the ones that bind a chat to a study, change a
+ * claim, an assumption or the interpretation, or clear a session, and the project-registry operations the server marks
+ * for the host (`audience=host`). None is READ class on a correct server, but this list means the guarantee does not
+ * rest on a server's annotations alone (a mislabelled or changed tool is still refused). A name match, applied before
+ * any annotation is read, on the trusted server's tools and every other.
+ *
+ * Every name here must be a tool the server really registers. A name that does not exist guards nothing and hides the
+ * ones that were missed (the earlier list named `revise_claim`, `promote_claim` and `approve_claim`, which have no row,
+ * and omitted `update_claim_status`). explorerPolicy.test.ts checks this list against the checked-in tool list
+ * (__tests__/fixtures/aihydro-tool-surface.json, exported from aihydro-tools by scripts/export-aihydro-tool-surface.py).
+ * Approval itself is not an MCP tool: it is the owner's `aihydro-approve` outside the agent.
  */
 export const EXPLORER_DENIED_MCP_TOOLS: ReadonlySet<string> = new Set([
+	// bind a chat to a study, or create one
 	"start_session",
 	"aihydro_rebind_chat",
+	// claims, assumptions, the plan and the interpretation: the lead's and the owner's, never a child's
 	"add_claim",
-	"revise_claim",
-	"promote_claim",
+	"update_claim_status",
 	"promote_claim_to_registry",
+	"add_assumption",
+	"bind_claim_to_item",
+	"bind_map_to_claim",
 	"register_research_plan",
 	"write_research_interpretation",
-	"approve_claim",
+	// wipes a study's slots
+	"clear_session",
+	// project registry (audience=host)
 	"ensure_project",
 	"set_project_default_study",
+	"rename_project",
+	"add_project_study",
+	"remove_project_study",
 ])
 
 export interface ExplorerMcpHub {
@@ -64,7 +80,7 @@ export function explorerMcpBlockReason(
 		return "use_mcp_tool needs server_name and tool_name so the read-only policy can be checked."
 	}
 	if (EXPLORER_DENIED_MCP_TOOLS.has(toolName.trim())) {
-		return `MCP tool '${toolName}' binds a chat to a study or changes a claim, so it is never available to an explorer.`
+		return `MCP tool '${toolName}' binds a chat to a study, changes a claim or the plan, or manages a project, so it is never available to an explorer.`
 	}
 	const server = mcpHub?.getServers().find((s) => s.name === serverName)
 	const tool = server?.tools?.find((t) => t.name === toolName)
