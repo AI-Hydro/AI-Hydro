@@ -1,3 +1,4 @@
+import { Controller } from "@core/controller"
 import { applyAddLayer, type LayerStoreState } from "@core/map/applyAddLayer"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { expect } from "chai"
@@ -129,8 +130,8 @@ describe("restore: persisted duplicates become one layer", () => {
 				for (const [a, t] of Object.entries(aliases)) state.aliases.set(a, t)
 				merged += Object.keys(aliases).length
 			},
-			addMapLayer(layer: MapLayer) {
-				if (applyAddLayer(state, layer).kind !== "added") merged++
+			addMapLayer(layer: MapLayer, options: { replaceExisting?: boolean } = {}) {
+				if (applyAddLayer(state, layer, options).kind !== "added") merged++
 			},
 		}
 	}
@@ -291,5 +292,144 @@ describe("restore: persisted duplicates become one layer", () => {
 		)
 		expect(again.aliases).to.deep.equal({ "user-watershed_01013500": "workspace_x" })
 		expect(again.entries.map((e) => e.id)).to.deep.equal(["workspace_x", "user-edited"])
+	})
+
+	describe("claim links (F1): a merged-away id must not orphan a bound claim", () => {
+		const studyDuplicate = (extra: Record<string, string> = {}) =>
+			entry({
+				id: "user-watershed_01013500",
+				name: "watershed_01013500",
+				geojson_cache_path: path.join(home, "map_layer_geojson_cache", "user-watershed_01013500.geojson"),
+				metadata_snapshot: { source: "user", source_path: "watershed_01013500.geojson", study_id: "study-1", ...extra },
+			})
+		const pair = () => {
+			const ws = catalog.layers.find((l) => l.id === "workspace_watershed_01013500_geojson") as MapLayerCatalogEntry
+			return [ws, studyDuplicate()]
+		}
+		const opts = (reader?: any) => ({
+			workspaceRoot: project,
+			cacheDir: path.join(home, "map_layer_geojson_cache"),
+			linkedLayerIds: reader,
+		})
+
+		it("an id the study holds a claim link for is not merged away, and still resolves", async () => {
+			const result = await migrateCatalogEntries(
+				pair(),
+				opts(async () => new Set(["user-watershed_01013500"])),
+			)
+			expect(result.aliases).to.deep.equal({})
+			expect(result.entries.map((e) => e.id)).to.deep.equal([
+				"workspace_watershed_01013500_geojson",
+				"user-watershed_01013500",
+			])
+			// Through restore: the linked id is a live layer, not an alias.
+			await persistMapLayerCatalog({ ...catalog, layers: [...pair()], layer_order: pair().map((e) => e.id) }, home)
+			const c = fakeController()
+			await hydrateMapLayersFromCatalog(c as any, project, {
+				linkedLayerIds: async () => new Set(["user-watershed_01013500"]),
+			})
+			expect(c.state.layers.has("user-watershed_01013500")).to.equal(true)
+			expect(c.state.aliases.has("user-watershed_01013500")).to.equal(false)
+		})
+
+		it("links that cannot be read leave the entry unmerged: a reader that throws, one that answers nothing, and no reader", async () => {
+			for (const reader of [
+				async () => {
+					throw new Error("study unreadable")
+				},
+				async () => undefined,
+				undefined,
+			]) {
+				const result = await migrateCatalogEntries(pair(), opts(reader))
+				expect(result.mergedCount).to.equal(0)
+				expect(result.entries).to.have.length(2)
+			}
+		})
+
+		it("a layer that carries a claim id itself is never merged away", async () => {
+			const result = await migrateCatalogEntries(
+				[pair()[0], studyDuplicate({ claim_id: "claim-9" })],
+				opts(async () => new Set()),
+			)
+			expect(result.mergedCount).to.equal(0)
+		})
+
+		it("a study that confirms no link allows the merge", async () => {
+			const result = await migrateCatalogEntries(
+				pair(),
+				opts(async () => new Set()),
+			)
+			expect(result.aliases).to.deep.equal({ "user-watershed_01013500": "workspace_watershed_01013500_geojson" })
+		})
+	})
+
+	describe("persistence through the real Controller (F5)", () => {
+		// Layer adds queue a catalog write behind `mapHydration`; the test holds it open and releases it when restore is done,
+		// as the real startup does, so the writes settle before the next controller reads the file.
+		let release: () => void = () => {}
+		const realController = () =>
+			Object.assign(Object.create(Controller.prototype), {
+				mapLayers: new Map(),
+				mapLayerOrder: [],
+				mapLayerAliases: new Map(),
+				mapOverflowEntries: [],
+				mapHydration: new Promise<void>((resolve) => {
+					release = resolve
+				}),
+				mapMergedCount: 0,
+				mapHydrating: true,
+				mapSubscribers: new Set(),
+				mapMapSubscribers: new Set(),
+				realPathCache: new Map(),
+				currentMapScope: () => project,
+			}) as any
+
+		it("the controller writes the aliases with its catalog and a fresh controller restores them without counting them as new merges", async () => {
+			await persistMapLayerCatalog(catalog, home)
+			const first = realController()
+			await hydrateMapLayersFromCatalog(first, project)
+			expect(first.getMapRestoreState().mergedCount).to.equal(2)
+			release()
+			await first.syncMapLayerCatalog()
+			await new Promise((resolve) => setTimeout(resolve, 300))
+			const written = JSON.parse(fs.readFileSync(scopedMapLayerCatalogFile(project, home), "utf8"))
+			expect(written.layer_aliases).to.have.property("user-watershed_01013500", "workspace_watershed_01013500_geojson")
+			expect(written.layers).to.have.length(3)
+			const second = realController()
+			await hydrateMapLayersFromCatalog(second, project)
+			expect(second.getMapLayerAliases()).to.deep.equal(first.getMapLayerAliases())
+			expect(second.getMapRestoreState().mergedCount).to.equal(0)
+			expect(second.resolveMapLayerId("user-watershed_01031500")).to.equal("workspace_watershed_01031500_geojson")
+		})
+	})
+
+	describe("an unreadable catalog and a crash between the backup and the write (F5)", () => {
+		it("an unreadable catalog restores nothing and is left byte for byte as it was", async () => {
+			const file = path.join(home, "map_layer_catalog.json")
+			fs.writeFileSync(file, '{"layers": [ not json')
+			const c = fakeController()
+			await hydrateMapLayersFromCatalog(c as any, "")
+			expect(c.state.layers.size).to.equal(0)
+			expect(fs.readFileSync(file, "utf8")).to.equal('{"layers": [ not json')
+			expect(fs.readdirSync(home).filter((f) => f.includes("backup"))).to.deep.equal([])
+		})
+
+		it("after a crash between the backup and the write the next restore starts from the same catalog and the backup is not replaced", async () => {
+			await persistMapLayerCatalog(catalog, home)
+			const scoped = scopedMapLayerCatalogFile(project, home)
+			const original = fs.readFileSync(scoped, "utf8")
+			const first = fakeController()
+			await hydrateMapLayersFromCatalog(first as any, project)
+			// The process dies here: the merged catalog was never written, and a half-written temp file is left behind.
+			fs.writeFileSync(`${scoped}.1234.tmp`, '{"layers": [')
+			const backup = scoped.replace(/\.json$/, ".pre-merge-backup.json")
+			const backupBefore = fs.readFileSync(backup, "utf8")
+			const second = fakeController()
+			await hydrateMapLayersFromCatalog(second as any, project)
+			expect(fs.readFileSync(scoped, "utf8")).to.equal(original)
+			expect(fs.readFileSync(backup, "utf8")).to.equal(backupBefore)
+			expect(second.state.layers.size).to.equal(3)
+			expect(second.merged).to.equal(2)
+		})
 	})
 })

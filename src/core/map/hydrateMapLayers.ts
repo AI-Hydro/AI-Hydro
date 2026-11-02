@@ -24,7 +24,7 @@ import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 import { buildInundation3dLayerFromPath } from "./inundation3dLayer"
 import { type MapLayerCatalogEntry, readMapLayerCatalog, scopedMapLayerCatalogFile } from "./mapLayerCatalog"
-import { migrateCatalogEntries } from "./restoreMigration"
+import { type MigrationOptions, migrateCatalogEntries } from "./restoreMigration"
 import { selectCatalogEntriesToRestore } from "./restoreSelection"
 import { MAX_INLINE_GEOJSON_BYTES } from "./sanitizeMapLayerForWebview"
 
@@ -238,6 +238,7 @@ export async function restoreCatalogEntries(
 	controller: Controller,
 	entries: MapLayerCatalogEntry[],
 	total: number,
+	options: { keepSeparate?: Set<string> } = {},
 ): Promise<string[]> {
 	const added: string[] = []
 	for (const entry of entries) {
@@ -245,7 +246,8 @@ export async function restoreCatalogEntries(
 			const layer = await buildLayerFromEntry(entry)
 			if (layer) {
 				layer.metadata = { ...(layer.metadata ?? {}), _hydrated_of: String(total) }
-				controller.addMapLayer(layer)
+				// An entry the migration kept apart on purpose is added as it is: the duplicate check must not merge it away.
+				controller.addMapLayer(layer, options.keepSeparate?.has(layer.id) ? { replaceExisting: true } : {})
 				added.push(layer.id)
 			}
 		} catch (err) {
@@ -270,7 +272,11 @@ export async function backUpCatalogBeforeMerge(catalogFile: string): Promise<voi
  * Read the persisted catalog and restore layers into the controller.
  * Called from Controller constructor (after mapSessionService.initialize).
  */
-export async function hydrateMapLayersFromCatalog(controller: Controller, currentScope?: string): Promise<void> {
+export async function hydrateMapLayersFromCatalog(
+	controller: Controller,
+	currentScope?: string,
+	options: { linkedLayerIds?: MigrationOptions["linkedLayerIds"] } = {},
+): Promise<void> {
 	let catalog
 	try {
 		catalog = await readMapLayerCatalog(currentScope)
@@ -292,6 +298,7 @@ export async function hydrateMapLayersFromCatalog(controller: Controller, curren
 		workspaceRoot: catalog.workspace_root || currentScope || undefined,
 		cacheDir: aihydroPath("map_layer_geojson_cache"),
 		realpath: (p) => realpathSync(p),
+		linkedLayerIds: options.linkedLayerIds,
 	})
 	if (migration.mergedCount > 0 && currentScope) {
 		// The merge is written to the catalog by the next layer change. Keep the catalog as it was first, once.
@@ -299,7 +306,9 @@ export async function hydrateMapLayersFromCatalog(controller: Controller, curren
 	}
 	controller.recordRestoreMerges(migration.aliases)
 
-	const restored = await restoreCatalogEntries(controller, migration.entries, selection.total)
+	const restored = await restoreCatalogEntries(controller, migration.entries, selection.total, {
+		keepSeparate: migration.protectedIds,
+	})
 
 	console.log(
 		`[hydrateMapLayers] Restored ${restored.length} / ${selection.total} layers from catalog` +

@@ -35,6 +35,11 @@ export interface RestoreMigration {
 	/** Ids merged away, and the entry that stands for each. */
 	aliases: Record<string, string>
 	mergedCount: number
+	/**
+	 * Entries that are the same file as an earlier one but were not merged (a claim may be bound to their id). They are
+	 * added as they are, so the runtime duplicate check does not merge them away either.
+	 */
+	protectedIds: Set<string>
 }
 
 export interface MigrationOptions {
@@ -47,7 +52,15 @@ export interface MigrationOptions {
 	readText?: (absolutePath: string) => Promise<string | undefined>
 	/** True when a file exists at this absolute path. */
 	exists?: (absolutePath: string) => Promise<boolean>
+	/**
+	 * Which of these layer ids a study holds an evidence link for (a claim bound to the layer, keyed by its exact id).
+	 * Throwing, or returning undefined, means the links could not be read.
+	 */
+	linkedLayerIds?: (studyId: string, layerIds: string[]) => Promise<Set<string> | undefined>
 }
+
+/** Metadata that is itself evidence the layer is bound to a study, a run or a claim. */
+const EVIDENCE_KEYS = ["claim_id", "study_id", "_run_id", "tool"]
 
 async function defaultExists(file: string): Promise<boolean> {
 	try {
@@ -120,6 +133,34 @@ const identityOf = (entry: MapLayerCatalogEntry): IdentityLayer => ({
 	metadata: entry.metadata_snapshot,
 })
 
+async function mergeAwayGate(
+	entries: MapLayerCatalogEntry[],
+	reader: MigrationOptions["linkedLayerIds"],
+): Promise<(entry: MapLayerCatalogEntry) => boolean> {
+	const free = new Set<string>()
+	const byStudy = new Map<string, string[]>()
+	for (const entry of entries) {
+		const meta = entry.metadata_snapshot ?? {}
+		if (meta.claim_id) continue
+		if (meta.study_id) {
+			byStudy.set(meta.study_id, [...(byStudy.get(meta.study_id) ?? []), entry.id])
+		} else if (!EVIDENCE_KEYS.some((k) => meta[k])) {
+			free.add(entry.id)
+		}
+	}
+	for (const [studyId, ids] of byStudy) {
+		let linked: Set<string> | undefined
+		try {
+			linked = reader ? await reader(studyId, ids) : undefined
+		} catch {
+			linked = undefined
+		}
+		if (!linked) continue // unreadable: fail closed
+		for (const id of ids) if (!linked.has(id)) free.add(id)
+	}
+	return (entry) => free.has(entry.id)
+}
+
 export async function migrateCatalogEntries(input: MapLayerCatalogEntry[], options: MigrationOptions): Promise<RestoreMigration> {
 	const readText = options.readText ?? defaultReadText
 	const exists = options.exists ?? defaultExists
@@ -173,15 +214,23 @@ export async function migrateCatalogEntries(input: MapLayerCatalogEntry[], optio
 	}
 	entries = next
 
+	// A merged-away id stops being a layer id. A claim bound to it (keyed by that exact id in the study) would then point at
+	// nothing, and the tools do not read aliases. So an entry that could carry a link is merged away only when its study
+	// positively says it holds none: a link, an unreadable answer, or no reader at all leaves the entry as its own layer.
+	const mayMergeAway = await mergeAwayGate(entries.filter(isVectorEntry), options.linkedLayerIds)
+
 	// 3. One file, one entry. The first in draw order stays.
 	const kept: MapLayerCatalogEntry[] = []
 	const aliases: Record<string, string> = {}
+	const protectedIds = new Set<string>()
 	for (const entry of entries) {
-		const survivorIndex = isVectorEntry(entry)
+		const sameAsKept = isVectorEntry(entry)
 			? kept.findIndex(
 					(k) => isVectorEntry(k) && matchFile(identityOf(k), identityOf(entry), options.realpath) !== "different",
 				)
 			: -1
+		const survivorIndex = sameAsKept >= 0 && mayMergeAway(entry) ? sameAsKept : -1
+		if (sameAsKept >= 0 && survivorIndex < 0) protectedIds.add(entry.id)
 		if (survivorIndex < 0) {
 			kept.push(entry)
 			continue
@@ -209,5 +258,5 @@ export async function migrateCatalogEntries(input: MapLayerCatalogEntry[], optio
 		}
 		aliases[entry.id] = survivor.id
 	}
-	return { entries: kept, aliases, mergedCount: Object.keys(aliases).length }
+	return { entries: kept, aliases, mergedCount: Object.keys(aliases).length, protectedIds }
 }
