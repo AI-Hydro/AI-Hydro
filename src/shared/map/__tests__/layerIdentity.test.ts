@@ -107,7 +107,7 @@ describe("layer identity: one file is one layer", () => {
 
 	it("compares content without hashing: a one-character change at equal length is seen, and repeated ids do not go stale", () => {
 		const a = L("e", { source_path: "/p/x" }, GJ)
-		expect(matchFile(a, L("n", { source_path: "/p/x" }, `${GJ} `))).to.equal("changed")
+		expect(matchFile(a, L("n", { source_path: "/p/x" }, `${GJ} `))).to.equal("same") // whitespace only: same value
 		expect(matchFile(a, L("n", { source_path: "/p/x" }, GJ))).to.equal("same")
 		expect(matchFile(a, L("n", { source_path: "/p/x" }, GJ2))).to.equal("changed")
 	})
@@ -305,5 +305,15 @@ describe("layer identity: one file is one layer", () => {
 		expect(pathHash("/w/g1/watershed.geojson")).to.not.equal(pathHash("/w/g2/watershed.geojson"))
 		expect(pathHash("/w/g1/watershed.geojson")).to.equal(pathHash("/w/g1/watershed.geojson"))
 		expect(pathHash("/w/g1/watershed.geojson")).to.match(/^[0-9a-f]{6}$/)
+	})
+
+	it("two copies that parse to the same value are the same content, however they are formatted or ordered", () => {
+		const compact = L("c", { source_path: "/w/a.geojson" }, '{"type":"Polygon","coordinates":[[0,1],[2,3]]}')
+		const pretty = L("p", { source_path: "/w/a.geojson" }, '{\n  "coordinates": [[0, 1], [2, 3]],\n  "type": "Polygon"\n}')
+		expect(matchFile(compact, pretty)).to.equal("same")
+		const a = L("a", {}, compact.geojson)
+		const b = L("b", {}, pretty.geojson)
+		expect(matchFile(a, b)).to.equal("same")
+		expect(matchFile(a, L("d", {}, '{"type":"Polygon","coordinates":[[0,1],[2,4]]}'))).to.equal("different")
 	})
 })

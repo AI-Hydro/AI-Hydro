@@ -262,8 +262,9 @@ export const longNameLayers = (): MapLayer[] => [
 ]
 
 /**
- * Layers restored from earlier sessions: the same delineation twice (same run, same source), plus a layer whose geometry
- * is not loaded, so AI-Hydro can only show it ("Limited layer"). Every one of them sits in the Results group.
+ * Layers restored from earlier sessions: the same delineation twice (same run, same source), a vector whose geometry is
+ * drawn from disk (a plain vector: not Limited), and a layer of a type nothing here knows, the one that is "Limited layer".
+ * Every one of them sits in the Results group.
  */
 export const restoredLayers = (): MapLayer[] => {
 	const restored = { _hydrated: "1", _hydrated_of: "6" }
@@ -274,15 +275,16 @@ export const restoredLayers = (): MapLayer[] => {
 			provenance_path: "/fixture/provenance/run-7f3a9c.json",
 			...restored,
 		})
-	const limited = (id: string, name: string) => ({
+	const drawnFromDisk = (id: string, name: string) => ({
 		...polygonLayer(id, name, { tool: "extract_rivers", _run_id: "run-2b44d0.1", ...restored }, "#e31a1c", ""),
 	})
+	const unknownType = (id: string, name: string) => ({ ...drawnFromDisk(id, name), layerType: "mystery_kind" })
 	return [
 		basin("rs-1"),
 		basin("rs-2"),
 		basin("rs-3"),
-		limited("rs-4", "flowlines_01031500"),
-		limited("rs-5", "catchments_01031500"),
+		drawnFromDisk("rs-4", "flowlines_01031500"),
+		unknownType("rs-5", "catchments_01031500"),
 	]
 }
 

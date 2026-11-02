@@ -53,6 +53,40 @@ describe("deriveLayerIntelligence", () => {
 	})
 })
 
+describe("what a layer is", () => {
+	it("calls a vector a vector whether or not its geometry is in the message", () => {
+		for (const geojson of ["", '{"type":"Polygon","coordinates":[]}']) {
+			const intel = deriveLayerIntelligence(
+				layer({ id: "w", layerType: "polygon", geojson, metadata: { source: "workspace" } }),
+			)
+			expect(intel.dataState).toBe("raw_vector")
+			expect(intel.statusLabel).not.toBe("Limited layer")
+		}
+	})
+
+	it("offers attributes and GeoJSON export only when the geometry is held", () => {
+		const held = deriveLayerIntelligence(layer({ id: "h", layerType: "polygon", geojson: "{}" }))
+		const drawn = deriveLayerIntelligence(layer({ id: "d", layerType: "polygon", geojson: "" }))
+		expect(held.capabilities.has("attributes")).toBe(true)
+		expect(drawn.capabilities.has("attributes")).toBe(false)
+		expect(drawn.capabilities.has("export_geojson")).toBe(false)
+		expect(drawn.capabilities.has("style_basic")).toBe(true)
+	})
+
+	it("labels a 3D inundation layer as itself, not as limited", () => {
+		const intel = deriveLayerIntelligence(layer({ id: "i3", layerType: "inundation_3d" }))
+		expect(intel.dataState).toBe("inundation_3d")
+		expect(intel.statusLabel).toBe("3D flood view")
+		expect(intel.warnings).not.toContain("UNSUPPORTED_SYMBOLOGY")
+	})
+
+	it("keeps Limited layer for a type nothing here knows", () => {
+		const intel = deriveLayerIntelligence(layer({ id: "m", layerType: "mystery_kind", geojson: "{}" }))
+		expect(intel.dataState).toBe("unknown")
+		expect(intel.statusLabel).toBe("Limited layer")
+	})
+})
+
 describe("research inspection", () => {
 	const provenanceOf = (l: ReturnType<typeof layer>) => layerProvenance(l, deriveLayerIntelligence(l))
 	it("keeps unrecorded scientific support unknown, as one list and not one row each", () => {

@@ -81,7 +81,11 @@ describe("origin and groups", () => {
 
 describe("what a row says about itself", () => {
 	it("keeps real warnings per row and treats Limited layer as a quiet note", () => {
-		const limited = layer("x", { geojson: "" }, { tool: "extract_rivers", provenance_path: "/p.json" })
+		const limited = layer(
+			"x",
+			{ layerType: "mystery_kind", geojson: "" },
+			{ tool: "extract_rivers", provenance_path: "/p.json" },
+		)
 		const ind = rowIndicators(limited)
 		expect(ind.warnings).toEqual([])
 		expect(ind.note).toMatch(/^Limited layer\./)

@@ -92,14 +92,39 @@ export function pathHash(resolvedPath: string): string {
 	return (h >>> 0).toString(16).padStart(8, "0").slice(0, 6)
 }
 
-/**
- * True when both layers carry content to compare and it is the same. Strings of different length differ at once;
- * equal lengths are compared by the engine's native string comparison, so nothing is hashed or cached per add.
- */
-function sameContent(a: IdentityLayer, b: IdentityLayer): boolean | undefined {
-	if (!a.geojson || !b.geojson) return undefined
-	return a.geojson.length === b.geojson.length && a.geojson === b.geojson
+/** Above this many characters a layer's two copies are compared as text only: parsing both would cost more than it saves. */
+const PARSED_COMPARE_MAX_CHARS = 2_000_000
+
+function sameJson(a: unknown, b: unknown): boolean {
+	if (a === b) return true
+	if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false
+	if (Array.isArray(a) !== Array.isArray(b)) return false
+	if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => sameJson(v, b[i]))
+	const ka = Object.keys(a)
+	const kb = Object.keys(b)
+	if (ka.length !== kb.length) return false
+	return ka.every((k) => Object.hasOwn(b, k) && sameJson((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
 }
+
+/**
+ * True when both layers carry content to compare and it is the same. Identical strings are the same at once. Copies
+ * that differ as text (one pretty-printed, one compact; a cache copy of a project file) are the same file when they
+ * parse to the same value, key order aside, so formatting never makes a second layer. Past a size limit only the text decides.
+ */
+export function sameContent(a: IdentityLayer, b: IdentityLayer): boolean | undefined {
+	if (!a.geojson || !b.geojson) return undefined
+	if (a.geojson === b.geojson) return true
+	if (a.geojson.length > PARSED_COMPARE_MAX_CHARS || b.geojson.length > PARSED_COMPARE_MAX_CHARS) return false
+	try {
+		return sameJson(JSON.parse(a.geojson), JSON.parse(b.geojson))
+	} catch {
+		return false
+	}
+}
+
+/** Two copies of a layer's content are the same value, whatever their formatting. */
+export const sameGeojson = (a: string, b: string): boolean =>
+	sameContent({ id: "a", geojson: a }, { id: "b", geojson: b }) === true
 
 const runOf = (l: IdentityLayer): string | undefined => l.metadata?._run_id || undefined
 

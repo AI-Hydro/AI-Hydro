@@ -8,6 +8,7 @@ export type LayerDataState =
 	| "remote_raster"
 	| "reference_vector"
 	| "analysis_output"
+	| "inundation_3d"
 	| "unknown"
 
 export type LayerCapability =
@@ -60,7 +61,10 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 	const provenancePath = meta.provenance_path || meta.provenancePath
 	const citation = meta.citation || meta.dataset_citation || meta.merit_citation
 	const license = meta.license || meta.dataset_license || meta.merit_license
-	const isVector = VECTOR_TYPES.has(layerType) && Boolean(layer.geojson?.trim())
+	// A vector is a vector by its type. Whether its geometry is in this message is a separate fact (a restored or very large
+	// layer is drawn from disk), and it only changes what can be offered, not what the layer is.
+	const isVector = VECTOR_TYPES.has(layerType)
+	const hasInlineGeometry = Boolean(layer.geojson?.trim())
 	const isMerit = source === "merit" || Boolean(meta.merit_layer)
 	const isAnalysisOutput = Boolean(meta.tool || meta._run_id || source === "tool" || source === "session")
 	const hasRawRaster =
@@ -80,8 +84,10 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 		capabilities.add("identify")
 		capabilities.add("hover_highlight")
 		capabilities.add("style_basic")
-		capabilities.add("attributes")
-		capabilities.add("export_geojson")
+		if (hasInlineGeometry) {
+			capabilities.add("attributes")
+			capabilities.add("export_geojson")
+		}
 		if (layerType !== "point") {
 			capabilities.add("style_graduated")
 		}
@@ -94,7 +100,9 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 			statusLabel: isMerit ? "Reference data" : isAnalysisOutput ? "Analysis output" : "Editable vector",
 			statusDetail: isMerit
 				? "MERIT-Basins reference geometry; inspect provenance before publication."
-				: "Feature geometry is available for identify, styling, attributes, and GeoJSON export.",
+				: hasInlineGeometry
+					? "Feature geometry is available for identify, styling, attributes, and GeoJSON export."
+					: "Geometry is drawn from the file on disk. Attributes and GeoJSON export are not available for this layer in the panel.",
 			capabilities,
 			warnings,
 			provenancePath,
@@ -149,6 +157,22 @@ export function deriveLayerIntelligence(layer: MapLayer, options: DeriveOptions 
 			typeLabel: "Raster preview",
 			statusLabel: "Visual preview only",
 			statusDetail: "Only a rendered image is loaded. Load raster values to enable colormap editing and value probing.",
+			capabilities,
+			warnings,
+			provenancePath,
+			citation,
+			license,
+			sourceLabel: sourceLabel(layer),
+		}
+	}
+
+	if (layerType === "inundation_3d") {
+		// Drawn by its own renderer and controlled from its own panel; there is no raster or vector styling to offer.
+		return {
+			dataState: "inundation_3d",
+			typeLabel: "3D flood",
+			statusLabel: "3D flood view",
+			statusDetail: "Drawn in 3D. Use the 3D flood view controls to change how it is shown.",
 			capabilities,
 			warnings,
 			provenancePath,
