@@ -1,14 +1,14 @@
 import { AiHydroDefaultTool } from "@shared/tools"
-import { type ExplorerMcpHub, explorerMcpBlockReason, explorerResourceBlockReason } from "./explorerPolicy"
+import { type AgentMcpHub, agentMcpBlockReason, agentResourceBlockReason } from "./agentPolicy"
 import { classifyCommand, type ShellEnvironment } from "./readOnlyClassifier"
 
 /**
  * Plan mode is read-only. Before 0.4.6 it blocked four file tools and nothing else: every MCP writer, `run_python`
  * (an MCP tool) and any shell command still ran, so "plan a study" could create runs and fill study slots.
  *
- * One rule, built from predicates that already exist and decide for the explorer subagent and for command auto-run:
+ * One rule, built from predicates that already exist and decide for read-only subagents and for command auto-run:
  *  - a file-writing built-in is refused (the list below);
- *  - `use_mcp_tool` runs only for a READ-class tool on a TRUSTED server (`explorerMcpBlockReason`: annotations from any
+ *  - `use_mcp_tool` runs only for a READ-class tool on a TRUSTED server (`agentMcpBlockReason`: annotations from any
  *    other server are untrusted hints, an unannotated tool is not read-only, and the tools that bind a chat or change a
  *    claim are refused by name);
  *  - `execute_command` runs only if the host's read-only classifier accepts every part of it (fail closed).
@@ -26,7 +26,7 @@ export const PLAN_MODE_RESTRICTED_TOOLS: readonly AiHydroDefaultTool[] = [
 	AiHydroDefaultTool.PREVIEW_HTML,
 	// Not file writes but effects all the same: a browser session acts on the open web (clicks, form posts), `new_task`
 	// starts another task from this one, `report_bug` opens an external issue. `spawn_subagents` stays allowed: its
-	// children run the read-only explorer profile.
+	// children run read-only definitions.
 	AiHydroDefaultTool.BROWSER,
 	AiHydroDefaultTool.NEW_TASK,
 	AiHydroDefaultTool.REPORT_BUG,
@@ -38,14 +38,14 @@ const SWITCH = "Describe this step in the plan, or ask the user to switch to Act
 export function planModeBlockReason(
 	toolName: string,
 	params: Record<string, unknown> | undefined,
-	mcpHub: ExplorerMcpHub | undefined,
+	mcpHub: AgentMcpHub | undefined,
 	shellEnvironment?: ShellEnvironment,
 ): string | undefined {
 	if ((PLAN_MODE_RESTRICTED_TOOLS as readonly string[]).includes(toolName)) {
 		return `Tool '${toolName}' is not available in PLAN MODE. This tool is restricted to ACT MODE for file modifications. Only use tools available for PLAN MODE when in that mode.`
 	}
 	if (toolName === AiHydroDefaultTool.MCP_USE) {
-		const reason = explorerMcpBlockReason(
+		const reason = agentMcpBlockReason(
 			mcpHub,
 			params?.server_name as string | undefined,
 			params?.tool_name as string | undefined,
@@ -55,7 +55,7 @@ export function planModeBlockReason(
 		}
 	}
 	if (toolName === AiHydroDefaultTool.MCP_ACCESS) {
-		const reason = explorerResourceBlockReason(
+		const reason = agentResourceBlockReason(
 			mcpHub,
 			params?.server_name as string | undefined,
 			params?.uri as string | undefined,

@@ -1,6 +1,7 @@
 import {
 	ARTIFACT_SELF_REVIEW_RULE,
 	CITATION_ANTI_HALLUCINATION_RULE,
+	delegationRuleFor,
 	SCIENTIFIC_CONDUCT_RULES,
 	SKILLS_RULE,
 } from "../../components/scientific_conduct"
@@ -84,4 +85,4 @@ export const rules_template = (context: SystemPromptContext) => `RULES
 ${SKILLS_RULE}
 ${ARTIFACT_SELF_REVIEW_RULE}
 ${CITATION_ANTI_HALLUCINATION_RULE}
-${SCIENTIFIC_CONDUCT_RULES}`
+${SCIENTIFIC_CONDUCT_RULES}${delegationRuleFor(context)}`

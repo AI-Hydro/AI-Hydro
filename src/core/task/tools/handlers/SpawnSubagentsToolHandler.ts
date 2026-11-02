@@ -5,8 +5,13 @@ import { formatResponse } from "@core/prompts/responses"
 import { ensureTaskDirectoryExists } from "@core/storage/disk"
 import {
 	DEFAULT_AGENT_BUDGET_USD,
+	DEFAULT_MAX_AGENTS_PER_TASK,
+	MAX_PURPOSE_CHARS,
+	SUBAGENT_SIGNALS,
 	type SubagentChildSummary,
 	type SubagentLaunch,
+	type SubagentLaunchFacts,
+	type SubagentSignal,
 	type SubagentStatusPayload,
 } from "@shared/aihydro/subagents"
 import type { AiHydroSayTool } from "@shared/ExtensionMessage"
@@ -14,15 +19,18 @@ import { telemetryService } from "@/services/telemetry"
 import { convertAiHydroMessageToProto } from "@/shared/proto-conversions/aihydro-message"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
-import { type AgentProfile, resolveProfile } from "../../subagents/agentProfile"
+import { type AgentDefinition, BUILTIN_DEFINITIONS, DEFAULT_AGENT_ID, resolveDefinition } from "../../subagents/agentDefinition"
+import { type ChildApiResolution, resolveChildApi } from "../../subagents/agentModel"
+import { launchesPaused, recordLaunchDenial } from "../../subagents/launchBrake"
 import { ParentAskBridge } from "../../subagents/ParentAskBridge"
 import { DEFAULT_STAGGER_MS, MAX_PROMPTS_PER_CALL, SpawnRefused, SubagentSupervisor } from "../../subagents/SubagentSupervisor"
 import { isModelPriced } from "../../subagents/subagentCost"
 import { diskRecordWriter } from "../../subagents/subagentRecord"
 import { formatReportsForParent } from "../../subagents/subagentReports"
-import { resolveAgentBudgetUsd, TaskAgentLedger } from "../../subagents/taskLedger"
+import { agentCountRefusal, resolveAgentBudgetUsd, resolveMaxAgentsPerTask, TaskAgentLedger } from "../../subagents/taskLedger"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
 import { isWorkspaceTrusted } from "../../workspaceTrust"
+import { AutoApprove } from "../autoApprove"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -91,11 +99,49 @@ export function resolveStaggerMs(value: unknown): number {
 	return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : DEFAULT_STAGGER_MS
 }
 
-/** What the profile cannot do, in one sentence, from the profile (the launch card must not overstate or understate it). */
-export function profileLimits(profile: AgentProfile): string {
-	return profile.id === "explorer"
-		? "No file writes, no commands, no network or browser tools, no questions to you, and no claims. It reads this workspace and calls read-only tools on the trusted AI-Hydro server."
-		: ""
+/** What the definition cannot do, in one sentence, from the definition (the launch card must not overstate or understate it). */
+export function profileLimits(definition: AgentDefinition): string {
+	return definition.limits
+}
+
+/** The model's one line for the launch card: one line of plain text, capped. Undefined when it wrote nothing. */
+export function cleanPurpose(raw: string | undefined): string | undefined {
+	const oneLine = (raw ?? "").replace(/\s+/g, " ").trim()
+	if (!oneLine) {
+		return undefined
+	}
+	return oneLine.length > MAX_PURPOSE_CHARS ? `${oneLine.slice(0, MAX_PURPOSE_CHARS - 1)}…` : oneLine
+}
+
+/** The signal the model named, if it is one of the known words. A wrong word is dropped, not refused: it must not cost a turn. */
+export function cleanSignal(raw: string | undefined): SubagentSignal | undefined {
+	const word = (raw ?? "").trim().toLowerCase()
+	return SUBAGENT_SIGNALS.find((known) => known === word)
+}
+
+/** The parent's context use at its last request, as a whole percentage; undefined when the window or the usage is not known. */
+export function contextUsedPercent(
+	rows: ReadonlyArray<{ say?: string; text?: string }>,
+	contextWindow: number | undefined,
+): number | undefined {
+	if (!contextWindow) {
+		return undefined
+	}
+	for (let i = rows.length - 1; i >= 0; i--) {
+		if (rows[i].say !== "api_req_started" || !rows[i].text) {
+			continue
+		}
+		try {
+			const { tokensIn, tokensOut, cacheWrites, cacheReads } = JSON.parse(rows[i].text as string)
+			const total = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
+			if (total > 0) {
+				return Math.round((total / contextWindow) * 100)
+			}
+		} catch {
+			// a malformed row says nothing
+		}
+	}
+	return undefined
 }
 
 /** Calls `fn` at most once per `intervalMs` (trailing edge), and `flush` runs any pending call now. */
@@ -131,8 +177,13 @@ export function createCoalescer(fn: () => Promise<void>, intervalMs: number) {
 export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 	readonly name = AiHydroDefaultTool.SPAWN_SUBAGENTS
 
-	/** `buildApi` is a test seam; production builds each child's handler from the user's current API configuration. */
-	constructor(private readonly options: { buildApi?: (config: TaskConfig) => ApiHandler } = {}) {}
+	/**
+	 * `buildApi` is a test seam; production builds each child's handler from the user's current API configuration, or
+	 * from the configuration a definition's model setting resolved to.
+	 */
+	constructor(
+		private readonly options: { buildApi?: (config: TaskConfig, resolved?: ChildApiResolution) => ApiHandler } = {},
+	) {}
 
 	getDescription(_block: ToolUse): string {
 		return `[${this.name}]`
@@ -148,10 +199,17 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 		if (stateManager.getGlobalSettingsKey("subagentsEnabled") !== true) {
 			return formatResponse.toolError("Subagents are turned off. Do the work yourself with your own tools.")
 		}
-		const profile = resolveProfile(block.params.profile?.trim() || "explorer")
-		if (!profile) {
+		// Two bare denials in a row end proposals until the user writes again. No card is raised, so a model that was
+		// told to stop cannot make the user answer the same question a third time.
+		if (launchesPaused(config.taskState)) {
+			return formatResponse.subagentLaunchesPaused()
+		}
+		const definition = resolveDefinition(block.params.profile?.trim() || DEFAULT_AGENT_ID)
+		if (!definition) {
 			config.taskState.consecutiveMistakeCount++
-			return formatResponse.toolError('Unknown profile. The only profile is "explorer"; leave profile out.')
+			return formatResponse.toolError(
+				`Unknown profile. Known profiles: ${[...BUILTIN_DEFINITIONS.keys()].join(", ")}. Leave profile out for ${DEFAULT_AGENT_ID}.`,
+			)
 		}
 		const parsed = parsePrompts(block.params.prompts)
 		if (!parsed.ok) {
@@ -165,10 +223,42 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 		const ledger = TaskAgentLedger.fromMessages(
 			config.messageState.getAiHydroMessages(),
 			resolveAgentBudgetUsd(stateManager.getGlobalSettingsKey("agentBudgetUsd"), DEFAULT_AGENT_BUDGET_USD),
+			resolveMaxAgentsPerTask(stateManager.getGlobalSettingsKey("maxAgentsPerTask"), DEFAULT_MAX_AGENTS_PER_TASK),
 		)
 		if (ledger.exceeded()) {
 			return formatResponse.toolError(ledger.refusal())
 		}
+		// The count needs no price, so unlike the dollar cap it holds for a model whose cost is unknown.
+		if (!ledger.allowsAgents(parsed.prompts.length)) {
+			return formatResponse.toolError(agentCountRefusal(ledger, parsed.prompts.length))
+		}
+
+		// Which model the children run. An id or provider that cannot be applied is an error, never a silent fallback to
+		// the parent's model: a reviewer that quietly ran on the author's model would look independent and not be.
+		const mode = stateManager.getGlobalSettingsKey("mode")
+		const resolved = resolveChildApi(
+			() => stateManager.getApiConfiguration(),
+			mode,
+			definition,
+			stateManager.getGlobalSettingsKey("agentModels"),
+		)
+		if (!resolved.ok) {
+			return formatResponse.toolError(resolved.error)
+		}
+		const buildChildApi = (): ApiHandler =>
+			this.options.buildApi?.(config, resolved) ??
+			buildApiHandler({ ...(resolved.config ?? stateManager.getApiConfiguration()), ulid: config.ulid }, resolved.mode)
+		let childModel: { id: string; info: ReturnType<ApiHandler["getModel"]>["info"] }
+		try {
+			childModel = resolved.overridden ? buildChildApi().getModel() : config.api.getModel()
+		} catch (error) {
+			return formatResponse.toolError(
+				`The model set for '${definition.id}' could not be built: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+		const purpose = cleanPurpose(block.params.purpose)
+		const signal = cleanSignal(block.params.signal)
+		const studyBrief = config.taskState.projectContextBrief || undefined
 
 		const bridge = new ParentAskBridge(config.callbacks.ask, () => config.taskState.abort)
 		const children: { current: SubagentChildSummary[] } = { current: [] }
@@ -182,7 +272,7 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 			if (index < 0) {
 				return
 			}
-			const payload: SubagentStatusPayload = { profile: profile.id, children: children.current, done: final }
+			const payload: SubagentStatusPayload = { profile: definition.id, children: children.current, done: final }
 			messages[index].text = JSON.stringify(payload)
 			if (final) {
 				await config.messageState.updateAiHydroMessage(index, { text: messages[index].text })
@@ -194,7 +284,7 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 		let supervisor: SubagentSupervisor
 		try {
 			supervisor = new SubagentSupervisor({
-				profile,
+				definition,
 				parent: {
 					canCall: (tool) => config.coordinator.has(tool),
 					workspaceTrusted: isWorkspaceTrusted(),
@@ -213,14 +303,13 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 					bridge,
 					isParentAborted: () => config.taskState.abort,
 					ledger,
+					...(studyBrief ? { studyBrief } : {}),
+					...(resolved.providerId ? { provider: resolved.providerId } : {}),
+					...(purpose ? { purpose } : {}),
+					...(signal ? { signal } : {}),
 					writeRecord: diskRecordWriter(() => ensureTaskDirectoryExists(config.taskId)),
 				},
-				buildApi: () =>
-					this.options.buildApi?.(config) ??
-					buildApiHandler(
-						{ ...stateManager.getApiConfiguration(), ulid: config.ulid },
-						stateManager.getGlobalSettingsKey("mode"),
-					),
+				buildApi: buildChildApi,
 				staggerMs: resolveStaggerMs(stateManager.getGlobalSettingsKey("subagentStaggerMs")),
 				onUpdate: (next) => {
 					children.current = next
@@ -235,30 +324,64 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 		}
 
 		// The launch ask: always asked, never auto-approved (H2). It shows exactly what will run.
+		const readsAutoRun = new AutoApprove(stateManager, isWorkspaceTrusted() ? "read" : "none").shouldAutoApproveTool(
+			AiHydroDefaultTool.FILE_READ,
+		)
+		const contextPercent = contextUsedPercent(
+			config.messageState.getAiHydroMessages(),
+			config.api.getModel().info.contextWindow,
+		)
+		const facts: SubagentLaunchFacts = {
+			...(contextPercent !== undefined ? { contextUsedPercent: contextPercent } : {}),
+			launchesSoFar: ledger.launchesApproved,
+			deniedSoFar: config.taskState.launchDenials ?? 0,
+			agentsSoFar: ledger.agentsStarted,
+			maxAgents: ledger.maxAgents,
+			readsAsk: !(Array.isArray(readsAutoRun) ? readsAutoRun[0] : readsAutoRun),
+			...(signal === "independent" && parsed.prompts.length === 1 ? { singlePromptIndependent: true } : {}),
+		}
 		const launch: SubagentLaunch = {
-			profile: profile.id,
+			profile: definition.id,
+			label: definition.displayName,
 			prompts: parsed.prompts,
 			budget: supervisor.caps.budget,
-			model: config.api.getModel().id,
-			limits: profileLimits(profile),
-			taskBudget: ledger.describe(isModelPriced(config.api.getModel().info)),
+			model: childModel.id,
+			...(resolved.providerId ? { provider: resolved.providerId } : {}),
+			...(resolved.otherProvider ? { otherProvider: true } : {}),
+			limits: profileLimits(definition),
+			...(definition.advisory ? { advisory: definition.advisory } : {}),
+			taskBudget: ledger.describe(isModelPriced(childModel.info)),
+			...(purpose ? { purpose } : {}),
+			...(signal ? { signal } : {}),
+			facts,
+			definition: {
+				id: definition.id,
+				source: definition.source,
+				sha256: definition.sha256,
+				...(definition.path ? { path: definition.path } : {}),
+				...(definition.extends ? { extends: definition.extends } : {}),
+			},
+			...(studyBrief ? { studyBrief: true } : {}),
 		}
 		const completeMessage = JSON.stringify({ tool: "spawnSubagents", subagents: launch } satisfies AiHydroSayTool)
 		showNotificationForApprovalIfAutoApprovalEnabled(
-			`AI-Hydro wants to start ${parsed.prompts.length} read-only explorer${parsed.prompts.length === 1 ? "" : "s"}`,
+			`AI-Hydro wants to start ${parsed.prompts.length} read-only ${definition.displayName.toLowerCase()}${parsed.prompts.length === 1 ? "" : "s"}`,
 			config.autoApprovalSettings.enabled,
 			config.autoApprovalSettings.enableNotifications,
 		)
 		await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-		if (!(await ToolResultUtils.askApprovalAndPushFeedback("tool", completeMessage, config))) {
+		const decision = await ToolResultUtils.askApprovalDetailed("tool", completeMessage, config)
+		if (!decision.approved) {
 			telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, false, false)
-			return formatResponse.toolDenied()
+			recordLaunchDenial(config.taskState, decision.hadFeedback)
+			// A denial with words is the user speaking to the lead: the brake does not count it, and the words reach the lead.
+			return decision.hadFeedback ? formatResponse.toolDenied() : formatResponse.subagentLaunchDenied()
 		}
 		telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, false, true)
 
 		// One row for the whole call, rewritten in place. Added once with `say` (before any child ask exists), and
 		// afterwards only mutated: a `say` per update would move lastMessageTs and supersede a pending child ask.
-		const initial: SubagentStatusPayload = { profile: profile.id, children: [], done: false }
+		const initial: SubagentStatusPayload = { profile: definition.id, children: [], done: false }
 		statusTs = await config.callbacks.say("subagent_status", JSON.stringify(initial))
 
 		try {

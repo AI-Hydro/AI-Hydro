@@ -2,11 +2,19 @@
  * Shared vocabulary for in-process subagents (plan: docs/vision-2040/plans/subagents.md). Pure types and small pure
  * helpers, so the host, the transcript presenter and the webview agree on one definition.
  *
- * Only the `explorer` profile exists. A child is never more capable than its parent, never creates, revises or
- * approves a claim, and returns its output to the parent as untrusted text.
+ * A child runs an agent definition (core/task/subagents/agentDefinition.ts). A child is never more capable than its
+ * parent, never creates, revises or approves a claim, and returns its output to the parent as untrusted text.
  */
 
-export type SubagentProfileId = "explorer"
+/** The id of an agent definition: a built-in, or a user file that extends one. Lowercase words joined by hyphens. */
+export type SubagentProfileId = string
+
+const AGENT_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+
+/** Whether `value` can be an agent definition id. The shape only; whether the id exists is the registry's to say. */
+export function isAgentId(value: unknown): value is SubagentProfileId {
+	return typeof value === "string" && value.length <= 40 && AGENT_ID.test(value)
+}
 
 /** Where a child ask came from. Stamped by the host on the parent's ask; never supplied by a model. */
 export interface SubagentOrigin {
@@ -38,6 +46,35 @@ export interface SubagentReport {
 	filesRead: string[]
 	openQuestions: string[]
 }
+
+/**
+ * A reviewer's verdict on one statement. "unverifiable" means the reviewer could not check it against anything it was
+ * given or could read: that is reported as unverified, never as refuted.
+ */
+export type ReviewVerdict = "supported" | "unsupported" | "unverifiable"
+
+export const REVIEW_VERDICTS: readonly ReviewVerdict[] = ["supported", "unsupported", "unverifiable"]
+
+/** What a reviewer hands back with report_review. Advisory text from a second model run, never evidence. */
+export interface SubagentReviewReport {
+	summary: string
+	verdicts: Array<{ statement: string; verdict: ReviewVerdict; evidence: string }>
+	openQuestions: string[]
+}
+
+/** The report shape a definition returns (`reportSchema`). The host validates it; a model cannot choose another. */
+export type ReportSchemaId = "findings" | "review"
+
+/**
+ * Why a launch is proposed. `bulk`: one wide question. `independent`: separate sizeable questions. `user_asked`: the
+ * user asked for subagents. `independent_check`: a reviewer, asked for by the user or before a claim goes to promotion.
+ */
+export type SubagentSignal = "bulk" | "independent" | "user_asked" | "independent_check"
+
+export const SUBAGENT_SIGNALS: readonly SubagentSignal[] = ["bulk", "independent", "user_asked", "independent_check"]
+
+/** The host caps the model's one-line `purpose` here. */
+export const MAX_PURPOSE_CHARS = 140
 
 export interface SubagentUsage {
 	toolCalls: number
@@ -90,7 +127,7 @@ export function parseSubagentOrigin(json: string): SubagentOrigin | undefined {
 			v &&
 			typeof v.childId === "string" &&
 			typeof v.label === "string" &&
-			v.profile === "explorer" &&
+			isAgentId(v.profile) &&
 			typeof v.promptHead === "string"
 		) {
 			return { childId: v.childId, label: v.label, profile: v.profile, promptHead: v.promptHead }
@@ -136,14 +173,60 @@ export interface SubagentChildSummary {
 /** What the launch ask shows the user before anything runs. */
 export interface SubagentLaunch {
 	profile: SubagentProfileId
+	/** The definition's display name, singular ("Explorer"). The card builds its headline from it. */
+	label?: string
 	prompts: string[]
 	budget: SubagentBudget
-	/** The model every child will use (the parent's). */
+	/** The model every child will use. */
 	model: string
+	/** The provider every child will use. Shown when it differs from the parent's (D7: opt-in, and the data goes there). */
+	provider?: string
+	/** True when the children's provider is not the parent's, so the card says the prompts leave for another vendor. */
+	otherProvider?: boolean
 	/** One sentence on what the profile cannot do, from the profile, so the card never overstates. */
 	limits: string
+	/** What the output of this kind of agent is and is not, from the definition (a reviewer: advice, not a review). */
+	advisory?: string
 	/** The task-level agent budget this launch draws on (plan 5.7, D6). */
 	taskBudget?: SubagentTaskBudget
+	/** The model's one line on what this will find and what it saves. Model-written, capped by the host. Untrusted. */
+	purpose?: string
+	/** The reason the model named. Host-checked to be one of the known signals. */
+	signal?: SubagentSignal
+	/** Facts the host computed itself, shown beside `purpose` so the user does not rest on the model's words alone. */
+	facts?: SubagentLaunchFacts
+	/** Where the definition came from and its hash. A file-defined agent is named here (stage 3); a built-in shows "built-in". */
+	definition?: SubagentDefinitionRef
+	/** True when the host built a study brief for the children (study id, gauge, period, plan id). Never model-written. */
+	studyBrief?: boolean
+}
+
+/** What the launch card says about the definition behind the children. */
+export interface SubagentDefinitionRef {
+	id: string
+	source: "builtin" | "global" | "workspace"
+	sha256: string
+	/** The file, for a global or workspace definition. Absent for a built-in. */
+	path?: string
+	/** The built-in it extends, for a file. */
+	extends?: string
+}
+
+/** Host-computed facts for a launch card. */
+export interface SubagentLaunchFacts {
+	/** The parent's context use at the last request, as a percentage. Absent when it is not known. */
+	contextUsedPercent?: number
+	/** Spawn calls the user approved earlier in this task. */
+	launchesSoFar: number
+	/** Launches the user denied earlier in this task. */
+	deniedSoFar: number
+	/** Children started so far in this task, and the most the task may start (`maxAgentsPerTask`). */
+	agentsSoFar: number
+	maxAgents: number
+	/** True when reads do not auto-approve, so every child read asks the user. */
+	readsAsk: boolean
+	/** `independent` was named with one prompt: nothing can run in parallel. */
+	singlePromptIndependent?: boolean
 }
 
 /** What the launch card says about the task-level cap. */
@@ -160,6 +243,13 @@ export interface SubagentTaskBudget {
 
 /** Default `agentBudgetUsd`: dollars all subagents of one task may cost together (owner decision D6). A guess, not a measurement. */
 export const DEFAULT_AGENT_BUDGET_USD = 5
+
+/**
+ * Default `maxAgentsPerTask`: children all of one task's spawn calls may start together. The count needs no price, so it
+ * bounds a model whose cost is unknown, where `agentBudgetUsd` cannot fire. 12 is the orchestration report's value
+ * (3 calls of 4); it is untested, and under the delegation policy it should almost never be reached.
+ */
+export const DEFAULT_MAX_AGENTS_PER_TASK = 12
 
 /** The text of a `subagent_status` row. One per spawn call, rewritten in place as the children progress. */
 export interface SubagentStatusPayload {
@@ -200,9 +290,9 @@ export function subagentStatusUsage(text: string | undefined): {
 	return total
 }
 
-/** Constants shared by the host and the transcript so a label can be rebuilt from an index. */
-export function subagentLabel(profile: SubagentProfileId, ordinal: number): string {
-	return `${profile === "explorer" ? "Explorer" : "Subagent"} ${ordinal}`
+/** The label of the nth child of a definition: its display name and the position in the call ("Explorer 2"). */
+export function subagentLabel(displayName: string, ordinal: number): string {
+	return `${displayName} ${ordinal}`
 }
 
 /** The first line of a child's prompt, whitespace-collapsed and capped, for the approval chip and the status row. */

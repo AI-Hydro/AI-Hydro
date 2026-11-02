@@ -3,8 +3,10 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import type {
 	SubagentBudgetStop,
+	SubagentDefinitionRef,
 	SubagentProfileId,
 	SubagentReport,
+	SubagentReviewReport,
 	SubagentStatus,
 	SubagentToolCallRecord,
 	SubagentUsage,
@@ -25,6 +27,11 @@ export interface SubagentRecord {
 	parentUlid: string
 	profile: SubagentProfileId
 	/**
+	 * The definition this child ran: its id, where it came from and the hash of the file (or of the built-in record).
+	 * A file-defined agent is the user's own text, so the record says which text it was.
+	 */
+	definition: SubagentDefinitionRef
+	/**
 	 * What this child's MCP calls carried in `_meta["aihydro/context"].agent`. The server does not read it yet, so it is
 	 * not in server RunRecords; this file is where it can be checked.
 	 */
@@ -34,6 +41,13 @@ export interface SubagentRecord {
 	prompt: string
 	promptSha256: string
 	modelIdRequested: string
+	/** The provider the child's requests went to. Differs from the parent's only when the user opted in (D7). */
+	providerRequested?: string
+	/** sha256 of the study brief the host put in the child's first message; absent when none was built. */
+	studyBriefSha256?: string
+	/** The model's one-line purpose and the signal it named, as the launch card showed them. Untrusted text. */
+	purpose?: string
+	signal?: string
 	/** The model id the provider reported serving; absent when it reports none. */
 	modelIdReturned?: string
 	startedAt: string
@@ -43,6 +57,8 @@ export interface SubagentRecord {
 	usage: SubagentUsage
 	toolCalls: SubagentToolCallRecord[]
 	report?: SubagentReport
+	/** A reviewer's check. Advice from a second model run: not evidence, never an input to promotion. */
+	review?: SubagentReviewReport
 	/** The child's last assistant text, kept when a budget or an error ended it without a report. */
 	lastAssistantText?: string
 	error?: string

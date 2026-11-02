@@ -2,7 +2,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
-import { capFor } from "../agentProfile"
+import { capFor } from "../agentDefinition"
 import { SubagentRunner } from "../SubagentRunner"
 import { makeParent, PARENT_CAPS, type ParentHarness, PROFILE, scriptedApi, tool } from "./subagentHarness"
 

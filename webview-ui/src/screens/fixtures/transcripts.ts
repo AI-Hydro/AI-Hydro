@@ -982,6 +982,10 @@ const subagentStatus = (ts: number, children: Record<string, unknown>[], done = 
 	say(ts, "subagent_status", JSON.stringify({ profile: "explorer", done, children }))
 const subagentLaunch = {
 	profile: "explorer",
+	label: "Explorer",
+	purpose: "Compare the fixture scripts in parallel so the main task stays short. Fixture text.",
+	signal: "independent",
+	facts: { contextUsedPercent: 38, launchesSoFar: 0, deniedSoFar: 0, agentsSoFar: 0, maxAgents: 12, readsAsk: false },
 	prompts: [
 		"Find where the fixture metric is defined and list its callers.",
 		"Summarise what the session already holds (fixture).",

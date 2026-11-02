@@ -57,6 +57,15 @@ export class TaskState {
 		return this._conversationHistoryDeletedRange
 	}
 
+	// Subagent launches the user denied. `bareLaunchDenials` counts only denials with no message and is reset the moment the
+	// user writes to the lead (say "user_feedback"); at two, further launches are refused without a card. The total
+	// never resets and is shown on the launch card.
+	bareLaunchDenials = 0
+	launchDenials = 0
+	// The server's capped project digest, framed (projectContextSection.ts), as the host last read it. A subagent's study
+	// brief is this text: built by the host, never by a model.
+	projectContextBrief?: string
+
 	// Tool execution flags
 	didRejectTool = false
 	didAlreadyUseTool = false

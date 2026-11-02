@@ -26,6 +26,8 @@ export enum AiHydroDefaultTool {
 	SPAWN_SUBAGENTS = "spawn_subagents",
 	// Child-only: the single exit of an in-process subagent. Never registered for a top-level task.
 	REPORT_FINDINGS = "report_findings",
+	// Child-only: the exit of a reviewer subagent (reportSchema "review"). Never registered for a top-level task.
+	REPORT_REVIEW = "report_review",
 }
 
 // Array of all tool names for compatibility

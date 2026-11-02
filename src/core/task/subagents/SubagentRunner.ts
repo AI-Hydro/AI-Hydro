@@ -14,6 +14,7 @@ import {
 	type SubagentOrigin,
 	type SubagentProfileId,
 	type SubagentReport,
+	type SubagentReviewReport,
 	type SubagentStatus,
 	type SubagentToolCallRecord,
 	type SubagentUsage,
@@ -25,7 +26,7 @@ import type { WorkspaceRootManager } from "@/core/workspace"
 import type { StateManager } from "../../storage/StateManager"
 import { ToolExecutor } from "../ToolExecutor"
 import type { TaskServices } from "../tools/types/TaskConfig"
-import type { EffectiveCapabilities } from "./agentProfile"
+import type { EffectiveCapabilities } from "./agentDefinition"
 import { ChildMessageState, newChildTaskState, nullFileContextTracker } from "./childRuntime"
 import type { ParentAskBridge } from "./ParentAskBridge"
 import { CostTally, emptyRequestUsage, priceRequest, type RequestUsage } from "./subagentCost"
@@ -74,6 +75,13 @@ export interface SubagentRunnerInit {
 	profile: SubagentProfileId
 	caps: EffectiveCapabilities
 	prompt: string
+	/** The host-built study brief for the first message. Reference data from the server's digest; never model-written. */
+	studyBrief?: string
+	/** The provider the child's requests go to, for the record. */
+	provider?: string
+	/** The model's one-line purpose and the signal it named at launch, kept in the record beside the prompt. */
+	purpose?: string
+	signal?: string
 	// The parent's world, passed explicitly so a child cannot reach anything it was not handed.
 	context: vscode.ExtensionContext
 	services: TaskServices
@@ -105,6 +113,9 @@ export interface SubagentResult {
 	label: string
 	status: SubagentStatus
 	report?: SubagentReport
+	/** A reviewer's check, for a definition whose report schema is "review". */
+	review?: SubagentReviewReport
+	reportSchema?: "findings" | "review"
 	/** Last assistant text, present when a budget or an error ended the child without a report. */
 	lastAssistantText?: string
 	budgetStop?: SubagentBudgetStop
@@ -159,6 +170,7 @@ export class SubagentRunner {
 	private startedAt = 0
 	private cancelRequested = false
 	private report?: SubagentReport
+	private review?: SubagentReviewReport
 	private lastAssistantText = ""
 	private budgetStop?: SubagentBudgetStop
 	private lastTool?: string
@@ -275,7 +287,10 @@ export class SubagentRunner {
 			const executor = this.buildExecutor(taskState, messages)
 			const system = this.systemPrompt()
 			const history: Anthropic.MessageParam[] = [
-				{ role: "user", content: [{ type: "text", text: subagentTaskMessage(init.prompt, this.label) }] },
+				{
+					role: "user",
+					content: [{ type: "text", text: subagentTaskMessage(init.prompt, this.label, init.studyBrief) }],
+				},
 			]
 			let toolLessTurns = 0
 			let blockedInARow = 0
@@ -406,7 +421,7 @@ export class SubagentRunner {
 						content: [
 							{
 								type: "text",
-								text: "[ERROR] You did not use a tool. Use exactly one tool per message. When you have what was asked, or nothing more can be learned, call report_findings.",
+								text: `[ERROR] You did not use a tool. Use exactly one tool per message. When you have what was asked, or nothing more can be learned, call ${init.caps.reportTool}.`,
 							},
 						],
 					})
@@ -415,7 +430,7 @@ export class SubagentRunner {
 				toolLessTurns = 0
 				const block: ToolUse = { ...toolUse, partial: false }
 
-				if (block.name !== AiHydroDefaultTool.REPORT_FINDINGS && this.usage.toolCalls >= budget.maxToolCalls) {
+				if (block.name !== init.caps.reportTool && this.usage.toolCalls >= budget.maxToolCalls) {
 					return this.finish("partial", { budgetStop: "tool_calls" })
 				}
 				this.usage.toolCalls++
@@ -446,7 +461,7 @@ export class SubagentRunner {
 				this.toolCalls.push(this.callRecord(block, this.refusedThisCall ? "refused" : call.approval, outcome))
 				this.setStatus("running")
 
-				if (this.report) {
+				if (this.report || this.review) {
 					return this.finish("completed")
 				}
 
@@ -553,6 +568,9 @@ export class SubagentRunner {
 				reportSink: (report) => {
 					this.report = report
 				},
+				reviewSink: (review) => {
+					this.review = review
+				},
 				onRefused: () => {
 					this.refusedThisCall = true
 				},
@@ -652,11 +670,22 @@ export class SubagentRunner {
 			parentTaskId: init.taskId,
 			parentUlid: init.ulid,
 			profile: init.profile,
+			definition: {
+				id: init.caps.definition.id,
+				source: init.caps.definition.source,
+				sha256: init.caps.definition.sha256,
+				...(init.caps.definition.path ? { path: init.caps.definition.path } : {}),
+				...(init.caps.definition.extends ? { extends: init.caps.definition.extends } : {}),
+			},
 			agent: { agent_id: this.childId, parent_agent_id: init.ulid, role: init.profile },
 			allowlistSha256: allowlistSha256([...init.caps.builtinAllow, init.caps.reportTool]),
 			prompt: init.prompt,
 			promptSha256: sha256(init.prompt),
 			modelIdRequested: init.api.getModel().id,
+			...(init.provider ? { providerRequested: init.provider } : {}),
+			...(init.studyBrief ? { studyBriefSha256: sha256(init.studyBrief) } : {}),
+			...(init.purpose ? { purpose: init.purpose } : {}),
+			...(init.signal ? { signal: init.signal } : {}),
 			...(this.modelIdReturned ? { modelIdReturned: this.modelIdReturned } : {}),
 			startedAt: new Date(this.startedAt).toISOString(),
 			endedAt: new Date(this.now()).toISOString(),
@@ -665,6 +694,7 @@ export class SubagentRunner {
 			usage: this.usage,
 			toolCalls: this.toolCalls,
 			...(this.report ? { report: this.report } : {}),
+			...(this.review ? { review: this.review } : {}),
 			...(keepText ? { lastAssistantText: this.lastAssistantText } : {}),
 			...(extra.error || extra.note ? { error: extra.error ?? extra.note } : {}),
 		}
@@ -681,6 +711,8 @@ export class SubagentRunner {
 			label: this.label,
 			status,
 			...(this.report ? { report: this.report } : {}),
+			...(this.review ? { review: this.review } : {}),
+			reportSchema: init.caps.reportSchema,
 			...(keepText ? { lastAssistantText: this.lastAssistantText } : {}),
 			...(extra.budgetStop ? { budgetStop: extra.budgetStop } : {}),
 			usage: this.usage,

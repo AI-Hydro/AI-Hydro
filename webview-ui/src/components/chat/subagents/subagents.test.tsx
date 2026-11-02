@@ -161,6 +161,7 @@ describe("SubagentOriginChip", () => {
 describe("SubagentLaunchCard", () => {
 	const launch: SubagentLaunch = {
 		profile: "explorer",
+		label: "Explorer",
 		prompts: ["Find every use of nse", "Summarise the session"],
 		budget: { maxToolCalls: 30, wallClockMs: 600_000, maxOutputTokens: 40_000, contextStopFraction: 0.8, maxCostUsd: 2 },
 		model: "claude-sonnet-4",
@@ -172,6 +173,112 @@ describe("SubagentLaunchCard", () => {
 		expect(screen.getByTestId("subagent-launch-prompts").textContent).toContain("Find every use of nse")
 		expect(screen.getByTestId("subagent-launch-limits").textContent).toContain("No file writes")
 		expect(screen.getByTestId("subagent-launch-budget").textContent).toMatch(/claude-sonnet-4.*30 tool calls.*10 minutes/)
+	})
+	it("falls back to 'subagent' for a launch an earlier build wrote with no label", () => {
+		const { label: _label, ...old } = launch
+		render(<SubagentLaunchCard state="pending" tool={{ tool: "spawnSubagents", subagents: old }} />)
+		expect(screen.getByText("Start 2 read-only subagents")).toBeTruthy()
+	})
+	it("labels the model's reason as the model's and puts the host's own facts on a separate line", () => {
+		render(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{
+					tool: "spawnSubagents",
+					subagents: {
+						...launch,
+						purpose: "Find where gap filling is handled so the main task stays short.",
+						signal: "bulk",
+						facts: {
+							contextUsedPercent: 62,
+							launchesSoFar: 1,
+							deniedSoFar: 0,
+							agentsSoFar: 1,
+							maxAgents: 12,
+							readsAsk: true,
+						},
+					},
+				}}
+			/>,
+		)
+		expect(screen.getByTestId("subagent-launch-why").textContent).toBe(
+			"Why: Find where gap filling is handled so the main task stays short.",
+		)
+		expect(screen.getByTestId("subagent-launch-why").querySelector(".ph-no-capture")).toBeTruthy()
+		expect(screen.getByTestId("subagent-launch-signal").textContent).toBe(
+			"Signal: many files · Context 62% used · 1 launch so far · 0 denied · 1 of 12 agents used · Reads will ask you",
+		)
+		expect(screen.queryByTestId("subagent-launch-single")).toBeNull()
+	})
+	it("says 'No reason given' when the model gave none, and still shows the card", () => {
+		render(<SubagentLaunchCard state="pending" tool={{ tool: "spawnSubagents", subagents: launch }} />)
+		expect(screen.getByTestId("subagent-launch-why").textContent).toBe("Why: No reason given")
+		expect(screen.getByTestId("subagent-launch-signal").textContent).toBe("Signal: no signal named")
+		expect(screen.getByTestId("subagent-launch-prompts").textContent).toContain("Find every use of nse")
+	})
+	it("notes that one explorer on an 'independent' launch runs nothing in parallel", () => {
+		render(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{
+					tool: "spawnSubagents",
+					subagents: {
+						...launch,
+						prompts: ["one"],
+						signal: "independent",
+						facts: {
+							launchesSoFar: 0,
+							deniedSoFar: 0,
+							agentsSoFar: 0,
+							maxAgents: 12,
+							readsAsk: false,
+							singlePromptIndependent: true,
+						},
+					},
+				}}
+			/>,
+		)
+		expect(screen.getByTestId("subagent-launch-single").textContent).toBe("One explorer, so nothing runs in parallel.")
+	})
+	it("a reviewer card says its output is advice from a second model run, and never says 'reviewed'", () => {
+		render(
+			<SubagentLaunchCard
+				state="executed"
+				tool={{
+					tool: "spawnSubagents",
+					subagents: {
+						...launch,
+						profile: "reviewer",
+						label: "Reviewer",
+						prompts: ["Check NSE is 0.62"],
+						signal: "independent_check",
+						advisory: "Its verdicts are advice from a second model run, not a review by a person.",
+					},
+				}}
+			/>,
+		)
+		expect(screen.getByText("Started 1 read-only reviewer")).toBeTruthy()
+		expect(screen.getByTestId("subagent-launch-advisory").textContent).toContain("advice from a second model run")
+		expect(screen.getByTestId("subagent-launch-signal").textContent).toContain("independent check")
+		expect(screen.getByTestId("subagent-launch").textContent).not.toMatch(/\breviewed\b/i)
+	})
+	it("says when the prompts go to another provider, and when a host-built study brief goes with them", () => {
+		render(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{
+					tool: "spawnSubagents",
+					subagents: { ...launch, provider: "openai-native", otherProvider: true, studyBrief: true },
+				}}
+			/>,
+		)
+		expect(screen.getByTestId("subagent-launch-provider").textContent).toMatch(
+			/go to openai-native, not the provider this chat uses/,
+		)
+		expect(screen.getByTestId("subagent-launch-budget").textContent).toContain("on openai-native")
+		expect(screen.getByTestId("subagent-launch-brief").textContent).toMatch(
+			/study brief the host read from the server.*model did not write it/,
+		)
 	})
 	it("shows the task budget and what is used, or says the cost is unknown for an unpriced model", () => {
 		const { rerender } = render(

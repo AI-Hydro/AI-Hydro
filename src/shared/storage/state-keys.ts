@@ -107,6 +107,14 @@ export interface Settings {
 	subagentsEnabled: boolean
 	/** Most dollars all of one task's subagents may cost together (owner decision D6). Unset means the default, 5. */
 	agentBudgetUsd: number | undefined
+	/** Most children all of one task's spawn calls may start together. Unset means the default, 12. Needs no price, so it caps a model whose cost is unknown too. */
+	maxAgentsPerTask: number | undefined
+	/**
+	 * The model a subagent definition runs, by definition id: `{ modelId }` on the parent's provider, plus `providerId` to
+	 * use another provider (honoured only for a definition that allows it, owner decision D7). Unset or missing: the
+	 * parent's model. Prompts sent to another provider leave for that vendor, which the launch card says.
+	 */
+	agentModels: Record<string, { modelId: string; providerId?: string }> | undefined
 	/** Milliseconds between subagent starts, so siblings can share a prompt cache. Unset means the default; 0 starts them together. */
 	subagentStaggerMs: number | undefined
 	finalAnswerAuditEnabled: boolean

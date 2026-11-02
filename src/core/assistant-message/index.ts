@@ -48,6 +48,9 @@ export const toolParamNames = [
 	"key_findings",
 	"files_read",
 	"open_questions",
+	"verdicts",
+	"purpose",
+	"signal",
 	"outcome",
 	"unmet",
 ] as const

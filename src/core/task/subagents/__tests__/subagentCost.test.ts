@@ -1,10 +1,10 @@
 import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import { calculateApiCostAnthropic } from "@/utils/cost"
-import { capFor } from "../agentProfile"
+import { capFor } from "../agentDefinition"
 import { isTransientStreamError, MAX_STREAM_RETRIES, SubagentRunner } from "../SubagentRunner"
 import { CostTally, emptyRequestUsage, isModelPriced, priceRequest } from "../subagentCost"
-import { TaskAgentLedger } from "../taskLedger"
+import { agentCountRefusal, resolveMaxAgentsPerTask, TaskAgentLedger } from "../taskLedger"
 import { makeParent, PARENT_CAPS, type ParentHarness, PROFILE, scriptedApi, tool } from "./subagentHarness"
 
 /** An Anthropic-style price table (per million tokens), as the model catalogue carries it. */
@@ -199,6 +199,39 @@ describe("subagent cost", () => {
 			expect(ledger.remainingUsd).to.equal(4.25)
 			expect(ledger.exceeded()).to.equal(false)
 			expect(new TaskAgentLedger(0).exceeded()).to.equal(true)
+			// and the same rows give the child and launch counts, which need no price
+			expect(ledger.agentsStarted).to.equal(3)
+			expect(ledger.launchesApproved).to.equal(2)
+		})
+
+		it("counts started children against maxAgentsPerTask, with no price needed", () => {
+			const row = (n: number) => ({
+				type: "say",
+				say: "subagent_status",
+				text: JSON.stringify({
+					profile: "explorer",
+					done: true,
+					children: Array.from({ length: n }, () => ({ tokensIn: 0, tokensOut: 0 })),
+				}),
+			})
+			const ledger = TaskAgentLedger.fromMessages([row(4), row(4)], 5, 10)
+			expect(ledger.maxAgents).to.equal(10)
+			expect(ledger.agentsRemaining).to.equal(2)
+			expect(ledger.allowsAgents(2)).to.equal(true)
+			expect(ledger.allowsAgents(3)).to.equal(false)
+			expect(agentCountRefusal(ledger, 3)).to.include("only 2 more")
+			const full = TaskAgentLedger.fromMessages([row(4), row(4), row(4)], 5, 10)
+			expect(full.agentsRemaining).to.equal(0)
+			expect(agentCountRefusal(full, 1)).to.include("already started 12 subagents")
+			expect(TaskAgentLedger.fromMessages([], 5).maxAgents).to.equal(12)
+		})
+
+		it("maxAgentsPerTask takes a whole number of 0 or more, else the default", () => {
+			expect(resolveMaxAgentsPerTask(4)).to.equal(4)
+			expect(resolveMaxAgentsPerTask(0)).to.equal(0)
+			for (const bad of [undefined, null, -1, 2.5, Number.NaN, "3", Number.POSITIVE_INFINITY]) {
+				expect(resolveMaxAgentsPerTask(bad), String(bad)).to.equal(12)
+			}
 		})
 	})
 
