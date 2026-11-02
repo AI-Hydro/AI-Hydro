@@ -163,13 +163,12 @@ export const TraceResult: React.FC<{ info: TraceLayerInfo; palette: TracePalette
 	palette: { muted, accentText, warn },
 }) => {
 	const d = describeTrace(info)
-	const cut = info.truncated === "yes" || info.truncated === "at-cap"
 	return (
 		<div aria-label={`Trace: ${d.title}`} role="group" style={{ marginTop: 6, fontSize: 11, lineHeight: 1.35 }}>
 			<div style={{ fontWeight: 600, wordBreak: "break-word" }}>{d.title}</div>
-			{cut && (
+			{d.cut && (
 				<div role="note" style={{ marginTop: 4, color: warn, fontWeight: 600 }}>
-					{d.notes[0]}
+					{d.cut}
 				</div>
 			)}
 			{d.rows.map(([label, value]) => (
@@ -185,7 +184,7 @@ export const TraceResult: React.FC<{ info: TraceLayerInfo; palette: TracePalette
 					</span>
 				</div>
 			))}
-			{d.notes.slice(cut ? 1 : 0).map((note) => (
+			{d.notes.map((note) => (
 				<div key={note} role="note" style={{ marginTop: 4, color: muted }}>
 					{note}
 				</div>

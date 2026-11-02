@@ -237,9 +237,8 @@ describe("gauge trace block", () => {
 		siteNo: "01013500",
 		direction: "upstream",
 		distanceKm: 50,
-		counts: { upstream: 12 },
-		lengthKm: 6,
-		truncated: "unknown",
+		nFeatures: 12,
+		truncated: false,
 		...over,
 	})
 	const base = {
@@ -295,13 +294,16 @@ describe("gauge trace block", () => {
 				{...base}
 				features={gaugeFeature("01013500")}
 				onTrace={vi.fn()}
-				traces={[info({ truncated: "yes" })]}
+				traces={[info({ truncated: true })]}
 			/>,
 		)
 		const group = screen.getByRole("group", { name: /^Trace: Upstream trace/ })
 		expect(within(group).getByText("50 km along the network")).toBeInTheDocument()
 		expect(within(group).getByText("NLDI navigation over NHDPlus V2")).toBeInTheDocument()
-		expect(within(group).getByText(/^Cut short/)).toBeInTheDocument()
+		// The cut-short note exists and is drawn in the warning colour, not the muted one.
+		const cut = within(group).getByText(/^Cut short: the tool keeps at most 750/)
+		expect(cut.getAttribute("role")).toBe("note")
+		expect(cut).toHaveStyle({ color: "#f2cc60" })
 		expect(within(group).getByText(TRACE_NATURE)).toBeInTheDocument()
 	})
 

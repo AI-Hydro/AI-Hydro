@@ -23,6 +23,28 @@ export interface HostStampedKeys {
 	item_id?: string
 }
 
+/**
+ * Facts a tool states about the layer its run made (tools >= the `layer_meta` change): gauge, direction, distance, whether
+ * it was cut. They ride in the same `provenance` object as extra string keys. Only lower-case snake_case keys, at most
+ * 12, values up to 200 characters; never an envelope key or a key the host owns.
+ */
+export const LAYER_FACT_KEY = /^[a-z][a-z0-9_]{0,39}$/
+export const MAX_LAYER_FACTS = 12
+export const MAX_LAYER_FACT_LENGTH = 200
+const NOT_FACTS: ReadonlySet<string> = new Set([...ENVELOPE_KEYS, "session_id", "project_id", "item_id"])
+
+/** The layer facts in a provenance object. Anything that is not a plain short string under a valid key is dropped. */
+export function readLayerFacts(provenance: object | undefined | null): Record<string, string> {
+	const out: Record<string, string> = {}
+	for (const [key, value] of Object.entries(provenance ?? {})) {
+		if (Object.keys(out).length >= MAX_LAYER_FACTS) break
+		if (NOT_FACTS.has(key) || !LAYER_FACT_KEY.test(key) || typeof value !== "string") continue
+		const text = value.trim()
+		if (text) out[key] = text.slice(0, MAX_LAYER_FACT_LENGTH)
+	}
+	return out
+}
+
 /** What the UI shows for a layer with no `_run_id`. */
 export const NO_RUN_RECORD = "No run record"
 
@@ -68,13 +90,16 @@ export function layerRetrievedAt(meta: MetadataLike): string | undefined {
  * that run was named explicitly. When neither is present the layer has no run record.
  */
 export function runLayerMetadata(
-	provenance: MapProvenanceEnvelope | undefined,
+	provenance: (MapProvenanceEnvelope & Record<string, unknown>) | undefined,
 	legacy: { runId?: string; sessionId?: string },
 ): Record<string, string> {
-	const env = readEnvelope(provenance)
+	const env = readEnvelope(provenance as MetadataLike)
 	const runId = env[RUN_ID_KEY] ?? nonEmpty(legacy.runId)
 	const studyId = env.study_id ?? nonEmpty(legacy.sessionId)
+	const facts = readLayerFacts(provenance)
 	return {
+		...facts,
+		...(Object.keys(facts).length > 0 ? { [FACT_KEYS_KEY]: Object.keys(facts).join(",") } : {}),
 		...env,
 		...(runId ? { [RUN_ID_KEY]: runId } : {}),
 		...(studyId ? { study_id: studyId, session_id: studyId } : {}),
@@ -86,9 +111,25 @@ export function runLayerMetadata(
  * Metadata keys an `update_layer` command may not set, change or erase: the envelope, the host-stamped keys
  * and the `session_id` alias of `study_id`. Provenance is written once, by the pushing call and the host.
  */
-export const PROTECTED_METADATA_KEYS: ReadonlySet<string> = new Set([...ENVELOPE_KEYS, "project_id", "item_id", "session_id"])
+/** Host-stamped: the names of the layer facts a tool stated, so a later `update_layer` cannot edit them. */
+export const FACT_KEYS_KEY = "_fact_keys"
 
-/** `metadata` without the protected keys. */
-export function withoutProtectedKeys(metadata: Record<string, string>): Record<string, string> {
-	return Object.fromEntries(Object.entries(metadata).filter(([k]) => !PROTECTED_METADATA_KEYS.has(k)))
+export const PROTECTED_METADATA_KEYS: ReadonlySet<string> = new Set([
+	...ENVELOPE_KEYS,
+	"project_id",
+	"item_id",
+	"session_id",
+	FACT_KEYS_KEY,
+])
+
+/**
+ * `metadata` without the protected keys, and without the layer facts of the layer being updated (`existing`): they are
+ * evidence about a run, so only the tool that stated them can say them.
+ */
+export function withoutProtectedKeys(
+	metadata: Record<string, string>,
+	existing?: Record<string, string>,
+): Record<string, string> {
+	const facts = new Set((existing?.[FACT_KEYS_KEY] ?? "").split(",").filter(Boolean))
+	return Object.fromEntries(Object.entries(metadata).filter(([k]) => !PROTECTED_METADATA_KEYS.has(k) && !facts.has(k)))
 }

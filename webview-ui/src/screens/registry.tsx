@@ -1326,7 +1326,7 @@ export const screens: ScreenDef[] = [
 			["idle", "Gauge card: trace upstream or downstream, ready (USGS gauge, 50 km default)"],
 			["tracing", "Gauge card: trace asked for in the chat, waiting for its layer"],
 			["result", "Gauge card: a traced layer (direction, distance, source, counts, network query result)"],
-			["truncated", "Gauge card: a trace at the 750-flowline cap, with the cut-short note"],
+			["truncated", "Gauge card: a trace the tool cut at its 750-flowline cap, with the cut-short note"],
 			["unavailable", "Gauge card: not a USGS gauge, so tracing is unavailable and no request is offered"],
 		] as const
 	).map(

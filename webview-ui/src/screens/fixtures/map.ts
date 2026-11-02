@@ -4,6 +4,7 @@
  * metadata.source_status = "synthetic" so exports can never pass as real data.
  */
 import type { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
+import { gaugeFlowlinesEnvelope } from "./gaugeFlowlinesEnvelope"
 
 const style = (over: Partial<MapLayerStyle>): MapLayerStyle => ({
 	color: "#1f78b4",
@@ -400,11 +401,11 @@ export const fixtureTransectsJson = (): string =>
 	])
 
 /**
- * A synthetic gauge_flowlines result: `n` invented short lines west (upstream) or east (downstream) of the fixture gauge.
- * The file name follows the tool's `flowlines_<site>_<direction>_<km>km_<hash8>.geojson`, which is where the map reads the
- * distance from. Nothing here is NHDPlus; `n` = 750 is the tool's per-direction cap.
+ * A synthetic gauge_flowlines layer: `n` invented short lines west (upstream) or east (downstream) of the fixture gauge.
+ * Its metadata is the envelope the real tools produced (`gaugeFlowlinesEnvelope`, captured from gauge_flowlines then
+ * map_add_layer_from_run) with the host's `session_id` alias, and the trace facts set for this variant. Nothing here is NHDPlus.
  */
-export const traceLayer = (direction: "upstream" | "downstream", km: number, n: number): MapLayer => {
+export const traceLayer = (direction: "upstream" | "downstream", km: number, n: number, truncated: boolean): MapLayer => {
 	const sign = direction === "upstream" ? -1 : 1
 	const features = Array.from({ length: n }, (_, i) => {
 		const x0 = -89.9 + sign * (0.004 * i + 0.01)
@@ -429,11 +430,14 @@ export const traceLayer = (direction: "upstream" | "downstream", km: number, n: 
 		geojson: JSON.stringify({ type: "FeatureCollection", features }),
 		style: style({ color: "#1b9e77", strokeColor: "#1b9e77", fillOpacity: 0 }),
 		metadata: {
+			...gaugeFlowlinesEnvelope,
+			session_id: gaugeFlowlinesEnvelope.study_id,
 			source_status: "synthetic",
-			tool: "gauge_flowlines",
-			_run_id: `fx-run-trace-${direction}`,
-			study_id: "fx-study",
-			source_path: `flowlines_00000001_${direction}_${km}km_ab12cd34.geojson`,
+			gauge_id: "00000001",
+			direction,
+			distance_km: String(km),
+			truncated: String(truncated),
+			n_features: String(n),
 		},
 	}
 }

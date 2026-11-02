@@ -91,8 +91,8 @@ const traceGauge = (siteNo: string, layerName: string): ClickedFeature[] => [
 
 export type TraceScreenVariant = "idle" | "tracing" | "result" | "truncated" | "unavailable"
 
-const upstream50 = traceLayerInfo(traceLayer("upstream", 50, 24))
-const downstream200 = traceLayerInfo(traceLayer("downstream", 200, 750))
+const upstream50 = traceLayerInfo(traceLayer("upstream", 50, 24, false))
+const downstream200 = traceLayerInfo(traceLayer("downstream", 200, 750, true))
 const tracingRequest: TraceRequest = { siteNo: "00000001", direction: "upstream", distanceKm: 50, seenLayerIds: [] }
 
 /**

@@ -55,18 +55,29 @@ export function traceAvailability(gauge: GaugeInfo): { available: true } | { ava
 	return { available: true }
 }
 
+/** The request is text a model reads, so what goes into it is checked here, not trusted: a USGS site number and a whole km. */
+function checkedRequest(siteNo: string, km: number): void {
+	if (!/^\d{8,15}$/.test(siteNo)) throw new Error("A trace needs a USGS site number (8 to 15 digits).")
+	if (!Number.isInteger(km) || km < MIN_TRACE_KM || km > MAX_TRACE_KM) {
+		throw new Error(`A trace distance is a whole number of km, ${MIN_TRACE_KM} to ${MAX_TRACE_KM}.`)
+	}
+}
+
 /** The one line that goes into an open chat's input. It carries the whole request: the user reads it and sends it. */
 export function traceComposerText(siteNo: string, direction: TraceDirection, km: number): string {
+	checkedRequest(siteNo, km)
 	return `Trace ${direction} ${km} km from USGS gauge ${siteNo} (gauge_flowlines), then show it on the map:`
 }
 
 /** The layer name the agent is asked to use, so the Layers list says what the layer is without opening it. */
 export function traceLayerName(siteNo: string, direction: TraceDirection, km: number): string {
+	checkedRequest(siteNo, km)
 	return `${directionLabel(direction)} trace, ${km} km, USGS-${siteNo} (NLDI)`
 }
 
 /** The prompt for a new chat. Same request as the composer line, with the steps and what to say about the result. */
 export function buildTracePrompt(siteNo: string, direction: TraceDirection, km: number): string {
+	checkedRequest(siteNo, km)
 	const name = traceLayerName(siteNo, direction, km)
 	return [
 		`Trace the river network ${direction} of USGS gauge ${siteNo}, ${km} km along the network, and show the result on the map.`,
@@ -76,80 +87,52 @@ export function buildTracePrompt(siteNo: string, direction: TraceDirection, km: 
 		"2. If the result has available=false (the gauge is outside the United States, or NLDI does not know it), tell the user so in plain words, give its message, and stop. Do not add a layer and do not guess a network.",
 		"3. If the result is an error, report the code and message. Do not retry with other parameters unless the user asks.",
 		`4. If it has a _run_id and a geometry_file, call \`map_add_layer_from_run\` with that run_id and layer_name='${name}'. If geometry_file is empty (no study), say that no layer could be added and that a study must be open; do not claim a layer.`,
-		`5. Report: direction, distance_km, n_features_returned of n_features_total, and the source (${TRACE_SOURCE}). If truncated is true, say the trace was cut at ${TRACE_FEATURE_CAP} flowlines per direction and that the far end is missing.`,
+		`5. Report: direction, distance_km, n_features_returned of n_features_total, and the source (${TRACE_SOURCE}). If truncated is true, say the trace was cut at ${TRACE_FEATURE_CAP} flowlines per direction and that the far end is missing. The layer carries gauge_id, direction, distance_km and truncated from the run, so do not rename or restyle it to say them.`,
 		"6. Describe it as a network query result, not a modelled flow path. Do not say it shows where water goes, and do not say anything about dams or regulation from it.",
 	].join("\n")
 }
 
 // ── what a traced layer says about itself ────────────────────────────────────
 
+/**
+ * What the tool recorded about the layer, as the layer envelope carries it (aihydro-tools `layer_meta`: `gauge_id`,
+ * `direction`, `distance_km`, `truncated`, `n_features`). Nothing is read from the layer's name or file name and nothing is
+ * inferred: a key an older tools server did not send reads "not recorded", and such a layer never answers a request.
+ */
 export interface TraceLayerInfo {
 	layerId: string
 	layerName: string
 	siteNo?: string
-	/** "both" when the layer holds the two directions. */
-	direction: TraceInfoDirection
+	direction?: TraceDirection | "both"
 	distanceKm?: number
-	/** Flowlines drawn, per direction found in the geometry. Unknown when the geometry is not loaded. */
-	counts?: Partial<Record<TraceDirection, number>>
-	lengthKm?: number
-	/**
-	 * "yes": the tool said it cut the trace (layer metadata `truncated=true`).
-	 * "at-cap": a direction holds exactly the cap, so it may have been cut; the tool's answer is in the chat.
-	 * "no": the tool said it did not (metadata `truncated=false`) and no direction is at the cap.
-	 * "unknown": nothing says, and the geometry is not loaded.
-	 */
-	truncated: "yes" | "at-cap" | "no" | "unknown"
+	/** Flowlines the run kept, as the tool counted them. */
+	nFeatures?: number
+	/** The tool's own flag: true when its per-direction cap cut any direction. Undefined when the run did not say. */
+	truncated?: boolean
 	runId?: string
 	studyId?: string
 }
 
-const FILE_NAME = /flowlines_(\d{8,15})_(upstream|downstream|both)_(\d{1,3})km_[0-9a-f]{8}\.geojson/
+const wholeNumber = (v: string | undefined): number | undefined => (v && /^\d{1,9}$/.test(v) ? Number(v) : undefined)
 
-const asDirection = (v: unknown): TraceDirection | undefined => (v === "upstream" || v === "downstream" ? v : undefined)
-
-/** A layer the trace tool made, described from its own metadata and geometry. Null for any other layer. */
+/** A layer the trace tool made, described from its own metadata. Null for any other layer. */
 export function traceLayerInfo(layer: MapLayer): TraceLayerInfo | null {
 	const meta = layer.metadata ?? {}
 	if (layerTool(meta) !== TRACE_TOOL) return null
-	const fromFile = FILE_NAME.exec(`${meta.source_path ?? ""} ${meta.path ?? ""} ${meta.geometry_file ?? ""}`)
-	const counts: Partial<Record<TraceDirection, number>> = {}
-	let lengthKm: number | undefined
-	try {
-		const doc = layer.geojson ? JSON.parse(layer.geojson) : undefined
-		const features: Array<{ properties?: Record<string, unknown> }> = Array.isArray(doc?.features) ? doc.features : []
-		let len = 0
-		for (const f of features) {
-			const d = asDirection(f.properties?.direction)
-			if (d) counts[d] = (counts[d] ?? 0) + 1
-			const km = Number(f.properties?.length_km)
-			if (Number.isFinite(km)) len += km
-		}
-		if (features.length > 0) lengthKm = Math.round(len * 10) / 10
-	} catch {
-		// Geometry not loaded or not JSON: counts stay unknown, and nothing is guessed.
-	}
-	const found = (Object.keys(counts) as TraceDirection[]).sort()
-	const fileDirection = fromFile?.[2] as TraceDirection | "both" | undefined
-	const direction: TraceInfoDirection = found.length === 2 ? "both" : found.length === 1 ? found[0] : fileDirection
-	const hasCounts = found.length > 0
-	const told = meta.truncated === "true" ? "yes" : meta.truncated === "false" ? "no" : undefined
-	const atCap = found.some((d) => (counts[d] ?? 0) >= TRACE_FEATURE_CAP)
-	const truncated: TraceLayerInfo["truncated"] = told === "yes" ? "yes" : atCap ? "at-cap" : (told ?? "unknown")
+	const site = meta.gauge_id
+	const dir = meta.direction
 	return {
 		layerId: layer.id,
 		layerName: layer.name,
-		siteNo: fromFile?.[1] ?? /USGS-(\d{8,15})/.exec(layer.name)?.[1],
-		direction,
-		...(fromFile ? { distanceKm: Number(fromFile[3]) } : {}),
-		...(hasCounts ? { counts } : {}),
-		...(lengthKm !== undefined ? { lengthKm } : {}),
-		truncated,
+		...(site && /^\d{8,15}$/.test(site) ? { siteNo: site } : {}),
+		...(dir === "upstream" || dir === "downstream" || dir === "both" ? { direction: dir } : {}),
+		...(wholeNumber(meta.distance_km) !== undefined ? { distanceKm: wholeNumber(meta.distance_km) } : {}),
+		...(wholeNumber(meta.n_features) !== undefined ? { nFeatures: wholeNumber(meta.n_features) } : {}),
+		...(meta.truncated === "true" ? { truncated: true } : meta.truncated === "false" ? { truncated: false } : {}),
 		runId: layerRunId(meta),
 		studyId: meta.study_id || meta.session_id || undefined,
 	}
 }
-type TraceInfoDirection = TraceDirection | "both" | undefined
 
 /** The traced layers on the map, in map order. */
 export function traceLayers(layers: MapLayer[]): TraceLayerInfo[] {
@@ -159,26 +142,30 @@ export function traceLayers(layers: MapLayer[]): TraceLayerInfo[] {
 	})
 }
 
-/** The rows a result block shows. Every line is something the layer or the tool's file says. */
-export function describeTrace(info: TraceLayerInfo): { title: string; rows: Array<[string, string]>; notes: string[] } {
-	const rows: Array<[string, string]> = []
-	rows.push(["Direction", info.direction ? directionLabel(info.direction) : "not recorded"])
-	rows.push(["Distance", info.distanceKm !== undefined ? `${info.distanceKm} km along the network` : "not recorded"])
-	rows.push(["Source", TRACE_SOURCE])
-	if (info.counts) {
-		const parts = (Object.keys(info.counts) as TraceDirection[]).sort().map((d) => `${info.counts?.[d]} ${d}`)
-		rows.push(["Flowlines", `${parts.join(", ")}${info.lengthKm !== undefined ? ` · ${info.lengthKm} km` : ""}`])
+/** The rows a result block shows. Every line is something the tool recorded; the rest reads "not recorded". */
+export function describeTrace(info: TraceLayerInfo): {
+	title: string
+	rows: Array<[string, string]>
+	cut?: string
+	notes: string[]
+} {
+	const rows: Array<[string, string]> = [
+		["Direction", info.direction ? directionLabel(info.direction) : "not recorded"],
+		["Distance", info.distanceKm !== undefined ? `${info.distanceKm} km along the network` : "not recorded"],
+		["Source", TRACE_SOURCE],
+		["Flowlines", info.nFeatures !== undefined ? String(info.nFeatures) : "not recorded"],
+		["Cut short", info.truncated === undefined ? "not recorded" : info.truncated ? "yes" : "no"],
+	]
+	return {
+		title: info.layerName,
+		rows,
+		...(info.truncated
+			? {
+					cut: `Cut short: the tool keeps at most ${TRACE_FEATURE_CAP} flowlines per direction and stopped there. The far end is missing.`,
+				}
+			: {}),
+		notes: [TRACE_NATURE],
 	}
-	const notes: string[] = []
-	if (info.truncated === "yes") {
-		notes.push(`Cut short: the trace stopped at ${TRACE_FEATURE_CAP} flowlines in a direction. The far end is missing.`)
-	} else if (info.truncated === "at-cap") {
-		notes.push(
-			`A direction holds exactly ${TRACE_FEATURE_CAP} flowlines, the tool's cap. It may have been cut short; the tool's reply in the chat says whether it was.`,
-		)
-	}
-	notes.push(TRACE_NATURE)
-	return { title: info.layerName, rows, notes }
 }
 
 // ── waiting for the layer ────────────────────────────────────────────────────
@@ -192,7 +179,13 @@ export interface TraceRequest {
 	seenLayerIds: string[]
 }
 
-/** The layer that answers a request: a trace layer for the same gauge that was not there before. */
+/** The layer that answers a request: new, and recorded by the tool as this gauge, direction and distance. */
 export function arrivedTrace(request: TraceRequest, traces: TraceLayerInfo[]): TraceLayerInfo | undefined {
-	return traces.find((t) => t.siteNo === request.siteNo && !request.seenLayerIds.includes(t.layerId))
+	return traces.find(
+		(t) =>
+			t.siteNo === request.siteNo &&
+			t.direction === request.direction &&
+			t.distanceKm === request.distanceKm &&
+			!request.seenLayerIds.includes(t.layerId),
+	)
 }

@@ -54,7 +54,7 @@ const mapCommandObject = z.object({
 	geojson: z.string().max(MAX_RUN_GEOJSON_LENGTH).optional(),
 	run_id: z.string().max(MAX_ID_LENGTH).optional(),
 	session_id: z.string().max(MAX_ID_LENGTH).optional(),
-	/** The provenance envelope (tools >= 2.8.3). Only the envelope keys survive parsing. */
+	/** The provenance envelope (tools >= 2.8.3), plus the layer facts a tool states (extra short string keys, bounded by `readLayerFacts`). */
 	provenance: z
 		.object({
 			chat_id: z.string().max(MAX_ID_LENGTH).optional(),
@@ -64,6 +64,7 @@ const mapCommandObject = z.object({
 			retrieved_at: z.string().max(64).optional(),
 			source: z.string().max(MAX_NAME_LENGTH).optional(),
 		})
+		.catchall(z.unknown())
 		.optional(),
 	auto_zoom: z.boolean().optional(),
 	// set_time_range

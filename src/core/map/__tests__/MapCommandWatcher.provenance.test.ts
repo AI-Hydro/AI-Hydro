@@ -27,13 +27,55 @@ describe("MapCommandWatcher add_layer_from_run provenance", () => {
 			geojson: GEOJSON,
 			run_id: "run-1",
 			session_id: "st_1",
-			provenance: { _run_id: "run-1", study_id: "st_1", chat_id: "chat-1", tool: "delineate_watershed", unknown: "x" },
+			provenance: {
+				_run_id: "run-1",
+				study_id: "st_1",
+				chat_id: "chat-1",
+				tool: "delineate_watershed",
+				"Unknown Key": "x",
+			},
 		})
 		expect(layer.metadata._run_id).to.equal("run-1")
 		expect(layer.metadata.chat_id).to.equal("chat-1")
 		expect(layer.metadata.tool).to.equal("delineate_watershed")
 		expect(layer.metadata).to.not.have.property("run_id")
-		expect(layer.metadata).to.not.have.property("unknown")
+		expect(layer.metadata).to.not.have.property("Unknown Key")
+	})
+
+	it("copies the facts a tool states about its layer, and never lets them replace the envelope or host keys", async () => {
+		const [layer] = await apply({
+			type: "add_layer_from_run",
+			layer_id: "l4",
+			geojson: GEOJSON,
+			run_id: "run-4",
+			provenance: {
+				_run_id: "run-4",
+				study_id: "st_1",
+				tool: "gauge_flowlines",
+				gauge_id: "01013500",
+				direction: "upstream",
+				distance_km: "50",
+				truncated: "false",
+				n_features: "214",
+				session_id: "forged",
+				project_id: "forged",
+				item_id: "forged",
+				count_as_number: 3,
+			},
+		})
+		expect(layer.metadata).to.include({
+			gauge_id: "01013500",
+			direction: "upstream",
+			distance_km: "50",
+			truncated: "false",
+			n_features: "214",
+		})
+		expect(layer.metadata.tool).to.equal("gauge_flowlines")
+		expect(layer.metadata.session_id).to.equal("st_1") // the study's alias, not the forged value
+		expect(layer.metadata).to.not.have.property("project_id")
+		expect(layer.metadata).to.not.have.property("item_id")
+		expect(layer.metadata).to.not.have.property("count_as_number")
+		expect(layer.metadata._fact_keys).to.equal("gauge_id,direction,distance_km,truncated,n_features")
 	})
 
 	it("an older tools server (no provenance object) still gets _run_id from run_id", async () => {
@@ -51,7 +93,11 @@ describe("MapCommandWatcher add_layer_from_run provenance", () => {
 describe("update_layer cannot forge or erase provenance", () => {
 	it("skips envelope, host-stamped and alias keys, and applies the rest", () => {
 		const patches: any[] = []
-		const controller = { updateMapLayer: (_id: string, p: any) => (patches.push(p), true), mapSessionService: {} }
+		const controller = {
+			updateMapLayer: (_id: string, p: any) => (patches.push(p), true),
+			getMapLayers: () => [],
+			mapSessionService: {},
+		}
 		const watcher = new MapCommandWatcher(controller as any)
 		const cmd = mapCommandSchema.parse({
 			type: "update_layer",
@@ -72,6 +118,38 @@ describe("update_layer cannot forge or erase provenance", () => {
 		return (watcher as any).applyCommand(cmd).then(() => {
 			expect(patches[0].metadata).to.deep.equal({ note: "kept" })
 		})
+	})
+})
+
+describe("update_layer cannot edit the facts a tool stated about a layer", () => {
+	it("an added layer's fact keys cannot be changed, erased or forged afterwards, and other metadata still can", async () => {
+		const [layer] = await apply({
+			type: "add_layer_from_run",
+			layer_id: "f1",
+			geojson: GEOJSON,
+			run_id: "run-f",
+			provenance: {
+				_run_id: "run-f",
+				tool: "gauge_flowlines",
+				gauge_id: "01013500",
+				truncated: "false",
+				_fact_keys: "forged",
+			},
+		})
+		expect(layer.metadata._fact_keys).to.equal("gauge_id,truncated") // host-stamped; a forged value is not read
+		const patches: any[] = []
+		const controller = {
+			updateMapLayer: (_id: string, p: any) => (patches.push(p), true),
+			getMapLayers: () => [layer],
+			mapSessionService: {},
+		}
+		const cmd = mapCommandSchema.parse({
+			type: "update_layer",
+			layer_id: "f1",
+			metadata: { gauge_id: "09999999", truncated: "true", _fact_keys: "", note: "kept" },
+		})
+		await (new MapCommandWatcher(controller as any) as any).applyCommand(cmd)
+		expect(patches[0].metadata).to.deep.equal({ note: "kept" })
 	})
 })
 

@@ -13,14 +13,15 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ### Added — trace upstream and downstream from a gauge (P6, branch `vision2040/map-tracing`)
 
-Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`, P6. Uses `gauge_flowlines` from aihydro-tools 2.8.7 (NLDI, US only, 750 flowlines per direction).
+Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`, P6. Uses `gauge_flowlines` (aihydro-tools 2.8.7: NLDI, US only, 750 flowlines per direction). **Needs the aihydro-tools change that records `layer_meta` (PR AI-Hydro/aihydro-tools#46, unreleased)** for the card to describe a trace; with an older tools server the trace still draws, and the card says "not recorded" for each fact it cannot read.
 
-- The gauge card has a **Trace** block: a distance (1 to 200 km, 50 by default) and **Upstream** / **Downstream**. It asks the agent, the same path as Delineate: an open chat gets one line to send, otherwise a chat starts. The map runs no tool and calls no host, so approvals are the chat's and unchanged.
-- The card shows a waiting state until the layer arrives (and **Stop waiting**), and then describes each trace layer of the gauge: direction, distance, source (NLDI navigation over NHDPlus V2), flowline count and length, a cut-short note, and "a network query result, not a modelled flow path". A clicked trace line shows the same block. A direction with exactly 750 flowlines reads "may have been cut short"; the layer cannot tell a full 750 from a cut one.
+- The gauge card has a **Trace** block: a distance (1 to 200 km, 50 by default) and **Upstream** / **Downstream**. It asks the agent, the same path as Delineate: an open chat gets one line to send, otherwise a chat starts. The map runs no tool and calls no host, so approvals are the chat's and unchanged. The request text is built only from a checked USGS site number and a whole km.
+- The card shows a waiting state until a new layer arrives that the tool recorded as the same gauge, direction and distance (and **Stop waiting**). A layer that records none of these never answers a request, so waiting is never ended by a guess.
+- The card then describes each trace layer of the gauge from what the tool recorded in the layer envelope (`gauge_id`, `direction`, `distance_km`, `truncated`, `n_features`): direction, distance, source (NLDI navigation over NHDPlus V2), flowline count, whether the tool cut it, and "a network query result, not a modelled flow path". Nothing is read from the layer's name or file name; a missing key reads "not recorded". A clicked trace line shows the same block (a line with `nhdplus_comid` is a River reach).
+- **Host**: an `add_layer_from_run` command's `provenance` may now carry extra short string keys (lower-case snake_case, at most 12, 200 characters, never an envelope key or a host-owned key); they become layer metadata, and the host records their names in `_fact_keys` so `update_layer` cannot edit or erase them (they are evidence about a run). Before, the host dropped every key but the six envelope keys.
 - A gauge that is not a USGS site number shows a plain unavailable message and offers no trace. For a US id NLDI does not know, the prompt tells the agent to say so and add no layer.
-- A line carrying `nhdplus_comid` is a River reach.
-- Harness screens `map-trace-idle`, `-tracing`, `-result`, `-truncated`, `-unavailable`.
-- Not done: the trace layer is solid, not dashed upstream (dashes mean modelled lines in this map's evidence grammar); the map does not read the tool's `truncated` flag, since the layer carries no such key; hydrograph, legend and bottom table are out of scope.
+- Harness screens `map-trace-idle`, `-tracing`, `-result`, `-truncated`, `-unavailable`; their layer metadata is the envelope captured from the real tools (`screens/fixtures/gaugeFlowlinesEnvelope.ts`).
+- Not done: the trace layer is solid, not dashed upstream (dashes mean modelled lines in this map's evidence grammar); hydrograph, legend and bottom table are out of scope.
 
 ---
 

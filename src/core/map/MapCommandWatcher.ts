@@ -160,7 +160,10 @@ export class MapCommandWatcher {
 					patch.style = cmd.style as MapLayerPatch["style"]
 				}
 				if (cmd.metadata) {
-					patch.metadata = withoutProtectedKeys(cmd.metadata)
+					patch.metadata = withoutProtectedKeys(
+						cmd.metadata,
+						this.controller.getMapLayers().find((l) => l.id === cmd.layer_id)?.metadata,
+					)
 				}
 				if (cmd.visible !== undefined) {
 					patch.visible = cmd.visible

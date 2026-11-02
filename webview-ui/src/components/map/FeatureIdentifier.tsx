@@ -137,7 +137,7 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 	// A clicked line of a trace layer says what the trace is; a clicked gauge offers a trace and lists its traces.
 	const clickedTrace = hasFeatures ? traces.find((t) => t.layerId === current.layerId) : undefined
 	const gaugeTraces = gauge ? traces.filter((t) => t.siteNo === gauge.siteNo) : []
-	const tracePalette = { fg, muted, accentText, border: bdClr, warn: fg }
+	const tracePalette = { fg, muted, accentText, border: bdClr, warn: isDark ? "#f2cc60" : "#7a5b00" }
 	const entries = showAll ? allEntries : allEntries.slice(0, PROPS_SHOWN)
 	const extra = allEntries.length - PROPS_SHOWN
 
