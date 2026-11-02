@@ -398,3 +398,42 @@ export const fixtureTransectsJson = (): string =>
 			updatedAt: "2026-01-01T00:00:00.000Z",
 		},
 	])
+
+/**
+ * A synthetic gauge_flowlines result: `n` invented short lines west (upstream) or east (downstream) of the fixture gauge.
+ * The file name follows the tool's `flowlines_<site>_<direction>_<km>km_<hash8>.geojson`, which is where the map reads the
+ * distance from. Nothing here is NHDPlus; `n` = 750 is the tool's per-direction cap.
+ */
+export const traceLayer = (direction: "upstream" | "downstream", km: number, n: number): MapLayer => {
+	const sign = direction === "upstream" ? -1 : 1
+	const features = Array.from({ length: n }, (_, i) => {
+		const x0 = -89.9 + sign * (0.004 * i + 0.01)
+		const y0 = 38.85 + 0.01 * Math.sin(i / 3) + 0.0003 * (i % 7)
+		return {
+			type: "Feature",
+			properties: { nhdplus_comid: 900000 + i, direction, length_km: 0.4, source_status: "synthetic" },
+			geometry: {
+				type: "LineString",
+				coordinates: [
+					[x0, y0],
+					[x0 + sign * 0.004, y0 + 0.0008],
+				],
+			},
+		}
+	})
+	return {
+		id: `fx-trace-${direction}`,
+		name: `${direction === "upstream" ? "Upstream" : "Downstream"} trace, ${km} km, USGS-00000001 (NLDI)`,
+		layerType: "line",
+		visible: true,
+		geojson: JSON.stringify({ type: "FeatureCollection", features }),
+		style: style({ color: "#1b9e77", strokeColor: "#1b9e77", fillOpacity: 0 }),
+		metadata: {
+			source_status: "synthetic",
+			tool: "gauge_flowlines",
+			_run_id: `fx-run-trace-${direction}`,
+			study_id: "fx-study",
+			source_path: `flowlines_00000001_${direction}_${km}km_ab12cd34.geojson`,
+		},
+	}
+}

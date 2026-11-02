@@ -9,6 +9,7 @@ import {
 	type MapAnnotationContext,
 	type MapBatchAnnotationsContext,
 } from "./mapAgentPrompts"
+import { buildTracePrompt, type TraceDirection, traceComposerText } from "./networkTrace"
 
 export type { MapAgentInspectContext, MapAnnotationContext, MapBatchAnnotationsContext }
 
@@ -101,6 +102,22 @@ function launchHint(ctx: MapAgentInspectContext, userQuestion?: string, composer
 export async function askAgentToDelineate(ctx: MapAgentInspectContext): Promise<MapAgentStartResult> {
 	const prompt = buildDelineateAgentPrompt(ctx)
 	return startMapAgentTask(prompt, launchHint(ctx, undefined, "Delineate the watershed at this point:"))
+}
+
+/**
+ * Ask the agent to trace the river network from a USGS gauge. The map does not run the tool: the call, its approval and its
+ * run record belong to the chat. An open chat gets one self-contained line to send; a new chat gets the full prompt.
+ */
+export async function askAgentToTrace(
+	ctx: MapAgentInspectContext,
+	siteNo: string,
+	direction: TraceDirection,
+	distanceKm: number,
+): Promise<MapAgentStartResult> {
+	return startMapAgentTask(
+		buildTracePrompt(siteNo, direction, distanceKm),
+		launchHint(ctx, undefined, traceComposerText(siteNo, direction, distanceKm)),
+	)
 }
 
 export async function askAgentAboutMap(ctx: MapAgentInspectContext, userQuestion?: string): Promise<MapAgentStartResult> {

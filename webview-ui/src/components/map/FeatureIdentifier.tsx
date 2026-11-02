@@ -1,11 +1,13 @@
 import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import React, { useEffect, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
+import { GaugeTraceSection, TraceResult } from "./GaugeTraceSection"
 import { GAUGE_BLOCK_KEYS, gaugeInfo } from "./gaugeInfo"
 import { originOf } from "./layerModel"
 import { actionTooltip, KIND_LABEL, type MapActionId, mapActions, objectKind, routingWarning } from "./mapActions"
 import type { CursorRasterReading } from "./mapLayerAdapters"
 import { MAP_Z } from "./mapZ"
+import type { TraceDirection, TraceLayerInfo, TraceRequest } from "./networkTrace"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { PhotoStrip } from "./PhotoStrip"
 import { extractPhotoPaths } from "./photoPaths"
@@ -45,6 +47,15 @@ interface FeatureIdentifierProps {
 	onMeasureFrom?: (point: MapInspectPoint) => void
 	onCopyCoords?: (point: MapInspectPoint) => void
 	onRemoveLayer?: (layerId: string) => void | Promise<void>
+	/** Trace layers on the map (the Results group), for a gauge's trace block and for a clicked trace line. */
+	traces?: TraceLayerInfo[]
+	/** A trace asked for in the chat whose layer has not arrived. */
+	traceRequest?: TraceRequest | null
+	/** Why the last trace request did not go out. */
+	traceNote?: string | null
+	/** Ask the agent to trace from this gauge. Without it the card shows what exists but offers no trace. */
+	onTrace?: (siteNo: string, direction: TraceDirection, distanceKm: number) => void
+	onStopWaitingForTrace?: () => void
 }
 
 /** How many properties show before "Show all". */
@@ -73,6 +84,11 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 	onMeasureFrom,
 	onCopyCoords,
 	onRemoveLayer,
+	traces = [],
+	traceRequest,
+	traceNote,
+	onTrace,
+	onStopWaitingForTrace,
 }) => {
 	const [currentIndex, setCurrentIndex] = useState(0)
 	const [showAll, setShowAll] = useState(false)
@@ -118,6 +134,10 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 				([k]) => !k.startsWith("_") && !PHOTO_KEYS.has(k) && !(gauge && GAUGE_BLOCK_KEYS.has(k)),
 			)
 		: []
+	// A clicked line of a trace layer says what the trace is; a clicked gauge offers a trace and lists its traces.
+	const clickedTrace = hasFeatures ? traces.find((t) => t.layerId === current.layerId) : undefined
+	const gaugeTraces = gauge ? traces.filter((t) => t.siteNo === gauge.siteNo) : []
+	const tracePalette = { fg, muted, accentText, border: bdClr, warn: fg }
 	const entries = showAll ? allEntries : allEntries.slice(0, PROPS_SHOWN)
 	const extra = allEntries.length - PROPS_SHOWN
 
@@ -337,7 +357,12 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 				</button>
 			</div>
 
-			{(rasterReading || gauge || entries.length > 0 || (!hasFeatures && !rasterReading) || showActions) && (
+			{(rasterReading ||
+				gauge ||
+				clickedTrace ||
+				entries.length > 0 ||
+				(!hasFeatures && !rasterReading) ||
+				showActions) && (
 				<div style={{ padding: "6px 8px", overflowY: "auto", flex: 1, minHeight: 0 }}>
 					{rasterReading && (
 						<div style={{ marginBottom: entries.length > 0 ? 6 : 0, fontSize: 11 }}>
@@ -393,6 +418,19 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 							)}
 						</div>
 					)}
+					{gauge && (onTrace || traceRequest || gaugeTraces.length > 0) && (
+						<GaugeTraceSection
+							busy={agentStarting}
+							gauge={gauge}
+							onStopWaiting={onStopWaitingForTrace}
+							onTrace={onTrace ? (d, km) => onTrace(gauge.siteNo, d, km) : undefined}
+							palette={tracePalette}
+							request={traceRequest}
+							requestNote={traceNote}
+							traces={gaugeTraces}
+						/>
+					)}
+					{clickedTrace && !gauge && <TraceResult info={clickedTrace} palette={tracePalette} />}
 					{entries.map(([key, value]) => (
 						<div
 							key={key}

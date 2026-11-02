@@ -80,7 +80,13 @@ import MapLegend from "./MapLegend"
 import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
-import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext, mapLayerStudyHint } from "./mapAgentBridge"
+import {
+	askAgentAboutMap,
+	askAgentToDelineate,
+	askAgentToTrace,
+	type MapAgentInspectContext,
+	mapLayerStudyHint,
+} from "./mapAgentBridge"
 import { buildMapRef } from "./mapAgentRef"
 import { panelFamily, useMapChrome } from "./mapChrome"
 import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapHydroGuards"
@@ -95,6 +101,7 @@ import {
 	saveMapWorkspace,
 } from "./mapWorkspace"
 import { MAP_Z } from "./mapZ"
+import { arrivedTrace, type TraceDirection, type TraceRequest, traceLayers } from "./networkTrace"
 import PinCard from "./PinCard"
 import PinsPanel from "./PinsPanel"
 import { DASH_EXTENSION } from "./pathStyle"
@@ -1313,6 +1320,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const [delineating, setDelineating] = useState(false)
 	const [delineateStatus, setDelineateStatus] = useState<string | null>(null)
 	const [agentStarting, setAgentStarting] = useState(false)
+	// A trace asked for in the chat, until its layer arrives (P6). The map never runs the tool itself.
+	const [traceRequest, setTraceRequest] = useState<TraceRequest | null>(null)
+	const [traceNote, setTraceNote] = useState<string | null>(null)
 	const [agentStatus, setAgentStatus] = useState<string | null>(null)
 	const [inspectRasterReading, setInspectRasterReading] = useState<CursorRasterReading | null>(null)
 	const [contextMenu, setContextMenu] = useState<{
@@ -3340,6 +3350,51 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		[sortedLayers, visibleLayerIds, selectedFeatures],
 	)
 
+	const traces = useMemo(() => traceLayers(layers), [layers])
+	useEffect(() => {
+		if (traceRequest && arrivedTrace(traceRequest, traces)) {
+			setTraceRequest(null)
+		}
+	}, [traceRequest, traces])
+
+	const handleAgentTrace = useCallback(
+		async (
+			pt: MapInspectPoint,
+			features: ClickedFeature[],
+			siteNo: string,
+			direction: TraceDirection,
+			distanceKm: number,
+		) => {
+			setAgentStarting(true)
+			setAgentStatus(null)
+			setTraceNote(null)
+			const ctx = buildMapAgentContext(pt, features, sortedLayers, visibleLayerIds, selectedFeatures)
+			try {
+				const result = await askAgentToTrace(ctx, siteNo, direction, distanceKm)
+				if (result.ok) {
+					setTraceRequest({ siteNo, direction, distanceKm, seenLayerIds: traces.map((t) => t.layerId) })
+					setAgentStatus(
+						agentLaunchStatus(
+							result,
+							"Chat opened with the trace request. Send it when ready, then approve the tool call.",
+						),
+					)
+				} else {
+					setTraceNote(
+						result.cancelled
+							? "Kept the current chat. Nothing was traced."
+							: result.error || "Could not start the trace",
+					)
+				}
+			} catch (e) {
+				setTraceNote(e instanceof Error ? e.message : String(e))
+			} finally {
+				setAgentStarting(false)
+			}
+		},
+		[sortedLayers, visibleLayerIds, selectedFeatures, traces],
+	)
+
 	const handleAgentDelineate = useCallback(
 		async (pt: MapInspectPoint, features: ClickedFeature[]) => {
 			setAgentStarting(true)
@@ -3867,6 +3922,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						setInspectRasterReading(null)
 						setDelineateStatus(null)
 						setAgentStatus(null)
+						setTraceNote(null)
 					}}
 					onCopyCoords={() => {}}
 					onMeasureFrom={(pt) => {
@@ -3883,8 +3939,15 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						}
 					}}
 					onSaveFeatures={saveFeaturesToWorkspace}
+					onStopWaitingForTrace={() => setTraceRequest(null)}
+					onTrace={(siteNo, direction, km) =>
+						inspectPoint && void handleAgentTrace(inspectPoint, clickedFeatures, siteNo, direction, km)
+					}
 					rasterReading={inspectRasterReading}
 					selectedFeatures={selectedFeatures}
+					traceNote={traceNote}
+					traceRequest={traceRequest}
+					traces={traces}
 				/>
 
 				{contextMenu && (

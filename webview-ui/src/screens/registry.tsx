@@ -53,7 +53,7 @@ import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replayS
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
 import * as tx from "./fixtures/transcripts"
 import { MapBannerVariantsScreen } from "./MapBannerVariantsScreen"
-import { MapIdentifyGaugeScreen, MapIdentifyScreen } from "./MapIdentifyScreen"
+import { MapIdentifyGaugeScreen, MapIdentifyScreen, MapTraceScreen } from "./MapIdentifyScreen"
 import { PrimitivesScreen } from "./PrimitivesScreen"
 import type { ScreenDef, ScreenStep } from "./types"
 
@@ -1321,6 +1321,24 @@ export const screens: ScreenDef[] = [
 		render: () => <MapIdentifyGaugeScreen />,
 		expectVisible: ['[aria-label="Gauge"]'],
 	},
+	...(
+		[
+			["idle", "Gauge card: trace upstream or downstream, ready (USGS gauge, 50 km default)"],
+			["tracing", "Gauge card: trace asked for in the chat, waiting for its layer"],
+			["result", "Gauge card: a traced layer (direction, distance, source, counts, network query result)"],
+			["truncated", "Gauge card: a trace at the 750-flowline cap, with the cut-short note"],
+			["unavailable", "Gauge card: not a USGS gauge, so tracing is unavailable and no request is offered"],
+		] as const
+	).map(
+		([variant, title]): ScreenDef => ({
+			id: `map-trace-${variant}`,
+			title,
+			group: "map",
+			surface: "editor",
+			render: () => <MapTraceScreen variant={variant} />,
+			expectVisible: ['[aria-label="Gauge"]'],
+		}),
+	),
 	mapScreen("map-error-imagery", "Map with every basemap tile failing (alert, Retry imagery)", { layers: [basinPolygon] }),
 	mapScreen("map-error-partial-tiles", "Map with one basemap tile missing (quiet note, no alert)", { layers: [basinPolygon] }),
 	mapScreen("map-empty-panel-open", "No layers with a tool panel open (no empty-state card)", {

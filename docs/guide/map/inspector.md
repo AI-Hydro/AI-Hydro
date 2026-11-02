@@ -15,10 +15,23 @@ Click anywhere on the map canvas (outside of any active drawing tool) to open th
 | **Title and kind** | The layer's name, then what was clicked: Gauge, River reach, Basin, Feature or Map point, with the click's coordinates |
 | **Run line** | The tool and run that made the layer, with **Open** (opens the run in Replay). A MERIT, NWIS, WBD or NID layer no run made reads "Reference, not in any run" |
 | **Gauge** (a gauge only) | USGS site, name, drainage area and period of record when the layer reports them (otherwise "not reported"), and a link to the USGS monitoring-location page |
+| **Trace** (a gauge only) | A distance (1 to 200 km, 50 by default) and **Upstream** and **Downstream** buttons, then every trace of this gauge already on the map. See [Trace upstream and downstream](#trace-upstream-and-downstream) |
 | **Properties** | The first six, then **Show all (N)**. Photos show as a strip |
 | **Raster value** | Pixel value from the topmost visible analysis-ready raster at that point, with the layer name and units |
 
 > **Raster readings require a local GeoTIFF with raw pixel values loaded.** Python-pushed preview PNGs and GEE tiles do not return per-pixel values. If the raster section is empty, open the layer's drawer, choose **Style** and **Load raster values**.
+
+---
+
+## Trace upstream and downstream
+
+From a gauge card, **Upstream** or **Downstream** with a distance asks the agent to run `gauge_flowlines`. The map does not run the tool itself: the request goes into the chat as one line (or starts a chat), you send it, and you approve the tool call as for any other tool. The card then says it is waiting; **Stop waiting** forgets the request without cancelling anything in the chat.
+
+The result is a layer in **Results**, named for its direction, distance and gauge, and it belongs to the run that made it (**Open run** in its Layers row menu, or **Open** on the card of a clicked trace line). The card describes it: direction, distance, source (NLDI navigation over NHDPlus V2), the flowline count and length, and whether the cap cut it. The tool keeps at most 750 flowlines per direction. A direction that holds exactly 750 reads "may have been cut short", because the layer alone cannot tell a full 750 from a cut one; the tool's reply in the chat does.
+
+- **It is a network query result, not a modelled flow path.** NLDI lists the flowlines within the distance along the network (upstream: every tributary; downstream: the main stem). It says nothing about regulation, perennial flow or gauge coverage. The line is drawn solid: dashes on this map mean modelled lines.
+- **United States only.** A gauge that is not a USGS site number gets a plain "tracing is unavailable" message and no buttons. A US id NLDI does not know is learned by asking: the agent says so, and no layer is added.
+- **No trace over the MERIT layer.** The loaded MERIT rivers are clipped to the view, so a trace over them would be incomplete and wrong without saying so.
 
 ---
 

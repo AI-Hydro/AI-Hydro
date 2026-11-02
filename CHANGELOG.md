@@ -9,6 +9,21 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [Unreleased]
+
+### Added — trace upstream and downstream from a gauge (P6, branch `vision2040/map-tracing`)
+
+Report: `docs/vision-2040/findings/refine-map-2026-10-31.md`, P6. Uses `gauge_flowlines` from aihydro-tools 2.8.7 (NLDI, US only, 750 flowlines per direction).
+
+- The gauge card has a **Trace** block: a distance (1 to 200 km, 50 by default) and **Upstream** / **Downstream**. It asks the agent, the same path as Delineate: an open chat gets one line to send, otherwise a chat starts. The map runs no tool and calls no host, so approvals are the chat's and unchanged.
+- The card shows a waiting state until the layer arrives (and **Stop waiting**), and then describes each trace layer of the gauge: direction, distance, source (NLDI navigation over NHDPlus V2), flowline count and length, a cut-short note, and "a network query result, not a modelled flow path". A clicked trace line shows the same block. A direction with exactly 750 flowlines reads "may have been cut short"; the layer cannot tell a full 750 from a cut one.
+- A gauge that is not a USGS site number shows a plain unavailable message and offers no trace. For a US id NLDI does not know, the prompt tells the agent to say so and add no layer.
+- A line carrying `nhdplus_comid` is a River reach.
+- Harness screens `map-trace-idle`, `-tracing`, `-result`, `-truncated`, `-unavailable`.
+- Not done: the trace layer is solid, not dashed upstream (dashes mean modelled lines in this map's evidence grammar); the map does not read the tool's `truncated` flag, since the layer carries no such key; hydrograph, legend and bottom table are out of scope.
+
+---
+
 ## [0.4.6] — 2026-11-01 (map: fewer places for one action, one file one layer; agent loop: the audit gate runs and says when it did not, Plan mode is read-only, follow-ups are conversation, compact tool schemas, honest exit)
 
 ### Changed — P1 subtraction pass on the map (branch `vision2040/map-subtract`)
