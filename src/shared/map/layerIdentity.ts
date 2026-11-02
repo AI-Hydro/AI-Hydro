@@ -69,6 +69,19 @@ export function resolvedSourcePath(meta: Record<string, string> | undefined, rea
 	return undefined
 }
 
+/**
+ * A path as a shared output (a map plate sidecar, an export record) should carry it: relative to the project folder when
+ * it lies inside it, so the user's home directory is not written into a file that leaves the machine. A path outside the
+ * folder, or with no folder given, is returned as it is: it cannot be made relative, and dropping it would lose where the
+ * data came from.
+ */
+export function pathForExport(p: string | undefined, workspaceFolder: string | undefined): string | undefined {
+	if (!p || !workspaceFolder || !isAbsolute(p)) return p
+	const file = norm(p)
+	const folder = norm(workspaceFolder).replace(/\/$/, "")
+	return file.startsWith(`${folder}/`) ? file.slice(folder.length + 1) : p
+}
+
 /** A short, stable tag for a resolved path, for ids: two files with one name in two folders must not share an id. */
 export function pathHash(resolvedPath: string): string {
 	let h = 0x811c9dc5

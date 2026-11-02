@@ -35,6 +35,10 @@ Owner report on 0.4.6: Reload source, Add file and drag-and-drop made duplicate 
 - **A restored cached layer survives the next restart.** A layer restored with no content in memory wrote a blank cache path and a blank workspace path back to the catalog, so the restart after that lost it. The catalog now keeps the cache path it was restored from.
 - **Two files with one name keep two ids.** File layers take a short hash of their resolved path (`user-<name>-<hash>`), `workspace_` ids take one too (`a/b.geojson` and `a_b.geojson` no longer share an id), and a same-id add of a different file is a new layer, not an overwrite. Files with no path keep the name-only id.
 - The "A source file changed" line appears only when a layer on the map is that file.
+- **A named file edited between sessions is not drawn from an old preview.** The map draws a stored preview (`display_geojson_path`) before anything else, and restore kept it. For a layer that names a file and is not a tool's, restore now drops the stored preview and rebuilds it from the text it just read. A tool's layer keeps its preview. The preview directory is now resolved per call (`AIHYDRO_HOME`), as the cache directory already was.
+- **Cache and preview file names are collision-free.** `run:x` and `run_x` both became `run_x.geojson`, so one layer overwrote the other's copy. An id with unsafe characters now gets a short hash of the whole id in its file name; safe ids keep their names.
+- **A layer drawn from a saved copy says so.** When the file a layer names cannot be read and the map draws the cache copy, the host marks the layer `Source status: File not found` (one message, `aihydro-map-layer-source-status`, which accepts only that status).
+- **Shared outputs name project files relative to the project.** The map plate sidecar and export record write a `source_path` inside the project folder as a relative path. A path outside the folder is left as it is. Not changed: a saved map scene keeps absolute paths (reopening it needs them to find the same file); the Python `map_get_state` and capsule export read layer metadata in `aihydro-tools`, which this repository cannot change.
 
 ---
 

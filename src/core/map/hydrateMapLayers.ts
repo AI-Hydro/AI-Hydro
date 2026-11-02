@@ -112,6 +112,21 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 	if (!entry.geojson_cache_path && !named) {
 		return null
 	}
+	// A layer that names a file (and is not a tool's) is that file as it is now. A stored preview was made from the file
+	// as it was, and the map draws a preview first, so it is dropped and rebuilt from the text read below.
+	if (named && !(meta.tool || meta._run_id) && meta.display_geojson_path) {
+		for (const key of [
+			"display_geojson_path",
+			"display_mode",
+			"original_feature_count",
+			"preview_feature_count",
+			"original_coord_count",
+			"preview_coord_count",
+			"preview_bytes",
+		]) {
+			delete meta[key]
+		}
+	}
 	const source = await readEntryGeojson(entry, meta)
 	if (source && !meta.display_geojson_path) {
 		try {

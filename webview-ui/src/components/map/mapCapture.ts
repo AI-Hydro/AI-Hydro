@@ -1,3 +1,5 @@
+import { pathForExport } from "@shared/map/layerIdentity"
+
 /** Copy this map's current pixels before yielding to dialogs or asynchronous export. */
 export function freezeMapCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
 	if (source.width < 1 || source.height < 1) throw new Error("Map canvas has no rendered pixels")
@@ -49,5 +51,8 @@ const EXPORT_METADATA = new Set([
 ])
 
 export function exportLayerMetadata(metadata: Record<string, string> = {}): Record<string, string> {
-	return Object.fromEntries(Object.entries(metadata).filter(([key]) => EXPORT_METADATA.has(key)))
+	const out = Object.fromEntries(Object.entries(metadata).filter(([key]) => EXPORT_METADATA.has(key)))
+	// A source file inside the project is named relative to it: a shared plate does not carry the user's home directory.
+	if (out.source_path) out.source_path = pathForExport(out.source_path, metadata.workspace_folder) ?? out.source_path
+	return out
 }

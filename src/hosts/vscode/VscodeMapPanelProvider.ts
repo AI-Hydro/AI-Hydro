@@ -857,6 +857,19 @@ export class VscodeMapPanelProvider {
 						}
 						break
 					}
+					case "aihydro-map-layer-source-status": {
+						// The map drew a saved copy because a layer's file could not be read. Only that one status is accepted.
+						if (
+							mainWebview?.controller &&
+							typeof message.layerId === "string" &&
+							message.status === "source_missing"
+						) {
+							mainWebview.controller.updateMapLayer(message.layerId, {
+								metadata: { source_status: "source_missing" },
+							})
+						}
+						break
+					}
 					case "aihydro-hydro-command": {
 						if (mainWebview?.controller) {
 							await handleHydroMapCommand(mainWebview.controller, message, async (response) => {

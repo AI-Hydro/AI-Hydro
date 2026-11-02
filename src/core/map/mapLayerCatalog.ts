@@ -6,6 +6,7 @@ import { constants as fsConstants } from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
+import { layerFileStem } from "./layerFileStem"
 
 /** Directory holding the catalog files. Resolved per call (honours AIHYDRO_HOME); overridable so tests never touch the real one. */
 export function defaultAihydroDir(): string {
@@ -278,8 +279,7 @@ async function cacheLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 	}
 	try {
 		await fs.mkdir(geojsonCacheDir(), { recursive: true })
-		const safeId = layer.id.replace(/[^a-zA-Z0-9_-]/g, "_")
-		const cachePath = path.join(geojsonCacheDir(), `${safeId}.geojson`)
+		const cachePath = path.join(geojsonCacheDir(), `${layerFileStem(layer.id)}.geojson`)
 		await fs.writeFile(cachePath, geojson, "utf8")
 		return cachePath
 	} catch {

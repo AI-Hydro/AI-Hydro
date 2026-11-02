@@ -7,6 +7,7 @@ import { EmptyRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useBrushContext } from "../../context/BrushContext"
 import { useMapContext } from "../../context/MapContext"
 import { MapServiceClient } from "../../services/grpc-client"
@@ -842,6 +843,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// Raster resource revision drives rendering and inspection after async loads.
 	const [geojsonReadyTick, setGeojsonReadyTick] = useState(0)
 	const geojsonFileCacheRef = useRef<Map<string, unknown>>(new Map())
+	/** Layers already reported as showing a saved copy because their file could not be read. */
+	const missingReportedRef = useRef<Set<string>>(new Set())
 	const [manifestReadyTick, setManifestReadyTick] = useState(0)
 	const manifestFileCacheRef = useRef<Map<string, Inundation3DManifest>>(new Map())
 
@@ -1862,6 +1865,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				try {
 					let parsed: unknown
 					let lastError: unknown
+					let projectSourceFailed = false
 					// The layer's own file first (a tool's own cache first); the next source is tried only when this one is gone.
 					for (const source of sources) {
 						try {
@@ -1886,6 +1890,18 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 							break
 						} catch (err) {
 							lastError = err
+							if (source.kind === "project") projectSourceFailed = true
+						}
+					}
+					// The file the layer names could not be read, so the map shows a saved copy: the layer says so.
+					if (parsed !== undefined && projectSourceFailed && !(layer.metadata?.tool || layer.metadata?._run_id)) {
+						if (layer.metadata?.source_status !== "source_missing" && !missingReportedRef.current.has(layer.id)) {
+							missingReportedRef.current.add(layer.id)
+							PLATFORM_CONFIG.postMessage({
+								type: "aihydro-map-layer-source-status",
+								layerId: layer.id,
+								status: "source_missing",
+							})
 						}
 					}
 					if (parsed === undefined) {

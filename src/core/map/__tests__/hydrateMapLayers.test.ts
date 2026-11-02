@@ -129,6 +129,58 @@ describe("hydrateMapLayers: the file a layer names is the file it shows", () => 
 		expect(await readEntryGeojson(e, e.metadata_snapshot)).to.equal(null)
 	})
 
+	it("a named file edited between sessions is not drawn from the old preview", async () => {
+		const many = (v: number) =>
+			JSON.stringify({
+				type: "FeatureCollection",
+				features: Array.from({ length: 10_100 }, (_, i) => ({
+					type: "Feature",
+					properties: { v, i },
+					geometry: { type: "Point", coordinates: [i * 0.001, 0] },
+				})),
+			})
+		const file = path.join(project, "a.geojson")
+		fs.writeFileSync(file, many(1))
+		await persist([workspaceEntry()])
+		const first = controller()
+		await hydrateMapLayersFromCatalog(first as any, project)
+		const firstPreview = first.state.layers.get("workspace_a")?.metadata.display_geojson_path
+		expect(firstPreview, "a file over the preview threshold gets one").to.be.a("string")
+		expect(firstPreview?.startsWith(home)).to.equal(true) // scratch AIHYDRO_HOME, never the real one
+		expect(JSON.parse(fs.readFileSync(firstPreview as string, "utf8")).features[0].properties.v).to.equal(1)
+		// The catalog now names that preview. The file changes before the next session.
+		await persistMapLayerCatalog(
+			await buildMapLayerCatalogAsync([...first.state.layers.values()], first.state.order, project),
+			home,
+		)
+		fs.writeFileSync(file, many(2))
+		const second = controller()
+		await hydrateMapLayersFromCatalog(second as any, project)
+		const preview = second.state.layers.get("workspace_a")?.metadata.display_geojson_path as string
+		expect(JSON.parse(fs.readFileSync(preview, "utf8")).features[0].properties.v).to.equal(2)
+	})
+
+	it("a tool's layer keeps the preview it was given", async () => {
+		const copy = path.join(cacheDir, "tool_p.geojson")
+		fs.writeFileSync(copy, JSON.stringify(POLYGON(5)))
+		const e = entry({
+			id: "tool_p",
+			name: "p",
+			source: "tool",
+			geojson_cache_path: copy,
+			metadata_snapshot: {
+				tool: "extract_rivers",
+				_run_id: "run-3.1",
+				display_geojson_path: "/scratch/keep.preview.geojson",
+				display_mode: "preview",
+			},
+		})
+		await persist([e])
+		const c = controller()
+		await hydrateMapLayersFromCatalog(c as any, project)
+		expect(c.state.layers.get("tool_p")?.metadata.display_geojson_path).to.equal("/scratch/keep.preview.geojson")
+	})
+
 	it("a tool's layer reads its cache copy first: the file may have been overwritten since the run", async () => {
 		const copy = path.join(cacheDir, "tool_a.geojson")
 		fs.writeFileSync(copy, JSON.stringify(POLYGON(5)))
