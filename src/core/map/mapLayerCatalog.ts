@@ -82,6 +82,30 @@ export interface MapLayerCatalog {
 	layers: MapLayerCatalogEntry[]
 }
 
+/**
+ * What was computed for a layer's content the last time the catalog was written. The catalog is rewritten on every layer
+ * change (a style edit, a visibility toggle), and parsing, summarising, caching and previewing every layer each time
+ * costs seconds at 40 layers of 512 KB; none of it changes while the content does not. Keyed by layer id and valid only
+ * for the exact same text.
+ */
+interface ContentWork {
+	geojson: string
+	numeric?: NumericAttributeSummary[]
+	count?: number
+	cachePath?: string
+	previewPath?: string
+}
+const contentWork = new Map<string, ContentWork>()
+/** How often each kind of work ran; read by tests and by the latency measure. */
+export const catalogWork = { summaries: 0, cacheWrites: 0, previews: 0 }
+const workFor = (id: string, geojson: string): ContentWork => {
+	const hit = contentWork.get(id)
+	if (hit && hit.geojson === geojson) return hit
+	const fresh: ContentWork = { geojson }
+	contentWork.set(id, fresh)
+	return fresh
+}
+
 export function extractNumericAttributes(geojson: string): NumericAttributeSummary[] {
 	if (!geojson?.trim()) {
 		return []
@@ -212,9 +236,26 @@ function styleToRecord(layer: MapLayer): Record<string, number | string> {
 	return out
 }
 
+function summarise(layer: MapLayer): Pick<MapLayerCatalogEntry, "numeric_attributes" | "feature_count"> {
+	const geojson = layer.geojson || ""
+	if (!geojson.trim()) return { numeric_attributes: [], feature_count: 0 }
+	const work = workFor(layer.id, geojson)
+	if (work.numeric === undefined || work.count === undefined) {
+		catalogWork.summaries++
+		// One parse for both summaries.
+		work.numeric = extractNumericAttributes(geojson)
+		work.count = countFeatures(geojson)
+	}
+	return { numeric_attributes: work.numeric, feature_count: work.count }
+}
+
 export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = "", displayGeojsonPath = ""): MapLayerCatalogEntry {
 	const meta = layer.metadata ?? {}
-	const workspacePath = meta.path || meta.workspace_path || ""
+	// A workspace file's path is stored absolute, with the folder it is relative to, so no later reader has to guess.
+	const workspacePath =
+		meta.path && !path.isAbsolute(meta.path) && meta.workspace_folder && path.isAbsolute(meta.workspace_folder)
+			? path.join(meta.workspace_folder, meta.path)
+			: meta.path || meta.workspace_path || ""
 	// Strip large blobs from the metadata snapshot — raster_data_url can be
 	// several MB and is reproduced from raster_path on hydration.
 	const metaSnapshot: Record<string, string> = {}
@@ -246,8 +287,7 @@ export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = "", disp
 		style: styleToRecord(layer),
 		symbology_mode: resolveSymbologyMode(layer),
 		graduated: buildGraduatedSummary(layer),
-		numeric_attributes: extractNumericAttributes(layer.geojson || ""),
-		feature_count: countFeatures(layer.geojson || ""),
+		...summarise(layer),
 		metadata_snapshot: metaSnapshot,
 	}
 }
@@ -278,9 +318,21 @@ async function cacheLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 		return ""
 	}
 	try {
-		await fs.mkdir(geojsonCacheDir(), { recursive: true })
+		const work = workFor(layer.id, geojson)
 		const cachePath = path.join(geojsonCacheDir(), `${layerFileStem(layer.id)}.geojson`)
+		// Unchanged content that is already cached is not written again.
+		if (work.cachePath === cachePath) {
+			try {
+				await fs.access(cachePath)
+				return cachePath
+			} catch {
+				/* the copy is gone: write it again */
+			}
+		}
+		await fs.mkdir(geojsonCacheDir(), { recursive: true })
+		catalogWork.cacheWrites++
 		await fs.writeFile(cachePath, geojson, "utf8")
+		work.cachePath = cachePath
 		return cachePath
 	} catch {
 		return ""
@@ -297,8 +349,12 @@ async function previewLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 		return ""
 	}
 	try {
+		const work = workFor(layer.id, geojson)
+		if (work.previewPath !== undefined) return work.previewPath
+		catalogWork.previews++
 		const preview = await ensureGeoJsonPreviewArtifact(layer.id, geojson)
-		return preview?.previewPath ?? ""
+		work.previewPath = preview?.previewPath ?? ""
+		return work.previewPath
 	} catch {
 		return ""
 	}
@@ -320,6 +376,9 @@ export async function buildMapLayerCatalogAsync(
 			order.push(layer.id)
 		}
 	}
+	// Work remembered for layers that are gone is dropped, so removed content is not kept alive.
+	const live = new Set(layers.map((l) => l.id))
+	for (const id of [...contentWork.keys()]) if (!live.has(id)) contentWork.delete(id)
 	const entries: MapLayerCatalogEntry[] = []
 	for (const id of order) {
 		const layer = layers.find((l) => l.id === id)

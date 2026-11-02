@@ -24,6 +24,7 @@ import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 import { buildInundation3dLayerFromPath } from "./inundation3dLayer"
 import { type MapLayerCatalogEntry, readMapLayerCatalog } from "./mapLayerCatalog"
 import { selectCatalogEntriesToRestore } from "./restoreSelection"
+import { MAX_INLINE_GEOJSON_BYTES } from "./sanitizeMapLayerForWebview"
 
 async function readFileToBase64(filePath: string): Promise<string | null> {
 	try {
@@ -151,11 +152,22 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 		// The file is back (or was never gone): a status written when it was missing must not outlive that.
 		meta.source_status = "current"
 	}
+	// A restored layer holds its content like a new one, up to the size the webview is sent. Larger ones are drawn from
+	// disk. Text that is not JSON (a file kept in another format) is left out rather than inlined.
+	let geojson = ""
+	if (source && Buffer.byteLength(source.raw, "utf8") <= MAX_INLINE_GEOJSON_BYTES) {
+		try {
+			JSON.parse(source.raw)
+			geojson = source.raw
+		} catch {
+			/* not GeoJSON text: drawn from the cached copy */
+		}
+	}
 	const style = entry.style ?? {}
 	return MapLayer.create({
 		id: entry.id,
 		name: entry.name,
-		geojson: "",
+		geojson,
 		layerType: entry.layer_type || "polygon",
 		visible: entry.visible,
 		style: MapLayerStyle.create({
