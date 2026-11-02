@@ -290,4 +290,73 @@ describe("spawn_subagents end to end", () => {
 		expect(h.records[0].toolCalls[0]).to.include({ name: "spawn_subagents", result: "refused" })
 		expect(h.asks).to.have.length(0)
 	})
+
+	describe("task-level agent budget (agentBudgetUsd)", () => {
+		const priced = { inputPrice: 3, outputPrice: 15 }
+		const costing = (usd: number) =>
+			scriptedApi([{ text: report("done"), usage: { inputTokens: 10, outputTokens: 5, totalCost: usd } }], {
+				modelInfo: priced,
+			})
+		const again = () => {
+			taskState.userMessageContent = []
+			taskState.didAlreadyUseTool = false
+		}
+		const launches = () =>
+			h.asks.filter((ask) => ask.type === "tool" && !ask.meta?.subagentOrigin).map((ask) => JSON.parse(ask.text!))
+
+		it("the cap stops the third spawn, the launch card shows the running total, and nothing is asked or started", async () => {
+			h.settings.agentBudgetUsd = 1
+			childApis.push(costing(0.6), costing(0.6), costing(0.6))
+
+			await executor.executeTool(spawn(["first"]))
+			expect(resultText()).to.include('status="completed"')
+			again()
+			await executor.executeTool(spawn(["second"]))
+			expect(resultText()).to.include('status="completed"')
+			again()
+
+			const asksBefore = h.asks.length
+			await executor.executeTool(spawn(["third"]))
+			const text = resultText()
+			expect(text).to.include("subagent budget for this task is used")
+			expect(text).to.include("$1.20 of $1.00")
+			expect(h.asks.length, "a refused spawn asks nothing").to.equal(asksBefore)
+			expect(childApis, "no handler was built for the third").to.have.length(1)
+
+			const [first, second] = launches()
+			expect(first.subagents.taskBudget).to.include({ budgetUsd: 1, spentUsd: 0 })
+			expect(second.subagents.taskBudget.spentUsd).to.be.closeTo(0.6, 1e-9)
+		})
+
+		it("defaults to $5 per task and shows it on the launch card; an unpriced model is called unknown", async () => {
+			childApis.push(scriptedApi([report("done")]))
+			await executor.executeTool(spawn(["only"]))
+			const [launch] = launches()
+			expect(launch.subagents.taskBudget).to.deep.equal({ budgetUsd: 5, spentUsd: 0, priced: false, unpricedChildren: 0 })
+		})
+
+		it("a spawn that overruns the cap stops its own siblings at their next request", async () => {
+			h.settings.agentBudgetUsd = 0.5
+			const expensive = scriptedApi(
+				[{ text: tool("read_file", { path: "README.md" }), usage: { inputTokens: 1, outputTokens: 1, totalCost: 0.6 } }],
+				{
+					modelInfo: priced,
+				},
+			)
+			childApis.push(expensive, expensive)
+			await executor.executeTool(spawn(["a"]))
+			expect(resultText()).to.include('status="partial"')
+			expect(
+				parseSubagentStatus(messages.getAiHydroMessages().find((m) => m.say === "subagent_status")?.text)?.children[0]
+					.budgetStop,
+			).to.equal("task_cost")
+		})
+
+		it("a zero budget refuses every spawn", async () => {
+			h.settings.agentBudgetUsd = 0
+			await executor.executeTool(spawn(["x"]))
+			expect(resultText()).to.include("subagent budget for this task is used")
+			expect(h.asks).to.have.length(0)
+		})
+	})
 })

@@ -3,7 +3,12 @@ import type { ToolUse } from "@core/assistant-message"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
 import { formatResponse } from "@core/prompts/responses"
 import { ensureTaskDirectoryExists } from "@core/storage/disk"
-import type { SubagentChildSummary, SubagentLaunch, SubagentStatusPayload } from "@shared/aihydro/subagents"
+import {
+	DEFAULT_AGENT_BUDGET_USD,
+	type SubagentChildSummary,
+	type SubagentLaunch,
+	type SubagentStatusPayload,
+} from "@shared/aihydro/subagents"
 import type { AiHydroSayTool } from "@shared/ExtensionMessage"
 import { telemetryService } from "@/services/telemetry"
 import { convertAiHydroMessageToProto } from "@/shared/proto-conversions/aihydro-message"
@@ -11,9 +16,11 @@ import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { type AgentProfile, resolveProfile } from "../../subagents/agentProfile"
 import { ParentAskBridge } from "../../subagents/ParentAskBridge"
-import { MAX_PROMPTS_PER_CALL, SpawnRefused, SubagentSupervisor } from "../../subagents/SubagentSupervisor"
+import { DEFAULT_STAGGER_MS, MAX_PROMPTS_PER_CALL, SpawnRefused, SubagentSupervisor } from "../../subagents/SubagentSupervisor"
+import { isModelPriced } from "../../subagents/subagentCost"
 import { diskRecordWriter } from "../../subagents/subagentRecord"
 import { formatReportsForParent } from "../../subagents/subagentReports"
+import { resolveAgentBudgetUsd, TaskAgentLedger } from "../../subagents/taskLedger"
 import { showNotificationForApprovalIfAutoApprovalEnabled } from "../../utils"
 import { isWorkspaceTrusted } from "../../workspaceTrust"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -77,6 +84,11 @@ function safeJsonString(text: string): string {
 	} catch {
 		return text
 	}
+}
+
+/** `subagentStaggerMs` from settings: a finite number of milliseconds, 0 or more; anything else is the default. */
+export function resolveStaggerMs(value: unknown): number {
+	return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : DEFAULT_STAGGER_MS
 }
 
 /** What the profile cannot do, in one sentence, from the profile (the launch card must not overstate or understate it). */
@@ -148,6 +160,16 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 		}
 		config.taskState.consecutiveMistakeCount = 0
 
+		// The task-level cap (D6): all of this task's subagents together. Read from the transcript, so it holds across
+		// calls and across a resume. At the cap no further spawn starts, and the model is told so.
+		const ledger = TaskAgentLedger.fromMessages(
+			config.messageState.getAiHydroMessages(),
+			resolveAgentBudgetUsd(stateManager.getGlobalSettingsKey("agentBudgetUsd"), DEFAULT_AGENT_BUDGET_USD),
+		)
+		if (ledger.exceeded()) {
+			return formatResponse.toolError(ledger.refusal())
+		}
+
 		const bridge = new ParentAskBridge(config.callbacks.ask, () => config.taskState.abort)
 		const children: { current: SubagentChildSummary[] } = { current: [] }
 		let statusTs: number | undefined
@@ -190,6 +212,7 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 					aihydroIgnoreController: config.services.aihydroIgnoreController,
 					bridge,
 					isParentAborted: () => config.taskState.abort,
+					ledger,
 					writeRecord: diskRecordWriter(() => ensureTaskDirectoryExists(config.taskId)),
 				},
 				buildApi: () =>
@@ -198,6 +221,7 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 						{ ...stateManager.getApiConfiguration(), ulid: config.ulid },
 						stateManager.getGlobalSettingsKey("mode"),
 					),
+				staggerMs: resolveStaggerMs(stateManager.getGlobalSettingsKey("subagentStaggerMs")),
 				onUpdate: (next) => {
 					children.current = next
 					coalescer.schedule()
@@ -217,6 +241,7 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 			budget: supervisor.caps.budget,
 			model: config.api.getModel().id,
 			limits: profileLimits(profile),
+			taskBudget: ledger.describe(isModelPriced(config.api.getModel().info)),
 		}
 		const completeMessage = JSON.stringify({ tool: "spawnSubagents", subagents: launch } satisfies AiHydroSayTool)
 		showNotificationForApprovalIfAutoApprovalEnabled(

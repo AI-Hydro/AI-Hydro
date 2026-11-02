@@ -8,6 +8,13 @@ import { type SubagentResult, SubagentRunner, type SubagentRunnerInit } from "./
 export const MAX_CONCURRENT_CHILDREN = 3
 /** At most this many prompts in one spawn call. */
 export const MAX_PROMPTS_PER_CALL = 4
+/**
+ * Children start this far apart. A provider's prompt cache serves a prefix only once the request that wrote it has
+ * begun to answer, so siblings launched at one instant all pay the cold price. The gap is small on purpose: it is
+ * latency the user waits through, and it is configurable (`subagentStaggerMs`; 0 starts them together). Kept only if
+ * the installed-build cache test shows a hit gain (plan stage 0 kill rule).
+ */
+export const DEFAULT_STAGGER_MS = 1_000
 
 export type SupervisorRunnerBase = Omit<
 	SubagentRunnerInit,
@@ -25,6 +32,11 @@ export interface SupervisorDeps {
 	onUpdate?: (children: SubagentChildSummary[]) => void
 	newId?: () => string
 	maxConcurrent?: number
+	/** Gap between child starts; defaults to DEFAULT_STAGGER_MS. */
+	staggerMs?: number
+	/** Test seam for the stagger wait. */
+	sleep?: (ms: number) => Promise<void>
+	now?: () => number
 }
 
 export class SpawnRefused extends Error {}
@@ -37,6 +49,9 @@ export class SubagentSupervisor {
 	private runners: SubagentRunner[] = []
 	private summaries = new Map<string, SubagentChildSummary>()
 	private cancelledAll = false
+	private readonly cancelledIds = new Set<string>()
+	/** Wakes a child sleeping in the stagger wait, by id. */
+	private readonly wakers = new Map<string, () => void>()
 	readonly caps: EffectiveCapabilities
 
 	constructor(private readonly deps: SupervisorDeps) {
@@ -57,12 +72,19 @@ export class SubagentSupervisor {
 		for (const runner of this.runners) {
 			runner.cancel()
 		}
+		for (const wake of [...this.wakers.values()]) {
+			wake()
+		}
 	}
 
 	/** Stop one child. A child waiting on the user stops now; its ask stays the parent's to resolve. */
 	cancel(childId: string): boolean {
 		const runner = this.runners.find((candidate) => candidate.childId === childId)
 		runner?.cancel()
+		if (runner) {
+			this.cancelledIds.add(runner.childId)
+			this.wakers.get(runner.childId)?.()
+		}
 		return !!runner
 	}
 
@@ -99,6 +121,36 @@ export class SubagentSupervisor {
 
 		const results: SubagentResult[] = new Array(this.runners.length)
 		let next = 0
+		const stagger = Math.max(0, this.deps.staggerMs ?? DEFAULT_STAGGER_MS)
+		const now = this.deps.now ?? Date.now
+		let lastStart = Number.NEGATIVE_INFINITY
+		const isCancelled = (runner: SubagentRunner) => this.cancelledAll || this.cancelledIds.has(runner.childId)
+		// Reserve the next start time synchronously, so two workers freeing up together still start a gap apart. The wait
+		// races a cancel: a cancelled child wakes at once, makes no request, and gives its reserved slot back.
+		const waitForStartSlot = async (runner: SubagentRunner) => {
+			const previous = lastStart
+			const at = Math.max(now(), lastStart + stagger)
+			const wait = at - now()
+			lastStart = at
+			if (wait <= 0 || isCancelled(runner)) {
+				return
+			}
+			let timer: ReturnType<typeof setTimeout> | undefined
+			const woken = new Promise<void>((resolve) => this.wakers.set(runner.childId, resolve))
+			const slept = this.deps.sleep
+				? this.deps.sleep(wait)
+				: new Promise<void>((resolve) => {
+						timer = setTimeout(resolve, wait)
+					})
+			await Promise.race([slept, woken])
+			if (timer) {
+				clearTimeout(timer)
+			}
+			this.wakers.delete(runner.childId)
+			if (isCancelled(runner) && lastStart === at) {
+				lastStart = previous
+			}
+		}
 		const worker = async () => {
 			for (;;) {
 				const index = next++
@@ -106,7 +158,8 @@ export class SubagentSupervisor {
 					return
 				}
 				const runner = this.runners[index]
-				results[index] = this.cancelledAll ? await runner.cancelQueued() : await runner.run()
+				await waitForStartSlot(runner)
+				results[index] = isCancelled(runner) ? await runner.cancelQueued() : await runner.run()
 			}
 		}
 		const width = Math.min(this.deps.maxConcurrent ?? MAX_CONCURRENT_CHILDREN, MAX_CONCURRENT_CHILDREN, this.runners.length)

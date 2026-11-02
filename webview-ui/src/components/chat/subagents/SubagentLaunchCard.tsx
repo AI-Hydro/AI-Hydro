@@ -13,6 +13,7 @@ export function SubagentLaunchCard({ tool, state }: { tool: AiHydroSayTool; stat
 	}
 	const count = launch.prompts.length
 	const minutes = Math.round(launch.budget.wallClockMs / 60_000)
+	const taskBudget = launch.taskBudget
 	return (
 		<section
 			aria-label="Start read-only explorers"
@@ -43,6 +44,15 @@ export function SubagentLaunchCard({ tool, state }: { tool: AiHydroSayTool; stat
 				Each uses model {launch.model}, up to {launch.budget.maxToolCalls} tool calls and about {minutes} minutes. Up to 3
 				run at once. Any read that needs your approval asks you in the chat, named after the explorer.
 			</div>
+			{taskBudget && (
+				<div
+					className="pt-[2px] text-[12px] text-[var(--vscode-descriptionForeground)]"
+					data-testid="subagent-launch-task-budget">
+					{taskBudget.priced
+						? `Each explorer stops at $${launch.budget.maxCostUsd.toFixed(2)}. All subagents in this task together stop at $${taskBudget.budgetUsd.toFixed(2)}; ${taskBudget.unpricedChildren > 0 ? "at least " : ""}$${taskBudget.spentUsd.toFixed(2)} used so far. A cap is a stop, not a guarantee: a request already under way when it is reached still finishes, and explorers launched together can each spend before the others are stopped, so the final cost can run over.`
+						: `This model has no verified price, so its cost is unknown and the dollar caps ($${launch.budget.maxCostUsd.toFixed(2)} per explorer, $${taskBudget.budgetUsd.toFixed(2)} per task) cannot stop it, and the task budget does not apply. The per-explorer output-token, tool-call and time limits above are the only limits.`}
+				</div>
+			)}
 		</section>
 	)
 }

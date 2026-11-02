@@ -46,9 +46,16 @@ export interface SubagentUsage {
 	tokensOut: number
 	cacheWrites: number
 	cacheReads: number
-	/** Sum of provider-reported cost; undefined when the provider reports none (a USD cap then does not apply). */
+	/**
+	 * Cost of the child's requests, computed as the parent computes its own (provider-reported when there is one,
+	 * otherwise from tokens and the model's prices). Undefined when the cost is unknown (a USD cap then does not apply).
+	 */
 	cost?: number
+	/** "unavailable": no verified price, so `cost` is absent. "lower-bound": `cost` is at least this much. Absent: exact. */
+	costStatus?: SubagentCostStatus
 }
+
+export type SubagentCostStatus = "unavailable" | "lower-bound"
 
 export interface SubagentBudget {
 	maxToolCalls: number
@@ -57,12 +64,12 @@ export interface SubagentBudget {
 	maxOutputTokens: number
 	/** Stop at this fraction of the model's context window (measured from the last request's input tokens). */
 	contextStopFraction: number
-	/** Applies only when the provider reports cost. */
+	/** Applies only when the cost is known: the model has verified prices, or the provider reports cost. */
 	maxCostUsd: number
 }
 
 /** Why a child was stopped by its budget, in words the status row can show. */
-export type SubagentBudgetStop = "tool_calls" | "wall_clock" | "output_tokens" | "context" | "cost"
+export type SubagentBudgetStop = "tool_calls" | "wall_clock" | "output_tokens" | "context" | "cost" | "task_cost"
 
 /** One tool call, as the record and the expanded status row show it. Arguments are hashed, never stored. */
 export interface SubagentToolCallRecord {
@@ -118,6 +125,7 @@ export interface SubagentChildSummary {
 	cacheWrites: number
 	cacheReads: number
 	cost?: number
+	costStatus?: SubagentCostStatus
 	budgetStop?: SubagentBudgetStop
 	/** Path of the child record under the task directory (relative), once written. */
 	recordPath?: string
@@ -134,7 +142,24 @@ export interface SubagentLaunch {
 	model: string
 	/** One sentence on what the profile cannot do, from the profile, so the card never overstates. */
 	limits: string
+	/** The task-level agent budget this launch draws on (plan 5.7, D6). */
+	taskBudget?: SubagentTaskBudget
 }
+
+/** What the launch card says about the task-level cap. */
+export interface SubagentTaskBudget {
+	/** `agentBudgetUsd`: the most all of this task's subagents may cost together. */
+	budgetUsd: number
+	/** Cost of earlier spawns in this task, as far as it is known. */
+	spentUsd: number
+	/** False when the model has no verified price: cost is unknown, so the dollar cap cannot fire. */
+	priced: boolean
+	/** Children of earlier spawns whose cost was unknown. `spentUsd` then undercounts. */
+	unpricedChildren: number
+}
+
+/** Default `agentBudgetUsd`: dollars all subagents of one task may cost together (owner decision D6). A guess, not a measurement. */
+export const DEFAULT_AGENT_BUDGET_USD = 5
 
 /** The text of a `subagent_status` row. One per spawn call, rewritten in place as the children progress. */
 export interface SubagentStatusPayload {

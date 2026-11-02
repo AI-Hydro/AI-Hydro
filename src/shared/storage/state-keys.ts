@@ -105,6 +105,10 @@ export interface Settings {
 	ocaMode: string | undefined
 	hooksEnabled: boolean
 	subagentsEnabled: boolean
+	/** Most dollars all of one task's subagents may cost together (owner decision D6). Unset means the default, 5. */
+	agentBudgetUsd: number | undefined
+	/** Milliseconds between subagent starts, so siblings can share a prompt cache. Unset means the default; 0 starts them together. */
+	subagentStaggerMs: number | undefined
 	finalAnswerAuditEnabled: boolean
 	/** Chat transcript detail level (Wave 2): "focus" | "normal" | "verbose". */
 	transcriptDetail: "focus" | "normal" | "verbose"
