@@ -6,6 +6,9 @@
 import type { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
 import { gaugeFlowlinesEnvelope } from "./gaugeFlowlinesEnvelope"
 
+/** What the host stamps next to the facts when it adds the layer (`runLayerMetadata`): the names of the facts the tool stated. */
+const FACT_KEYS_STAMP = "gauge_id,direction,distance_km,truncated,n_features"
+
 const style = (over: Partial<MapLayerStyle>): MapLayerStyle => ({
 	color: "#1f78b4",
 	opacity: 1,
@@ -432,6 +435,7 @@ export const traceLayer = (direction: "upstream" | "downstream", km: number, n: 
 		metadata: {
 			...gaugeFlowlinesEnvelope,
 			session_id: gaugeFlowlinesEnvelope.study_id,
+			_fact_keys: FACT_KEYS_STAMP,
 			source_status: "synthetic",
 			gauge_id: "00000001",
 			direction,

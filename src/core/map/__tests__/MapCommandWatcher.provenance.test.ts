@@ -61,6 +61,15 @@ describe("MapCommandWatcher add_layer_from_run provenance", () => {
 				project_id: "forged",
 				item_id: "forged",
 				count_as_number: 3,
+				source_path: "/etc/passwd",
+				workspace_path: "/w",
+				path: "/p",
+				source_status: "validated",
+				validation_status: "ok",
+				claim_id: "c1",
+				uncertainty: "none",
+				raster_path: "/r.tif",
+				geojson_cache_path: "/c.json",
 			},
 		})
 		expect(layer.metadata).to.include({
@@ -74,7 +83,22 @@ describe("MapCommandWatcher add_layer_from_run provenance", () => {
 		expect(layer.metadata.session_id).to.equal("st_1") // the study's alias, not the forged value
 		expect(layer.metadata).to.not.have.property("project_id")
 		expect(layer.metadata).to.not.have.property("item_id")
-		expect(layer.metadata).to.not.have.property("count_as_number")
+		for (const refused of [
+			"count_as_number",
+			"source_path",
+			"workspace_path",
+			"path",
+			"source_status",
+			"validation_status",
+			"claim_id",
+			"uncertainty",
+			"raster_path",
+			"geojson_cache_path",
+			"project_id",
+			"item_id",
+		]) {
+			expect(layer.metadata, refused).to.not.have.property(refused)
+		}
 		expect(layer.metadata._fact_keys).to.equal("gauge_id,direction,distance_km,truncated,n_features")
 	})
 
@@ -96,6 +120,7 @@ describe("update_layer cannot forge or erase provenance", () => {
 		const controller = {
 			updateMapLayer: (_id: string, p: any) => (patches.push(p), true),
 			getMapLayers: () => [],
+			resolveMapLayerId: (id: string) => id,
 			mapSessionService: {},
 		}
 		const watcher = new MapCommandWatcher(controller as any)
@@ -122,6 +147,30 @@ describe("update_layer cannot forge or erase provenance", () => {
 })
 
 describe("update_layer cannot edit the facts a tool stated about a layer", () => {
+	it("a merged-away alias of the layer is no way around it", async () => {
+		const [layer] = await apply({
+			type: "add_layer_from_run",
+			layer_id: "canon",
+			geojson: GEOJSON,
+			run_id: "run-a",
+			provenance: { _run_id: "run-a", tool: "gauge_flowlines", gauge_id: "01013500", n_features: "9" },
+		})
+		const patches: any[] = []
+		const controller = {
+			updateMapLayer: (_id: string, p: any) => (patches.push(p), true),
+			getMapLayers: () => [layer, { id: "other", metadata: {} }],
+			resolveMapLayerId: (id: string) => (id === "old-alias" ? "canon" : id),
+			mapSessionService: {},
+		}
+		const cmd = mapCommandSchema.parse({
+			type: "update_layer",
+			layer_id: "old-alias",
+			metadata: { gauge_id: "09999999", n_features: "1", note: "kept" },
+		})
+		await (new MapCommandWatcher(controller as any) as any).applyCommand(cmd)
+		expect(patches[0].metadata).to.deep.equal({ note: "kept" })
+	})
+
 	it("an added layer's fact keys cannot be changed, erased or forged afterwards, and other metadata still can", async () => {
 		const [layer] = await apply({
 			type: "add_layer_from_run",
@@ -141,6 +190,7 @@ describe("update_layer cannot edit the facts a tool stated about a layer", () =>
 		const controller = {
 			updateMapLayer: (_id: string, p: any) => (patches.push(p), true),
 			getMapLayers: () => [layer],
+			resolveMapLayerId: (id: string) => id,
 			mapSessionService: {},
 		}
 		const cmd = mapCommandSchema.parse({

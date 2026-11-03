@@ -18,7 +18,11 @@ const layer = (over: Partial<MapLayer> & { metadata?: Record<string, string> }):
 	({ id: "t1", name: "whatever the agent called it", layerType: "line", visible: true, ...over }) as MapLayer
 
 /** The envelope the real tools produced (captured), with the host's session_id alias. */
-const REAL: Record<string, string> = { ...gaugeFlowlinesEnvelope, session_id: gaugeFlowlinesEnvelope.study_id }
+const REAL: Record<string, string> = {
+	...gaugeFlowlinesEnvelope,
+	session_id: gaugeFlowlinesEnvelope.study_id,
+	_fact_keys: "gauge_id,direction,distance_km,truncated,n_features",
+}
 
 describe("parseTraceDistance", () => {
 	it("takes whole km from 1 to 200 and refuses the rest, without rounding", () => {
@@ -118,6 +122,29 @@ describe("traceLayerInfo", () => {
 			"Cut short",
 		])
 		expect(d.cut).toBeUndefined()
+	})
+	it("treats the facts as the tool's only when the host stamped them and the layer has a run", () => {
+		// A plain add_layer can carry the same keys with nobody behind them.
+		const { _fact_keys: _f, ...unstamped } = REAL
+		const a = traceLayerInfo(layer({ metadata: unstamped }))!
+		expect([a.siteNo, a.direction, a.distanceKm, a.nFeatures, a.truncated]).toEqual([
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+		])
+		const { _run_id: _r, ...noRun } = REAL
+		const b = traceLayerInfo(layer({ metadata: noRun }))!
+		expect([b.siteNo, b.direction, b.distanceKm, b.nFeatures, b.truncated]).toEqual([
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+		])
+		const c = traceLayerInfo(layer({ metadata: { ...REAL, _fact_keys: "gauge_id,direction" } }))!
+		expect([c.siteNo, c.direction, c.distanceKm, c.truncated]).toEqual(["01031500", "upstream", undefined, undefined])
 	})
 	it("drops values that are not plain numbers or ids", () => {
 		const info = traceLayerInfo(

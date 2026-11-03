@@ -24,21 +24,20 @@ export interface HostStampedKeys {
 }
 
 /**
- * Facts a tool states about the layer its run made (tools >= the `layer_meta` change): gauge, direction, distance, whether
- * it was cut. They ride in the same `provenance` object as extra string keys. Only lower-case snake_case keys, at most
- * 12, values up to 200 characters; never an envelope key or a key the host owns.
+ * The facts a tool may state about the layer its run made: exactly these five, the same list as aihydro-tools'
+ * `LAYER_FACT_KEYS`. A key not named here never becomes layer metadata through `provenance` (it was stripped before the
+ * facts existed and still is), so a command cannot put a path, a status or a claim link on a layer this way.
  */
-export const LAYER_FACT_KEY = /^[a-z][a-z0-9_]{0,39}$/
-export const MAX_LAYER_FACTS = 12
+export const LAYER_FACT_KEYS = ["gauge_id", "direction", "distance_km", "truncated", "n_features"] as const
 export const MAX_LAYER_FACT_LENGTH = 200
-const NOT_FACTS: ReadonlySet<string> = new Set([...ENVELOPE_KEYS, "session_id", "project_id", "item_id"])
 
-/** The layer facts in a provenance object. Anything that is not a plain short string under a valid key is dropped. */
+/** The layer facts in a provenance object: the allowlisted keys with a plain non-empty string value, cut at 200 characters. */
 export function readLayerFacts(provenance: object | undefined | null): Record<string, string> {
+	const source = (provenance ?? {}) as Record<string, unknown>
 	const out: Record<string, string> = {}
-	for (const [key, value] of Object.entries(provenance ?? {})) {
-		if (Object.keys(out).length >= MAX_LAYER_FACTS) break
-		if (NOT_FACTS.has(key) || !LAYER_FACT_KEY.test(key) || typeof value !== "string") continue
+	for (const key of LAYER_FACT_KEYS) {
+		const value = source[key]
+		if (typeof value !== "string") continue
 		const text = value.trim()
 		if (text) out[key] = text.slice(0, MAX_LAYER_FACT_LENGTH)
 	}

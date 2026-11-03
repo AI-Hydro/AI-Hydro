@@ -119,17 +119,22 @@ const wholeNumber = (v: string | undefined): number | undefined => (v && /^\d{1,
 export function traceLayerInfo(layer: MapLayer): TraceLayerInfo | null {
 	const meta = layer.metadata ?? {}
 	if (layerTool(meta) !== TRACE_TOOL) return null
-	const site = meta.gauge_id
-	const dir = meta.direction
+	// A fact is the tool's only when the host stamped the layer with the fact's name (`_fact_keys`) and the layer has a run:
+	// a plain add_layer could carry the same keys with nobody behind them.
+	const runId = layerRunId(meta)
+	const stated = new Set(runId ? (meta._fact_keys ?? "").split(",") : [])
+	const fact = (key: string): string | undefined => (stated.has(key) ? meta[key] : undefined)
+	const site = fact("gauge_id")
+	const dir = fact("direction")
 	return {
 		layerId: layer.id,
 		layerName: layer.name,
 		...(site && /^\d{8,15}$/.test(site) ? { siteNo: site } : {}),
 		...(dir === "upstream" || dir === "downstream" || dir === "both" ? { direction: dir } : {}),
-		...(wholeNumber(meta.distance_km) !== undefined ? { distanceKm: wholeNumber(meta.distance_km) } : {}),
-		...(wholeNumber(meta.n_features) !== undefined ? { nFeatures: wholeNumber(meta.n_features) } : {}),
-		...(meta.truncated === "true" ? { truncated: true } : meta.truncated === "false" ? { truncated: false } : {}),
-		runId: layerRunId(meta),
+		...(wholeNumber(fact("distance_km")) !== undefined ? { distanceKm: wholeNumber(fact("distance_km")) } : {}),
+		...(wholeNumber(fact("n_features")) !== undefined ? { nFeatures: wholeNumber(fact("n_features")) } : {}),
+		...(fact("truncated") === "true" ? { truncated: true } : fact("truncated") === "false" ? { truncated: false } : {}),
+		runId,
 		studyId: meta.study_id || meta.session_id || undefined,
 	}
 }
