@@ -122,6 +122,22 @@ describe("hydrateMapLayers: the file a layer names is the file it shows", () => 
 		expect(c.state.layers.get("workspace_a")?.metadata.source_status).to.equal("source_missing")
 	})
 
+	it("a source_missing status does not outlive the missing file", async () => {
+		fs.writeFileSync(path.join(project, "a.geojson"), JSON.stringify(POLYGON(1)))
+		const e = workspaceEntry({
+			metadata_snapshot: {
+				source: "workspace",
+				path: "a.geojson",
+				workspace_folder: project,
+				source_status: "source_missing",
+			},
+		})
+		await persist([e])
+		const c = controller()
+		await hydrateMapLayersFromCatalog(c as any, project)
+		expect(c.state.layers.get("workspace_a")?.metadata.source_status).to.equal("current")
+	})
+
 	it("a relative workspace path is never looked up in the cache directory", async () => {
 		fs.writeFileSync(path.join(cacheDir, "a.geojson"), JSON.stringify(POLYGON(99)))
 		const e = workspaceEntry({ metadata_snapshot: { source: "workspace", path: "a.geojson" } })

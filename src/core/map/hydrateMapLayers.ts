@@ -147,6 +147,9 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 	// A layer that names a file and was read from the cache because the file is gone says so, not "current".
 	if (named && source?.from === "cache" && !(meta.tool || meta._run_id)) {
 		meta.source_status = "source_missing"
+	} else if (named && source?.from === "file" && meta.source_status === "source_missing") {
+		// The file is back (or was never gone): a status written when it was missing must not outlive that.
+		meta.source_status = "current"
 	}
 	const style = entry.style ?? {}
 	return MapLayer.create({

@@ -24,6 +24,14 @@ Report: `docs/vision-2040/findings/agent-orchestration-2026-10-31.md`, section 7
 - **Task agent budget, `agentBudgetUsd`, default 5 USD** (F2, D6). The launch card shows it and what earlier spawns used. It is enforced across every spawn in the task whose model has a verified price (a model with no verified price has an unknown cost, so **the budget does not stop it; the per-explorer limits are the only limit there, and F2 stays open for such models**): running children stop at their next request ("task agent budget used"), and a further spawn is refused with a message to the model. The total is read from the transcript's status rows, so it holds across calls and across a resume. The cap is a stop, not a guarantee: a request in flight, or explorers launched together, can overshoot it. There is no settings screen for it yet (state key only).
 - **Sibling system prompts are byte-equal** (F3). The per-child label moved from the system prompt to the first user message, and children now start `subagentStaggerMs` apart (default 1000, 0 disables) so the first can write the cache the others read. A cancel wakes a child out of the stagger wait at once. The cache gain is unmeasured: it needs the installed build.
 
+---
+
+## [Unreleased] (map Layers, slice 0: one file is one file; restore reads the file, not a stale copy)
+
+Design and red-team review: `docs/vision-2040/findings/layers-design-2026-11-02.md`. Slice 0 ships as three stacked changes (0a, 0b, 0c); 0c must not ship before 0a.
+
+**Known gap, until the tools resolve `layer_aliases`:** a claim bound to a file layer that belongs to no study can still be orphaned when a merge folds that layer into another, because claim links are keyed by the exact layer id and the tools read `layers[].id` only. The extension protects layers it can tell may carry a link (a study, run, tool or claim id on the layer) and writes `layer_aliases` into the catalog; the tools change that reads them is separate, and the release needs both.
+
 ### Fixed — Layers: one file is one file (Slice 0a of `docs/vision-2040/findings/layers-design-2026-11-02.md`; branch `vision2040/layers-slice0`)
 
 Owner report on 0.4.6: Reload source, Add file and drag-and-drop made duplicate layers of a restored file, and a layer could show a different file under that file's name. This part fixes how a file is found and told apart. Content on restore, the "Limited layer" label and the upgrade of already-persisted duplicates follow in 0b and 0c.
@@ -37,7 +45,7 @@ Owner report on 0.4.6: Reload source, Add file and drag-and-drop made duplicate 
 - The "A source file changed" line appears only when a layer on the map is that file.
 - **A named file edited between sessions is not drawn from an old preview.** The map draws a stored preview (`display_geojson_path`) before anything else, and restore kept it. For a layer that names a file and is not a tool's, restore now drops the stored preview and rebuilds it from the text it just read. A tool's layer keeps its preview. The preview directory is now resolved per call (`AIHYDRO_HOME`), as the cache directory already was.
 - **Cache and preview file names are collision-free.** `run:x` and `run_x` both became `run_x.geojson`, so one layer overwrote the other's copy. An id with unsafe characters now gets a short hash of the whole id in its file name; safe ids keep their names.
-- **A layer drawn from a saved copy says so.** When the file a layer names cannot be read and the map draws the cache copy, the host marks the layer `Source status: File not found` (one message, `aihydro-map-layer-source-status`, which accepts only that status).
+- **A layer drawn from a saved copy says so.** When the file a layer names cannot be read and the map draws the cache copy, the host marks the layer `Source status: File not found` (one message, `aihydro-map-layer-source-status`, which the host accepts only as `source_missing` and only for a layer that names a file and is not a tool's). The status is set back to current when restore reads the file again.
 - **Shared outputs name project files relative to the project.** The map plate sidecar and export record write a `source_path` inside the project folder as a relative path. A path outside the folder is left as it is. Not changed: a saved map scene keeps absolute paths (reopening it needs them to find the same file); the Python `map_get_state` and capsule export read layer metadata in `aihydro-tools`, which this repository cannot change.
 
 ---

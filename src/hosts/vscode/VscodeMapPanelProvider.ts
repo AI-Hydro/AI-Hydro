@@ -7,6 +7,7 @@ import { resolveMapFilePath as resolveMapFilePathIn } from "@core/map/resolveMap
 import { checkSaveTarget, loadPinsForProject, NO_FOLDER_KEY, quarantinePins, savePinsForProject } from "@core/project/pinStore"
 import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
+import { resolvedSourcePath } from "@shared/map/layerIdentity"
 import axios from "axios"
 import * as vscode from "vscode"
 import { AiHydroEnv } from "@/config"
@@ -858,15 +859,15 @@ export class VscodeMapPanelProvider {
 						break
 					}
 					case "aihydro-map-layer-source-status": {
-						// The map drew a saved copy because a layer's file could not be read. Only that one status is accepted.
-						if (
-							mainWebview?.controller &&
-							typeof message.layerId === "string" &&
-							message.status === "source_missing"
-						) {
-							mainWebview.controller.updateMapLayer(message.layerId, {
-								metadata: { source_status: "source_missing" },
-							})
+						// The map drew a saved copy because a layer's file could not be read. Only that one status is accepted, and
+						// only for a layer that names a file and is not a tool's: a tool's layer has no file to be missing.
+						const controller = mainWebview?.controller
+						if (controller && typeof message.layerId === "string" && message.status === "source_missing") {
+							const layer = controller.getMapLayers().find((l: { id: string }) => l.id === message.layerId)
+							const meta = layer?.metadata ?? {}
+							if (layer && resolvedSourcePath(meta) && !(meta.tool || meta._run_id)) {
+								controller.updateMapLayer(layer.id, { metadata: { source_status: "source_missing" } })
+							}
 						}
 						break
 					}
