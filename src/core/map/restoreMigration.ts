@@ -40,6 +40,11 @@ export interface RestoreMigration {
 	 * added as they are, so the runtime duplicate check does not merge them away either.
 	 */
 	protectedIds: Set<string>
+	/**
+	 * Entries that carry an evidence link and that their study positively cleared (it reported no link for the id). Only
+	 * these may be merged by the duplicate check at restore; every other entry with a link is added as it is.
+	 */
+	clearedIds: Set<string>
 }
 
 export interface MigrationOptions {
@@ -61,6 +66,8 @@ export interface MigrationOptions {
 
 /** Metadata that is itself evidence the layer is bound to a study, a run or a claim. */
 const EVIDENCE_KEYS = ["claim_id", "study_id", "_run_id", "tool"]
+/** True when the layer carries an id a claim or a run could be bound to. */
+export const hasEvidenceLink = (meta: Record<string, string> | undefined): boolean => EVIDENCE_KEYS.some((k) => !!meta?.[k])
 
 async function defaultExists(file: string): Promise<boolean> {
 	try {
@@ -136,8 +143,9 @@ const identityOf = (entry: MapLayerCatalogEntry): IdentityLayer => ({
 async function mergeAwayGate(
 	entries: MapLayerCatalogEntry[],
 	reader: MigrationOptions["linkedLayerIds"],
-): Promise<(entry: MapLayerCatalogEntry) => boolean> {
+): Promise<{ mayMergeAway: (entry: MapLayerCatalogEntry) => boolean; cleared: Set<string> }> {
 	const free = new Set<string>()
+	const cleared = new Set<string>()
 	const byStudy = new Map<string, string[]>()
 	for (const entry of entries) {
 		const meta = entry.metadata_snapshot ?? {}
@@ -156,9 +164,14 @@ async function mergeAwayGate(
 			linked = undefined
 		}
 		if (!linked) continue // unreadable: fail closed
-		for (const id of ids) if (!linked.has(id)) free.add(id)
+		for (const id of ids) {
+			if (!linked.has(id)) {
+				free.add(id)
+				cleared.add(id)
+			}
+		}
 	}
-	return (entry) => free.has(entry.id)
+	return { mayMergeAway: (entry) => free.has(entry.id), cleared }
 }
 
 export async function migrateCatalogEntries(input: MapLayerCatalogEntry[], options: MigrationOptions): Promise<RestoreMigration> {
@@ -217,7 +230,7 @@ export async function migrateCatalogEntries(input: MapLayerCatalogEntry[], optio
 	// A merged-away id stops being a layer id. A claim bound to it (keyed by that exact id in the study) would then point at
 	// nothing, and the tools do not read aliases. So an entry that could carry a link is merged away only when its study
 	// positively says it holds none: a link, an unreadable answer, or no reader at all leaves the entry as its own layer.
-	const mayMergeAway = await mergeAwayGate(entries.filter(isVectorEntry), options.linkedLayerIds)
+	const { mayMergeAway, cleared } = await mergeAwayGate(entries.filter(isVectorEntry), options.linkedLayerIds)
 
 	// 3. One file, one entry. The first in draw order stays.
 	const kept: MapLayerCatalogEntry[] = []
@@ -258,5 +271,5 @@ export async function migrateCatalogEntries(input: MapLayerCatalogEntry[], optio
 		}
 		aliases[entry.id] = survivor.id
 	}
-	return { entries: kept, aliases, mergedCount: Object.keys(aliases).length, protectedIds }
+	return { entries: kept, aliases, mergedCount: Object.keys(aliases).length, protectedIds, clearedIds: cleared }
 }

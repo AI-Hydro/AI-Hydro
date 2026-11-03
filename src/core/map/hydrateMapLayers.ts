@@ -24,7 +24,7 @@ import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 import { buildInundation3dLayerFromPath } from "./inundation3dLayer"
 import { type MapLayerCatalogEntry, readMapLayerCatalog, scopedMapLayerCatalogFile } from "./mapLayerCatalog"
-import { type MigrationOptions, migrateCatalogEntries } from "./restoreMigration"
+import { hasEvidenceLink, type MigrationOptions, migrateCatalogEntries } from "./restoreMigration"
 import { selectCatalogEntriesToRestore } from "./restoreSelection"
 import { MAX_INLINE_GEOJSON_BYTES } from "./sanitizeMapLayerForWebview"
 
@@ -238,7 +238,7 @@ export async function restoreCatalogEntries(
 	controller: Controller,
 	entries: MapLayerCatalogEntry[],
 	total: number,
-	options: { keepSeparate?: Set<string> } = {},
+	options: { keepSeparate?: Set<string>; clearedIds?: Set<string> } = {},
 ): Promise<string[]> {
 	const added: string[] = []
 	for (const entry of entries) {
@@ -246,8 +246,13 @@ export async function restoreCatalogEntries(
 			const layer = await buildLayerFromEntry(entry)
 			if (layer) {
 				layer.metadata = { ...(layer.metadata ?? {}), _hydrated_of: String(total) }
-				// An entry the migration kept apart on purpose is added as it is: the duplicate check must not merge it away.
-				controller.addMapLayer(layer, options.keepSeparate?.has(layer.id) ? { replaceExisting: true } : {})
+				// An entry that could carry a claim, run or study link is added exactly as it is, unless its study positively
+				// cleared it: the duplicate check would otherwise merge its id away, and the migration cannot protect it (it
+				// compares entries before their content is read). This also covers layers restored later from overflow.
+				const guarded =
+					options.keepSeparate?.has(layer.id) ||
+					(hasEvidenceLink(entry.metadata_snapshot) && !options.clearedIds?.has(layer.id))
+				controller.addMapLayer(layer, guarded ? { replaceExisting: true } : {})
 				added.push(layer.id)
 			}
 		} catch (err) {

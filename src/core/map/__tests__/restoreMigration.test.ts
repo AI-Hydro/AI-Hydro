@@ -6,7 +6,7 @@ import * as fs from "fs"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import * as os from "os"
 import * as path from "path"
-import { hydrateMapLayersFromCatalog } from "../hydrateMapLayers"
+import { hydrateMapLayersFromCatalog, restoreCatalogEntries } from "../hydrateMapLayers"
 import {
 	buildMapLayerCatalogAsync,
 	type MapLayerCatalog,
@@ -107,7 +107,9 @@ describe("restore: persisted duplicates become one layer", () => {
 		catalog = { workspace_root: project, updated_at_ms: 1, layer_order: rows.map((r) => r.id), layers: rows }
 	})
 
-	afterEach(() => {
+	afterEach(async () => {
+		// Catalog writes queued by the controller settle before the scratch directories go.
+		await new Promise((resolve) => setTimeout(resolve, 150))
 		if (savedHome === undefined) delete process.env.AIHYDRO_HOME
 		else process.env.AIHYDRO_HOME = savedHome
 		fs.rmSync(home, { recursive: true, force: true })
@@ -378,8 +380,7 @@ describe("restore: persisted duplicates become one layer", () => {
 				}),
 				mapMergedCount: 0,
 				mapHydrating: true,
-				mapSubscribers: new Set(),
-				mapMapSubscribers: new Set(),
+				mapLayerSubscribers: new Set(),
 				realPathCache: new Map(),
 				currentMapScope: () => project,
 			}) as any
@@ -430,6 +431,81 @@ describe("restore: persisted duplicates become one layer", () => {
 			expect(fs.readFileSync(backup, "utf8")).to.equal(backupBefore)
 			expect(second.state.layers.size).to.equal(3)
 			expect(second.merged).to.equal(2)
+		})
+	})
+
+	describe("the restore-time duplicate check, through the real Controller.addMapLayer with realpath", () => {
+		const GJ = JSON.stringify(POLYGON(3))
+		const real = () =>
+			Object.assign(Object.create(Controller.prototype), {
+				mapLayers: new Map(),
+				mapLayerOrder: [],
+				mapLayerAliases: new Map(),
+				mapOverflowEntries: [],
+				mapHydration: Promise.resolve(),
+				mapMergedCount: 0,
+				mapHydrating: true,
+				mapLayerSubscribers: new Set(),
+				realPathCache: new Map(),
+				realPathOf: (p: string) => fs.realpathSync(p),
+				currentMapScope: () => project,
+			}) as any
+		const cached = (name: string) => {
+			const file = path.join(home, "map_layer_geojson_cache", name)
+			fs.writeFileSync(file, GJ)
+			return file
+		}
+		const e = (id: string, over: Partial<MapLayerCatalogEntry>) => entry({ id, name: id, ...over })
+
+		it("path-less entries with the same content: the one bound to a study is not merged into the other at restore", async () => {
+			const a = e("A", { geojson_cache_path: cached("c1.dat"), metadata_snapshot: { source: "user" } })
+			const b = e("B", { geojson_cache_path: cached("c2.dat"), metadata_snapshot: { source: "user", study_id: "s1" } })
+			const migration = await migrateCatalogEntries([a, b], {
+				workspaceRoot: project,
+				cacheDir: path.join(home, "map_layer_geojson_cache"),
+			})
+			expect(migration.mergedCount).to.equal(0)
+			const ctl = real()
+			await restoreCatalogEntries(ctl, migration.entries, 2, {
+				keepSeparate: migration.protectedIds,
+				clearedIds: migration.clearedIds,
+			})
+			expect([...ctl.mapLayers.keys()]).to.deep.equal(["A", "B"])
+			expect(ctl.getMapLayerAliases()).to.deep.equal({})
+			expect(ctl.getMapRestoreState().mergedCount).to.equal(0)
+		})
+
+		it("layers restored later from overflow: a study and claim bound entry is not merged away", async () => {
+			const p = path.join(project, "same.geojson")
+			fs.writeFileSync(p, GJ)
+			const a2 = e("A2", { metadata_snapshot: { source: "user", source_path: p }, geojson_cache_path: cached("a2.dat") })
+			const b2 = e("B2", {
+				metadata_snapshot: { source: "user", source_path: p, study_id: "s1", claim_id: "c1" },
+				geojson_cache_path: cached("b2.dat"),
+			})
+			const ctl = real()
+			ctl.mapOverflowEntries = [a2, b2]
+			expect(await ctl.restoreOlderMapLayers()).to.equal(2)
+			expect([...ctl.mapLayers.keys()].sort()).to.deep.equal(["A2", "B2"])
+			expect(ctl.getMapLayerAliases()).to.deep.equal({})
+			await new Promise((resolve) => setTimeout(resolve, 200))
+		})
+
+		it("the guard does not stop duplicates that carry no link from merging, nor an entry its study cleared", async () => {
+			const p = path.join(project, "plain.geojson")
+			fs.writeFileSync(p, GJ)
+			const plain = (id: string) =>
+				e(id, { metadata_snapshot: { source: "user", source_path: p }, geojson_cache_path: cached(`${id}.dat`) })
+			const ctl = real()
+			await restoreCatalogEntries(ctl, [plain("P1"), plain("P2")], 2)
+			expect([...ctl.mapLayers.keys()]).to.deep.equal(["P1"])
+			const linked = e("L2", {
+				metadata_snapshot: { source: "user", source_path: p, study_id: "s1" },
+				geojson_cache_path: cached("L2.dat"),
+			})
+			const ctl2 = real()
+			await restoreCatalogEntries(ctl2, [plain("L1"), linked], 2, { clearedIds: new Set(["L2"]) })
+			expect([...ctl2.mapLayers.keys()]).to.deep.equal(["L1"])
 		})
 	})
 })
