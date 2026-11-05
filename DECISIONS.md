@@ -4,6 +4,17 @@ Append-only. Newest first. One entry per non-obvious choice, with the **why**.
 
 ---
 
+## 2026-11-05 — Layers slice 1: Unload settings live in a sidecar, "Remove from list" lives in globalState
+
+PR #159. Design: `docs/vision-2040/findings/layers-design-2026-11-02.md`, section 5.5, 5.6 and the Addendum (items 5 and 8).
+
+- **Unload keeps style, name, opacity and place in a sidecar file, not in the layer catalog.** `<AIHYDRO_HOME>/map_unloaded_layers.<12 hex of sha1(workspace root)>.json`, keyed by the file's resolved path. *Why not the catalog:* the tools (aihydro-tools) read `map_layer_catalog*.json` as "what is on the map", and the catalog is rewritten on every layer change and mirrored to an unscoped file; an unloaded file is not on the map, and we had not verified that the tools ignore an unknown key. A sidecar cannot change what the tools see. It is capped at 500 entries (oldest first), written atomically one write at a time, and holds only whitelisted settings.
+- **The sidecar carries no run link, tool or study.** Load of a file the user unloaded gives back its look, never its evidence. A file reads `Not linked to a run` until a lookup (`aihydro://study/by-artifact`, Slice 3) says otherwise. A name or a folder is never evidence of a run. Unloading a run-linked layer is allowed, says its link is not kept, and Undo restores the original layer in the same session.
+- **"Remove from list" is a per-project preference in the extension's `globalState`**, key `aihydro.map.fileList.removed.v1:<projectKey>`, on the `pinStore.ts` pattern (`prj_` key with `dir:` fallback and merge). *Why not elsewhere:* a file in `.aihydro/` would show up in the owner's repository, and `.gitignore` covers only `.aihydro/runs/`; `localStorage` has one global key; the catalog is rewritten constantly.
+- **An entry is `{ folderHash, relativePath, kind, removedAt }`: never an absolute path.** The folder is the first 16 hex of the sha256 of its resolved path, so the list names no home directory, survives a `dir:` to `prj_` move, and tells two folders of a multi-root window apart. A multi-root window has one project identity (the first folder's key). Entries that are absolute, drive paths or climb out with `..` are refused at the store.
+- **Nothing in the feature deletes a file.** A test scans every feature module for any delete call and another checks files are byte-identical after remove, restore and unload. The Explorer remains the only place a file is deleted.
+- **Open decision, not made here:** whether a loaded file stays in the tree with a check (built) or moves to a "Not on the map" section (mocked as `map-layers-files-moving-row-alt`). That is the owner's call after seeing both.
+
 ## 2026-10-31 — Explorer subagents are in-process, profile-scoped and asked every time
 
 Branches `vision2040/subagents-pr0` to `-pr3` (owner decision H1, 2026-10-28: explorer-only; PR-4, a `general` or

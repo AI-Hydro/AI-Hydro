@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import * as os from "os"
 import * as path from "path"
 import { type FileListStateStore, folderHashOf, REMOVED_KEY_PREFIX } from "../mapFileListStore"
-import { changeFileList, listProjectFiles, type ProjectFilesHost } from "../projectFiles"
+import { changeFileList, checkProjectFileRequest, listProjectFiles, type ProjectFilesHost } from "../projectFiles"
 import { peekUnloaded, saveUnloaded } from "../unloadedLayerSidecar"
 
 function memento(): FileListStateStore & { data: Record<string, unknown> } {
@@ -144,10 +144,51 @@ describe("project files list", () => {
 	})
 })
 
+describe("load-project-file request check", () => {
+	const scan = [
+		{ workspaceFolder: "/ws", relativePath: "data/dem.tif", extension: ".tif" },
+		{ workspaceFolder: "/ws", relativePath: "x.kmz", extension: ".kmz" },
+	]
+	const folders = [{ path: "/ws" }]
+	const ask = (relativePath: unknown, workspaceFolder: unknown = "/ws") => checkProjectFileRequest({ relativePath, workspaceFolder }, scan, folders)
+
+	it("accepts a file of the current scan and returns its absolute path", () => {
+		const r = ask("data/dem.tif")
+		expect(r.ok && r.absolutePath).to.equal(path.join("/ws", "data/dem.tif"))
+	})
+	it("rejects .., absolute paths and drive paths", () => {
+		for (const bad of ["../x.kmz", "data/../../etc/passwd.tif", "/etc/hosts.tif", "C:\\x.tif", "C:/x.tif", "..\\x.kmz"]) {
+			expect(ask(bad).ok, bad).to.equal(false)
+		}
+	})
+	it("rejects a type that is not a listed map type, and a file that is not in the scan", () => {
+		expect(ask("data/notes.txt").ok).to.equal(false)
+		expect(ask("data/other.tif").ok).to.equal(false)
+	})
+	it("rejects a folder that is not open and a malformed request", () => {
+		expect(ask("data/dem.tif", "/not-open").ok).to.equal(false)
+		expect(ask(undefined).ok).to.equal(false)
+		expect(ask("data/dem.tif", 5).ok).to.equal(false)
+	})
+})
+
+describe("loaded layer id comes from the host", () => {
+	it("is set for a file the host says is on the map, and empty otherwise", async () => {
+		const h = { ...host(), loadedLayerId: (p: string) => (p.endsWith("c.geojson") ? "L-c" : undefined) }
+		const r = await listProjectFiles(h)
+		expect(Object.fromEntries(r.files.map((f) => [f.relativePath, f.loadedLayerId]))).to.deep.equal({
+			"data/a.geojson": "",
+			"data/b.geojson": "",
+			"c.geojson": "L-c",
+		})
+	})
+})
+
 describe("no code of this feature deletes a file", () => {
 	const FEATURE_FILES = [
 		"src/core/map/mapFileListStore.ts",
 		"src/core/map/projectFiles.ts",
+		"src/core/map/derivedWrite.ts",
 		"src/core/map/unloadedLayerSidecar.ts",
 		"src/core/map/authorizeMapPath.ts",
 		"src/core/workspace/FileScanner.ts",

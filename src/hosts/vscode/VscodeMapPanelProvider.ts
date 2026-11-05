@@ -3,6 +3,8 @@ import * as os from "node:os"
 import * as path from "node:path"
 import type { Controller } from "@core/controller"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
+import { writeDerivedGeojson } from "@core/map/derivedWrite"
+import { checkProjectFileRequest } from "@core/map/projectFiles"
 import { authorizeMapPath, grantMapPath, type MapPathDeps, type MapPathPurpose } from "@core/map/authorizeMapPath"
 import { resolveMapFilePath as resolveMapFilePathIn } from "@core/map/resolveMapFilePath"
 import { checkSaveTarget, loadPinsForProject, NO_FOLDER_KEY, quarantinePins, savePinsForProject } from "@core/project/pinStore"
@@ -335,23 +337,23 @@ export class VscodeMapPanelProvider {
 		if (!panel) {
 			return
 		}
-		// A path the check refuses is not loaded. Files the user picked were granted by `grantAndSendFileUrisToMap`.
-		const allowed: vscode.Uri[] = []
-		for (const uri of uris) {
-			const decision = await authorizeForMap(uri.fsPath, "load", VscodeMapPanelProvider.controller)
+		// A path the check refuses is not loaded. Files the user picked were granted by `grantAndSendFileUrisToMap`. What is
+		// read, served and recorded is the path the check resolved, not the spelling it was asked with.
+		const allowed: { uri: vscode.Uri; asked: string }[] = []
+		for (const asked of uris) {
+			const decision = await authorizeForMap(asked.fsPath, "load", VscodeMapPanelProvider.controller)
 			if (decision.ok) {
-				allowed.push(uri)
+				allowed.push({ uri: vscode.Uri.file(decision.path), asked: asked.fsPath })
 			} else {
 				vscode.window.showWarningMessage(`AI-Hydro Map: ${decision.reason}`)
 			}
 		}
-		uris = allowed
 		VscodeMapPanelProvider.allowLocalFileRoots(
 			panel,
-			uris.map((uri) => vscode.Uri.file(path.dirname(uri.fsPath))),
+			allowed.map(({ uri }) => vscode.Uri.file(path.dirname(uri.fsPath))),
 		)
 		await new Promise((resolve) => setTimeout(resolve, 400))
-		for (const uri of uris) {
+		for (const { uri, asked } of allowed) {
 			let stat: vscode.FileStat | undefined
 			try {
 				stat = await vscode.workspace.fs.stat(uri)
@@ -366,7 +368,7 @@ export class VscodeMapPanelProvider {
 				sourceUri: uri.toString(),
 				sourceMtimeMs: stat?.mtime,
 				sourceSizeBytes: stat?.size,
-				...(sourceExtras[uri.fsPath] ?? {}),
+				...(sourceExtras[asked] ?? sourceExtras[uri.fsPath] ?? {}),
 			})
 		}
 	}
@@ -1002,16 +1004,18 @@ export class VscodeMapPanelProvider {
 					}
 					case "aihydro-map-load-project-file": {
 						// A project file the extension host cannot read to text (GeoTIFF, KMZ): the map panel parses it. The
-						// file is named by folder and relative path and must be inside an open folder.
-						const folder = (vscode.workspace.workspaceFolders ?? []).find(
-							(f) => typeof message.workspaceFolder === "string" && f.uri.fsPath === message.workspaceFolder,
+						// request must name a file of the current scan, by open folder and relative path.
+						const controller = VscodeMapPanelProvider.controller
+						const checked = checkProjectFileRequest(
+							message,
+							controller?.getWorkspaceGeoJsonFiles() ?? [],
+							(vscode.workspace.workspaceFolders ?? []).map((f) => ({ path: f.uri.fsPath })),
 						)
-						if (!folder || typeof message.relativePath !== "string") {
-							vscode.window.showWarningMessage("AI-Hydro Map: That file is not in an open folder.")
+						if (!checked.ok) {
+							vscode.window.showWarningMessage(`AI-Hydro Map: ${checked.reason}`)
 							break
 						}
-						const target = vscode.Uri.file(path.join(folder.uri.fsPath, message.relativePath))
-						await VscodeMapPanelProvider.sendFileUrisToMap([target])
+						await VscodeMapPanelProvider.sendFileUrisToMap([vscode.Uri.file(checked.absolutePath)])
 						break
 					}
 					case "aihydro-map-add-file-command": {
@@ -1155,53 +1159,25 @@ export class VscodeMapPanelProvider {
 					case "aihydro-write-derived-geojson": {
 						const requestId = message.requestId
 						try {
-							const workspaceRoot =
-								vscode.workspace.workspaceFolders?.[0]?.uri ?? VscodeMapPanelProvider.context.globalStorageUri
-							const derivedDir = vscode.Uri.joinPath(workspaceRoot, ".aihydro", "map-derived")
-							await vscode.workspace.fs.createDirectory(derivedDir)
-							const baseName = safeFilename(String(message.name ?? "layer.geojson"), "layer.geojson").replace(
-								/\.(geojson|json)$/i,
-								"",
-							)
-							const geojson = typeof message.geojson === "string" ? message.geojson : ""
-							if (!geojson) {
-								throw new Error("No GeoJSON payload")
-							}
-							const featureCount = (() => {
-								try {
-									const parsed = JSON.parse(geojson)
-									return parsed?.type === "FeatureCollection" && Array.isArray(parsed.features)
-										? parsed.features.length
-										: undefined
-								} catch {
-									return undefined
-								}
-							})()
-							const artifactPath = vscode.Uri.joinPath(derivedDir, `${baseName}.geojson`)
-							const provenancePath = vscode.Uri.joinPath(derivedDir, `${baseName}.provenance.json`)
-							const geojsonBytes = Buffer.from(geojson, "utf8")
-							await vscode.workspace.fs.writeFile(artifactPath, geojsonBytes)
-							const provenance = {
-								schemaVersion: "1.0",
-								artifactType: "ai-hydro.map-derived-vector",
-								generatedAtUtc: new Date().toISOString(),
-								source: message.source ?? null,
-								format: message.format ?? null,
-								featureCount,
-								artifactPath: artifactPath.fsPath,
-								sha256: checksum(geojsonBytes),
-								warnings: Array.isArray(message.warnings) ? message.warnings : [],
-							}
-							await vscode.workspace.fs.writeFile(
-								provenancePath,
-								Buffer.from(JSON.stringify(provenance, null, 2), "utf8"),
-							)
+							const source = (message.source ?? null) as { path?: string } | null
+							const written = await writeDerivedGeojson({
+								folders: (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+								fallbackDir: VscodeMapPanelProvider.context.globalStorageUri.fsPath,
+								sourcePath: typeof source?.path === "string" ? source.path : undefined,
+								name: String(message.name ?? "layer.geojson"),
+								geojson: typeof message.geojson === "string" ? message.geojson : "",
+								provenance: {
+									source,
+									format: message.format ?? null,
+									warnings: Array.isArray(message.warnings) ? message.warnings : [],
+								},
+							})
 							await panel.webview.postMessage({
 								type: "aihydro-write-derived-geojson-result",
 								requestId,
 								ok: true,
-								artifactPath: artifactPath.fsPath,
-								provenancePath: provenancePath.fsPath,
+								artifactPath: written.artifactPath,
+								provenancePath: written.provenancePath,
 							})
 						} catch (err) {
 							await panel.webview.postMessage({

@@ -287,7 +287,7 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 					)}
 					{data.truncated && (
 						<p className="map-pf-notes">
-							{`Listing stops at ${formatCount(data.files.length, false)} files; there are more. Narrow it with the filter or the exclude settings.`}
+							{`Listing stops at ${formatCount(data.files.length, false)} files; there are more. Removing files from the list does not bring in the ones beyond the limit; add folders to files.exclude to narrow the scan.`}
 						</p>
 					)}
 					{showFilter && (

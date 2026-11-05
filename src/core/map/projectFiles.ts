@@ -6,6 +6,7 @@ import {
 	type RemovedFileEntry,
 	type WorkspaceGeoFile,
 } from "@shared/proto/cline/map"
+import { PROJECT_FILE_EXTENSIONS } from "@shared/map/projectFiles"
 import * as path from "path"
 import {
 	addRemoved,
@@ -30,9 +31,15 @@ export interface ProjectFilesHost {
 	folders(): { path: string; name: string }[]
 	/** The open project's list scope. One identity for the whole window, however many folders it holds. */
 	scope(): Promise<{ store: FileListStateStore; key: ProjectKey; dirKey?: string }>
+	/**
+	 * The id of the layer on the map that was made from this file, comparing real paths (symlinks resolved), so a symlinked
+	 * folder, or `/var` against `/private/var`, still counts as loaded. Undefined when the file is not on the map.
+	 */
+	loadedLayerId?(absolutePath: string): string | undefined
 }
 
-const toProtoFile = (file: WorkspaceGeoJsonFile): WorkspaceGeoFile => ({
+const toProtoFile = (file: WorkspaceGeoJsonFile, loadedLayerId = ""): WorkspaceGeoFile => ({
+	loadedLayerId,
 	relativePath: file.relativePath,
 	workspaceFolder: file.workspaceFolder,
 	folderName: file.workspaceFolderName,
@@ -68,7 +75,7 @@ export async function listProjectFiles(host: ProjectFilesHost): Promise<ListWork
 	})
 	const stats = host.stats()
 	return ListWorkspaceGeoFilesResponse.create({
-		files: visible.map(toProtoFile),
+		files: visible.map((file) => toProtoFile(file, host.loadedLayerId?.(file.uri.fsPath) ?? "")),
 		totalCount: visible.length,
 		foldersSkipped: stats.foldersSkipped,
 		skippedNames: stats.skippedNames,
@@ -101,4 +108,37 @@ export async function changeFileList(
 		})
 	}
 	return mode === "remove" ? await addRemoved(store, key.key, entries) : await restoreRemoved(store, key.key, entries)
+}
+
+/**
+ * The check on a "load this project file" message from the webview (GeoTIFF, KMZ: the map panel parses them). The file
+ * is named by an open folder and a relative path, and must be exactly a file of the current scan: no `..`, no absolute or
+ * drive path, a listed geo extension, and a row of the list. Returns the file's absolute path, or why not.
+ */
+export function checkProjectFileRequest(
+	request: { workspaceFolder?: unknown; relativePath?: unknown },
+	scan: { workspaceFolder: string; relativePath: string; extension: string }[],
+	folders: { path: string }[],
+): { ok: true; absolutePath: string } | { ok: false; reason: string } {
+	const rel = request.relativePath
+	const folder = request.workspaceFolder
+	if (typeof rel !== "string" || typeof folder !== "string" || rel === "") {
+		return { ok: false, reason: "That file is not in an open folder." }
+	}
+	const normal = normalizeRelative(rel)
+	if (path.isAbsolute(rel) || path.isAbsolute(normal) || /^[A-Za-z]:/.test(rel) || normal.split("/").includes("..") || rel.includes("\0")) {
+		return { ok: false, reason: "A project file is named by a path inside its folder." }
+	}
+	if (!folders.some((f) => f.path === folder)) {
+		return { ok: false, reason: "That file is not in an open folder." }
+	}
+	const ext = path.extname(normal).toLowerCase()
+	if (!(PROJECT_FILE_EXTENSIONS as readonly string[]).includes(ext.slice(1))) {
+		return { ok: false, reason: "That is not a map file type." }
+	}
+	const listed = scan.find((f) => f.workspaceFolder === folder && normalizeRelative(f.relativePath) === normal)
+	if (!listed) {
+		return { ok: false, reason: "That file is not in the Project files list." }
+	}
+	return { ok: true, absolutePath: path.join(folder, normal) }
 }

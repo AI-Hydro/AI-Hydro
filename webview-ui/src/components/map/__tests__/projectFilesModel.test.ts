@@ -59,4 +59,11 @@ describe("project files rows", () => {
 		expect(layerOfFile(file, layersByFile([rel]))?.id).toBe("2")
 		expect(layerOfFile(f("b.geojson"), layersByFile([abs, rel]))).toBeUndefined()
 	})
+
+	it("trusts the host's real-path match: a symlinked folder or /var vs /private/var still counts as loaded", () => {
+		const file = { ...f("a.geojson"), loadedLayerId: "L9" } as WorkspaceGeoFile
+		const layer = { id: "L9", metadata: { source_path: "/private/ws-real/a.geojson" } } as unknown as MapLayer
+		expect(layerOfFile(file, layersByFile([layer]))?.id).toBe("L9")
+		expect(layerOfFile({ ...file, loadedLayerId: "" } as WorkspaceGeoFile, layersByFile([layer]))).toBeUndefined()
+	})
 })

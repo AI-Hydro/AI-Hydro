@@ -2948,6 +2948,16 @@ export class Controller {
 	/** Project key per root: a `prj_` answer is kept, a `dir:` fallback is asked again (the project may get an id). */
 	private readonly fileListKeys = new Map<string, ProjectKey>()
 
+	/** A lookup from a file's path to the layer made from it, by real path. Built once per call of the list. */
+	private loadedLayerLookup(): (absolutePath: string) => string | undefined {
+		const byReal = new Map<string, string>()
+		for (const layer of this.mapLayers.values()) {
+			const named = resolvedSourcePath(layer.metadata)
+			if (named) byReal.set(this.realPathOf(named), layer.id)
+		}
+		return (absolutePath) => (byReal.size === 0 ? undefined : byReal.get(this.realPathOf(absolutePath)))
+	}
+
 	/**
 	 * Everything the Project files list needs from this window. One project identity for the whole window: the first
 	 * folder's key, so a multi-root window has one removed list, and an entry names its folder by hash.
@@ -2958,6 +2968,7 @@ export class Controller {
 			stats: () => this.getWorkspaceScanStats(),
 			folders: () =>
 				(vscode.workspace.workspaceFolders ?? []).map((folder) => ({ path: folder.uri.fsPath, name: folder.name })),
+			loadedLayerId: this.loadedLayerLookup(),
 			scope: async () => {
 				const store = this.context.globalState
 				const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath

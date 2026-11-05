@@ -180,6 +180,7 @@ message WorkspaceGeoFile {
     string folder_name = 5;    // Display name of that folder
     int64 size_bytes = 6;      // Size on disk when scanned
     int64 mtime_ms = 7;        // Modified time when scanned
+    string loaded_layer_id = 8; // Layer on the map made from this file (symlinks and /var vs /private/var resolved by the host); empty when none
 }
 
 // A file or folder the user took out of the Project files list on this machine. The file itself is never touched.

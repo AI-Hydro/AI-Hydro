@@ -24,23 +24,36 @@ export function fileResolved(file: Pick<WorkspaceGeoFile, "relativePath" | "work
 }
 
 /** Layers by the file they were loaded from. A layer saved before paths were absolute matches by relative path alone. */
-export function layersByFile(layers: MapLayer[]): { byPath: Map<string, MapLayer>; pathOnly: Map<string, MapLayer> } {
+export function layersByFile(layers: MapLayer[]): {
+	byPath: Map<string, MapLayer>
+	pathOnly: Map<string, MapLayer>
+	byId: Map<string, MapLayer>
+} {
 	const byPath = new Map<string, MapLayer>()
 	const pathOnly = new Map<string, MapLayer>()
+	const byId = new Map<string, MapLayer>()
 	for (const layer of layers) {
+		byId.set(layer.id, layer)
 		const key = resolvedSourcePath(layer.metadata)
 		if (key) byPath.set(key, layer)
 		if (layer.metadata?.path && !layer.metadata.workspace_folder) pathOnly.set(layer.metadata.path, layer)
 	}
-	return { byPath, pathOnly }
+	return { byPath, pathOnly, byId }
 }
 
-/** The layer that holds this file, if one is on the map. */
+/**
+ * The layer that holds this file, if one is on the map. The host's answer comes first: it compares real paths, so a
+ * symlinked folder or `/var` against `/private/var` still counts. The webview's own comparison is the fallback.
+ */
 export function layerOfFile(
 	file: WorkspaceGeoFile,
 	index: ReturnType<typeof layersByFile>,
 ): MapLayer | undefined {
-	return index.byPath.get(fileResolved(file)) ?? index.pathOnly.get(file.relativePath)
+	return (
+		(file.loadedLayerId ? index.byId.get(file.loadedLayerId) : undefined) ??
+		index.byPath.get(fileResolved(file)) ??
+		index.pathOnly.get(file.relativePath)
+	)
 }
 
 export type PfRow =

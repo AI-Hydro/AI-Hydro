@@ -262,6 +262,16 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		if (autoOpen === undefined && !project.data.loading) setAutoOpen(layers.length === 0 && project.data.files.length > 0)
 	}, [autoOpen, project.data.loading, project.data.files.length, layers.length])
 	const projectOpen = projectOpenChoice ?? autoOpen ?? false
+	// A layer arrives or leaves (a GeoTIFF the panel parsed, an agent's push): ask the host again, so its real-path match is current.
+	const layerIdsKey = layers.map((l) => l.id).join("\u0000")
+	const refreshProject = project.refresh
+	const firstLayerKey = useRef(layerIdsKey)
+	useEffect(() => {
+		if (firstLayerKey.current === layerIdsKey) return
+		firstLayerKey.current = layerIdsKey
+		const t = window.setTimeout(() => void refreshProject(), 300)
+		return () => window.clearTimeout(t)
+	}, [layerIdsKey, refreshProject])
 	const toggleProjectOpen = () => {
 		const next = !projectOpen
 		setProjectOpenChoice(next)
@@ -588,6 +598,15 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		for (const file of project.data.files) map.set(fileResolved(file), file)
 		return map
 	}, [project.data.files])
+	/** The project file each layer on the map was loaded from (by the host's real-path match, else by path). */
+	const fileOfLayerId = useMemo(() => {
+		const map = new Map<string, WorkspaceGeoFile>()
+		for (const file of project.data.files) {
+			const layer = layerOfFile(file, fileIndex)
+			if (layer) map.set(layer.id, file)
+		}
+		return map
+	}, [project.data.files, fileIndex])
 	const removedResolved = useMemo(() => {
 		const set = new Set<string>()
 		for (const e of project.data.removed) {
@@ -653,7 +672,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				: `${base}. The file stays on disk`
 		const listEntries: UndoEntry["listEntries"] = alsoRemove
 			? targets.flatMap((l): NonNullable<UndoEntry["listEntries"]> => {
-					const file = fileByResolved.get(resolvedSourcePath(l.metadata) ?? "")
+					const file = fileOfLayerId.get(l.id) ?? fileByResolved.get(resolvedSourcePath(l.metadata) ?? "")
 					return file ? [{ workspaceFolder: file.workspaceFolder, relativePath: file.relativePath, kind: "file" as const }] : []
 				})
 			: undefined
@@ -756,7 +775,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		// A file in the Project files tree (listed, or removed from the list) can be unloaded and loaded again from there.
 		// A layer with no such row (an inline layer, a file outside the project) can only be removed.
 		const resolved = resolvedSourcePath(layer.metadata) ?? ""
-		const listed = resolved ? fileByResolved.has(resolved) : false
+		const listed = fileOfLayerId.has(layer.id) || (resolved ? fileByResolved.has(resolved) : false)
 		const unloadable = listed || (resolved !== "" && removedResolved.has(resolved))
 		const items: (OverflowItem | false)[] = [
 			{ key: "zoom", label: "Zoom to layer", icon: "zoom-in", onSelect: () => onZoomToLayer?.(layer) },
