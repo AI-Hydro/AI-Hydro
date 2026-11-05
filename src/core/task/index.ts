@@ -116,6 +116,7 @@ import {
 import { FocusChainManager } from "./focus-chain"
 import { MessageStateHandler } from "./message-state"
 import { appendProjectContext, ProjectContextSection } from "./projectContextSection"
+import { noteAgentsDirectory } from "./protectedRoots"
 import { userWroteToLead } from "./subagents/launchBrake"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
@@ -1835,6 +1836,7 @@ export class Task {
 		const { globalToggles, localToggles } = await refreshAiHydroRulesToggles(this.controller, this.cwd)
 
 		const globalAiHydroRulesFilePath = await ensureRulesDirectoryExists()
+		noteAgentsDirectory(path.join(path.dirname(globalAiHydroRulesFilePath), "Agents"))
 		const globalAiHydroRulesFileInstructions = await getGlobalAiHydroRules(globalAiHydroRulesFilePath, globalToggles)
 
 		const localAiHydroRulesFileInstructions = await getLocalAiHydroRules(this.cwd, localToggles)

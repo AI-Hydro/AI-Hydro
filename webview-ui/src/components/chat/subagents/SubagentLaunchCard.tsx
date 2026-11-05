@@ -84,6 +84,30 @@ export function SubagentLaunchCard({ tool, state }: { tool: AiHydroSayTool; stat
 			<div className="text-[12px] text-[var(--vscode-descriptionForeground)]" data-testid="subagent-launch-limits">
 				{launch.limits}
 			</div>
+			{launch.definition && launch.definition.source !== "builtin" && (
+				<div
+					className="pt-[2px] text-[12px] text-[var(--vscode-descriptionForeground)]"
+					data-testid="subagent-launch-definition">
+					{`Agent "${launch.definition.id}" is your ${launch.definition.source} file${launch.definition.path ? ` ${launch.definition.path}` : ""}, narrowing ${launch.definition.extends ?? "a built-in"}: it can only remove tools, lower limits and add prompt text. `}
+					<span className="ph-no-capture" title={launch.definition.sha256}>
+						{`sha256 ${launch.definition.sha256.slice(0, 12)}…`}
+					</span>
+				</div>
+			)}
+			{launch.agentFiles && (launch.agentFiles.problems.length > 0 || launch.agentFiles.notes.length > 0) && (
+				<div className="pt-[2px] text-[12px]" data-testid="subagent-launch-agent-files" role="note">
+					{launch.agentFiles.notes.map((note) => (
+						<div className="ph-no-capture" key={note}>
+							{note}
+						</div>
+					))}
+					{launch.agentFiles.problems.map((problem) => (
+						<div className="ph-no-capture" key={problem.path}>
+							{`Agent file not loaded: ${problem.path}: ${problem.reason}`}
+						</div>
+					))}
+				</div>
+			)}
 			{launch.advisory && (
 				<div
 					className="pt-[2px] text-[12px] text-[var(--vscode-descriptionForeground)]"

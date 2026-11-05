@@ -11,6 +11,7 @@ import {
 	promptHeadOf,
 	type SubagentBudgetStop,
 	type SubagentChildSummary,
+	type SubagentDefinitionRef,
 	type SubagentOrigin,
 	type SubagentProfileId,
 	type SubagentReport,
@@ -116,6 +117,8 @@ export interface SubagentResult {
 	/** A reviewer's check, for a definition whose report schema is "review". */
 	review?: SubagentReviewReport
 	reportSchema?: "findings" | "review"
+	/** The definition the child ran, so the lead's result can name a user file and its hash. */
+	definition?: SubagentDefinitionRef
 	/** Last assistant text, present when a budget or an error ended the child without a report. */
 	lastAssistantText?: string
 	budgetStop?: SubagentBudgetStop
@@ -652,6 +655,17 @@ export class SubagentRunner {
 		}
 	}
 
+	private definitionRef(): SubagentDefinitionRef {
+		const definition = this.init.caps.definition
+		return {
+			id: definition.id,
+			source: definition.source,
+			sha256: definition.sha256,
+			...(definition.path ? { path: definition.path } : {}),
+			...(definition.extends ? { extends: definition.extends } : {}),
+		}
+	}
+
 	private async finish(
 		status: SubagentStatus,
 		extra: { budgetStop?: SubagentBudgetStop; error?: string; note?: string } = {},
@@ -670,13 +684,7 @@ export class SubagentRunner {
 			parentTaskId: init.taskId,
 			parentUlid: init.ulid,
 			profile: init.profile,
-			definition: {
-				id: init.caps.definition.id,
-				source: init.caps.definition.source,
-				sha256: init.caps.definition.sha256,
-				...(init.caps.definition.path ? { path: init.caps.definition.path } : {}),
-				...(init.caps.definition.extends ? { extends: init.caps.definition.extends } : {}),
-			},
+			definition: this.definitionRef(),
 			agent: { agent_id: this.childId, parent_agent_id: init.ulid, role: init.profile },
 			allowlistSha256: allowlistSha256([...init.caps.builtinAllow, init.caps.reportTool]),
 			prompt: init.prompt,
@@ -713,6 +721,7 @@ export class SubagentRunner {
 			...(this.report ? { report: this.report } : {}),
 			...(this.review ? { review: this.review } : {}),
 			reportSchema: init.caps.reportSchema,
+			definition: this.definitionRef(),
 			...(keepText ? { lastAssistantText: this.lastAssistantText } : {}),
 			...(extra.budgetStop ? { budgetStop: extra.budgetStop } : {}),
 			usage: this.usage,

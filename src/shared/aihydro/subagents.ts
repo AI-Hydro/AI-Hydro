@@ -201,6 +201,16 @@ export interface SubagentLaunch {
 	definition?: SubagentDefinitionRef
 	/** True when the host built a study brief for the children (study id, gauge, period, plan id). Never model-written. */
 	studyBrief?: boolean
+	/** Agent files that did not load, and notes about files left out. Shown so no file is skipped silently. */
+	agentFiles?: SubagentAgentFilesNotice
+}
+
+/** What the launch card says about the user's agent files this launch could not use. */
+export interface SubagentAgentFilesNotice {
+	/** A file that is invalid, with the reason. */
+	problems: Array<{ path: string; reason: string }>
+	/** For example: workspace files left out because the workspace is not trusted. */
+	notes: string[]
 }
 
 /** What the launch card says about the definition behind the children. */

@@ -2,7 +2,7 @@ import { type ApiHandler, buildApiHandler } from "@core/api"
 import type { ToolUse } from "@core/assistant-message"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
 import { formatResponse } from "@core/prompts/responses"
-import { ensureTaskDirectoryExists } from "@core/storage/disk"
+import { ensureTaskDirectoryExists, getAgentsDirectoryPath } from "@core/storage/disk"
 import {
 	DEFAULT_AGENT_BUDGET_USD,
 	DEFAULT_MAX_AGENTS_PER_TASK,
@@ -10,6 +10,7 @@ import {
 	SUBAGENT_SIGNALS,
 	type SubagentChildSummary,
 	type SubagentLaunch,
+	type SubagentAgentFilesNotice,
 	type SubagentLaunchFacts,
 	type SubagentSignal,
 	type SubagentStatusPayload,
@@ -20,6 +21,7 @@ import { convertAiHydroMessageToProto } from "@/shared/proto-conversions/aihydro
 import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { type AgentDefinition, BUILTIN_DEFINITIONS, DEFAULT_AGENT_ID, resolveDefinition } from "../../subagents/agentDefinition"
+import { type AgentRegistry, loadAgentRegistry } from "../../subagents/agentFiles"
 import { type ChildApiResolution, resolveChildApi } from "../../subagents/agentModel"
 import { launchesPaused, recordLaunchApproved, recordLaunchDenial } from "../../subagents/launchBrake"
 import { ParentAskBridge } from "../../subagents/ParentAskBridge"
@@ -119,6 +121,20 @@ export function cleanSignal(raw: string | undefined): SubagentSignal | undefined
 	return SUBAGENT_SIGNALS.find((known) => known === word)
 }
 
+/** The files the user wrote that this launch could not use, for the card. Capped; nothing is skipped without being counted. */
+export function agentFilesNotice(registry: AgentRegistry): { agentFiles?: SubagentAgentFilesNotice } {
+	if (registry.problems.length === 0 && registry.notes.length === 0) {
+		return {}
+	}
+	const LIMIT = 5
+	const problems = registry.problems.slice(0, LIMIT).map((problem) => ({ path: problem.path, reason: problem.reason }))
+	const notes = registry.notes.slice(0, LIMIT)
+	if (registry.problems.length > LIMIT) {
+		notes.push(`${registry.problems.length - LIMIT} more agent files did not load.`)
+	}
+	return { agentFiles: { problems, notes } }
+}
+
 /** The parent's context use at its last request, as a whole percentage; undefined when the window or the usage is not known. */
 export function contextUsedPercent(
 	rows: ReadonlyArray<{ say?: string; text?: string }>,
@@ -182,8 +198,32 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 	 * from the configuration a definition's model setting resolved to.
 	 */
 	constructor(
-		private readonly options: { buildApi?: (config: TaskConfig, resolved?: ChildApiResolution) => ApiHandler } = {},
+		private readonly options: {
+			buildApi?: (config: TaskConfig, resolved?: ChildApiResolution) => ApiHandler
+			/** Test seam: the user's agent files. Production reads the global folder and each workspace's `.aihydrorules/agents`. */
+			loadAgents?: (config: TaskConfig) => Promise<AgentRegistry>
+			/** Test seam: where the global agents folder is. Production asks the host. */
+			globalAgentsDir?: () => Promise<string | undefined>
+		} = {},
 	) {}
+
+	/**
+	 * The user's agent files, read at each launch (a few small files). Workspace files load only in a trusted workspace;
+	 * in an untrusted one they are not opened and the registry carries a note saying how many were left out.
+	 */
+	private loadAgents(config: TaskConfig): Promise<AgentRegistry> {
+		if (this.options.loadAgents) {
+			return this.options.loadAgents(config)
+		}
+		const roots = config.workspaceManager?.getRoots().map((root) => root.path) ?? []
+		return (this.options.globalAgentsDir ? this.options.globalAgentsDir() : getAgentsDirectoryPath()).then((globalDir) =>
+			loadAgentRegistry({
+				globalDir,
+				workspaceRoots: roots.length > 0 ? roots : [config.cwd],
+				workspaceTrusted: isWorkspaceTrusted(),
+			}),
+		)
+	}
 
 	getDescription(_block: ToolUse): string {
 		return `[${this.name}]`
@@ -204,12 +244,21 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 		if (launchesPaused(config.taskState)) {
 			return formatResponse.subagentLaunchesPaused()
 		}
-		const definition = resolveDefinition(block.params.profile?.trim() || DEFAULT_AGENT_ID)
+		const registry = await this.loadAgents(config)
+		const requestedId = block.params.profile?.trim() || DEFAULT_AGENT_ID
+		const definition = resolveDefinition(requestedId, registry.definitions)
 		if (!definition) {
 			config.taskState.consecutiveMistakeCount++
-			return formatResponse.toolError(
-				`Unknown profile. Known profiles: ${[...BUILTIN_DEFINITIONS.keys()].join(", ")}. Leave profile out for ${DEFAULT_AGENT_ID}.`,
-			)
+			const problem = registry.problems.find((candidate) => candidate.id === requestedId)
+			const known = [...BUILTIN_DEFINITIONS.keys(), ...registry.definitions.keys()].join(", ")
+			const message = problem
+				? `Agent '${requestedId}' did not load: ${problem.reason} (${problem.path}). Known profiles: ${known}.`
+				: `Unknown profile. Known profiles: ${known}. Leave profile out for ${DEFAULT_AGENT_ID}.${registry.notes.length ? ` ${registry.notes.join(" ")}` : ""}`
+			if (problem || registry.notes.length) {
+				// The user's own file did not load, or was left out: say so in the chat, not only to the model.
+				await config.callbacks.say("error", message)
+			}
+			return formatResponse.toolError(message)
 		}
 		const parsed = parsePrompts(block.params.prompts)
 		if (!parsed.ok) {
@@ -364,6 +413,7 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 				...(definition.extends ? { extends: definition.extends } : {}),
 			},
 			...(studyBrief ? { studyBrief: true } : {}),
+			...agentFilesNotice(registry),
 		}
 		const completeMessage = JSON.stringify({ tool: "spawnSubagents", subagents: launch } satisfies AiHydroSayTool)
 		showNotificationForApprovalIfAutoApprovalEnabled(
