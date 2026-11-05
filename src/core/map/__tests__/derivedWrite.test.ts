@@ -76,4 +76,29 @@ describe("derived writes", () => {
 		const r = await writeDerivedGeojson({ ...input("/elsewhere/x.kmz"), folders: [] })
 		expect(r.artifactPath.startsWith(path.join(root, "global", "map-derived"))).to.equal(true)
 	})
+
+	it("refuses an artifact that exists with no provenance beside it, and leaves it as it was", async () => {
+		const src = path.join(a, "x", "basin.kmz")
+		const first = await writeDerivedGeojson(input(src))
+		await fs.rm(first.provenancePath)
+		await fs.writeFile(first.artifactPath, "mine")
+		let message = ""
+		await writeDerivedGeojson(input(src)).catch((e) => {
+			message = String(e.message)
+		})
+		expect(message).to.contain("no provenance")
+		expect(await fs.readFile(first.artifactPath, "utf8")).to.equal("mine")
+	})
+
+	it("refuses when .aihydro is a symlink that leads outside the folder, and writes nothing there", async () => {
+		const elsewhere = path.join(root, "elsewhere")
+		await fs.mkdir(elsewhere)
+		await fs.symlink(elsewhere, path.join(a, ".aihydro"))
+		let message = ""
+		await writeDerivedGeojson(input(path.join(a, "x", "basin.kmz"))).catch((e) => {
+			message = String(e.message)
+		})
+		expect(message).to.contain("outside its folder")
+		expect(await fs.readdir(elsewhere)).to.deep.equal([])
+	})
 })
