@@ -30,7 +30,10 @@ function walk(dir: string, out: string[] = []): string[] {
 
 /** Test code and recorded screen fixtures are data about the explorer, not code that decides on it. */
 function isTestOrFixture(file: string): boolean {
-	return /__tests__|\.test\.tsx?$|\/fixtures\/|\/test\/|subagentHarness/.test(file)
+	// Separators are normalised: on Windows the path has backslashes and a "/fixtures/" pattern would never match.
+	// The screen fixtures (webview-ui/src/screens/fixtures) are deliberate: they are recorded transcripts that say
+	// "explorer" as data, the way the tests do, and they decide nothing.
+	return /__tests__|\.test\.tsx?$|\/fixtures\/|\/test\/|subagentHarness/.test(file.split(path.sep).join("/"))
 }
 
 describe("no hard-coded agent id", () => {
