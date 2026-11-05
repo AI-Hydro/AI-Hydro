@@ -1,4 +1,5 @@
 import type { MapViewState } from "@deck.gl/core"
+import { pathForExport } from "@shared/map/layerIdentity"
 import { layerRunId } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { MapExportArtifact, PrepareMapExportRequest, SaveMapExportRequest } from "@shared/proto/cline/map"
@@ -612,7 +613,7 @@ export function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSce
 			sourceRef:
 				layer.metadata?.provenance_path ||
 				layer.metadata?.source_uri ||
-				layer.metadata?.source_path ||
+				pathForExport(layer.metadata?.source_path, layer.metadata?.workspace_folder) ||
 				(layerRunId(layer.metadata) ? `run:${layerRunId(layer.metadata)}` : undefined),
 			metadata: captureLayerMetadata(layer),
 		})),

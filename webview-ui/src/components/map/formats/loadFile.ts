@@ -10,6 +10,7 @@
  * the main thread — they're typically smaller anyway.
  */
 
+import { pathHash, resolvedSourcePath } from "@shared/map/layerIdentity"
 import { PLATFORM_CONFIG } from "../../../config/platform.config"
 import type { LayerSourceSpec } from "./types"
 import { detectFormat, LayerLoadError, type LayerSpec, type RasterPixels } from "./types"
@@ -362,17 +363,24 @@ async function attachVectorDerivedArtifact(
 	}
 }
 
+/**
+ * A file layer's id. A file with a path carries a hash of it, so `g1/watershed.geojson` and `g2/watershed.geojson` are two
+ * layers; the same file by any route still gets the same id. A file with no path is told apart by name and content.
+ */
+export function fileLayerId(fileName: string, opts: Pick<LoadOptions, "idPrefix" | "source"> = {}): string {
+	const sourcePath = resolvedSourcePath({ source_path: opts.source?.path ?? "" })
+	return `${opts.idPrefix ?? "user"}-${slugify(stripExt(fileName))}${sourcePath ? `-${pathHash(sourcePath)}` : ""}`
+}
+
 export async function loadFile(file: File, opts: LoadOptions = {}): Promise<LayerSpec> {
 	const fmt = detectFormat(file.name)
 	if (!fmt) {
 		throw new LayerLoadError(`Unsupported file type: ${file.name}. Try GeoJSON, KML, GPX, Shapefile (.zip), or GeoTIFF.`)
 	}
 
-	// Stable ID derived from filename only — re-adding the same file replaces
-	// the existing layer (MapContext keys layers by id) instead of duplicating.
-	// Two files with the same name from different folders will collide; that's
-	// an acceptable edge case for now.
-	const baseId = opts.idOverride ?? `${opts.idPrefix ?? "user"}-${slugify(stripExt(file.name))}`
+	// Stable id: re-adding the same file replaces the existing layer (MapContext keys layers by id) instead of
+	// duplicating. A file with a path also carries a hash of it, so same-named files in different folders do not collide.
+	const baseId = opts.idOverride ?? fileLayerId(file.name, opts)
 	const baseName = opts.nameOverride ?? stripExt(file.name)
 
 	try {

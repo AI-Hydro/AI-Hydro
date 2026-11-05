@@ -45,6 +45,7 @@ import { MAX_REMOTE_CATALOG_BYTES, MAX_REMOTE_CONNECTORS } from "@shared/connect
 import type { StudyBindingState } from "@shared/ExtensionMessage"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { HistoryItem, type HistoryOrigin } from "@shared/HistoryItem"
+import { pathHash, resolvedSourcePath } from "@shared/map/layerIdentity"
 import { McpMarketplaceCatalog } from "@shared/mcp"
 import { HtmlPreviewItem, HtmlPreviewMode, LearningModuleCatalog } from "@shared/proto/cline/html_preview"
 import type { ClaimUpdate } from "@shared/proto/cline/ledger"
@@ -2780,7 +2781,9 @@ export class Controller {
 		// same relative path in two folders yields two layers; single-folder ids are unchanged.
 		const multiRoot = (vscode.workspace.workspaceFolders?.length ?? 0) > 1
 		const idSource = multiRoot ? `${file.workspaceFolderName}/${file.relativePath}` : file.relativePath
-		const layerId = `workspace_${idSource.replace(/[^a-zA-Z0-9]/g, "_")}`
+		// Punctuation all becomes `_`, so `a/b.geojson` and `a_b.geojson` would share a name; the hash of the file's
+		// resolved path keeps them apart. The same file always gets the same id.
+		const layerId = `workspace_${idSource.replace(/[^a-zA-Z0-9]/g, "_")}_${pathHash(resolvedSourcePath({ path: file.relativePath, workspace_folder: file.workspaceFolder }) ?? idSource)}`
 
 		// Determine format icon for display
 		const formatIcon = this.getFormatIcon(file.extension)

@@ -1,6 +1,15 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import { findDuplicate, matchFile, mergedMetadata, planMerge, preferKept, resolvedSourcePath, sameFile } from "../layerIdentity"
+import {
+	findDuplicate,
+	matchFile,
+	mergedMetadata,
+	pathHash,
+	planMerge,
+	preferKept,
+	resolvedSourcePath,
+	sameFile,
+} from "../layerIdentity"
 
 const L = (id: string, metadata: Record<string, string> = {}, geojson = "", layerType = "polygon") => ({
 	id,
@@ -91,7 +100,7 @@ describe("layer identity: one file is one layer", () => {
 		expect(matchFile(L("t1", { tool: "delineate_watershed" }, GJ), L("t2", { tool: "extract_rivers" }, GJ))).to.equal(
 			"different",
 		)
-		const plain = L("p", { source: "workspace", source_path: "/w/out.geojson" })
+		const plain = L("p", { source: "workspace", source_path: "/w/out.geojson" }, GJ)
 		expect(matchFile(L("r1", { _run_id: "run-1", source_path: "/w/out.geojson" }, GJ), plain)).to.equal("same")
 		expect(preferKept(plain, L("r1", { _run_id: "run-1" }), ["p"]).id).to.equal("r1")
 	})
@@ -121,7 +130,7 @@ describe("layer identity: one file is one layer", () => {
 			source_mtime_ms: "5",
 			source_status: "current",
 		}
-		const merged = mergedMetadata(keep, other)
+		const merged = mergedMetadata(keep, other, true)
 		expect(merged).to.include({
 			source: "user",
 			style: "mine",
@@ -142,8 +151,8 @@ describe("layer identity: one file is one layer", () => {
 	})
 
 	it("plans a merge: the existing layer always survives, so its id, style, visibility and order do not move", () => {
-		const existing = L("e", { source: "user", source_path: "/w/a.geojson" })
-		const withRun = L("r", { source: "tool", _run_id: "run-3", tool: "delineate_watershed", source_path: "/w/a.geojson" })
+		const existing = L("e", { source: "user", source_path: "/w/a.geojson" }, GJ)
+		const withRun = L("r", { source: "tool", _run_id: "run-3", tool: "delineate_watershed", source_path: "/w/a.geojson" }, GJ)
 		const plan = planMerge(existing, withRun, "same")
 		expect(plan).to.include({ kind: "merge", keptId: "e", aliasId: "r", takeContent: false })
 		expect(plan.metadata._run_id).to.equal("run-3")
@@ -227,5 +236,74 @@ describe("layer identity: one file is one layer", () => {
 		expect(planMerge(onMap, L("n3", { source_path: "/w/a.geojson", units: "" }, GJ2), "changed").metadata.units).to.equal(
 			"mm",
 		)
+	})
+
+	describe("a run link is a claim about content (S0-1)", () => {
+		const P = "/w/out.geojson"
+
+		it("a restored run layer with no content is not the same file as different bytes at its path", () => {
+			const restoredRun = L("r", { _run_id: "run-1", tool: "delineate_watershed", source_path: P })
+			const reloaded = L("user-out", { source: "user", source_path: P }, GJ)
+			// Content cannot be compared and one side names a run: never "same".
+			expect(matchFile(restoredRun, reloaded)).to.equal("changed")
+			const plan = planMerge(restoredRun, reloaded, "changed")
+			// The route is the changed one: the link goes, the prior run is recorded, the bytes are the new bytes.
+			expect(plan.takeContent).to.equal(true)
+			expect(plan.metadata._run_id).to.equal(undefined)
+			expect(plan.metadata._prior_run_id).to.equal("run-1")
+			expect(plan.priorRun).to.equal("run-1")
+		})
+
+		it("the same, the other way round: a file layer is not given a run link by an empty restored run layer", () => {
+			const loaded = L("user-out", { source: "user", source_path: P }, GJ)
+			const restoredRun = L("r", { _run_id: "run-1", source_path: P })
+			expect(matchFile(loaded, restoredRun)).to.equal("different")
+			// Even when asked to merge, the survivor gets no run link it did not have.
+			const merged = planMerge(loaded, restoredRun, "same")
+			expect(merged.metadata._run_id).to.equal(undefined)
+			expect(merged.takeContent).to.equal(false)
+		})
+
+		it("an empty layer under a run does not adopt content; one with no run does", () => {
+			const empty = (meta: Record<string, string>) => L("e", { source_path: P, ...meta })
+			const incoming = L("n", { source_path: P }, GJ)
+			expect(planMerge(empty({}), incoming, "same").takeContent).to.equal(true)
+			expect(planMerge(empty({ _run_id: "run-1" }), incoming, "same").takeContent).to.equal(false)
+		})
+
+		it("run keys copy across only when both copies were compared and are the same", () => {
+			const keep = { source: "user", source_path: P }
+			const other = { _run_id: "run-9", tool: "t", study_id: "s", provenance_path: "/p.json", source_path: P }
+			expect(mergedMetadata(keep, other)._run_id).to.equal(undefined)
+			expect(mergedMetadata(keep, other).tool).to.equal(undefined)
+			expect(mergedMetadata(keep, other, true)._run_id).to.equal("run-9")
+			// Identical content on both sides: planMerge verifies it, and the link follows.
+			const a = L("a", keep, GJ)
+			const b = L("b", other, GJ)
+			expect(matchFile(a, b)).to.equal("same")
+			expect(planMerge(a, b, "same").metadata._run_id).to.equal("run-9")
+		})
+
+		it("two layers for one run id still merge when neither has content to compare", () => {
+			expect(
+				matchFile(L("a", { _run_id: "run-1", source_path: P }), L("b", { _run_id: "run-1", source_path: P })),
+			).to.equal("same")
+		})
+	})
+
+	it("a relative source_path names the file under the layer's workspace folder, so Reload on a restored layer is the same file", () => {
+		const restored = L("workspace_a", { source: "workspace", path: "a.geojson", workspace_folder: "/w/proj" }, "")
+		const reloaded = L("user-a", { source: "user", source_path: "a.geojson", workspace_folder: "/w/proj" }, GJ)
+		expect(resolvedSourcePath(reloaded.metadata)).to.equal("/w/proj/a.geojson")
+		expect(matchFile(restored, reloaded)).to.equal("same")
+		expect(planMerge(restored, reloaded, "same").takeContent).to.equal(true)
+		// With no folder recorded a relative path still names nothing, so it cannot be mistaken for a file.
+		expect(resolvedSourcePath({ source_path: "a.geojson" })).to.equal(undefined)
+	})
+
+	it("path hashes tell same-named files in different folders apart and are stable", () => {
+		expect(pathHash("/w/g1/watershed.geojson")).to.not.equal(pathHash("/w/g2/watershed.geojson"))
+		expect(pathHash("/w/g1/watershed.geojson")).to.equal(pathHash("/w/g1/watershed.geojson"))
+		expect(pathHash("/w/g1/watershed.geojson")).to.match(/^[0-9a-f]{6}$/)
 	})
 })

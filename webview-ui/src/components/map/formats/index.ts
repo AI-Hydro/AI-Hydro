@@ -29,6 +29,20 @@ export async function loadAndPushFiles(files: File[] | FileList): Promise<{
 	return loadAndPushFileEntries(Array.from(files).map((file) => ({ file })))
 }
 
+/**
+ * Dropped files with the path the host knows them by, where the host reports one (`File.path`). A webview normally does
+ * not, and then the file has no path and is told apart by its content alone; a path found here makes it the same
+ * layer as the same file added by any other route.
+ */
+export function entriesWithHostPaths(files: File[] | FileList): FileLoadEntry[] {
+	return Array.from(files).map((file) => {
+		const hostPath = (file as File & { path?: unknown }).path
+		return typeof hostPath === "string" && /^([A-Za-z]:[\\/]|\/)/.test(hostPath)
+			? { file, source: { path: hostPath, displayPath: hostPath } }
+			: { file }
+	})
+}
+
 export async function loadAndPushFileEntries(entries: FileLoadEntry[]): Promise<{
 	loaded: number
 	skipped: number

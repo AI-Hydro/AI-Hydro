@@ -1,8 +1,10 @@
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import * as fs from "fs/promises"
 import * as path from "path"
+import { layerFileStem } from "./layerFileStem"
 
-export const MAP_LAYER_GEOJSON_PREVIEW_DIR = aihydroPath("map_layer_geojson_preview")
+/** Resolved per call (honours AIHYDRO_HOME), so a test or a scratch profile never writes the real one. */
+export const geojsonPreviewDir = () => aihydroPath("map_layer_geojson_preview")
 
 const PREVIEW_TRIGGER_FEATURES = 10_000
 const PREVIEW_TRIGGER_BYTES = 4_000_000
@@ -23,10 +25,6 @@ export interface GeoJsonPreviewResult {
 	stats: GeoJsonStats
 	previewStats: GeoJsonStats
 	previewBytes: number
-}
-
-function safeLayerId(id: string): string {
-	return id.replace(/[^a-zA-Z0-9_-]/g, "_")
 }
 
 function countCoordsAndBbox(geojson: any): GeoJsonStats {
@@ -232,8 +230,9 @@ export async function ensureGeoJsonPreviewArtifact(layerId: string, rawGeojson: 
 	const previewRaw = JSON.stringify(preview)
 	const previewStats = countCoordsAndBbox(preview)
 
-	await fs.mkdir(MAP_LAYER_GEOJSON_PREVIEW_DIR, { recursive: true })
-	const previewPath = path.join(MAP_LAYER_GEOJSON_PREVIEW_DIR, `${safeLayerId(layerId)}.preview.geojson`)
+	const dir = geojsonPreviewDir()
+	await fs.mkdir(dir, { recursive: true })
+	const previewPath = path.join(dir, `${layerFileStem(layerId)}.preview.geojson`)
 	await fs.writeFile(previewPath, previewRaw, "utf8")
 	return {
 		previewPath,

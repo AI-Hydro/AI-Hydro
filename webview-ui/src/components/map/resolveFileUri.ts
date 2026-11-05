@@ -11,7 +11,25 @@ export function newUiRequestId(prefix: string): string {
 	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-export function resolveFileUri(filePath: string, timeoutMs = 30_000): Promise<{ uri: string; name: string }> {
+export type PathKind = "project" | "cache" | "any"
+
+export interface ResolvedFile {
+	uri: string
+	name: string
+	/** The absolute path the host found the file at, when it says (a relative layer path resolved against a folder). */
+	path?: string
+}
+
+/**
+ * `workspaceFolder` is the folder a layer recorded for a relative path: the host looks there and nowhere else, so a
+ * same-named file in another folder is never read for it. `kind` says what the path is (a project file or a cache copy),
+ * and the host does not look in the other kind's places.
+ */
+export function resolveFileUri(
+	filePath: string,
+	options: { workspaceFolder?: string; kind?: PathKind; timeoutMs?: number } = {},
+): Promise<ResolvedFile> {
+	const timeoutMs = options.timeoutMs ?? 30_000
 	const requestId = newUiRequestId("resolve")
 	return new Promise((resolve, reject) => {
 		const timeout = window.setTimeout(() => {
@@ -26,13 +44,23 @@ export function resolveFileUri(filePath: string, timeoutMs = 30_000): Promise<{ 
 			window.clearTimeout(timeout)
 			window.removeEventListener("message", onMessage)
 			if (data.ok && typeof data.uri === "string") {
-				resolve({ uri: data.uri, name: data.name ?? filePath.split("/").pop() ?? "file" })
+				resolve({
+					uri: data.uri,
+					name: data.name ?? filePath.split("/").pop() ?? "file",
+					...(typeof data.path === "string" ? { path: data.path } : {}),
+				})
 			} else {
 				reject(new Error(data.error ?? "Could not resolve file"))
 			}
 		}
 		window.addEventListener("message", onMessage)
-		PLATFORM_CONFIG.postMessage({ type: "aihydro-resolve-file-uri", requestId, path: filePath })
+		PLATFORM_CONFIG.postMessage({
+			type: "aihydro-resolve-file-uri",
+			requestId,
+			path: filePath,
+			...(options.workspaceFolder ? { workspaceFolder: options.workspaceFolder } : {}),
+			...(options.kind ? { kind: options.kind } : {}),
+		})
 	})
 }
 

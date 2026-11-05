@@ -28,3 +28,10 @@ describe("scene aliases", () => {
 		expect(followAlias("loop", { loop: "loop" })).toBe("loop")
 	})
 })
+
+describe("a restore state with no aliases", () => {
+	it("leaves a scene as it is", () => {
+		const scene = { visibleLayerIds: ["a"], layerOrder: ["a"] }
+		expect(remapSceneIds(scene, undefined)).toBe(scene)
+	})
+})

@@ -2,50 +2,47 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { MapEmptyState, shouldShowEmptyState } from "../MapEmptyState"
 
-const mock = vi.hoisted(() => ({ start: vi.fn() }))
+const mock = vi.hoisted(() => ({ start: vi.fn(), post: vi.fn() }))
 vi.mock("../mapAgentBridge", () => ({ startMapAgentTask: mock.start }))
+vi.mock("../../../config/platform.config", () => ({ PLATFORM_CONFIG: { postMessage: mock.post } }))
 
 afterEach(() => {
 	cleanup()
 	mock.start.mockReset()
+	mock.post.mockReset()
 })
 
 describe("MapEmptyState", () => {
 	it("offers three real buttons on an opaque card, with the agent action labelled as one", () => {
-		render(<MapEmptyState onFilesPicked={() => {}} onFindGauge={() => {}} />)
+		render(<MapEmptyState onFindGauge={() => {}} />)
 		const names = screen.getAllByRole("button").map((b) => b.textContent)
 		expect(names).toEqual(["Open a file…", "Find a gauge", "Ask the agent: start a watershed investigation"])
 		expect(screen.getByRole("region", { name: "No layers yet" })).toHaveClass("aih-empty")
 	})
 
 	it("contains no emoji and no styled-div actions", () => {
-		const { container } = render(<MapEmptyState onFilesPicked={() => {}} onFindGauge={() => {}} />)
+		const { container } = render(<MapEmptyState onFindGauge={() => {}} />)
 		expect(container.textContent ?? "").not.toMatch(/\p{Emoji_Presentation}|\p{Extended_Pictographic}️/u)
 		expect(container.querySelectorAll(".map-empty-action").length).toBe(0)
 	})
 
-	it("opens the file picker and passes the chosen files to the shared load path", () => {
-		const picked = vi.fn()
-		render(<MapEmptyState onFilesPicked={picked} onFindGauge={() => {}} />)
-		const input = screen.getByLabelText("Choose map files") as HTMLInputElement
-		const click = vi.spyOn(input, "click")
+	it("asks the host to open its file picker, so the file arrives with its path", () => {
+		render(<MapEmptyState onFindGauge={() => {}} />)
 		fireEvent.click(screen.getByRole("button", { name: "Open a file…" }))
-		expect(click).toHaveBeenCalledOnce()
-		const file = new File(["{}"], "basin.geojson", { type: "application/geo+json" })
-		fireEvent.change(input, { target: { files: [file] } })
-		expect(picked).toHaveBeenCalledOnce()
+		expect(mock.post).toHaveBeenCalledWith({ type: "aihydro-map-add-file-command" })
+		expect(screen.queryByLabelText("Choose map files")).toBeNull()
 	})
 
 	it("Find a gauge calls the focus-search handler", () => {
 		const find = vi.fn()
-		render(<MapEmptyState onFilesPicked={() => {}} onFindGauge={find} />)
+		render(<MapEmptyState onFindGauge={find} />)
 		fireEvent.click(screen.getByRole("button", { name: "Find a gauge" }))
 		expect(find).toHaveBeenCalledOnce()
 	})
 
 	it("sends an outcome-free agent prompt and reports the result", async () => {
 		mock.start.mockResolvedValue({ ok: true })
-		render(<MapEmptyState onFilesPicked={() => {}} onFindGauge={() => {}} />)
+		render(<MapEmptyState onFindGauge={() => {}} />)
 		await act(async () => {
 			fireEvent.click(screen.getByRole("button", { name: /Ask the agent/ }))
 		})

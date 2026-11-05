@@ -16,6 +16,7 @@
 
 import type { Controller } from "@core/controller"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
+import { resolvedSourcePath } from "@shared/map/layerIdentity"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -54,19 +55,82 @@ async function buildRasterLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 	})
 }
 
-async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLayer | null> {
-	const sourcePath = entry.geojson_cache_path || entry.workspace_path
-	if (!sourcePath) {
+/** Extensions whose file text is the layer's GeoJSON. Other formats were converted when loaded, so only the cache copy is. */
+const JSON_SOURCE_EXT = new Set([".geojson", ".json"])
+
+async function readTextIfPresent(file: string): Promise<string | null> {
+	try {
+		return await fs.readFile(file, "utf8")
+	} catch {
 		return null
 	}
+}
+
+interface EntrySource {
+	raw: string
+	/** Where it was read: the layer's own file, or a copy AI-Hydro kept. */
+	from: "file" | "cache"
+}
+
+/**
+ * The text a restored vector layer is made of. A layer that names a file is read from that file (an absolute path, or a
+ * relative one under the folder the layer recorded). The cache directory holds a copy under the file's own name, which
+ * can be older, so it is read only when the file is gone, and the caller says so. A tool's layer is the other way round:
+ * the cache holds what the run produced, and the file (if any) may have been overwritten since, so the cache is first.
+ * A relative path is never looked for in the cache directory unless it is the cache's own.
+ */
+export async function readEntryGeojson(entry: MapLayerCatalogEntry, meta: Record<string, string>): Promise<EntrySource | null> {
+	const cachePath = entry.geojson_cache_path
+		? path.isAbsolute(entry.geojson_cache_path)
+			? entry.geojson_cache_path
+			: aihydroPath("map_layer_geojson_cache", entry.geojson_cache_path)
+		: undefined
+	const named = resolvedSourcePath({ ...meta, workspace_path: meta.workspace_path || entry.workspace_path })
+	const projectFile = named && JSON_SOURCE_EXT.has(path.extname(named).toLowerCase()) ? named : undefined
+	const fromTool = Boolean(meta.tool || meta._run_id)
+	const order: Array<[string | undefined, EntrySource["from"]]> = fromTool
+		? [
+				[cachePath, "cache"],
+				[projectFile, "file"],
+			]
+		: [
+				[projectFile, "file"],
+				[cachePath, "cache"],
+			]
+	for (const [candidate, from] of order) {
+		if (!candidate) continue
+		const raw = await readTextIfPresent(candidate)
+		if (raw !== null) return { raw, from }
+	}
+	return null
+}
+
+async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLayer | null> {
 	const meta = { ...(entry.metadata_snapshot ?? {}) }
-	if (!meta.display_geojson_path) {
+	// Restorable from a cache copy, a file the layer names, or a workspace file it recorded.
+	const named = resolvedSourcePath({ ...meta, workspace_path: meta.workspace_path || entry.workspace_path })
+	if (!entry.geojson_cache_path && !named) {
+		return null
+	}
+	// A layer that names a file (and is not a tool's) is that file as it is now. A stored preview was made from the file
+	// as it was, and the map draws a preview first, so it is dropped and rebuilt from the text read below.
+	if (named && !(meta.tool || meta._run_id) && meta.display_geojson_path) {
+		for (const key of [
+			"display_geojson_path",
+			"display_mode",
+			"original_feature_count",
+			"preview_feature_count",
+			"original_coord_count",
+			"preview_coord_count",
+			"preview_bytes",
+		]) {
+			delete meta[key]
+		}
+	}
+	const source = await readEntryGeojson(entry, meta)
+	if (source && !meta.display_geojson_path) {
 		try {
-			const resolvedSourcePath = path.isAbsolute(sourcePath)
-				? sourcePath
-				: aihydroPath("map_layer_geojson_cache", sourcePath)
-			const raw = await fs.readFile(resolvedSourcePath, "utf8")
-			const preview = await ensureGeoJsonPreviewArtifact(entry.id, raw)
+			const preview = await ensureGeoJsonPreviewArtifact(entry.id, source.raw)
 			if (preview) {
 				meta.display_geojson_path = preview.previewPath
 				meta.display_mode = "preview"
@@ -79,6 +143,13 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 		} catch {
 			/* preview is an optimization; never block hydration */
 		}
+	}
+	// A layer that names a file and was read from the cache because the file is gone says so, not "current".
+	if (named && source?.from === "cache" && !(meta.tool || meta._run_id)) {
+		meta.source_status = "source_missing"
+	} else if (named && source?.from === "file" && meta.source_status === "source_missing") {
+		// The file is back (or was never gone): a status written when it was missing must not outlive that.
+		meta.source_status = "current"
 	}
 	const style = entry.style ?? {}
 	return MapLayer.create({
@@ -98,7 +169,9 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 		}),
 		metadata: {
 			...meta,
-			geojson_cache_path: entry.geojson_cache_path || sourcePath,
+			// Only the cache copy goes here: this key is read as "a cache file", and a project path stamped into it
+			// would be drawn in preference to the project file it belongs to.
+			geojson_cache_path: entry.geojson_cache_path || "",
 			workspace_path: entry.workspace_path || "",
 			_hydrated: "1",
 		},

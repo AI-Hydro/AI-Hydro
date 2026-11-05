@@ -1,4 +1,4 @@
-import { findDuplicate, type PathResolver, planMerge } from "@shared/map/layerIdentity"
+import { findDuplicate, type PathResolver, pathHash, planMerge, resolvedSourcePath } from "@shared/map/layerIdentity"
 import { MapLayer } from "@shared/proto/cline/map"
 
 /** The id a layer is known by now: itself, or the layer an earlier merge folded it into. */
@@ -24,16 +24,28 @@ export type AddOutcome =
 /**
  * Add a layer to the store, one file one layer. Mutates `state`; the caller notifies, syncs and speaks.
  * - `replaceExisting` (Undo, opening a scene) restores exactly what it was given, and never merges.
- * - A same-id add is an overwrite (a style edit), never a duplicate.
+ * - A same-id add is an overwrite (a style edit), never a duplicate, unless it names a different file: then it is a new
+ *   layer under an id that carries a hash of its path.
  * - The same file under another id: the layer already on the map stays (id, style, visibility, order) and either
  *   gains the other's run and source keys (same content) or takes the new content (the file changed).
  */
 export function applyAddLayer(
 	state: LayerStoreState,
-	layer: MapLayer,
+	incoming: MapLayer,
 	options: { replaceExisting?: boolean } = {},
 	realpath?: PathResolver,
 ): AddOutcome {
+	let layer = incoming
+	const sameId = options.replaceExisting ? undefined : state.layers.get(layer.id)
+	if (sameId) {
+		// A same-id add is a style edit or a refresh only when it is the same file. Another file that happens to get the
+		// same id (the same name in two folders, from an older build) is its own layer, not an overwrite of the first.
+		const onMap = resolvedSourcePath(sameId.metadata, realpath)
+		const arriving = resolvedSourcePath(layer.metadata, realpath)
+		if (onMap && arriving && onMap !== arriving) {
+			layer = MapLayer.create({ ...layer, id: `${layer.id}-${pathHash(arriving)}` })
+		}
+	}
 	const found =
 		options.replaceExisting || state.layers.has(layer.id)
 			? undefined

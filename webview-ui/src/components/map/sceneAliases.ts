@@ -17,7 +17,8 @@ export function followAlias(id: string, aliases: Record<string, string>): string
 	return at
 }
 
-export function remapSceneIds<T extends SceneLike>(scene: T, aliases: Record<string, string>): T {
+export function remapSceneIds<T extends SceneLike>(scene: T, aliasesIn: Record<string, string> | undefined): T {
+	const aliases = aliasesIn ?? {}
 	if (Object.keys(aliases).length === 0) return scene
 	const map = (id: string) => followAlias(id, aliases)
 	const ids = (value: unknown): unknown =>
