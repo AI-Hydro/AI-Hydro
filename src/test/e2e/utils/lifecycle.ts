@@ -1,4 +1,4 @@
-import { cpSync } from "node:fs"
+import { cpSync, readdirSync, readFileSync } from "node:fs"
 import * as path from "node:path"
 import type { Page, TestInfo } from "@playwright/test"
 import type { ElectronApplication } from "playwright"
@@ -40,6 +40,12 @@ async function describeOpenFrames(app: ElectronApplication | null): Promise<void
 							.slice(0, 3)
 							.map((element) => element.getAttribute("data-aihydro-cell-id")),
 						wiredRunButtons: document.querySelectorAll('.aihydro-run[data-aihydro-wired="1"]').length,
+						cellStatus: Array.from(document.querySelectorAll("[data-aihydro-cell-id]")).map((element) => ({
+							id: element.getAttribute("data-aihydro-cell-id")?.split(".").slice(-1)[0],
+							status: element.getAttribute("data-aihydro-cell-status"),
+							outputChars: element.querySelector(".aihydro-output")?.textContent?.length ?? -1,
+							awaiting: element.querySelector(".aihydro-output")?.getAttribute("data-aihydro-awaiting") ?? null,
+						})),
 						bridge: typeof (window as unknown as { aihydro?: unknown }).aihydro,
 						documentChars: document.documentElement.outerHTML.length,
 					}))
@@ -48,6 +54,33 @@ async function describeOpenFrames(app: ElectronApplication | null): Promise<void
 					// frame navigated or is cross-origin
 				}
 			}
+		}
+	} catch {
+		// Diagnostics must never fail a test.
+	}
+}
+
+/** Print the last error/warning lines of the extension-host logs (capped; these hold paths, not course text). */
+async function describeHostLogProblems(userDataDir: string): Promise<void> {
+	try {
+		const lines: string[] = []
+		const walk = (dir: string) => {
+			for (const entry of readdirSync(dir, { withFileTypes: true })) {
+				const full = path.join(dir, entry.name)
+				if (entry.isDirectory()) {
+					walk(full)
+				} else if (entry.name.endsWith(".log")) {
+					for (const line of readFileSync(full, "utf8").split("\n")) {
+						if (/\b(error|warn|exception|died|crash)/i.test(line)) {
+							lines.push(`${path.relative(userDataDir, full)}: ${line.slice(0, 240)}`)
+						}
+					}
+				}
+			}
+		}
+		walk(path.join(userDataDir, "logs"))
+		for (const line of lines.slice(-40)) {
+			console.error("[lifecycle-diagnostics] host-log", line)
 		}
 	} catch {
 		// Diagnostics must never fail a test.
@@ -109,8 +142,10 @@ export const lifecycleFixture = {
 			testFailure = error
 		}
 		const cleanupFailures: unknown[] = []
-		if (testFailure !== undefined) {
+		// Playwright does not rethrow a test's failure into a fixture's `use()`, so read the status.
+		if (testFailure !== undefined || testInfo.status !== testInfo.expectedStatus) {
 			await describeOpenFrames(current)
+			await describeHostLogProblems(userDataDir)
 			// Extension-host and window logs live under the profile, which is deleted below; keep a copy of
 			// the text logs (failures only), as the `page` fixture does, so a CI failure can be diagnosed.
 			try {
