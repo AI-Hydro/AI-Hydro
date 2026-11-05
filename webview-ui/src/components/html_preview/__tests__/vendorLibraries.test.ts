@@ -15,6 +15,13 @@ function packageFile(entry: { package: string; file: string }): Buffer {
 	return readFileSync(join(root, entry.file))
 }
 
+/** A standalone ArrayBuffer copy of the bytes (Buffer.buffer may be a shared pool). */
+function arrayBufferOf(bytes: Uint8Array): ArrayBuffer {
+	const copy = new ArrayBuffer(bytes.byteLength)
+	new Uint8Array(copy).set(bytes)
+	return copy
+}
+
 describe("vendored chart libraries", () => {
 	beforeEach(() => resetVendorLibraryCache())
 
@@ -36,19 +43,15 @@ describe("vendored chart libraries", () => {
 
 	it("returns the source when the bytes match the manifest", async () => {
 		const bytes = packageFile(manifest.three)
-		const source = await loadVendorLibrarySource("three", async () =>
-			bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-		)
+		const source = await loadVendorLibrarySource("three", async () => arrayBufferOf(bytes))
 		expect(source.length).toBeGreaterThan(1000)
 	})
 
 	it("never returns a file whose digest differs, and does not cache the failure", async () => {
-		const tampered = new TextEncoder().encode("window.stolen = true").buffer
+		const tampered = arrayBufferOf(new TextEncoder().encode("window.stolen = true"))
 		await expect(loadVendorLibrarySource("plotly", async () => tampered)).rejects.toThrow(/integrity/)
 		const real = packageFile(manifest.plotly)
-		await expect(
-			loadVendorLibrarySource("plotly", async () => real.buffer.slice(real.byteOffset, real.byteOffset + real.byteLength)),
-		).resolves.toContain("Plotly")
+		await expect(loadVendorLibrarySource("plotly", async () => arrayBufferOf(real))).resolves.toContain("Plotly")
 	})
 })
 
