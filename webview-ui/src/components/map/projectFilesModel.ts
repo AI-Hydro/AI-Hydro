@@ -24,7 +24,11 @@ export function fileResolved(file: Pick<WorkspaceGeoFile, "relativePath" | "work
 }
 
 /** Layers by the file they were loaded from. A layer saved before paths were absolute matches by relative path alone. */
-export function layersByFile(layers: MapLayer[]): {
+export function layersByFile(
+	layers: MapLayer[],
+	/** One open folder. A legacy layer that recorded a relative path and no folder can only be matched to a file then. */
+	singleRoot = true,
+): {
 	byPath: Map<string, MapLayer>
 	pathOnly: Map<string, MapLayer>
 	byId: Map<string, MapLayer>
@@ -36,7 +40,8 @@ export function layersByFile(layers: MapLayer[]): {
 		byId.set(layer.id, layer)
 		const key = resolvedSourcePath(layer.metadata)
 		if (key) byPath.set(key, layer)
-		if (layer.metadata?.path && !layer.metadata.workspace_folder) pathOnly.set(layer.metadata.path, layer)
+		// With several folders open, a relative path alone cannot say which folder's file it is.
+		if (singleRoot && layer.metadata?.path && !layer.metadata.workspace_folder) pathOnly.set(layer.metadata.path, layer)
 	}
 	return { byPath, pathOnly, byId }
 }

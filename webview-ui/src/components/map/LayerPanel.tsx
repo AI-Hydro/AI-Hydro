@@ -248,12 +248,13 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 	// Project files: every map file of the open folders. A loaded file stays in the tree with a check.
 	const project = useProjectFiles()
-	const fileIndex = useMemo(() => layersByFile(layers), [layers])
+	const singleRoot = project.data.folderCount <= 1
+	const fileIndex = useMemo(() => layersByFile(layers, singleRoot), [layers, singleRoot])
 	// Each project file is one row: its layer under On the map, or a row under Not on the map. Never both.
 	const notOnMapFiles = useMemo(() => notOnMap(project.data.files, fileIndex), [project.data.files, fileIndex])
 	const [projectOpenChoice, setProjectOpenChoice] = useState<boolean | undefined>(persisted.layerPanel?.projectFilesOpen)
 	// Closed by default; open on its own only when the map has nothing on it and there are files to load.
-	const [reveal, setReveal] = useState<{ file: WorkspaceGeoFile; nonce: number } | null>(null)
+	const [reveal, setReveal] = useState<{ files: WorkspaceGeoFile[]; nonce: number } | null>(null)
 	/** The layer row a Load just put on the map: marked for a moment and scrolled into view. */
 	const [justLoadedId, setJustLoadedId] = useState<string | null>(null)
 	const justLoadedTimer = useRef<number | undefined>(undefined)
@@ -264,7 +265,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const row = document.querySelector(`[data-layer-id="${CSS.escape(justLoadedId)}"]`)
 		if (row) {
 			scrolledTo.current = justLoadedId
-			row.scrollIntoView({ block: "nearest" })
+			row.scrollIntoView?.({ block: "nearest" })
+			// The row the user acted on moved; keyboard focus follows it to its new place.
+			row.querySelector<HTMLButtonElement>("button.map-layer-name")?.focus({ preventScroll: true })
 		}
 	}, [justLoadedId, layers])
 	// Decided once, when the first answer arrives, so removing the last row does not close the section under the user.
@@ -634,15 +637,47 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		return file ? `${project.data.folderCount > 1 && file.folderName ? `${file.folderName} / ` : ""}${file.relativePath}` : undefined
 	}
 
+	/** A Load put this layer on the map: mark its row, say where it went, offer Zoom to, and fit the camera on an empty map. */
+	const finishLoad = (file: WorkspaceGeoFile, id: string, wasEmpty: boolean) => {
+		if (wasEmpty) fitWhenArrives.current = id
+		window.clearTimeout(justLoadedTimer.current)
+		scrolledTo.current = null
+		setJustLoadedId(id)
+		justLoadedTimer.current = window.setTimeout(() => setJustLoadedId(null), 3500)
+		say("ok", `Loaded ${file.name}. It moved up to On the map.`, 10_000, { label: "Zoom to", run: () => zoomToLoaded(id) })
+		void project.refresh()
+	}
+
+	/** GeoTIFF and KMZ are parsed by the map panel, so their layer arrives later with an id nobody knew: wait for it. */
+	const pendingParsed = useRef<{ file: WorkspaceGeoFile; known: Set<string>; wasEmpty: boolean; timer: number } | null>(null)
+	useEffect(() => {
+		const pending = pendingParsed.current
+		if (!pending) return
+		const layer = layers.find((l) => !pending.known.has(l.id) && layerOfFile(pending.file, layersByFile([l], singleRoot)))
+		if (!layer) return
+		window.clearTimeout(pending.timer)
+		pendingParsed.current = null
+		finishLoad(pending.file, layer.id, pending.wasEmpty)
+	})
+
 	const loadProjectFile = async (file: WorkspaceGeoFile) => {
 		if (WEBVIEW_PARSED.has(file.extension.toLowerCase())) {
-			// GeoTIFF and KMZ are parsed by the map panel itself; the layer arrives when it has read the file.
+			const wasEmpty = layersRef.current.length === 0
+			if (pendingParsed.current) window.clearTimeout(pendingParsed.current.timer)
+			pendingParsed.current = {
+				file,
+				known: new Set(layersRef.current.map((l) => l.id)),
+				wasEmpty,
+				timer: window.setTimeout(() => {
+					pendingParsed.current = null
+				}, 30_000),
+			}
 			PLATFORM_CONFIG.postMessage({
 				type: "aihydro-map-load-project-file",
 				relativePath: file.relativePath,
 				workspaceFolder: file.workspaceFolder,
 			})
-			if (layersRef.current.length === 0) say("idle", `Loading ${file.name}…`, 8000)
+			say("idle", `Loading ${file.name}…`, 15_000)
 			return
 		}
 		const wasEmpty = layersRef.current.length === 0
@@ -667,21 +702,13 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				onReorder([...display].reverse())
 			}
 		}
-		// The camera moves only when the map was empty; otherwise a Zoom to link is offered.
-		if (wasEmpty) fitWhenArrives.current = id
-		// The row moved up: mark it where it landed, and say where it went.
-		window.clearTimeout(justLoadedTimer.current)
-		scrolledTo.current = null
-		setJustLoadedId(id)
-		justLoadedTimer.current = window.setTimeout(() => setJustLoadedId(null), 3500)
-		say("ok", `Loaded ${file.name}. It moved up to On the map.`, 10_000, { label: "Zoom to", run: () => zoomToLoaded(id) })
-		void project.refresh()
+		finishLoad(file, id, wasEmpty)
 	}
 
 	/** Unload layers (and, with `alsoRemove`, take their files out of the list). The files stay on disk. */
 	const unloadLayers = async (targets: MapLayer[], name: string, alsoRemove = false) => {
 		const linked = targets.map((l) => layerRunId(l.metadata)?.split(".")[0]).find(Boolean)
-		const base = `Unloaded ${name}`
+		const base = targets.length > 1 ? `Unloaded ${targets.length} files` : `Unloaded ${name}`
 		const label = alsoRemove
 			? `${base} and removed it from this list. The file stays on disk`
 			: linked
@@ -693,12 +720,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 					return file ? [{ workspaceFolder: file.workspaceFolder, relativePath: file.relativePath, kind: "file" as const }] : []
 				})
 			: undefined
-		const moved = alsoRemove ? undefined : fileOfLayerId.get(targets[0]?.id ?? "")
+		const moved = alsoRemove ? [] : targets.flatMap((l) => fileOfLayerId.get(l.id) ?? [])
 		await removeLayers(targets, label, { unload: true, listEntries })
 		// The row now lives under Not on the map: show it there for a moment, so the move can be followed.
-		if (moved) {
+		if (moved.length > 0) {
 			setProjectOpenChoice((cur) => cur ?? true)
-			setReveal({ file: moved, nonce: Date.now() })
+			setReveal({ files: moved, nonce: Date.now() })
 		}
 	}
 

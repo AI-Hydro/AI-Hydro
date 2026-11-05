@@ -39,7 +39,7 @@ export interface ProjectFilesSectionProps {
 	/** The listed files that are not on the map (the host's list minus every file that has a layer). */
 	files: WorkspaceGeoFile[]
 	/** A file that just moved down here (Unload): open its folder, scroll to it and highlight it for a moment. */
-	reveal?: { file: WorkspaceGeoFile; nonce: number } | null
+	reveal?: { files: WorkspaceGeoFile[]; nonce: number } | null
 	open: boolean
 	onToggleOpen: () => void
 	/** Load a file. Rejects with the reason when it fails; the row then offers Retry. */
@@ -79,32 +79,54 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 	const showFilter = files.length > FILTER_ABOVE
 	const multiRoot = useMemo(() => new Set(files.map((f) => f.workspaceFolder)).size > 1, [files])
 	const listRef = useRef<VirtuosoHandle>(null)
-	const [flashKey, setFlashKey] = useState<string | null>(null)
+	const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set())
+	const treeRef = useRef<HTMLDivElement>(null)
+	const focusedFor = useRef<string | null>(null)
 
-	// A row that just moved down: clear the filter, open its folders, scroll to it and mark it for a moment.
+	// Rows that just moved down: clear the filter, open their folders, scroll to the first, mark them for a moment and
+	// put keyboard focus on the first one's Load button, so a keyboard user is not left on a row that is gone.
 	const revealNonce = useRef(0)
 	useEffect(() => {
-		if (!reveal || reveal.nonce === revealNonce.current) return
+		if (!reveal || reveal.nonce === revealNonce.current || reveal.files.length === 0) return
 		revealNonce.current = reveal.nonce
+		focusedFor.current = null
 		setFilter("")
-		setFlashKey(fileKey(reveal.file.workspaceFolder, reveal.file.relativePath))
+		setFlashKeys(new Set(reveal.files.map((f) => fileKey(f.workspaceFolder, f.relativePath))))
 		const startsOpen = files.length <= 20
 		setOpenFolders((prev) => {
 			const next = new Set(prev)
-			for (const key of folderKeysOf(reveal.file, multiRoot)) {
-				// `open` holds flips from the starting state: flip only a folder that is currently closed.
-				if (startsOpen === next.has(key)) startsOpen ? next.delete(key) : next.add(key)
+			for (const file of reveal.files) {
+				for (const key of folderKeysOf(file, multiRoot)) {
+					// `open` holds flips from the starting state: flip only a folder that is currently closed.
+					if (startsOpen === next.has(key)) startsOpen ? next.delete(key) : next.add(key)
+				}
 			}
 			return next
 		})
-		const timer = window.setTimeout(() => setFlashKey(null), FLASH_MS)
+		const timer = window.setTimeout(() => setFlashKeys(new Set()), FLASH_MS)
 		return () => window.clearTimeout(timer)
 	}, [reveal, files.length, multiRoot])
+	const firstFlash = useMemo(() => rows.find((r) => r.kind === "file" && flashKeys.has(r.key)), [rows, flashKeys])
 	useEffect(() => {
-		if (!flashKey) return
-		const index = rows.findIndex((r) => r.kind === "file" && r.key === flashKey)
+		if (!firstFlash) return
+		const index = rows.indexOf(firstFlash)
 		if (index >= 0) listRef.current?.scrollToIndex({ index, align: "center", behavior: "auto" })
-	}, [flashKey, rows])
+		if (focusedFor.current === firstFlash.key) return
+		// The row may be drawn a moment after the scroll (virtualised): try a few times.
+		let tries = 0
+		let timer: number | undefined
+		const focus = () => {
+			const button = treeRef.current?.querySelector<HTMLButtonElement>("[data-just-moved] button.map-chip")
+			if (button) {
+				button.focus({ preventScroll: true })
+				focusedFor.current = firstFlash.key
+			} else if (tries++ < 10) {
+				timer = window.setTimeout(focus, 40)
+			}
+		}
+		focus()
+		return () => window.clearTimeout(timer)
+	}, [firstFlash, rows])
 
 	// The set holds folders the user flipped from their starting state (open with 20 files or fewer, closed above).
 	const toggleFolder = (key: string) =>
@@ -231,7 +253,7 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 			<div
 				aria-level={row.depth + 1}
 				className="map-pf-row"
-				data-just-moved={flashKey === key || undefined}
+				data-just-moved={flashKeys.has(key) || undefined}
 				onDoubleClick={() => void runLoad(file)}
 				role="treeitem"
 				style={indent}
@@ -282,7 +304,8 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 					{(data.foldersSkipped > 0 || data.symlinksFound > 0) && (
 						<p className="map-pf-notes">
 							{data.foldersSkipped > 0 && (
-								<span title={`Not scanned: ${data.skippedNames.join(", ")} (top level of each folder)`}>
+								<span
+									title={`Not scanned, on purpose: ${data.skippedNames.join(", ")} (the top level of each open folder). These hold dependencies, version control, build output and the tools' own .aihydro folder, plus anything in your files.exclude setting. Files inside them are never listed.`}>
 									{`${data.foldersSkipped} folder${data.foldersSkipped === 1 ? "" : "s"} skipped`}
 								</span>
 							)}
@@ -357,7 +380,7 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 					)}
 					{allOnMap && <div className="map-pf-empty">Every project file is on the map.</div>}
 					{rows.length > 0 && (
-						<div aria-label="Not on the map" className="map-pf-tree" role="tree">
+						<div aria-label="Not on the map" className="map-pf-tree" ref={treeRef} role="tree">
 							<Virtuoso
 								ref={listRef}
 								computeItemKey={(i, row) => row?.key ?? i}

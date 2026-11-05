@@ -78,4 +78,19 @@ describe("project files rows", () => {
 		expect(layerOfFile(file, layersByFile([layer]))?.id).toBe("L9")
 		expect(layerOfFile({ ...file, loadedLayerId: "" } as WorkspaceGeoFile, layersByFile([layer]))).toBeUndefined()
 	})
+
+	it("a legacy layer that recorded only a relative path matches a file in one open folder, never with several", () => {
+		const legacy = { id: "9", metadata: { path: "a.geojson" } } as unknown as MapLayer
+		expect(layerOfFile(f("a.geojson"), layersByFile([legacy], true))?.id).toBe("9")
+		expect(layerOfFile(f("a.geojson"), layersByFile([legacy], false))).toBeUndefined()
+		expect(notOnMap([f("a.geojson", "/one", "one"), f("a.geojson", "/two", "two")], layersByFile([legacy], false))).toHaveLength(2)
+	})
+
+	it("two layers from one file keep it off the list until both are gone", () => {
+		const a = { id: "1", metadata: { source_path: "/ws/a.geojson" } } as unknown as MapLayer
+		const b = { id: "2", metadata: { source_path: "/ws/a.geojson" } } as unknown as MapLayer
+		expect(notOnMap([f("a.geojson")], layersByFile([a, b]))).toHaveLength(0)
+		expect(notOnMap([f("a.geojson")], layersByFile([b]))).toHaveLength(0)
+		expect(notOnMap([f("a.geojson")], layersByFile([]))).toHaveLength(1)
+	})
 })
