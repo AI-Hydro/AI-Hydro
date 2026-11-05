@@ -45,4 +45,25 @@ describe("applyFactStampPolicy: only an add from a run keeps the stamp", () => {
 			"_fact_keys",
 		)
 	})
+
+	it("a re-send that points at another run or tool does not keep the stamp, even with the same geometry and facts", () => {
+		const prior = layer({ ...STAMPED })
+		expect(applyFactStampPolicy(prior, layer({ ...STAMPED, _run_id: "r2" }), false).metadata).to.not.have.property(
+			"_fact_keys",
+		)
+		expect(applyFactStampPolicy(prior, layer({ ...STAMPED, tool: "other_tool" }), false).metadata).to.not.have.property(
+			"_fact_keys",
+		)
+	})
+	it("a forged scene file layer with no prior layer (a new id) loses the stamp", () => {
+		const forged = layer({ _run_id: "r9", tool: "gauge_flowlines", gauge_id: "01013500", _fact_keys: "gauge_id" })
+		expect(applyFactStampPolicy(undefined, forged, false).metadata).to.not.have.property("_fact_keys")
+	})
+	it("Undo: a layer the host removed itself comes back with its stamp, only when it is the same layer", () => {
+		const removed = layer({ ...STAMPED })
+		expect(applyFactStampPolicy(removed, layer({ ...STAMPED }), false).metadata._fact_keys).to.equal("gauge_id,n_features")
+		expect(applyFactStampPolicy(removed, layer({ ...STAMPED, gauge_id: "09999999" }), false).metadata).to.not.have.property(
+			"_fact_keys",
+		)
+	})
 })

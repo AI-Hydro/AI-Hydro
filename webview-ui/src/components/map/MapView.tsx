@@ -130,6 +130,7 @@ import { resolveFileUri } from "./resolveFileUri"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
 import { remapSceneIds } from "./sceneAliases"
+import { sceneLayerForOpen } from "./sceneLayer"
 import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
 import {
@@ -1669,7 +1670,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					}
 					if (Array.isArray(scene?.layers)) {
 						for (const layer of scene.layers as MapLayer[]) {
-							await MapServiceClient.addMapLayer(AddMapLayerRequest.create({ layer, replaceExisting: true }))
+							await MapServiceClient.addMapLayer(
+								AddMapLayerRequest.create({ layer: sceneLayerForOpen(layer), replaceExisting: true }),
+							)
 						}
 					}
 					setDropStatus({ kind: "ok", msg: `Opened map scene ${msg.name ?? ""}`.trim() })
