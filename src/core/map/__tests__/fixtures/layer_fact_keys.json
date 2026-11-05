@@ -1,0 +1,10 @@
+{
+	"_note": "The layer fact keys. The extension keeps an identical copy at src/core/map/__tests__/fixtures/layer_fact_keys.json. Each side tests its own constant against its copy, so a change to one list fails a test until the copies agree.",
+	"layer_fact_keys": [
+		"gauge_id",
+		"direction",
+		"distance_km",
+		"truncated",
+		"n_features"
+	]
+}

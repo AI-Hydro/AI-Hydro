@@ -253,10 +253,11 @@ export async function restoreCatalogEntries(
 				// An entry that could carry a claim, run or study link is added exactly as it is, unless its study positively
 				// cleared it: the duplicate check would otherwise merge its id away, and the migration cannot protect it (it
 				// compares entries before their content is read). This also covers layers restored later from overflow.
+				// trustFactStamp: a restore of what the host wrote to its own catalog keeps the fact stamp (a catalog edited on disk can forge it).
 				const guarded =
 					options.keepSeparate?.has(layer.id) ||
 					(hasEvidenceLink(entry.metadata_snapshot) && !options.clearedIds?.has(layer.id))
-				controller.addMapLayer(layer, guarded ? { replaceExisting: true } : {})
+				controller.addMapLayer(layer, guarded ? { replaceExisting: true, trustFactStamp: true } : { trustFactStamp: true })
 				added.push(layer.id)
 			}
 		} catch (err) {

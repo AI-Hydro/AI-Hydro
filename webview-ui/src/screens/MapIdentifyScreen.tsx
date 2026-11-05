@@ -4,6 +4,8 @@
  * the map; this is the test seam, and the card is the production component.
  */
 import FeatureIdentifier, { type ClickedFeature } from "../components/map/FeatureIdentifier"
+import { type TraceRequest, traceLayerInfo } from "../components/map/networkTrace"
+import { traceLayer } from "./fixtures/map"
 
 const features: ClickedFeature[] = [
 	{
@@ -72,6 +74,55 @@ export function MapIdentifyGaugeScreen() {
 				onClose={() => {}}
 				onQuickDelineate={() => {}}
 				onSaveFeatures={() => {}}
+			/>
+		</div>
+	)
+}
+
+/** A gauge the map can trace from (a USGS site number) and one it cannot (a station id that is not USGS). */
+const traceGauge = (siteNo: string, layerName: string): ClickedFeature[] => [
+	{
+		layerId: "fx-ref-gauges",
+		layerName,
+		properties: { site_no: siteNo, name: "Synthetic gauge", label: `${siteNo} — Synthetic gauge` },
+		geometry: { type: "Point", coordinates: [-89.9, 38.85] },
+	},
+]
+
+export type TraceScreenVariant = "idle" | "tracing" | "result" | "truncated" | "unavailable"
+
+const upstream50 = traceLayerInfo(traceLayer("upstream", 50, 24, false))
+const downstream200 = traceLayerInfo(traceLayer("downstream", 200, 750, true))
+const tracingRequest: TraceRequest = { siteNo: "00000001", direction: "upstream", distanceKm: 50, seenLayerIds: [] }
+
+/**
+ * P6 gauge card, five states of one block: ready to trace, waiting for the chat's run, a traced layer, a trace at the tool's
+ * feature cap, and a gauge that cannot be traced (not a USGS site, so no request is offered).
+ */
+export function MapTraceScreen({ variant }: { variant: TraceScreenVariant }) {
+	const unavailable = variant === "unavailable"
+	return (
+		<div style={{ position: "relative", height: "100%", minHeight: 620, background: "var(--vscode-editor-background)" }}>
+			<FeatureIdentifier
+				features={
+					unavailable ? traceGauge("08MF005", "Station gauges in view") : traceGauge("00000001", "NWIS gauges in view")
+				}
+				inspectPoint={{ lon: -89.9, lat: 38.85 }}
+				layerMetadata={() => (unavailable ? { source: "mx-station" } : { source: "nwis" })}
+				mapStyle="dark"
+				onAgentAsk={() => {}}
+				onAgentDelineate={() => {}}
+				onClose={() => {}}
+				onStopWaitingForTrace={() => {}}
+				onTrace={() => {}}
+				traceRequest={variant === "tracing" ? tracingRequest : null}
+				traces={
+					variant === "result" && upstream50
+						? [upstream50]
+						: variant === "truncated" && downstream200
+							? [downstream200]
+							: []
+				}
 			/>
 		</div>
 	)

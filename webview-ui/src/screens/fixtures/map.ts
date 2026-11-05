@@ -4,6 +4,10 @@
  * metadata.source_status = "synthetic" so exports can never pass as real data.
  */
 import type { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
+import { gaugeFlowlinesEnvelope } from "./gaugeFlowlinesEnvelope"
+
+/** What the host stamps next to the facts when it adds the layer (`runLayerMetadata`): the names of the facts the tool stated. */
+const FACT_KEYS_STAMP = "gauge_id,direction,distance_km,truncated,n_features"
 
 const style = (over: Partial<MapLayerStyle>): MapLayerStyle => ({
 	color: "#1f78b4",
@@ -400,3 +404,46 @@ export const fixtureTransectsJson = (): string =>
 			updatedAt: "2026-01-01T00:00:00.000Z",
 		},
 	])
+
+/**
+ * A synthetic gauge_flowlines layer: `n` invented short lines west (upstream) or east (downstream) of the fixture gauge.
+ * Its metadata is the envelope the real tools produced (`gaugeFlowlinesEnvelope`, captured from gauge_flowlines then
+ * map_add_layer_from_run) with the host's `session_id` alias, and the trace facts set for this variant. Nothing here is NHDPlus.
+ */
+export const traceLayer = (direction: "upstream" | "downstream", km: number, n: number, truncated: boolean): MapLayer => {
+	const sign = direction === "upstream" ? -1 : 1
+	const features = Array.from({ length: n }, (_, i) => {
+		const x0 = -89.9 + sign * (0.004 * i + 0.01)
+		const y0 = 38.85 + 0.01 * Math.sin(i / 3) + 0.0003 * (i % 7)
+		return {
+			type: "Feature",
+			properties: { nhdplus_comid: 900000 + i, direction, length_km: 0.4, source_status: "synthetic" },
+			geometry: {
+				type: "LineString",
+				coordinates: [
+					[x0, y0],
+					[x0 + sign * 0.004, y0 + 0.0008],
+				],
+			},
+		}
+	})
+	return {
+		id: `fx-trace-${direction}`,
+		name: `${direction === "upstream" ? "Upstream" : "Downstream"} trace, ${km} km, USGS-00000001 (NLDI)`,
+		layerType: "line",
+		visible: true,
+		geojson: JSON.stringify({ type: "FeatureCollection", features }),
+		style: style({ color: "#1b9e77", strokeColor: "#1b9e77", fillOpacity: 0 }),
+		metadata: {
+			...gaugeFlowlinesEnvelope,
+			session_id: gaugeFlowlinesEnvelope.study_id,
+			_fact_keys: FACT_KEYS_STAMP,
+			source_status: "synthetic",
+			gauge_id: "00000001",
+			direction,
+			distance_km: String(km),
+			truncated: String(truncated),
+			n_features: String(n),
+		},
+	}
+}

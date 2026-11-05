@@ -1,3 +1,4 @@
+import { FACT_KEYS_KEY, stampedFactKeys } from "@shared/map/provenanceEnvelope"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
 
 export interface MapLayerStylePatch {
@@ -33,7 +34,11 @@ export function mergeMapLayerPatch(layer: MapLayer, patch: MapLayerPatch): MapLa
 		}
 	}
 	if (patch.metadata) {
+		// Every caller is covered here, not only `update_layer`: the `_fact_keys` stamp is never set, changed or erased by a
+		// patch, and neither is any fact the layer's stamp lists. They describe the run's content, so only an add from a run writes them.
+		const protectedKeys = new Set([FACT_KEYS_KEY, ...stampedFactKeys(layer.metadata)])
 		for (const [k, v] of Object.entries(patch.metadata)) {
+			if (protectedKeys.has(k)) continue
 			if (v === "" || v === undefined) {
 				delete nextMeta[k]
 			} else {

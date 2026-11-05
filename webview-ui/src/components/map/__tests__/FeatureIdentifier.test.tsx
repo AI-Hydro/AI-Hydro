@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { PLATFORM_CONFIG } from "../../../config/platform.config"
 import FeatureIdentifier, { type ClickedFeature } from "../FeatureIdentifier"
+import { TRACE_NATURE, type TraceLayerInfo } from "../networkTrace"
 
 afterEach(cleanup)
 
@@ -218,5 +219,109 @@ describe("feature identifier card", () => {
 		expect(block).toHaveTextContent("Site08MF005")
 		expect(block).not.toHaveTextContent("USGS")
 		expect(screen.queryByRole("button", { name: "USGS page" })).toBeNull()
+	})
+})
+
+describe("gauge trace block", () => {
+	const gaugeFeature = (site: string): ClickedFeature[] => [
+		{
+			layerId: "g",
+			layerName: "Gauges",
+			properties: { site_no: site, name: "Test gauge" },
+			geometry: { type: "Point", coordinates: [-68.5, 47.2] },
+		},
+	]
+	const info = (over: Partial<TraceLayerInfo> = {}): TraceLayerInfo => ({
+		layerId: "t1",
+		layerName: "Upstream trace, 50 km, USGS-01013500 (NLDI)",
+		siteNo: "01013500",
+		direction: "upstream",
+		distanceKm: 50,
+		nFeatures: 12,
+		truncated: false,
+		...over,
+	})
+	const base = {
+		inspectPoint: { lon: -68.5, lat: 47.2 },
+		layerMetadata: () => ({ source: "nwis" }),
+		mapStyle: "dark",
+		onClose: vi.fn(),
+	}
+
+	it("asks for a trace with the typed distance and sends nothing for a bad one", () => {
+		const onTrace = vi.fn()
+		render(<FeatureIdentifier {...base} features={gaugeFeature("01013500")} onTrace={onTrace} />)
+		fireEvent.click(screen.getByRole("button", { name: "Downstream" }))
+		expect(onTrace).toHaveBeenLastCalledWith("01013500", "downstream", 50)
+		fireEvent.change(screen.getByLabelText("Distance (km)"), { target: { value: "75" } })
+		fireEvent.click(screen.getByRole("button", { name: "Upstream" }))
+		expect(onTrace).toHaveBeenLastCalledWith("01013500", "upstream", 75)
+		fireEvent.change(screen.getByLabelText("Distance (km)"), { target: { value: "250" } })
+		expect(screen.getByRole("alert").textContent).toMatch(/1 to 200/)
+		expect(screen.getByRole("button", { name: "Upstream" })).toBeDisabled()
+		expect(onTrace).toHaveBeenCalledTimes(2)
+	})
+
+	it("offers no trace for a gauge that is not a USGS site, and says why in plain words", () => {
+		const onTrace = vi.fn()
+		render(<FeatureIdentifier {...base} features={gaugeFeature("08MF005")} onTrace={onTrace} />)
+		expect(screen.queryByRole("button", { name: "Upstream" })).toBeNull()
+		expect(screen.getByRole("note").textContent).toMatch(/needs a USGS gauge in the United States/)
+	})
+
+	it("shows the wait, that the user approves the run, and lets them stop waiting", () => {
+		const stop = vi.fn()
+		render(
+			<FeatureIdentifier
+				{...base}
+				features={gaugeFeature("01013500")}
+				onStopWaitingForTrace={stop}
+				onTrace={vi.fn()}
+				traceRequest={{ siteNo: "01013500", direction: "upstream", distanceKm: 50, seenLayerIds: [] }}
+			/>,
+		)
+		expect(screen.getByRole("status").textContent).toMatch(/Tracing upstream, 50 km, in the chat/)
+		expect(screen.getByRole("status").textContent).toMatch(/approve the tool call/)
+		expect(screen.getByRole("status").textContent).toMatch(/no layer is added/)
+		expect(screen.getByRole("button", { name: "Upstream" })).toBeDisabled()
+		fireEvent.click(screen.getByRole("button", { name: "Stop waiting" }))
+		expect(stop).toHaveBeenCalled()
+	})
+
+	it("describes a traced layer as a network query result, with the cut when there is one", () => {
+		render(
+			<FeatureIdentifier
+				{...base}
+				features={gaugeFeature("01013500")}
+				onTrace={vi.fn()}
+				traces={[info({ truncated: true })]}
+			/>,
+		)
+		const group = screen.getByRole("group", { name: /^Trace: Upstream trace/ })
+		expect(within(group).getByText("50 km along the network")).toBeInTheDocument()
+		expect(within(group).getByText("NLDI navigation over NHDPlus V2")).toBeInTheDocument()
+		// The cut-short note exists and is drawn in the warning colour, not the muted one.
+		const cut = within(group).getByText(/^Cut short: the tool keeps at most 750/)
+		expect(cut.getAttribute("role")).toBe("note")
+		expect(cut).toHaveStyle({ color: "#f2cc60" })
+		expect(within(group).getByText(TRACE_NATURE)).toBeInTheDocument()
+	})
+
+	it("does not list another gauge's trace, and shows a clicked trace line's layer without a gauge block", () => {
+		const { rerender } = render(
+			<FeatureIdentifier {...base} features={gaugeFeature("09999999")} onTrace={vi.fn()} traces={[info()]} />,
+		)
+		expect(screen.queryByRole("group", { name: /^Trace:/ })).toBeNull()
+		rerender(
+			<FeatureIdentifier
+				{...base}
+				features={[
+					{ layerId: "t1", layerName: "Upstream trace", properties: { nhdplus_comid: 5, direction: "upstream" } },
+				]}
+				traces={[info()]}
+			/>,
+		)
+		expect(screen.getByRole("group", { name: /^Trace:/ })).toBeInTheDocument()
+		expect(screen.queryByRole("group", { name: "Network trace" })).toBeNull()
 	})
 })

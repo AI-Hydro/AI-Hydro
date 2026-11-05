@@ -27,13 +27,79 @@ describe("MapCommandWatcher add_layer_from_run provenance", () => {
 			geojson: GEOJSON,
 			run_id: "run-1",
 			session_id: "st_1",
-			provenance: { _run_id: "run-1", study_id: "st_1", chat_id: "chat-1", tool: "delineate_watershed", unknown: "x" },
+			provenance: {
+				_run_id: "run-1",
+				study_id: "st_1",
+				chat_id: "chat-1",
+				tool: "delineate_watershed",
+				"Unknown Key": "x",
+			},
 		})
 		expect(layer.metadata._run_id).to.equal("run-1")
 		expect(layer.metadata.chat_id).to.equal("chat-1")
 		expect(layer.metadata.tool).to.equal("delineate_watershed")
 		expect(layer.metadata).to.not.have.property("run_id")
-		expect(layer.metadata).to.not.have.property("unknown")
+		expect(layer.metadata).to.not.have.property("Unknown Key")
+	})
+
+	it("copies the layer facts from the command's provenance, and never lets them replace the envelope or host keys", async () => {
+		const [layer] = await apply({
+			type: "add_layer_from_run",
+			layer_id: "l4",
+			geojson: GEOJSON,
+			run_id: "run-4",
+			provenance: {
+				_run_id: "run-4",
+				study_id: "st_1",
+				tool: "gauge_flowlines",
+				gauge_id: "01013500",
+				direction: "upstream",
+				distance_km: "50",
+				truncated: "false",
+				n_features: "214",
+				session_id: "forged",
+				project_id: "forged",
+				item_id: "forged",
+				count_as_number: 3,
+				source_path: "/etc/passwd",
+				workspace_path: "/w",
+				path: "/p",
+				source_status: "validated",
+				validation_status: "ok",
+				claim_id: "c1",
+				uncertainty: "none",
+				raster_path: "/r.tif",
+				geojson_cache_path: "/c.json",
+			},
+		})
+		expect(layer.metadata).to.include({
+			gauge_id: "01013500",
+			direction: "upstream",
+			distance_km: "50",
+			truncated: "false",
+			n_features: "214",
+		})
+		expect(layer.metadata.tool).to.equal("gauge_flowlines")
+		expect(layer.metadata.session_id).to.equal("st_1") // the study's alias, not the forged value
+		expect(layer.metadata).to.not.have.property("project_id")
+		expect(layer.metadata).to.not.have.property("item_id")
+		for (const refused of [
+			"count_as_number",
+			"source_path",
+			"workspace_path",
+			"path",
+			"source_status",
+			"validation_status",
+			"claim_id",
+			"uncertainty",
+			"raster_path",
+			"geojson_cache_path",
+			"project_id",
+			"item_id",
+		]) {
+			expect(layer.metadata, refused).to.not.have.property(refused)
+		}
+		expect(layer.metadata._fact_keys).to.equal("gauge_id,direction,distance_km,truncated,n_features")
 	})
 
 	it("an older tools server (no provenance object) still gets _run_id from run_id", async () => {
@@ -51,7 +117,12 @@ describe("MapCommandWatcher add_layer_from_run provenance", () => {
 describe("update_layer cannot forge or erase provenance", () => {
 	it("skips envelope, host-stamped and alias keys, and applies the rest", () => {
 		const patches: any[] = []
-		const controller = { updateMapLayer: (_id: string, p: any) => (patches.push(p), true), mapSessionService: {} }
+		const controller = {
+			updateMapLayer: (_id: string, p: any) => (patches.push(p), true),
+			getMapLayers: () => [],
+			resolveMapLayerId: (id: string) => id,
+			mapSessionService: {},
+		}
 		const watcher = new MapCommandWatcher(controller as any)
 		const cmd = mapCommandSchema.parse({
 			type: "update_layer",
@@ -66,12 +137,32 @@ describe("update_layer cannot forge or erase provenance", () => {
 				project_id: "p",
 				item_id: "i",
 				session_id: "x",
+				_fact_keys: "gauge_id",
 				note: "kept",
 			},
 		})
 		return (watcher as any).applyCommand(cmd).then(() => {
 			expect(patches[0].metadata).to.deep.equal({ note: "kept" })
 		})
+	})
+})
+
+describe("an add from a run is the only add that keeps the fact stamp", () => {
+	it("a forged _fact_keys in the command's provenance is not read; the host writes its own", async () => {
+		const [layer] = await apply({
+			type: "add_layer_from_run",
+			layer_id: "f1",
+			geojson: GEOJSON,
+			run_id: "run-f",
+			provenance: {
+				_run_id: "run-f",
+				tool: "gauge_flowlines",
+				gauge_id: "01013500",
+				truncated: "false",
+				_fact_keys: "forged",
+			},
+		})
+		expect(layer.metadata._fact_keys).to.equal("gauge_id,truncated")
 	})
 })
 

@@ -3,6 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
 import { LedgerEventWatcher } from "@core/ledger/LedgerEventWatcher"
 import { type AddOutcome, applyAddLayer, dropAliasesFor, resolveAlias } from "@core/map/applyAddLayer"
+import { applyFactStampPolicy } from "@core/map/factStamp"
 import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
 import { buildMapLayerCatalogAsync, type MapLayerCatalogEntry, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
@@ -2040,8 +2041,14 @@ export class Controller {
 	 * Add or update a map layer
 	 * @param layer The layer to add/update
 	 */
-	addMapLayer(layer: MapLayer, options: { replaceExisting?: boolean } = {}): void {
+	addMapLayer(layer: MapLayer, options: { replaceExisting?: boolean; trustFactStamp?: boolean } = {}): void {
 		console.log(`[Controller] Adding map layer: ${layer.id}`)
+		layer = applyFactStampPolicy(
+			this.mapLayers.get(layer.id) ?? this.recentlyRemovedLayers.get(layer.id),
+			layer,
+			options.trustFactStamp === true,
+		)
+		this.recentlyRemovedLayers.delete(layer.id)
 		const op = layer.metadata?.__operation
 		if (op === "remove") {
 			this.removeMapLayer(layer.id)
@@ -2063,6 +2070,18 @@ export class Controller {
 		}
 		this.notifyMapLayerSubscribers(layer)
 		void this.syncMapLayerCatalog()
+	}
+
+	/** Layers the host removed itself, newest last, so Undo can bring one back with the fact stamp it had (nothing comes from the webview). */
+	private readonly recentlyRemovedLayers = new Map<string, MapLayer>()
+	private rememberRemoved(layer: MapLayer): void {
+		this.recentlyRemovedLayers.delete(layer.id)
+		this.recentlyRemovedLayers.set(layer.id, layer)
+		while (this.recentlyRemovedLayers.size > 20) {
+			const oldest = this.recentlyRemovedLayers.keys().next().value
+			if (oldest === undefined) break
+			this.recentlyRemovedLayers.delete(oldest)
+		}
 	}
 
 	/** Symlinks resolved, cached per path, so two routes to one file compare equal without a stat on every add. */
@@ -2246,7 +2265,9 @@ export class Controller {
 		const layerId = this.resolveMapLayerId(requestedId)
 		console.log(`[Controller] Removing map layer: ${layerId}`)
 
+		const removed = this.mapLayers.get(layerId)
 		const wasRemoved = this.mapLayers.delete(layerId)
+		if (removed) this.rememberRemoved(removed)
 		if (wasRemoved) dropAliasesFor(this.mapLayerAliases, layerId)
 		if (!wasRemoved) {
 			return

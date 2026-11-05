@@ -121,7 +121,14 @@ export function objectKind(features: ClickedFeature[], hasPin = false): MapObjec
 	const props = features[0].properties
 	if (props.site_no != null || props.siteNo != null || props.monitoring_location_id != null) return "gauge"
 	if (props.area_km2 != null && (props.method != null || props.pfaf != null || props.routing != null)) return "basin"
-	if (props.uparea != null || props.strmOrder != null || props.COMID != null || props.comid != null) return "river"
+	if (
+		props.uparea != null ||
+		props.strmOrder != null ||
+		props.COMID != null ||
+		props.comid != null ||
+		props.nhdplus_comid != null
+	)
+		return "river"
 	return "feature"
 }
 
