@@ -11,7 +11,11 @@ const featureCollection = (seed: number, bytes: number) => {
 	const features: unknown[] = []
 	let size = 0
 	for (let i = 0; size < bytes; i++) {
-		const f = { type: "Feature", properties: { id: i, area: seed + i * 1.5, name: `f${i}` }, geometry: { type: "Point", coordinates: [seed + i * 0.001, 40 + i * 0.001] } }
+		const f = {
+			type: "Feature",
+			properties: { id: i, area: seed + i * 1.5, name: `f${i}` },
+			geometry: { type: "Point", coordinates: [seed + i * 0.001, 40 + i * 0.001] },
+		}
 		features.push(f)
 		size += JSON.stringify(f).length + 1
 	}
@@ -55,7 +59,9 @@ describe("catalog rewrite: unchanged content is not redone", () => {
 		expect(before.summaries).to.equal(40)
 		expect(before.cacheWrites).to.equal(40)
 		// A style edit: one layer's metadata changes, its content does not.
-		const edited = ls.map((l, i) => (i === 7 ? MapLayer.create({ ...l, metadata: { ...l.metadata, display_name: "renamed" } }) : l))
+		const edited = ls.map((l, i) =>
+			i === 7 ? MapLayer.create({ ...l, metadata: { ...l.metadata, display_name: "renamed" } }) : l,
+		)
 		const t1 = Date.now()
 		await buildMapLayerCatalogAsync(edited, order)
 		const second = Date.now() - t1
@@ -86,7 +92,7 @@ describe("catalog rewrite: unchanged content is not redone", () => {
 			layerType: "polygon",
 			metadata: { source: "workspace", path: "data/a.geojson", workspace_folder: "/w/proj" },
 		})
-		expect(layerToCatalogEntry(layer).workspace_path).to.equal("/w/proj/data/a.geojson")
+		expect(layerToCatalogEntry(layer).workspace_path).to.equal(path.join("/w/proj", "data/a.geojson"))
 		expect(layerToCatalogEntry(layer).metadata_snapshot.path).to.equal("data/a.geojson")
 	})
 })
