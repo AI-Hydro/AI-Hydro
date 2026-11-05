@@ -127,18 +127,24 @@ jobs:
       - name: Run installed-VSIX specs (Ubuntu)
         if: matrix.runner == 'ubuntu'
         shell: bash
+        env:
+          REPEAT: ${{ inputs.repeat || '1' }}
+          RUNNER_LABEL: ${{ matrix.runner }}
         run: >-
           xvfb-run -a node scripts/e2e-repeat.mjs
-          --runs "${{ inputs.repeat || '1' }}" --label "${{ matrix.runner }}-vsix" --
+          --runs "$REPEAT" --label "$RUNNER_LABEL-vsix" --
           src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts
           --grep '@phase1-(pack|charts)'
 
       - name: Run installed-VSIX specs
         if: matrix.runner != 'ubuntu'
         shell: bash
+        env:
+          REPEAT: ${{ inputs.repeat || '1' }}
+          RUNNER_LABEL: ${{ matrix.runner }}
         run: >-
           node scripts/e2e-repeat.mjs
-          --runs "${{ inputs.repeat || '1' }}" --label "${{ matrix.runner }}-vsix" --
+          --runs "$REPEAT" --label "$RUNNER_LABEL-vsix" --
           src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts
           --grep '@phase1-(pack|charts)'
 

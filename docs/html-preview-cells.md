@@ -138,7 +138,7 @@ signed Learning Pack, whose CSP is `script-src 'unsafe-inline'` with `connect-sr
 these figures: the policy is unchanged, and no external origin is allowed. Outside the host (a standalone
 file) the helpers fall back to the CDN. Updating a library means bumping the exact version in
 `webview-ui/package.json` and the digest in the manifest together; `vendorLibraries.test.ts` fails if
-they disagree. The vendored builds add about 5 MB to the unpacked webview build.
+they disagree. The vendored builds add about 5 MB to the unpacked webview build. Their MIT licence texts ship in `THIRD_PARTY_NOTICES` (extension root) and `webview-ui/build/assets/plotly.min.js.LICENSE.txt`, the file the Plotly bundle header points to; `vendorLibraries.test.ts` checks the notices against the manifest.
 
 ## Control-state persistence
 

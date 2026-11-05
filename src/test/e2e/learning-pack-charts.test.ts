@@ -126,23 +126,45 @@ chartPackE2E(
 			)
 			.toBe(true)
 
-		// Plotly drew into the mount point: it adds a .js-plotly-plot container with an SVG.
+		// The globals come from the vendored files (exact versions), and Plotly drew into the mount point.
+		await expect
+			.poll(() =>
+				chart!.evaluate(() => {
+					const w = window as unknown as {
+						Plotly?: { version?: string; newPlot?: unknown }
+						THREE?: { REVISION?: string }
+					}
+					return { plotly: w.Plotly?.version, plotlyFn: typeof w.Plotly?.newPlot, three: w.THREE?.REVISION }
+				}),
+			)
+			.toEqual({ plotly: "2.35.2", plotlyFn: "function", three: "128" })
 		await expect(chart!.locator("#chart.js-plotly-plot svg.main-svg").first()).toBeAttached({ timeout: 30_000 })
+		await expect(chart!.locator("#chart .scatterlayer .trace").first()).toBeAttached()
 		// three.js and its OrbitControls loaded and the helper settled (a WebGL context may be unavailable on a
 		// hosted runner, in which case the helper resolves null; the library must still have loaded).
 		await expect
 			.poll(() =>
-				chart!.evaluate(() => {
-					const w = window as Window & { THREE?: { REVISION?: string; OrbitControls?: unknown } }
-					return Boolean(w.THREE?.REVISION) && Boolean(w.THREE?.OrbitControls)
-				}),
+				chart!.evaluate(() => typeof (window as unknown as { THREE?: { OrbitControls?: unknown } }).THREE?.OrbitControls),
 			)
-			.toBe(true)
+			.toBe("function")
 		await expect
 			.poll(() => chart!.evaluate(() => (window as Window & { __sceneResolved?: string }).__sceneResolved), {
 				timeout: 30_000,
 			})
 			.toBeDefined()
+		// page.route may not see requests made from a sandboxed iframe, so check from inside the document too:
+		// the vendored scripts are inline (tagged by the bridge) and no resource entry names a CDN host.
+		const inFrame = await chart!.evaluate(() => ({
+			vendored: Array.from(document.querySelectorAll("script[data-aihydro-vendor]")).map((el) =>
+				el.getAttribute("data-aihydro-vendor"),
+			),
+			cdnResources: performance.getEntriesByType("resource").filter((entry) => /cdn\.plot\.ly|jsdelivr/.test(entry.name))
+				.length,
+			externalScripts: Array.from(document.querySelectorAll("script[src]")).length,
+		}))
+		expect(inFrame.vendored.sort()).toEqual(["plotly", "three", "three-orbit"])
+		expect(inFrame.cdnResources).toBe(0)
+		expect(inFrame.externalScripts).toBe(0)
 		expect(cdnRequests).toEqual([])
 	},
 )

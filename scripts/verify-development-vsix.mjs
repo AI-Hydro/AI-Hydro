@@ -36,6 +36,7 @@ export const REQUIRED_RUNTIME_ENTRIES = Object.freeze([
 	"extension/changelog.md",
 	"extension/package.json",
 	"extension/readme.md",
+	"extension/THIRD_PARTY_NOTICES",
 	"extension/schemas/learning-pack/v1/pack.schema.json",
 	"extension/standalone/runtime-files/vscode/enhanced-terminal.js",
 	"extension/walkthrough/step1.md",
@@ -59,6 +60,7 @@ export const REQUIRED_RUNTIME_ENTRIES = Object.freeze([
 	"extension/webview-ui/build/assets/plotly.min.js",
 	"extension/webview-ui/build/assets/three.min.js",
 	"extension/webview-ui/build/assets/OrbitControls.js",
+	"extension/webview-ui/build/assets/plotly.min.js.LICENSE.txt",
 	"extension/webview-ui/build/index.html",
 ])
 

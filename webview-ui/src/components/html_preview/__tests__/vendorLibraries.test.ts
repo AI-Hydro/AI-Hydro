@@ -55,6 +55,33 @@ describe("vendored chart libraries", () => {
 	})
 })
 
+describe("vendored library notices", () => {
+	const notices = readFileSync(join(__dirname, "..", "..", "..", "..", "..", "THIRD_PARTY_NOTICES"), "utf8")
+
+	it("carries the full licence text and version of every vendored package, matching the manifest", () => {
+		for (const [id, entry] of Object.entries(manifest)) {
+			const root = dirname(require.resolve(`${entry.package}/package.json`))
+			const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string; license: string }
+			expect(pkg.version, id).toBe(entry.version)
+			expect(pkg.license, id).toBe(entry.license)
+			expect(notices, id).toContain(`${entry.package} ${entry.version}`)
+			expect(notices, id).toContain(`license: ${entry.license}`)
+			expect(notices, id).toContain(readFileSync(join(root, "LICENSE"), "utf8").trim())
+			expect(notices, id).toContain(entry.file.split("/").pop() as string)
+		}
+	})
+
+	it("ships the licence file that the Plotly bundle header points to", () => {
+		const shipped = readFileSync(
+			join(__dirname, "..", "..", "..", "..", "public", "assets", "plotly.min.js.LICENSE.txt"),
+			"utf8",
+		)
+		expect(shipped).toContain(
+			readFileSync(join(dirname(require.resolve("plotly.js-dist-min/package.json")), "LICENSE"), "utf8").trim(),
+		)
+	})
+})
+
 describe("chart helpers under the installed-pack CSP", () => {
 	it("keeps script-src inline-only: vendoring must not add a script origin", () => {
 		const csp = buildInstalledPackCsp("https://file+.vscode-resource.vscode-cdn.net/pack/")

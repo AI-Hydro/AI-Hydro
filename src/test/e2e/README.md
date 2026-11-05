@@ -93,6 +93,8 @@ AIHYDRO_E2E_VSIX=/tmp/ai-hydro.vsix npx playwright test -c playwright.config.ts 
   --grep '@phase1-(pack|charts)'
 ```
 
+The restart test closes and relaunches VS Code, then issues the install command again, which returns `noop` and reopens the course. Studio does not restore the course on its own after a restart, so this is a reinstall-noop reopen, not a restore.
+
 CI does this on Ubuntu, macOS and Windows in `studio-vsix-e2e.yml`. Dispatch it with `repeat` set to 20 to
 measure the flake rate (`scripts/e2e-repeat.mjs`: a fresh process per run, retries disabled).
 
