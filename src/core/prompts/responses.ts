@@ -30,6 +30,14 @@ export const formatResponse = {
 
 	toolDenied: () => `The user denied this operation.`,
 
+	/** A launch the user denied without saying anything: the lead carries on alone and does not ask again. */
+	subagentLaunchDenied: () =>
+		`The user denied this launch. Carry on with your own tools. Do not propose explorers again in this task unless the user asks.`,
+
+	/** Two bare denials in a row: no card is raised until the user next writes to the lead. */
+	subagentLaunchesPaused: () =>
+		`Launches are paused: the user denied two in this task. Do the work yourself. Launches resume when the user next writes to you.`,
+
 	/**
 	 * Gate feedback for a held-back draft (W2-C). Deliberately NOT an error result: it must not match the tool-error
 	 * markers (so it never feeds recentToolErrors, the decompose nudge or a "failed" execOutcome) and it never echoes

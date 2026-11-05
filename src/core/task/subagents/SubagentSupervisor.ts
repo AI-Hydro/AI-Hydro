@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto"
 import type { ApiHandler } from "@core/api"
 import { type SubagentChildSummary, subagentLabel } from "@shared/aihydro/subagents"
-import { type AgentProfile, capFor, type EffectiveCapabilities, type ParentCapabilities } from "./agentProfile"
+import { type AgentDefinition, capFor, type EffectiveCapabilities, type ParentCapabilities } from "./agentDefinition"
 import { type SubagentResult, SubagentRunner, type SubagentRunnerInit } from "./SubagentRunner"
 
 /** At most this many children run at once; the rest queue (plan 5.3). */
@@ -22,7 +22,7 @@ export type SupervisorRunnerBase = Omit<
 >
 
 export interface SupervisorDeps {
-	profile: AgentProfile
+	definition: AgentDefinition
 	parent: ParentCapabilities
 	/** The fixed parts every runner shares (context, services, bridge, record writer...). */
 	runnerBase: SupervisorRunnerBase
@@ -55,7 +55,7 @@ export class SubagentSupervisor {
 	readonly caps: EffectiveCapabilities
 
 	constructor(private readonly deps: SupervisorDeps) {
-		const caps = capFor(deps.parent, deps.profile)
+		const caps = capFor(deps.parent, deps.definition)
 		if (!caps) {
 			throw new SpawnRefused("A subagent cannot start another subagent.")
 		}
@@ -103,8 +103,8 @@ export class SubagentSupervisor {
 				...this.deps.runnerBase,
 				childId: newId(),
 				ordinal,
-				label: subagentLabel(this.deps.profile.id, ordinal),
-				profile: this.deps.profile.id,
+				label: subagentLabel(this.deps.definition.displayName, ordinal),
+				profile: this.deps.definition.id,
 				caps: this.caps,
 				prompt,
 				api: this.deps.buildApi(),

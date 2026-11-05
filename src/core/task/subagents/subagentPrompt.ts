@@ -5,11 +5,13 @@ import { AiHydroToolSet } from "@/core/prompts/system-prompt/registry/AiHydroToo
 import { PromptBuilder } from "@/core/prompts/system-prompt/registry/PromptBuilder"
 import { TemplateEngine } from "@/core/prompts/system-prompt/templates/TemplateEngine"
 import { registerAiHydroToolSets } from "@/core/prompts/system-prompt/tools"
+import { SCIENTIFIC_CONDUCT_RULES } from "@/core/prompts/system-prompt/components/scientific_conduct"
 import { report_findings_spec } from "@/core/prompts/system-prompt/tools/report_findings"
+import { report_review_spec } from "@/core/prompts/system-prompt/tools/report_review"
 import type { SystemPromptContext } from "@/core/prompts/system-prompt/types"
 import { ModelFamily } from "@/shared/prompts"
 import { AiHydroDefaultTool } from "@/shared/tools"
-import type { EffectiveCapabilities } from "./agentProfile"
+import type { EffectiveCapabilities } from "./agentDefinition"
 
 /** Per-tool and total caps on the MCP listing, so a large server cannot crowd out the rest of a child's prompt. */
 const MAX_SCHEMA_CHARS = 1_500
@@ -69,13 +71,15 @@ Use exactly one tool per message and wait for its result. Do not describe a call
 
 function toolDocs(caps: EffectiveCapabilities, context: SystemPromptContext): string {
 	registerAiHydroToolSets()
-	const ids = [...caps.builtinAllow, AiHydroDefaultTool.REPORT_FINDINGS]
+	const ids = [...caps.builtinAllow, caps.reportTool]
 	const docs: string[] = []
 	for (const id of ids) {
 		const config =
 			id === AiHydroDefaultTool.REPORT_FINDINGS
 				? report_findings_spec
-				: AiHydroToolSet.getToolByNameWithFallback(id, ModelFamily.GENERIC)?.config
+				: id === AiHydroDefaultTool.REPORT_REVIEW
+					? report_review_spec
+					: AiHydroToolSet.getToolByNameWithFallback(id, ModelFamily.GENERIC)?.config
 		if (config) {
 			// Parameters whose focus-chain dependency is unmet are filtered by PromptBuilder; task_progress is not offered.
 			docs.push(
@@ -98,16 +102,26 @@ export interface SubagentPromptInput {
 	context: SystemPromptContext
 }
 
+/** The closing section of a child's prompt: what to call when it is done, by report schema. */
+function finishing(caps: EffectiveCapabilities): string {
+	if (caps.reportSchema === "review") {
+		return `When you have checked each statement you were given, or nothing more can be learned, call report_review once. Give one verdict per statement: supported, unsupported or unverifiable. Say "supported" only for what you read yourself and name the source. Say "unsupported" only when what you read contradicts the statement or shows it does not follow. When you could not check a statement against anything you read or were given, say "unverifiable": that is not the same as wrong. Do not guess. Do not claim a number, a result or a citation you did not see. You are one more model run: your verdicts are advice, not evidence, and you cannot approve or reject anything.`
+	}
+	return `When you have what was asked, or nothing more can be learned, call ${caps.reportTool} once. Report only what you read in this session: name the files and lines, say what a tool returned, and put anything you could not establish in open_questions. Do not guess. Do not claim a number, a result or a citation you did not see.`
+}
+
 /**
- * A child's system prompt (plan 5.4): a role, the allowed tool specs, the report contract and the budget. It carries
- * none of the parent's conversation, rules files, skills or focus chain. The tool specs come from the same registry
- * as the parent's, filtered to what the child can call.
+ * A child's system prompt (plan 5.4): a role, the allowed tool specs, the conduct rules, the report contract and the
+ * budget. It carries none of the parent's conversation, rules files, skills or focus chain. The tool specs come from
+ * the same registry as the parent's, filtered to what the child can call. Nothing in it names the child: siblings of
+ * one definition share this text byte for byte (see subagentTaskMessage).
  */
 export function buildSubagentSystemPrompt(input: SubagentPromptInput): string {
 	const { caps, cwd, workspaceRoots, servers, context } = input
 	const budget = caps.budget
 	const minutes = Math.round(budget.wallClockMs / 60_000)
-	const body = `You are a read-only research subagent of AI-Hydro. Another agent (the parent) gave you one focused question. You read the workspace and call read-only tools, then report what you found. You cannot change anything.
+	const definition = caps.definition
+	const body = `${definition.role}${definition.body ? `\n\n${definition.body.trim()}` : ""}
 
 # What you can and cannot do
 
@@ -120,9 +134,13 @@ export function buildSubagentSystemPrompt(input: SubagentPromptInput): string {
 
 At most ${budget.maxToolCalls} tool calls and about ${minutes} minutes. If a limit stops you, your last message is kept as a partial result, so work from the most useful sources first.
 
+# Conduct
+
+${SCIENTIFIC_CONDUCT_RULES}
+
 # Finishing
 
-When you have what was asked, or nothing more can be learned, call report_findings once. Report only what you read in this session: name the files and lines, say what a tool returned, and put anything you could not establish in open_questions. Do not guess. Do not claim a number, a result or a citation you did not see.
+${finishing(caps)}
 
 ${TOOL_FORMAT}
 
@@ -149,8 +167,10 @@ Current working directory: ${cwd}${
 /**
  * The first user message: the parent's prompt, marked as the task. The child's label rides here, never in the system
  * prompt: siblings then share one system prompt byte for byte, which is what lets a provider's prompt cache serve the
- * second and third child from the first one's prefix.
+ * second and third child from the first one's prefix. The study brief rides here too. The host built it (the server's
+ * capped project digest, read by the host, never written by the model), it is reference data and grants nothing, and
+ * every sibling receives the same text.
  */
-export function subagentTaskMessage(prompt: string, label?: string): string {
-	return `${label ? `You are ${label}.\n` : ""}<task>\n${prompt.trim()}\n</task>`
+export function subagentTaskMessage(prompt: string, label?: string, studyBrief?: string): string {
+	return `${label ? `You are ${label}.\n` : ""}${studyBrief ? `<study_brief>\n${studyBrief.trim()}\n</study_brief>\n` : ""}<task>\n${prompt.trim()}\n</task>`
 }

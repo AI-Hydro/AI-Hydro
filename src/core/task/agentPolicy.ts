@@ -2,12 +2,13 @@ import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import { effectClass } from "@shared/aihydro/mcpEffectClass"
 import type { McpServer } from "@shared/mcp"
 import { AiHydroDefaultTool } from "@/shared/tools"
-import { EXPLORER_PROFILE } from "./subagents/agentProfile"
+import { type AgentDefinition, EXPLORER_DEFINITION, reportToolFor } from "./subagents/agentDefinition"
 
 /**
- * Capability policy for the `explorer` subagent profile (AGENT_EXECUTION_MODEL §4, gap #3).
+ * Capability policy for read-only subagent definitions (AGENT_EXECUTION_MODEL §4, gap #3). Every definition that names
+ * the `read` MCP policy is checked here; nothing in this file is specific to one definition.
  *
- * The profile is advertised as physically read-only. Name-based blocking of the built-in write tools
+ * A definition is advertised as physically read-only. Name-based blocking of the built-in write tools
  * is not enough on its own: `use_mcp_tool` reaches every MCP tool, including `run_python` and every
  * server-side write tool. So MCP calls are allowed only for READ-class tools (readOnlyHint true AND
  * openWorldHint false, see mcpEffectClass.ts) on a TRUSTED server (isServerTrusted: name plus the launcher
@@ -17,18 +18,23 @@ import { EXPLORER_PROFILE } from "./subagents/agentProfile"
  */
 
 /**
- * The explorer's built-in allowlist is data on the profile (subagents/agentProfile.ts). This is an ALLOWLIST: any
- * tool not listed (including tools added later, e.g. preview_html which writes model-supplied HTML to the workspace
- * and opens it, or report_bug which opens an external issue) is refused by default. `report_findings` is the child's
- * only exit and is handled by the host. use_mcp_tool and access_mcp_resource are listed but further gated below.
+ * A definition's callable tools: its built-ins (subagents/agentDefinition.ts) plus its exit tool. This is an ALLOWLIST:
+ * any tool not listed (including tools added later, e.g. preview_html which writes model-supplied HTML to the workspace
+ * and opens it, or report_bug which opens an external issue) is refused by default. The exit tool is handled by the
+ * host. use_mcp_tool and access_mcp_resource are listed but further gated below.
  */
-export const EXPLORER_ALLOWED_TOOLS: readonly string[] = [...EXPLORER_PROFILE.builtinAllow, EXPLORER_PROFILE.reportTool]
+export function allowedToolsOf(definition: AgentDefinition): readonly string[] {
+	return [...definition.builtinAllow, reportToolFor(definition.reportSchema)]
+}
+
+/** The default definition's allowlist, for a caller that names none. */
+export const DEFAULT_ALLOWED_TOOLS: readonly string[] = allowedToolsOf(EXPLORER_DEFINITION)
 
 const READ_ONLY_TOOL_LIST =
-	"read_file, search_files, list_files, load_mcp_documentation, report_findings, and read-only MCP tools (readOnlyHint=true, openWorldHint=false) or resources on the trusted first-party server"
+	"read_file, search_files, list_files, load_mcp_documentation, your report tool, and read-only MCP tools (readOnlyHint=true, openWorldHint=false) or resources on the trusted first-party server"
 
 /**
- * MCP tools an explorer may never call whatever the server annotates: the ones that bind a chat to a study, change a
+ * MCP tools a subagent may never call whatever the server annotates: the ones that bind a chat to a study, change a
  * claim, an assumption or the interpretation, or clear a session, and the project-registry operations the server marks
  * for the host (`audience=host`). None is READ class on a correct server, but this list means the guarantee does not
  * rest on a server's annotations alone (a mislabelled or changed tool is still refused). A name match, applied before
@@ -36,11 +42,11 @@ const READ_ONLY_TOOL_LIST =
  *
  * Every name here must be a tool the server really registers. A name that does not exist guards nothing and hides the
  * ones that were missed (the earlier list named `revise_claim`, `promote_claim` and `approve_claim`, which have no row,
- * and omitted `update_claim_status`). explorerPolicy.test.ts checks this list against the checked-in tool list
+ * and omitted `update_claim_status`). agentPolicy.test.ts checks this list against the checked-in tool list
  * (__tests__/fixtures/aihydro-tool-surface.json, exported from aihydro-tools by scripts/export-aihydro-tool-surface.py).
  * Approval itself is not an MCP tool: it is the owner's `aihydro-approve` outside the agent.
  */
-export const EXPLORER_DENIED_MCP_TOOLS: ReadonlySet<string> = new Set([
+export const AGENT_DENIED_MCP_TOOLS: ReadonlySet<string> = new Set([
 	// bind a chat to a study, or create one
 	"start_session",
 	"aihydro_rebind_chat",
@@ -63,24 +69,24 @@ export const EXPLORER_DENIED_MCP_TOOLS: ReadonlySet<string> = new Set([
 	"remove_project_study",
 ])
 
-export interface ExplorerMcpHub {
+export interface AgentMcpHub {
 	getServers(): McpServer[]
 }
 
 /**
- * Why an `use_mcp_tool` call is not allowed in explorer, or undefined if it is allowed.
+ * Why a `use_mcp_tool` call is not allowed for a read-only subagent, or undefined if it is allowed.
  * Unknown server/tool, an untrusted server, missing annotations, or a class other than READ are all refusals.
  */
-export function explorerMcpBlockReason(
-	mcpHub: ExplorerMcpHub | undefined,
+export function agentMcpBlockReason(
+	mcpHub: AgentMcpHub | undefined,
 	serverName: string | undefined,
 	toolName: string | undefined,
 ): string | undefined {
 	if (!serverName || !toolName) {
 		return "use_mcp_tool needs server_name and tool_name so the read-only policy can be checked."
 	}
-	if (EXPLORER_DENIED_MCP_TOOLS.has(toolName.trim())) {
-		return `MCP tool '${toolName}' binds a chat to a study, changes a claim or the plan, or manages a project, so it is never available to an explorer.`
+	if (AGENT_DENIED_MCP_TOOLS.has(toolName.trim())) {
+		return `MCP tool '${toolName}' binds a chat to a study, changes a claim or the plan, or manages a project, so it is never available to a subagent.`
 	}
 	const server = mcpHub?.getServers().find((s) => s.name === serverName)
 	const tool = server?.tools?.find((t) => t.name === toolName)
@@ -102,12 +108,12 @@ export function explorerMcpBlockReason(
 }
 
 /**
- * Why an `access_mcp_resource` call is not allowed in explorer, or undefined if it is allowed. A resource read is not
+ * Why an `access_mcp_resource` call is not allowed for a read-only subagent, or undefined if it is allowed. A resource read is not
  * a tool call, so there is no effect annotation to check; the server must be the trusted first-party one on the live
  * connection (the same condition that lets the parent auto-run a resource read), and the call must be fully specified.
  */
-export function explorerResourceBlockReason(
-	mcpHub: ExplorerMcpHub | undefined,
+export function agentResourceBlockReason(
+	mcpHub: AgentMcpHub | undefined,
 	serverName: string | undefined,
 	uri: string | undefined,
 ): string | undefined {
@@ -116,43 +122,45 @@ export function explorerResourceBlockReason(
 	}
 	const server = mcpHub?.getServers().find((s) => s.name === serverName)
 	if (!server || !isServerTrusted(server)) {
-		return `MCP server '${serverName}' is not the trusted first-party server, so the explorer may not read its resources.`
+		return `MCP server '${serverName}' is not the trusted first-party server, so a subagent may not read its resources.`
 	}
 	return undefined
 }
 
 /**
- * Reason a tool call is blocked in a subagent profile, or undefined if allowed.
- * Pure: the caller decides whether a profile is active. `allowlist` defaults to the explorer's; a caller passes the
- * child's effective list (the intersection with the parent, see capFor), so the check is never wider than the registry.
+ * Reason a tool call is blocked for a subagent, or undefined if allowed.
+ * Pure: the caller decides whether a subagent is active. `allowlist` defaults to the default definition's; a caller
+ * passes the child's effective list (the intersection with the parent, see capFor), so the check is never wider than
+ * the registry. `label` names the child kind in the refusal text.
  */
-export function explorerBlockReason(
+export function agentBlockReason(
 	toolName: string,
 	params: Record<string, unknown> | undefined,
-	mcpHub: ExplorerMcpHub | undefined,
-	allowlist: readonly string[] = EXPLORER_ALLOWED_TOOLS,
+	mcpHub: AgentMcpHub | undefined,
+	allowlist: readonly string[] = DEFAULT_ALLOWED_TOOLS,
+	label = "Explorer",
 ): string | undefined {
 	if (!allowlist.includes(toolName)) {
-		return `Tool '${toolName}' is not available in EXPLORER profile. This is a read-only research subagent. Use only ${READ_ONLY_TOOL_LIST}.`
+		return `Tool '${toolName}' is not available in ${label.toUpperCase()} profile. This is a read-only research subagent. Use only ${READ_ONLY_TOOL_LIST}.`
 	}
 	if (toolName === AiHydroDefaultTool.MCP_USE) {
-		const reason = explorerMcpBlockReason(
+		const reason = agentMcpBlockReason(
 			mcpHub,
 			params?.server_name as string | undefined,
 			params?.tool_name as string | undefined,
 		)
 		if (reason) {
-			return `${reason} The EXPLORER profile is read-only: only read-only MCP tools on the trusted first-party server may be called (never run_python or write tools).`
+			return `${reason} The ${label.toUpperCase()} profile is read-only: only read-only MCP tools on the trusted first-party server may be called (never run_python or write tools).`
 		}
 	}
 	if (toolName === AiHydroDefaultTool.MCP_ACCESS) {
-		const reason = explorerResourceBlockReason(
+		const reason = agentResourceBlockReason(
 			mcpHub,
 			params?.server_name as string | undefined,
 			params?.uri as string | undefined,
 		)
 		if (reason) {
-			return `${reason} The EXPLORER profile is read-only.`
+			return `${reason} The ${label.toUpperCase()} profile is read-only.`
 		}
 	}
 	return undefined

@@ -12,7 +12,7 @@ import { callRowIndexToRecord } from "@shared/aihydro/askOutcome"
 import { execOutcomeFor } from "@shared/aihydro/commandEvidence"
 import { isServerTrusted } from "@shared/aihydro/firstPartyServers"
 import type { SayEvidence } from "@shared/aihydro/infoNotice"
-import type { SubagentReport } from "@shared/aihydro/subagents"
+import type { SubagentReport, SubagentReviewReport } from "@shared/aihydro/subagents"
 import { AiHydroAsk, AiHydroSay } from "@shared/ExtensionMessage"
 import { AiHydroDefaultTool } from "@shared/tools"
 import { AiHydroAskResponse } from "@shared/WebviewMessage"
@@ -38,12 +38,12 @@ import {
 } from "./answerAuditGate"
 import type { AskMeta } from "./askMeta"
 import { browserToolRefusal } from "./browserGate"
-import { explorerBlockReason } from "./explorerPolicy"
+import { agentBlockReason } from "./agentPolicy"
 import { CHAT_STATUS_TOOL_NAME } from "./finalAnswerAudit"
 import { checkRepeatedToolCall, checkSemanticLoop, LOOP_DETECTION_SOFT_THRESHOLD, toolCallSignature } from "./loop-detection"
 import { MessageStateHandler } from "./message-state"
 import { planModeBlockReason } from "./planModePolicy"
-import type { EffectiveCapabilities } from "./subagents/agentProfile"
+import type { EffectiveCapabilities } from "./subagents/agentDefinition"
 import { TaskState } from "./TaskState"
 import { AutoApprove } from "./tools/autoApprove"
 import { AccessMcpResourceHandler } from "./tools/handlers/AccessMcpResourceHandler"
@@ -63,6 +63,7 @@ import { ReadFileToolHandler } from "./tools/handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./tools/handlers/ReportBugHandler"
 import { ReportFindingsHandler } from "./tools/handlers/ReportFindingsHandler"
 import { SearchFilesToolHandler } from "./tools/handlers/SearchFilesToolHandler"
+import { ReportReviewHandler } from "./tools/handlers/ReportReviewHandler"
 import { SpawnSubagentsToolHandler } from "./tools/handlers/SpawnSubagentsToolHandler"
 import { SummarizeTaskHandler } from "./tools/handlers/SummarizeTaskHandler"
 import { UseMcpToolHandler } from "./tools/handlers/UseMcpToolHandler"
@@ -85,8 +86,10 @@ import { ToolResultUtils } from "./tools/utils/ToolResultUtils"
  */
 export interface ToolExecutorOptions {
 	profile?: EffectiveCapabilities
-	/** Where a child's report_findings goes. Required with `profile`. */
+	/** Where a child's report_findings goes. Required with a `profile` whose report schema is "findings". */
 	reportSink?: (report: SubagentReport) => void
+	/** Where a reviewer's report_review goes. Required with a `profile` whose report schema is "review". */
+	reviewSink?: (review: SubagentReviewReport) => void
 	/** Who a child is, for the MCP call context. */
 	agent?: AiHydroAgentIdentity
 	/** Called when a child's call is refused by its profile, before any handler or ask, so the record can say so. */
@@ -98,6 +101,7 @@ export class ToolExecutor {
 	private coordinator: ToolExecutorCoordinator
 	private readonly profile?: EffectiveCapabilities
 	private readonly reportSink?: (report: SubagentReport) => void
+	private readonly reviewSink?: (review: SubagentReviewReport) => void
 	private readonly onRefused?: (block: ToolUse, reason: string) => void
 	private readonly agent?: AiHydroAgentIdentity
 
@@ -186,10 +190,13 @@ export class ToolExecutor {
 	) {
 		this.profile = options.profile
 		this.reportSink = options.reportSink
+		this.reviewSink = options.reviewSink
 		this.onRefused = options.onRefused
 		this.agent = options.agent
-		if (this.profile && !this.reportSink) {
-			throw new Error("A subagent executor needs a reportSink")
+		if (this.profile?.reportSchema === "review" ? !this.reviewSink : this.profile && !this.reportSink) {
+			throw new Error(
+				`A subagent executor needs a ${this.profile?.reportSchema === "review" ? "reviewSink" : "reportSink"}`,
+			)
 		}
 		this.autoApprover = new AutoApprove(this.stateManager, this.profile?.autoApproveCeiling)
 
@@ -315,7 +322,12 @@ export class ToolExecutor {
 				this.coordinator.register(make())
 			}
 		}
-		this.coordinator.register(new ReportFindingsHandler(this.reportSink!))
+		// The exit tool follows the definition's report schema; the other schema's tool is absent, not merely refused.
+		if (profile.reportSchema === "review") {
+			this.coordinator.register(new ReportReviewHandler(this.reviewSink!))
+		} else {
+			this.coordinator.register(new ReportFindingsHandler(this.reportSink!))
+		}
 	}
 
 	/**
@@ -504,7 +516,13 @@ export class ToolExecutor {
 		// A subagent's call is checked against its profile before anything else, and an unknown tool is refused with
 		// a result (not "not handled"), so a model that names a tool outside its profile is told so and no handler runs.
 		if (this.profile && !block.partial) {
-			const reason = explorerBlockReason(block.name, block.params, this.mcpHub, this.profileAllowlist())
+			const reason = agentBlockReason(
+				block.name,
+				block.params,
+				this.mcpHub,
+				this.profileAllowlist(),
+				this.profile.definition.displayName,
+			)
 			if (reason || !this.coordinator.has(block.name)) {
 				const message = reason ?? `Tool '${block.name}' is not available to this subagent.`
 				this.onRefused?.(block, message)

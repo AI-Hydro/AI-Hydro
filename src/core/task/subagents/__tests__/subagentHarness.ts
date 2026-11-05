@@ -8,7 +8,7 @@ import type { AiHydroAsk } from "@shared/ExtensionMessage"
 import { HostProvider } from "@/hosts/host-provider"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@/shared/AutoApprovalSettings"
 import type { AskMeta } from "../../askMeta"
-import { EXPLORER_PROFILE } from "../agentProfile"
+import { EXPLORER_DEFINITION } from "../agentDefinition"
 import { type ParentAsk, ParentAskBridge } from "../ParentAskBridge"
 import type { SupervisorRunnerBase } from "../SubagentSupervisor"
 import type { SubagentRecord, SubagentRecordWriter } from "../subagentRecord"
@@ -262,5 +262,5 @@ export function makeParent(overrides: { mcpTools?: FakeTool[]; settings?: Record
 }
 
 export const PARENT_CAPS = { canCall: () => true, workspaceTrusted: true, parentIsChild: false }
-export const PROFILE = EXPLORER_PROFILE
+export const PROFILE = EXPLORER_DEFINITION
 export type { SubagentOrigin }
