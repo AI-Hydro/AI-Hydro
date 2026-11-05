@@ -6,6 +6,7 @@ import { constants as fsConstants } from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
+import { layerFileStem } from "./layerFileStem"
 
 /** Directory holding the catalog files. Resolved per call (honours AIHYDRO_HOME); overridable so tests never touch the real one. */
 export function defaultAihydroDir(): string {
@@ -79,6 +80,35 @@ export interface MapLayerCatalog {
 	updated_at_ms: number
 	layer_order: string[]
 	layers: MapLayerCatalogEntry[]
+	/**
+	 * Ids merged away because they were the same file, and the layer that stands for each. Kept so a saved scene, an
+	 * agent command or the panel's own remembered state that names an old id still reaches the layer that stayed.
+	 */
+	layer_aliases?: Record<string, string>
+}
+
+/**
+ * What was computed for a layer's content the last time the catalog was written. The catalog is rewritten on every layer
+ * change (a style edit, a visibility toggle), and parsing, summarising, caching and previewing every layer each time
+ * costs seconds at 40 layers of 512 KB; none of it changes while the content does not. Keyed by layer id and valid only
+ * for the exact same text.
+ */
+interface ContentWork {
+	geojson: string
+	numeric?: NumericAttributeSummary[]
+	count?: number
+	cachePath?: string
+	previewPath?: string
+}
+const contentWork = new Map<string, ContentWork>()
+/** How often each kind of work ran; read by tests and by the latency measure. */
+export const catalogWork = { summaries: 0, cacheWrites: 0, previews: 0 }
+const workFor = (id: string, geojson: string): ContentWork => {
+	const hit = contentWork.get(id)
+	if (hit && hit.geojson === geojson) return hit
+	const fresh: ContentWork = { geojson }
+	contentWork.set(id, fresh)
+	return fresh
 }
 
 export function extractNumericAttributes(geojson: string): NumericAttributeSummary[] {
@@ -211,9 +241,26 @@ function styleToRecord(layer: MapLayer): Record<string, number | string> {
 	return out
 }
 
+function summarise(layer: MapLayer): Pick<MapLayerCatalogEntry, "numeric_attributes" | "feature_count"> {
+	const geojson = layer.geojson || ""
+	if (!geojson.trim()) return { numeric_attributes: [], feature_count: 0 }
+	const work = workFor(layer.id, geojson)
+	if (work.numeric === undefined || work.count === undefined) {
+		catalogWork.summaries++
+		// One parse for both summaries.
+		work.numeric = extractNumericAttributes(geojson)
+		work.count = countFeatures(geojson)
+	}
+	return { numeric_attributes: work.numeric, feature_count: work.count }
+}
+
 export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = "", displayGeojsonPath = ""): MapLayerCatalogEntry {
 	const meta = layer.metadata ?? {}
-	const workspacePath = meta.path || meta.workspace_path || ""
+	// A workspace file's path is stored absolute, with the folder it is relative to, so no later reader has to guess.
+	const workspacePath =
+		meta.path && !path.isAbsolute(meta.path) && meta.workspace_folder && path.isAbsolute(meta.workspace_folder)
+			? path.join(meta.workspace_folder, meta.path)
+			: meta.path || meta.workspace_path || ""
 	// Strip large blobs from the metadata snapshot — raster_data_url can be
 	// several MB and is reproduced from raster_path on hydration.
 	const metaSnapshot: Record<string, string> = {}
@@ -236,7 +283,7 @@ export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = "", disp
 		visible: layer.visible !== false,
 		source: resolveLayerSource(layer),
 		workspace_path: workspacePath,
-		geojson_cache_path: geojsonCachePath,
+		geojson_cache_path: geojsonCachePath || meta.geojson_cache_path || "",
 		raster_path: meta.raster_path || "",
 		raster_bounds: meta.raster_bounds || "",
 		raster_colormap: meta.raster_colormap || "viridis",
@@ -245,8 +292,7 @@ export function layerToCatalogEntry(layer: MapLayer, geojsonCachePath = "", disp
 		style: styleToRecord(layer),
 		symbology_mode: resolveSymbologyMode(layer),
 		graduated: buildGraduatedSummary(layer),
-		numeric_attributes: extractNumericAttributes(layer.geojson || ""),
-		feature_count: countFeatures(layer.geojson || ""),
+		...summarise(layer),
 		metadata_snapshot: metaSnapshot,
 	}
 }
@@ -267,7 +313,9 @@ async function cacheLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 	}
 	const geojson = layer.geojson?.trim()
 	if (!geojson) {
-		return ""
+		// A restored layer holds no content here. Its cache copy is still its only copy: keep naming it, or the next
+		// restart finds neither a cache path nor a file and the layer is gone.
+		return meta.geojson_cache_path ?? ""
 	}
 	const bytes = Buffer.byteLength(geojson, "utf8")
 	const cap = isToolPushedLayer(layer) ? MAX_GEOJSON_CACHE_BYTES_TOOL : MAX_GEOJSON_CACHE_BYTES_USER
@@ -275,10 +323,21 @@ async function cacheLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 		return ""
 	}
 	try {
+		const work = workFor(layer.id, geojson)
+		const cachePath = path.join(geojsonCacheDir(), `${layerFileStem(layer.id)}.geojson`)
+		// Unchanged content that is already cached is not written again.
+		if (work.cachePath === cachePath) {
+			try {
+				await fs.access(cachePath)
+				return cachePath
+			} catch {
+				/* the copy is gone: write it again */
+			}
+		}
 		await fs.mkdir(geojsonCacheDir(), { recursive: true })
-		const safeId = layer.id.replace(/[^a-zA-Z0-9_-]/g, "_")
-		const cachePath = path.join(geojsonCacheDir(), `${safeId}.geojson`)
+		catalogWork.cacheWrites++
 		await fs.writeFile(cachePath, geojson, "utf8")
+		work.cachePath = cachePath
 		return cachePath
 	} catch {
 		return ""
@@ -295,8 +354,12 @@ async function previewLayerGeojsonIfNeeded(layer: MapLayer): Promise<string> {
 		return ""
 	}
 	try {
+		const work = workFor(layer.id, geojson)
+		if (work.previewPath !== undefined) return work.previewPath
+		catalogWork.previews++
 		const preview = await ensureGeoJsonPreviewArtifact(layer.id, geojson)
-		return preview?.previewPath ?? ""
+		work.previewPath = preview?.previewPath ?? ""
+		return work.previewPath
 	} catch {
 		return ""
 	}
@@ -311,6 +374,7 @@ export async function buildMapLayerCatalogAsync(
 	layerOrder: string[],
 	workspaceRoot?: string,
 	preserved: MapLayerCatalogEntry[] = [],
+	aliases: Record<string, string> = {},
 ): Promise<MapLayerCatalog> {
 	const order = layerOrder.length > 0 ? layerOrder.filter((id) => layers.some((l) => l.id === id)) : layers.map((l) => l.id)
 	for (const layer of layers) {
@@ -318,6 +382,9 @@ export async function buildMapLayerCatalogAsync(
 			order.push(layer.id)
 		}
 	}
+	// Work remembered for layers that are gone is dropped, so removed content is not kept alive.
+	const live = new Set(layers.map((l) => l.id))
+	for (const id of [...contentWork.keys()]) if (!live.has(id)) contentWork.delete(id)
 	const entries: MapLayerCatalogEntry[] = []
 	for (const id of order) {
 		const layer = layers.find((l) => l.id === id)
@@ -330,11 +397,17 @@ export async function buildMapLayerCatalogAsync(
 	}
 	const liveIds = new Set(entries.map((entry) => entry.id))
 	const carried = preserved.filter((entry) => !liveIds.has(entry.id))
+	// An alias is kept while the layer it stands for is in the catalog.
+	const known = new Set([...carried.map((e) => e.id), ...order])
+	const liveAliases = Object.fromEntries(
+		Object.entries(aliases).filter(([alias, target]) => alias !== target && known.has(target)),
+	)
 	return {
 		...(workspaceRoot ? { workspace_root: workspaceRoot } : {}),
 		updated_at_ms: Date.now(),
 		layer_order: [...carried.map((entry) => entry.id), ...order],
 		layers: [...carried, ...entries],
+		...(Object.keys(liveAliases).length > 0 ? { layer_aliases: liveAliases } : {}),
 	}
 }
 

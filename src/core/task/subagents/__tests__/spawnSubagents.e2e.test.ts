@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -9,6 +10,8 @@ import { TaskState } from "../../TaskState"
 import { ToolExecutor } from "../../ToolExecutor"
 import { SpawnSubagentsToolHandler } from "../../tools/handlers/SpawnSubagentsToolHandler"
 import { ChildMessageState } from "../childRuntime"
+import { setWorkspaceTrustProvider } from "../../workspaceTrust"
+import { launchesPaused, userWroteToLead } from "../launchBrake"
 import { makeParent, type ParentHarness, scriptedApi, tool } from "./subagentHarness"
 
 const report = (summary: string) => tool("report_findings", { summary })
@@ -88,7 +91,9 @@ describe("spawn_subagents end to end", () => {
 			async () => false,
 		)
 		// Production builds each child's handler from the user's API settings; the test hands out scripted ones.
-		;(exec as any).coordinator.register(new SpawnSubagentsToolHandler({ buildApi: () => childApis.shift() }))
+		;(exec as any).coordinator.register(
+			new SpawnSubagentsToolHandler({ buildApi: () => childApis.shift(), globalAgentsDir: async () => undefined }),
+		)
 		return exec
 	}
 
@@ -97,10 +102,10 @@ describe("spawn_subagents end to end", () => {
 			(c) => c.status,
 		) ?? []
 
-	const spawn = (prompts: string[]) => ({
+	const spawn = (prompts: string[], extra: Record<string, string> = {}) => ({
 		type: "tool_use" as const,
 		name: "spawn_subagents" as any,
-		params: { prompts: JSON.stringify(prompts) },
+		params: { prompts: JSON.stringify(prompts), ...extra },
 		partial: false,
 	})
 	const resultText = () =>
@@ -108,6 +113,17 @@ describe("spawn_subagents end to end", () => {
 			.map((part: any) => part.text)
 			.filter(Boolean)
 			.join("\n")
+
+	/** The records the real writer left on disk, in start order (the handler uses it, not the harness's in-memory writer). */
+	const diskRecords = (): any[] => {
+		const dir = path.join(os.tmpdir(), "aihydro-sub-storage", "tasks", "task-1", "subagents")
+		return fs.existsSync(dir)
+			? fs
+					.readdirSync(dir)
+					.map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), "utf8")))
+					.sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1))
+			: []
+	}
 
 	beforeEach(() => {
 		fs.rmSync(path.join(os.tmpdir(), "aihydro-sub-storage", "tasks", "task-1"), { recursive: true, force: true })
@@ -273,7 +289,7 @@ describe("spawn_subagents end to end", () => {
 
 	it("the spawn tool is absent from a child's registry and refused if a child names it", async () => {
 		const { SubagentRunner } = await import("../SubagentRunner")
-		const { capFor } = await import("../agentProfile")
+		const { capFor } = await import("../agentDefinition")
 		const { PARENT_CAPS, PROFILE } = await import("./subagentHarness")
 		const runner = new SubagentRunner({
 			...h.runnerBase,
@@ -297,9 +313,11 @@ describe("spawn_subagents end to end", () => {
 			scriptedApi([{ text: report("done"), usage: { inputTokens: 10, outputTokens: 5, totalCost: usd } }], {
 				modelInfo: priced,
 			})
+		// A new model message: what the task loop resets before the next tool call.
 		const again = () => {
 			taskState.userMessageContent = []
 			taskState.didAlreadyUseTool = false
+			taskState.didRejectTool = false
 		}
 		const launches = () =>
 			h.asks.filter((ask) => ask.type === "tool" && !ask.meta?.subagentOrigin).map((ask) => JSON.parse(ask.text!))
@@ -357,6 +375,491 @@ describe("spawn_subagents end to end", () => {
 			await executor.executeTool(spawn(["x"]))
 			expect(resultText()).to.include("subagent budget for this task is used")
 			expect(h.asks).to.have.length(0)
+		})
+	})
+
+	describe("delegation: purpose, signal, facts and the denial brake", () => {
+		// A new model message: what the task loop resets before the next tool call.
+		const again = () => {
+			taskState.userMessageContent = []
+			taskState.didAlreadyUseTool = false
+			taskState.didRejectTool = false
+		}
+		const launchCards = () =>
+			h.asks.filter((ask) => ask.type === "tool" && !ask.meta?.subagentOrigin).map((ask) => JSON.parse(ask.text!).subagents)
+
+		it("the card carries the model's purpose (capped) and signal, and the host's own facts", async () => {
+			childApis.push(scriptedApi([report("done")]))
+			const long = `Find where gap filling is handled.${" x".repeat(100)}`
+			await executor.executeTool(spawn(["look"], { purpose: `  ${long}\n  `, signal: "BULK" }))
+			const [card] = launchCards()
+			expect(card.label).to.equal("Explorer")
+			expect(card.signal).to.equal("bulk")
+			expect(card.purpose.length).to.equal(140)
+			expect(card.purpose.endsWith("…")).to.equal(true)
+			expect(card.purpose).to.not.include("\n")
+			expect(card.facts).to.include({ launchesSoFar: 0, deniedSoFar: 0, agentsSoFar: 0, maxAgents: 12 })
+			expect(card.definition).to.include({ id: "explorer", source: "builtin" })
+			expect(card.definition.sha256).to.match(/^[0-9a-f]{64}$/)
+		})
+
+		it("a missing purpose or an unknown signal does not cost a turn: the launch still asks, with nothing made up", async () => {
+			childApis.push(scriptedApi([report("done")]))
+			await executor.executeTool(spawn(["look"], { signal: "thoroughness" }))
+			const [card] = launchCards()
+			expect(card.purpose).to.equal(undefined)
+			expect(card.signal).to.equal(undefined)
+			expect(resultText()).to.include('status="completed"')
+		})
+
+		it("'independent' with one prompt is shown as a contradiction, not refused", async () => {
+			childApis.push(scriptedApi([report("done")]))
+			await executor.executeTool(spawn(["one"], { signal: "independent" }))
+			expect(launchCards()[0].facts.singlePromptIndependent).to.equal(true)
+			expect(resultText()).to.include('status="completed"')
+		})
+
+		it("'reads will ask you' follows read auto-approve and workspace trust, and later launches count earlier ones", async () => {
+			setWorkspaceTrustProvider(() => true)
+			try {
+				childApis.push(scriptedApi([report("one")]), scriptedApi([report("two")]), scriptedApi([report("three")]))
+				await executor.executeTool(spawn(["a"]))
+				again()
+				h.settings.autoApprovalSettings = {
+					...(h.settings.autoApprovalSettings as object),
+					actions: { readFiles: false, useMcp: false },
+				}
+				await executor.executeTool(spawn(["b", "c"]))
+				const [first, second] = launchCards()
+				expect(first.facts.readsAsk, "trusted workspace, reads auto-run").to.equal(false)
+				expect(second.facts.readsAsk, "read auto-approve off").to.equal(true)
+				expect(second.facts).to.include({ launchesSoFar: 1, agentsSoFar: 1 })
+			} finally {
+				setWorkspaceTrustProvider(undefined)
+			}
+		})
+
+		it("in an untrusted workspace every child read asks, whatever the settings", async () => {
+			childApis.push(scriptedApi([report("one")]))
+			await executor.executeTool(spawn(["a"]))
+			expect(launchCards()[0].facts.readsAsk).to.equal(true)
+		})
+
+		it("a bare denial tells the lead to stop; the second pauses launches with no card; the user writing resumes them", async () => {
+			h.answer = async () => ({ response: "noButtonClicked" })
+			await executor.executeTool(spawn(["x"]))
+			expect(resultText()).to.include("The user denied this launch. Carry on with your own tools.")
+			expect(resultText()).to.include("Do not propose explorers again")
+			again()
+			await executor.executeTool(spawn(["y"]))
+			expect(taskState.bareLaunchDenials).to.equal(2)
+			again()
+
+			const asks = h.asks.length
+			await executor.executeTool(spawn(["z"]))
+			expect(resultText()).to.include("Launches are paused: the user denied two in this task.")
+			expect(resultText()).to.include("Launches resume when the user next writes to you.")
+			expect(h.asks.length, "a paused launch raises no card").to.equal(asks)
+			expect(childApis).to.have.length(0)
+			expect(taskState.consecutiveMistakeCount, "a pause is an answer, not a mistake").to.equal(0)
+
+			// the user writes to the lead (Task.say does this on "user_feedback"): launches are asked again
+			userWroteToLead(taskState)
+			again()
+			h.answer = async () => ({ response: "yesButtonClicked" })
+			childApis.push(scriptedApi([report("done")]))
+			await executor.executeTool(spawn(["w"]))
+			expect(resultText()).to.include('status="completed"')
+			// the card told the user how many they had denied
+			expect(launchCards().at(-1).facts.deniedSoFar).to.equal(2)
+		})
+
+		it("a denial with a message is the user speaking: it reaches the lead and does not count toward the brake", async () => {
+			h.answer = async () => ({ response: "noButtonClicked", text: "use one explorer, not three" })
+			await executor.executeTool(spawn(["x"]))
+			again()
+			await executor.executeTool(spawn(["y"]))
+			again()
+			await executor.executeTool(spawn(["z"]))
+			expect(taskState.bareLaunchDenials ?? 0).to.equal(0)
+			expect(taskState.launchDenials).to.equal(3)
+			expect(resultText()).to.not.include("Launches are paused")
+			expect(h.asks.filter((a) => a.type === "tool")).to.have.length(3)
+		})
+
+		it("a bare denial and then an approval does not leave the brake armed past two in a row", async () => {
+			let n = 0
+			h.answer = async () => ({ response: n++ === 1 ? "yesButtonClicked" : "noButtonClicked" })
+			childApis.push(scriptedApi([report("done")]))
+			await executor.executeTool(spawn(["x"])) // denied: bare 1
+			again()
+			await executor.executeTool(spawn(["y"])) // approved
+			expect(resultText()).to.include('status="completed"')
+			expect(taskState.bareLaunchDenials, "an approval ends the run of bare denials").to.equal(0)
+			again()
+			await executor.executeTool(spawn(["z"])) // denied: bare 1 again, not 2
+			expect(taskState.bareLaunchDenials).to.equal(1)
+			expect(launchesPaused(taskState)).to.equal(false)
+		})
+	})
+
+	describe("task agent count (maxAgentsPerTask)", () => {
+		// A new model message: what the task loop resets before the next tool call.
+		const again = () => {
+			taskState.userMessageContent = []
+			taskState.didAlreadyUseTool = false
+			taskState.didRejectTool = false
+		}
+
+		it("holds for a model with no verified price, where the dollar cap cannot fire", async () => {
+			h.settings.maxAgentsPerTask = 3
+			childApis.push(scriptedApi([report("a")]), scriptedApi([report("b")]), scriptedApi([report("c")]))
+			await executor.executeTool(spawn(["a", "b"]))
+			expect(resultText()).to.include('status="completed"')
+			again()
+			const asks = h.asks.length
+			await executor.executeTool(spawn(["c", "d"]))
+			expect(resultText()).to.include("may start only 1 more")
+			expect(resultText()).to.include("2 started of 3")
+			expect(h.asks.length, "a refused spawn asks nothing").to.equal(asks)
+			again()
+			await executor.executeTool(spawn(["c"]))
+			expect(resultText()).to.include('status="completed"')
+			again()
+			await executor.executeTool(spawn(["e"]))
+			expect(resultText()).to.include("already started 3 subagents")
+		})
+
+		it("defaults to 12, and zero refuses every spawn", async () => {
+			childApis.push(scriptedApi([report("a")]))
+			await executor.executeTool(spawn(["a"]))
+			const card = JSON.parse(h.asks.find((a) => a.type === "tool")!.text!).subagents
+			expect(card.facts.maxAgents).to.equal(12)
+			again()
+			h.settings.maxAgentsPerTask = 0
+			await executor.executeTool(spawn(["b"]))
+			expect(resultText()).to.include("already started 1 subagents")
+			h.settings.maxAgentsPerTask = -2
+			again()
+			childApis.push(scriptedApi([report("b")]))
+			await executor.executeTool(spawn(["b"]))
+			expect(resultText(), "a bad value falls back to the default").to.include('status="completed"')
+		})
+	})
+
+	describe("reviewer and the study brief", () => {
+		const reviewText = tool("report_review", {
+			summary: "Checked.",
+			verdicts: "unverifiable | NSE is 0.62 | nothing to read",
+		})
+
+		it("profile reviewer runs a reviewer: labelled, advisory on the card and in the lead's result, never called a review", async () => {
+			childApis.push(scriptedApi([reviewText]))
+			await executor.executeTool(
+				spawn(["Check: NSE is 0.62"], { profile: "reviewer", signal: "independent_check", purpose: "Check one claim" }),
+			)
+			const card = JSON.parse(h.asks.find((a) => a.type === "tool")!.text!).subagents
+			expect(card.profile).to.equal("reviewer")
+			expect(card.label).to.equal("Reviewer")
+			expect(card.advisory).to.include("advice from a second model run")
+			const text = resultText()
+			expect(text).to.include('label="Reviewer 1"')
+			expect(text).to.include('<verdict kind="unverifiable">NSE is 0.62')
+			expect(text).to.include("advice from a second model run")
+			expect(text).to.not.match(/\breviewed\b/i)
+			expect(diskRecords()[0].definition.id).to.equal("reviewer")
+		})
+
+		it("an unknown profile names the known ones", async () => {
+			await executor.executeTool(spawn(["x"], { profile: "general" }))
+			expect(resultText()).to.match(/Known profiles: explorer, reviewer/)
+			expect(h.asks).to.have.length(0)
+		})
+
+		it("the host-built brief goes to every child in its first message, hashed in the record, and the card says so", async () => {
+			taskState.projectContextBrief = "====\n\nPROJECT CONTEXT\n\nstudy s1, gauge 01031500, plan p7"
+			const firstMessages: string[] = []
+			const watch = () =>
+				scriptedApi([report("done")], {
+					onRequest: (_system, history) => firstMessages.push(history[0].content[0].text),
+				})
+			childApis.push(watch(), watch())
+			await executor.executeTool(spawn(["a", "b"]))
+			expect(firstMessages).to.have.length(2)
+			for (const message of firstMessages) {
+				expect(message).to.include(
+					"<study_brief>\n====\n\nPROJECT CONTEXT\n\nstudy s1, gauge 01031500, plan p7\n</study_brief>",
+				)
+			}
+			const card = JSON.parse(h.asks.find((a) => a.type === "tool")!.text!).subagents
+			expect(card.studyBrief).to.equal(true)
+			const records = diskRecords()
+			expect(records.map((r) => r.studyBriefSha256)).to.have.length(2)
+			expect(records.every((r) => /^[0-9a-f]{64}$/.test(r.studyBriefSha256))).to.equal(true)
+			expect(new Set(records.map((r) => r.studyBriefSha256)).size).to.equal(1)
+		})
+
+		it("with no brief, nothing is added", async () => {
+			const firstMessages: string[] = []
+			childApis.push(
+				scriptedApi([report("done")], {
+					onRequest: (_system, history) => firstMessages.push(history[0].content[0].text),
+				}),
+			)
+			await executor.executeTool(spawn(["a"]))
+			expect(firstMessages[0]).to.not.include("study_brief")
+			expect(JSON.parse(h.asks.find((a) => a.type === "tool")!.text!).subagents.studyBrief).to.equal(undefined)
+		})
+	})
+
+	describe("per-definition model", () => {
+		const withConfig = () => {
+			;(h.runnerBase.stateManager as any).getApiConfiguration = () => ({
+				actModeApiProvider: "anthropic",
+				actModeApiModelId: "claude-parent",
+			})
+		}
+		const handlerCapturing = (seen: any[]) => {
+			;(executor as any).coordinator.unregister("spawn_subagents")
+			;(executor as any).coordinator.register(
+				new SpawnSubagentsToolHandler({
+					buildApi: (_config, resolved) => {
+						seen.push(resolved)
+						return childApis.shift()
+					},
+					globalAgentsDir: async () => undefined,
+				}),
+			)
+		}
+
+		it("a reviewer with no setting runs on the parent's model and never reads the configuration", async () => {
+			const seen: any[] = []
+			handlerCapturing(seen)
+			childApis.push(scriptedApi([tool("report_review", { summary: "s", verdicts: "supported | a | b" })]))
+			await executor.executeTool(spawn(["x"], { profile: "reviewer" }))
+			expect(seen[0]).to.include({ ok: true, overridden: false, otherProvider: false })
+			expect(seen[0].config).to.equal(undefined)
+			const card = JSON.parse(h.asks.find((a) => a.type === "tool")!.text!).subagents
+			expect(card.provider).to.equal(undefined)
+			expect(card.otherProvider).to.equal(undefined)
+		})
+
+		it("a reviewer set to another model on the same provider runs there", async () => {
+			withConfig()
+			h.settings.agentModels = { reviewer: { modelId: "claude-judge" } }
+			const seen: any[] = []
+			handlerCapturing(seen)
+			childApis.push(
+				scriptedApi([tool("report_review", { summary: "s", verdicts: "supported | a | b" })]),
+				scriptedApi([tool("report_review", { summary: "s", verdicts: "supported | a | b" })]),
+			)
+			await executor.executeTool(spawn(["x"], { profile: "reviewer" }))
+			expect(seen[0].config.actModeApiModelId).to.equal("claude-judge")
+			expect(seen[0].config.actModeApiProvider).to.equal("anthropic")
+			expect(seen[0]).to.include({ overridden: true, otherProvider: false })
+			expect(JSON.parse(h.asks.find((a) => a.type === "tool")!.text!).subagents.otherProvider).to.equal(undefined)
+		})
+
+		it("a reviewer set to another provider says on the card that the prompts leave for it (D7), and records the provider", async () => {
+			withConfig()
+			h.settings.agentModels = { reviewer: { modelId: "gpt-judge", providerId: "openai-native" } }
+			const seen: any[] = []
+			handlerCapturing(seen)
+			childApis.push(
+				scriptedApi([tool("report_review", { summary: "s", verdicts: "supported | a | b" })]),
+				scriptedApi([tool("report_review", { summary: "s", verdicts: "supported | a | b" })]),
+			)
+			await executor.executeTool(spawn(["x"], { profile: "reviewer" }))
+			const card = JSON.parse(h.asks.find((a) => a.type === "tool")!.text!).subagents
+			expect(card).to.include({ provider: "openai-native", otherProvider: true })
+			expect(seen[0].config.actModeApiProvider).to.equal("openai-native")
+			expect(diskRecords()[0].providerRequested).to.equal("openai-native")
+		})
+
+		it("an explorer ignores the setting: it inherits, so its behaviour is unchanged", async () => {
+			withConfig()
+			h.settings.agentModels = { explorer: { modelId: "cheap", providerId: "openai-native" } }
+			const seen: any[] = []
+			handlerCapturing(seen)
+			childApis.push(scriptedApi([report("done")]))
+			await executor.executeTool(spawn(["x"]))
+			expect(seen[0]).to.include({ overridden: false })
+			expect(resultText()).to.include('status="completed"')
+		})
+
+		it("a setting that cannot be applied refuses the launch, with no card and no fallback to the parent's model", async () => {
+			withConfig()
+			h.settings.agentModels = { reviewer: { modelId: "x", providerId: "no-such-provider" } }
+			await executor.executeTool(spawn(["x"], { profile: "reviewer" }))
+			expect(resultText()).to.include("cannot be set on provider 'no-such-provider'")
+			expect(h.asks).to.have.length(0)
+			h.settings.agentModels = { reviewer: "not an object" }
+			taskState.userMessageContent = []
+			taskState.didAlreadyUseTool = false
+			await executor.executeTool(spawn(["x"], { profile: "reviewer" }))
+			expect(resultText()).to.include("is not { modelId, providerId? }")
+			expect(h.asks).to.have.length(0)
+		})
+	})
+
+	describe("user-defined agents (agent files)", () => {
+		const SCOPED =
+			"---\nextends: explorer\nname: Scoped\ntools: [read_file]\nbudget:\n  maxToolCalls: 5\n---\nLook only at README.md.\n"
+		const BAD = "---\nextends: explorer\ntools: [read_file, run_python]\n---\n"
+		const agentsDir = () => path.join(h.dir, ".aihydrorules", "agents")
+		const writeAgent = (name: string, text: string) => {
+			fs.mkdirSync(agentsDir(), { recursive: true })
+			fs.writeFileSync(path.join(agentsDir(), name), text)
+		}
+		// The real loader on the temp workspace; the global folder is out of the test.
+		const useFiles = (seen: any[] = []) => {
+			;(executor as any).coordinator.unregister("spawn_subagents")
+			;(executor as any).coordinator.register(
+				new SpawnSubagentsToolHandler({
+					buildApi: (_config, resolved) => {
+						seen.push(resolved)
+						return childApis.shift()
+					},
+					globalAgentsDir: async () => undefined,
+				}),
+			)
+		}
+		const card = () => JSON.parse(h.asks.find((a) => a.type === "tool")!.text!).subagents
+
+		it("a trusted workspace's file runs as its own narrower agent, and the card, the record and the lead's result carry its source and hash", async () => {
+			setWorkspaceTrustProvider(() => true)
+			try {
+				writeAgent("scoped.md", SCOPED)
+				const sha = createHash("sha256").update(SCOPED).digest("hex")
+				useFiles()
+				childApis.push(
+					scriptedApi([
+						tool("search_files", { path: ".", regex: "Demo" }), // removed by the file: refused
+						tool("read_file", { path: "README.md" }),
+						report("README says Demo."),
+					]),
+				)
+				await executor.executeTool(spawn(["What does the README say?"], { profile: "scoped" }))
+				const launch = card()
+				expect(launch.label).to.equal("Scoped")
+				expect(launch.definition).to.deep.equal({
+					id: "scoped",
+					source: "workspace",
+					sha256: sha,
+					path: path.join(agentsDir(), "scoped.md"),
+					extends: "explorer",
+				})
+				expect(launch.budget.maxToolCalls).to.equal(5)
+				expect(launch.limits).to.include("No file writes")
+				const [record] = diskRecords()
+				expect(record.definition).to.deep.include({ id: "scoped", source: "workspace", sha256: sha, extends: "explorer" })
+				expect(record.toolCalls.map((c: any) => [c.name, c.result])).to.deep.equal([
+					["search_files", "refused"],
+					["read_file", "ok"],
+					["report_findings", "ok"],
+				])
+				expect(record.allowlistSha256).to.not.equal(undefined)
+				// the lead's result (and so any export of the conversation) names the file and its hash
+				expect(resultText()).to.include(`definition="scoped" source="workspace" sha256="${sha}"`)
+				expect(resultText()).to.include('label="Scoped 1"')
+			} finally {
+				setWorkspaceTrustProvider(undefined)
+			}
+		})
+
+		it("the file's prompt text is in the child's system prompt, after the role, and the file added no tool to the registry", async () => {
+			setWorkspaceTrustProvider(() => true)
+			try {
+				writeAgent("scoped.md", SCOPED)
+				useFiles()
+				let system = ""
+				childApis.push(scriptedApi([report("done")], { onRequest: (s) => (system = s) }))
+				await executor.executeTool(spawn(["x"], { profile: "scoped" }))
+				expect(system).to.include("You are a read-only research subagent of AI-Hydro.")
+				expect(system.indexOf("Look only at README.md.")).to.be.greaterThan(
+					system.indexOf("You are a read-only research subagent"),
+				)
+				expect(system).to.not.include("## search_files")
+				expect(system).to.not.include("## use_mcp_tool")
+			} finally {
+				setWorkspaceTrustProvider(undefined)
+			}
+		})
+
+		it("in an untrusted workspace the same file does not load: the request is told why, the user sees a note, and nothing starts", async () => {
+			writeAgent("scoped.md", SCOPED)
+			useFiles()
+			await executor.executeTool(spawn(["x"], { profile: "scoped" }))
+			expect(resultText()).to.include("Unknown profile")
+			expect(resultText()).to.include("1 agent file")
+			expect(resultText()).to.include("not trusted")
+			expect(parentSays.some((say) => say.type === "error" && /not trusted/.test(say.text ?? ""))).to.equal(true)
+			expect(h.asks).to.have.length(0)
+			expect(childApis).to.have.length(0)
+
+			// an ordinary launch in that workspace still shows the note on its card
+			taskState.userMessageContent = []
+			taskState.didAlreadyUseTool = false
+			childApis.push(scriptedApi([report("done")]))
+			await executor.executeTool(spawn(["y"]))
+			expect(card().agentFiles.notes[0]).to.include("not trusted")
+			expect(card().agentFiles.problems).to.deep.equal([])
+		})
+
+		it("an invalid file is an error with its reason, not a silent skip: on the card of any launch, and in the chat when it is asked for", async () => {
+			setWorkspaceTrustProvider(() => true)
+			try {
+				writeAgent("bad.md", BAD)
+				useFiles()
+				await executor.executeTool(spawn(["x"], { profile: "bad" }))
+				expect(resultText()).to.include("Agent 'bad' did not load")
+				expect(resultText()).to.include("tool 'run_python'")
+				expect(resultText()).to.include("A file can only remove tools, never add one")
+				expect(parentSays.some((say) => say.type === "error" && /did not load/.test(say.text ?? ""))).to.equal(true)
+				expect(h.asks).to.have.length(0)
+
+				taskState.userMessageContent = []
+				taskState.didAlreadyUseTool = false
+				childApis.push(scriptedApi([report("done")]))
+				await executor.executeTool(spawn(["y"]))
+				const problems = card().agentFiles.problems
+				expect(problems).to.have.length(1)
+				expect(problems[0].path).to.equal(path.join(agentsDir(), "bad.md"))
+				expect(problems[0].reason).to.include("run_python")
+			} finally {
+				setWorkspaceTrustProvider(undefined)
+			}
+		})
+
+		it("a file cannot choose a model: it does not load, with the named reason; the model stays the user's agentModels setting", async () => {
+			setWorkspaceTrustProvider(() => true)
+			try {
+				;(h.runnerBase.stateManager as any).getApiConfiguration = () => ({
+					actModeApiProvider: "anthropic",
+					actModeApiModelId: "claude-parent",
+				})
+				writeAgent("cheap.md", "---\nextends: explorer\nmodel: claude-haiku\n---\n")
+				writeAgent("judge.md", "---\nextends: reviewer\n---\n")
+				h.settings.agentModels = { reviewer: { modelId: "claude-judge" } }
+				const seen: any[] = []
+				useFiles(seen)
+				await executor.executeTool(spawn(["x"], { profile: "cheap" }))
+				expect(resultText()).to.include("model is chosen in settings (agentModels), not in an agent file")
+				expect(h.asks).to.have.length(0)
+				expect(seen).to.have.length(0)
+
+				// a file that extends the reviewer follows the user's setting for the reviewer, like the reviewer itself
+				taskState.userMessageContent = []
+				taskState.didAlreadyUseTool = false
+				childApis.push(
+					scriptedApi([tool("report_review", { summary: "s", verdicts: "unverifiable | a" })]),
+					scriptedApi([]),
+				)
+				await executor.executeTool(spawn(["x"], { profile: "judge" }))
+				expect(seen[0].config.actModeApiModelId).to.equal("claude-judge")
+			} finally {
+				setWorkspaceTrustProvider(undefined)
+			}
 		})
 	})
 })

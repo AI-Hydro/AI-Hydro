@@ -226,7 +226,7 @@ export class MapCommandWatcher {
 					visible: true,
 					metadata: runLayerMetadata(cmd.provenance, { runId: cmd.run_id, sessionId: cmd.session_id }),
 				})
-				this.controller.addMapLayer(layer)
+				this.controller.addMapLayer(layer, { trustFactStamp: true })
 				if (cmd.auto_zoom !== false) {
 					this.appendAgentCommandEvent("command.fit_layer", {
 						layerId: this.controller.resolveMapLayerId(cmd.layer_id),

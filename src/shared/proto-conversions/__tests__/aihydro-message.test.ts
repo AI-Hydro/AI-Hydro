@@ -204,12 +204,23 @@ describe("subagent origin on the wire", () => {
 		for (const bad of [
 			"{",
 			"[]",
-			JSON.stringify({ ...origin, profile: "general" }),
+			// a definition id is a lowercase word list: anything else (a path, markup, a number, nothing) is no origin
+			JSON.stringify({ ...origin, profile: "../general" }),
+			JSON.stringify({ ...origin, profile: "General Agent" }),
+			JSON.stringify({ ...origin, profile: "<b>" }),
+			JSON.stringify({ ...origin, profile: 3 }),
+			JSON.stringify({ ...origin, profile: undefined }),
 			JSON.stringify({ ...origin, label: 3 }),
 			'{"childId":"x"}',
 		]) {
 			expect(convertProtoToAiHydroMessage({ ...proto, subagentOriginJson: bad }).subagentOrigin, bad).to.equal(undefined)
 		}
+	})
+
+	it("an origin from a user-defined agent (a lowercase hyphenated id) survives the wire", () => {
+		const custom = { ...origin, profile: "my-reviewer", label: "My reviewer 1" }
+		const proto = convertAiHydroMessageToProto({ ts: 7, type: "ask", ask: "tool", text: "{}", subagentOrigin: custom })
+		expect(convertProtoToAiHydroMessage(proto).subagentOrigin).to.deep.equal(custom)
 	})
 
 	it("the status row kind survives the wire", () => {

@@ -116,6 +116,8 @@ import {
 import { FocusChainManager } from "./focus-chain"
 import { MessageStateHandler } from "./message-state"
 import { appendProjectContext, ProjectContextSection } from "./projectContextSection"
+import { noteAgentsDirectory } from "./protectedRoots"
+import { userWroteToLead } from "./subagents/launchBrake"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
 import { detectAvailableCliTools, updateApiReqMsg } from "./utils"
@@ -711,6 +713,8 @@ export class Task {
 			// Real user feedback starts a new completion cycle: the audit revision counter does not carry over.
 			resetGateCycle(this.taskState.answerAuditGate)
 			this.taskState.followUpAnswerInFlight = false
+			// The user is writing to the lead: a pause on subagent launches (two bare denials) ends.
+			userWroteToLead(this.taskState)
 		}
 
 		if (partial !== undefined) {
@@ -1832,6 +1836,7 @@ export class Task {
 		const { globalToggles, localToggles } = await refreshAiHydroRulesToggles(this.controller, this.cwd)
 
 		const globalAiHydroRulesFilePath = await ensureRulesDirectoryExists()
+		noteAgentsDirectory(path.join(path.dirname(globalAiHydroRulesFilePath), "Agents"))
 		const globalAiHydroRulesFileInstructions = await getGlobalAiHydroRules(globalAiHydroRulesFilePath, globalToggles)
 
 		const localAiHydroRulesFileInstructions = await getLocalAiHydroRules(this.cwd, localToggles)
@@ -1884,6 +1889,7 @@ export class Task {
 			chatId: this.ulid,
 			studyId: bindingState?.chatId === this.ulid ? bindingState.studyId : undefined,
 		})
+		this.taskState.projectContextBrief = projectContext
 		const systemPrompt = appendProjectContext(await getSystemPrompt(promptContext), projectContext)
 
 		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(

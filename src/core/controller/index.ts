@@ -3,6 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
 import { LedgerEventWatcher } from "@core/ledger/LedgerEventWatcher"
 import { type AddOutcome, applyAddLayer, dropAliasesFor, resolveAlias } from "@core/map/applyAddLayer"
+import { applyFactStampPolicy } from "@core/map/factStamp"
 import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
 import { buildMapLayerCatalogAsync, type MapLayerCatalogEntry, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
@@ -45,6 +46,7 @@ import { MAX_REMOTE_CATALOG_BYTES, MAX_REMOTE_CONNECTORS } from "@shared/connect
 import type { StudyBindingState } from "@shared/ExtensionMessage"
 import { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { HistoryItem, type HistoryOrigin } from "@shared/HistoryItem"
+import { pathHash, resolvedSourcePath } from "@shared/map/layerIdentity"
 import { McpMarketplaceCatalog } from "@shared/mcp"
 import { HtmlPreviewItem, HtmlPreviewMode, LearningModuleCatalog } from "@shared/proto/cline/html_preview"
 import type { ClaimUpdate } from "@shared/proto/cline/ledger"
@@ -2039,8 +2041,14 @@ export class Controller {
 	 * Add or update a map layer
 	 * @param layer The layer to add/update
 	 */
-	addMapLayer(layer: MapLayer, options: { replaceExisting?: boolean } = {}): void {
+	addMapLayer(layer: MapLayer, options: { replaceExisting?: boolean; trustFactStamp?: boolean } = {}): void {
 		console.log(`[Controller] Adding map layer: ${layer.id}`)
+		layer = applyFactStampPolicy(
+			this.mapLayers.get(layer.id) ?? this.recentlyRemovedLayers.get(layer.id),
+			layer,
+			options.trustFactStamp === true,
+		)
+		this.recentlyRemovedLayers.delete(layer.id)
 		const op = layer.metadata?.__operation
 		if (op === "remove") {
 			this.removeMapLayer(layer.id)
@@ -2062,6 +2070,18 @@ export class Controller {
 		}
 		this.notifyMapLayerSubscribers(layer)
 		void this.syncMapLayerCatalog()
+	}
+
+	/** Layers the host removed itself, newest last, so Undo can bring one back with the fact stamp it had (nothing comes from the webview). */
+	private readonly recentlyRemovedLayers = new Map<string, MapLayer>()
+	private rememberRemoved(layer: MapLayer): void {
+		this.recentlyRemovedLayers.delete(layer.id)
+		this.recentlyRemovedLayers.set(layer.id, layer)
+		while (this.recentlyRemovedLayers.size > 20) {
+			const oldest = this.recentlyRemovedLayers.keys().next().value
+			if (oldest === undefined) break
+			this.recentlyRemovedLayers.delete(oldest)
+		}
 	}
 
 	/** Symlinks resolved, cached per path, so two routes to one file compare equal without a stat on every add. */
@@ -2093,6 +2113,17 @@ export class Controller {
 	/** The id a layer is known by now: itself, or the layer an earlier merge folded it into. */
 	resolveMapLayerId(id: string): string {
 		return resolveAlias(this.mapLayerAliases, id)
+	}
+
+	/** Layers the restore pass folded into others before they were added (see `migrateCatalogEntries`). */
+	recordRestoreMerges(aliases: Record<string, string>): void {
+		for (const [alias, target] of Object.entries(aliases)) this.mapLayerAliases.set(alias, target)
+		this.mapMergedCount += Object.keys(aliases).length
+	}
+
+	/** Aliases the catalog kept from an earlier session. They are not new merges, so they are not counted. */
+	restorePersistedAliases(aliases: Record<string, string>): void {
+		for (const [alias, target] of Object.entries(aliases)) this.mapLayerAliases.set(alias, target)
 	}
 
 	getMapLayerAliases(): Record<string, string> {
@@ -2138,7 +2169,22 @@ export class Controller {
 		return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
 	}
 
-	private async syncMapLayerCatalog(): Promise<void> {
+	/** Catalog writes run one after another, so an older write never lands after a newer one. */
+	private mapCatalogWrites: Promise<void> = Promise.resolve()
+
+	/** Resolves when every catalog write started so far has finished. */
+	flushMapCatalogWrites(): Promise<void> {
+		return this.mapCatalogWrites
+	}
+
+	private syncMapLayerCatalog(): Promise<void> {
+		const write = () => this.writeMapLayerCatalog()
+		const next = (this.mapCatalogWrites ?? Promise.resolve()).then(write, write)
+		this.mapCatalogWrites = next.catch(() => {})
+		return next
+	}
+
+	private async writeMapLayerCatalog(): Promise<void> {
 		// Never rewrite the catalog before startup restore has read it: the rewrite would drop what it has not loaded.
 		await this.mapHydration
 		const catalog = await buildMapLayerCatalogAsync(
@@ -2146,6 +2192,7 @@ export class Controller {
 			this.mapLayerOrder,
 			this.currentMapScope(),
 			this.mapOverflowEntries,
+			this.getMapLayerAliases(),
 		)
 		await persistMapLayerCatalog(catalog)
 	}
@@ -2218,7 +2265,9 @@ export class Controller {
 		const layerId = this.resolveMapLayerId(requestedId)
 		console.log(`[Controller] Removing map layer: ${layerId}`)
 
+		const removed = this.mapLayers.get(layerId)
 		const wasRemoved = this.mapLayers.delete(layerId)
+		if (removed) this.rememberRemoved(removed)
 		if (wasRemoved) dropAliasesFor(this.mapLayerAliases, layerId)
 		if (!wasRemoved) {
 			return
@@ -2780,7 +2829,9 @@ export class Controller {
 		// same relative path in two folders yields two layers; single-folder ids are unchanged.
 		const multiRoot = (vscode.workspace.workspaceFolders?.length ?? 0) > 1
 		const idSource = multiRoot ? `${file.workspaceFolderName}/${file.relativePath}` : file.relativePath
-		const layerId = `workspace_${idSource.replace(/[^a-zA-Z0-9]/g, "_")}`
+		// Punctuation all becomes `_`, so `a/b.geojson` and `a_b.geojson` would share a name; the hash of the file's
+		// resolved path keeps them apart. The same file always gets the same id.
+		const layerId = `workspace_${idSource.replace(/[^a-zA-Z0-9]/g, "_")}_${pathHash(resolvedSourcePath({ path: file.relativePath, workspace_folder: file.workspaceFolder }) ?? idSource)}`
 
 		// Determine format icon for display
 		const formatIcon = this.getFormatIcon(file.extension)

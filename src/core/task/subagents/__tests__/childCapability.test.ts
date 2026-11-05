@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import { AiHydroDefaultTool } from "@/shared/tools"
 import { TaskState } from "../../TaskState"
 import { ToolExecutor } from "../../ToolExecutor"
-import { capFor } from "../agentProfile"
+import { capFor } from "../agentDefinition"
 import { ChildMessageState } from "../childRuntime"
 import { SubagentRunner } from "../SubagentRunner"
 import { makeParent, PARENT_CAPS, type ParentHarness, PROFILE, scriptedApi, tool } from "./subagentHarness"
@@ -44,6 +44,7 @@ const PROBES: Record<string, Record<string, string>> = {
 	report_bug: { title: "t", what_happened: "w", steps_to_reproduce: "s", api_request_output: "a", additional_context: "c" },
 	preview_html: { path: "p.html", content: "<h1>x</h1>" },
 	spawn_subagents: { prompts: '["nested"]' },
+	report_review: { summary: "s", verdicts: "supported | a | b" },
 }
 
 describe("child capability (AC2, AC7)", () => {

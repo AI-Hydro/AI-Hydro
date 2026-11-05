@@ -140,9 +140,11 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 							Allow read-only explorers
 						</VSCodeCheckbox>
 						<p className="toggle-description">
-							Read-only explorers. Each one asks before it starts and is shown in the chat. An explorer can read
-							this workspace and call read-only tools on the AI-Hydro server; it cannot write files, run commands,
-							fetch from the web or touch a claim. It cannot fetch data in parallel yet.
+							Read-only explorers and a reviewer. The main agent works alone by default and may propose them for
+							wide searches or separate questions. Every launch asks you first and is shown in the chat. They can
+							read this workspace and call read-only tools on the AI-Hydro server; they cannot write files, run
+							commands, fetch from the web or touch a claim. A reviewer's verdicts are advice from a second model
+							run, not a review. They cannot fetch data in parallel yet.
 						</p>
 					</div>
 

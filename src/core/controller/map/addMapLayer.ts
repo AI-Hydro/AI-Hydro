@@ -23,6 +23,8 @@ export async function addMapLayer(controller: Controller, request: AddMapLayerRe
 	})
 
 	// Add layer to controller storage and notify subscribers
+	// replaceExisting is not trusted for the fact stamp: the webview (and a scene file it opened) can send anything. The controller
+	// keeps the stamp only for a re-send of the layer it already holds or of one it just removed itself.
 	controller.addMapLayer(request.layer, { replaceExisting: request.replaceExisting })
 
 	if (request.autoZoom) {

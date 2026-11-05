@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const post = vi.hoisted(() => vi.fn())
 vi.mock("../../../config/platform.config", () => ({ PLATFORM_CONFIG: { postMessage: post } }))
 
-import { askAgentAboutMap, askAgentToDelineate, mapLayerStudyHint } from "../mapAgentBridge"
+import { askAgentAboutMap, askAgentToDelineate, askAgentToTrace, mapLayerStudyHint } from "../mapAgentBridge"
 
 const ctx = { lat: 45, lon: -69.5, studyHint: { sessionId: "try", artifactPath: "/w/ws.geojson" } }
 
@@ -51,5 +51,27 @@ describe("map agent launch (X0-2)", () => {
 		expect(mapLayerStudyHint({ metadata: { path: "/w/b.tif" } })).toEqual({ artifactPath: "/w/b.tif" })
 		expect(mapLayerStudyHint({ metadata: {} })).toBeUndefined()
 		expect(mapLayerStudyHint(undefined)).toBeUndefined()
+	})
+})
+
+describe("trace from a gauge", () => {
+	beforeEach(() => post.mockReset())
+	afterEach(() => vi.restoreAllMocks())
+
+	it("goes to the agent as a chat message: a full prompt for a new chat, one self-contained line for an open one", async () => {
+		replyWith({ ok: true, addedToChat: true })
+		const r = await askAgentToTrace(
+			{ lat: 47.2, lon: -68.5, ref: { kind: "gauge", lon: -68.5, lat: 47.2 } },
+			"01013500",
+			"upstream",
+			50,
+		)
+		expect(r.addedToChat).toBe(true)
+		const msg = post.mock.calls[0][0]
+		expect(msg.type).toBe("aihydro-map-agent-task")
+		expect(msg.prompt).toContain("gauge_id='01013500', direction='upstream', distance_km=50")
+		expect(msg.launch.composerText).toContain("upstream 50 km from USGS gauge 01013500")
+		// The map starts no tool of its own: the only message is the chat task.
+		expect(post).toHaveBeenCalledTimes(1)
 	})
 })

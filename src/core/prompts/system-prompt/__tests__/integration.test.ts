@@ -368,6 +368,52 @@ describe("Prompt System Integration Tests", () => {
 				expect(on, `${providerId}/${modelId} on`).to.include("spawn_subagents")
 				expect(on, `${providerId}/${modelId} on`).to.include('untrusted="true"')
 				expect(on, `${providerId}/${modelId} on`).to.not.include("report_findings")
+				expect(on, `${providerId}/${modelId} on`).to.not.include("report_review")
+			}
+		})
+
+		it("states the delegation policy in the tool description and, once, in the lead rules, only when subagents are on and the variant lists the tool", async function () {
+			this.timeout(30000)
+
+			for (const [modelId, providerId] of [
+				["gpt-3", "openai"],
+				["claude-sonnet-4", "anthropic"],
+				["gpt-5", "openai-native"],
+			]) {
+				const base = makeMockContext(modelId, providerId)
+				const label = `${providerId}/${modelId}`
+				for (const subagentsEnabled of [undefined, false]) {
+					const off = await getSystemPrompt({ ...base, subagentsEnabled })
+					expect(off, `${label} off`).to.not.include("**Delegation:**")
+					expect(off, `${label} off`).to.not.include("Work alone by default")
+				}
+				const on = await getSystemPrompt({ ...base, subagentsEnabled: true })
+				expect(on.match(/\*\*Delegation:\*\*/g), `${label} rule once`).to.have.length(1)
+				expect(on, label).to.include("Work alone by default")
+				// the ladder, the signals, the floor and the reviewer line are in the tool description
+				expect(on, label).to.include("By default, do the work yourself.")
+				for (const signal of ["bulk:", "independent:", "user_asked:", "independent_check:"]) {
+					expect(on, `${label} ${signal}`).to.include(signal)
+				}
+				expect(on, label).to.include("Those stay with you, even if the user asks to hand them off.")
+				expect(on, label).to.include("a second model run, not a review")
+				// the card's two parameters, and nothing that asks for the model's reasoning
+				expect(on, label).to.include("<purpose>")
+				expect(on, label).to.include("<signal>")
+				expect(on, label).to.include("A summary of the action, not your thinking.")
+				expect(on, label).to.not.match(/<reasoning>|<reason>/)
+			}
+		})
+
+		it("keeps the delegation rule out of the compact variant, which has no spawn_subagents", async function () {
+			this.timeout(30000)
+
+			const base = makeMockContext("qwen3_coder", "lmstudio")
+			for (const subagentsEnabled of [undefined, false, true]) {
+				const prompt = await getSystemPrompt({ ...base, subagentsEnabled })
+				expect(prompt, `subagentsEnabled=${String(subagentsEnabled)}`).to.not.include("spawn_subagents")
+				expect(prompt, `subagentsEnabled=${String(subagentsEnabled)}`).to.not.include("**Delegation:**")
+				expect(prompt, `subagentsEnabled=${String(subagentsEnabled)}`).to.not.include("Work alone by default")
 			}
 		})
 

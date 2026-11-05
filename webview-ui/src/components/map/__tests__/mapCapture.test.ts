@@ -156,3 +156,18 @@ it("uses actual line geometry and stroke despite a misleading basin name", () =>
 	})
 	expect(snapshot.layers[0]).toMatchObject({ geom: "line", color: "#0000ff", opacity: 1 })
 })
+
+describe("export paths (F6)", () => {
+	it("names a source file inside the project relative to it, and leaves other paths alone", () => {
+		expect(
+			exportLayerMetadata({ source_path: "/Users/me/proj/data/a.geojson", workspace_folder: "/Users/me/proj" }).source_path,
+		).toBe("data/a.geojson")
+		expect(exportLayerMetadata({ source_path: "/elsewhere/a.geojson", workspace_folder: "/Users/me/proj" }).source_path).toBe(
+			"/elsewhere/a.geojson",
+		)
+		expect(exportLayerMetadata({ source_path: "/Users/me/proj/a.geojson" }).source_path).toBe("/Users/me/proj/a.geojson")
+		expect(
+			exportLayerMetadata({ source_path: "/Users/me/proj/a.geojson", workspace_folder: "/Users/me/proj" }).workspace_folder,
+		).toBeUndefined()
+	})
+})

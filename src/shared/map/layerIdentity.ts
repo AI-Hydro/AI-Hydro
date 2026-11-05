@@ -13,6 +13,8 @@
  *     layer is updated in place: id, style, visibility and order stay, the content is the new content.
  */
 
+import { FACT_KEYS_KEY, LAYER_FACT_KEYS } from "./provenanceEnvelope"
+
 export interface IdentityLayer {
 	id: string
 	layerType?: string
@@ -56,7 +58,10 @@ export function resolvedSourcePath(meta: Record<string, string> | undefined, rea
 	}
 	for (const key of ["source_path", "workspace_path"]) {
 		const v = meta[key]
-		if (v && isAbsolute(v)) return finish(v)
+		if (!v) continue
+		if (isAbsolute(v)) return finish(v)
+		// A relative path names the same file as its folder joined with it (a layer saved before paths were absolute).
+		if (meta.workspace_folder) return finish(`${meta.workspace_folder}/${v}`)
 	}
 	const rel = meta.path
 	if (rel) {
@@ -67,13 +72,61 @@ export function resolvedSourcePath(meta: Record<string, string> | undefined, rea
 }
 
 /**
- * True when both layers carry content to compare and it is the same. Strings of different length differ at once;
- * equal lengths are compared by the engine's native string comparison, so nothing is hashed or cached per add.
+ * A path as a shared output (a map plate sidecar, an export record) should carry it: relative to the project folder when
+ * it lies inside it, so the user's home directory is not written into a file that leaves the machine. A path outside the
+ * folder, or with no folder given, is returned as it is: it cannot be made relative, and dropping it would lose where the
+ * data came from.
  */
-function sameContent(a: IdentityLayer, b: IdentityLayer): boolean | undefined {
-	if (!a.geojson || !b.geojson) return undefined
-	return a.geojson.length === b.geojson.length && a.geojson === b.geojson
+export function pathForExport(p: string | undefined, workspaceFolder: string | undefined): string | undefined {
+	if (!p || !workspaceFolder || !isAbsolute(p)) return p
+	const file = norm(p)
+	const folder = norm(workspaceFolder).replace(/\/$/, "")
+	return file.startsWith(`${folder}/`) ? file.slice(folder.length + 1) : p
 }
+
+/** A short, stable tag for a resolved path, for ids: two files with one name in two folders must not share an id. */
+export function pathHash(resolvedPath: string): string {
+	let h = 0x811c9dc5
+	for (let i = 0; i < resolvedPath.length; i++) {
+		h ^= resolvedPath.charCodeAt(i)
+		h = Math.imul(h, 0x01000193)
+	}
+	return (h >>> 0).toString(16).padStart(8, "0").slice(0, 6)
+}
+
+/** Above this many characters a layer's two copies are compared as text only: parsing both would cost more than it saves. */
+const PARSED_COMPARE_MAX_CHARS = 2_000_000
+
+function sameJson(a: unknown, b: unknown): boolean {
+	if (a === b) return true
+	if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false
+	if (Array.isArray(a) !== Array.isArray(b)) return false
+	if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => sameJson(v, b[i]))
+	const ka = Object.keys(a)
+	const kb = Object.keys(b)
+	if (ka.length !== kb.length) return false
+	return ka.every((k) => Object.hasOwn(b, k) && sameJson((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
+}
+
+/**
+ * True when both layers carry content to compare and it is the same. Identical strings are the same at once. Copies
+ * that differ as text (one pretty-printed, one compact; a cache copy of a project file) are the same file when they
+ * parse to the same value, key order aside, so formatting never makes a second layer. Past a size limit only the text decides.
+ */
+export function sameContent(a: IdentityLayer, b: IdentityLayer): boolean | undefined {
+	if (!a.geojson || !b.geojson) return undefined
+	if (a.geojson === b.geojson) return true
+	if (a.geojson.length > PARSED_COMPARE_MAX_CHARS || b.geojson.length > PARSED_COMPARE_MAX_CHARS) return false
+	try {
+		return sameJson(JSON.parse(a.geojson), JSON.parse(b.geojson))
+	} catch {
+		return false
+	}
+}
+
+/** Two copies of a layer's content are the same value, whatever their formatting. */
+export const sameGeojson = (a: string, b: string): boolean =>
+	sameContent({ id: "a", geojson: a }, { id: "b", geojson: b }) === true
 
 const runOf = (l: IdentityLayer): string | undefined => l.metadata?._run_id || undefined
 
@@ -96,8 +149,12 @@ export function matchFile(existing: IdentityLayer, incoming: IdentityLayer, real
 		const same = sameContent(existing, incoming)
 		if (same === false) return "changed"
 		if (same === undefined) {
-			// One side has no content here. Only an incoming layer that brings content can change the existing one: an
-			// empty incoming side (a restored layer) has nothing to put in its place, so it is the same file.
+			// One side has no content here, so nothing says the two hold the same bytes. A run link is a claim about
+			// content: it must not move onto content that was not compared. When the two differ in whether they name a
+			// run, the incoming layer can only replace the existing content (and the run link follows what was
+			// replaced, see `planMerge`); an incoming layer with nothing to bring is not the same layer.
+			if (re !== ri) return incoming.geojson ? "changed" : "different"
+			// An empty incoming side (a restored layer) has nothing to put in its place, so it is the same file.
 			const se = existing.metadata?.source_size_bytes
 			const si = incoming.metadata?.source_size_bytes
 			return incoming.geojson && se && si && se !== si ? "changed" : "same"
@@ -128,6 +185,18 @@ export function findDuplicate<T extends IdentityLayer>(
 	return undefined
 }
 
+/** Keys that tie a layer to the run that made its content. */
+const RUN_LINK_KEYS = [
+	"_run_id",
+	"tool",
+	"study_id",
+	"session_id",
+	"chat_id",
+	"retrieved_at",
+	"provenance_path",
+	"agent_step",
+	"claim_id",
+]
 /** Keys that carry a layer's provenance and where it came from. Copied when missing, never overwritten. */
 const KEEP_KEYS = [
 	"_run_id",
@@ -158,13 +227,21 @@ const KEEP_KEYS = [
 	"license",
 ]
 
-/** The metadata of the layer that stays: its own, plus any key the other had and it lacked. A run link on either side survives. */
+/**
+ * The metadata of the layer that stays: its own, plus any key the other had and it lacked.
+ * A run link (and the keys that go with it) is a claim about content, so it is copied onto a layer that has none only
+ * when `contentVerified`: both copies were compared and are the same. Without that, the survivor keeps no run link it did
+ * not already have.
+ */
 export function mergedMetadata(
 	keep: Record<string, string> | undefined,
 	other: Record<string, string> | undefined,
+	contentVerified = false,
 ): Record<string, string> {
 	const out = { ...(keep ?? {}) }
+	const keepsRun = !!out._run_id
 	for (const key of KEEP_KEYS) {
+		if (!contentVerified && !keepsRun && RUN_LINK_KEYS.includes(key)) continue
 		if (!out[key] && other?.[key]) out[key] = other[key]
 	}
 	return out
@@ -226,12 +303,17 @@ export function planMerge(existing: IdentityLayer, incoming: IdentityLayer, matc
 			kind: "merge",
 			keptId: existing.id,
 			aliasId: incoming.id,
-			metadata: mergedMetadata(existing.metadata, incoming.metadata),
-			takeContent: false,
+			metadata: mergedMetadata(existing.metadata, incoming.metadata, sameContent(existing, incoming) === true),
+			// A layer that holds no content takes it from the same file arriving again, but never under a run link: the
+			// run's content is the run's, and the existing layer is not told it came from that run.
+			takeContent: !existing.geojson && !!incoming.geojson && !runOf(existing),
 		}
 	}
 	// An empty value from the incoming side never overwrites a real one.
 	const meta: Record<string, string> = { ...(existing.metadata ?? {}) }
+	// Layer facts describe the content they were recorded with. The content is changing, so the old ones and their stamp go,
+	// and only what the incoming layer itself carries (a stamp it was allowed to bring) replaces them.
+	for (const key of [...LAYER_FACT_KEYS, FACT_KEYS_KEY]) delete meta[key]
 	for (const [key, value] of Object.entries(incoming.metadata ?? {})) {
 		if (value !== "" && value !== undefined) meta[key] = value
 	}

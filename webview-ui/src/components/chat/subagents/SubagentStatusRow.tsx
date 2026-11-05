@@ -87,21 +87,28 @@ export function SubagentStatusRow({ message }: { message: AiHydroMessage }) {
 		: payload.children.filter(
 				(child) => child.status === "running" || child.status === "waiting" || child.status === "queued",
 			).length
+	// The noun comes from the children's own labels (their display name without the position), so a reviewer's row is not
+	// headed with another kind's name.
+	const noun =
+		(payload.children[0]?.label ?? "")
+			.replace(/\s+\d+$/, "")
+			.trim()
+			.toLowerCase() || "subagent"
 	return (
 		<section
-			aria-label="Read-only explorers"
+			aria-label={`Read-only ${noun}s`}
 			className="my-[4px] rounded-sm border border-[var(--vscode-editorGroup-border)] bg-[var(--vscode-editor-background)] px-[8px] py-[6px] text-[13px]"
 			data-testid={SUBAGENT_STATUS_TESTID}>
 			<div className="flex items-center gap-[6px] pb-[2px] text-[12px] text-[var(--vscode-descriptionForeground)]">
 				<span aria-hidden="true" className="codicon codicon-organization" />
 				<span>
 					{payload.children.length === 0
-						? "Starting explorers"
-						: `${payload.children.length} read-only explorer${payload.children.length === 1 ? "" : "s"}`}
+						? "Starting subagents"
+						: `${payload.children.length} read-only ${noun}${payload.children.length === 1 ? "" : "s"}`}
 					{payload.done ? " · finished" : interrupted ? " · interrupted" : active ? ` · ${active} active` : ""}
 				</span>
 			</div>
-			<ul aria-label="Explorers" className="m-0 flex list-none flex-col p-0">
+			<ul aria-label={`${noun[0].toUpperCase()}${noun.slice(1)}s`} className="m-0 flex list-none flex-col p-0">
 				{payload.children.map((child) => (
 					<ChildLine child={child} interrupted={interrupted} key={child.childId} />
 				))}

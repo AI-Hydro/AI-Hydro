@@ -27,6 +27,8 @@ export interface ProtectedRootInputs {
 	aihydroHome?: string
 	/** $AIHYDRO_LEARNING_PACK_ROOT as seen by the extension, if it relocates the pack store. */
 	learningPackRoot?: string
+	/** The user's global agents folder, where the host resolved it (it can differ from ~/Documents on Windows and Linux). */
+	agentsDir?: string
 }
 
 export function computeProtectedRoots(inputs: ProtectedRootInputs = {}): string[] {
@@ -46,6 +48,12 @@ export function computeProtectedRoots(inputs: ProtectedRootInputs = {}): string[
 	}
 	if (inputs.globalStoragePath) {
 		roots.push(path.resolve(inputs.globalStoragePath))
+	}
+	// User-defined agents (subagents/agentFiles.ts): a file here is prompt text a child runs with, so an agent writing it
+	// silently would change what the next launch does. The default place is always covered; the resolved one when known.
+	roots.push(path.join(home, "Documents", "AI-Hydro", "Agents"))
+	if (inputs.agentsDir) {
+		roots.push(path.resolve(inputs.agentsDir))
 	}
 	return roots
 }
@@ -82,9 +90,13 @@ function resolveThroughSymlinks(target: string): string {
 /** A repository's config and hooks can make git run programs (core.pager, core.fsmonitor, hooks), so they are protected too. */
 const GIT_EXEC_PATH = /(^|\/)\.git\/(config|hooks)(\/|$)/i
 
+/** A workspace's user-defined agents (`.aihydrorules/agents/*.md`), in any workspace root or subfolder. */
+const WORKSPACE_AGENTS_PATH = /(^|\/)\.aihydrorules\/agents(\/|$)/i
+
 /** Whether an absolute path equals or lies inside any protected root (also checks the symlink-resolved path). */
 export function isProtectedPath(absolutePath: string, roots: readonly string[]): boolean {
-	if (GIT_EXEC_PATH.test(absolutePath.replace(/\\/g, "/"))) {
+	const forward = absolutePath.replace(/\\/g, "/")
+	if (GIT_EXEC_PATH.test(forward) || WORKSPACE_AGENTS_PATH.test(forward)) {
 		return true
 	}
 	const candidates = new Set([comparable(absolutePath), comparable(resolveThroughSymlinks(absolutePath))])

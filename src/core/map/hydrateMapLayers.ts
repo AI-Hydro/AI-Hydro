@@ -16,13 +16,17 @@
 
 import type { Controller } from "@core/controller"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
+import { resolvedSourcePath } from "@shared/map/layerIdentity"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
+import { constants as fsConstants, realpathSync } from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { ensureGeoJsonPreviewArtifact } from "./geojsonPreview"
 import { buildInundation3dLayerFromPath } from "./inundation3dLayer"
-import { type MapLayerCatalogEntry, readMapLayerCatalog } from "./mapLayerCatalog"
+import { type MapLayerCatalogEntry, readMapLayerCatalog, scopedMapLayerCatalogFile } from "./mapLayerCatalog"
+import { hasEvidenceLink, type MigrationOptions, migrateCatalogEntries } from "./restoreMigration"
 import { selectCatalogEntriesToRestore } from "./restoreSelection"
+import { MAX_INLINE_GEOJSON_BYTES } from "./sanitizeMapLayerForWebview"
 
 async function readFileToBase64(filePath: string): Promise<string | null> {
 	try {
@@ -54,19 +58,82 @@ async function buildRasterLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 	})
 }
 
-async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLayer | null> {
-	const sourcePath = entry.geojson_cache_path || entry.workspace_path
-	if (!sourcePath) {
+/** Extensions whose file text is the layer's GeoJSON. Other formats were converted when loaded, so only the cache copy is. */
+const JSON_SOURCE_EXT = new Set([".geojson", ".json"])
+
+async function readTextIfPresent(file: string): Promise<string | null> {
+	try {
+		return await fs.readFile(file, "utf8")
+	} catch {
 		return null
 	}
+}
+
+interface EntrySource {
+	raw: string
+	/** Where it was read: the layer's own file, or a copy AI-Hydro kept. */
+	from: "file" | "cache"
+}
+
+/**
+ * The text a restored vector layer is made of. A layer that names a file is read from that file (an absolute path, or a
+ * relative one under the folder the layer recorded). The cache directory holds a copy under the file's own name, which
+ * can be older, so it is read only when the file is gone, and the caller says so. A tool's layer is the other way round:
+ * the cache holds what the run produced, and the file (if any) may have been overwritten since, so the cache is first.
+ * A relative path is never looked for in the cache directory unless it is the cache's own.
+ */
+export async function readEntryGeojson(entry: MapLayerCatalogEntry, meta: Record<string, string>): Promise<EntrySource | null> {
+	const cachePath = entry.geojson_cache_path
+		? path.isAbsolute(entry.geojson_cache_path)
+			? entry.geojson_cache_path
+			: aihydroPath("map_layer_geojson_cache", entry.geojson_cache_path)
+		: undefined
+	const named = resolvedSourcePath({ ...meta, workspace_path: meta.workspace_path || entry.workspace_path })
+	const projectFile = named && JSON_SOURCE_EXT.has(path.extname(named).toLowerCase()) ? named : undefined
+	const fromTool = Boolean(meta.tool || meta._run_id)
+	const order: Array<[string | undefined, EntrySource["from"]]> = fromTool
+		? [
+				[cachePath, "cache"],
+				[projectFile, "file"],
+			]
+		: [
+				[projectFile, "file"],
+				[cachePath, "cache"],
+			]
+	for (const [candidate, from] of order) {
+		if (!candidate) continue
+		const raw = await readTextIfPresent(candidate)
+		if (raw !== null) return { raw, from }
+	}
+	return null
+}
+
+async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<MapLayer | null> {
 	const meta = { ...(entry.metadata_snapshot ?? {}) }
-	if (!meta.display_geojson_path) {
+	// Restorable from a cache copy, a file the layer names, or a workspace file it recorded.
+	const named = resolvedSourcePath({ ...meta, workspace_path: meta.workspace_path || entry.workspace_path })
+	if (!entry.geojson_cache_path && !named) {
+		return null
+	}
+	// A layer that names a file (and is not a tool's) is that file as it is now. A stored preview was made from the file
+	// as it was, and the map draws a preview first, so it is dropped and rebuilt from the text read below.
+	if (named && !(meta.tool || meta._run_id) && meta.display_geojson_path) {
+		for (const key of [
+			"display_geojson_path",
+			"display_mode",
+			"original_feature_count",
+			"preview_feature_count",
+			"original_coord_count",
+			"preview_coord_count",
+			"preview_bytes",
+		]) {
+			delete meta[key]
+		}
+	}
+	const source = await readEntryGeojson(entry, meta)
+	if (source && !meta.display_geojson_path) {
 		try {
-			const resolvedSourcePath = path.isAbsolute(sourcePath)
-				? sourcePath
-				: aihydroPath("map_layer_geojson_cache", sourcePath)
-			const raw = await fs.readFile(resolvedSourcePath, "utf8")
-			const preview = await ensureGeoJsonPreviewArtifact(entry.id, raw)
+			const preview = await ensureGeoJsonPreviewArtifact(entry.id, source.raw)
 			if (preview) {
 				meta.display_geojson_path = preview.previewPath
 				meta.display_mode = "preview"
@@ -80,11 +147,29 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 			/* preview is an optimization; never block hydration */
 		}
 	}
+	// A layer that names a file and was read from the cache because the file is gone says so, not "current".
+	if (named && source?.from === "cache" && !(meta.tool || meta._run_id)) {
+		meta.source_status = "source_missing"
+	} else if (named && source?.from === "file" && meta.source_status === "source_missing") {
+		// The file is back (or was never gone): a status written when it was missing must not outlive that.
+		meta.source_status = "current"
+	}
+	// A restored layer holds its content like a new one, up to the size the webview is sent. Larger ones are drawn from
+	// disk. Text that is not JSON (a file kept in another format) is left out rather than inlined.
+	let geojson = ""
+	if (source && Buffer.byteLength(source.raw, "utf8") <= MAX_INLINE_GEOJSON_BYTES) {
+		try {
+			JSON.parse(source.raw)
+			geojson = source.raw
+		} catch {
+			/* not GeoJSON text: drawn from the cached copy */
+		}
+	}
 	const style = entry.style ?? {}
 	return MapLayer.create({
 		id: entry.id,
 		name: entry.name,
-		geojson: "",
+		geojson,
 		layerType: entry.layer_type || "polygon",
 		visible: entry.visible,
 		style: MapLayerStyle.create({
@@ -98,7 +183,9 @@ async function buildVectorLayerFromEntry(entry: MapLayerCatalogEntry): Promise<M
 		}),
 		metadata: {
 			...meta,
-			geojson_cache_path: entry.geojson_cache_path || sourcePath,
+			// Only the cache copy goes here: this key is read as "a cache file", and a project path stamped into it
+			// would be drawn in preference to the project file it belongs to.
+			geojson_cache_path: entry.geojson_cache_path || "",
 			workspace_path: entry.workspace_path || "",
 			_hydrated: "1",
 		},
@@ -151,14 +238,26 @@ export async function restoreCatalogEntries(
 	controller: Controller,
 	entries: MapLayerCatalogEntry[],
 	total: number,
+	options: { keepSeparate?: Set<string>; clearedIds?: Set<string> } = {},
 ): Promise<string[]> {
 	const added: string[] = []
+	// A layer already live is newer than any catalog entry for the same id (an agent or the user may have pushed it while
+	// restore ran), and `replaceExisting` would overwrite it, so such an entry is not restored.
+	const live = new Set(controller.getMapLayers?.().map((l) => l.id) ?? [])
 	for (const entry of entries) {
+		if (live.has(entry.id)) continue
 		try {
 			const layer = await buildLayerFromEntry(entry)
 			if (layer) {
 				layer.metadata = { ...(layer.metadata ?? {}), _hydrated_of: String(total) }
-				controller.addMapLayer(layer)
+				// An entry that could carry a claim, run or study link is added exactly as it is, unless its study positively
+				// cleared it: the duplicate check would otherwise merge its id away, and the migration cannot protect it (it
+				// compares entries before their content is read). This also covers layers restored later from overflow.
+				// trustFactStamp: a restore of what the host wrote to its own catalog keeps the fact stamp (a catalog edited on disk can forge it).
+				const guarded =
+					options.keepSeparate?.has(layer.id) ||
+					(hasEvidenceLink(entry.metadata_snapshot) && !options.clearedIds?.has(layer.id))
+				controller.addMapLayer(layer, guarded ? { replaceExisting: true, trustFactStamp: true } : { trustFactStamp: true })
 				added.push(layer.id)
 			}
 		} catch (err) {
@@ -168,11 +267,26 @@ export async function restoreCatalogEntries(
 	return added
 }
 
+/** Copy of the catalog taken before the first merge. Never overwritten: it is the file as an older build left it. */
+export async function backUpCatalogBeforeMerge(catalogFile: string): Promise<void> {
+	try {
+		await fs.copyFile(catalogFile, catalogFile.replace(/\.json$/, ".pre-merge-backup.json"), fsConstants.COPYFILE_EXCL)
+	} catch (err) {
+		// EEXIST: a backup from an earlier merge stays as it is. ENOENT: nothing to keep.
+		const code = (err as NodeJS.ErrnoException).code
+		if (code !== "EEXIST" && code !== "ENOENT") console.warn("[hydrateMapLayers] catalog backup failed:", err)
+	}
+}
+
 /**
  * Read the persisted catalog and restore layers into the controller.
  * Called from Controller constructor (after mapSessionService.initialize).
  */
-export async function hydrateMapLayersFromCatalog(controller: Controller, currentScope?: string): Promise<void> {
+export async function hydrateMapLayersFromCatalog(
+	controller: Controller,
+	currentScope?: string,
+	options: { linkedLayerIds?: MigrationOptions["linkedLayerIds"] } = {},
+): Promise<void> {
 	let catalog
 	try {
 		catalog = await readMapLayerCatalog(currentScope)
@@ -188,7 +302,24 @@ export async function hydrateMapLayersFromCatalog(controller: Controller, curren
 	const selection = selectCatalogEntriesToRestore(catalog, currentScope)
 	controller.setMapOverflowEntries(selection.overflow)
 
-	const restored = await restoreCatalogEntries(controller, selection.entries, selection.total)
+	// Persisted duplicates (older builds kept one file under several ids) are one layer before anything is added.
+	controller.restorePersistedAliases(catalog.layer_aliases ?? {})
+	const migration = await migrateCatalogEntries(selection.entries, {
+		workspaceRoot: catalog.workspace_root || currentScope || undefined,
+		cacheDir: aihydroPath("map_layer_geojson_cache"),
+		realpath: (p) => realpathSync(p),
+		linkedLayerIds: options.linkedLayerIds,
+	})
+	if (migration.mergedCount > 0 && currentScope) {
+		// The merge is written to the catalog by the next layer change. Keep the catalog as it was first, once.
+		await backUpCatalogBeforeMerge(scopedMapLayerCatalogFile(currentScope))
+	}
+	controller.recordRestoreMerges(migration.aliases)
+
+	const restored = await restoreCatalogEntries(controller, migration.entries, selection.total, {
+		keepSeparate: migration.protectedIds,
+		clearedIds: migration.clearedIds,
+	})
 
 	console.log(
 		`[hydrateMapLayers] Restored ${restored.length} / ${selection.total} layers from catalog` +

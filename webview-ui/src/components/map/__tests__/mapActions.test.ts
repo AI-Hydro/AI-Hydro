@@ -56,3 +56,11 @@ describe("mapActions", () => {
 		expect(actionTooltip("ask", undefined, { lon: -90, lat: 40 })).not.toMatch(/Routing/)
 	})
 })
+
+describe("objectKind: a traced flowline", () => {
+	it("is a river reach, so its card offers the reach actions", () => {
+		expect(objectKind([{ layerId: "t", layerName: "t", properties: { nhdplus_comid: 724696, direction: "upstream" } }])).toBe(
+			"river",
+		)
+	})
+})

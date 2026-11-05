@@ -10,7 +10,10 @@ import { describe, it } from "mocha"
  */
 const SRC = path.resolve(__dirname, "../../../..")
 const SUBAGENT_FILES = [
-	"core/task/subagents/agentProfile.ts",
+	"core/task/subagents/agentDefinition.ts",
+	"core/task/subagents/agentFiles.ts",
+	"core/task/subagents/agentModel.ts",
+	"core/task/subagents/launchBrake.ts",
 	"core/task/subagents/childRuntime.ts",
 	"core/task/subagents/ParentAskBridge.ts",
 	"core/task/subagents/SubagentRunner.ts",
@@ -21,7 +24,9 @@ const SUBAGENT_FILES = [
 	"core/task/subagents/subagentReports.ts",
 	"core/task/subagents/taskLedger.ts",
 	"core/task/tools/handlers/ReportFindingsHandler.ts",
+	"core/task/tools/handlers/ReportReviewHandler.ts",
 	"core/prompts/system-prompt/tools/report_findings.ts",
+	"core/prompts/system-prompt/tools/report_review.ts",
 	"shared/aihydro/subagents.ts",
 ]
 

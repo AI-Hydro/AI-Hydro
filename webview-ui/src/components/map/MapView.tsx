@@ -2,10 +2,12 @@ import { LightingEffect, type MapViewState, WebMercatorViewport } from "@deck.gl
 import { TileLayer } from "@deck.gl/geo-layers"
 import { BitmapLayer, GeoJsonLayer, PathLayer, TextLayer } from "@deck.gl/layers"
 import DeckGL from "@deck.gl/react"
+import { resolvedSourcePath } from "@shared/map/layerIdentity"
 import { EmptyRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useBrushContext } from "../../context/BrushContext"
 import { useMapContext } from "../../context/MapContext"
 import { MapServiceClient } from "../../services/grpc-client"
@@ -40,7 +42,7 @@ import {
 import FeatureIdentifier, { type ClickedFeature, type MapInspectPoint } from "./FeatureIdentifier"
 import { flyToTransition } from "./flyToTransition"
 import { FOCUS_WAIT_MS, focusExpired, focusLayersMessage, mayMoveCamera } from "./focusLayers"
-import { loadAndPushFileEntries, loadAndPushFiles } from "./formats"
+import { entriesWithHostPaths, loadAndPushFileEntries } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
 import { freshLayers } from "./freshLayers"
 import {
@@ -72,6 +74,7 @@ import { meshTriangleCount } from "./inundation3d/meshCoordinates"
 import { hydrographFrameVisibilityUpdates } from "./inundation3d/syncHydrographFrame"
 import { terrainOffsetForManifest } from "./inundation3d/verticalAlignment"
 import { clusterGeoJSON, LayerClusterCache } from "./layerClusterCache"
+import { drawSources } from "./layerDrawPath"
 import { drawOrder } from "./layerModel"
 import { MapConnectionStatus } from "./MapConnectionStatus"
 import MapContextMenu from "./MapContextMenu"
@@ -80,7 +83,13 @@ import MapLegend from "./MapLegend"
 import { MapResourceStatus } from "./MapResourceStatus"
 import { MapToolRibbon, type RibbonTool } from "./MapToolRibbon"
 import MeasureTool, { type MeasureMode } from "./MeasureTool"
-import { askAgentAboutMap, askAgentToDelineate, type MapAgentInspectContext, mapLayerStudyHint } from "./mapAgentBridge"
+import {
+	askAgentAboutMap,
+	askAgentToDelineate,
+	askAgentToTrace,
+	type MapAgentInspectContext,
+	mapLayerStudyHint,
+} from "./mapAgentBridge"
 import { buildMapRef } from "./mapAgentRef"
 import { panelFamily, useMapChrome } from "./mapChrome"
 import { hasMeritRiversOnMap, isConus, meritRiversRequiredMessage } from "./mapHydroGuards"
@@ -95,6 +104,7 @@ import {
 	saveMapWorkspace,
 } from "./mapWorkspace"
 import { MAP_Z } from "./mapZ"
+import { arrivedTrace, type TraceDirection, type TraceRequest, traceLayers } from "./networkTrace"
 import PinCard from "./PinCard"
 import PinsPanel from "./PinsPanel"
 import { DASH_EXTENSION } from "./pathStyle"
@@ -123,6 +133,7 @@ import { resolveFileUri } from "./resolveFileUri"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
 import { remapSceneIds } from "./sceneAliases"
+import { sceneLayerForOpen } from "./sceneLayer"
 import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
 import {
@@ -840,6 +851,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// Raster resource revision drives rendering and inspection after async loads.
 	const [geojsonReadyTick, setGeojsonReadyTick] = useState(0)
 	const geojsonFileCacheRef = useRef<Map<string, unknown>>(new Map())
+	/** Layers already reported as showing a saved copy because their file could not be read. */
+	const missingReportedRef = useRef<Set<string>>(new Set())
 	const [manifestReadyTick, setManifestReadyTick] = useState(0)
 	const manifestFileCacheRef = useRef<Map<string, Inundation3DManifest>>(new Map())
 
@@ -1313,6 +1326,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const [delineating, setDelineating] = useState(false)
 	const [delineateStatus, setDelineateStatus] = useState<string | null>(null)
 	const [agentStarting, setAgentStarting] = useState(false)
+	// A trace asked for in the chat, until its layer arrives (P6). The map never runs the tool itself.
+	const [traceRequest, setTraceRequest] = useState<TraceRequest | null>(null)
+	const [traceNote, setTraceNote] = useState<string | null>(null)
 	const [agentStatus, setAgentStatus] = useState<string | null>(null)
 	const [inspectRasterReading, setInspectRasterReading] = useState<CursorRasterReading | null>(null)
 	const [contextMenu, setContextMenu] = useState<{
@@ -1467,7 +1483,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		e.dataTransfer.dropEffect = "copy"
 	}, [])
 	const ingestFiles = useCallback(async (files: FileList) => {
-		const result = await loadAndPushFiles(files)
+		const result = await loadAndPushFileEntries(entriesWithHostPaths(files))
 		if (result.loaded > 0 && result.errors.length === 0) {
 			setDropStatus({ kind: "ok", msg: `Loaded ${result.loaded} layer${result.loaded > 1 ? "s" : ""}.` })
 		} else if (result.loaded > 0) {
@@ -1583,11 +1599,14 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				const bytes = new Uint8Array(msg.data)
 				file = new File([bytes], msg.name)
 			} else if (msg?.type === "aihydro-source-file-saved" && typeof msg.path === "string") {
-				const savedPath = msg.path
+				const savedPath = resolvedSourcePath({ source_path: msg.path })
+				let matched = 0
 				for (const layer of layers) {
-					if (layer.metadata?.source_path !== savedPath) {
+					// The same file by its one resolved path, whichever way the layer spelled it (relative, workspace list).
+					if (!savedPath || resolvedSourcePath(layer.metadata) !== savedPath) {
 						continue
 					}
+					matched++
 					await MapServiceClient.addMapLayer(
 						AddMapLayerRequest.create({
 							layer: {
@@ -1607,8 +1626,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						}),
 					)
 				}
-				setDropStatus({ kind: "ok", msg: "A source file changed. Use Reload source in Layers to refresh it." })
-				window.setTimeout(() => setDropStatus(null), 5000)
+				// Said only when a layer on the map is that file; a save of any other .json, .csv or .zip is none of the map's business.
+				if (matched > 0) {
+					setDropStatus({ kind: "ok", msg: "A source file changed. Use Reload source in Layers to refresh it." })
+					window.setTimeout(() => setDropStatus(null), 5000)
+				}
 				return
 			} else if (msg?.type === "aihydro-map-save-scene-request") {
 				const scene = {
@@ -1641,7 +1663,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				return
 			} else if (msg?.type === "aihydro-open-map-scene" && typeof msg.scene === "string") {
 				try {
-					const scene = remapSceneIds(JSON.parse(msg.scene), restoreStateRef.current.aliases)
+					const scene = remapSceneIds(JSON.parse(msg.scene), restoreStateRef.current.aliases ?? {})
 					if (scene?.viewState) {
 						setViewState(sanitizeViewState(scene.viewState))
 					}
@@ -1659,7 +1681,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					}
 					if (Array.isArray(scene?.layers)) {
 						for (const layer of scene.layers as MapLayer[]) {
-							await MapServiceClient.addMapLayer(AddMapLayerRequest.create({ layer, replaceExisting: true }))
+							await MapServiceClient.addMapLayer(
+								AddMapLayerRequest.create({ layer: sceneLayerForOpen(layer), replaceExisting: true }),
+							)
 						}
 					}
 					setDropStatus({ kind: "ok", msg: `Opened map scene ${msg.name ?? ""}`.trim() })
@@ -1778,6 +1802,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		if (addedVisibleLayerIds.length > 0) {
 			pendingAutoFitLayerIdsRef.current = addedVisibleLayerIds
 		}
+		const liveLayerIds = new Set(layers.map((layer) => layer.id))
 		setVisibleLayerIds((previousVisibleLayers) => {
 			const nextVisibleLayers = new Set<string>()
 			layers.forEach((layer) => {
@@ -1789,6 +1814,11 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					nextVisibleLayers.add(layer.id)
 				}
 			})
+			// A layer merged into another because they were the same file: if the one that went away was shown, the one
+			// that stayed is shown. Once: the id is gone from the remembered set after this pass.
+			for (const [alias, target] of Object.entries(restoreStateRef.current.aliases ?? {})) {
+				if (previousVisibleLayers.has(alias) && liveLayerIds.has(target)) nextVisibleLayers.add(target)
+			}
 			return nextVisibleLayers
 		})
 		knownLayerIdsRef.current = new Set(layers.map((layer) => layer.id))
@@ -1800,7 +1830,16 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		})
 		setLayerOpacities((previousOpacities) => {
 			const nextOpacities = Object.fromEntries(Object.entries(previousOpacities).filter(([id]) => liveIds.has(id)))
-			return Object.keys(nextOpacities).length === Object.keys(previousOpacities).length ? previousOpacities : nextOpacities
+			// The opacity set on a layer that was merged into another carries over, unless the one that stayed has its own.
+			for (const [alias, target] of Object.entries(restoreStateRef.current.aliases ?? {})) {
+				if (previousOpacities[alias] !== undefined && liveIds.has(target) && nextOpacities[target] === undefined) {
+					nextOpacities[target] = previousOpacities[alias]
+				}
+			}
+			const unchanged =
+				Object.keys(nextOpacities).length === Object.keys(previousOpacities).length &&
+				Object.keys(nextOpacities).every((id) => previousOpacities[id] === nextOpacities[id])
+			return unchanged ? previousOpacities : nextOpacities
 		})
 		setClusterLayerIds((previousClusterLayerIds) => {
 			const nextClusterLayerIds = new Set([...previousClusterLayerIds].filter((id) => liveIds.has(id)))
@@ -1847,31 +1886,55 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				if (geojsonFileCacheRef.current.has(layer.id)) {
 					continue
 				}
-				const filePath =
-					layer.metadata?.display_geojson_path ||
-					layer.metadata?.geojson_cache_path ||
-					layer.metadata?.workspace_path ||
-					layer.metadata?.source_path ||
-					layer.metadata?.path
-				if (!filePath) {
+				const sources = drawSources(layer)
+				if (sources.length === 0) {
 					continue
 				}
 				try {
-					await yieldToUi()
-					const { uri } = await resolveFileUri(filePath)
-					const resp = await fetch(uri)
-					if (!resp.ok) {
-						throw new Error(`HTTP ${resp.status}`)
+					let parsed: unknown
+					let lastError: unknown
+					let projectSourceFailed = false
+					// The layer's own file first (a tool's own cache first); the next source is tried only when this one is gone.
+					for (const source of sources) {
+						try {
+							await yieldToUi()
+							const { uri } = await resolveFileUri(source.path, {
+								workspaceFolder: source.workspaceFolder,
+								kind: source.kind,
+							})
+							const resp = await fetch(uri)
+							if (!resp.ok) {
+								throw new Error(`HTTP ${resp.status}`)
+							}
+							if (cancelled) {
+								return
+							}
+							const raw = await resp.text()
+							await yieldToUi()
+							if (cancelled) {
+								return
+							}
+							parsed = JSON.parse(raw)
+							break
+						} catch (err) {
+							lastError = err
+							if (source.kind === "project") projectSourceFailed = true
+						}
 					}
-					if (cancelled) {
-						return
+					// The file the layer names could not be read, so the map shows a saved copy: the layer says so.
+					if (parsed !== undefined && projectSourceFailed && !(layer.metadata?.tool || layer.metadata?._run_id)) {
+						if (layer.metadata?.source_status !== "source_missing" && !missingReportedRef.current.has(layer.id)) {
+							missingReportedRef.current.add(layer.id)
+							PLATFORM_CONFIG.postMessage({
+								type: "aihydro-map-layer-source-status",
+								layerId: layer.id,
+								status: "source_missing",
+							})
+						}
 					}
-					const raw = await resp.text()
-					await yieldToUi()
-					if (cancelled) {
-						return
+					if (parsed === undefined) {
+						throw lastError ?? new Error("No readable source")
 					}
-					const parsed = JSON.parse(raw)
 					if (cancelled) {
 						return
 					}
@@ -3340,6 +3403,51 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		[sortedLayers, visibleLayerIds, selectedFeatures],
 	)
 
+	const traces = useMemo(() => traceLayers(layers), [layers])
+	useEffect(() => {
+		if (traceRequest && arrivedTrace(traceRequest, traces)) {
+			setTraceRequest(null)
+		}
+	}, [traceRequest, traces])
+
+	const handleAgentTrace = useCallback(
+		async (
+			pt: MapInspectPoint,
+			features: ClickedFeature[],
+			siteNo: string,
+			direction: TraceDirection,
+			distanceKm: number,
+		) => {
+			setAgentStarting(true)
+			setAgentStatus(null)
+			setTraceNote(null)
+			const ctx = buildMapAgentContext(pt, features, sortedLayers, visibleLayerIds, selectedFeatures)
+			try {
+				const result = await askAgentToTrace(ctx, siteNo, direction, distanceKm)
+				if (result.ok) {
+					setTraceRequest({ siteNo, direction, distanceKm, seenLayerIds: traces.map((t) => t.layerId) })
+					setAgentStatus(
+						agentLaunchStatus(
+							result,
+							"Chat opened with the trace request. Send it when ready, then approve the tool call.",
+						),
+					)
+				} else {
+					setTraceNote(
+						result.cancelled
+							? "Kept the current chat. Nothing was traced."
+							: result.error || "Could not start the trace",
+					)
+				}
+			} catch (e) {
+				setTraceNote(e instanceof Error ? e.message : String(e))
+			} finally {
+				setAgentStarting(false)
+			}
+		},
+		[sortedLayers, visibleLayerIds, selectedFeatures, traces],
+	)
+
 	const handleAgentDelineate = useCallback(
 		async (pt: MapInspectPoint, features: ClickedFeature[]) => {
 			setAgentStarting(true)
@@ -3669,9 +3777,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					layerCount: layers.length,
 					panelOpen: activeTool !== null && chrome.state !== "hidden",
 					hydrating: restoreState.hydrating,
-				}) && (
-					<MapEmptyState onFilesPicked={(files) => void ingestFiles(files)} onFindGauge={() => setSearchOpen(true)} />
-				)}
+				}) && <MapEmptyState onFindGauge={() => setSearchOpen(true)} />}
 
 				{/* Search pin clear button */}
 				{searchPin && (
@@ -3867,6 +3973,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						setInspectRasterReading(null)
 						setDelineateStatus(null)
 						setAgentStatus(null)
+						setTraceNote(null)
 					}}
 					onCopyCoords={() => {}}
 					onMeasureFrom={(pt) => {
@@ -3883,8 +3990,15 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						}
 					}}
 					onSaveFeatures={saveFeaturesToWorkspace}
+					onStopWaitingForTrace={() => setTraceRequest(null)}
+					onTrace={(siteNo, direction, km) =>
+						inspectPoint && void handleAgentTrace(inspectPoint, clickedFeatures, siteNo, direction, km)
+					}
 					rasterReading={inspectRasterReading}
 					selectedFeatures={selectedFeatures}
+					traceNote={traceNote}
+					traceRequest={traceRequest}
+					traces={traces}
 				/>
 
 				{contextMenu && (

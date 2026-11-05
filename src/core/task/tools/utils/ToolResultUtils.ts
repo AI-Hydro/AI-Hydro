@@ -81,9 +81,22 @@ export class ToolResultUtils {
 	 * Handles tool approval flow and processes any user feedback
 	 */
 	static async askApprovalAndPushFeedback(type: AiHydroAsk, completeMessage: string, config: TaskConfig) {
-		const { response, text, images, files } = await config.callbacks.ask(type, completeMessage, false)
+		return (await ToolResultUtils.askApprovalDetailed(type, completeMessage, config)).approved
+	}
 
-		if (text || (images && images.length > 0) || (files && files.length > 0)) {
+	/**
+	 * The same flow, saying also whether the user wrote anything with the answer. A denial with text is the user
+	 * speaking; a bare denial is only a "no" (the subagent launch brake counts only those).
+	 */
+	static async askApprovalDetailed(
+		type: AiHydroAsk,
+		completeMessage: string,
+		config: TaskConfig,
+	): Promise<{ approved: boolean; hadFeedback: boolean }> {
+		const { response, text, images, files } = await config.callbacks.ask(type, completeMessage, false)
+		const hadFeedback = !!text || (images?.length ?? 0) > 0 || (files?.length ?? 0) > 0
+
+		if (hadFeedback) {
 			let fileContentString = ""
 			if (files && files.length > 0) {
 				fileContentString = await processFilesIntoText(files)
@@ -96,10 +109,10 @@ export class ToolResultUtils {
 		if (response !== "yesButtonClicked") {
 			// User pressed reject button or responded with a message, which we treat as a rejection
 			config.taskState.didRejectTool = true // Prevent further tool uses in this message
-			return false
+			return { approved: false, hadFeedback }
 		} else {
 			// User hit the approve button, and may have provided feedback
-			return true
+			return { approved: true, hadFeedback }
 		}
 	}
 }

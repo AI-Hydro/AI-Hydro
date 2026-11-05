@@ -13,7 +13,7 @@ function supervisorFor(h: ParentHarness, apis: any[], overrides: Record<string, 
 	let next = 0
 	const updates: string[][] = []
 	const supervisor = new SubagentSupervisor({
-		profile: PROFILE,
+		definition: PROFILE,
 		parent: PARENT_CAPS,
 		runnerBase: h.runnerBase,
 		buildApi: () => apis[next++],

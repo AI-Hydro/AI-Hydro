@@ -17,6 +17,11 @@ const context = {
 	clearLayers: vi.fn(),
 	restoreOlderLayers: vi.fn(),
 }
+const loadEntries = vi.hoisted(() => vi.fn())
+vi.mock("../formats", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../formats")>()),
+	loadAndPushFileEntries: (...a: unknown[]) => loadEntries(...a),
+}))
 vi.mock("../../../context/MapContext", () => ({ useMapContext: () => context }))
 vi.mock("../../../services/grpc-client", () => ({
 	MapServiceClient: {
@@ -260,6 +265,52 @@ describe("LayerPanel", () => {
 		expect(screen.queryByText("Path")).toBeNull()
 	})
 
+	it("Add file asks the host's picker, so the file arrives with its path", () => {
+		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation(() => {})
+		const { container } = render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: "Add layer" }))
+		fireEvent.click(screen.getByRole("menuitem", { name: /Add file/ }))
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-map-add-file-command" })
+		expect(container.querySelector('input[type="file"]')).toBeNull()
+		postMessage.mockRestore()
+	})
+
+	it("Reload source loads the file by the absolute path the host found it at, not the relative spelling", async () => {
+		loadEntries.mockResolvedValue({ loaded: 1, skipped: 0, errors: [] })
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(() => Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(["{}"])) })),
+		)
+		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation((message: any) => {
+			if (message.type === "aihydro-resolve-file-uri") {
+				expect(message.workspaceFolder).toBe("/proj")
+				expect(message.kind).toBe("project")
+				window.dispatchEvent(
+					new MessageEvent("message", {
+						data: {
+							type: "aihydro-resolve-file-uri-result",
+							requestId: message.requestId,
+							ok: true,
+							uri: "vscode-resource://x",
+							name: "a.geojson",
+							path: "/proj/a.geojson",
+						},
+					}),
+				)
+			}
+		})
+		state.layers = [
+			poly("w", "a.geojson", { source: "workspace", path: "a.geojson", workspace_folder: "/proj", tool: "", _run_id: "" }),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for a\.geojson/ }))
+		fireEvent.click(screen.getByRole("menuitem", { name: "Reload source" }))
+		await waitFor(() => expect(loadEntries).toHaveBeenCalledTimes(1))
+		expect(loadEntries.mock.calls[0][0][0].source.path).toBe("/proj/a.geojson")
+		postMessage.mockRestore()
+		vi.unstubAllGlobals()
+	})
+
 	it("Move up is disabled with its reason on the layer on top of the map", () => {
 		render(<LayerPanelContent {...baseProps()} />)
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for gauge/ }))
@@ -291,11 +342,22 @@ describe("LayerPanel", () => {
 		await waitFor(() => expect(removeMapLayer).toHaveBeenCalledTimes(1))
 	})
 
+	it("does not call a vector Limited because its geometry is drawn from disk", () => {
+		state.layers = [
+			poly("a", "flowlines", { provenance_path: "/p.json" }),
+			poly("b", "catchments", { provenance_path: "/q.json" }),
+		].map((l) => ({ ...l, geojson: "" }))
+		const { container } = render(<LayerPanelContent {...baseProps()} />)
+		expect(container.textContent ?? "").not.toMatch(/Limited layer/)
+		expect(container.querySelectorAll(".map-layer-group__note").length).toBe(0)
+	})
+
 	it("says Limited layer once for the group, never per row, and never drops a real warning", () => {
+		// A layer type nothing here knows is the one honest case.
 		state.layers = [
 			poly("a", "flowlines", { provenance_path: "" }),
 			poly("b", "catchments", { _run_id: "run-3.1", provenance_path: "" }),
-		].map((l) => ({ ...l, geojson: "" }))
+		].map((l) => ({ ...l, layerType: "mystery_kind", geojson: "" }))
 		const { container } = render(<LayerPanelContent {...baseProps()} />)
 		expect(container.querySelectorAll(".map-layer-group__note").length).toBe(1)
 		expect(container.querySelector(".map-layer-group__note")?.textContent).toMatch(/Limited layer/)

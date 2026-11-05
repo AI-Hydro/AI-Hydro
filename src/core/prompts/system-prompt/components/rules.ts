@@ -4,6 +4,7 @@ import type { PromptVariant, SystemPromptContext } from "../types"
 import {
 	ARTIFACT_SELF_REVIEW_RULE,
 	CITATION_ANTI_HALLUCINATION_RULE,
+	delegationRuleFor,
 	SCIENTIFIC_CONDUCT_RULES,
 	SKILLS_RULE,
 } from "./scientific_conduct"
@@ -40,7 +41,7 @@ const getRulesTemplateText = (context: SystemPromptContext) => `RULES
 ${SKILLS_RULE}
 ${ARTIFACT_SELF_REVIEW_RULE}
 ${CITATION_ANTI_HALLUCINATION_RULE}
-${SCIENTIFIC_CONDUCT_RULES}`
+${SCIENTIFIC_CONDUCT_RULES}${delegationRuleFor(context)}`
 
 export async function getRulesSection(variant: PromptVariant, context: SystemPromptContext): Promise<string> {
 	const template = variant.componentOverrides?.[SystemPromptSection.RULES]?.template || getRulesTemplateText
