@@ -3050,10 +3050,194 @@ vscode-dropdown::part(listbox) {
 	color: var(--vscode-errorForeground, #f48771);
 }
 .map-layers__list {
-	flex: 1;
-	min-height: 0;
+	/* The legend takes the height it needs and gives up the rest to Project files; it scrolls on its own when it is long. */
+	flex: 0 1 auto;
+	min-height: 96px;
 	overflow-y: auto;
 	padding: 4px 6px 8px;
+}
+.map-layers__section {
+	margin: 0 0 2px;
+	padding: 0 4px;
+	font-size: var(--aih-text-caption, 11px);
+	font-weight: 600;
+	text-transform: none;
+	color: var(--vscode-descriptionForeground);
+}
+.map-layers__link {
+	margin-left: 6px;
+	min-height: 24px;
+	min-width: 24px;
+	display: inline-flex;
+	align-items: center;
+	padding: 0 2px;
+	border: none;
+	background: none;
+	color: var(--vscode-textLink-foreground);
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+.map-layers__link:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+/* Project files: one collapsed tree below On the map. Free height, never fewer than five rows when open. */
+.map-pf {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	border-top: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35));
+	padding: 2px 6px 4px;
+}
+.map-pf[data-open] {
+	flex: 1 1 0;
+	/* header (24) + five rows (28 each) */
+	min-height: 164px;
+}
+.map-pf__head {
+	flex: none;
+}
+.map-pf__body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.map-pf-tree {
+	flex: 1;
+	min-height: 140px;
+}
+.map-pf-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	height: 28px;
+	box-sizing: border-box;
+	padding-right: 2px;
+}
+.map-pf-row:hover {
+	background: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
+	border-radius: 4px;
+}
+.map-pf-row--head {
+	font-weight: 600;
+}
+.map-pf-name {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	border: none;
+	background: transparent;
+	color: var(--vscode-foreground);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	padding: 0;
+	height: 100%;
+}
+.map-pf-name:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+.map-pf-name--static {
+	cursor: default;
+}
+.map-pf-name__text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.map-pf-meta {
+	flex: none;
+	color: var(--vscode-descriptionForeground);
+	font-size: var(--aih-text-caption, 11px);
+	white-space: nowrap;
+}
+/* A row that just moved (Load put it on the map, Unload put it under Not on the map). The outline stays for the
+   moment it is marked, so it reads without motion; the fade is added only when motion is allowed. */
+.map-layer-row[data-just-moved],
+.map-pf-row[data-just-moved] {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+	.map-layer-row[data-just-moved],
+	.map-pf-row[data-just-moved] {
+		animation: map-just-moved 3.2s ease-out;
+	}
+}
+@keyframes map-just-moved {
+	from {
+		background: color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent);
+	}
+	to {
+		background: color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
+	}
+}
+.map-pf-notes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 10px;
+	margin: 0;
+	padding: 0 4px;
+	font-size: var(--aih-text-caption, 11px);
+	color: var(--vscode-descriptionForeground);
+}
+.map-pf-filter {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 0;
+}
+.map-pf-filter input {
+	flex: 1;
+	min-width: 0;
+	height: 24px;
+	box-sizing: border-box;
+	padding: 0 6px;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border, var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.5)));
+	border-radius: 3px;
+	font: inherit;
+}
+.map-pf-filter input:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+.map-pf-confirm {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 6px 8px;
+	border: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.5));
+	border-radius: 4px;
+	background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+}
+.map-pf-confirm > span {
+	flex: 1;
+	min-width: 140px;
+}
+.map-pf-empty {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 6px;
+	color: var(--vscode-descriptionForeground);
+	line-height: 1.4;
+}
+.map-pf-empty strong {
+	color: var(--vscode-foreground);
 }
 .map-layers__empty {
 	display: flex;

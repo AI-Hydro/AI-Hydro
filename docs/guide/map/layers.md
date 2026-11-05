@@ -33,9 +33,17 @@ The **Layers panel** (📑) is the central control surface for everything on the
 
 ---
 
-### Workspace files you can add
+### Project files: On the map and Not on the map
 
-Opening the map no longer registers every GeoJSON/KML/… file in the workspace as a layer. **Add**, then **From this workspace (N)** lists them (dependency, `.git`, `.worktrees`, `_archive` and build folders are skipped); **Add** on a row puts one on the map. With none to add, the item is not there. A file already on the map, however it got there, is not listed. The ribbon badge counts **visible** layers; its tooltip reads "N visible · M hidden". Layers restored from an earlier session are scoped to the current workspace and capped at the 40 most recent; older layers are kept on disk (never dropped) and the panel offers **Restore older layers (N)** to load them. The old unscoped `map_layer_catalog.json` is imported once, by the first workspace that opens it; a `map_layer_catalog.migrated` marker records that, and no other workspace imports it. After that the unscoped file is a **mirror of the active workspace's catalog**, rewritten atomically on every catalog write, because the agent's map layer tools (aihydro-tools) still read it. The mirror can be removed once aihydro-tools reads the scoped catalogs. Before the first mirror write, the previous unscoped file is copied byte-for-byte to `map_layer_catalog.legacy-backup.json` (never overwritten); if that copy fails the unscoped file is left untouched. Workspace files are keyed by folder plus path (multi-root safe), symlinks leaving the folder are not listed, and `env`, `.tox`, `site-packages`, `.ipynb_checkpoints`, `.cache` and `target` are skipped too. "No layers yet" appears only after restore has finished.
+Opening the map does not register every GeoJSON/KML/… file in the folder as a layer. Each map file of the open folders appears **once**: under **On the map** as its layer row, or under **Not on the map**, a collapsed section below it with the header `Not on the map · N files`. **Load** moves a file up to On the map and **Unload** moves it back down; a file is never in both places. After either, the row that moved is marked for a moment in its new place (an outline; a fade too when your system allows motion) and the status line says where it went (`Loaded x. It moved up to On the map.`, `Unloaded x. It is now under Not on the map.`). Hover the name of a project file's row on the map to see its folder path. The section is a flat list for 20 files or fewer and collapsed folders above that (a root row per folder in a multi-root window); a filter box appears above 10 files, and the list is virtualised, so thousands of rows stay fast. It lists up to 5,000 files and says `5,000+` when the scan stopped there; removing files from the list does not bring in the ones beyond the limit. The section opens by itself only when the map has no layers and there are files to load; open or closed is remembered.
+
+- **Load** shows the size on the row, asks first above 20 MB (the largest layer the map already keeps across a restart; larger files can leave the window unresponsive while they are read), and offers **Zoom to**; the camera fits the file when the map was empty. GeoTIFF and KMZ load through the map panel's own parser.
+- **Unload** keeps the layer's name, style, opacity and place in a sidecar file (`map_unloaded_layers.<hash>.json` beside the layer catalog, not in it), so loading the file again gives it back. It keeps no run link: a loaded file reads `Not linked to a run`. Undo is in the status line.
+- **Remove from list** (row menu, folder menu, `Remove N matches` from the filter, and `Unload and remove from list` on an On the map row) hides a file or folder in this list **on this machine**. It never touches the file: no code of the feature deletes, moves or renames anything. The entry is stored per project in the extension's global state as a folder hash plus a relative path (never an absolute path). Undo is in the status line for 10 seconds; after that **Removed from list (N)**, the last row of the section, lists the entries with **Restore** and **Restore all**.
+- **What is scanned.** `.aihydro/` (the tools' own output) is never listed, and `files.exclude` is merged with the built-in skip list (`node_modules`, `.git`, `.worktrees`, `_archive`, `dist`, `build`, virtualenvs, `env`, `.tox`, `site-packages`, `.ipynb_checkpoints`, `.cache`, `target`); the section says `N folders skipped` (the top level of each folder; hover for the names) and how many symlinks it met and how many lead outside the folder and are not listed. A `.json` file is judged from its first 8 KB. Scans are debounced, and the list refreshes when the window regains focus or the layers change. A file counts as on the map when a layer was made from it, compared by real path, so a symlinked folder does not show it as loadable. A multi-root window has one removed list for the project; the same relative path in two folders stays two rows.
+- **Authorised paths.** Every path the map panel opens, reads or loads passes one check (`authorizeMapPath`): inside an open folder, inside AI-Hydro's own directories, or a file the user chose (Add file, the Explorer menu). A file already on the map can be reloaded or opened; a path from a scene or a message that fits none of these is refused. Loading a GeoTIFF or KMZ from the list accepts only a file of the current scan. Converted layers are written under the source's own folder in `.aihydro/map-derived`, named with a short hash of the source path, and never replace another source's provenance.
+
+The ribbon badge counts **visible** layers; its tooltip reads "N visible · M hidden". Layers restored from an earlier session are scoped to the current workspace and capped at the 40 most recent; older layers are kept on disk (never dropped) and the panel offers **Restore older layers (N)** to load them. The old unscoped `map_layer_catalog.json` is imported once, by the first workspace that opens it; a `map_layer_catalog.migrated` marker records that, and no other workspace imports it. After that the unscoped file is a **mirror of the active workspace's catalog**, rewritten atomically on every catalog write, because the agent's map layer tools (aihydro-tools) still read it. The mirror can be removed once aihydro-tools reads the scoped catalogs. Before the first mirror write, the previous unscoped file is copied byte-for-byte to `map_layer_catalog.legacy-backup.json` (never overwritten); if that copy fails the unscoped file is left untouched. "No layers yet" appears only after restore has finished.
 
 ---
 
@@ -56,7 +64,7 @@ Opening the map no longer registers every GeoJSON/KML/… file in the workspace 
 
 | Badge | Source |
 |---|---|
-| 📁 | Workspace file (auto-scanned on open) |
+| 📁 | Workspace file |
 | 🐍 | Python tool output |
 | 📥 | User-loaded (drag-and-drop / file picker) |
 | 🛰 | Google Earth Engine layer |
@@ -121,15 +129,16 @@ Each action lives in one place. Click a layer's name to open its drawer; the `..
 | Drawer | **Style** | Symbology editor; **Cluster points** for point layers |
 | Drawer | **Attributes** | Attribute table (vector layers) |
 | Drawer | **Details** | Overview, Data and Provenance. The run and tool names copy from here |
-| `...` menu | Zoom to layer, Rename | |
+| `...` menu | Zoom to layer, Rename on map | Rename on map sets the name shown on the map; the file is not renamed |
 | `...` menu | **Save as…** | A workspace file, or a GeoJSON download |
-| `...` menu | Open source file, Reload source | Only when the layer has a source file |
+| `...` menu | Open file, Reload source | Only when the layer has a source file |
 | `...` menu and Details | **Open run** | Opens the run that made the layer in Replay. Shown only when the layer records both its study and its run |
 | Details, Provenance | Open provenance record | When the layer has one |
 | `...` menu | Move up, Move down | Render order |
-| `...` menu | Remove layer | Source file not deleted; Undo appears |
+| `...` menu | **Unload**, Unload and remove from list | For a file in the project list; the file stays on disk and Undo appears |
+| `...` menu | Remove layer | For a layer with no file in the project list (inline, Earth Engine, outside the project); source file not deleted; Undo appears |
 
-Layers are grouped by what they are, not by how they got there: **Results** (made by a tool run, even if saved in the workspace; Details shows the path), **Your files** (any file from disk, in the workspace or not), **Reference data**, **Earth Engine**. One file is one layer: adding a file that is already on the map (same source path, else the same content) selects the existing layer and says so, and layers from two different runs are never merged. **Reference data** holds MERIT rivers, WBD boundaries, NWIS gauges and NID dams that no run made: they are labelled "Reference, not in any run" and are not from a recorded run. The same layer made by a study's run sits under Results instead.
+Layers are grouped by what they are, not by how they got there: **Results** (made by a tool run, even if saved in the workspace; Details shows the path), **Files** (any file from disk, in the workspace or not; `Not linked to a run`), **Reference data**, **Earth Engine**. One file is one layer: adding a file that is already on the map (same source path, else the same content) selects the existing layer and says so, and layers from two different runs are never merged. **Reference data** holds MERIT rivers, WBD boundaries, NWIS gauges and NID dams that no run made: they are labelled "Reference, not in any run" and are not from a recorded run. The same layer made by a study's run sits under Results instead.
 
 Show all and Hide all are in the Layers panel `...` menu. The Provenance tab lists what is recorded and ends with one "Not recorded: ..." line for the facts that are not.
 

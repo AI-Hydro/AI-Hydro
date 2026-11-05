@@ -1,6 +1,12 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import { isExcludedWorkspaceGeoPath, WORKSPACE_GEO_EXCLUDE_GLOB } from "../geoScanExclusions"
+import {
+	buildExcludeGlob,
+	isExcludedByNames,
+	isExcludedWorkspaceGeoPath,
+	mergeFilesExclude,
+	WORKSPACE_GEO_EXCLUDE_GLOB,
+} from "../geoScanExclusions"
 
 describe("geoScanExclusions", () => {
 	it("excludes dependency, VCS, worktree and archive directories at any depth", () => {
@@ -30,5 +36,21 @@ describe("geoScanExclusions", () => {
 
 	it("builds a findFiles exclude glob from the same list", () => {
 		expect(WORKSPACE_GEO_EXCLUDE_GLOB).to.contain("**/.worktrees/**").and.to.contain("**/_archive/**")
+	})
+
+	it("excludes the tools' .aihydro state directory", () => {
+		expect(isExcludedWorkspaceGeoPath(".aihydro/runs/r1/basin.geojson")).to.equal(true)
+		expect(WORKSPACE_GEO_EXCLUDE_GLOB).to.contain("**/.aihydro/**")
+	})
+
+	it("merges files.exclude: directories keep their contents out, braces are reported not dropped", () => {
+		const m = mergeFilesExclude({ "**/.hidden": true, "**/*.pyc": true, "**/off": false, "{a,b}": true })
+		expect(m.globs).to.include.members(["**/.hidden", "**/.hidden/**", "**/*.pyc"])
+		expect(m.globs).to.not.include("**/off")
+		expect(m.dirNames).to.deep.equal([".hidden"])
+		expect(m.unsupported).to.deep.equal(["{a,b}"])
+		expect(buildExcludeGlob(m.globs)).to.contain("**/.hidden/**").and.to.contain("**/node_modules/**")
+		expect(isExcludedByNames("x/.hidden/a.json", m.dirNames)).to.equal(true)
+		expect(isExcludedByNames(".hidden", m.dirNames)).to.equal(false)
 	})
 })

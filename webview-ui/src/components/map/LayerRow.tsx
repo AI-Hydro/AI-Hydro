@@ -26,6 +26,10 @@ export interface LayerRowProps {
 	/** A quiet capability note, shown on the row unless the group states it once. */
 	note?: string
 	duplicate: boolean
+	/** A Load just put this row here: it is marked for a moment. */
+	justMoved?: boolean
+	/** Where the file of a project file's row is, so hovering the name shows it. */
+	sourceHint?: string
 	menuItems: OverflowItem[]
 	renaming: boolean
 	renameDraft: string
@@ -70,6 +74,8 @@ export const LayerRow: React.FC<LayerRowProps> = ({
 	warnings,
 	note,
 	duplicate,
+	justMoved,
+	sourceHint,
 	menuItems,
 	renaming,
 	renameDraft,
@@ -94,6 +100,7 @@ export const LayerRow: React.FC<LayerRowProps> = ({
 			data-dragging={dragging || undefined}
 			data-drop={dropTarget ?? undefined}
 			data-hidden={!visible || undefined}
+			data-just-moved={justMoved || undefined}
 			data-layer-id={layer.id}
 			data-selected={selected || undefined}>
 			<div
@@ -134,7 +141,7 @@ export const LayerRow: React.FC<LayerRowProps> = ({
 						className="map-layer-name"
 						onClick={onSelect}
 						onDoubleClick={onStartRename}
-						title={`${displayName}\nClick for opacity and style. Double-click to rename.`}
+						title={`${displayName}${sourceHint ? `\n${sourceHint}` : ""}\nClick for opacity and style. Double-click to rename.`}
 						type="button">
 						<span>{displayName}</span>
 					</button>
