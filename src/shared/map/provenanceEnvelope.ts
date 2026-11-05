@@ -107,12 +107,16 @@ export function runLayerMetadata(
 }
 
 /**
- * Metadata keys an `update_layer` command may not set, change or erase: the envelope, the host-stamped keys
- * and the `session_id` alias of `study_id`. Provenance is written once, by the pushing call and the host.
+ * Host-written when it adds a layer from a run: the names of the layer facts that came with that run's command. A fact is
+ * "recorded on a layer that names a run" when its name is listed here and the layer has a `_run_id`. This is a convention
+ * between the host's own paths, not a signature: a layer catalog file edited on disk can still forge it.
  */
-/** Host-stamped: the names of the layer facts a tool stated, so a later `update_layer` cannot edit them. */
 export const FACT_KEYS_KEY = "_fact_keys"
 
+/**
+ * Metadata keys an `update_layer` command may not set, change or erase: the envelope, the host-written keys
+ * and the `session_id` alias of `study_id`. Provenance is written once, by the pushing call and the host.
+ */
 export const PROTECTED_METADATA_KEYS: ReadonlySet<string> = new Set([
 	...ENVELOPE_KEYS,
 	"project_id",
@@ -121,14 +125,18 @@ export const PROTECTED_METADATA_KEYS: ReadonlySet<string> = new Set([
 	FACT_KEYS_KEY,
 ])
 
-/**
- * `metadata` without the protected keys, and without the layer facts of the layer being updated (`existing`): they are
- * evidence about a run, so only the tool that stated them can say them.
- */
-export function withoutProtectedKeys(
-	metadata: Record<string, string>,
-	existing?: Record<string, string>,
-): Record<string, string> {
-	const facts = new Set((existing?.[FACT_KEYS_KEY] ?? "").split(",").filter(Boolean))
-	return Object.fromEntries(Object.entries(metadata).filter(([k]) => !PROTECTED_METADATA_KEYS.has(k) && !facts.has(k)))
+/** `metadata` without the protected keys. (The facts of an existing layer are guarded where patches are merged: `mergeMapLayerPatch`.) */
+export function withoutProtectedKeys(metadata: Record<string, string>): Record<string, string> {
+	return Object.fromEntries(Object.entries(metadata).filter(([k]) => !PROTECTED_METADATA_KEYS.has(k)))
+}
+
+/** The names of the layer facts a layer's `_fact_keys` stamp lists. Empty when it carries no stamp. */
+export function stampedFactKeys(meta: MetadataLike): string[] {
+	return (meta?.[FACT_KEYS_KEY] ?? "").split(",").filter((k) => (LAYER_FACT_KEYS as readonly string[]).includes(k))
+}
+
+/** `metadata` without the `_fact_keys` stamp. The stamp is only ever written by the host when it adds a layer from a run. */
+export function withoutFactStamp(metadata: Record<string, string> | undefined): Record<string, string> {
+	const { [FACT_KEYS_KEY]: _stamp, ...rest } = metadata ?? {}
+	return rest
 }

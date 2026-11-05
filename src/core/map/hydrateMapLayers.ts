@@ -158,7 +158,8 @@ export async function restoreCatalogEntries(
 			const layer = await buildLayerFromEntry(entry)
 			if (layer) {
 				layer.metadata = { ...(layer.metadata ?? {}), _hydrated_of: String(total) }
-				controller.addMapLayer(layer)
+				// A restore of what the host wrote to its own catalog keeps the fact stamp (a catalog edited on disk can forge it).
+				controller.addMapLayer(layer, { trustFactStamp: true })
 				added.push(layer.id)
 			}
 		} catch (err) {

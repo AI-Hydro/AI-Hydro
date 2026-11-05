@@ -3,6 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
 import { LedgerEventWatcher } from "@core/ledger/LedgerEventWatcher"
 import { type AddOutcome, applyAddLayer, dropAliasesFor, resolveAlias } from "@core/map/applyAddLayer"
+import { applyFactStampPolicy } from "@core/map/factStamp"
 import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
 import { buildMapLayerCatalogAsync, type MapLayerCatalogEntry, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
@@ -2039,8 +2040,9 @@ export class Controller {
 	 * Add or update a map layer
 	 * @param layer The layer to add/update
 	 */
-	addMapLayer(layer: MapLayer, options: { replaceExisting?: boolean } = {}): void {
+	addMapLayer(layer: MapLayer, options: { replaceExisting?: boolean; trustFactStamp?: boolean } = {}): void {
 		console.log(`[Controller] Adding map layer: ${layer.id}`)
+		layer = applyFactStampPolicy(this.mapLayers.get(layer.id), layer, options.trustFactStamp === true)
 		const op = layer.metadata?.__operation
 		if (op === "remove") {
 			this.removeMapLayer(layer.id)

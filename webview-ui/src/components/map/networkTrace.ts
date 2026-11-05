@@ -95,7 +95,7 @@ export function buildTracePrompt(siteNo: string, direction: TraceDirection, km: 
 // ── what a traced layer says about itself ────────────────────────────────────
 
 /**
- * What the tool recorded about the layer, as the layer envelope carries it (aihydro-tools `layer_meta`: `gauge_id`,
+ * The facts recorded on the layer, as the layer envelope carries them (aihydro-tools `layer_meta`: `gauge_id`,
  * `direction`, `distance_km`, `truncated`, `n_features`). Nothing is read from the layer's name or file name and nothing is
  * inferred: a key an older tools server did not send reads "not recorded", and such a layer never answers a request.
  */
@@ -119,8 +119,8 @@ const wholeNumber = (v: string | undefined): number | undefined => (v && /^\d{1,
 export function traceLayerInfo(layer: MapLayer): TraceLayerInfo | null {
 	const meta = layer.metadata ?? {}
 	if (layerTool(meta) !== TRACE_TOOL) return null
-	// A fact is the tool's only when the host stamped the layer with the fact's name (`_fact_keys`) and the layer has a run:
-	// a plain add_layer could carry the same keys with nobody behind them.
+	// A fact counts as recorded only on a layer that names a run and carries the host's `_fact_keys` stamp listing it: a plain
+	// add_layer cannot bring the stamp, though a catalog file edited on disk still could.
 	const runId = layerRunId(meta)
 	const stated = new Set(runId ? (meta._fact_keys ?? "").split(",") : [])
 	const fact = (key: string): string | undefined => (stated.has(key) ? meta[key] : undefined)

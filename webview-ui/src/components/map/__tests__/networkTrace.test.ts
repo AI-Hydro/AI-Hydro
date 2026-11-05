@@ -123,7 +123,7 @@ describe("traceLayerInfo", () => {
 		])
 		expect(d.cut).toBeUndefined()
 	})
-	it("treats the facts as the tool's only when the host stamped them and the layer has a run", () => {
+	it("treats the facts as recorded only on a layer that names a run and carries the stamp", () => {
 		// A plain add_layer can carry the same keys with nobody behind them.
 		const { _fact_keys: _f, ...unstamped } = REAL
 		const a = traceLayerInfo(layer({ metadata: unstamped }))!

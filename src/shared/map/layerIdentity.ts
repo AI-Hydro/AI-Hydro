@@ -13,6 +13,8 @@
  *     layer is updated in place: id, style, visibility and order stay, the content is the new content.
  */
 
+import { FACT_KEYS_KEY, LAYER_FACT_KEYS } from "./provenanceEnvelope"
+
 export interface IdentityLayer {
 	id: string
 	layerType?: string
@@ -232,6 +234,9 @@ export function planMerge(existing: IdentityLayer, incoming: IdentityLayer, matc
 	}
 	// An empty value from the incoming side never overwrites a real one.
 	const meta: Record<string, string> = { ...(existing.metadata ?? {}) }
+	// Layer facts describe the content they were recorded with. The content is changing, so the old ones and their stamp go,
+	// and only what the incoming layer itself carries (a stamp it was allowed to bring) replaces them.
+	for (const key of [...LAYER_FACT_KEYS, FACT_KEYS_KEY]) delete meta[key]
 	for (const [key, value] of Object.entries(incoming.metadata ?? {})) {
 		if (value !== "" && value !== undefined) meta[key] = value
 	}

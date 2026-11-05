@@ -23,7 +23,11 @@ export async function addMapLayer(controller: Controller, request: AddMapLayerRe
 	})
 
 	// Add layer to controller storage and notify subscribers
-	controller.addMapLayer(request.layer, { replaceExisting: request.replaceExisting })
+	// Undo and opening a scene restore a layer exactly as it was (replaceExisting), so they keep its fact stamp; a plain add does not.
+	controller.addMapLayer(request.layer, {
+		replaceExisting: request.replaceExisting,
+		trustFactStamp: request.replaceExisting === true,
+	})
 
 	if (request.autoZoom) {
 		console.log("[addMapLayer] Auto-zoom requested for layer:", request.layer.id)

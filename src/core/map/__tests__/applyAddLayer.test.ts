@@ -147,3 +147,43 @@ describe("applyAddLayer: one file is one layer", () => {
 		expect(s.layers.get("e")!.metadata.units).to.equal("mm")
 	})
 })
+
+describe("applyAddLayer: layer facts follow the content they were recorded with", () => {
+	const FACTS = {
+		_run_id: "r1",
+		tool: "gauge_flowlines",
+		gauge_id: "01013500",
+		n_features: "9",
+		_fact_keys: "gauge_id,n_features",
+		...P,
+	}
+
+	it("the same file from a duplicate does not copy its facts or stamp onto the layer that stays", () => {
+		const onMap = layer("keep", { ...P })
+		const s = store(onMap)
+		applyAddLayer(s, layer("dup", { ...FACTS }))
+		const kept = s.layers.get("keep") as MapLayer
+		expect(kept.metadata).to.not.have.property("_fact_keys")
+		expect(kept.metadata).to.not.have.property("gauge_id")
+		expect(kept.metadata._run_id).to.equal("r1") // the run link still moves, as before
+	})
+
+	it("when the content changes, the old facts and stamp go, and only the incoming layer's own come in", () => {
+		const onMap = layer("keep", { ...FACTS })
+		const s = store(onMap)
+		applyAddLayer(s, layer("again", { ...P, direction: "upstream", _fact_keys: "direction" }, GJ2))
+		const kept = s.layers.get("keep") as MapLayer
+		expect(kept.metadata).to.not.have.property("gauge_id")
+		expect(kept.metadata).to.not.have.property("n_features")
+		expect(kept.metadata._fact_keys).to.equal("direction")
+		expect(kept.metadata.direction).to.equal("upstream")
+	})
+
+	it("when the content changes and the incoming layer has no stamp, the layer has no facts at all", () => {
+		const s = store(layer("keep", { ...FACTS }))
+		applyAddLayer(s, layer("again", { ...P }, GJ2))
+		const kept = s.layers.get("keep") as MapLayer
+		for (const k of ["_fact_keys", "gauge_id", "n_features", "direction", "truncated", "distance_km"])
+			expect(kept.metadata).to.not.have.property(k)
+	})
+})

@@ -155,17 +155,12 @@ export class MapCommandWatcher {
 				if (!cmd.layer_id) {
 					break
 				}
-				const layerId: string = cmd.layer_id
 				const patch: MapLayerPatch = {}
 				if (cmd.style) {
 					patch.style = cmd.style as MapLayerPatch["style"]
 				}
 				if (cmd.metadata) {
-					patch.metadata = withoutProtectedKeys(
-						cmd.metadata,
-						// By the id the layer has now: an alias of a merged-away layer must not step around the protection.
-						this.controller.getMapLayers().find((l) => l.id === this.controller.resolveMapLayerId(layerId))?.metadata,
-					)
+					patch.metadata = withoutProtectedKeys(cmd.metadata)
 				}
 				if (cmd.visible !== undefined) {
 					patch.visible = cmd.visible
@@ -177,7 +172,7 @@ export class MapCommandWatcher {
 				if (cmd.clear_graduated) {
 					patch.clear_graduated = true
 				}
-				const updated = this.controller.updateMapLayer(layerId, patch)
+				const updated = this.controller.updateMapLayer(cmd.layer_id, patch)
 				if (!updated) {
 					console.warn("[MapCommandWatcher] update_layer: unknown layer", cmd.layer_id)
 				}
@@ -231,7 +226,7 @@ export class MapCommandWatcher {
 					visible: true,
 					metadata: runLayerMetadata(cmd.provenance, { runId: cmd.run_id, sessionId: cmd.session_id }),
 				})
-				this.controller.addMapLayer(layer)
+				this.controller.addMapLayer(layer, { trustFactStamp: true })
 				if (cmd.auto_zoom !== false) {
 					this.appendAgentCommandEvent("command.fit_layer", {
 						layerId: this.controller.resolveMapLayerId(cmd.layer_id),

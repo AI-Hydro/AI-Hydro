@@ -42,7 +42,7 @@ describe("MapCommandWatcher add_layer_from_run provenance", () => {
 		expect(layer.metadata).to.not.have.property("Unknown Key")
 	})
 
-	it("copies the facts a tool states about its layer, and never lets them replace the envelope or host keys", async () => {
+	it("copies the layer facts from the command's provenance, and never lets them replace the envelope or host keys", async () => {
 		const [layer] = await apply({
 			type: "add_layer_from_run",
 			layer_id: "l4",
@@ -137,6 +137,7 @@ describe("update_layer cannot forge or erase provenance", () => {
 				project_id: "p",
 				item_id: "i",
 				session_id: "x",
+				_fact_keys: "gauge_id",
 				note: "kept",
 			},
 		})
@@ -146,32 +147,8 @@ describe("update_layer cannot forge or erase provenance", () => {
 	})
 })
 
-describe("update_layer cannot edit the facts a tool stated about a layer", () => {
-	it("a merged-away alias of the layer is no way around it", async () => {
-		const [layer] = await apply({
-			type: "add_layer_from_run",
-			layer_id: "canon",
-			geojson: GEOJSON,
-			run_id: "run-a",
-			provenance: { _run_id: "run-a", tool: "gauge_flowlines", gauge_id: "01013500", n_features: "9" },
-		})
-		const patches: any[] = []
-		const controller = {
-			updateMapLayer: (_id: string, p: any) => (patches.push(p), true),
-			getMapLayers: () => [layer, { id: "other", metadata: {} }],
-			resolveMapLayerId: (id: string) => (id === "old-alias" ? "canon" : id),
-			mapSessionService: {},
-		}
-		const cmd = mapCommandSchema.parse({
-			type: "update_layer",
-			layer_id: "old-alias",
-			metadata: { gauge_id: "09999999", n_features: "1", note: "kept" },
-		})
-		await (new MapCommandWatcher(controller as any) as any).applyCommand(cmd)
-		expect(patches[0].metadata).to.deep.equal({ note: "kept" })
-	})
-
-	it("an added layer's fact keys cannot be changed, erased or forged afterwards, and other metadata still can", async () => {
+describe("an add from a run is the only add that keeps the fact stamp", () => {
+	it("a forged _fact_keys in the command's provenance is not read; the host writes its own", async () => {
 		const [layer] = await apply({
 			type: "add_layer_from_run",
 			layer_id: "f1",
@@ -185,21 +162,7 @@ describe("update_layer cannot edit the facts a tool stated about a layer", () =>
 				_fact_keys: "forged",
 			},
 		})
-		expect(layer.metadata._fact_keys).to.equal("gauge_id,truncated") // host-stamped; a forged value is not read
-		const patches: any[] = []
-		const controller = {
-			updateMapLayer: (_id: string, p: any) => (patches.push(p), true),
-			getMapLayers: () => [layer],
-			resolveMapLayerId: (id: string) => id,
-			mapSessionService: {},
-		}
-		const cmd = mapCommandSchema.parse({
-			type: "update_layer",
-			layer_id: "f1",
-			metadata: { gauge_id: "09999999", truncated: "true", _fact_keys: "", note: "kept" },
-		})
-		await (new MapCommandWatcher(controller as any) as any).applyCommand(cmd)
-		expect(patches[0].metadata).to.deep.equal({ note: "kept" })
+		expect(layer.metadata._fact_keys).to.equal("gauge_id,truncated")
 	})
 })
 
