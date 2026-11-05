@@ -1,0 +1,23 @@
+{
+	"plotly": {
+		"package": "plotly.js-dist-min",
+		"version": "2.35.2",
+		"file": "plotly.min.js",
+		"license": "MIT",
+		"sha256": "6d21266ce1bd7d9e5ab4e115989c70c20de0382fd973a8f26ab58619eba4d603"
+	},
+	"three": {
+		"package": "three",
+		"version": "0.128.0",
+		"file": "build/three.min.js",
+		"license": "MIT",
+		"sha256": "9274bbcec8d96168626c732b5d31c775aa8cfb7eaa0599bec0c175908a2c1ce2"
+	},
+	"three-orbit": {
+		"package": "three",
+		"version": "0.128.0",
+		"file": "examples/js/controls/OrbitControls.js",
+		"license": "MIT",
+		"sha256": "02bb4ade710f3e607329e37a21f098bc3ac70eb6e33daf8a65e79f4db785e7b2"
+	}
+}

@@ -2,26 +2,12 @@ import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } fr
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Locator, type Page } from "@playwright/test"
-import type { ElectronApplication } from "playwright"
 import { allowArtifactExecution, E2ETestHelper, e2e, writeUserSettings } from "./utils/helpers"
+import { type LifecycleSession, lifecycleFixture } from "./utils/lifecycle"
 
 const sourceArchive = process.env.AIHYDRO_PHASE1_PACK_PATH
 const expectedBookModuleId = process.env.AIHYDRO_EXPECTED_BOOK_MODULE_ID ?? "hmfp.water-balance.01"
 const courseEntryModuleId = "hmfp.orientation.00"
-
-interface LifecycleSession {
-	launch: () => Promise<{ app: ElectronApplication; page: Page }>
-	close: () => Promise<number | null>
-}
-
-function processIsRunning(pid: number): boolean {
-	try {
-		process.kill(pid, 0)
-		return true
-	} catch {
-		return false
-	}
-}
 
 const artifactIntegrationE2E = e2e
 	.extend<{ workspaceDir: string }>({
@@ -46,61 +32,7 @@ const artifactIntegrationE2E = e2e
 			}
 		},
 	})
-	.extend<{ lifecycle: LifecycleSession }>({
-		lifecycle: async ({ openVSCode, workspaceDir, userDataDir, extensionsDir, homeDir }, use) => {
-			let current: ElectronApplication | null = null
-			const close = async () => {
-				if (!current) return null
-				const app = current
-				current = null
-				const pid = app.process().pid
-				await E2ETestHelper.closeElectronApp(app)
-				try {
-					await E2ETestHelper.waitUntil(() => !processIsRunning(pid), 15_000)
-				} catch {
-					if (processIsRunning(pid)) app.process().kill()
-					await E2ETestHelper.waitUntil(() => !processIsRunning(pid), 15_000)
-				}
-				return pid
-			}
-			let testFailure: unknown
-			try {
-				await use({
-					launch: async () => {
-						await close()
-						current = await openVSCode(workspaceDir)
-						const page = await current.firstWindow()
-						await page.waitForLoadState("domcontentloaded")
-						await page.locator(".monaco-workbench").waitFor({ state: "visible", timeout: 20_000 })
-						return { app: current, page }
-					},
-					close,
-				})
-			} catch (error) {
-				testFailure = error
-			}
-			const cleanupFailures: unknown[] = []
-			try {
-				await close()
-			} catch (error) {
-				cleanupFailures.push(error)
-			}
-			const cleanupResults = await Promise.allSettled([
-				E2ETestHelper.rmForRetries(userDataDir, { recursive: true, force: true }),
-				E2ETestHelper.rmForRetries(extensionsDir, { recursive: true, force: true }),
-				E2ETestHelper.rmForRetries(homeDir, { recursive: true, force: true }),
-			])
-			for (const result of cleanupResults) {
-				if (result.status === "rejected") cleanupFailures.push(result.reason)
-			}
-			if (cleanupFailures.length > 0) {
-				if (testFailure !== undefined) cleanupFailures.unshift(testFailure)
-				throw new AggregateError(cleanupFailures, "Learning Pack real-panel teardown failed")
-			}
-			if (testFailure !== undefined) throw testFailure
-		},
-	})
-
+	.extend<{ lifecycle: LifecycleSession }>(lifecycleFixture)
 artifactIntegrationE2E.setTimeout(420_000)
 artifactIntegrationE2E.skip(!sourceArchive, "requires a pinned book-built Learning Pack artifact")
 

@@ -1,0 +1,178 @@
+name: Studio VSIX End-to-End
+
+# Installs the packaged VSIX into a clean VS Code profile (no extensionDevelopmentPath) and runs the
+# installed Learning Pack real-panel specs against it, on Ubuntu, macOS and Windows. The VSIX is built
+# once and the same bytes are tested on every OS. Dispatch with `repeat` > 1 to measure the flake rate:
+# each run is a fresh Playwright process with retries disabled and the pass count is reported per OS.
+
+on:
+  pull_request:
+    branches: [main, "vision2040/**"]
+    paths:
+      - ".github/workflows/studio-vsix-e2e.yml"
+      - "scripts/e2e-repeat.mjs"
+      - "scripts/build-development-vsix.mjs"
+      - "scripts/verify-development-vsix.mjs"
+      - "src/test/e2e/learning-pack-*.test.ts"
+      - "src/test/e2e/utils/**"
+      - "src/services/learning-pack/**"
+      - "src/services/test/**"
+      - "webview-ui/src/components/html_preview/**"
+      - "webview-ui/package.json"
+      - "package.json"
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      repeat:
+        description: Runs of the spec selection per OS (1 = a single verification run; 20 = flake measurement)
+        required: false
+        default: "1"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  build:
+    name: Build VSIX
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install locked dependencies
+        shell: bash
+        run: |
+          npm ci
+          cd webview-ui
+          npm ci
+
+      - name: Build and inspect the VSIX
+        id: source
+        shell: bash
+        run: |
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          mkdir -p artifacts/vsix
+          npm run package:vsix -- --out "artifacts/vsix/ai-hydro-${SOURCE_SHA}.vsix"
+          (cd artifacts/vsix && shasum -a 256 -c SHA256SUMS)
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: studio-e2e-vsix-${{ steps.source.outputs.sha }}
+          path: artifacts/vsix/
+          retention-days: 7
+          if-no-files-found: error
+
+  vsix-e2e:
+    name: Installed VSIX on ${{ matrix.runner }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu, macos, windows]
+    runs-on: ${{ matrix.runner }}-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install test dependencies
+        shell: bash
+        run: npm ci
+
+      - name: Install VS Code and Chromium for Playwright
+        shell: bash
+        run: node src/test/e2e/utils/build.mjs
+
+      - name: Install xvfb
+        if: matrix.runner == 'ubuntu'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: studio-e2e-vsix-${{ needs.build.outputs.sha }}
+          path: ${{ runner.temp }}/vsix
+
+      - name: Locate the VSIX under test
+        shell: bash
+        run: |
+          vsix="$(find "$RUNNER_TEMP/vsix" -maxdepth 1 -name '*.vsix' | head -n 1)"
+          test -f "$vsix"
+          echo "AIHYDRO_E2E_VSIX=$vsix" >> "$GITHUB_ENV"
+          echo "Testing $(basename "$vsix") sha256 $(node -e 'const c=require("crypto");const f=require("fs");console.log(c.createHash("sha256").update(f.readFileSync(process.argv[1])).digest("hex"))' "$vsix")"
+
+      - name: Run installed-VSIX specs (Ubuntu)
+        if: matrix.runner == 'ubuntu'
+        shell: bash
+        run: >-
+          xvfb-run -a node scripts/e2e-repeat.mjs
+          --runs "${{ inputs.repeat || '1' }}" --label "${{ matrix.runner }}-vsix" --
+          src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts
+          --grep '@phase1-(pack|charts)'
+
+      - name: Run installed-VSIX specs
+        if: matrix.runner != 'ubuntu'
+        shell: bash
+        run: >-
+          node scripts/e2e-repeat.mjs
+          --runs "${{ inputs.repeat || '1' }}" --label "${{ matrix.runner }}-vsix" --
+          src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts
+          --grep '@phase1-(pack|charts)'
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: studio-vsix-e2e-summary-${{ matrix.runner }}
+          path: test-results/e2e-repeat/*.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Sanitize allowlisted failure evidence
+        if: failure()
+        shell: bash
+        run: node scripts/sanitize-e2e-artifacts.mjs test-results failure-evidence/sanitized
+
+      - name: Collect failure traces and screenshots
+        if: failure()
+        shell: bash
+        # Same policy as html-preview-runtime.yml: unredactable traces and screenshots are uploaded
+        # only for a failed job with 3-day retention, and this job has no repository secrets in its
+        # environment. If a secret is ever added to this job, remove this step and the upload below.
+        run: |
+          mkdir -p failure-evidence/diagnostics
+          find test-results -type f \( -name 'trace.zip' -o -name 'failure.png' -o -name '*.log' -path '*host-logs*' \) | while read -r f; do
+            dest="failure-evidence/diagnostics/$(dirname "${f#test-results/}")"
+            mkdir -p "$dest"
+            cp "$f" "$dest/"
+          done
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: studio-vsix-e2e-failure-${{ matrix.runner }}
+          path: failure-evidence/
+          retention-days: 3
+          if-no-files-found: ignore

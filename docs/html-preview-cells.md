@@ -117,14 +117,28 @@ Pure-DOM author helpers (no kernel dependency); all respect `prefers-reduced-mot
   `params` may be a value or a function (pull live `bindParam` values). Returns
   `{ play, stop, toggle }`.
 - **`aihydro.plot({ mount, data, layout, config })`** — branded Plotly wrapper; lazy-loads
-  Plotly from the CSP-whitelisted CDN and applies the AI-Hydro dark palette.
+  the Plotly 2.35.2 build that ships inside the extension and applies the AI-Hydro dark palette.
 - **`aihydro.scene3d({ canvas, dem, setup, onFrame })`** — three.js helper for 3D /
   manipulable scenes (terrain flythroughs, DEM/TWI surfaces, watershed views) over a
-  `<canvas data-aihydro-scene3d>`. Lazy-loads three.js + OrbitControls from the
-  CSP-whitelisted jsdelivr CDN and hands `setup(ctx)` a branded `{ THREE, scene, camera,
+  `<canvas data-aihydro-scene3d>`. Lazy-loads the three.js r128 + OrbitControls builds that ship
+  inside the extension and hands `setup(ctx)` a branded `{ THREE, scene, camera,
   renderer, controls, canvas, dem }`; `onFrame(ctx)` runs per animation frame (skipped under
   reduced-motion, which renders a single static frame). Returns a promise resolving to that
   `ctx` (with a `stop()` method).
+
+### Vendored chart libraries
+
+`aihydro.plot` and `aihydro.scene3d` do not fetch from a CDN. The preview host holds Plotly
+(`plotly.js-dist-min` 2.35.2) and three.js (`three` 0.128.0, plus its OrbitControls) as extension
+assets, verifies each file's SHA-256 against `webview-ui/src/components/html_preview/vendorManifest.json`
+(byte-identical to the CDN releases the helpers used before), and returns the source to the document,
+which runs it as an inline script. A document can only name a fixed id (`plotly`, `three`,
+`three-orbit`), never a URL, and a file that fails the digest check is not sent. This is why a
+signed Learning Pack, whose CSP is `script-src 'unsafe-inline'` with `connect-src 'none'`, can still draw
+these figures: the policy is unchanged, and no external origin is allowed. Outside the host (a standalone
+file) the helpers fall back to the CDN. Updating a library means bumping the exact version in
+`webview-ui/package.json` and the digest in the manifest together; `vendorLibraries.test.ts` fails if
+they disagree. The vendored builds add about 5 MB to the unpacked webview build.
 
 ## Control-state persistence
 
