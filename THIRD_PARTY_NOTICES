@@ -32,6 +32,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
+Plotly's bundle also contains third-party components. Their licence notices
+are in plotly.min.js.LICENSE.txt, shipped verbatim next to plotly.min.js in
+webview-ui/build/assets/. It is dist/plotly.min.js.LICENSE.txt of the
+plotly.js 2.35.2 npm package (SHA-256 recorded in vendorManifest.json), and
+plotly.min.js is byte-identical to dist/plotly.min.js of that package.
+
 ================================================================================
 three.js - three 0.128.0 - files: three.min.js, OrbitControls.js (from
 examples/js/controls) - license: MIT

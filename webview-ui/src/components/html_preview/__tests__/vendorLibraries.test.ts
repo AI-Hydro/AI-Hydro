@@ -71,14 +71,15 @@ describe("vendored library notices", () => {
 		}
 	})
 
-	it("ships the licence file that the Plotly bundle header points to", () => {
-		const shipped = readFileSync(
-			join(__dirname, "..", "..", "..", "..", "public", "assets", "plotly.min.js.LICENSE.txt"),
-			"utf8",
-		)
-		expect(shipped).toContain(
-			readFileSync(join(dirname(require.resolve("plotly.js-dist-min/package.json")), "LICENSE"), "utf8").trim(),
-		)
+	it("ships the bundled-dependency notices verbatim and names them in THIRD_PARTY_NOTICES", () => {
+		const recorded = manifest.plotly.bundledNotices
+		const shipped = readFileSync(join(__dirname, "..", "..", "..", "..", "public", "assets", "plotly.min.js.LICENSE.txt"))
+		const upstream = readFileSync(join(dirname(require.resolve(`${recorded.package}/package.json`)), recorded.file))
+		expect(createHash("sha256").update(shipped).digest("hex")).toBe(recorded.sha256)
+		expect(Buffer.compare(shipped, upstream)).toBe(0)
+		expect(notices).toContain(`${recorded.package} 2.35.2 npm package`)
+		expect(notices).toContain(recorded.file)
+		expect(recorded.version).toBe(manifest.plotly.version)
 	})
 })
 

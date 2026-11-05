@@ -4,7 +4,13 @@
 		"version": "2.35.2",
 		"file": "plotly.min.js",
 		"license": "MIT",
-		"sha256": "6d21266ce1bd7d9e5ab4e115989c70c20de0382fd973a8f26ab58619eba4d603"
+		"sha256": "6d21266ce1bd7d9e5ab4e115989c70c20de0382fd973a8f26ab58619eba4d603",
+		"bundledNotices": {
+			"package": "plotly.js",
+			"version": "2.35.2",
+			"file": "dist/plotly.min.js.LICENSE.txt",
+			"sha256": "9144a55454d7944bd0695179ec85956de3d08a64c5227ffa2d45da186ec8445a"
+		}
 	},
 	"three": {
 		"package": "three",
