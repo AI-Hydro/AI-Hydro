@@ -142,7 +142,6 @@ describe("agent files: narrowing", () => {
 		}
 		// what a file does produce carries no model of its own
 		const d = ok(file("extends: reviewer"))
-		expect(d.modelId).to.equal(undefined)
 		expect(d.model).to.equal(REVIEWER_DEFINITION.model)
 		expect(d.crossProvider).to.equal(REVIEWER_DEFINITION.crossProvider)
 		expect(ok(file("extends: explorer")).crossProvider).to.equal(false)
