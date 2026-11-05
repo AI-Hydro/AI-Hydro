@@ -3066,7 +3066,11 @@ vscode-dropdown::part(listbox) {
 }
 .map-layers__link {
 	margin-left: 6px;
-	padding: 0;
+	min-height: 24px;
+	min-width: 24px;
+	display: inline-flex;
+	align-items: center;
+	padding: 0 2px;
 	border: none;
 	background: none;
 	color: var(--vscode-textLink-foreground);
@@ -3156,11 +3160,28 @@ vscode-dropdown::part(listbox) {
 	font-size: var(--aih-text-caption, 11px);
 	white-space: nowrap;
 }
-.map-pf-check {
-	flex: none;
-	display: inline-flex;
-	/* Not green: green is reserved for approved claims. */
-	color: var(--vscode-foreground);
+/* A row that just moved (Load put it on the map, Unload put it under Not on the map). The outline stays for the
+   moment it is marked, so it reads without motion; the fade is added only when motion is allowed. */
+.map-layer-row[data-just-moved],
+.map-pf-row[data-just-moved] {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+	.map-layer-row[data-just-moved],
+	.map-pf-row[data-just-moved] {
+		animation: map-just-moved 3.2s ease-out;
+	}
+}
+@keyframes map-just-moved {
+	from {
+		background: color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent);
+	}
+	to {
+		background: color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
+	}
 }
 .map-pf-notes {
 	display: flex;

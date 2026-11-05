@@ -4,7 +4,7 @@ Append-only. Newest first. One entry per non-obvious choice, with the **why**.
 
 ---
 
-## 2026-11-05 — Layers slice 1: Unload settings live in a sidecar, "Remove from list" lives in globalState
+## 2026-11-05 — Layers slice 1: the moving row; Unload settings in a sidecar; "Remove from list" in globalState
 
 PR #159. Design: `docs/vision-2040/findings/layers-design-2026-11-02.md`, section 5.5, 5.6 and the Addendum (items 5 and 8).
 
@@ -13,7 +13,7 @@ PR #159. Design: `docs/vision-2040/findings/layers-design-2026-11-02.md`, sectio
 - **"Remove from list" is a per-project preference in the extension's `globalState`**, key `aihydro.map.fileList.removed.v1:<projectKey>`, on the `pinStore.ts` pattern (`prj_` key with `dir:` fallback and merge). *Why not elsewhere:* a file in `.aihydro/` would show up in the owner's repository, and `.gitignore` covers only `.aihydro/runs/`; `localStorage` has one global key; the catalog is rewritten constantly.
 - **An entry is `{ folderHash, relativePath, kind, removedAt }`: never an absolute path.** The folder is the first 16 hex of the sha256 of its resolved path, so the list names no home directory, survives a `dir:` to `prj_` move, and tells two folders of a multi-root window apart. A multi-root window has one project identity (the first folder's key). Entries that are absolute, drive paths or climb out with `..` are refused at the store.
 - **Nothing in the feature deletes a file.** A test scans every feature module for any delete call and another checks files are byte-identical after remove, restore and unload. The Explorer remains the only place a file is deleted.
-- **Open decision, not made here:** whether a loaded file stays in the tree with a check (built) or moves to a "Not on the map" section (mocked as `map-layers-files-moving-row-alt`). That is the owner's call after seeing both.
+- **Decided (owner, 2026-11-05): the moving row.** Each project file appears once: under On the map as its layer row, or under a collapsed `Not on the map · N files` section. Load moves the row up and Unload moves it down; a file is never in both. *Why this and not a tree with a check mark:* the owner's complaint was that two lists load the same files and read as duplicates; one place per file removes that reading. The tree-with-check version was built first and mocked against this one (`map-layers-files-moving-row-alt`); it is dropped. *Cost the choice accepts:* a row changes place when acted on, so after Load or Unload the moved row is marked for a moment in its new place and the status line says where it went (`It moved up to On the map`, `It is now under Not on the map`); an On the map row of a project file shows its folder path on hover. Folder grouping, size, the filter, `Remove N matches`, `Removed from list (N)`, skipped-folder and symlink counts, the `5,000+` text, virtualisation, the large-load confirm and `Zoom to` all live under `Not on the map`.
 
 ## 2026-10-31 — Explorer subagents are in-process, profile-scoped and asked every time
 

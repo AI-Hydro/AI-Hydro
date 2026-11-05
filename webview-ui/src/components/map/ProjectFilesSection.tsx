@@ -1,21 +1,22 @@
 /**
- * ProjectFilesSection: every map file of the open folders, in one collapsed tree below "On the map".
+ * ProjectFilesSection: the map files of the open folders that are NOT on the map, in one collapsed section below
+ * "On the map".
  *
- *   Project files · 12 files, 3 loaded
+ *   Not on the map · 2 files
  *     data/
- *       [icon] basin.geojson   1.2 MB   [check] [Unload] [more]
- *       [icon] gauges.geojson  96 KB            [Load]   [more]
+ *       [icon] gauges.geojson  96 KB   [Load] [more]
  *
- * A file stays where it is when it is loaded: Load and Unload act in place and a loaded row shows a check. Removing a
- * row from the list hides it on this machine and never touches the file; the removed rows are kept under
- * "Removed from list (N)" with Restore. The panel owns the actions (so Undo and the status line are one); this component
- * owns the tree, the filter and the confirmation before a very large load.
+ * Each project file appears once. Load moves a row up to On the map (as its layer row) and Unload moves it back down here,
+ * so a file is never in both places. Removing a row from the list hides it on this machine and never touches the file; the
+ * removed rows are kept under "Removed from list (N)" with Restore. The panel owns the actions (so Undo and the status
+ * line are one); this component owns the folders, the filter, the highlight of a row that just arrived, and the
+ * confirmation before a very large load.
  */
 
-import { formatBytes, formatCount, isLargeLoad, LARGE_LOAD_BYTES, projectFilesHeader } from "@shared/map/projectFiles"
+import { formatBytes, formatCount, isLargeLoad, LARGE_LOAD_BYTES, notOnMapHeader } from "@shared/map/projectFiles"
 import type { RemovedFileEntry, WorkspaceGeoFile } from "@shared/proto/cline/map"
-import React, { useMemo, useState } from "react"
-import { Virtuoso } from "react-virtuoso"
+import React, { useEffect, useMemo, useRef, useState } from "react"
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import {
 	buildRows,
@@ -23,23 +24,26 @@ import {
 	FILTER_ABOVE,
 	fileIcon,
 	fileKey,
-	loadedCount,
+	filterMatches,
+	folderKeysOf,
 	type PfRow,
-	unloadedMatches,
 } from "./projectFilesModel"
 import type { ProjectFilesData } from "./WorkspaceFilesSection"
 
 const ROW_HEIGHT = 28
+/** How long a row that just moved stays marked. */
+const FLASH_MS = 3500
 
 export interface ProjectFilesSectionProps {
 	data: ProjectFilesData
-	/** Resolved paths of the files on the map. */
-	loadedPaths: Set<string>
+	/** The listed files that are not on the map (the host's list minus every file that has a layer). */
+	files: WorkspaceGeoFile[]
+	/** A file that just moved down here (Unload): open its folder, scroll to it and highlight it for a moment. */
+	reveal?: { file: WorkspaceGeoFile; nonce: number } | null
 	open: boolean
 	onToggleOpen: () => void
 	/** Load a file. Rejects with the reason when it fails; the row then offers Retry. */
 	onLoad: (file: WorkspaceGeoFile) => Promise<void>
-	onUnload: (file: WorkspaceGeoFile) => Promise<void>
 	onOpenFile: (file: WorkspaceGeoFile) => void
 	onRemove: (entries: { file?: WorkspaceGeoFile; folder?: FolderRef }[], label: string) => Promise<void>
 	onRestore: (entries: RemovedFileEntry[] | "all") => Promise<void>
@@ -50,11 +54,11 @@ const TOOLTIP_REMOVE =
 
 export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 	data,
-	loadedPaths,
+	files,
+	reveal,
 	open,
 	onToggleOpen,
 	onLoad,
-	onUnload,
 	onOpenFile,
 	onRemove,
 	onRestore,
@@ -66,14 +70,41 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 	const [failed, setFailed] = useState<Map<string, string>>(new Map())
 	const [pendingLarge, setPendingLarge] = useState<WorkspaceGeoFile | null>(null)
 
-	const loaded = useMemo(() => loadedCount(data.files, loadedPaths), [data.files, loadedPaths])
 	const rows = useMemo(
-		() => buildRows({ files: data.files, removed: data.removed, loadedPaths, filter, open: openFolders, removedOpen }),
-		[data.files, data.removed, loadedPaths, filter, openFolders, removedOpen],
+		() => buildRows({ files, removed: data.removed, filter, open: openFolders, removedOpen }),
+		[files, data.removed, filter, openFolders, removedOpen],
 	)
-	const matches = useMemo(() => unloadedMatches(data.files, filter, loadedPaths), [data.files, filter, loadedPaths])
-	const header = projectFilesHeader(data.totalCount, loaded, data.truncated)
-	const showFilter = data.files.length > FILTER_ABOVE
+	const matches = useMemo(() => filterMatches(files, filter), [files, filter])
+	const header = notOnMapHeader(files.length, data.truncated)
+	const showFilter = files.length > FILTER_ABOVE
+	const multiRoot = useMemo(() => new Set(files.map((f) => f.workspaceFolder)).size > 1, [files])
+	const listRef = useRef<VirtuosoHandle>(null)
+	const [flashKey, setFlashKey] = useState<string | null>(null)
+
+	// A row that just moved down: clear the filter, open its folders, scroll to it and mark it for a moment.
+	const revealNonce = useRef(0)
+	useEffect(() => {
+		if (!reveal || reveal.nonce === revealNonce.current) return
+		revealNonce.current = reveal.nonce
+		setFilter("")
+		setFlashKey(fileKey(reveal.file.workspaceFolder, reveal.file.relativePath))
+		const startsOpen = files.length <= 20
+		setOpenFolders((prev) => {
+			const next = new Set(prev)
+			for (const key of folderKeysOf(reveal.file, multiRoot)) {
+				// `open` holds flips from the starting state: flip only a folder that is currently closed.
+				if (startsOpen === next.has(key)) startsOpen ? next.delete(key) : next.add(key)
+			}
+			return next
+		})
+		const timer = window.setTimeout(() => setFlashKey(null), FLASH_MS)
+		return () => window.clearTimeout(timer)
+	}, [reveal, files.length, multiRoot])
+	useEffect(() => {
+		if (!flashKey) return
+		const index = rows.findIndex((r) => r.kind === "file" && r.key === flashKey)
+		if (index >= 0) listRef.current?.scrollToIndex({ index, align: "center", behavior: "auto" })
+	}, [flashKey, rows])
 
 	// The set holds folders the user flipped from their starting state (open with 20 files or fewer, closed above).
 	const toggleFolder = (key: string) =>
@@ -105,16 +136,6 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 			setBusy(null)
 		}
 	}
-	const runUnload = async (file: WorkspaceGeoFile) => {
-		const key = fileKey(file.workspaceFolder, file.relativePath)
-		setBusy(key)
-		try {
-			await onUnload(file)
-		} finally {
-			setBusy(null)
-		}
-	}
-
 	const fileMenu = (file: WorkspaceGeoFile): OverflowItem[] => [
 		{ key: "open", label: "Open file", icon: "go-to-file", onSelect: () => onOpenFile(file) },
 		{
@@ -210,8 +231,8 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 			<div
 				aria-level={row.depth + 1}
 				className="map-pf-row"
-				data-loaded={row.loaded || undefined}
-				onDoubleClick={() => (row.loaded ? undefined : void runLoad(file))}
+				data-just-moved={flashKey === key || undefined}
+				onDoubleClick={() => void runLoad(file)}
 				role="treeitem"
 				style={indent}
 				tabIndex={-1}>
@@ -232,23 +253,14 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 						<span aria-hidden="true" className="codicon codicon-warning" />
 					</span>
 				)}
-				{row.loaded && (
-					<span aria-label="Loaded" className="map-pf-check" role="img" title="On the map">
-						<span aria-hidden="true" className="codicon codicon-check" />
-					</span>
-				)}
 				<button
-					aria-label={`${row.loaded ? "Unload" : error ? "Retry loading" : "Load"} ${file.relativePath}`}
+					aria-label={`${error ? "Retry loading" : "Load"} ${file.relativePath}`}
 					className="map-chip"
 					disabled={isBusy}
-					onClick={() => void (row.loaded ? runUnload(file) : runLoad(file))}
-					title={
-						row.loaded
-							? "Take it off the map. The file stays on disk, and its style is kept for next time."
-							: "Put it on the map"
-					}
+					onClick={() => void runLoad(file)}
+					title="Put it on the map. The row moves up to On the map."
 					type="button">
-					{isBusy ? (row.loaded ? "Unloading…" : "Loading…") : row.loaded ? "Unload" : error ? "Retry" : "Load"}
+					{isBusy ? "Loading…" : error ? "Retry" : "Load"}
 				</button>
 				<OverflowMenu items={fileMenu(file)} label={`Actions for ${file.relativePath}`} />
 			</div>
@@ -257,12 +269,13 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 
 	const noFolder = !data.loading && data.folderCount === 0 && data.files.length === 0 && data.removed.length === 0
 	const empty = !data.loading && !noFolder && data.files.length === 0 && data.removed.length === 0
+	const allOnMap = !data.loading && data.files.length > 0 && files.length === 0 && data.removed.length === 0
 
 	return (
-		<section aria-label="Project files" className="map-pf" data-open={open || undefined}>
+		<section aria-label="Not on the map" className="map-pf" data-open={open || undefined}>
 			<button aria-expanded={open} className="map-layer-group__head map-pf__head" onClick={onToggleOpen} type="button">
 				<span aria-hidden="true" className={`codicon codicon-chevron-${open ? "down" : "right"}`} />
-				<span className="map-layer-group__title">{noFolder || data.loading ? "Project files" : header}</span>
+				<span className="map-layer-group__title">{noFolder || data.loading ? "Not on the map" : header}</span>
 			</button>
 			{open && (
 				<div className="map-pf__body">
@@ -342,9 +355,11 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 							<span>GeoJSON, KML, GPX, Shapefile, FlatGeobuf and GeoTIFF files appear here as they are added.</span>
 						</div>
 					)}
+					{allOnMap && <div className="map-pf-empty">Every project file is on the map.</div>}
 					{rows.length > 0 && (
-						<div aria-label="Project files" className="map-pf-tree" role="tree">
+						<div aria-label="Not on the map" className="map-pf-tree" role="tree">
 							<Virtuoso
+								ref={listRef}
 								computeItemKey={(i, row) => row?.key ?? i}
 								data={rows}
 								fixedItemHeight={ROW_HEIGHT}

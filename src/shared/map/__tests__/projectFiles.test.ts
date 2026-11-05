@@ -1,6 +1,6 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import { formatBytes, formatCount, isLargeLoad, LARGE_LOAD_BYTES, projectFilesHeader } from "../projectFiles"
+import { formatBytes, formatCount, isLargeLoad, LARGE_LOAD_BYTES, notOnMapHeader } from "../projectFiles"
 
 describe("projectFiles helpers", () => {
 	it("formats sizes", () => {
@@ -9,9 +9,10 @@ describe("projectFiles helpers", () => {
 	})
 	it("is honest about a truncated count", () => {
 		expect(formatCount(5000, true)).to.equal("5,000+")
-		expect(projectFilesHeader(3, 1, false)).to.equal("Project files · 3 files, 1 loaded")
-		expect(projectFilesHeader(1, 0, false)).to.equal("Project files · 1 file, 0 loaded")
-		expect(projectFilesHeader(5000, 12, true)).to.equal("Project files · 5,000+ files, 12 loaded")
+		expect(notOnMapHeader(2, false)).to.equal("Not on the map · 2 files")
+		expect(notOnMapHeader(1, false)).to.equal("Not on the map · 1 file")
+		expect(notOnMapHeader(0, false)).to.equal("Not on the map · 0 files")
+		expect(notOnMapHeader(5000, true)).to.equal("Not on the map · 5,000+ files")
 	})
 	it("asks only above the threshold", () => {
 		expect(isLargeLoad(LARGE_LOAD_BYTES)).to.equal(false)

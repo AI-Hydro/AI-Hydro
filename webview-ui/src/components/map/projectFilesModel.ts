@@ -58,7 +58,7 @@ export function layerOfFile(
 
 export type PfRow =
 	| { kind: "folder"; key: string; depth: number; name: string; path: string; count: number; open: boolean; entry: FolderRef }
-	| { kind: "file"; key: string; depth: number; file: WorkspaceGeoFile; loaded: boolean; multiRoot: boolean }
+	| { kind: "file"; key: string; depth: number; file: WorkspaceGeoFile; multiRoot: boolean }
 	| { kind: "removed-head"; key: string; count: number; open: boolean }
 	| { kind: "removed"; key: string; entry: RemovedFileEntry }
 
@@ -85,22 +85,21 @@ export function matchesFilter(file: Pick<WorkspaceGeoFile, "relativePath" | "fol
 }
 
 /**
- * The rows the tree shows, top to bottom. With a filter the tree is flat (matches only); otherwise folders are rows.
+ * The rows under "Not on the map", top to bottom; `files` are the files that are not on the map. With a filter the list is
+ * flat (matches only); otherwise folders are rows.
  * `open` holds the folders the user flipped from their starting state: with 20 files or fewer every folder starts open,
  * above that every folder starts closed.
  */
 export function buildRows(input: {
 	files: WorkspaceGeoFile[]
 	removed: RemovedFileEntry[]
-	loadedPaths: Set<string>
 	filter: string
 	open: Set<string>
 	removedOpen: boolean
 }): PfRow[] {
-	const { files, removed, loadedPaths, filter, open, removedOpen } = input
+	const { files, removed, filter, open, removedOpen } = input
 	const multiRoot = new Set(files.map((f) => f.workspaceFolder)).size > 1
 	const rows: PfRow[] = []
-	const isLoaded = (file: WorkspaceGeoFile) => loadedPaths.has(fileResolved(file))
 	const autoOpen = files.length <= AUTO_OPEN_FILES
 
 	if (filter.trim() !== "") {
@@ -110,7 +109,6 @@ export function buildRows(input: {
 				key: fileKey(file.workspaceFolder, file.relativePath),
 				depth: 0,
 				file,
-				loaded: isLoaded(file),
 				multiRoot,
 			})
 		}
@@ -157,8 +155,7 @@ export function buildRows(input: {
 					key: fileKey(file.workspaceFolder, file.relativePath),
 					depth,
 					file,
-					loaded: isLoaded(file),
-					multiRoot,
+						multiRoot,
 				})
 			}
 		}
@@ -194,15 +191,26 @@ export function buildRows(input: {
 	return rows
 }
 
-/** The files a filter matches that are not on the map: what `Remove N matches` would hide. */
-export function unloadedMatches(files: WorkspaceGeoFile[], filter: string, loadedPaths: Set<string>): WorkspaceGeoFile[] {
-	if (filter.trim() === "") return []
-	return files.filter((f) => matchesFilter(f, filter) && !loadedPaths.has(fileResolved(f)))
+/** The files a filter matches: what `Remove N matches` would hide. */
+export function filterMatches(files: WorkspaceGeoFile[], filter: string): WorkspaceGeoFile[] {
+	return filter.trim() === "" ? [] : files.filter((f) => matchesFilter(f, filter))
 }
 
-/** How many files in the list are loaded. */
-export function loadedCount(files: WorkspaceGeoFile[], loadedPaths: Set<string>): number {
-	return files.reduce((n, f) => (loadedPaths.has(fileResolved(f)) ? n + 1 : n), 0)
+/** The files that are not on the map. */
+export function notOnMap(files: WorkspaceGeoFile[], index: ReturnType<typeof layersByFile>): WorkspaceGeoFile[] {
+	return files.filter((f) => !layerOfFile(f, index))
+}
+
+/** The folder keys above a file, outermost first, as `buildRows` keys them (for revealing a row that just moved). */
+export function folderKeysOf(file: WorkspaceGeoFile, multiRoot: boolean): string[] {
+	const keys: string[] = multiRoot ? [`root\u0000${file.workspaceFolder}`] : []
+	const parts = file.relativePath.replace(/\\/g, "/").split("/").slice(0, -1)
+	let acc = ""
+	for (const part of parts) {
+		acc = acc ? `${acc}/${part}` : part
+		keys.push(`dir\u0000${file.workspaceFolder}\u0000${acc}`)
+	}
+	return keys
 }
 
 /** Extensions the map panel parses itself; the extension host does not read them. */

@@ -1,8 +1,8 @@
 /**
  * Project files: the rules the host and the Layers panel share.
  *
- * The Project files tree lists every map file of the open folders. A file on the map stays in the tree with a check;
- * Load and Unload act in place. "Remove from list" hides a row on this machine and never touches the file.
+ * Every map file of the open folders appears once: on the map as its layer row, or under "Not on the map". Load moves
+ * the row up and Unload moves it down. "Remove from list" hides a row on this machine and never touches the file.
  */
 
 /** Files the scan lists at most. The scan asks for one more, so it can say `5,000+` and mean it. */
@@ -47,10 +47,9 @@ export function formatCount(count: number, truncated: boolean): string {
 	return `${count.toLocaleString("en-US")}${truncated ? "+" : ""}`
 }
 
-/** The header of the section: `Project files · 3 files, 1 loaded`. */
-export function projectFilesHeader(total: number, loaded: number, truncated: boolean): string {
-	const n = formatCount(total, truncated)
-	return `Project files · ${n} file${total === 1 && !truncated ? "" : "s"}, ${loaded.toLocaleString("en-US")} loaded`
+/** The header of the lower section: `Not on the map · 3 files`. Counts the files not on the map; `+` when the scan stopped at its limit. */
+export function notOnMapHeader(count: number, truncated: boolean): string {
+	return `Not on the map · ${formatCount(count, truncated)} file${count === 1 && !truncated ? "" : "s"}`
 }
 
 export function isLargeLoad(sizeBytes: number | undefined): boolean {

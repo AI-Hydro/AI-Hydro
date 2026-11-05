@@ -83,8 +83,9 @@ export const MAP_SYNC_TIMEOUT_MS = 15000;
 let cached;
 export const useMapContext = () => {
   const screen = getActiveScreen();
-  if (!cached || cached.__screen !== screen) {
-    cached = {__screen: screen, layers: screen?.layers ?? [], connectionStatus: screen?.mapConnection ?? "connected", restoreState: {hydrating: screen?.mapHydrating ?? false, olderCount: screen?.mapOlderCount ?? 0}, restoreOlderLayers: async () => 0, connectionError: undefined, reconnect() {}, activeRoi: undefined, boundClaimId: undefined,
+  const loadedFlag = typeof window !== "undefined" && screen && window.__screensLoaded === screen.id
+  if (!cached || cached.__screen !== screen || cached.__loaded !== loadedFlag) {
+    cached = {__screen: screen, __loaded: loadedFlag, layers: (loadedFlag ? screen?.layersAfterLoad : undefined) ?? screen?.layers ?? [], connectionStatus: screen?.mapConnection ?? "connected", restoreState: {hydrating: screen?.mapHydrating ?? false, olderCount: screen?.mapOlderCount ?? 0}, restoreOlderLayers: async () => 0, connectionError: undefined, reconnect() {}, activeRoi: undefined, boundClaimId: undefined,
       addLayer() {}, removeLayer() {}, clearLayers() {}, getLayer: (id) => (screen?.layers ?? []).find((l) => l.id === id), setActiveRoiOnHost: async () => {}, refreshSessionRoi: async () => {}};
   }
   return cached;

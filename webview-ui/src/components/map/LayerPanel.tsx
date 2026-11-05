@@ -48,7 +48,7 @@ import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { resolveFileUri } from "./resolveFileUri"
 import { SymbologyEditor } from "./SymbologyEditor"
-import { type FolderRef, fileResolved, layerOfFile, layersByFile, WEBVIEW_PARSED } from "./projectFilesModel"
+import { type FolderRef, fileResolved, layerOfFile, layersByFile, notOnMap, WEBVIEW_PARSED } from "./projectFilesModel"
 import { ProjectFilesSection } from "./ProjectFilesSection"
 import { restoredLayersNote, useProjectFiles } from "./WorkspaceFilesSection"
 
@@ -249,18 +249,29 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	// Project files: every map file of the open folders. A loaded file stays in the tree with a check.
 	const project = useProjectFiles()
 	const fileIndex = useMemo(() => layersByFile(layers), [layers])
-	const loadedPaths = useMemo(() => {
-		const set = new Set<string>()
-		for (const file of project.data.files) if (layerOfFile(file, fileIndex)) set.add(fileResolved(file))
-		return set
-	}, [project.data.files, fileIndex])
+	// Each project file is one row: its layer under On the map, or a row under Not on the map. Never both.
+	const notOnMapFiles = useMemo(() => notOnMap(project.data.files, fileIndex), [project.data.files, fileIndex])
 	const [projectOpenChoice, setProjectOpenChoice] = useState<boolean | undefined>(persisted.layerPanel?.projectFilesOpen)
 	// Closed by default; open on its own only when the map has nothing on it and there are files to load.
+	const [reveal, setReveal] = useState<{ file: WorkspaceGeoFile; nonce: number } | null>(null)
+	/** The layer row a Load just put on the map: marked for a moment and scrolled into view. */
+	const [justLoadedId, setJustLoadedId] = useState<string | null>(null)
+	const justLoadedTimer = useRef<number | undefined>(undefined)
+	useEffect(() => () => window.clearTimeout(justLoadedTimer.current), [])
+	const scrolledTo = useRef<string | null>(null)
+	useEffect(() => {
+		if (!justLoadedId || scrolledTo.current === justLoadedId) return
+		const row = document.querySelector(`[data-layer-id="${CSS.escape(justLoadedId)}"]`)
+		if (row) {
+			scrolledTo.current = justLoadedId
+			row.scrollIntoView({ block: "nearest" })
+		}
+	}, [justLoadedId, layers])
 	// Decided once, when the first answer arrives, so removing the last row does not close the section under the user.
 	const [autoOpen, setAutoOpen] = useState<boolean | undefined>(undefined)
 	useEffect(() => {
-		if (autoOpen === undefined && !project.data.loading) setAutoOpen(layers.length === 0 && project.data.files.length > 0)
-	}, [autoOpen, project.data.loading, project.data.files.length, layers.length])
+		if (autoOpen === undefined && !project.data.loading) setAutoOpen(layers.length === 0 && notOnMapFiles.length > 0)
+	}, [autoOpen, project.data.loading, notOnMapFiles.length, layers.length])
 	const projectOpen = projectOpenChoice ?? autoOpen ?? false
 	// A layer arrives or leaves (a GeoTIFF the panel parsed, an agent's push): ask the host again, so its real-path match is current.
 	const layerIdsKey = layers.map((l) => l.id).join("\u0000")
@@ -617,6 +628,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		return set
 	}, [project.data.removed])
 
+	/** For a project file's row on the map: where the file is, shown on hover so the move is traceable. */
+	const sourceHintOf = (layerId: string): string | undefined => {
+		const file = fileOfLayerId.get(layerId)
+		return file ? `${project.data.folderCount > 1 && file.folderName ? `${file.folderName} / ` : ""}${file.relativePath}` : undefined
+	}
+
 	const loadProjectFile = async (file: WorkspaceGeoFile) => {
 		if (WEBVIEW_PARSED.has(file.extension.toLowerCase())) {
 			// GeoTIFF and KMZ are parsed by the map panel itself; the layer arrives when it has read the file.
@@ -652,13 +669,13 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		}
 		// The camera moves only when the map was empty; otherwise a Zoom to link is offered.
 		if (wasEmpty) fitWhenArrives.current = id
-		say("ok", `Loaded ${file.name}.`, 10_000, { label: "Zoom to", run: () => zoomToLoaded(id) })
+		// The row moved up: mark it where it landed, and say where it went.
+		window.clearTimeout(justLoadedTimer.current)
+		scrolledTo.current = null
+		setJustLoadedId(id)
+		justLoadedTimer.current = window.setTimeout(() => setJustLoadedId(null), 3500)
+		say("ok", `Loaded ${file.name}. It moved up to On the map.`, 10_000, { label: "Zoom to", run: () => zoomToLoaded(id) })
 		void project.refresh()
-	}
-
-	const unloadProjectFile = async (file: WorkspaceGeoFile) => {
-		const layer = layerOfFile(file, fileIndex)
-		if (layer) await unloadLayers([layer], file.name)
 	}
 
 	/** Unload layers (and, with `alsoRemove`, take their files out of the list). The files stay on disk. */
@@ -668,15 +685,21 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const label = alsoRemove
 			? `${base} and removed it from this list. The file stays on disk`
 			: linked
-				? `${base}. Its link to run ${linked} is not kept; Undo restores it`
-				: `${base}. The file stays on disk`
+				? `${base}. It is now under Not on the map. Its link to run ${linked} is not kept; Undo restores it`
+				: `${base}. It is now under Not on the map. The file stays on disk`
 		const listEntries: UndoEntry["listEntries"] = alsoRemove
 			? targets.flatMap((l): NonNullable<UndoEntry["listEntries"]> => {
 					const file = fileOfLayerId.get(l.id) ?? fileByResolved.get(resolvedSourcePath(l.metadata) ?? "")
 					return file ? [{ workspaceFolder: file.workspaceFolder, relativePath: file.relativePath, kind: "file" as const }] : []
 				})
 			: undefined
+		const moved = alsoRemove ? undefined : fileOfLayerId.get(targets[0]?.id ?? "")
 		await removeLayers(targets, label, { unload: true, listEntries })
+		// The row now lives under Not on the map: show it there for a moment, so the move can be followed.
+		if (moved) {
+			setProjectOpenChoice((cur) => cur ?? true)
+			setReveal({ file: moved, nonce: Date.now() })
+		}
 	}
 
 	const removeFromList = async (entries: { file?: WorkspaceGeoFile; folder?: FolderRef }[], label: string) => {
@@ -1169,8 +1192,10 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 														dragging={drag?.id === layer.id}
 														dropTarget={drop?.id === layer.id ? drop.pos : null}
 														duplicate={twins.has(layer.id)}
+														justMoved={justLoadedId === layer.id}
 														key={layer.id}
 														layer={layer}
+														sourceHint={sourceHintOf(layer.id)}
 														menuItems={menuFor(layer, displayName)}
 														note={groupNote ? undefined : indicators[i].note}
 														onDragEnd={finishDrag}
@@ -1216,14 +1241,14 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 
 			<ProjectFilesSection
 				data={project.data}
-				loadedPaths={loadedPaths}
+				files={notOnMapFiles}
 				onLoad={loadProjectFile}
 				onOpenFile={(file) => openSourceFile(file.relativePath, file.workspaceFolder)}
 				onRemove={removeFromList}
 				onRestore={restoreToList}
 				onToggleOpen={toggleProjectOpen}
-				onUnload={unloadProjectFile}
 				open={projectOpen}
+				reveal={reveal}
 			/>
 
 			{undo && (

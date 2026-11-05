@@ -28,7 +28,11 @@ function projectFilesAnswer(screen: ReturnType<typeof getActiveScreen>) {
 				e.workspaceFolder === f.workspaceFolder &&
 				(e.kind === "file" ? e.relativePath === f.relativePath : f.relativePath.startsWith(`${e.relativePath}/`)),
 		)
-	const files = (pf?.files ?? []).filter((f) => !hidden(f))
+	// After a Load the fixture map reports the screen's `layersAfterLoad`; a file with a layer there is on the map.
+	const loaded = typeof window !== "undefined" && screen && (window as { __screensLoaded?: string }).__screensLoaded === screen.id
+	const layerOf = (f: { relativePath: string; workspaceFolder: string }) =>
+		loaded ? (screen?.layersAfterLoad ?? []).find((l) => l.metadata?.source_path === `${f.workspaceFolder}/${f.relativePath}`)?.id ?? "" : ""
+	const files = (pf?.files ?? []).filter((f) => !hidden(f)).map((f) => ({ ...f, loadedLayerId: layerOf(f) }))
 	return {
 		files,
 		totalCount: files.length,
@@ -133,7 +137,10 @@ export function hostCall(service: string, method: string, request: unknown): Pro
 		return Promise.resolve({ changed: changeProjectFileList(screen, method === "removeFromFileList", request) })
 	}
 	if (service === "MapServiceClient" && method === "addWorkspaceGeoFile") {
-		return Promise.resolve({ layerId: "fixture-loaded", settingsRestored: false, positionFromTop: -1, sizeBytes: 0 })
+		const req = request as { relativePath?: string; workspaceFolder?: string }
+		if (screen && typeof window !== "undefined") (window as { __screensLoaded?: string }).__screensLoaded = screen.id
+		const made = (screen?.layersAfterLoad ?? []).find((l) => l.metadata?.source_path === `${req.workspaceFolder}/${req.relativePath}`)
+		return Promise.resolve({ layerId: made?.id ?? "fixture-loaded", settingsRestored: false, positionFromTop: -1, sizeBytes: 0 })
 	}
 	if (service === "MapServiceClient" && method === "unloadMapLayer") {
 		return Promise.resolve({ unloaded: true, settingsKept: true })

@@ -1,11 +1,11 @@
 import type { MapLayer, RemovedFileEntry, WorkspaceGeoFile } from "@shared/proto/cline/map"
 import { describe, expect, it } from "vitest"
-import { buildRows, fileResolved, layerOfFile, layersByFile, loadedCount, matchesFilter, unloadedMatches } from "../projectFilesModel"
+import { buildRows, filterMatches, folderKeysOf, layerOfFile, layersByFile, matchesFilter, notOnMap } from "../projectFilesModel"
 
 const f = (relativePath: string, folder = "/ws", folderName = "ws"): WorkspaceGeoFile =>
 	({ relativePath, workspaceFolder: folder, folderName, name: relativePath.split("/").pop(), extension: ".geojson", sizeBytes: 10, mtimeMs: 0 }) as WorkspaceGeoFile
 const rows = (files: WorkspaceGeoFile[], extra: Partial<Parameters<typeof buildRows>[0]> = {}) =>
-	buildRows({ files, removed: [], loadedPaths: new Set(), filter: "", open: new Set(), removedOpen: false, ...extra })
+	buildRows({ files, removed: [], filter: "", open: new Set(), removedOpen: false, ...extra })
 
 describe("project files rows", () => {
 	it("up to 20 files the folders start open and the list reads flat under them", () => {
@@ -23,13 +23,20 @@ describe("project files rows", () => {
 		expect(flipped.filter((x) => x.kind === "folder" && x.open)).toHaveLength(1)
 	})
 
-	it("a filter flattens to matching files; a loaded file keeps its row and is marked loaded", () => {
-		const files = [f("data/huc8.geojson"), f("data/gauges.geojson")]
-		const loaded = new Set([fileResolved(files[0])])
-		const r = rows(files, { filter: "HUC", loadedPaths: loaded })
+	it("a filter flattens to the matching files", () => {
+		const r = rows([f("data/huc8.geojson"), f("data/gauges.geojson")], { filter: "HUC" })
 		expect(r).toHaveLength(1)
-		expect(r[0]).toMatchObject({ kind: "file", loaded: true })
-		expect(loadedCount(files, loaded)).toBe(1)
+		expect(r[0]).toMatchObject({ kind: "file" })
+	})
+
+	it("a file on the map is not listed: each file is one row, on the map or under Not on the map", () => {
+		const files = [f("a.geojson"), f("b.geojson"), f("c.geojson")]
+		const onMap = { id: "L1", metadata: { source_path: "/ws/b.geojson" } } as unknown as MapLayer
+		const left = notOnMap(files, layersByFile([onMap]))
+		expect(left.map((x) => x.relativePath)).toEqual(["a.geojson", "c.geojson"])
+		expect(notOnMap(files, layersByFile([]))).toHaveLength(3)
+		// After Unload the layer is gone and the file is listed again.
+		expect(notOnMap(files, layersByFile([])).map((x) => x.relativePath)).toContain("b.geojson")
 	})
 
 	it("multi-root: one root row per open folder, and the same relative path in two folders stays two rows", () => {
@@ -44,11 +51,16 @@ describe("project files rows", () => {
 		expect(rows([f("a.geojson")], { removed, removedOpen: true }).at(-1)).toMatchObject({ kind: "removed" })
 	})
 
-	it("Remove N matches counts only matches that are not on the map", () => {
+	it("Remove N matches counts the matches, and none for an empty filter", () => {
 		const files = [f("huc_1.geojson"), f("huc_2.geojson"), f("other.geojson")]
-		expect(unloadedMatches(files, "huc", new Set([fileResolved(files[0])])).map((x) => x.relativePath)).toEqual(["huc_2.geojson"])
-		expect(unloadedMatches(files, "", new Set())).toEqual([])
+		expect(filterMatches(files, "huc").map((x) => x.relativePath)).toEqual(["huc_1.geojson", "huc_2.geojson"])
+		expect(filterMatches(files, "")).toEqual([])
 		expect(matchesFilter(files[0], "  ")).toBe(true)
+	})
+
+	it("names the folders above a file, so a row that just moved can be revealed", () => {
+		expect(folderKeysOf(f("a/b/x.geojson"), false)).toEqual(["dir\u0000/ws\u0000a", "dir\u0000/ws\u0000a/b"])
+		expect(folderKeysOf(f("x.geojson"), true)).toEqual(["root\u0000/ws"])
 	})
 
 	it("finds the layer of a file by resolved path, and a layer saved with a relative path only", () => {

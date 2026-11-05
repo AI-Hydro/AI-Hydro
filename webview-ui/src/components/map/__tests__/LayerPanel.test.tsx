@@ -103,7 +103,7 @@ describe("LayerPanel", () => {
 		expect(container.querySelectorAll('input[type="range"]').length).toBe(0)
 	})
 
-	it("Project files is one collapsed tree below On the map; the Add menu no longer offers a second list", async () => {
+	it("Not on the map is one collapsed section below On the map; the Add menu no longer offers a second list", async () => {
 		const list = MapServiceClient.listWorkspaceGeoFiles as unknown as ReturnType<typeof vi.fn>
 		const f = (relativePath: string) => ({
 			relativePath,
@@ -115,7 +115,7 @@ describe("LayerPanel", () => {
 		})
 		list.mockResolvedValue({ files: [f("a.geojson"), f("b.geojson")], removed: [], totalCount: 2, folderCount: 1 })
 		render(<LayerPanelContent {...baseProps()} />)
-		const head = await screen.findByRole("button", { name: "Project files · 2 files, 0 loaded" })
+		const head = await screen.findByRole("button", { name: "Not on the map · 2 files" })
 		expect(head).toHaveAttribute("aria-expanded", "false")
 		expect(screen.queryByRole("treeitem")).toBeNull()
 		fireEvent.click(screen.getByRole("button", { name: "Add layer" }))
@@ -473,7 +473,7 @@ describe("LayerPanel", () => {
 	})
 })
 
-describe("Project files", () => {
+describe("Not on the map (project files)", () => {
 	const list = MapServiceClient.listWorkspaceGeoFiles as unknown as ReturnType<typeof vi.fn>
 	const file = (relativePath: string, sizeBytes = 2000) => ({
 		relativePath,
@@ -500,36 +500,53 @@ describe("Project files", () => {
 		list.mockResolvedValue({ files: [], totalCount: 0 })
 	})
 
-	it("Load works in place: the row stays, the status offers Zoom to, and the file is named by folder and path", async () => {
+	it("Load asks the host for exactly that file, says where the row went, and offers Zoom to", async () => {
 		answer([file("data/a.geojson"), file("b.geojson")])
 		render(<LayerPanelContent {...baseProps()} />)
-		await openSection(/^Project files · 2 files, 0 loaded/)
+		await openSection(/^Not on the map · 2 files/)
 		fireEvent.click(screen.getByRole("button", { name: "Load b.geojson" }))
 		await waitFor(() => expect(addWorkspaceGeoFile).toHaveBeenCalledOnce())
 		expect(addWorkspaceGeoFile.mock.calls[0][0]).toMatchObject({ relativePath: "b.geojson", workspaceFolder: "/w" })
-		expect(await screen.findByText(/Loaded b.geojson\./)).toBeInTheDocument()
+		expect(await screen.findByText(/Loaded b.geojson\. It moved up to On the map\./)).toBeInTheDocument()
 		expect(screen.getByRole("button", { name: "Zoom to" })).toBeInTheDocument()
 		expect(screen.getAllByRole("treeitem").length).toBeGreaterThan(0)
 	})
 
-	it("a loaded file keeps its row with a check and an Unload button; Unload uses the unload route, never a delete, and offers Undo", async () => {
+	it("a loaded file is its layer row under On the map and is not listed below; Unload uses the unload route, says where it went, and offers Undo", async () => {
 		state.layers = [poly("L1", "a.geojson", { source: "workspace", tool: "", _run_id: "", path: "a.geojson", workspace_folder: "/w" })]
 		answer([file("a.geojson"), file("b.geojson")])
 		render(<LayerPanelContent {...baseProps()} />)
-		await openSection(/Project files · 2 files, 1 loaded/)
-		expect(screen.getByRole("img", { name: "Loaded" })).toBeInTheDocument()
-		fireEvent.click(screen.getByRole("button", { name: "Unload a.geojson" }))
+		await openSection(/Not on the map · 1 file/)
+		// Each file once: a.geojson is the layer row, only b.geojson is under Not on the map.
+		expect(screen.queryByRole("button", { name: "Load a.geojson" })).toBeNull()
+		expect(screen.getByRole("button", { name: "Load b.geojson" })).toBeInTheDocument()
+		expect(screen.queryByRole("img", { name: "Loaded" })).toBeNull()
+		expect(document.querySelectorAll('[data-layer-id="L1"]')).toHaveLength(1)
+		fireEvent.click(screen.getByRole("button", { name: "Actions for a.geojson" }))
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Unload" }))
 		await waitFor(() => expect(unloadMapLayer).toHaveBeenCalledOnce())
 		expect(unloadMapLayer.mock.calls[0][0]).toMatchObject({ layerId: "L1" })
 		expect(removeMapLayer).not.toHaveBeenCalled()
-		expect(await screen.findByText(/Unloaded a.geojson\. The file stays on disk\./)).toBeInTheDocument()
+		expect(await screen.findByText(/Unloaded a.geojson\. It is now under Not on the map\. The file stays on disk\./)).toBeInTheDocument()
 		expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument()
+		// The row moved down: it is listed now, marked for a moment, and its layer row is gone.
+		const moved = await screen.findByRole("button", { name: "Load a.geojson" })
+		expect(moved.closest("[data-just-moved]")).not.toBeNull()
+		expect(document.querySelector('[data-layer-id="L1"]')).toBeNull()
+	})
+
+	it("a project file's row on the map shows its folder path on hover and offers Unload and Unload and remove from list", async () => {
+		state.layers = [poly("L1", "a.geojson", { source: "workspace", tool: "", _run_id: "", path: "data/a.geojson", workspace_folder: "/w" })]
+		answer([file("data/a.geojson")])
+		render(<LayerPanelContent {...baseProps()} />)
+		await screen.findByRole("button", { name: /Not on the map · 0 files/ })
+		expect(screen.getByRole("button", { name: /^a.geojson/ }).getAttribute("title")).toContain("data/a.geojson")
 	})
 
 	it("Remove from list tells the host, says the file stays on disk, and Undo puts it back", async () => {
 		answer([file("a.geojson")])
 		render(<LayerPanelContent {...baseProps()} />)
-		await openSection(/Project files/)
+		await openSection(/Not on the map/)
 		fireEvent.click(screen.getByRole("button", { name: "Actions for a.geojson" }))
 		const item = await screen.findByRole("menuitem", { name: "Remove from list" })
 		expect(item.getAttribute("title")).toMatch(/on this machine/)
@@ -546,7 +563,7 @@ describe("Project files", () => {
 	it("a file above the large-load threshold asks first, and loads only after Load is confirmed", async () => {
 		answer([file("big.geojson", 48_000_000)])
 		render(<LayerPanelContent {...baseProps()} />)
-		await openSection(/Project files/)
+		await openSection(/Not on the map/)
 		fireEvent.click(screen.getByRole("button", { name: "Load big.geojson" }))
 		const dialog = await screen.findByRole("alertdialog", { name: "Confirm large load" })
 		expect(dialog.textContent).toMatch(/48 MB/)
@@ -562,7 +579,7 @@ describe("Project files", () => {
 		addWorkspaceGeoFile.mockRejectedValueOnce(new Error("Unexpected token"))
 		answer([file("bad.geojson")])
 		render(<LayerPanelContent {...baseProps()} />)
-		await openSection(/Project files/)
+		await openSection(/Not on the map/)
 		fireEvent.click(screen.getByRole("button", { name: "Load bad.geojson" }))
 		expect(await screen.findByRole("button", { name: "Retry loading bad.geojson" })).toBeInTheDocument()
 		expect(screen.getByRole("img", { name: /Could not load bad.geojson: Unexpected token/ })).toBeInTheDocument()
@@ -573,7 +590,7 @@ describe("Project files", () => {
 		const files = Array.from({ length: 13 }, (_, i) => file(`huc_${String(i).padStart(2, "0")}.geojson`))
 		answer(files)
 		render(<LayerPanelContent {...baseProps()} />)
-		await openSection(/Project files · 13 files, 1 loaded/)
+		await openSection(/Not on the map · 12 files/)
 		fireEvent.change(screen.getByRole("searchbox", { name: "Filter project files" }), { target: { value: "huc_0" } })
 		fireEvent.click(await screen.findByRole("button", { name: "Remove 9 matches" }))
 		await waitFor(() => expect(removeFromFileList).toHaveBeenCalledOnce())
@@ -582,7 +599,7 @@ describe("Project files", () => {
 		expect(sent.map((e) => e.relativePath)).not.toContain("huc_00.geojson")
 	})
 
-	it("the tree says what the scan skipped and when it stopped, and is empty-honest", async () => {
+	it("the section says what the scan skipped and when it stopped, and is empty-honest", async () => {
 		list.mockResolvedValue({
 			files: [file("a.geojson")],
 			removed: [],
@@ -595,8 +612,9 @@ describe("Project files", () => {
 			folderCount: 1,
 		})
 		render(<LayerPanelContent {...baseProps()} />)
-		await openSection(/Project files · 1\+ files/)
+		await openSection(/Not on the map · 1\+ file/)
 		expect(screen.getByText("3 folders skipped")).toBeInTheDocument()
+		expect(screen.getByText(/Removing files from the list does not bring in the ones beyond the limit/)).toBeInTheDocument()
 		expect(screen.getByText(/2 symlinks, 1 outside the folder and not listed/)).toBeInTheDocument()
 	})
 
@@ -607,7 +625,7 @@ describe("Project files", () => {
 		]
 		answer([file("a.geojson")])
 		render(<LayerPanelContent {...baseProps()} />)
-		await screen.findByRole("button", { name: /Project files · 1 file, 1 loaded/ })
+		await screen.findByRole("button", { name: /Not on the map · 0 files/ })
 		fireEvent.click(screen.getByRole("button", { name: "Actions for a.geojson" }))
 		expect(await screen.findByRole("menuitem", { name: "Unload" })).toBeInTheDocument()
 		expect(screen.queryByRole("menuitem", { name: /Remove layer/ })).toBeNull()

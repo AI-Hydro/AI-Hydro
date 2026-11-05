@@ -51,6 +51,8 @@ export interface ScreenDef {
 	state?: Partial<ExtensionState>
 	ledger?: { sessionId: string; claims: ClaimRecord[]; error?: string }
 	layers?: MapLayer[]
+	/** Layers the fixture map reports once a Load has been asked for (the fixture context cannot add layers itself). */
+	layersAfterLoad?: MapLayer[]
 	/** Map layer-sync state the fixture reports (default "connected"). "loading" never completes. */
 	mapConnection?: "loading" | "connected" | "stale"
 	/** Host is still restoring saved layers (the empty-state card must stay hidden). */
