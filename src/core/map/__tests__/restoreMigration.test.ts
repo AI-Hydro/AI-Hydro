@@ -381,6 +381,7 @@ describe("restore: persisted duplicates become one layer", () => {
 				mapLayers: new Map(),
 				mapLayerOrder: [],
 				mapLayerAliases: new Map(),
+				recentlyRemovedLayers: new Map(),
 				mapOverflowEntries: [],
 				mapHydration: new Promise<void>((resolve) => {
 					release = resolve
@@ -453,6 +454,7 @@ describe("restore: persisted duplicates become one layer", () => {
 				mapLayers: new Map(),
 				mapLayerOrder: [],
 				mapLayerAliases: new Map(),
+				recentlyRemovedLayers: new Map(),
 				mapOverflowEntries: [],
 				mapHydration: Promise.resolve(),
 				mapMergedCount: 0,
