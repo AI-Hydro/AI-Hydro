@@ -9,7 +9,11 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [Unreleased] (agent orchestration stage 0: honest subagent caps, a task budget, cache-friendly siblings)
+## [0.4.7] - 2026-11-05
+
+**Needs aihydro-tools 2.8.8** for the tracing facts and for layer alias resolution. With an older aihydro-tools the trace card reads "not recorded" for each fact it cannot read.
+
+### (agent orchestration stage 0: honest subagent caps, a task budget, cache-friendly siblings)
 
 Report: `docs/vision-2040/findings/agent-orchestration-2026-10-31.md`, section 7 "Stage 0. Repairs" (defects F1 to F4 and F6). Owner decision D6 taken: a $5 default task budget.
 
@@ -68,7 +72,7 @@ Report: `docs/vision-2040/findings/agent-orchestration-2026-10-31.md`, Stage 3. 
 
 ---
 
-## [Unreleased] (map Layers, slice 0: one file is one file; restore reads the file, not a stale copy)
+### (map Layers, slice 0: one file is one file; restore reads the file, not a stale copy)
 
 Design and red-team review: `docs/vision-2040/findings/layers-design-2026-11-02.md`. Slice 0 ships as three stacked changes (0a, 0b, 0c); 0c must not ship before 0a.
 
@@ -112,7 +116,7 @@ Catalogs written by 0.4.6 and earlier hold one file under several ids (Reload so
 - **One backup first.** Before the first merge the scoped catalog is copied to `map_layer_catalog.<hash>.pre-merge-backup.json`; the copy is exclusive and never overwritten. No cache or project file is deleted.
 - The existing line "N layers were the same file as another and are now one." is shown once. Tested on a fixture of the shape of the owner's catalog (two `user-*` rows with a relative `source_path`, three `workspace_*` rows, one with no workspace folder, in scratch directories): five rows become three, each holding its geometry, and a second restore of what the first wrote gives the same three and merges nothing. The real `~/.aihydro` was not read.
 
-## [Unreleased]
+### Changes
 
 ### Added — trace upstream and downstream from a gauge (P6, branch `vision2040/map-tracing`)
 
