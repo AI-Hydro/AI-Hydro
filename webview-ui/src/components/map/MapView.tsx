@@ -1803,7 +1803,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			})
 			// A layer merged into another because they were the same file: if the one that went away was shown, the one
 			// that stayed is shown. Once: the id is gone from the remembered set after this pass.
-			for (const [alias, target] of Object.entries(restoreStateRef.current.aliases)) {
+			for (const [alias, target] of Object.entries(restoreStateRef.current.aliases ?? {})) {
 				if (previousVisibleLayers.has(alias) && liveLayerIds.has(target)) nextVisibleLayers.add(target)
 			}
 			return nextVisibleLayers
@@ -1818,7 +1818,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		setLayerOpacities((previousOpacities) => {
 			const nextOpacities = Object.fromEntries(Object.entries(previousOpacities).filter(([id]) => liveIds.has(id)))
 			// The opacity set on a layer that was merged into another carries over, unless the one that stayed has its own.
-			for (const [alias, target] of Object.entries(restoreStateRef.current.aliases)) {
+			for (const [alias, target] of Object.entries(restoreStateRef.current.aliases ?? {})) {
 				if (previousOpacities[alias] !== undefined && liveIds.has(target) && nextOpacities[target] === undefined) {
 					nextOpacities[target] = previousOpacities[alias]
 				}
