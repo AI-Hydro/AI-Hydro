@@ -80,6 +80,11 @@ export interface MapLayerCatalog {
 	updated_at_ms: number
 	layer_order: string[]
 	layers: MapLayerCatalogEntry[]
+	/**
+	 * Ids merged away because they were the same file, and the layer that stands for each. Kept so a saved scene, an
+	 * agent command or the panel's own remembered state that names an old id still reaches the layer that stayed.
+	 */
+	layer_aliases?: Record<string, string>
 }
 
 /**
@@ -369,6 +374,7 @@ export async function buildMapLayerCatalogAsync(
 	layerOrder: string[],
 	workspaceRoot?: string,
 	preserved: MapLayerCatalogEntry[] = [],
+	aliases: Record<string, string> = {},
 ): Promise<MapLayerCatalog> {
 	const order = layerOrder.length > 0 ? layerOrder.filter((id) => layers.some((l) => l.id === id)) : layers.map((l) => l.id)
 	for (const layer of layers) {
@@ -391,11 +397,17 @@ export async function buildMapLayerCatalogAsync(
 	}
 	const liveIds = new Set(entries.map((entry) => entry.id))
 	const carried = preserved.filter((entry) => !liveIds.has(entry.id))
+	// An alias is kept while the layer it stands for is in the catalog.
+	const known = new Set([...carried.map((e) => e.id), ...order])
+	const liveAliases = Object.fromEntries(
+		Object.entries(aliases).filter(([alias, target]) => alias !== target && known.has(target)),
+	)
 	return {
 		...(workspaceRoot ? { workspace_root: workspaceRoot } : {}),
 		updated_at_ms: Date.now(),
 		layer_order: [...carried.map((entry) => entry.id), ...order],
 		layers: [...carried, ...entries],
+		...(Object.keys(liveAliases).length > 0 ? { layer_aliases: liveAliases } : {}),
 	}
 }
 

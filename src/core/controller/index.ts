@@ -2096,6 +2096,17 @@ export class Controller {
 		return resolveAlias(this.mapLayerAliases, id)
 	}
 
+	/** Layers the restore pass folded into others before they were added (see `migrateCatalogEntries`). */
+	recordRestoreMerges(aliases: Record<string, string>): void {
+		for (const [alias, target] of Object.entries(aliases)) this.mapLayerAliases.set(alias, target)
+		this.mapMergedCount += Object.keys(aliases).length
+	}
+
+	/** Aliases the catalog kept from an earlier session. They are not new merges, so they are not counted. */
+	restorePersistedAliases(aliases: Record<string, string>): void {
+		for (const [alias, target] of Object.entries(aliases)) this.mapLayerAliases.set(alias, target)
+	}
+
 	getMapLayerAliases(): Record<string, string> {
 		return Object.fromEntries(this.mapLayerAliases)
 	}
@@ -2139,7 +2150,22 @@ export class Controller {
 		return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
 	}
 
-	private async syncMapLayerCatalog(): Promise<void> {
+	/** Catalog writes run one after another, so an older write never lands after a newer one. */
+	private mapCatalogWrites: Promise<void> = Promise.resolve()
+
+	/** Resolves when every catalog write started so far has finished. */
+	flushMapCatalogWrites(): Promise<void> {
+		return this.mapCatalogWrites
+	}
+
+	private syncMapLayerCatalog(): Promise<void> {
+		const write = () => this.writeMapLayerCatalog()
+		const next = (this.mapCatalogWrites ?? Promise.resolve()).then(write, write)
+		this.mapCatalogWrites = next.catch(() => {})
+		return next
+	}
+
+	private async writeMapLayerCatalog(): Promise<void> {
 		// Never rewrite the catalog before startup restore has read it: the rewrite would drop what it has not loaded.
 		await this.mapHydration
 		const catalog = await buildMapLayerCatalogAsync(
@@ -2147,6 +2173,7 @@ export class Controller {
 			this.mapLayerOrder,
 			this.currentMapScope(),
 			this.mapOverflowEntries,
+			this.getMapLayerAliases(),
 		)
 		await persistMapLayerCatalog(catalog)
 	}

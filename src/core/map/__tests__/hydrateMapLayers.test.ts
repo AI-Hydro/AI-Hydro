@@ -73,6 +73,7 @@ describe("hydrateMapLayers: the file a layer names is the file it shows", () => 
 			state,
 			setMapOverflowEntries() {},
 			recordRestoreMerges() {},
+			restorePersistedAliases() {},
 			addMapLayer(layer: MapLayer) {
 				applyAddLayer(state, layer)
 			},
@@ -219,7 +220,10 @@ describe("hydrateMapLayers: the file a layer names is the file it shows", () => 
 
 	it("a restored layer holds its content up to the size the webview is sent, and a larger one is drawn from disk", async () => {
 		fs.writeFileSync(path.join(project, "a.geojson"), JSON.stringify(POLYGON(1)))
-		const big = JSON.stringify({ type: "FeatureCollection", features: [{ type: "Feature", properties: { pad: "x".repeat(600_000) }, geometry: POLYGON(2) }] })
+		const big = JSON.stringify({
+			type: "FeatureCollection",
+			features: [{ type: "Feature", properties: { pad: "x".repeat(600_000) }, geometry: POLYGON(2) }],
+		})
 		fs.writeFileSync(path.join(project, "big.geojson"), big)
 		await persist([
 			workspaceEntry(),
