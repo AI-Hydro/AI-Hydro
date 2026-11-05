@@ -85,20 +85,21 @@ function isChoice(value: unknown): value is AgentModelChoice {
 	)
 }
 
-/** The setting for a definition: its own id, then the built-in a file extends. A malformed entry is an error, not a skip. */
+/**
+ * The setting for a definition, read by the built-in's id (`extends ?? id`) and never by a file agent's own id, so a
+ * leftover entry named for some file cannot be picked up by a workspace file that happens to share the name. A malformed
+ * entry is an error, not a skip.
+ */
 function settingFor(definition: AgentDefinition, settings: unknown): AgentModelChoice | undefined | "invalid" {
 	if (!settings || typeof settings !== "object") {
 		return undefined
 	}
-	for (const key of [definition.id, definition.extends]) {
-		if (key && Object.hasOwn(settings, key)) {
-			const value = (settings as Record<string, unknown>)[key]
-			return isChoice(value)
-				? { modelId: value.modelId.trim(), providerId: value.providerId?.trim() || undefined }
-				: "invalid"
-		}
+	const key = definition.extends ?? definition.id
+	if (!Object.hasOwn(settings, key)) {
+		return undefined
 	}
-	return undefined
+	const value = (settings as Record<string, unknown>)[key]
+	return isChoice(value) ? { modelId: value.modelId.trim(), providerId: value.providerId?.trim() || undefined } : "invalid"
 }
 
 /** Set the model id (and clear a stale model-info record) for `provider` and `mode` on a copy of the configuration. */
@@ -130,10 +131,10 @@ export function resolveChildApi(
 	if (fromSetting === "invalid") {
 		return {
 			ok: false,
-			error: `The agentModels setting for '${definition.id}' is not { modelId, providerId? }. Fix it in settings, or do the work yourself.`,
+			error: `The agentModels setting for '${definition.extends ?? definition.id}' is not { modelId, providerId? }. Fix it in settings, or do the work yourself.`,
 		}
 	}
-	const choice: AgentModelChoice | undefined = fromSetting ?? (definition.modelId ? { modelId: definition.modelId } : undefined)
+	const choice: AgentModelChoice | undefined = fromSetting
 	if (!choice) {
 		// Nothing to apply: the parent's configuration is not even read.
 		return { ok: true, mode, overridden: false, otherProvider: false }

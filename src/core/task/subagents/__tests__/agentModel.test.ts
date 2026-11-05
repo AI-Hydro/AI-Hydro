@@ -103,28 +103,21 @@ describe("resolveChildApi", () => {
 		}
 	})
 
-	it("a file's model id applies on the parent's provider, and a setting beats it", () => {
-		const file: AgentDefinition = {
-			...EXPLORER_DEFINITION,
-			id: "mine",
-			extends: "explorer",
-			source: "global",
-			modelId: "from-file",
-		}
-		const fromFile = resolveChildApi(base, "act", file, undefined)
-		expect(fromFile.ok && fromFile.config?.actModeApiModelId).to.equal("from-file")
-		// a file cannot be pointed at another provider: there is no field for it
-		expect(fromFile.ok && fromFile.otherProvider).to.equal(false)
-		const settingFile: AgentDefinition = { ...file, model: "setting" }
-		const fromSetting = resolveChildApi(base, "act", settingFile, { mine: { modelId: "from-setting" } })
-		expect(fromSetting.ok && fromSetting.config?.actModeApiModelId).to.equal("from-setting")
-		// a setting under the built-in a file extends applies to the file too
-		const viaBase = resolveChildApi(
-			base,
-			"act",
-			{ ...REVIEWER_DEFINITION, id: "my-rev", extends: "reviewer", source: "global" },
-			{ reviewer: { modelId: "rev-model" } },
-		)
+	it("a file agent follows the setting of the built-in it extends, and never one named for its own id", () => {
+		const file: AgentDefinition = { ...REVIEWER_DEFINITION, id: "foo", extends: "reviewer", source: "workspace" }
+		// a leftover entry named for the file's id is not picked up
+		const own = resolveChildApi(base, "act", file, { foo: { modelId: "leftover", providerId: "openai-native" } })
+		expect(own).to.deep.equal({ ok: true, mode: "act", overridden: false, otherProvider: false })
+		// the built-in's entry is
+		const viaBase = resolveChildApi(base, "act", file, { foo: { modelId: "leftover" }, reviewer: { modelId: "rev-model" } })
 		expect(viaBase.ok && viaBase.config?.actModeApiModelId).to.equal("rev-model")
+		// an explorer-based file inherits, as the explorer does
+		const explorerFile: AgentDefinition = { ...EXPLORER_DEFINITION, id: "bar", extends: "explorer", source: "global" }
+		expect(resolveChildApi(base, "act", explorerFile, { bar: { modelId: "x" }, explorer: { modelId: "y" } })).to.include({
+			overridden: false,
+		})
+		// a malformed entry for the built-in is named by the built-in
+		const bad = resolveChildApi(base, "act", file, { reviewer: "x" })
+		expect(!bad.ok && bad.error).to.include("'reviewer'")
 	})
 })

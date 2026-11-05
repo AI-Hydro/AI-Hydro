@@ -44,11 +44,9 @@ export interface AgentDefinition {
 	autoApproveCeiling: "read"
 	/**
 	 * Which model the child runs: the parent's ("inherit"), or the one the user set for this definition in the
-	 * `agentModels` setting ("setting"). A file may name a model id on the parent's provider (`modelId`), never a provider.
+	 * `agentModels` setting ("setting"). A file never chooses a model or a provider: the setting is read by the built-in's id.
 	 */
 	model: "inherit" | "setting"
-	/** A model id a file set, on the parent's provider. */
-	modelId?: string
 	/**
 	 * Whether the user may point this definition at a provider other than the parent's (owner decision D7). Opt-in twice:
 	 * the definition must allow it, and the user must set a provider for it. Then the prompts go to a second vendor.
