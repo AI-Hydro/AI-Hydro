@@ -1652,7 +1652,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				return
 			} else if (msg?.type === "aihydro-open-map-scene" && typeof msg.scene === "string") {
 				try {
-					const scene = remapSceneIds(JSON.parse(msg.scene), restoreStateRef.current.aliases)
+					const scene = remapSceneIds(JSON.parse(msg.scene), restoreStateRef.current.aliases ?? {})
 					if (scene?.viewState) {
 						setViewState(sanitizeViewState(scene.viewState))
 					}

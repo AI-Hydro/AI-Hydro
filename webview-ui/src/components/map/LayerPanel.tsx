@@ -76,7 +76,8 @@ const openSourceFile = (filePath: string, workspaceFolder?: string) => {
 	})
 }
 
-const buildDisplayNames = (layers: MapLayer[], aliases: Record<string, string>): Map<string, string> => {
+const buildDisplayNames = (layers: MapLayer[], aliasesIn: Record<string, string> | undefined): Map<string, string> => {
+	const aliases = aliasesIn ?? {}
 	const counts = new Map<string, number>()
 	for (const l of layers) {
 		const n = aliases[l.id] ?? l.metadata?.display_name ?? (l.name || l.id)
