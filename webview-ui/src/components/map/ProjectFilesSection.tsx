@@ -17,6 +17,7 @@ import { formatBytes, formatCount, isLargeLoad, LARGE_LOAD_BYTES, notOnMapHeader
 import type { RemovedFileEntry, WorkspaceGeoFile } from "@shared/proto/cline/map"
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
+import type { FocusHandoff } from "./focusHandoff"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import {
 	buildRows,
@@ -39,7 +40,7 @@ export interface ProjectFilesSectionProps {
 	/** The listed files that are not on the map (the host's list minus every file that has a layer). */
 	files: WorkspaceGeoFile[]
 	/** A file that just moved down here (Unload): open its folder, scroll to it and highlight it for a moment. */
-	reveal?: { files: WorkspaceGeoFile[]; nonce: number } | null
+	reveal?: { files: WorkspaceGeoFile[]; nonce: number; handoff: FocusHandoff } | null
 	open: boolean
 	onToggleOpen: () => void
 	/** Load a file. Rejects with the reason when it fails; the row then offers Retry. */
@@ -82,6 +83,8 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 	const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set())
 	const treeRef = useRef<HTMLDivElement>(null)
 	const focusedFor = useRef<string | null>(null)
+	const handoff = useRef<FocusHandoff | null>(null)
+	useEffect(() => () => handoff.current?.cancel(), [])
 
 	// Rows that just moved down: clear the filter, open their folders, scroll to the first, mark them for a moment and
 	// put keyboard focus on the first one's Load button, so a keyboard user is not left on a row that is gone.
@@ -90,6 +93,9 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 		if (!reveal || reveal.nonce === revealNonce.current || reveal.files.length === 0) return
 		revealNonce.current = reveal.nonce
 		focusedFor.current = null
+		// Focus moves to the row only if the user has not gone elsewhere since the action began (the handoff was started then).
+		if (handoff.current !== reveal.handoff) handoff.current?.cancel()
+		handoff.current = reveal.handoff
 		setFilter("")
 		setFlashKeys(new Set(reveal.files.map((f) => fileKey(f.workspaceFolder, f.relativePath))))
 		const startsOpen = files.length <= 20
@@ -112,14 +118,15 @@ export const ProjectFilesSection: React.FC<ProjectFilesSectionProps> = ({
 		const index = rows.indexOf(firstFlash)
 		if (index >= 0) listRef.current?.scrollToIndex({ index, align: "center", behavior: "auto" })
 		if (focusedFor.current === firstFlash.key) return
-		// The row may be drawn a moment after the scroll (virtualised): try a few times.
+		// The row may be drawn a moment after the scroll (virtualised): try a few times, unless the user has moved on.
 		let tries = 0
 		let timer: number | undefined
 		const focus = () => {
+			const h = handoff.current
+			if (!h || h.cancelled) return
 			const button = treeRef.current?.querySelector<HTMLButtonElement>("[data-just-moved] button.map-chip")
 			if (button) {
-				button.focus({ preventScroll: true })
-				focusedFor.current = firstFlash.key
+				if (h.tryFocus(button)) focusedFor.current = firstFlash.key
 			} else if (tries++ < 10) {
 				timer = window.setTimeout(focus, 40)
 			}

@@ -29,6 +29,7 @@ import { FileServiceClient, MapServiceClient } from "../../services/grpc-client"
 import { loadAndPushFileEntries } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
 import GraduatedSymbologyEditor from "./GraduatedSymbologyEditor"
+import { type FocusHandoff, startFocusHandoff } from "./focusHandoff"
 import { LayerRow } from "./LayerRow"
 import { deriveLayerIntelligence } from "./layerIntelligence"
 import {
@@ -254,20 +255,24 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const notOnMapFiles = useMemo(() => notOnMap(project.data.files, fileIndex), [project.data.files, fileIndex])
 	const [projectOpenChoice, setProjectOpenChoice] = useState<boolean | undefined>(persisted.layerPanel?.projectFilesOpen)
 	// Closed by default; open on its own only when the map has nothing on it and there are files to load.
-	const [reveal, setReveal] = useState<{ files: WorkspaceGeoFile[]; nonce: number } | null>(null)
+	const [reveal, setReveal] = useState<{ files: WorkspaceGeoFile[]; nonce: number; handoff: FocusHandoff } | null>(null)
 	/** The layer row a Load just put on the map: marked for a moment and scrolled into view. */
 	const [justLoadedId, setJustLoadedId] = useState<string | null>(null)
 	const justLoadedTimer = useRef<number | undefined>(undefined)
 	useEffect(() => () => window.clearTimeout(justLoadedTimer.current), [])
 	const scrolledTo = useRef<string | null>(null)
+	/** Where focus was when a Load began; moves to the new row only while the user has not gone elsewhere. */
+	const focusHandoff = useRef<FocusHandoff | null>(null)
+	useEffect(() => () => focusHandoff.current?.cancel(), [])
 	useEffect(() => {
 		if (!justLoadedId || scrolledTo.current === justLoadedId) return
 		const row = document.querySelector(`[data-layer-id="${CSS.escape(justLoadedId)}"]`)
 		if (row) {
 			scrolledTo.current = justLoadedId
 			row.scrollIntoView?.({ block: "nearest" })
-			// The row the user acted on moved; keyboard focus follows it to its new place.
-			row.querySelector<HTMLButtonElement>("button.map-layer-name")?.focus({ preventScroll: true })
+			// The row the user acted on moved; keyboard focus follows it, unless the user has gone elsewhere since.
+			focusHandoff.current?.tryFocus(row.querySelector<HTMLButtonElement>("button.map-layer-name"))
+			focusHandoff.current = null
 		}
 	}, [justLoadedId, layers])
 	// Decided once, when the first answer arrives, so removing the last row does not close the section under the user.
@@ -638,8 +643,10 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	}
 
 	/** A Load put this layer on the map: mark its row, say where it went, offer Zoom to, and fit the camera on an empty map. */
-	const finishLoad = (file: WorkspaceGeoFile, id: string, wasEmpty: boolean) => {
+	const finishLoad = (file: WorkspaceGeoFile, id: string, wasEmpty: boolean, handoff: FocusHandoff) => {
 		if (wasEmpty) fitWhenArrives.current = id
+		focusHandoff.current?.cancel()
+		focusHandoff.current = handoff
 		window.clearTimeout(justLoadedTimer.current)
 		scrolledTo.current = null
 		setJustLoadedId(id)
@@ -648,30 +655,55 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		void project.refresh()
 	}
 
-	/** GeoTIFF and KMZ are parsed by the map panel, so their layer arrives later with an id nobody knew: wait for it. */
-	const pendingParsed = useRef<{ file: WorkspaceGeoFile; known: Set<string>; wasEmpty: boolean; timer: number } | null>(null)
+	/**
+	 * GeoTIFF and KMZ are parsed by the map panel, so their layer arrives later with an id nobody knew. Each file waits for
+	 * its own layer: one entry per file with its own timer, so two loads at once each get their feedback.
+	 */
+	const pendingParsed = useRef(
+		new Map<string, { file: WorkspaceGeoFile; known: Set<string>; wasEmpty: boolean; timer: number; handoff: FocusHandoff }>(),
+	)
+	const finishLoadRef = useRef(finishLoad)
+	finishLoadRef.current = finishLoad
+	useEffect(
+		() => () => {
+			for (const entry of pendingParsed.current.values()) {
+				window.clearTimeout(entry.timer)
+				entry.handoff.cancel()
+			}
+			pendingParsed.current.clear()
+		},
+		[],
+	)
 	useEffect(() => {
-		const pending = pendingParsed.current
-		if (!pending) return
-		const layer = layers.find((l) => !pending.known.has(l.id) && layerOfFile(pending.file, layersByFile([l], singleRoot)))
-		if (!layer) return
-		window.clearTimeout(pending.timer)
-		pendingParsed.current = null
-		finishLoad(pending.file, layer.id, pending.wasEmpty)
-	})
+		for (const [key, pending] of pendingParsed.current) {
+			const layer = layers.find((l) => !pending.known.has(l.id) && layerOfFile(pending.file, layersByFile([l], singleRoot)))
+			if (!layer) continue
+			window.clearTimeout(pending.timer)
+			pendingParsed.current.delete(key)
+			finishLoadRef.current(pending.file, layer.id, pending.wasEmpty, pending.handoff)
+		}
+	}, [layers, singleRoot])
 
 	const loadProjectFile = async (file: WorkspaceGeoFile) => {
+		const handoff = startFocusHandoff()
 		if (WEBVIEW_PARSED.has(file.extension.toLowerCase())) {
 			const wasEmpty = layersRef.current.length === 0
-			if (pendingParsed.current) window.clearTimeout(pendingParsed.current.timer)
-			pendingParsed.current = {
+			const key = `${file.workspaceFolder}\u0000${file.relativePath}`
+			const old = pendingParsed.current.get(key)
+			if (old) {
+				window.clearTimeout(old.timer)
+				old.handoff.cancel()
+			}
+			pendingParsed.current.set(key, {
 				file,
 				known: new Set(layersRef.current.map((l) => l.id)),
 				wasEmpty,
+				handoff,
 				timer: window.setTimeout(() => {
-					pendingParsed.current = null
+					pendingParsed.current.get(key)?.handoff.cancel()
+					pendingParsed.current.delete(key)
 				}, 30_000),
-			}
+			})
 			PLATFORM_CONFIG.postMessage({
 				type: "aihydro-map-load-project-file",
 				relativePath: file.relativePath,
@@ -688,6 +720,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				AddWorkspaceGeoFileRequest.create({ relativePath: file.relativePath, workspaceFolder: file.workspaceFolder }),
 			)
 		} catch (error) {
+			handoff.cancel()
 			say("err", error instanceof Error ? error.message : `Could not load ${file.name}.`, 8000)
 			throw error
 		}
@@ -702,11 +735,13 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				onReorder([...display].reverse())
 			}
 		}
-		finishLoad(file, id, wasEmpty)
+		finishLoad(file, id, wasEmpty, handoff)
 	}
 
 	/** Unload layers (and, with `alsoRemove`, take their files out of the list). The files stay on disk. */
 	const unloadLayers = async (targets: MapLayer[], name: string, alsoRemove = false) => {
+		// Where focus is now; the moved row gets it only if the user has not gone elsewhere by the time it is drawn.
+		const handoff = startFocusHandoff()
 		const linked = targets.map((l) => layerRunId(l.metadata)?.split(".")[0]).find(Boolean)
 		const base = targets.length > 1 ? `Unloaded ${targets.length} files` : `Unloaded ${name}`
 		const label = alsoRemove
@@ -725,7 +760,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		// The row now lives under Not on the map: show it there for a moment, so the move can be followed.
 		if (moved.length > 0) {
 			setProjectOpenChoice((cur) => cur ?? true)
-			setReveal({ files: moved, nonce: Date.now() })
+			setReveal({ files: moved, nonce: Date.now(), handoff })
+		} else {
+			handoff.cancel()
 		}
 	}
 

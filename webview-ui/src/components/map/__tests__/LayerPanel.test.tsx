@@ -749,4 +749,64 @@ describe("Not on the map (project files)", () => {
 		expect(tip).toMatch(/on purpose/)
 		expect(tip).toMatch(/files\.exclude/)
 	})
+
+	it("focus is not stolen: the user focuses another control while the Unload is in flight and focus stays there", async () => {
+		state.layers = [poly("L1", "a.geojson", { source: "workspace", tool: "", _run_id: "", path: "a.geojson", workspace_folder: "/w" })]
+		answer([file("a.geojson"), file("b.geojson")])
+		let release: () => void = () => {}
+		unloadMapLayer.mockImplementationOnce(() => new Promise((r) => { release = () => r({ unloaded: true, settingsKept: true }) }) as never)
+		render(<LayerPanelContent {...baseProps()} />)
+		await openSection(/Not on the map · 1 file/)
+		fireEvent.click(screen.getByRole("button", { name: "Actions for a.geojson" }))
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Unload" }))
+		await waitFor(() => expect(unloadMapLayer).toHaveBeenCalled())
+		// The user goes to the Add button while the host is still working.
+		const add = screen.getByRole("button", { name: "Add layer" })
+		add.focus()
+		release()
+		const moved = await screen.findByRole("button", { name: "Load a.geojson" })
+		await new Promise((r) => setTimeout(r, 450))
+		expect(moved).not.toHaveFocus()
+		expect(add).toHaveFocus()
+	})
+
+	it("focus is not stolen on Load either: a Tab or click elsewhere before the layer arrives keeps focus there", async () => {
+		answer([file("b.geojson")])
+		const { rerender } = render(<LayerPanelContent {...baseProps()} />)
+		await openSection(/Not on the map · 1 file/)
+		const load = screen.getByRole("button", { name: "Load b.geojson" })
+		load.focus()
+		fireEvent.click(load)
+		await screen.findByText(/It moved up to On the map\./)
+		const add = screen.getByRole("button", { name: "Add layer" })
+		add.focus()
+		state.layers = [...state.layers, poly("workspace_new", "b.geojson", { source: "workspace", tool: "", _run_id: "", path: "b.geojson", workspace_folder: "/w" })]
+		rerender(<LayerPanelContent {...baseProps()} />)
+		await new Promise((r) => setTimeout(r, 100))
+		expect(add).toHaveFocus()
+	})
+
+	it("two parsed loads at once each get their own feedback when their layers arrive", async () => {
+		const post = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation(() => {})
+		list.mockResolvedValue({
+			files: [fileIn("one.tif", "/w", "w", ".tif"), fileIn("two.kmz", "/w", "w", ".kmz")],
+			removed: [],
+			totalCount: 2,
+			folderCount: 1,
+		})
+		const { rerender } = render(<LayerPanelContent {...baseProps()} />)
+		await openSection(/Not on the map · 2 files/)
+		fireEvent.click(screen.getByRole("button", { name: "Load one.tif" }))
+		fireEvent.click(screen.getByRole("button", { name: "Load two.kmz" }))
+		expect(post.mock.calls.filter(([m]) => (m as { type: string }).type === "aihydro-map-load-project-file")).toHaveLength(2)
+		// The second file's layer arrives first, then the first's.
+		state.layers = [...state.layers, poly("kmz-2", "two.kmz", { source: "user", tool: "", _run_id: "", source_path: "/w/two.kmz" })]
+		rerender(<LayerPanelContent {...baseProps()} />)
+		expect(await screen.findByText(/Loaded two.kmz\. It moved up to On the map\./)).toBeInTheDocument()
+		state.layers = [...state.layers, poly("tif-1", "one.tif", { source: "user", tool: "", _run_id: "", source_path: "/w/one.tif" })]
+		rerender(<LayerPanelContent {...baseProps()} />)
+		expect(await screen.findByText(/Loaded one.tif\. It moved up to On the map\./)).toBeInTheDocument()
+		expect(document.querySelector('[data-layer-id="tif-1"]')?.hasAttribute("data-just-moved")).toBe(true)
+		post.mockRestore()
+	})
 })
