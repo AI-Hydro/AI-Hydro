@@ -1,6 +1,6 @@
 import { Controller } from "@core/controller"
 import { applyAddLayer, type LayerStoreState } from "@core/map/applyAddLayer"
-import type { MapLayer } from "@shared/proto/cline/map"
+import { MapLayer } from "@shared/proto/cline/map"
 import { expect } from "chai"
 import * as fs from "fs"
 import { afterEach, beforeEach, describe, it } from "mocha"
@@ -107,9 +107,15 @@ describe("restore: persisted duplicates become one layer", () => {
 		catalog = { workspace_root: project, updated_at_ms: 1, layer_order: rows.map((r) => r.id), layers: rows }
 	})
 
+	// Real controllers made by a test: their queued catalog writes finish before the scratch directories go.
+	const madeControllers: any[] = []
+	const releasers: Array<() => void> = []
+
 	afterEach(async () => {
-		// Catalog writes queued by the controller settle before the scratch directories go.
-		await new Promise((resolve) => setTimeout(resolve, 150))
+		for (const release of releasers) release()
+		await Promise.all(madeControllers.map((c) => c.flushMapCatalogWrites()))
+		madeControllers.length = 0
+		releasers.length = 0
 		if (savedHome === undefined) delete process.env.AIHYDRO_HOME
 		else process.env.AIHYDRO_HOME = savedHome
 		fs.rmSync(home, { recursive: true, force: true })
@@ -369,14 +375,16 @@ describe("restore: persisted duplicates become one layer", () => {
 		// Layer adds queue a catalog write behind `mapHydration`; the test holds it open and releases it when restore is done,
 		// as the real startup does, so the writes settle before the next controller reads the file.
 		let release: () => void = () => {}
-		const realController = () =>
-			Object.assign(Object.create(Controller.prototype), {
+		const realController = () => {
+			const c = Object.assign(Object.create(Controller.prototype), {
+				mapCatalogWrites: Promise.resolve(),
 				mapLayers: new Map(),
 				mapLayerOrder: [],
 				mapLayerAliases: new Map(),
 				mapOverflowEntries: [],
 				mapHydration: new Promise<void>((resolve) => {
 					release = resolve
+					releasers.push(resolve)
 				}),
 				mapMergedCount: 0,
 				mapHydrating: true,
@@ -384,6 +392,9 @@ describe("restore: persisted duplicates become one layer", () => {
 				realPathCache: new Map(),
 				currentMapScope: () => project,
 			}) as any
+			madeControllers.push(c)
+			return c
+		}
 
 		it("the controller writes the aliases with its catalog and a fresh controller restores them without counting them as new merges", async () => {
 			await persistMapLayerCatalog(catalog, home)
@@ -392,7 +403,7 @@ describe("restore: persisted duplicates become one layer", () => {
 			expect(first.getMapRestoreState().mergedCount).to.equal(2)
 			release()
 			await first.syncMapLayerCatalog()
-			await new Promise((resolve) => setTimeout(resolve, 300))
+			await first.flushMapCatalogWrites()
 			const written = JSON.parse(fs.readFileSync(scopedMapLayerCatalogFile(project, home), "utf8"))
 			expect(written.layer_aliases).to.have.property("user-watershed_01013500", "workspace_watershed_01013500_geojson")
 			expect(written.layers).to.have.length(3)
@@ -436,8 +447,9 @@ describe("restore: persisted duplicates become one layer", () => {
 
 	describe("the restore-time duplicate check, through the real Controller.addMapLayer with realpath", () => {
 		const GJ = JSON.stringify(POLYGON(3))
-		const real = () =>
-			Object.assign(Object.create(Controller.prototype), {
+		const real = () => {
+			const c = Object.assign(Object.create(Controller.prototype), {
+				mapCatalogWrites: Promise.resolve(),
 				mapLayers: new Map(),
 				mapLayerOrder: [],
 				mapLayerAliases: new Map(),
@@ -450,6 +462,9 @@ describe("restore: persisted duplicates become one layer", () => {
 				realPathOf: (p: string) => fs.realpathSync(p),
 				currentMapScope: () => project,
 			}) as any
+			madeControllers.push(c)
+			return c
+		}
 		const cached = (name: string) => {
 			const file = path.join(home, "map_layer_geojson_cache", name)
 			fs.writeFileSync(file, GJ)
@@ -488,7 +503,24 @@ describe("restore: persisted duplicates become one layer", () => {
 			expect(await ctl.restoreOlderMapLayers()).to.equal(2)
 			expect([...ctl.mapLayers.keys()].sort()).to.deep.equal(["A2", "B2"])
 			expect(ctl.getMapLayerAliases()).to.deep.equal({})
-			await new Promise((resolve) => setTimeout(resolve, 200))
+			await ctl.flushMapCatalogWrites()
+		})
+
+		it("an entry whose id is already live is not restored over it: replaceExisting never overwrites a newer layer", async () => {
+			const ctl = real()
+			const newer = MapLayer.create({
+				id: "A",
+				name: "newer",
+				geojson: GJ,
+				layerType: "polygon",
+				metadata: { source: "user", note: "pushed during restore" },
+			})
+			ctl.addMapLayer(newer)
+			const old = e("A", { geojson_cache_path: cached("old.dat"), metadata_snapshot: { source: "user", study_id: "s1" } })
+			const added = await restoreCatalogEntries(ctl, [old], 1)
+			expect(added).to.deep.equal([])
+			expect(ctl.mapLayers.get("A").name).to.equal("newer")
+			expect(ctl.mapLayers.get("A").metadata.note).to.equal("pushed during restore")
 		})
 
 		it("the guard does not stop duplicates that carry no link from merging, nor an entry its study cleared", async () => {

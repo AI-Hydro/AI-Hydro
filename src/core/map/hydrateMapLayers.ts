@@ -241,7 +241,11 @@ export async function restoreCatalogEntries(
 	options: { keepSeparate?: Set<string>; clearedIds?: Set<string> } = {},
 ): Promise<string[]> {
 	const added: string[] = []
+	// A layer already live is newer than any catalog entry for the same id (an agent or the user may have pushed it while
+	// restore ran), and `replaceExisting` would overwrite it, so such an entry is not restored.
+	const live = new Set(controller.getMapLayers?.().map((l) => l.id) ?? [])
 	for (const entry of entries) {
+		if (live.has(entry.id)) continue
 		try {
 			const layer = await buildLayerFromEntry(entry)
 			if (layer) {
@@ -313,6 +317,7 @@ export async function hydrateMapLayersFromCatalog(
 
 	const restored = await restoreCatalogEntries(controller, migration.entries, selection.total, {
 		keepSeparate: migration.protectedIds,
+		clearedIds: migration.clearedIds,
 	})
 
 	console.log(

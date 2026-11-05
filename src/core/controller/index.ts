@@ -2150,7 +2150,22 @@ export class Controller {
 		return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
 	}
 
-	private async syncMapLayerCatalog(): Promise<void> {
+	/** Catalog writes run one after another, so an older write never lands after a newer one. */
+	private mapCatalogWrites: Promise<void> = Promise.resolve()
+
+	/** Resolves when every catalog write started so far has finished. */
+	flushMapCatalogWrites(): Promise<void> {
+		return this.mapCatalogWrites
+	}
+
+	private syncMapLayerCatalog(): Promise<void> {
+		const write = () => this.writeMapLayerCatalog()
+		const next = (this.mapCatalogWrites ?? Promise.resolve()).then(write, write)
+		this.mapCatalogWrites = next.catch(() => {})
+		return next
+	}
+
+	private async writeMapLayerCatalog(): Promise<void> {
 		// Never rewrite the catalog before startup restore has read it: the rewrite would drop what it has not loaded.
 		await this.mapHydration
 		const catalog = await buildMapLayerCatalogAsync(
