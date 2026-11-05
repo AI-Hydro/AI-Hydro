@@ -46,7 +46,7 @@ By default, the main agent's model. A reviewer can run on another model so it is
 
 ## Your own agents
 
-You can write a narrower variant of a built-in agent as a Markdown file. A file **narrows only**: it can remove tools, add prompt text, lower the limits and set a model id. It can never add a tool, MCP access or a budget, and it cannot change what the agent reports, what it may auto-approve, or whether it may start others. A setting the format does not know (`mcp`, `autoApprove`, `canSpawn`, `provider` and so on) is refused with its name, not ignored.
+You can write a narrower variant of a built-in agent as a Markdown file. A file **narrows only**: it can remove tools, add prompt text and lower the limits. It can never add a tool, MCP access or a budget, it cannot choose a model or a provider (see below), and it cannot change what the agent reports, what it may auto-approve, or whether it may start others. A setting the format does not know (`mcp`, `autoApprove`, `canSpawn`, `provider` and so on) is refused with its name, not ignored.
 
 **Where.** `~/Documents/AI-Hydro/Agents/` (beside `Rules`; the path follows your Documents folder), and `.aihydrorules/agents/` in a workspace. One agent per `*.md` file, at most 50 files and 16 KB each per folder. The built-ins load first, then your global files, then each workspace's. Two files never share an id, no file may use a built-in's id (`explorer`, `reviewer`), and a workspace file cannot take over an id from your global folder: the first one stands and the other is reported.
 
@@ -64,14 +64,13 @@ tools: [read_file, search_files]   # a subset of the base's tools; leave the lin
 budget:
   maxToolCalls: 12           # each value at or below the base's: maxToolCalls, wallClockMs,
   maxCostUsd: 0.5            # maxOutputTokens, contextStopFraction, maxCostUsd
-model: claude-haiku-4-5      # a model id on the same provider as the chat; never a provider
 ---
 Look only under src/hydro/baseflow/. Report units next to every number.
 ```
 
 The tool names are the base's own (`read_file`, `search_files`, `list_files`, `load_mcp_documentation`, `use_mcp_tool`, `access_mcp_resource`). Leaving out `use_mcp_tool` takes MCP away. Listing a tool the base does not have, such as `run_python` or `write_to_file`, makes the file invalid and the reason names the tool and the base. The format is a small YAML subset (scalars, `[a, b]` lists, `- item` lists, one `budget:` map, `#` comments); anything else, such as anchors or block scalars, is refused.
 
-**What you see.** The launch card names the file, what it extends and the first 12 characters of its sha256 (hover for all of it), and lists any agent file that did not load with the reason. The child's record carries the definition id, source and full hash; the lead's result carries them as attributes of the child's report block, so an export of the conversation names the exact file text that ran. The model is told the ids of your agents only when it asks for one that does not exist; say "use my bfi-reader agent" to have it launched. Launch still asks you every time. A model for a file agent runs on the chat's provider; sending a reviewer to a different provider stays your `agentModels` setting.
+**What you see.** The launch card names the file, what it extends and the first 12 characters of its sha256 (hover for all of it), and lists any agent file that did not load with the reason. The child's record carries the definition id, source and full hash; the lead's result carries them as attributes of the child's report block, so an export of the conversation names the exact file text that ran. The model is told the ids of your agents only when it asks for one that does not exist; say "use my bfi-reader agent" to have it launched. Launch still asks you every time. A file cannot set a model: a model can be unpriced (so no dollar cap would fire) or belong to another vendor, so a file containing `model:` does not load and says "model is chosen in settings (agentModels), not in an agent file". A file agent runs on the chat's model, or on the `agentModels` entry for its id or for the built-in it extends.
 
 ## Limits
 

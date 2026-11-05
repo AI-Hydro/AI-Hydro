@@ -1,17 +1,20 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import type { SubagentBudget, SubagentProfileId } from "@shared/aihydro/subagents"
 import { isAgentId } from "@shared/aihydro/subagents"
 import { AiHydroDefaultTool } from "@/shared/tools"
-import { type AgentDefinition, BUILTIN_DEFINITIONS, reportToolFor, sha256Hex } from "./agentDefinition"
+import { type AgentDefinition, BUILTIN_DEFINITIONS, reportToolFor } from "./agentDefinition"
 
 /**
  * User-defined agents (orchestration report 5.1 and Stage 3; owner decision D8). A file defines a NARROWER variant of a
- * built-in: it names the built-in it extends, and it can remove tools, add prompt text, lower budgets and set a model id
- * on the parent's provider. It can never add a tool, MCP access or budget, change the report schema, the MCP policy, the
- * auto-approve ceiling or `canSpawn`, or name a provider. That is by construction, not by checking: a derived definition
- * is the base with only those four fields replaced, and `assertNarrower` repeats the comparison so a later edit that
- * copies another field fails a test.
+ * built-in: it names the built-in it extends, and it can remove tools, add prompt text and lower budgets. It can never add
+ * a tool, MCP access or a budget, change the report schema, the MCP policy, the auto-approve ceiling or `canSpawn`, and
+ * it cannot choose a model or a provider: a model can be unpriced (so no dollar cap would fire) or, on a gateway
+ * provider, belong to another vendor, so the model is chosen only in the user's `agentModels` setting (D7). That is by
+ * construction, not by checking: a derived definition is the base with only the tool list, budget, name, description and
+ * prompt text replaced, and `assertNarrower` repeats the comparison so a later edit that copies another field fails a
+ * test.
  *
  * Where files live, in order: the built-ins, then the user's global `Agents` folder (beside `Rules`), then each
  * workspace's `.aihydrorules/agents/*.md`. A workspace file loads only in a trusted workspace (a workspace file is
@@ -42,6 +45,14 @@ export interface AgentFileProblem {
 	reason: string
 }
 
+/** Longest problem reason that reaches the card or the lead's tool error. */
+export const MAX_PROBLEM_REASON_CHARS = 200
+
+export function capReason(reason: string): string {
+	const oneLine = reason.replace(/\s+/g, " ").trim()
+	return oneLine.length > MAX_PROBLEM_REASON_CHARS ? `${oneLine.slice(0, MAX_PROBLEM_REASON_CHARS - 1)}…` : oneLine
+}
+
 export interface AgentRegistry {
 	/** File definitions that loaded, by id. Built-ins are not in it. */
 	definitions: ReadonlyMap<SubagentProfileId, AgentDefinition>
@@ -52,7 +63,7 @@ export interface AgentRegistry {
 
 export const EMPTY_AGENT_REGISTRY: AgentRegistry = { definitions: new Map(), problems: [], notes: [] }
 
-const ALLOWED_KEYS = ["id", "name", "extends", "description", "tools", "budget", "model"] as const
+const ALLOWED_KEYS = ["id", "name", "extends", "description", "tools", "budget"] as const
 const BUDGET_KEYS: ReadonlyArray<keyof SubagentBudget> = [
 	"maxToolCalls",
 	"wallClockMs",
@@ -210,7 +221,7 @@ function isNumberAbove0(value: unknown): value is number {
 }
 
 /**
- * Throws if `derived` is not the base with fewer tools, lower budgets, more prompt text or a model id. This repeats, as a
+ * Throws if `derived` is not the base with fewer tools, lower budgets, more prompt text. This repeats, as a
  * check, what building the definition from the base already guarantees.
  */
 export function assertNarrower(base: AgentDefinition, derived: AgentDefinition): void {
@@ -250,15 +261,29 @@ function toolNames(base: AgentDefinition): string {
  * gives none. Returns the id the file would have had even on failure, so a request for it can be answered.
  */
 export function parseAgentFile(
-	raw: string,
+	bytes: Uint8Array | string,
 	ctx: { path: string; source: AgentFileSource; stem: string },
 ): { ok: true; definition: AgentDefinition } | { ok: false; reason: string; id: string } {
 	let id = ctx.stem
 	try {
+		// The hash is of the file's bytes, as read. Text that is not valid UTF-8 is refused rather than decoded loosely, so
+		// the text that runs and the bytes that were hashed cannot differ.
+		const buffer = typeof bytes === "string" ? Buffer.from(bytes, "utf8") : Buffer.from(bytes)
+		let raw: string
+		try {
+			raw = new TextDecoder("utf-8", { fatal: true }).decode(buffer)
+		} catch {
+			throw new FileError("the file is not valid UTF-8 text")
+		}
 		const { front, body } = splitFile(raw)
 		const map = parseFrontMatter(front)
 		if (typeof map.id === "string" && isAgentId(map.id)) {
 			id = map.id
+		}
+		if (Object.hasOwn(map, "model")) {
+			// A model can be unpriced (so no dollar cap would fire) or, on a gateway provider, belong to another vendor.
+			// The user chooses it in settings (D7), where the card and the cost caps account for it.
+			throw new FileError("model is chosen in settings (agentModels), not in an agent file")
 		}
 		for (const key of Object.keys(map)) {
 			if (!(ALLOWED_KEYS as readonly string[]).includes(key)) {
@@ -355,17 +380,6 @@ export function parseAgentFile(
 			}
 		}
 
-		// model: an id on the parent's provider
-		let modelId: string | undefined
-		if (map.model !== undefined) {
-			if (typeof map.model !== "string" || !/^[A-Za-z0-9][\w.:/@+-]{0,99}$/.test(map.model)) {
-				throw new FileError(
-					"'model' must be one model id (no spaces), at most 100 characters; it runs on the parent's provider",
-				)
-			}
-			modelId = map.model
-		}
-
 		// body: the added prompt text
 		const bodyText = body.trim()
 		if (bodyText.length > AGENT_BODY_MAX_CHARS) {
@@ -378,12 +392,11 @@ export function parseAgentFile(
 			displayName,
 			extends: base.id,
 			source: ctx.source,
-			sha256: sha256Hex(raw),
+			sha256: createHash("sha256").update(buffer).digest("hex"),
 			path: ctx.path,
 			description,
 			builtinAllow,
 			budget,
-			...(modelId ? { modelId } : {}),
 			...(bodyText ? { body: bodyText } : {}),
 		})
 		assertNarrower(base, definition)
@@ -487,8 +500,8 @@ export async function loadAgentRegistry(options: LoadAgentsOptions): Promise<Age
 					})
 					continue
 				}
-				const raw = await fs.readFile(file, "utf8")
-				const parsed = parseAgentFile(raw, { path: file, source, stem })
+				const bytes = await fs.readFile(file)
+				const parsed = parseAgentFile(bytes, { path: file, source, stem })
 				if (!parsed.ok) {
 					problems.push({ source, path: file, id: parsed.id, reason: parsed.reason })
 					continue
@@ -532,5 +545,6 @@ export async function loadAgentRegistry(options: LoadAgentsOptions): Promise<Age
 		}
 		await readFolder(dir, "workspace", root)
 	}
-	return { definitions, problems, notes }
+	// A reason can carry text from the file itself (an unknown setting's name, a line): bounded before it is shown anywhere.
+	return { definitions, problems: problems.map((problem) => ({ ...problem, reason: capReason(problem.reason) })), notes }
 }

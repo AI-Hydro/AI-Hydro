@@ -831,7 +831,7 @@ describe("spawn_subagents end to end", () => {
 			}
 		})
 
-		it("a file's model id runs on the parent's provider, and a file cannot name a provider", async () => {
+		it("a file cannot choose a model: it does not load, with the named reason; the model stays the user's agentModels setting", async () => {
 			setWorkspaceTrustProvider(() => true)
 			try {
 				;(h.runnerBase.stateManager as any).getApiConfiguration = () => ({
@@ -839,18 +839,24 @@ describe("spawn_subagents end to end", () => {
 					actModeApiModelId: "claude-parent",
 				})
 				writeAgent("cheap.md", "---\nextends: explorer\nmodel: claude-haiku\n---\n")
-				writeAgent("elsewhere.md", "---\nextends: explorer\nmodel: gpt-x\nprovider: openai-native\n---\n")
+				writeAgent("judge.md", "---\nextends: reviewer\n---\n")
+				h.settings.agentModels = { reviewer: { modelId: "claude-judge" } }
 				const seen: any[] = []
 				useFiles(seen)
-				childApis.push(scriptedApi([report("done")]), scriptedApi([report("done")]))
 				await executor.executeTool(spawn(["x"], { profile: "cheap" }))
-				expect(seen[0].config.actModeApiModelId).to.equal("claude-haiku")
-				expect(seen[0].config.actModeApiProvider).to.equal("anthropic")
-				expect(seen[0].otherProvider).to.equal(false)
+				expect(resultText()).to.include("model is chosen in settings (agentModels), not in an agent file")
+				expect(h.asks).to.have.length(0)
+				expect(seen).to.have.length(0)
+
+				// a file that extends the reviewer follows the user's setting for the reviewer, like the reviewer itself
 				taskState.userMessageContent = []
 				taskState.didAlreadyUseTool = false
-				await executor.executeTool(spawn(["x"], { profile: "elsewhere" }))
-				expect(resultText()).to.include("unknown setting 'provider'")
+				childApis.push(
+					scriptedApi([tool("report_review", { summary: "s", verdicts: "unverifiable | a" })]),
+					scriptedApi([]),
+				)
+				await executor.executeTool(spawn(["x"], { profile: "judge" }))
+				expect(seen[0].config.actModeApiModelId).to.equal("claude-judge")
 			} finally {
 				setWorkspaceTrustProvider(undefined)
 			}

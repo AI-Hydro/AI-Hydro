@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -12,6 +13,7 @@ import {
 	AGENT_FILES_PER_DIR,
 	assertNarrower,
 	loadAgentRegistry,
+	MAX_PROBLEM_REASON_CHARS,
 	parseAgentFile,
 	parseFrontMatter,
 	splitFile,
@@ -123,19 +125,26 @@ describe("agent files: narrowing", () => {
 		expect(refused(file("extends: explorer\nbudget:\n  maxTokens: 5"))).to.include("unknown budget limit")
 	})
 
-	it("can set a model id, which runs on the parent's provider, and nothing else about the model", () => {
-		const d = ok(file("extends: explorer\nmodel: claude-haiku-4-5"))
-		expect(d.modelId).to.equal("claude-haiku-4-5")
-		expect(d.model).to.equal("inherit")
-		expect(d.crossProvider).to.equal(false)
-		for (const bad of ["two words", "a;b", "", "$(x)", "../x", "x".repeat(101)]) {
-			expect(refused(file(`extends: explorer\nmodel: "${bad}"`)), bad).to.include("'model'")
+	it("cannot choose a model or a provider: the model is the user's setting, never a file's", () => {
+		for (const line of [
+			"model: claude-haiku-4-5",
+			"model: some-unpriced-model",
+			'model: ""',
+			"provider: openai",
+			"providerId: openai",
+		]) {
+			const reason = refused(file(`extends: explorer\n${line}`))
+			if (line.startsWith("model")) {
+				expect(reason, line).to.equal("model is chosen in settings (agentModels), not in an agent file")
+			} else {
+				expect(reason, line).to.include("unknown setting")
+			}
 		}
-		// a provider has no field at all
-		expect(refused(file("extends: reviewer\nprovider: openai"))).to.include("unknown setting 'provider'")
-		expect(refused(file("extends: reviewer\nproviderId: openai"))).to.include("unknown setting 'providerId'")
-		// a reviewer file keeps the reviewer's opt-in, which is the user's setting; the file cannot add to it
-		expect(ok(file("extends: reviewer")).crossProvider).to.equal(REVIEWER_DEFINITION.crossProvider)
+		// what a file does produce carries no model of its own
+		const d = ok(file("extends: reviewer"))
+		expect(d.modelId).to.equal(undefined)
+		expect(d.model).to.equal(REVIEWER_DEFINITION.model)
+		expect(d.crossProvider).to.equal(REVIEWER_DEFINITION.crossProvider)
 		expect(ok(file("extends: explorer")).crossProvider).to.equal(false)
 	})
 
@@ -273,6 +282,20 @@ describe("agent files: the file format", () => {
 		}
 	})
 
+	it("hashes the file's bytes and refuses text that is not valid UTF-8", () => {
+		const bytes = Buffer.from(file("extends: explorer", "Look at caf\u00e9 only."), "utf8")
+		const parsed = parseAgentFile(bytes, ctx())
+		expect(parsed.ok && parsed.definition.sha256).to.equal(createHash("sha256").update(bytes).digest("hex"))
+		const bad = Buffer.concat([Buffer.from("---\nextends: explorer\n---\nbody "), Buffer.from([0xff, 0xfe, 0xfd])])
+		const reason = parseAgentFile(bad, ctx())
+		expect(reason.ok).to.equal(false)
+		expect(!reason.ok && reason.reason).to.include("not valid UTF-8")
+		// a BOM is part of the bytes that were hashed, even though it is not part of the text
+		const withBom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("---\nextends: explorer\n---\n")])
+		const bomParsed = parseAgentFile(withBom, ctx())
+		expect(bomParsed.ok && bomParsed.definition.sha256).to.equal(createHash("sha256").update(withBom).digest("hex"))
+	})
+
 	it("needs the opening and closing --- lines", () => {
 		expect(refused("extends: explorer")).to.include("must start with a '---' line")
 		expect(refused("---\nextends: explorer\n")).to.include("is not closed")
@@ -393,6 +416,17 @@ describe("agent files: loading", () => {
 		const out = await loadAgentRegistry({ workspaceRoots: [escaped], workspaceTrusted: true })
 		expect(out.definitions.size).to.equal(0)
 		expect(out.problems[0].reason).to.include("outside the workspace")
+	})
+
+	it("a file that is not valid UTF-8 is a problem, and a long reason is cut before it reaches anyone", async () => {
+		fs.writeFileSync(path.join(home, "binary.md"), Buffer.from([0x2d, 0x2d, 0x2d, 0x0a, 0xff, 0xfe]))
+		put(home, "long.md", file(`extends: explorer\n${"x".repeat(5000)}: 1`))
+		const registry = await loadAgentRegistry({ globalDir: home, workspaceRoots: [], workspaceTrusted: true })
+		const byId = Object.fromEntries(registry.problems.map((p) => [p.id, p.reason]))
+		expect(byId.binary).to.include("not valid UTF-8")
+		expect(byId.long.length).to.be.at.most(MAX_PROBLEM_REASON_CHARS)
+		expect(byId.long.endsWith("…")).to.equal(true)
+		expect(byId.long).to.include("unknown setting")
 	})
 
 	it("missing folders and no folders at all are not problems", async () => {
