@@ -12,6 +12,7 @@
  */
 import { spawnSync } from "node:child_process"
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { createRequire } from "node:module"
 import path from "node:path"
 
 const argv = process.argv.slice(2)
@@ -47,17 +48,20 @@ function collect(suites, found = []) {
 	return found
 }
 
+// Run the Playwright CLI with this Node directly. Going through a shell (npx on Windows) would let cmd.exe
+// interpret characters in arguments such as the `|` in --grep '@a|@b'.
+const playwrightCli = createRequire(import.meta.url).resolve("@playwright/test/cli")
+
 const iterations = []
 for (let n = 1; n <= runs; n++) {
 	const reportFile = path.join(outDir, `${label}-iteration-${n}.json`)
 	rmSync(reportFile, { force: true })
 	const started = Date.now()
 	const result = spawnSync(
-		"npx",
-		["playwright", "test", "-c", "playwright.config.ts", ...playwrightArgs, "--retries=0", "--reporter=json"],
+		process.execPath,
+		[playwrightCli, "test", "-c", "playwright.config.ts", ...playwrightArgs, "--retries=0", "--reporter=json"],
 		{
 			env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_NAME: reportFile },
-			shell: process.platform === "win32",
 			stdio: ["ignore", "ignore", "inherit"],
 		},
 	)

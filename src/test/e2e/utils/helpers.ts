@@ -56,8 +56,10 @@ function installVsixIntoCleanProfile(executablePath: string, vsixPath: string, e
 	}
 	const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(executablePath)
 	const profileArgs = [`--extensions-dir=${extensionsDir}`, `--user-data-dir=${userDataDir}`]
+	// code.cmd needs a shell on Windows, which does not quote for us.
+	const quote = (arg: string) => (process.platform === "win32" && /\s/.test(arg) ? `"${arg}"` : arg)
 	const run = (args: string[]) =>
-		spawnSync(cli, [...cliArgs, ...profileArgs, ...args], {
+		spawnSync(quote(cli), [...cliArgs, ...profileArgs, ...args].map(quote), {
 			encoding: "utf8",
 			shell: process.platform === "win32",
 			timeout: 120_000,
