@@ -1,12 +1,45 @@
 /**
- * Scans workspace for GeoJSON files and watches for changes
+ * Scans the open folders for map data files (the Project files list) and watches for changes.
+ *
+ * Bounds, because a project can hold thousands of files:
+ *  - at most MAX_PROJECT_FILES files are kept; the scan asks for one more so the list can say `5,000+` and mean it;
+ *  - a file is judged from its first few kilobytes (geoSniff.ts), never read whole;
+ *  - watcher events and `files.exclude` changes are collected and handled in one batch after a short quiet period.
  */
 
+import { AIHYDRO_STATE_DIR, MAX_PROJECT_FILES, PROJECT_FILE_EXTENSIONS } from "@shared/map/projectFiles"
+import * as fs from "fs/promises"
 import * as path from "path"
 import * as vscode from "vscode"
-import { isValidGeoJSONString } from "./GeoJsonValidator"
-import { isExcludedWorkspaceGeoPath, WORKSPACE_GEO_EXCLUDE_GLOB } from "./geoScanExclusions"
+import { readPrefix, looksLikeGeoJson } from "./geoSniff"
+import {
+	buildExcludeGlob,
+	isExcludedByNames,
+	isExcludedWorkspaceGeoPath,
+	mergeFilesExclude,
+	WORKSPACE_GEO_EXCLUDED_DIRS,
+} from "./geoScanExclusions"
 import { realPathInsideFolder } from "./workspaceGeoPaths"
+
+const GEO_GLOB = `**/*.{${PROJECT_FILE_EXTENSIONS.join(",")}}`
+/** Files judged at once. Each needs a stat and sometimes an 8 KB read; more than this only queues on the disk. */
+const SCAN_CONCURRENCY = 16
+/** Extensions that are text GeoJSON (or close enough to read as JSON); every other listed format is binary or converted. */
+const JSON_TEXT = new Set([".geojson", ".json", ".topojson"])
+/** Formats the extension host cannot read to text: the map panel's own parser loads them. */
+export const WEBVIEW_PARSED_EXTENSIONS = new Set([".tif", ".tiff", ".kmz"])
+
+/** What the last scan saw, for the "N folders skipped" and symlink lines. */
+export interface ScanStats {
+	foldersSkipped: number
+	skippedNames: string[]
+	symlinksFound: number
+	/** Symlinked files that resolve outside their folder; they are not listed. */
+	symlinksSkipped: number
+	/** The scan stopped at its limit: the real count is higher. */
+	truncated: boolean
+	folderCount: number
+}
 
 export interface WorkspaceGeoJsonFile {
 	uri: vscode.Uri
@@ -18,114 +51,193 @@ export interface WorkspaceGeoJsonFile {
 	name: string
 	extension: string
 	lastModified: number
+	sizeBytes: number
 	requiresConversion: boolean
 }
 
 export class FileScanner {
 	private watcher: vscode.FileSystemWatcher | null = null
+	private configWatcher: vscode.Disposable | null = null
 	private files: Map<string, WorkspaceGeoJsonFile> = new Map()
 	private onFilesChangedCallback: ((files: WorkspaceGeoJsonFile[]) => void) | null = null
 	private debounceTimer: NodeJS.Timeout | null = null
 	private readonly DEBOUNCE_MS = 500
+	/** Watcher events waiting for the quiet period: `true` means check the file again, `false` means it is gone. */
+	private pending = new Map<string, { uri: vscode.Uri; present: boolean }>()
+	private batchTimer: NodeJS.Timeout | null = null
+	private readonly BATCH_MS = 400
+	private scanning: Promise<void> | null = null
+	private extraExcludedDirs: string[] = []
+	private stats: ScanStats = {
+		foldersSkipped: 0,
+		skippedNames: [],
+		symlinksFound: 0,
+		symlinksSkipped: 0,
+		truncated: false,
+		folderCount: 0,
+	}
 
 	/**
 	 * Initialize the file scanner
 	 */
 	async initialize(workspaceFolders: readonly vscode.WorkspaceFolder[]): Promise<void> {
-		console.log("[FileScanner] Initializing...")
-
 		// Initial scan
 		await this.scanWorkspace(workspaceFolders)
 
 		// Set up file watcher
 		this.setupWatcher()
+		console.log(`[FileScanner] Initialized with ${this.files.size} map files`)
+	}
 
-		console.log(`[FileScanner] Initialized with ${this.files.size} GeoJSON files`)
+	/** What the last scan saw besides the files themselves. */
+	getStats(): ScanStats {
+		return { ...this.stats, skippedNames: [...this.stats.skippedNames] }
 	}
 
 	/**
-	 * Scan workspace recursively for geo data files
+	 * Scan the open folders for map data files. Scans never overlap: a second request while one runs waits for it and
+	 * then runs once more, so a burst of requests costs at most two scans.
 	 */
-	private async scanWorkspace(workspaceFolders: readonly vscode.WorkspaceFolder[]): Promise<void> {
-		this.files.clear()
+	private scanWorkspace(workspaceFolders: readonly vscode.WorkspaceFolder[]): Promise<void> {
+		const run = () => this.scanOnce(workspaceFolders)
+		const next = (this.scanning ?? Promise.resolve()).then(run, run)
+		this.scanning = next.catch(() => {})
+		return next
+	}
+
+	private async scanOnce(workspaceFolders: readonly vscode.WorkspaceFolder[]): Promise<void> {
+		const found = new Map<string, WorkspaceGeoJsonFile>()
+		const stats: ScanStats = {
+			foldersSkipped: 0,
+			skippedNames: [],
+			symlinksFound: 0,
+			symlinksSkipped: 0,
+			truncated: false,
+			folderCount: workspaceFolders.length,
+		}
+		const extraDirs = new Set<string>()
+		const excluded = new Set<string>()
+		let budget = MAX_PROJECT_FILES + 1
 
 		for (const folder of workspaceFolders) {
 			try {
-				// Find all supported geo format files recursively
-				// Includes: GeoJSON, KML, GPX, TopoJSON, FlatGeobuf, Shapefiles
-				const pattern = new vscode.RelativePattern(folder, "**/*.{geojson,json,kml,gpx,topojson,topo.json,fgb,shp}")
-				// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required for file scanning
-				const uris = await vscode.workspace.findFiles(pattern, WORKSPACE_GEO_EXCLUDE_GLOB)
-
-				console.log(`[FileScanner] Found ${uris.length} potential geo data files in ${folder.name}`)
-
-				// Validate each file
-				for (const uri of uris) {
-					await this.validateAndAddFile(uri, folder)
+				const merged = mergeFilesExclude(
+					vscode.workspace.getConfiguration("files", folder.uri).get<Record<string, unknown>>("exclude"),
+				)
+				for (const name of merged.dirNames) extraDirs.add(name)
+				for (const pattern of merged.unsupported) {
+					console.warn(`[FileScanner] files.exclude pattern not merged (braces or commas): ${pattern}`)
 				}
+				// `findFiles` gives back the files that match; excluded directories are counted from the folder's top level.
+				for (const name of await this.presentExcludedDirs(folder.uri.fsPath, [...WORKSPACE_GEO_EXCLUDED_DIRS, ...merged.dirNames])) {
+					excluded.add(name)
+					stats.foldersSkipped++
+				}
+				if (budget <= 0) {
+					stats.truncated = true
+					continue
+				}
+				const pattern = new vscode.RelativePattern(folder, GEO_GLOB)
+				const uris = await vscode.workspace.findFiles(pattern, buildExcludeGlob(merged.globs), budget)
+				budget -= uris.length
+				if (budget <= 0) stats.truncated = true
+				await this.judgeAll(uris, folder, found, stats)
 			} catch (error) {
 				console.error(`[FileScanner] Error scanning ${folder.name}:`, error)
 			}
 		}
+		// A truncated scan lists exactly MAX_PROJECT_FILES; the extra one only proved there are more.
+		const kept = [...found.entries()].sort((a, b) => a[1].relativePath.localeCompare(b[1].relativePath))
+		if (kept.length > MAX_PROJECT_FILES) stats.truncated = true
+		this.files = new Map(kept.slice(0, MAX_PROJECT_FILES))
+		this.extraExcludedDirs = [...extraDirs]
+		stats.skippedNames = [...excluded].sort()
+		this.stats = stats
 	}
 
-	/**
-	 * Validate and add a file to the collection
-	 */
-	private async validateAndAddFile(uri: vscode.Uri, workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
+	/** Names from `names` that exist as directories at the top of `folder`. */
+	private async presentExcludedDirs(folder: string, names: readonly string[]): Promise<string[]> {
+		const present: string[] = []
+		for (const name of new Set(names)) {
+			try {
+				if ((await fs.stat(path.join(folder, name))).isDirectory()) present.push(name)
+			} catch {
+				/* not there */
+			}
+		}
+		return present
+	}
+
+	/** Judge many files with bounded concurrency. */
+	private async judgeAll(
+		uris: readonly vscode.Uri[],
+		folder: vscode.WorkspaceFolder,
+		into: Map<string, WorkspaceGeoJsonFile>,
+		stats: ScanStats,
+	): Promise<void> {
+		let next = 0
+		const worker = async () => {
+			while (next < uris.length) {
+				const uri = uris[next++]
+				const file = await this.judge(uri, folder, stats)
+				if (file) into.set(uri.toString(), file)
+			}
+		}
+		await Promise.all(Array.from({ length: Math.min(SCAN_CONCURRENCY, uris.length) }, worker))
+	}
+
+	/** Decide whether one path is a listed map file. Reads at most a prefix. Returns the file, or undefined. */
+	private async judge(
+		uri: vscode.Uri,
+		workspaceFolder: vscode.WorkspaceFolder,
+		stats: ScanStats,
+	): Promise<WorkspaceGeoJsonFile | undefined> {
 		try {
 			const extension = path.extname(uri.fsPath).toLowerCase()
 			const relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath)
 			const name = path.basename(uri.fsPath)
 
 			// The watcher glob is workspace-wide, so excluded directories must be re-checked here.
-			if (isExcludedWorkspaceGeoPath(relativePath)) {
-				return
+			if (isExcludedWorkspaceGeoPath(relativePath) || isExcludedByNames(relativePath, this.extraExcludedDirs)) {
+				return undefined
+			}
+			// The tools' state directory is excluded only at the top of a folder: a user's own `.aihydro` deeper down is data.
+			if (relativePath.split(path.sep)[0] === AIHYDRO_STATE_DIR) {
+				return undefined
 			}
 
-			// A symlink that leaves the workspace folder is not a workspace file.
-			if (!(await realPathInsideFolder(workspaceFolder.uri.fsPath, uri.fsPath))) {
-				console.log(`[FileScanner] Skipped (resolves outside the workspace folder): ${relativePath}`)
-				return
-			}
-
-			// Determine if file needs conversion
-			const requiresConversion = this.needsConversion(extension)
-
-			// For GeoJSON files, validate content
-			if (!requiresConversion) {
-				// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required for file operations
-				const content = await vscode.workspace.fs.readFile(uri)
-				const contentStr = Buffer.from(content).toString("utf8")
-
-				// Validate GeoJSON
-				const validation = isValidGeoJSONString(contentStr)
-
-				if (!validation.valid) {
-					console.log(`[FileScanner] Skipped (invalid GeoJSON): ${relativePath} - ${validation.error}`)
-					return
+			const lstat = await fs.lstat(uri.fsPath)
+			if (lstat.isSymbolicLink()) {
+				stats.symlinksFound++
+				// A symlink that leaves the workspace folder is not a workspace file.
+				if (!(await realPathInsideFolder(workspaceFolder.uri.fsPath, uri.fsPath))) {
+					stats.symlinksSkipped++
+					return undefined
 				}
 			}
+			const stat = lstat.isSymbolicLink() ? await fs.stat(uri.fsPath) : lstat
+			if (!stat.isFile()) {
+				return undefined
+			}
 
-			// Add file to collection
-			// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required for file metadata
-			const stat = await vscode.workspace.fs.stat(uri)
+			if (JSON_TEXT.has(extension) && !looksLikeGeoJson(await readPrefix(uri.fsPath), stat.size, extension)) {
+				return undefined
+			}
 
-			const file: WorkspaceGeoJsonFile = {
+			return {
 				uri,
 				workspaceFolder: workspaceFolder.uri.fsPath,
 				workspaceFolderName: workspaceFolder.name,
 				relativePath,
 				name,
 				extension,
-				lastModified: stat.mtime,
-				requiresConversion,
+				lastModified: stat.mtimeMs,
+				sizeBytes: stat.size,
+				requiresConversion: this.needsConversion(extension),
 			}
-
-			this.files.set(uri.toString(), file)
-			console.log(`[FileScanner] Added: ${relativePath} (${extension})${requiresConversion ? " [needs conversion]" : ""}`)
 		} catch (error) {
 			console.warn(`[FileScanner] Error reading ${uri.fsPath}:`, error)
+			return undefined
 		}
 	}
 
@@ -134,51 +246,69 @@ export class FileScanner {
 	 */
 	private needsConversion(extension: string): boolean {
 		const ext = extension.toLowerCase()
-		return [".kml", ".gpx", ".topojson", ".topo.json", ".fgb", ".shp"].includes(ext)
+		return [".kml", ".gpx", ".topojson", ".topo.json", ".fgb", ".shp", ".tif", ".tiff", ".kmz"].includes(ext)
 	}
 
 	/**
-	 * Set up file system watcher for auto-refresh
+	 * Set up file system watcher for auto-refresh. Events are collected and handled together after a quiet period, so a
+	 * tool writing 500 files costs one pass, not 500.
 	 */
 	private setupWatcher(): void {
-		// Watch for all supported geo format files
 		// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required for file watching
-		this.watcher = vscode.workspace.createFileSystemWatcher("**/*.{geojson,json,kml,gpx,topojson,topo.json,fgb,shp}")
-
-		// File created
-		this.watcher.onDidCreate(async (uri) => {
-			console.log(`[FileScanner] File created: ${uri.fsPath}`)
-			// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required for folder lookup
-			const folder = vscode.workspace.getWorkspaceFolder(uri)
-			if (folder) {
-				await this.validateAndAddFile(uri, folder)
-				this.notifyChangesDebounced()
-			}
+		this.watcher = vscode.workspace.createFileSystemWatcher(GEO_GLOB)
+		const queue = (uri: vscode.Uri, present: boolean) => {
+			this.pending.set(uri.toString(), { uri, present })
+			if (this.batchTimer) clearTimeout(this.batchTimer)
+			this.batchTimer = setTimeout(() => {
+				this.batchTimer = null
+				void this.flushPending()
+			}, this.BATCH_MS)
+		}
+		this.watcher.onDidCreate((uri) => queue(uri, true))
+		this.watcher.onDidChange((uri) => queue(uri, true))
+		this.watcher.onDidDelete((uri) => queue(uri, false))
+		// A changed `files.exclude` changes which files exist for the list.
+		this.configWatcher = vscode.workspace.onDidChangeConfiguration((event) => {
+			if (event.affectsConfiguration("files.exclude")) this.refreshDebounced()
 		})
+	}
 
-		// File deleted
-		this.watcher.onDidDelete((uri) => {
-			console.log(`[FileScanner] File deleted: ${uri.fsPath}`)
-			const removed = this.files.delete(uri.toString())
-			if (removed) {
-				this.notifyChangesDebounced()
+	private async flushPending(): Promise<void> {
+		const batch = [...this.pending.values()]
+		this.pending.clear()
+		let changed = false
+		let next = 0
+		const worker = async () => {
+			while (next < batch.length) {
+				const { uri, present } = batch[next++]
+				const key = uri.toString()
+				if (!present) {
+					changed = this.files.delete(key) || changed
+					continue
+				}
+				// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required for folder lookup
+				const folder = vscode.workspace.getWorkspaceFolder(uri)
+				if (!folder) continue
+				const file = await this.judge(uri, folder, this.stats)
+				if (file) {
+					this.files.set(key, file)
+					changed = true
+				} else {
+					changed = this.files.delete(key) || changed
+				}
 			}
-		})
+		}
+		await Promise.all(Array.from({ length: Math.min(SCAN_CONCURRENCY, batch.length) }, worker))
+		if (changed) this.notifyChangesDebounced()
+	}
 
-		// File changed
-		this.watcher.onDidChange(async (uri) => {
-			console.log(`[FileScanner] File changed: ${uri.fsPath}`)
-			// Remove and re-add to revalidate
-			this.files.delete(uri.toString())
-			// biome-ignore lint/correctness/noNodejsModules: VSCode workspace API required for folder lookup
-			const folder = vscode.workspace.getWorkspaceFolder(uri)
-			if (folder) {
-				await this.validateAndAddFile(uri, folder)
-				this.notifyChangesDebounced()
-			}
-		})
-
-		console.log("[FileScanner] File watcher set up")
+	/** A full rescan after a quiet period (settings changes, many folders changing at once). */
+	refreshDebounced(): void {
+		if (this.batchTimer) clearTimeout(this.batchTimer)
+		this.batchTimer = setTimeout(() => {
+			this.batchTimer = null
+			void this.refresh()
+		}, this.BATCH_MS)
 	}
 
 	/**
@@ -255,10 +385,17 @@ export class FileScanner {
 			this.watcher.dispose()
 			this.watcher = null
 		}
+		this.configWatcher?.dispose()
+		this.configWatcher = null
 		if (this.debounceTimer) {
 			clearTimeout(this.debounceTimer)
 			this.debounceTimer = null
 		}
+		if (this.batchTimer) {
+			clearTimeout(this.batchTimer)
+			this.batchTimer = null
+		}
+		this.pending.clear()
 		this.files.clear()
 		this.onFilesChangedCallback = null
 		console.log("[FileScanner] Disposed")

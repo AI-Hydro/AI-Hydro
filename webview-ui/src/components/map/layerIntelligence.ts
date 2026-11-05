@@ -320,7 +320,7 @@ export function layerProvenance(layer: MapLayer, intelligence: LayerIntelligence
 		["Coverage", meta.coverage_status],
 	]
 	// Hidden when absent (not "not recorded"): they only exist for some layers.
-	// Run is not listed either: the Provenance tab says "No run record." on its own line.
+	// Run is not listed either: the Provenance tab says "Not linked to a run." on its own line.
 	const optional = new Set([
 		"Tool",
 		"Run",

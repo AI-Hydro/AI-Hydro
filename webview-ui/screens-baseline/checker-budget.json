@@ -10,6 +10,295 @@
 		}
 	},
 	"screens": {
+		"map-layers-collapsed-group": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-confirm-undo": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-files-collapsed": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-files-empty": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-files-just-loaded": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-files-large-confirm": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-files-many-filter": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-files-multi-root": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-files-removed-undo": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-files-three": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-long-names": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-many": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-menu-open": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-menu-run": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-reference-group": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-restored": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
+		"map-layers-selected": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 6
+		},
 		"map-trace-idle": {
 			"ref": {
 				"noName": 0,
@@ -2553,125 +2842,6 @@
 			},
 			"cells": 6
 		},
-		"map-layers-selected": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-layers-menu-open": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-layers-long-names": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-layers-many": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-layers-restored": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-layers-confirm-undo": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-layers-collapsed-group": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
 		"map-pin-dirty": {
 			"ref": {
 				"noName": 0,
@@ -2859,23 +3029,6 @@
 			},
 			"cells": 6
 		},
-		"map-layers-workspace-files": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
 		"chat-subagent-ask": {
 			"ref": {
 				"noName": 0,
@@ -2960,40 +3113,6 @@
 				"contrastIndeterminate": 0
 			},
 			"cells": 40
-		},
-		"map-layers-menu-run": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
-		},
-		"map-layers-reference-group": {
-			"ref": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"matrixTotal": {
-				"noName": 0,
-				"smallTarget": 0,
-				"smallText": 0,
-				"contrast": 0,
-				"contrastIndeterminate": 0
-			},
-			"cells": 6
 		},
 		"toolcard-on-map": {
 			"ref": {
@@ -4717,16 +4836,6 @@
 					},
 					"cells": 6
 				},
-				"map-layers-workspace-files": {
-					"matrixTotal": {
-						"noName": 0,
-						"smallTarget": 0,
-						"smallText": 0,
-						"contrast": 0,
-						"contrastIndeterminate": 0
-					},
-					"cells": 6
-				},
 				"chat-subagent-ask": {
 					"matrixTotal": {
 						"noName": 0,
@@ -4878,6 +4987,86 @@
 					"cells": 6
 				},
 				"map-trace-unavailable": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-files-collapsed": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-files-empty": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-files-large-confirm": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-files-many-filter": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-files-multi-root": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-files-removed-undo": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-files-three": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-layers-files-just-loaded": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,

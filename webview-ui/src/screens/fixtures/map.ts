@@ -447,3 +447,39 @@ export const traceLayer = (direction: "upstream" | "downstream", km: number, n: 
 		},
 	}
 }
+
+// ── Project files (Layers panel) ────────────────────────────────────────────────────────────────
+
+type PfFixtureFile = NonNullable<import("../types").ScreenDef["projectFiles"]>["files"][number]
+
+/** One file of the fixture project. */
+export const pfFile = (relativePath: string, sizeBytes: number, workspaceFolder = "/fixture", folderName = "fixture"): PfFixtureFile => ({
+	relativePath,
+	name: relativePath.split("/").pop() ?? relativePath,
+	extension: `.${relativePath.split(".").pop()}`,
+	workspaceFolder,
+	folderName,
+	sizeBytes,
+})
+
+/** The layer a loaded project file makes: a file with no run behind it. */
+export const workspaceFileLayer = (relativePath: string, workspaceFolder = "/fixture"): MapLayer => ({
+	...polygonLayer(`workspace_${relativePath.replace(/[^a-zA-Z0-9]/g, "_")}`, relativePath.split("/").pop() ?? relativePath, {
+		source: "workspace",
+		path: relativePath,
+		source_path: `${workspaceFolder}/${relativePath}`,
+		workspace_folder: workspaceFolder,
+	}),
+})
+
+export const threeProjectFiles = (): PfFixtureFile[] => [
+	pfFile("data/huc8_boundaries.geojson", 1_240_000),
+	pfFile("data/gauges.geojson", 96_000),
+	pfFile("roi/active.json", 3_400),
+]
+
+/** 200 files in ten folders, as a long-running project looks. */
+export const manyProjectFiles = (): PfFixtureFile[] =>
+	Array.from({ length: 200 }, (_, i) =>
+		pfFile(`${["huc", "gauges", "roi", "rivers", "dams", "soils", "land", "lakes", "wells", "misc"][i % 10]}/${i % 10 === 0 ? "huc" : "part"}_${String(i).padStart(3, "0")}.geojson`, 12_000 + i * 731),
+	)

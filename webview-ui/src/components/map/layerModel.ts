@@ -25,7 +25,7 @@ export const ORIGIN_LABEL: Record<LayerOrigin, { title: string; icon: string; hi
 		icon: "book",
 		hint: "Reference, not in any run. These layers are not from a recorded run",
 	},
-	files: { title: "Your files", icon: "folder", hint: "Files from disk, in the workspace or not" },
+	files: { title: "Files", icon: "folder", hint: "Loaded from a file. Not linked to a run" },
 	gee: { title: "Earth Engine", icon: "globe", hint: "Google Earth Engine layers" },
 	pushed: { title: "Other", icon: "layers", hint: "Layers pushed to the map without a recorded origin" },
 }

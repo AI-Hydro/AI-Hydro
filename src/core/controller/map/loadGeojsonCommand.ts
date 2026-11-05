@@ -1,3 +1,4 @@
+import { grantMapPath } from "@core/map/authorizeMapPath"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -26,6 +27,8 @@ export async function loadGeojsonCommand(controller: Controller): Promise<void> 
 		}
 
 		const filePath = filePaths[0]
+		// The user chose this file in a dialog: that puts it in reach of the map (see authorizeMapPath).
+		grantMapPath(filePath)
 		const fileName = path.basename(filePath, path.extname(filePath))
 
 		// Read the file

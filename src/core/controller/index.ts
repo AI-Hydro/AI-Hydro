@@ -6,12 +6,17 @@ import { type AddOutcome, applyAddLayer, dropAliasesFor, resolveAlias } from "@c
 import { applyFactStampPolicy } from "@core/map/factStamp"
 import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
+import { authorizeMapPath, type MapPathDeps } from "@core/map/authorizeMapPath"
 import { buildMapLayerCatalogAsync, type MapLayerCatalogEntry, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
 import { type MapLayerPatch, mergeMapLayerPatch } from "@core/map/mergeMapLayerPatch"
 import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview"
+import { takeUnloaded, saveUnloaded } from "@core/map/unloadedLayerSidecar"
+import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
+import { NO_FOLDER_KEY } from "@core/project/pinStore"
+import type { ProjectFilesHost } from "@core/map/projectFiles"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
-import { FileScanner, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
+import { FileScanner, WEBVIEW_PARSED_EXTENSIONS, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
 import { setupWorkspaceManager } from "@core/workspace/setup"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
 import { realPathInsideFolder } from "@core/workspace/workspaceGeoPaths"
@@ -2731,7 +2736,10 @@ export class Controller {
 	 * Add ONE workspace geo file to the map as a visible layer (user-initiated, from the Layers panel).
 	 * Returns the layer id. Throws when the file cannot be read or converted.
 	 */
-	private async addWorkspaceFileAsLayer(file: WorkspaceGeoJsonFile): Promise<string> {
+	private async addWorkspaceFileAsLayer(file: WorkspaceGeoJsonFile): Promise<{
+		layerId: string
+		kept?: Awaited<ReturnType<typeof takeUnloaded>>
+	}> {
 		let geojsonContent: string
 		let originalFormat = "geojson"
 
@@ -2831,15 +2839,21 @@ export class Controller {
 		const idSource = multiRoot ? `${file.workspaceFolderName}/${file.relativePath}` : file.relativePath
 		// Punctuation all becomes `_`, so `a/b.geojson` and `a_b.geojson` would share a name; the hash of the file's
 		// resolved path keeps them apart. The same file always gets the same id.
-		const layerId = `workspace_${idSource.replace(/[^a-zA-Z0-9]/g, "_")}_${pathHash(resolvedSourcePath({ path: file.relativePath, workspace_folder: file.workspaceFolder }) ?? idSource)}`
+		const computedId = `workspace_${idSource.replace(/[^a-zA-Z0-9]/g, "_")}_${pathHash(resolvedSourcePath({ path: file.relativePath, workspace_folder: file.workspaceFolder }) ?? idSource)}`
+
+		// A file that was unloaded comes back as it was: same id, name and style. The sidecar holds nothing about a run.
+		const resolved = this.realPathOf(file.uri.fsPath)
+		const kept = await takeUnloaded(this.currentMapScope(), resolved).catch(() => undefined)
+		const layerId = kept?.layer_id || computedId
 
 		// Determine format icon for display
 		const formatIcon = this.getFormatIcon(file.extension)
 
-		// Create MapLayer with workspace metadata
+		// Create MapLayer with workspace metadata. One entry records the absolute path, the folder, and the size and
+		// modified time the content was read at, however the file was reached.
 		const layer = {
 			id: layerId,
-			name: file.name,
+			name: kept?.display_name || kept?.name || file.name,
 			layerType: "polygon" as const,
 			geojson: geojsonContent,
 			visible: true,
@@ -2851,14 +2865,19 @@ export class Controller {
 				strokeWidth: 3,
 				weight: 3,
 				opacity: 1,
+				...(kept?.style ?? {}),
 			},
 			metadata: {
 				source: "workspace",
 				path: file.relativePath,
+				source_path: file.uri.fsPath,
 				workspace_folder: file.workspaceFolder,
+				source_size_bytes: String(file.sizeBytes ?? ""),
+				source_mtime_ms: String(Math.round(file.lastModified)),
 				lastModified: file.lastModified.toString(),
 				originalFormat,
 				formatIcon,
+				...(kept?.display_name ? { display_name: kept.display_name } : {}),
 			},
 		}
 
@@ -2867,11 +2886,17 @@ export class Controller {
 
 		console.log(`[Controller] Added workspace layer: ${file.name} (${originalFormat})`)
 
-		return layerId
+		return { layerId, kept }
 	}
 
-	/** Add a workspace file chosen by the user (by workspace-relative path) as a layer. */
-	async addWorkspaceGeoFileByPath(relativePath: string, workspaceFolder = ""): Promise<string> {
+	/**
+	 * Add a workspace file chosen by the user (by workspace-relative path) as a layer. This is Load, in the Project files
+	 * tree: the one host entry every Load goes through. The path is authorised before the file is read.
+	 */
+	async addWorkspaceGeoFileByPath(
+		relativePath: string,
+		workspaceFolder = "",
+	): Promise<{ layerId: string; kept?: Awaited<ReturnType<typeof takeUnloaded>>; sizeBytes: number }> {
 		const matches = this.workspaceGeoJsonFiles.filter(
 			(candidate) =>
 				candidate.relativePath === relativePath && (!workspaceFolder || candidate.workspaceFolder === workspaceFolder),
@@ -2883,11 +2908,121 @@ export class Controller {
 			throw new Error(`${relativePath} exists in more than one workspace folder; choose one from the list.`)
 		}
 		const file = matches[0]
+		if (WEBVIEW_PARSED_EXTENSIONS.has(file.extension.toLowerCase())) {
+			throw new Error(`${file.name} is loaded by the map panel itself, not by the extension host.`)
+		}
 		// The list was checked when scanned; re-check so a symlink swapped in since then cannot escape the folder.
 		if (!(await realPathInsideFolder(file.workspaceFolder, file.uri.fsPath))) {
 			throw new Error(`${relativePath} resolves outside its workspace folder and was not added.`)
 		}
-		return await this.addWorkspaceFileAsLayer(file)
+		const decision = await authorizeMapPath(file.uri.fsPath, "load", this.mapPathDeps())
+		if (!decision.ok) {
+			throw new Error(decision.reason)
+		}
+		const added = await this.addWorkspaceFileAsLayer(file)
+		return { ...added, sizeBytes: file.sizeBytes }
+	}
+
+	/** What `authorizeMapPath` checks a path against: the open folders and AI-Hydro's own directories. */
+	mapPathDeps(): MapPathDeps {
+		return {
+			workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+			aihydroDirs: () => [aihydroPath("map_layer_geojson_cache"), aihydroPath()],
+		}
+	}
+
+	/** What the scan saw besides the files: folders skipped, symlinks, whether it stopped at its limit. */
+	getWorkspaceScanStats() {
+		return (
+			this.fileScanner?.getStats() ?? {
+				foldersSkipped: 0,
+				skippedNames: [],
+				symlinksFound: 0,
+				symlinksSkipped: 0,
+				truncated: false,
+				folderCount: vscode.workspace.workspaceFolders?.length ?? 0,
+			}
+		)
+	}
+
+	/** Project key per root: a `prj_` answer is kept, a `dir:` fallback is asked again (the project may get an id). */
+	private readonly fileListKeys = new Map<string, ProjectKey>()
+
+	/** A lookup from a file's path to the layer made from it, by real path. Built once per call of the list. */
+	private loadedLayerLookup(): (absolutePath: string) => string | undefined {
+		const byReal = new Map<string, string>()
+		for (const layer of this.mapLayers.values()) {
+			const named = resolvedSourcePath(layer.metadata)
+			if (named) byReal.set(this.realPathOf(named), layer.id)
+		}
+		return (absolutePath) => (byReal.size === 0 ? undefined : byReal.get(this.realPathOf(absolutePath)))
+	}
+
+	/**
+	 * Everything the Project files list needs from this window. One project identity for the whole window: the first
+	 * folder's key, so a multi-root window has one removed list, and an entry names its folder by hash.
+	 */
+	projectFilesHost(): ProjectFilesHost {
+		return {
+			files: () => this.workspaceGeoJsonFiles,
+			stats: () => this.getWorkspaceScanStats(),
+			folders: () =>
+				(vscode.workspace.workspaceFolders ?? []).map((folder) => ({ path: folder.uri.fsPath, name: folder.name })),
+			loadedLayerId: this.loadedLayerLookup(),
+			scope: async () => {
+				const store = this.context.globalState
+				const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+				if (!root) {
+					return { store, key: { key: NO_FOLDER_KEY, kind: "dir" } }
+				}
+				const cached = this.fileListKeys.get(root)
+				if (cached?.kind === "prj") {
+					return { store, key: cached, dirKey: await dirProjectKey(root) }
+				}
+				const key = await getProjectKey(root, this.mcpHub as unknown as ProjectKeyHub)
+				this.fileListKeys.set(root, key)
+				return { store, key, dirKey: await dirProjectKey(root) }
+			},
+		}
+	}
+
+	/**
+	 * Unload: take a file-backed layer off the map and keep what the user set (name, style, opacity, place) in the
+	 * sidecar file. The file on disk is not touched. A layer with no file on disk is not unloaded here; it is removed.
+	 */
+	async unloadMapLayer(
+		requestedId: string,
+		settings: { opacity?: number; hidden?: boolean; positionFromTop?: number },
+	): Promise<{ unloaded: boolean; settingsKept: boolean }> {
+		const layerId = this.resolveMapLayerId(requestedId)
+		const layer = this.mapLayers.get(layerId)
+		if (!layer) {
+			return { unloaded: false, settingsKept: false }
+		}
+		const named = resolvedSourcePath(layer.metadata)
+		let settingsKept = false
+		if (named) {
+			try {
+				await saveUnloaded(this.currentMapScope(), this.realPathOf(named), {
+					layer_id: layer.id,
+					name: layer.name,
+					display_name: layer.metadata?.display_name,
+					layer_type: layer.layerType,
+					style: layer.style,
+					opacity: settings.opacity,
+					hidden: settings.hidden,
+					position_from_top: settings.positionFromTop,
+					source_size_bytes: Number(layer.metadata?.source_size_bytes) || undefined,
+					source_mtime_ms: Number(layer.metadata?.source_mtime_ms) || undefined,
+					unloaded_at: Date.now(),
+				})
+				settingsKept = true
+			} catch (error) {
+				console.warn("[Controller] Could not keep the settings of an unloaded layer:", error)
+			}
+		}
+		this.removeMapLayer(layerId)
+		return { unloaded: true, settingsKept }
 	}
 
 	/**
