@@ -565,7 +565,8 @@ export const e2e = test
 			if (pythonInterpreter) {
 				execFileSync(pythonInterpreter, ["-c", "import matplotlib.pyplot"], {
 					env: { ...process.env, HOME: homeDir, USERPROFILE: homeDir, MPLCONFIGDIR: matplotlibConfigDir },
-					timeout: 60_000,
+					// A cold matplotlib font cache can take over a minute on a developer machine.
+					timeout: 180_000,
 				})
 			}
 

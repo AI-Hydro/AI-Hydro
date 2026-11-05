@@ -737,9 +737,12 @@ artifactIntegrationE2E(
 		await waitForFrame(page, async (frame) => (await frame.title()).startsWith("AI-Hydro"))
 		expect(await installBookPack(workspaceDir)).toBe("installed")
 
+		const startedAt = Date.now()
 		for (const [index, contract] of BOOK_MODULES.slice(0, expectedModuleIndex + 1).entries()) {
+			console.log(`[phase1-progress] ${contract.id} open at +${Math.round((Date.now() - startedAt) / 1000)}s`)
 			await completeCurrentAndOpenNext(page, contract.title)
 			const { artifact, plotCell } = await executeBookModule(page, contract)
+			console.log(`[phase1-progress] ${contract.id} executed at +${Math.round((Date.now() - startedAt) / 1000)}s`)
 			if (index === 0) {
 				const shell = await waitForCourseShell(page)
 				await shell.getByTitle("More actions").evaluate((element: HTMLElement) => element.click())

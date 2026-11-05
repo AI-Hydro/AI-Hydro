@@ -1,4 +1,6 @@
-import type { Page } from "@playwright/test"
+import { cpSync } from "node:fs"
+import * as path from "node:path"
+import type { Page, TestInfo } from "@playwright/test"
 import type { ElectronApplication } from "playwright"
 import { E2ETestHelper } from "./helpers"
 
@@ -13,6 +15,42 @@ function processIsRunning(pid: number): boolean {
 		return true
 	} catch {
 		return false
+	}
+}
+
+/**
+ * On failure, print what each open frame contains: title, number of cells, bridge presence, document size.
+ * Structure only (no text content), so the output is safe in the log of a private caller.
+ */
+async function describeOpenFrames(app: ElectronApplication | null): Promise<void> {
+	if (!app) {
+		return
+	}
+	try {
+		for (const page of app.windows()) {
+			for (const frame of page.frames()) {
+				if (frame.isDetached()) {
+					continue
+				}
+				try {
+					const info = await frame.evaluate(() => ({
+						title: document.title,
+						cells: document.querySelectorAll("[data-aihydro-cell-id]").length,
+						firstCells: Array.from(document.querySelectorAll("[data-aihydro-cell-id]"))
+							.slice(0, 3)
+							.map((element) => element.getAttribute("data-aihydro-cell-id")),
+						wiredRunButtons: document.querySelectorAll('.aihydro-run[data-aihydro-wired="1"]').length,
+						bridge: typeof (window as unknown as { aihydro?: unknown }).aihydro,
+						documentChars: document.documentElement.outerHTML.length,
+					}))
+					console.error("[lifecycle-diagnostics] frame", JSON.stringify(info))
+				} catch {
+					// frame navigated or is cross-origin
+				}
+			}
+		}
+	} catch {
+		// Diagnostics must never fail a test.
 	}
 }
 
@@ -37,6 +75,7 @@ export const lifecycleFixture = {
 			homeDir: string
 		},
 		use: (session: LifecycleSession) => Promise<void>,
+		testInfo: TestInfo,
 	) => {
 		let current: ElectronApplication | null = null
 		const close = async () => {
@@ -70,6 +109,19 @@ export const lifecycleFixture = {
 			testFailure = error
 		}
 		const cleanupFailures: unknown[] = []
+		if (testFailure !== undefined) {
+			await describeOpenFrames(current)
+			// Extension-host and window logs live under the profile, which is deleted below; keep a copy of
+			// the text logs (failures only), as the `page` fixture does, so a CI failure can be diagnosed.
+			try {
+				cpSync(path.join(userDataDir, "logs"), testInfo.outputPath("host-logs"), {
+					recursive: true,
+					filter: (source) => !path.extname(source) || path.extname(source) === ".log",
+				})
+			} catch {
+				// Diagnostics must never fail a test.
+			}
+		}
 		try {
 			await close()
 		} catch (error) {
