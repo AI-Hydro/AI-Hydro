@@ -55,6 +55,10 @@ export const REQUIRED_RUNTIME_ENTRIES = Object.freeze([
 	"extension/webview-ui/build/assets/azeret-mono-latin-ext-400-normal.woff2",
 	"extension/webview-ui/build/assets/index.css",
 	"extension/webview-ui/build/assets/index.js",
+	// Chart libraries vendored for installed packs (see webview-ui/.../vendorManifest.json for pinned digests).
+	"extension/webview-ui/build/assets/plotly.min.js",
+	"extension/webview-ui/build/assets/three.min.js",
+	"extension/webview-ui/build/assets/OrbitControls.js",
 	"extension/webview-ui/build/index.html",
 ])
 
