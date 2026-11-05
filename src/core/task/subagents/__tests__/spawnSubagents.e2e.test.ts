@@ -10,7 +10,7 @@ import { ToolExecutor } from "../../ToolExecutor"
 import { SpawnSubagentsToolHandler } from "../../tools/handlers/SpawnSubagentsToolHandler"
 import { ChildMessageState } from "../childRuntime"
 import { setWorkspaceTrustProvider } from "../../workspaceTrust"
-import { userWroteToLead } from "../launchBrake"
+import { launchesPaused, userWroteToLead } from "../launchBrake"
 import { makeParent, type ParentHarness, scriptedApi, tool } from "./subagentHarness"
 
 const report = (summary: string) => tool("report_findings", { summary })
@@ -492,7 +492,11 @@ describe("spawn_subagents end to end", () => {
 			again()
 			await executor.executeTool(spawn(["y"])) // approved
 			expect(resultText()).to.include('status="completed"')
+			expect(taskState.bareLaunchDenials, "an approval ends the run of bare denials").to.equal(0)
+			again()
+			await executor.executeTool(spawn(["z"])) // denied: bare 1 again, not 2
 			expect(taskState.bareLaunchDenials).to.equal(1)
+			expect(launchesPaused(taskState)).to.equal(false)
 		})
 	})
 

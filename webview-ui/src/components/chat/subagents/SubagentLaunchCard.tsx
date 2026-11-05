@@ -5,7 +5,7 @@ import type { AiHydroSayTool } from "@shared/ExtensionMessage"
 const SIGNAL_WORDS: Record<SubagentSignal, string> = {
 	bulk: "many files",
 	independent: "separate questions",
-	user_asked: "you asked for it",
+	user_asked: "model says you asked",
 	independent_check: "independent check",
 }
 
@@ -93,6 +93,7 @@ export function SubagentLaunchCard({ tool, state }: { tool: AiHydroSayTool; stat
 			)}
 			<div className="pt-[2px] text-[12px] text-[var(--vscode-descriptionForeground)]" data-testid="subagent-launch-budget">
 				Each uses model {launch.model}
+				{launch.sameModelAsLead ? " (same model as the lead)" : ""}
 				{launch.provider ? ` on ${launch.provider}` : ""}, up to {launch.budget.maxToolCalls} tool calls and about{" "}
 				{minutes} minutes. Up to 3 run at once. Any read that needs your approval asks you in the chat, named after the{" "}
 				{noun}.

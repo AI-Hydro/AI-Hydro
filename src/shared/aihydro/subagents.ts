@@ -181,6 +181,8 @@ export interface SubagentLaunch {
 	model: string
 	/** The provider every child will use. Shown when it differs from the parent's (D7: opt-in, and the data goes there). */
 	provider?: string
+	/** True when a definition that can run on its own model runs on the lead's, so the card says so (a reviewer is then not independent of the author). */
+	sameModelAsLead?: boolean
 	/** True when the children's provider is not the parent's, so the card says the prompts leave for another vendor. */
 	otherProvider?: boolean
 	/** One sentence on what the profile cannot do, from the profile, so the card never overstates. */

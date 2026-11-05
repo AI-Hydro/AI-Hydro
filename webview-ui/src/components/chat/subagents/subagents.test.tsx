@@ -44,6 +44,12 @@ const row = (children: SubagentChildSummary[], done = false): AiHydroMessage => 
 })
 
 describe("SubagentStatusRow", () => {
+	it("names the kind from the children's labels, and falls back to 'subagent' for an empty or missing label", () => {
+		const { rerender } = render(<SubagentStatusRow message={row([child({ label: "" })])} />)
+		expect(screen.getByLabelText("Read-only subagents")).toBeTruthy()
+		rerender(<SubagentStatusRow message={row([child({ label: "Reviewer 2" })])} />)
+		expect(screen.getByLabelText("Read-only reviewers")).toBeTruthy()
+	})
 	it("lists each explorer with its state, last tool and usage", () => {
 		render(
 			<SubagentStatusRow
@@ -261,6 +267,26 @@ describe("SubagentLaunchCard", () => {
 		expect(screen.getByTestId("subagent-launch-advisory").textContent).toContain("advice from a second model run")
 		expect(screen.getByTestId("subagent-launch-signal").textContent).toContain("independent check")
 		expect(screen.getByTestId("subagent-launch").textContent).not.toMatch(/\breviewed\b/i)
+	})
+	it("'user_asked' is shown as the model's claim, not as a fact the host knows", () => {
+		render(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{ tool: "spawnSubagents", subagents: { ...launch, signal: "user_asked" } }}
+			/>,
+		)
+		expect(screen.getByTestId("subagent-launch-signal").textContent).toBe("Signal: model says you asked")
+	})
+	it("says a reviewer running on the lead's model is the lead's model", () => {
+		const { rerender } = render(
+			<SubagentLaunchCard
+				state="pending"
+				tool={{ tool: "spawnSubagents", subagents: { ...launch, sameModelAsLead: true } }}
+			/>,
+		)
+		expect(screen.getByTestId("subagent-launch-budget").textContent).toContain("claude-sonnet-4 (same model as the lead)")
+		rerender(<SubagentLaunchCard state="pending" tool={{ tool: "spawnSubagents", subagents: launch }} />)
+		expect(screen.getByTestId("subagent-launch-budget").textContent).not.toContain("same model as the lead")
 	})
 	it("says when the prompts go to another provider, and when a host-built study brief goes with them", () => {
 		render(

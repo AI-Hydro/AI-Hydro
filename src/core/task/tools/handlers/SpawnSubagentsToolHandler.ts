@@ -21,7 +21,7 @@ import { AiHydroDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { type AgentDefinition, BUILTIN_DEFINITIONS, DEFAULT_AGENT_ID, resolveDefinition } from "../../subagents/agentDefinition"
 import { type ChildApiResolution, resolveChildApi } from "../../subagents/agentModel"
-import { launchesPaused, recordLaunchDenial } from "../../subagents/launchBrake"
+import { launchesPaused, recordLaunchApproved, recordLaunchDenial } from "../../subagents/launchBrake"
 import { ParentAskBridge } from "../../subagents/ParentAskBridge"
 import { DEFAULT_STAGGER_MS, MAX_PROMPTS_PER_CALL, SpawnRefused, SubagentSupervisor } from "../../subagents/SubagentSupervisor"
 import { isModelPriced } from "../../subagents/subagentCost"
@@ -348,6 +348,8 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 			model: childModel.id,
 			...(resolved.providerId ? { provider: resolved.providerId } : {}),
 			...(resolved.otherProvider ? { otherProvider: true } : {}),
+			// A definition that is meant to be able to run elsewhere, but does not: the user should see it is the lead's model.
+			...(definition.model === "setting" && !resolved.overridden ? { sameModelAsLead: true } : {}),
 			limits: profileLimits(definition),
 			...(definition.advisory ? { advisory: definition.advisory } : {}),
 			taskBudget: ledger.describe(isModelPriced(childModel.info)),
@@ -378,6 +380,7 @@ export class SpawnSubagentsToolHandler implements IFullyManagedTool {
 			return decision.hadFeedback ? formatResponse.toolDenied() : formatResponse.subagentLaunchDenied()
 		}
 		telemetryService.captureToolUsage(config.ulid, block.name, config.api.getModel().id, false, true)
+		recordLaunchApproved(config.taskState)
 
 		// One row for the whole call, rewritten in place. Added once with `say` (before any child ask exists), and
 		// afterwards only mutated: a `say` per update would move lastMessageTs and supersede a pending child ask.

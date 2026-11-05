@@ -33,6 +33,11 @@ export function recordLaunchDenial(state: LaunchBrakeState, hadFeedback: boolean
 	}
 }
 
+/** The user approved a launch: the denials were not "in a row" any more. */
+export function recordLaunchApproved(state: LaunchBrakeState): void {
+	state.bareLaunchDenials = 0
+}
+
 /** The user wrote to the lead: any pause ends. */
 export function userWroteToLead(state: LaunchBrakeState): void {
 	state.bareLaunchDenials = 0

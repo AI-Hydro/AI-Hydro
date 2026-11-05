@@ -89,7 +89,11 @@ export function SubagentStatusRow({ message }: { message: AiHydroMessage }) {
 			).length
 	// The noun comes from the children's own labels (their display name without the position), so a reviewer's row is not
 	// headed with another kind's name.
-	const noun = (payload.children[0]?.label ?? "subagent 1").replace(/\s+\d+$/, "").toLowerCase()
+	const noun =
+		(payload.children[0]?.label ?? "")
+			.replace(/\s+\d+$/, "")
+			.trim()
+			.toLowerCase() || "subagent"
 	return (
 		<section
 			aria-label={`Read-only ${noun}s`}

@@ -178,6 +178,18 @@ describe("parseReview", () => {
 		}
 	})
 
+	it("a supported verdict with no evidence becomes unsupported, saying no source was named", () => {
+		const parsed = parseReview({ summary: "s", verdicts: "supported | A\nsupported | B |   \nunverifiable | C" })
+		expect(parsed.ok).to.equal(true)
+		if (parsed.ok) {
+			expect(parsed.review.verdicts).to.deep.equal([
+				{ statement: "A", verdict: "unsupported", evidence: "no source named" },
+				{ statement: "B", verdict: "unsupported", evidence: "no source named" },
+				{ statement: "C", verdict: "unverifiable", evidence: "" },
+			])
+		}
+	})
+
 	it("refuses a missing summary, no verdicts, an unknown word and a line with no statement", () => {
 		for (const params of [
 			{ verdicts: "supported | A | b" },

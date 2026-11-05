@@ -52,10 +52,13 @@ export function parseReview(params: ToolUse["params"]): ReviewParse {
 				error: `Verdict line ${index + 1} is not 'supported | <statement> | <evidence>' (the first part must be one of ${REVIEW_VERDICTS.join(", ")}).`,
 			}
 		}
+		const evidence = cut(parts.slice(2).join(" | ").trim(), REVIEW_LIMITS.evidenceChars)
+		// "Supported" with no source is a claim of support nobody can check: it is reported as unsupported, and says why.
+		const unsourced = word === "supported" && !evidence
 		verdicts.push({
 			statement: cut(parts[1], REVIEW_LIMITS.statementChars),
-			verdict: word,
-			evidence: cut(parts.slice(2).join(" | "), REVIEW_LIMITS.evidenceChars),
+			verdict: unsourced ? "unsupported" : word,
+			evidence: unsourced ? "no source named" : evidence,
 		})
 	}
 	const trimmed: string[] = []

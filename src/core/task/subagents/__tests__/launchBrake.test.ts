@@ -1,6 +1,13 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
-import { LAUNCH_BRAKE_AT, type LaunchBrakeState, launchesPaused, recordLaunchDenial, userWroteToLead } from "../launchBrake"
+import {
+	LAUNCH_BRAKE_AT,
+	type LaunchBrakeState,
+	launchesPaused,
+	recordLaunchApproved,
+	recordLaunchDenial,
+	userWroteToLead,
+} from "../launchBrake"
 
 describe("launch brake", () => {
 	it("pauses at two bare denials and not before", () => {
@@ -31,5 +38,14 @@ describe("launch brake", () => {
 		expect(state.launchDenials).to.equal(2)
 		recordLaunchDenial(state, false)
 		expect(launchesPaused(state), "one bare denial after a reset is not a pause").to.equal(false)
+	})
+
+	it("an approved launch ends the run: two denials with an approval between them do not pause", () => {
+		const state: LaunchBrakeState = {}
+		recordLaunchDenial(state, false)
+		recordLaunchApproved(state)
+		recordLaunchDenial(state, false)
+		expect(launchesPaused(state)).to.equal(false)
+		expect(state.launchDenials).to.equal(2)
 	})
 })
