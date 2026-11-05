@@ -3,6 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import type { Controller } from "@core/controller"
 import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
+import { authorizeMapPath, grantMapPath, type MapPathDeps, type MapPathPurpose } from "@core/map/authorizeMapPath"
 import { resolveMapFilePath as resolveMapFilePathIn } from "@core/map/resolveMapFilePath"
 import { checkSaveTarget, loadPinsForProject, NO_FOLDER_KEY, quarantinePins, savePinsForProject } from "@core/project/pinStore"
 import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
@@ -42,6 +43,24 @@ function resolveMapFilePath(filePath: string, hint: { workspaceFolder?: unknown;
 			kind: hint.kind === "project" || hint.kind === "cache" ? hint.kind : "any",
 		},
 	)
+}
+
+/**
+ * The one check every path from the webview, a scene or a message passes before the host opens it, reads it or adds its
+ * folder to the panel's resource roots (see `authorizeMapPath`).
+ */
+async function authorizeForMap(
+	absolutePath: string,
+	purpose: MapPathPurpose,
+	controller: Controller | undefined,
+): Promise<{ ok: true; path: string } | { ok: false; reason: string }> {
+	const deps: MapPathDeps = {
+		workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+		aihydroDirs: () => [aihydroPath("map_layer_geojson_cache"), aihydroPath()],
+		onMapPaths: () =>
+			(controller?.getMapLayers() ?? []).map((layer) => resolvedSourcePath(layer.metadata)).filter((p): p is string => !!p),
+	}
+	return await authorizeMapPath(absolutePath, purpose, deps)
 }
 
 const MAP_SUPPORTED_EXTENSIONS = new Set([
@@ -316,6 +335,17 @@ export class VscodeMapPanelProvider {
 		if (!panel) {
 			return
 		}
+		// A path the check refuses is not loaded. Files the user picked were granted by `grantAndSendFileUrisToMap`.
+		const allowed: vscode.Uri[] = []
+		for (const uri of uris) {
+			const decision = await authorizeForMap(uri.fsPath, "load", VscodeMapPanelProvider.controller)
+			if (decision.ok) {
+				allowed.push(uri)
+			} else {
+				vscode.window.showWarningMessage(`AI-Hydro Map: ${decision.reason}`)
+			}
+		}
+		uris = allowed
 		VscodeMapPanelProvider.allowLocalFileRoots(
 			panel,
 			uris.map((uri) => vscode.Uri.file(path.dirname(uri.fsPath))),
@@ -341,6 +371,17 @@ export class VscodeMapPanelProvider {
 		}
 	}
 
+	/** For files the user just chose (Add file, the Explorer menu, "Add to Map"): the choice puts them in reach of the map. */
+	public static async grantAndSendFileUrisToMap(
+		uris: vscode.Uri[],
+		sourceExtras: Record<string, Record<string, string | number | undefined>> = {},
+	): Promise<void> {
+		for (const uri of uris) {
+			grantMapPath(uri.fsPath)
+		}
+		await VscodeMapPanelProvider.sendFileUrisToMap(uris, sourceExtras)
+	}
+
 	/**
 	 * Add file: the native picker, so every file that reaches the map this way carries its absolute path (the webview's
 	 * own file input cannot tell the page where the file is). Same route as the Explorer menu.
@@ -357,7 +398,7 @@ export class VscodeMapPanelProvider {
 		if (!picked || picked.length === 0) {
 			return
 		}
-		await VscodeMapPanelProvider.sendFileUrisToMap(picked)
+		await VscodeMapPanelProvider.grantAndSendFileUrisToMap(picked)
 	}
 
 	public static async addLayerFromUrl(initialUrl?: string): Promise<void> {
@@ -400,7 +441,7 @@ export class VscodeMapPanelProvider {
 		await vscode.workspace.fs.createDirectory(cacheDir)
 		const target = vscode.Uri.joinPath(cacheDir, `${Date.now()}_${name}`)
 		await vscode.workspace.fs.writeFile(target, bytes)
-		await VscodeMapPanelProvider.sendFileUrisToMap([target], {
+		await VscodeMapPanelProvider.grantAndSendFileUrisToMap([target], {
 			[target.fsPath]: {
 				sourceRemoteUrl: trimmedUrl,
 				sourceDisplayPath: trimmedUrl,
@@ -626,7 +667,7 @@ export class VscodeMapPanelProvider {
 					scene: text,
 				})
 			} else {
-				await VscodeMapPanelProvider.sendFileUrisToMap([target], {
+				await VscodeMapPanelProvider.grantAndSendFileUrisToMap([target], {
 					[target.fsPath]: {
 						sourceRemoteUrl: artifactUrl || `aihydro-gallery://${item.id}`,
 						sourceDisplayPath: `AI-Hydro Research Gallery: ${item.title}`,
@@ -894,7 +935,11 @@ export class VscodeMapPanelProvider {
 							if (!filePath) {
 								throw new Error("Missing file path")
 							}
-							const uri = vscode.Uri.file(filePath)
+							const decision = await authorizeForMap(filePath, "read", VscodeMapPanelProvider.controller)
+							if (!decision.ok) {
+								throw new Error(decision.reason)
+							}
+							const uri = vscode.Uri.file(decision.path)
 							VscodeMapPanelProvider.allowLocalFileRoots(panel, [vscode.Uri.file(path.dirname(uri.fsPath))])
 							await panel.webview.postMessage({
 								type: "aihydro-resolve-file-uri-result",
@@ -925,8 +970,14 @@ export class VscodeMapPanelProvider {
 							if (!filePath) {
 								throw new Error("Missing source file path")
 							}
+							const decision = await authorizeForMap(filePath, "open", VscodeMapPanelProvider.controller)
+							if (!decision.ok) {
+								throw new Error(decision.reason)
+							}
 							// vscode.open picks the right editor for the file (a GeoTIFF is not a text document).
-							await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(filePath), { preview: false })
+							await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(decision.path), {
+								preview: false,
+							})
 						} catch (err) {
 							vscode.window.showWarningMessage(
 								`AI-Hydro Map: Could not open source file: ${err instanceof Error ? err.message : String(err)}`,
@@ -947,6 +998,20 @@ export class VscodeMapPanelProvider {
 							requestId,
 							paths,
 						})
+						break
+					}
+					case "aihydro-map-load-project-file": {
+						// A project file the extension host cannot read to text (GeoTIFF, KMZ): the map panel parses it. The
+						// file is named by folder and relative path and must be inside an open folder.
+						const folder = (vscode.workspace.workspaceFolders ?? []).find(
+							(f) => typeof message.workspaceFolder === "string" && f.uri.fsPath === message.workspaceFolder,
+						)
+						if (!folder || typeof message.relativePath !== "string") {
+							vscode.window.showWarningMessage("AI-Hydro Map: That file is not in an open folder.")
+							break
+						}
+						const target = vscode.Uri.file(path.join(folder.uri.fsPath, message.relativePath))
+						await VscodeMapPanelProvider.sendFileUrisToMap([target])
 						break
 					}
 					case "aihydro-map-add-file-command": {

@@ -57,6 +57,8 @@ export interface MapWorkspace {
 	activeRoi?: ActiveRoi
 	layerPanel?: {
 		showDetails: boolean
+		/** Project files section open or closed. Absent until the user chooses, so the panel picks the default. */
+		projectFilesOpen?: boolean
 	}
 	/** User-facing display names keyed by layer id (does not change server layer name). */
 	layerAliases?: Record<string, string>

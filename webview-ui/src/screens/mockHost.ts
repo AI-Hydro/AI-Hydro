@@ -10,9 +10,65 @@ import { convertMcpServersToProtoMcpServers } from "@shared/proto-conversions/mc
 import { getActiveScreen } from "./active"
 import { buildBaseState } from "./fixtures/state"
 
+type PfEntry = { relativePath: string; workspaceFolder: string; folderName: string; kind: "file" | "folder" }
+/** The removed list of the current screen, kept while the screen is shown (the real host keeps it in global state). */
+let pfRemoved: { screenId: string; entries: PfEntry[] } | undefined
+
+function removedFor(screen: ReturnType<typeof getActiveScreen>): PfEntry[] {
+	if (!pfRemoved || pfRemoved.screenId !== screen?.id) pfRemoved = { screenId: screen?.id ?? "", entries: [...(screen?.projectFiles?.removed ?? [])] }
+	return pfRemoved.entries
+}
+
+function projectFilesAnswer(screen: ReturnType<typeof getActiveScreen>) {
+	const pf = screen?.projectFiles
+	const removed = removedFor(screen)
+	const hidden = (f: { relativePath: string; workspaceFolder: string }) =>
+		removed.some(
+			(e) =>
+				e.workspaceFolder === f.workspaceFolder &&
+				(e.kind === "file" ? e.relativePath === f.relativePath : f.relativePath.startsWith(`${e.relativePath}/`)),
+		)
+	const files = (pf?.files ?? []).filter((f) => !hidden(f))
+	return {
+		files,
+		totalCount: files.length,
+		foldersSkipped: pf?.foldersSkipped ?? 0,
+		skippedNames: pf?.skippedNames ?? [],
+		symlinksFound: pf?.symlinksFound ?? 0,
+		symlinksSkipped: pf?.symlinksSkipped ?? 0,
+		truncated: pf?.truncated ?? false,
+		folderCount: pf?.folderCount ?? (pf ? 1 : 0),
+		removed: removed.map((e) => ({ ...e, name: e.relativePath.split("/").pop() ?? e.relativePath, removedAt: 0 })),
+	}
+}
+
+function changeProjectFileList(screen: ReturnType<typeof getActiveScreen>, remove: boolean, request: unknown): number {
+	const req = request as { entries?: { workspaceFolder: string; relativePath: string; kind?: string }[]; all?: boolean }
+	const list = removedFor(screen)
+	if (!remove && req.all) {
+		const n = list.length
+		list.length = 0
+		return n
+	}
+	let changed = 0
+	for (const e of req.entries ?? []) {
+		const kind = e.kind === "folder" ? "folder" : "file"
+		const i = list.findIndex((x) => x.workspaceFolder === e.workspaceFolder && x.relativePath === e.relativePath && x.kind === kind)
+		if (remove && i < 0) {
+			const folderName = screen?.projectFiles?.files.find((f) => f.workspaceFolder === e.workspaceFolder)?.folderName ?? ""
+			list.push({ relativePath: e.relativePath, workspaceFolder: e.workspaceFolder, folderName, kind })
+			changed++
+		} else if (!remove && i >= 0) {
+			list.splice(i, 1)
+			changed++
+		}
+	}
+	return changed
+}
+
 type Handlers = { onResponse?: (value: any) => void; onError?: (e: unknown) => void; onComplete?: () => void }
 
-export function hostCall(service: string, method: string, _request: unknown): Promise<unknown> {
+export function hostCall(service: string, method: string, request: unknown): Promise<unknown> {
 	const screen = getActiveScreen()
 	if (service === "LedgerServiceClient" && method === "getLedgerState") {
 		if (screen?.ledger?.error) return Promise.reject(new Error(screen.ledger.error))
@@ -71,8 +127,16 @@ export function hostCall(service: string, method: string, _request: unknown): Pr
 		return Promise.resolve({ ok: true, outputs, message: "" })
 	}
 	if (service === "MapServiceClient" && method === "listWorkspaceGeoFiles") {
-		const files = screen?.workspaceFiles ?? []
-		return Promise.resolve({ files, totalCount: files.length })
+		return Promise.resolve(projectFilesAnswer(screen))
+	}
+	if (service === "MapServiceClient" && (method === "removeFromFileList" || method === "restoreToFileList")) {
+		return Promise.resolve({ changed: changeProjectFileList(screen, method === "removeFromFileList", request) })
+	}
+	if (service === "MapServiceClient" && method === "addWorkspaceGeoFile") {
+		return Promise.resolve({ layerId: "fixture-loaded", settingsRestored: false, positionFromTop: -1, sizeBytes: 0 })
+	}
+	if (service === "MapServiceClient" && method === "unloadMapLayer") {
+		return Promise.resolve({ unloaded: true, settingsKept: true })
 	}
 	if (service === "MapServiceClient" && method === "getMapState") {
 		return Promise.resolve({ layers: screen?.layers ?? [] })

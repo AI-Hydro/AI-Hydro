@@ -178,11 +178,58 @@ message WorkspaceGeoFile {
     string extension = 3;      // Lower-case extension including the dot
     string workspace_folder = 4; // Workspace folder path; with relative_path it identifies the file in multi-root workspaces
     string folder_name = 5;    // Display name of that folder
+    int64 size_bytes = 6;      // Size on disk when scanned
+    int64 mtime_ms = 7;        // Modified time when scanned
+}
+
+// A file or folder the user took out of the Project files list on this machine. The file itself is never touched.
+message RemovedFileEntry {
+    string relative_path = 1;
+    string workspace_folder = 2; // Empty when the entry's folder is not open in this window
+    string folder_name = 3;
+    string name = 4;
+    string kind = 5;             // file | folder
+    int64 removed_at = 6;
 }
 
 message ListWorkspaceGeoFilesResponse {
-    repeated WorkspaceGeoFile files = 1;
-    int32 total_count = 2;     // Files found; `files` may be capped
+    repeated WorkspaceGeoFile files = 1;  // Files in the list (removed ones are in `removed`)
+    int32 total_count = 2;     // Files found; at least this many when `truncated`
+    int32 folders_skipped = 3; // Folders at the top of an open folder that the scan does not enter
+    repeated string skipped_names = 4;
+    int32 symlinks_found = 5;  // Symlinked map files met by the scan
+    int32 symlinks_skipped = 6; // Of those, files that resolve outside their folder and are not listed
+    bool truncated = 7;        // The scan stopped at its result limit
+    repeated RemovedFileEntry removed = 8;
+    int32 folder_count = 9;    // Workspace folders open (more than one means the rows show the folder name)
+}
+
+message FileListEntry {
+    string workspace_folder = 1;
+    string relative_path = 2;
+    string kind = 3;           // file | folder; empty means file
+}
+
+message FileListChangeRequest {
+    repeated FileListEntry entries = 1;
+    bool all = 2;              // Restore only: every removed entry of this project
+}
+
+message FileListChangeResponse {
+    int32 changed = 1;
+}
+
+message UnloadMapLayerRequest {
+    string layer_id = 1;
+    bool has_opacity = 2;
+    double opacity = 3;        // The webview's opacity for the layer, kept for loading it back
+    bool hidden = 4;
+    int32 position_from_top = 5; // 0 is the top of the list; -1 when unknown
+}
+
+message UnloadMapLayerResponse {
+    bool unloaded = 1;
+    bool settings_kept = 2;    // Style and position were written to the sidecar file
 }
 
 message AddWorkspaceGeoFileRequest {
@@ -192,6 +239,12 @@ message AddWorkspaceGeoFileRequest {
 
 message AddWorkspaceGeoFileResponse {
     string layer_id = 1;       // Layer created for the file
+    bool settings_restored = 2; // The file was unloaded before; its style and position came back
+    bool has_opacity = 3;
+    double opacity = 4;
+    bool hidden = 5;
+    int32 position_from_top = 6; // -1 when none was kept
+    int64 size_bytes = 7;
 }
 
 message RestoreOlderMapLayersResponse {
@@ -232,6 +285,13 @@ service MapService {
 
     // Add one workspace geo file to the map as a layer
     rpc addWorkspaceGeoFile(AddWorkspaceGeoFileRequest) returns (AddWorkspaceGeoFileResponse);
+
+    // Unload: take a file-backed layer off the map and keep its style and position in a sidecar file. The file stays on disk.
+    rpc unloadMapLayer(UnloadMapLayerRequest) returns (UnloadMapLayerResponse);
+
+    // Remove from list / restore: a per-project preference in the extension's global state. Never deletes a file.
+    rpc removeFromFileList(FileListChangeRequest) returns (FileListChangeResponse);
+    rpc restoreToFileList(FileListChangeRequest) returns (FileListChangeResponse);
 
     // Load the saved layers beyond the startup restore cap (they are kept on disk, not dropped)
     rpc restoreOlderMapLayers(EmptyRequest) returns (RestoreOlderMapLayersResponse);

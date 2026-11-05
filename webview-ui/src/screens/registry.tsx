@@ -44,15 +44,20 @@ import {
 	longNameLayers,
 	MAP_STORAGE_KEY,
 	manyLayers,
+	manyProjectFiles,
+	pfFile,
 	referenceGauges,
 	restoredLayers,
 	TRANSECTS_STORAGE_KEY,
+	threeProjectFiles,
+	workspaceFileLayer,
 } from "./fixtures/map"
 import { fixtureInstalledSkills, fixtureMarketplaceSkills, fixtureMcpMarketplace } from "./fixtures/nav"
 import { replayCapsule, replayMismatch, replayMissing, replayNoTimezone, replaySession, replayWarnings } from "./fixtures/replay"
 import { catalogueModules, courseManifest, courseModule, courseProgress, executableModule, staticDoc } from "./fixtures/studio"
 import * as tx from "./fixtures/transcripts"
 import { MapBannerVariantsScreen } from "./MapBannerVariantsScreen"
+import { MapLayersMovingRowScreen } from "./MapLayersMovingRowScreen"
 import { MapIdentifyGaugeScreen, MapIdentifyScreen, MapTraceScreen } from "./MapIdentifyScreen"
 import { PrimitivesScreen } from "./PrimitivesScreen"
 import type { ScreenDef, ScreenStep } from "./types"
@@ -1425,7 +1430,7 @@ export const screens: ScreenDef[] = [
 	}),
 	mapScreen("map-layers-collapsed-group", "Layers: a group collapsed to its header", {
 		layers: manyLayers(),
-		steps: [...openTool("Layer manager"), { click: 'button.map-layer-group__head:has-text("Your files")' }, { wait: 200 }],
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-group__head:has(.map-layer-group__title:text-is("Files"))' }, { wait: 200 }],
 	}),
 	mapScreen("map-time-slider", "Map date filter", {
 		layers: featureLayers(),
@@ -1632,33 +1637,87 @@ export const screens: ScreenDef[] = [
 		storage: { [MAP_STORAGE_KEY]: framedWorkspace(), [TRANSECTS_STORAGE_KEY]: fixtureTransectsJson() },
 		steps: openTool("Transect profile", true),
 	}),
-	mapScreen("map-layers-workspace-files", "Layers: Add menu offers From this workspace (2), and its list is open", {
+	// Project files (layers slice 1): one collapsed tree below On the map. A loaded file keeps its row and shows a check.
+	mapScreen("map-layers-files-empty", "Project files: an open folder with no map files", {
 		layers: featureLayers(),
-		workspaceFiles: [
-			{
-				relativePath: "data/huc8_boundaries.geojson",
-				name: "huc8_boundaries.geojson",
-				extension: ".geojson",
-				workspaceFolder: "/fixture",
-				folderName: "fixture",
-			},
-			{
-				relativePath: "roi/active.json",
-				name: "active.json",
-				extension: ".json",
-				workspaceFolder: "/fixture",
-				folderName: "fixture",
-			},
+		projectFiles: { files: [], folderCount: 1, foldersSkipped: 2, skippedNames: [".git", "node_modules"] },
+		steps: [...openTool("Layer manager"), { click: 'button[aria-expanded="false"]:has-text("Project files")' }, { wait: 300 }],
+		expectVisible: ['[aria-label="Project files"] >> text=No map files in this folder.'],
+	}),
+	mapScreen("map-layers-files-three", "Project files: three files, one loaded (a check and Unload on its row, Load on the others)", {
+		layers: [workspaceFileLayer("data/huc8_boundaries.geojson")],
+		projectFiles: { files: threeProjectFiles(), foldersSkipped: 3, skippedNames: [".aihydro", ".git", "node_modules"] },
+		steps: [...openTool("Layer manager"), { click: 'button[aria-expanded="false"]:has-text("Project files")' }, { wait: 300 }],
+		expectVisible: [
+			'button[aria-expanded="true"]:has-text("Project files · 3 files, 1 loaded")',
+			'[role="img"][aria-label="Loaded"]',
+			'button[aria-label="Unload data/huc8_boundaries.geojson"]',
+			'button[aria-label="Load data/gauges.geojson"]',
 		],
+	}),
+	mapScreen("map-layers-files-collapsed", "Project files: collapsed by default when layers are on the map", {
+		layers: [workspaceFileLayer("data/huc8_boundaries.geojson")],
+		projectFiles: { files: threeProjectFiles() },
+		steps: openTool("Layer manager"),
+		expectVisible: ['button[aria-expanded="false"]:has-text("Project files · 3 files, 1 loaded")'],
+		expectAbsent: ['[role="treeitem"]'],
+	}),
+	mapScreen("map-layers-files-many-filter", "Project files: 200 files, folders collapsed, a filter typed (matches only, Remove N matches)", {
+		layers: [workspaceFileLayer("huc/huc_000.geojson")],
+		projectFiles: { files: manyProjectFiles() },
 		steps: [
 			...openTool("Layer manager"),
-			{ wait: 500 },
-			{ click: 'button[aria-label="Add layer"]' },
-			{ click: '[role="menuitem"]:has-text("From this workspace")' },
+			{ click: 'button[aria-expanded="false"]:has-text("Project files")' },
+			{ wait: 300 },
+			{ fill: ['input[aria-label="Filter project files"]', "huc_"] },
 			{ wait: 300 },
 		],
-		expectVisible: ['[aria-label="From this workspace"]'],
+		expectVisible: ['input[aria-label="Filter project files"]', 'button:has-text("Remove 19 matches")'],
 	}),
+	mapScreen("map-layers-files-removed-undo", "Project files: a file removed from the list, the status line with Undo, and Removed from list (1)", {
+		layers: [workspaceFileLayer("data/huc8_boundaries.geojson")],
+		projectFiles: { files: threeProjectFiles() },
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button[aria-expanded="false"]:has-text("Project files")' },
+			{ click: 'button[aria-label="Actions for data/gauges.geojson"]' },
+			{ click: '[role="menuitem"]:has-text("Remove from list")' },
+			{ wait: 400 },
+		],
+		expectVisible: ['text=The file stays on disk.', 'button:text-is("Undo")', 'button:has-text("Removed from list (1)")'],
+	}),
+	mapScreen("map-layers-files-large-confirm", "Project files: loading a 48 MB file asks first", {
+		layers: featureLayers(),
+		projectFiles: { files: [pfFile("data/nhd_flowlines_all.geojson", 48_000_000), ...threeProjectFiles()] },
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button[aria-expanded="false"]:has-text("Project files")' },
+			{ click: 'button[aria-label="Load data/nhd_flowlines_all.geojson"]' },
+			{ wait: 300 },
+		],
+		expectVisible: ['[role="alertdialog"][aria-label="Confirm large load"]'],
+	}),
+	mapScreen("map-layers-files-multi-root", "Project files: two folders open, the same relative path in each, a root row per folder", {
+		layers: featureLayers(),
+		projectFiles: {
+			files: [
+				pfFile("data/basin.geojson", 410_000, "/fixture/upper", "upper"),
+				pfFile("data/basin.geojson", 388_000, "/fixture/lower", "lower"),
+				pfFile("data/gauges.geojson", 52_000, "/fixture/lower", "lower"),
+			],
+			folderCount: 2,
+		},
+		steps: [...openTool("Layer manager"), { click: 'button[aria-expanded="false"]:has-text("Project files")' }, { wait: 300 }],
+		expectVisible: ['button[aria-label="Collapse upper"]', 'button[aria-label="Collapse lower"]'],
+	}),
+	{
+		id: "map-layers-files-moving-row-alt",
+		title: "Mock for comparison only: the alternative where a file moves to a Not on the map section when loaded",
+		group: "map",
+		surface: "editor",
+		render: () => <MapLayersMovingRowScreen />,
+		expectVisible: ['[aria-label="Not on the map"]'],
+	},
 	mapScreen("map-more-flyout", "More menu with Swipe, Time and Flood disabled and why", {
 		steps: [
 			{ click: 'button[aria-label^="Map tools"]', optional: true },

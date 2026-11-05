@@ -45,7 +45,7 @@ export function readLayerFacts(provenance: object | undefined | null): Record<st
 }
 
 /** What the UI shows for a layer with no `_run_id`. */
-export const NO_RUN_RECORD = "No run record"
+export const NO_RUN_RECORD = "Not linked to a run"
 
 type MetadataLike = Record<string, string> | undefined | null
 

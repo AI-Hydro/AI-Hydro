@@ -57,8 +57,27 @@ export interface ScreenDef {
 	mapHydrating?: boolean
 	/** Saved layers kept on disk beyond the restore cap (the Layers panel offers "Restore older layers"). */
 	mapOlderCount?: number
-	/** Geo files the fixture host lists in the open workspace (the Layers panel offers to add them). */
-	workspaceFiles?: { relativePath: string; name: string; extension: string; workspaceFolder: string; folderName: string }[]
+	/**
+	 * What the fixture host reports for the Layers panel's Project files tree. The host keeps the removed list for the
+	 * screen's lifetime, so Remove from list, Undo and Restore behave as they do against the real host.
+	 */
+	projectFiles?: {
+		files: {
+			relativePath: string
+			name: string
+			extension: string
+			workspaceFolder: string
+			folderName: string
+			sizeBytes: number
+		}[]
+		removed?: { relativePath: string; workspaceFolder: string; folderName: string; kind: "file" | "folder" }[]
+		foldersSkipped?: number
+		skippedNames?: string[]
+		symlinksFound?: number
+		symlinksSkipped?: number
+		truncated?: boolean
+		folderCount?: number
+	}
 	/** Artifacts the fixture host reports from saveMapExport (0 exercises the zero-output state). */
 	exportOutputs?: number
 	htmlPreviews?: HtmlPreviewItem[]

@@ -9,6 +9,34 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [Unreleased]
+
+### Layers slice 1: Project files (Load, Unload, Remove from list)
+
+Design: `docs/vision-2040/findings/layers-design-2026-11-02.md` (section 5 and the Addendum, which overrides the body where they differ).
+
+### Added
+
+- **Project files**, one collapsed tree below On the map. Header `Project files · N files, M loaded`. Every file stays in the tree; **Load** and **Unload** act in place and a loaded row shows a check. Size on every row; a filter above 10 files; folders collapsed above 20; virtualised with `react-virtuoso`; free height with room for at least five rows. Load asks first above 20 MB, says `Loaded <name>.` with a **Zoom to** link, and fits the camera when the map was empty. A failed load keeps its row and offers Retry.
+- **Remove from list** (row and folder menus, `Remove N matches` from the filter, `Unload and remove from list` on an On the map row) with **Undo** in the status line and **Removed from list (N)** with Restore and Restore all. It hides a file or folder on this machine, stored per project in `globalState` as a folder hash plus a relative path (never an absolute path), and never touches the file. New RPCs `removeFromFileList`, `restoreToFileList`; a static test and a byte-for-byte test assert no file is ever deleted.
+- **Unload** keeps name, style, opacity and place in a sidecar file (`map_unloaded_layers.<hash>.json` in `AIHYDRO_HOME`), not in the layer catalog. It keeps no run link. New RPC `unloadMapLayer`; `addWorkspaceGeoFile` gives the settings back.
+- **File scope.** `.aihydro/` is excluded; `files.exclude` is merged; the tree shows `N folders skipped` and symlink counts; one project identity across a multi-root window with a root row per folder; `.json` is judged from its first 8 KB; watcher events and `files.exclude` changes are batched; the scan stops at 5,000 files and says `5,000+`. `.tif`, `.tiff` and `.kmz` are listed and load through the map panel.
+- **`authorizeMapPath`**, the one check for every path the map panel opens, reads or adds to its resource roots (`aihydro-resolve-file-uri`, `aihydro-open-source-file`, `sendFileUrisToMap`, the new `aihydro-map-load-project-file`, `addWorkspaceGeoFileByPath`).
+- Screens: `map-layers-files-empty`, `-three`, `-collapsed`, `-many-filter`, `-removed-undo`, `-large-confirm`, `-multi-root`, and `-moving-row-alt` (a mock of the alternative where a loaded file moves to a "Not on the map" section, for the owner to compare).
+
+### Changed
+
+- The group "Your files" is **Files** and says `Not linked to a run` (was "No run record").
+- The row menu says **Rename on map** and **Open file**; a file in Project files offers **Unload** instead of Remove layer. A layer with no such file keeps **Remove layer**. **Reload source** is unchanged (Slice 2 replaces it).
+- The Add menu no longer has "From this workspace (N)"; Project files replaces it.
+- A workspace layer now records `source_path`, `source_size_bytes` and `source_mtime_ms` when it is loaded.
+
+### Not in this slice
+
+The watcher that replaces Reload source (Slice 2); run actions and the by-artifact lookup (Slice 3); `Outside this project` and `Saved layers (N)` groups; `Draw all features` for previewed files.
+
+---
+
 ## [0.4.7] - 2026-11-05
 
 **Needs aihydro-tools 2.8.8** for the tracing facts and for layer alias resolution. With an older aihydro-tools the trace card reads "not recorded" for each fact it cannot read.

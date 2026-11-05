@@ -1,155 +1,87 @@
-import { resolvedSourcePath } from "@shared/map/layerIdentity"
 import { EmptyRequest } from "@shared/proto/cline/common"
-import { AddWorkspaceGeoFileRequest, type MapLayer, type WorkspaceGeoFile } from "@shared/proto/cline/map"
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import type { MapLayer, RemovedFileEntry, WorkspaceGeoFile } from "@shared/proto/cline/map"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { MapServiceClient } from "../../services/grpc-client"
 
-/** Rows shown before "Show all". */
-const COLLAPSED_ROWS = 8
+/** What the host says about the project's map files. */
+export interface ProjectFilesData {
+	files: WorkspaceGeoFile[]
+	removed: RemovedFileEntry[]
+	/** Files found; at least this many when `truncated`. */
+	totalCount: number
+	foldersSkipped: number
+	skippedNames: string[]
+	symlinksFound: number
+	symlinksSkipped: number
+	truncated: boolean
+	folderCount: number
+	/** The first answer has not arrived yet. */
+	loading: boolean
+}
 
-const workspaceFileKey = (folder: string | undefined, relativePath: string) => `${folder ?? ""}\u0000${relativePath}`
+const EMPTY: ProjectFilesData = {
+	files: [],
+	removed: [],
+	totalCount: 0,
+	foldersSkipped: 0,
+	skippedNames: [],
+	symlinksFound: 0,
+	symlinksSkipped: 0,
+	truncated: false,
+	folderCount: 0,
+	loading: true,
+}
+
+/** A burst of focus events asks the host once. */
+const REFRESH_DEBOUNCE_MS = 400
 
 /**
- * Geo files found in the open workspace that are not on the map yet. They are candidates only: opening the map does
- * not register every `*.json` as a layer (that flooded the layer list). They are offered from the Add menu as
- * "From this workspace (N)"; there is no section for them in the panel.
- *
- * A file is "on the map" when a layer has the same resolved source path, however that layer got there (this list,
- * Add file, the Explorer menu, a restore or an agent), so a file already added never shows up here again.
+ * The project's map files, from the host. They are candidates only: opening the map does not register every `*.json` as
+ * a layer (that flooded the layer list). The list is read on mount, again after every action that changes it, and when
+ * the window regains focus, because files appear while another window or a tool is working.
  */
-export function useWorkspaceCandidates(layers: MapLayer[]): {
-	addable: WorkspaceGeoFile[]
-	files: WorkspaceGeoFile[]
-	totalCount: number
-} {
-	const [files, setFiles] = useState<WorkspaceGeoFile[]>([])
-	const [totalCount, setTotalCount] = useState(0)
+export function useProjectFiles(): { data: ProjectFilesData; refresh: () => Promise<void> } {
+	const [data, setData] = useState<ProjectFilesData>(EMPTY)
+	const alive = useRef(true)
+	const timer = useRef<number | undefined>(undefined)
 
-	useEffect(() => {
-		let cancelled = false
-		MapServiceClient.listWorkspaceGeoFiles(EmptyRequest.create({}))
-			.then((response) => {
-				if (cancelled) return
-				setFiles(response.files ?? [])
-				setTotalCount(response.totalCount ?? response.files?.length ?? 0)
+	const refresh = useCallback(async () => {
+		try {
+			const r = await MapServiceClient.listWorkspaceGeoFiles(EmptyRequest.create({}))
+			if (!alive.current) return
+			setData({
+				files: r.files ?? [],
+				removed: r.removed ?? [],
+				totalCount: r.totalCount ?? r.files?.length ?? 0,
+				foldersSkipped: r.foldersSkipped ?? 0,
+				skippedNames: r.skippedNames ?? [],
+				symlinksFound: r.symlinksFound ?? 0,
+				symlinksSkipped: r.symlinksSkipped ?? 0,
+				truncated: r.truncated ?? false,
+				folderCount: r.folderCount ?? ((r.files ?? []).length > 0 ? 1 : 0),
+				loading: false,
 			})
-			.catch(() => {})
-		return () => {
-			cancelled = true
+		} catch {
+			if (alive.current) setData((cur) => ({ ...cur, loading: false }))
 		}
 	}, [])
 
-	const onMap = useMemo(() => {
-		const resolved = new Set<string>()
-		const pathOnly = new Set<string>()
-		for (const layer of layers) {
-			const key = resolvedSourcePath(layer.metadata)
-			if (key) resolved.add(key)
-			// Layers saved before the folder was recorded match by relative path alone.
-			if (layer.metadata?.path && !layer.metadata.workspace_folder) pathOnly.add(layer.metadata.path)
-		}
-		return { resolved, pathOnly }
-	}, [layers])
-
-	const addable = useMemo(
-		() =>
-			files.filter(
-				(file) =>
-					!onMap.resolved.has(
-						resolvedSourcePath({ path: file.relativePath, workspace_folder: file.workspaceFolder }) ?? "",
-					) && !onMap.pathOnly.has(file.relativePath),
-			),
-		[files, onMap],
-	)
-	return { addable, files, totalCount }
-}
-
-/** The list opened by "From this workspace (N)". Closes itself when the last file is added. */
-export const WorkspaceFilePicker: React.FC<{
-	addable: WorkspaceGeoFile[]
-	files: WorkspaceGeoFile[]
-	totalCount: number
-	border: string
-	fg: string
-	onClose: () => void
-	/** A one-line result for the panel's status area, which expires on its own. */
-	onStatus: (kind: "ok" | "err", msg: string) => void
-}> = ({ addable, files, totalCount, border, fg, onClose, onStatus }) => {
-	const [showAll, setShowAll] = useState(false)
-	const [busyKey, setBusyKey] = useState<string | null>(null)
-	const multiRoot = useMemo(() => new Set(files.map((file) => file.workspaceFolder).filter(Boolean)).size > 1, [files])
-
 	useEffect(() => {
-		if (addable.length === 0) onClose()
-	}, [addable.length, onClose])
+		alive.current = true
+		void refresh()
+		const onFocus = () => {
+			window.clearTimeout(timer.current)
+			timer.current = window.setTimeout(() => void refresh(), REFRESH_DEBOUNCE_MS)
+		}
+		window.addEventListener("focus", onFocus)
+		return () => {
+			alive.current = false
+			window.clearTimeout(timer.current)
+			window.removeEventListener("focus", onFocus)
+		}
+	}, [refresh])
 
-	const add = useCallback(
-		async (file: WorkspaceGeoFile) => {
-			setBusyKey(workspaceFileKey(file.workspaceFolder, file.relativePath))
-			try {
-				await MapServiceClient.addWorkspaceGeoFile(
-					AddWorkspaceGeoFileRequest.create({ relativePath: file.relativePath, workspaceFolder: file.workspaceFolder }),
-				)
-				onStatus("ok", `Added ${file.name}.`)
-			} catch (error) {
-				onStatus("err", error instanceof Error ? error.message : `Could not add ${file.name}.`)
-			} finally {
-				setBusyKey(null)
-			}
-		},
-		[onStatus],
-	)
-
-	const shown = showAll ? addable : addable.slice(0, COLLAPSED_ROWS)
-	return (
-		<section
-			aria-label="From this workspace"
-			style={{ borderTop: `1px solid ${border}`, padding: "6px 8px", fontSize: 11, color: fg }}>
-			<div className="map-section-head">
-				<span className="map-section-label">
-					<span aria-hidden="true" className="codicon codicon-folder" />
-					{`From this workspace (${addable.length})`}
-				</span>
-				<button
-					aria-label="Close the workspace file list"
-					className="map-overflow-trigger"
-					onClick={onClose}
-					type="button">
-					<span aria-hidden="true" className="codicon codicon-close" />
-				</button>
-			</div>
-			{shown.map((file) => (
-				<div
-					key={workspaceFileKey(file.workspaceFolder, file.relativePath)}
-					style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 28 }}>
-					<span
-						style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-						title={workspaceFileKey(file.workspaceFolder, file.relativePath).replace("\u0000", " / ")}>
-						{multiRoot && file.folderName ? `${file.folderName} / ` : ""}
-						{file.relativePath}
-					</span>
-					<button
-						aria-label={`Add ${file.relativePath} to the map`}
-						className="map-chip"
-						disabled={busyKey !== null}
-						onClick={() => void add(file)}
-						type="button">
-						{busyKey === workspaceFileKey(file.workspaceFolder, file.relativePath) ? "Adding…" : "Add"}
-					</button>
-				</div>
-			))}
-			{addable.length > COLLAPSED_ROWS && (
-				<button className="map-chip" onClick={() => setShowAll((value) => !value)} style={{ marginTop: 4 }} type="button">
-					{showAll ? "Show fewer" : `Show all ${addable.length}`}
-				</button>
-			)}
-			{totalCount > files.length && (
-				<div style={{ opacity: 0.75, marginTop: 4 }}>
-					Showing the first {files.length} of {totalCount} files found.
-				</div>
-			)}
-		</section>
-	)
+	return { data, refresh }
 }
 
 /**

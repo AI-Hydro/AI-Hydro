@@ -443,7 +443,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				vscode.window.showWarningMessage("AI-Hydro Map: open or select a supported geospatial file first.")
 				return
 			}
-			await VscodeMapPanelProvider.sendFileUrisToMap(uris)
+			await VscodeMapPanelProvider.grantAndSendFileUrisToMap(uris)
 		}),
 	)
 
@@ -613,7 +613,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 		if (action === "Add to Map") {
 			try {
-				await VscodeMapPanelProvider.sendFileUrisToMap([uri])
+				await VscodeMapPanelProvider.grantAndSendFileUrisToMap([uri])
 			} catch (err) {
 				vscode.window.showErrorMessage(`AI-Hydro Map: ${err instanceof Error ? err.message : String(err)}`)
 			}

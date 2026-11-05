@@ -10,9 +10,18 @@
  * Positioning is the parent's responsibility (see MapToolRibbon).
  */
 
+import { resolvedSourcePath } from "@shared/map/layerIdentity"
+import { layerRunId } from "@shared/map/provenanceEnvelope"
 import { StringRequest } from "@shared/proto/cline/common"
-import type { MapLayer } from "@shared/proto/cline/map"
-import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
+import type { MapLayer, RemovedFileEntry, WorkspaceGeoFile } from "@shared/proto/cline/map"
+import {
+	AddMapLayerRequest,
+	AddWorkspaceGeoFileRequest,
+	FileListChangeRequest,
+	RemoveMapLayerRequest,
+	SaveRoiToWorkspaceRequest,
+	UnloadMapLayerRequest,
+} from "@shared/proto/cline/map"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useMapContext } from "../../context/MapContext"
@@ -39,7 +48,9 @@ import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { resolveFileUri } from "./resolveFileUri"
 import { SymbologyEditor } from "./SymbologyEditor"
-import { restoredLayersNote, useWorkspaceCandidates, WorkspaceFilePicker } from "./WorkspaceFilesSection"
+import { type FolderRef, fileResolved, layerOfFile, layersByFile, WEBVIEW_PARSED } from "./projectFilesModel"
+import { ProjectFilesSection } from "./ProjectFilesSection"
+import { restoredLayersNote, useProjectFiles } from "./WorkspaceFilesSection"
 
 interface LayerPanelContentProps {
 	onZoomToLayer?: (layer: MapLayer) => void
@@ -154,6 +165,8 @@ interface UndoEntry {
 	/** The layer and what the user had set on it, so Undo gives back more than the geometry. */
 	layers: { layer: MapLayer; visible: boolean; opacity?: number; clustered: boolean }[]
 	order: string[]
+	/** Files taken out of the Project files list with it: Undo puts them back. */
+	listEntries?: { workspaceFolder: string; relativePath: string; kind: "file" | "folder" }[]
 }
 const UNDO_MS = 10_000
 
@@ -185,7 +198,11 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const [drawer, setDrawer] = useState<DrawerView>(CLOSED_DRAWER)
 	const [symbologyMode, setSymbologyMode] = useState<"basic" | "graduated">("basic")
 	const [confirm, setConfirm] = useState<null | { kind: "all" } | { kind: "duplicates"; names: string[] }>(null)
-	const [loadStatus, setLoadStatus] = useState<{ kind: "idle" | "ok" | "err"; msg: string }>({ kind: "idle", msg: "" })
+	const [loadStatus, setLoadStatus] = useState<{
+		kind: "idle" | "ok" | "err"
+		msg: string
+		action?: { label: string; run: () => void }
+	}>({ kind: "idle", msg: "" })
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<LayerOrigin>>(new Set())
 	// Back-to-back removals each stay undoable (most recent first); the whole stack expires together.
 	const [undoStack, setUndoStack] = useState<UndoEntry[]>([])
@@ -224,15 +241,32 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		[],
 	)
 
-	const say = useCallback((kind: "ok" | "err" | "idle", msg: string, ms = 3500) => {
-		setLoadStatus({ kind, msg })
+	const say = useCallback((kind: "ok" | "err" | "idle", msg: string, ms = 3500, action?: { label: string; run: () => void }) => {
+		setLoadStatus({ kind, msg, action })
 		if (msg) window.setTimeout(() => setLoadStatus((cur) => (cur.msg === msg ? { kind: "idle", msg: "" } : cur)), ms)
 	}, [])
 
-	// Workspace files not on the map yet are offered from the Add menu; the list opens only when asked for.
-	const workspace = useWorkspaceCandidates(layers)
-	const [pickerOpen, setPickerOpen] = useState(false)
-	const closePicker = useCallback(() => setPickerOpen(false), [])
+	// Project files: every map file of the open folders. A loaded file stays in the tree with a check.
+	const project = useProjectFiles()
+	const fileIndex = useMemo(() => layersByFile(layers), [layers])
+	const loadedPaths = useMemo(() => {
+		const set = new Set<string>()
+		for (const file of project.data.files) if (layerOfFile(file, fileIndex)) set.add(fileResolved(file))
+		return set
+	}, [project.data.files, fileIndex])
+	const [projectOpenChoice, setProjectOpenChoice] = useState<boolean | undefined>(persisted.layerPanel?.projectFilesOpen)
+	// Closed by default; open on its own only when the map has nothing on it and there are files to load.
+	// Decided once, when the first answer arrives, so removing the last row does not close the section under the user.
+	const [autoOpen, setAutoOpen] = useState<boolean | undefined>(undefined)
+	useEffect(() => {
+		if (autoOpen === undefined && !project.data.loading) setAutoOpen(layers.length === 0 && project.data.files.length > 0)
+	}, [autoOpen, project.data.loading, project.data.files.length, layers.length])
+	const projectOpen = projectOpenChoice ?? autoOpen ?? false
+	const toggleProjectOpen = () => {
+		const next = !projectOpen
+		setProjectOpenChoice(next)
+		saveMapWorkspace({ layerPanel: { showDetails: persisted.layerPanel?.showDetails ?? false, projectFilesOpen: next } })
+	}
 
 	// "N layers were the same file": said once per session, then it expires like any status line.
 	useEffect(() => {
@@ -401,7 +435,11 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	 * Remove layers. The host is asked first and the panel changes only for what it accepted, so the two never disagree:
 	 * a layer the host refused is still on the map and still in the list, and the message says so.
 	 */
-	const removeLayers = async (targets: MapLayer[], label: string) => {
+	const removeLayers = async (
+		targets: MapLayer[],
+		label: string,
+		opts: { unload?: boolean; listEntries?: UndoEntry["listEntries"] } = {},
+	) => {
 		if (targets.length === 0) return
 		const previousOrder = drawLayers.map((l) => l.id)
 		const captured = targets.map(capture)
@@ -410,7 +448,21 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		await Promise.all(
 			targets.map(async (layer) => {
 				try {
-					await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId: layer.id }))
+					if (opts.unload) {
+						// Unload keeps the layer's name, style, opacity and place in a sidecar file; the file on disk is not touched.
+						const opacity = layerOpacities[layer.id]
+						await MapServiceClient.unloadMapLayer(
+							UnloadMapLayerRequest.create({
+								layerId: layer.id,
+								hasOpacity: opacity !== undefined,
+								opacity: opacity ?? 0,
+								hidden: !visibleLayerIds.has(layer.id),
+								positionFromTop: displayIds.indexOf(layer.id),
+							}),
+						)
+					} else {
+						await MapServiceClient.removeMapLayer(RemoveMapLayerRequest.create({ layerId: layer.id }))
+					}
 					removed.push(layer)
 				} catch (err) {
 					console.error("Failed to remove layer:", err)
@@ -418,7 +470,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				}
 			}),
 		)
-		if (failed > 0) say("err", `Could not remove ${failed === 1 ? "the layer" : `${failed} layers`}.`, 6000)
+		if (failed > 0) say("err", `Could not ${opts.unload ? "unload" : "remove"} ${failed === 1 ? "the layer" : `${failed} layers`}.`, 6000)
 		if (removed.length === 0) return
 		const gone = new Set(removed.map((l) => l.id))
 		for (const layer of removed) {
@@ -429,7 +481,18 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		onReorder(previousOrder.filter((id) => !gone.has(id)))
 		if (selectedId && gone.has(selectedId)) select(null)
 		if (renamingId && gone.has(renamingId)) setRenamingId(null)
-		pushUndo({ label, layers: captured.filter((c) => gone.has(c.layer.id)), order: previousOrder })
+		let listEntries: UndoEntry["listEntries"]
+		if (opts.listEntries && opts.listEntries.length > 0) {
+			try {
+				await MapServiceClient.removeFromFileList(FileListChangeRequest.create({ entries: opts.listEntries }))
+				listEntries = opts.listEntries
+			} catch (err) {
+				console.error("Failed to remove from the list:", err)
+				say("err", "Unloaded, but could not remove it from the list.", 6000)
+			}
+		}
+		pushUndo({ label, layers: captured.filter((c) => gone.has(c.layer.id)), order: previousOrder, listEntries })
+		if (opts.unload || listEntries) void project.refresh()
 	}
 
 	/** Undo the latest removal. The host is asked first; only layers it took back reappear in the panel. */
@@ -440,6 +503,14 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		setUndoStack(stackRef.current)
 		if (stackRef.current.length > 0) armUndoTimer()
 		else window.clearTimeout(undoTimer.current)
+		if (entry.listEntries && entry.listEntries.length > 0) {
+			try {
+				await MapServiceClient.restoreToFileList(FileListChangeRequest.create({ entries: entry.listEntries }))
+			} catch (err) {
+				console.error("Failed to restore the list:", err)
+			}
+			void project.refresh()
+		}
 		const failed: string[] = []
 		const back = new Set<string>()
 		for (const c of entry.layers) {
@@ -457,8 +528,10 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 			if (c.opacity !== undefined) onOpacityChange?.(c.layer.id, c.opacity)
 			if (c.clustered) onClusterToggle?.(c.layer.id, true)
 		}
-		const present = new Set([...orderIds, ...back])
-		onReorder([...entry.order.filter((id) => present.has(id)), ...orderIds.filter((id) => !entry.order.includes(id))])
+		if (entry.layers.length > 0) {
+			const present = new Set([...orderIds, ...back])
+			onReorder([...entry.order.filter((id) => present.has(id)), ...orderIds.filter((id) => !entry.order.includes(id))])
+		}
 		say(failed.length ? "err" : "ok", failed.length ? `Could not restore ${failed.join(", ")}.` : "Restored.", 4000)
 	}
 
@@ -487,6 +560,146 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const drop = duplicatesToRemove(orderedLayers, (id) => visibleLayerIds.has(id))
 		setConfirm(null)
 		await removeLayers(drop, `Removed ${drop.length} duplicate${drop.length === 1 ? "" : "s"}`)
+	}
+
+	// ── project files: load, unload, remove from list ───────────────────────
+
+	const layersRef = useRef(layers)
+	layersRef.current = layers
+	/** A layer to fit the camera to as soon as it reaches the map (a load onto an empty map). */
+	const fitWhenArrives = useRef<string | null>(null)
+	useEffect(() => {
+		const id = fitWhenArrives.current
+		if (!id) return
+		const layer = layers.find((l) => l.id === id)
+		if (layer) {
+			fitWhenArrives.current = null
+			onZoomToLayer?.(layer)
+		}
+	}, [layers, onZoomToLayer])
+	const zoomToLoaded = (id: string) => {
+		const layer = layersRef.current.find((l) => l.id === id)
+		if (layer) onZoomToLayer?.(layer)
+	}
+
+	/** Files in the list, by resolved path; and the resolved paths of files removed from the list. */
+	const fileByResolved = useMemo(() => {
+		const map = new Map<string, WorkspaceGeoFile>()
+		for (const file of project.data.files) map.set(fileResolved(file), file)
+		return map
+	}, [project.data.files])
+	const removedResolved = useMemo(() => {
+		const set = new Set<string>()
+		for (const e of project.data.removed) {
+			if (e.kind === "file" && e.workspaceFolder) {
+				set.add(resolvedSourcePath({ path: e.relativePath, workspace_folder: e.workspaceFolder }) ?? "")
+			}
+		}
+		return set
+	}, [project.data.removed])
+
+	const loadProjectFile = async (file: WorkspaceGeoFile) => {
+		if (WEBVIEW_PARSED.has(file.extension.toLowerCase())) {
+			// GeoTIFF and KMZ are parsed by the map panel itself; the layer arrives when it has read the file.
+			PLATFORM_CONFIG.postMessage({
+				type: "aihydro-map-load-project-file",
+				relativePath: file.relativePath,
+				workspaceFolder: file.workspaceFolder,
+			})
+			if (layersRef.current.length === 0) say("idle", `Loading ${file.name}…`, 8000)
+			return
+		}
+		const wasEmpty = layersRef.current.length === 0
+		say("idle", `Loading ${file.name}…`, 15_000)
+		let res: Awaited<ReturnType<typeof MapServiceClient.addWorkspaceGeoFile>>
+		try {
+			res = await MapServiceClient.addWorkspaceGeoFile(
+				AddWorkspaceGeoFileRequest.create({ relativePath: file.relativePath, workspaceFolder: file.workspaceFolder }),
+			)
+		} catch (error) {
+			say("err", error instanceof Error ? error.message : `Could not load ${file.name}.`, 8000)
+			throw error
+		}
+		const id = res.layerId
+		if (res.settingsRestored) {
+			// Back as it was: opacity, hidden or shown, and its place in the list.
+			if (res.hasOpacity) onOpacityChange?.(id, res.opacity)
+			if (res.hidden) onVisibilityChange(id, false)
+			if (res.positionFromTop >= 0) {
+				const display = displayIds.filter((x) => x !== id)
+				display.splice(Math.min(res.positionFromTop, display.length), 0, id)
+				onReorder([...display].reverse())
+			}
+		}
+		// The camera moves only when the map was empty; otherwise a Zoom to link is offered.
+		if (wasEmpty) fitWhenArrives.current = id
+		say("ok", `Loaded ${file.name}.`, 10_000, { label: "Zoom to", run: () => zoomToLoaded(id) })
+		void project.refresh()
+	}
+
+	const unloadProjectFile = async (file: WorkspaceGeoFile) => {
+		const layer = layerOfFile(file, fileIndex)
+		if (layer) await unloadLayers([layer], file.name)
+	}
+
+	/** Unload layers (and, with `alsoRemove`, take their files out of the list). The files stay on disk. */
+	const unloadLayers = async (targets: MapLayer[], name: string, alsoRemove = false) => {
+		const linked = targets.map((l) => layerRunId(l.metadata)?.split(".")[0]).find(Boolean)
+		const base = `Unloaded ${name}`
+		const label = alsoRemove
+			? `${base} and removed it from this list. The file stays on disk`
+			: linked
+				? `${base}. Its link to run ${linked} is not kept; Undo restores it`
+				: `${base}. The file stays on disk`
+		const listEntries: UndoEntry["listEntries"] = alsoRemove
+			? targets.flatMap((l): NonNullable<UndoEntry["listEntries"]> => {
+					const file = fileByResolved.get(resolvedSourcePath(l.metadata) ?? "")
+					return file ? [{ workspaceFolder: file.workspaceFolder, relativePath: file.relativePath, kind: "file" as const }] : []
+				})
+			: undefined
+		await removeLayers(targets, label, { unload: true, listEntries })
+	}
+
+	const removeFromList = async (entries: { file?: WorkspaceGeoFile; folder?: FolderRef }[], label: string) => {
+		const list: NonNullable<UndoEntry["listEntries"]> = entries.flatMap((e): NonNullable<UndoEntry["listEntries"]> =>
+			e.file
+				? [{ workspaceFolder: e.file.workspaceFolder, relativePath: e.file.relativePath, kind: "file" as const }]
+				: e.folder && e.folder.relativePath
+					? [{ workspaceFolder: e.folder.workspaceFolder, relativePath: e.folder.relativePath, kind: "folder" as const }]
+					: [],
+		)
+		if (list.length === 0) return
+		try {
+			await MapServiceClient.removeFromFileList(FileListChangeRequest.create({ entries: list }))
+		} catch (error) {
+			say("err", error instanceof Error ? error.message : "Could not remove from the list.", 6000)
+			return
+		}
+		pushUndo({ label, layers: [], order: [], listEntries: list })
+		await project.refresh()
+	}
+
+	const restoreToList = async (entries: RemovedFileEntry[] | "all") => {
+		try {
+			await MapServiceClient.restoreToFileList(
+				FileListChangeRequest.create(
+					entries === "all"
+						? { all: true, entries: [] }
+						: {
+								entries: entries.map((e) => ({
+									workspaceFolder: e.workspaceFolder,
+									relativePath: e.relativePath,
+									kind: e.kind,
+								})),
+							},
+				),
+			)
+		} catch (error) {
+			say("err", error instanceof Error ? error.message : "Could not restore.", 6000)
+			return
+		}
+		say("ok", entries === "all" ? "Restored all removed files to the list." : "Restored to the list.", 4000)
+		await project.refresh()
 	}
 
 	// ── order ─────────────────────────────────────────────────────────────
@@ -540,12 +753,18 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
 		const openable = openableRun(layer)
 		const rank = displayIds.indexOf(layer.id)
+		// A file in the Project files tree (listed, or removed from the list) can be unloaded and loaded again from there.
+		// A layer with no such row (an inline layer, a file outside the project) can only be removed.
+		const resolved = resolvedSourcePath(layer.metadata) ?? ""
+		const listed = resolved ? fileByResolved.has(resolved) : false
+		const unloadable = listed || (resolved !== "" && removedResolved.has(resolved))
 		const items: (OverflowItem | false)[] = [
 			{ key: "zoom", label: "Zoom to layer", icon: "zoom-in", onSelect: () => onZoomToLayer?.(layer) },
 			{
 				key: "rename",
-				label: "Rename",
+				label: "Rename on map",
 				icon: "edit",
+				title: "Sets the name shown on the map. The file is not renamed.",
 				onSelect: () => {
 					setRenamingId(layer.id)
 					setRenameDraft(displayName)
@@ -561,7 +780,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				},
 			!!sourcePath && {
 				key: "open-source",
-				label: "Open source file",
+				label: "Open file",
 				icon: "go-to-file",
 				onSelect: () => openSourceFile(sourcePath, layer.metadata?.workspace_folder),
 			},
@@ -593,12 +812,27 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				onSelect: () => moveLayer(layer, 1),
 			},
 			{ key: "d5", divider: true },
-			{
-				key: "remove",
-				label: "Remove layer",
+			unloadable
+				? {
+						key: "unload",
+						label: "Unload",
+						icon: "close",
+						title: "Takes it off the map. The file stays on disk, and its style is kept for next time.",
+						onSelect: () => void unloadLayers([layer], displayName),
+					}
+				: {
+						key: "remove",
+						label: "Remove layer",
+						icon: "trash",
+						danger: true,
+						onSelect: () => void removeLayers([layer], `Removed “${displayName}”`),
+					},
+			listed && {
+				key: "unload-remove",
+				label: "Unload and remove from list",
 				icon: "trash",
-				danger: true,
-				onSelect: () => void removeLayers([layer], `Removed “${displayName}”`),
+				title: "Takes it off the map and hides it in Project files, on this machine. The file stays on disk.",
+				onSelect: () => void unloadLayers([layer], displayName, true),
 			},
 		]
 		return items.filter(Boolean) as OverflowItem[]
@@ -612,16 +846,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 			icon: "link",
 			onSelect: () => PLATFORM_CONFIG.postMessage({ type: "aihydro-map-add-url-command" }),
 		},
-		...(workspace.addable.length > 0
-			? [
-					{
-						key: "workspace",
-						label: `From this workspace (${workspace.addable.length})`,
-						icon: "folder",
-						onSelect: () => setPickerOpen(true),
-					} as OverflowItem,
-				]
-			: []),
 	]
 	const panelItems: OverflowItem[] = [
 		{
@@ -827,11 +1051,17 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				{loadStatus.msg && (
 					<div className={`map-layers__status${loadStatus.kind === "err" ? " map-layers__status--err" : ""}`}>
 						{loadStatus.msg}
+						{loadStatus.action && (
+							<button className="map-layers__link" onClick={loadStatus.action.run} type="button">
+								{loadStatus.action.label}
+							</button>
+						)}
 					</div>
 				)}
 			</div>
 
-			<div className="map-layers__list">
+			<div className="map-layers__list" data-with-project={project.data.folderCount > 0 || undefined}>
+				<h3 className="map-layers__section">On the map</h3>
 				{orderedLayers.length === 0 ? (
 					<div className="map-layers__empty">
 						<span aria-hidden="true" className="codicon codicon-layers" />
@@ -965,6 +1195,18 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				)}
 			</div>
 
+			<ProjectFilesSection
+				data={project.data}
+				loadedPaths={loadedPaths}
+				onLoad={loadProjectFile}
+				onOpenFile={(file) => openSourceFile(file.relativePath, file.workspaceFolder)}
+				onRemove={removeFromList}
+				onRestore={restoreToList}
+				onToggleOpen={toggleProjectOpen}
+				onUnload={unloadProjectFile}
+				open={projectOpen}
+			/>
+
 			{undo && (
 				<div className="map-layers__undo" role="status">
 					<span>{undo.label}.</span>
@@ -989,18 +1231,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 						</div>
 					)}
 				</div>
-			)}
-
-			{pickerOpen && workspace.addable.length > 0 && (
-				<WorkspaceFilePicker
-					addable={workspace.addable}
-					border="var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
-					fg="var(--vscode-foreground)"
-					files={workspace.files}
-					onClose={closePicker}
-					onStatus={(kind, msg) => say(kind, msg, kind === "err" ? 8000 : 4000)}
-					totalCount={workspace.totalCount}
-				/>
 			)}
 
 			{confirm && (
