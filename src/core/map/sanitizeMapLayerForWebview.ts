@@ -1,7 +1,7 @@
 import { MapLayer } from "@shared/proto/cline/map"
 
 /** GeoJSON larger than this is stripped from gRPC payloads; webview loads from disk. */
-const MAX_INLINE_GEOJSON_BYTES = 512_000
+export const MAX_INLINE_GEOJSON_BYTES = 512_000
 
 /** Inline 3D manifest JSON larger than this is stripped; webview loads from disk. */
 const MAX_INLINE_MANIFEST_BYTES = 512_000

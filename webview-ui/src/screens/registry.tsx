@@ -1371,7 +1371,7 @@ export const screens: ScreenDef[] = [
 	}),
 	mapScreen(
 		"map-layers-restored",
-		"Layers: restored duplicates flagged with Remove duplicates, one group note for Limited layers",
+		"Layers: restored duplicates flagged with Remove duplicates; only a layer of an unknown type says Limited layer",
 		{
 			layers: restoredLayers(),
 			steps: openTool("Layer manager"),

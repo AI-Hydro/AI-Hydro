@@ -217,6 +217,25 @@ describe("hydrateMapLayers: the file a layer names is the file it shows", () => 
 		expect(JSON.parse(read?.raw ?? "null")).to.deep.equal(POLYGON(5))
 	})
 
+	it("a restored layer holds its content up to the size the webview is sent, and a larger one is drawn from disk", async () => {
+		fs.writeFileSync(path.join(project, "a.geojson"), JSON.stringify(POLYGON(1)))
+		const big = JSON.stringify({ type: "FeatureCollection", features: [{ type: "Feature", properties: { pad: "x".repeat(600_000) }, geometry: POLYGON(2) }] })
+		fs.writeFileSync(path.join(project, "big.geojson"), big)
+		await persist([
+			workspaceEntry(),
+			entry({
+				id: "workspace_big",
+				name: "big.geojson",
+				workspace_path: "big.geojson",
+				metadata_snapshot: { source: "workspace", path: "big.geojson", workspace_folder: project },
+			}),
+		])
+		const c = controller()
+		await hydrateMapLayersFromCatalog(c as any, project)
+		expect(JSON.parse(c.state.layers.get("workspace_a")?.geojson ?? "null")).to.deep.equal(POLYGON(1))
+		expect(c.state.layers.get("workspace_big")?.geojson).to.equal("")
+	})
+
 	it("a cached tool layer survives a second restart", async () => {
 		const copy = path.join(cacheDir, "tool_a.geojson")
 		fs.writeFileSync(copy, JSON.stringify(POLYGON(5)))

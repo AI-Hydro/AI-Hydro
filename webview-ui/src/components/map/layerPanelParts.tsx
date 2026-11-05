@@ -134,10 +134,13 @@ export const AttributeTable: React.FC<{ layer: MapLayer; border: string; fg: str
 	const [page, setPage] = useState(0)
 	const PAGE_SIZE = 10
 
-	const { features, headers } = useMemo(() => {
+	const { features, headers, bareGeometry } = useMemo(() => {
 		try {
 			const parsed = JSON.parse(layer.geojson)
-			const feats = parsed?.type === "FeatureCollection" ? parsed.features : parsed?.type === "Feature" ? [parsed] : []
+			// A file can hold one bare geometry (a Polygon, with no Feature around it): one shape, no attributes.
+			const bare = typeof parsed?.type === "string" && parsed.type !== "FeatureCollection" && parsed.type !== "Feature"
+			const feats =
+				parsed?.type === "FeatureCollection" ? parsed.features : parsed?.type === "Feature" ? [parsed] : bare ? [{}] : []
 			const keys = new Set<string>()
 			for (const f of feats.slice(0, 100)) {
 				for (const k of Object.keys(f.properties ?? {})) {
@@ -146,9 +149,9 @@ export const AttributeTable: React.FC<{ layer: MapLayer; border: string; fg: str
 					}
 				}
 			}
-			return { features: feats, headers: Array.from(keys).slice(0, 12) }
+			return { features: feats, headers: Array.from(keys).slice(0, 12), bareGeometry: bare }
 		} catch {
-			return { features: [], headers: [] }
+			return { features: [], headers: [], bareGeometry: false }
 		}
 	}, [layer.geojson])
 
@@ -166,7 +169,11 @@ export const AttributeTable: React.FC<{ layer: MapLayer; border: string; fg: str
 					borderTop: `1px dashed ${border}`,
 					color: fg,
 				}}>
-				{features.length === 0 ? "No features in this layer." : "Features have no attribute columns."}
+				{features.length === 0
+					? "No features in this layer."
+					: bareGeometry
+						? "This file has geometry but no attributes."
+						: "Features have no attribute columns."}
 			</div>
 		)
 	}

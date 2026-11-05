@@ -342,11 +342,22 @@ describe("LayerPanel", () => {
 		await waitFor(() => expect(removeMapLayer).toHaveBeenCalledTimes(1))
 	})
 
+	it("does not call a vector Limited because its geometry is drawn from disk", () => {
+		state.layers = [
+			poly("a", "flowlines", { provenance_path: "/p.json" }),
+			poly("b", "catchments", { provenance_path: "/q.json" }),
+		].map((l) => ({ ...l, geojson: "" }))
+		const { container } = render(<LayerPanelContent {...baseProps()} />)
+		expect(container.textContent ?? "").not.toMatch(/Limited layer/)
+		expect(container.querySelectorAll(".map-layer-group__note").length).toBe(0)
+	})
+
 	it("says Limited layer once for the group, never per row, and never drops a real warning", () => {
+		// A layer type nothing here knows is the one honest case.
 		state.layers = [
 			poly("a", "flowlines", { provenance_path: "" }),
 			poly("b", "catchments", { _run_id: "run-3.1", provenance_path: "" }),
-		].map((l) => ({ ...l, geojson: "" }))
+		].map((l) => ({ ...l, layerType: "mystery_kind", geojson: "" }))
 		const { container } = render(<LayerPanelContent {...baseProps()} />)
 		expect(container.querySelectorAll(".map-layer-group__note").length).toBe(1)
 		expect(container.querySelector(".map-layer-group__note")?.textContent).toMatch(/Limited layer/)
