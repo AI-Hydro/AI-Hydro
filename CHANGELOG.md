@@ -9,7 +9,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [Unreleased]
+## [0.4.8] - 2026-11-05
 
 ### Layers slice 1: Project files (Load, Unload, Remove from list)
 
