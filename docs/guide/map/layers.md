@@ -151,8 +151,9 @@ A layer that names a file follows it. There is no Reload button.
 - **A layer with an evidence link** (a run, a study, a tool or a claim) never changes by itself. Its row gets a warning icon and the drawer says `The file changed after this run. The map still shows the run's result.` **Use new file** replaces the content after one question, and removes the link, because the new content did not come from that run. A layer that holds no saved copy says `The map draws the file as it is now, so it may not match.` instead of claiming one.
 - **A file that is gone** keeps the last loaded copy and says `File not found: ...`. A file replaced in one step (save by rename, delete then create) is waited for and never shows as gone.
 - **Raster layers** (GeoTIFF) are not re-read in place: they say the file changed and to load it again.
-- It looks when a watcher says something changed, when the map opens, and when the map panel is shown again. A watcher can drop events (network drives promise none), so the look on show is the backstop. While the map is closed nothing is read or drawn; the next open finds every change.
-- Only files the map was allowed to load are watched: inside an open folder, in AI-Hydro's own folders, or picked this session with Add file or the Explorer. A path that arrived in a map scene is never watched.
+- It looks when a watcher says something changed, when the map opens, and when the map panel is shown again. A watcher can drop events (network drives promise none), so the look on show is the backstop. While the map is closed nothing is read or drawn; the next open applies the changes to layers that follow their file and flags the others.
+- **Only files the map was allowed to load are watched:** inside an open folder, in AI-Hydro's own folders, or picked this session with Add file or the Explorer. A file outside the open folders that was loaded in an earlier session, or whose path came from a map scene, is **not watched and not flagged** when it changes. Its drawer says `Not watched: this file is outside the open folders...`; add the file again to watch it.
+- A file too large to hash (over 256 MB) is flagged from its size and time and never updated in place. Beyond 50 watched folders outside the open folders, the status line says so and those files are found only by the look on show.
 
 ### Renaming
 

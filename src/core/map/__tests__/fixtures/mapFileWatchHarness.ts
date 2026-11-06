@@ -132,7 +132,7 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
 			h.watch.onParseResult({ requestId: request.requestId, ok: false, reason: "changed_while_reading" })
 			return
 		}
-		if (bytes.length !== request.sizeBytes) {
+		if (bytes.length !== request.sizeBytes || sha(bytes) !== request.sha256) {
 			h.watch.onParseResult({ requestId: request.requestId, ok: false, reason: "changed_while_reading" })
 			return
 		}

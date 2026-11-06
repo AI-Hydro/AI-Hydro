@@ -483,7 +483,7 @@ export const workspaceFileLayer = (relativePath: string, workspaceFolder = "/fix
  * accepts either).
  */
 export const fileStateLayer = (
-	state: "run-changed" | "run-changed-no-copy" | "updated" | "unreadable" | "missing" | "manual",
+	state: "run-changed" | "run-changed-no-copy" | "updated" | "unreadable" | "missing" | "manual" | "unwatched",
 ): MapLayer => {
 	const common = { fixture: "synthetic", source_path: "/fixture/data/flowlines.geojson", source_format: "geojson" }
 	switch (state) {
@@ -524,6 +524,13 @@ export const fileStateLayer = (
 				...common,
 				source: "workspace",
 				source_status: "source_missing",
+			})
+		case "unwatched":
+			return polygonLayer("fs-unw", "flowlines.geojson", {
+				...common,
+				source: "user",
+				source_status: "current",
+				source_watch: "not_watched",
 			})
 		case "manual":
 			return polygonLayer("fs-man", "flowlines.geojson", {

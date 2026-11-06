@@ -19,6 +19,8 @@ export interface RefreshFileRequest {
 	name: string
 	/** The size the host measured. A different number of bytes arrived: the file changed while it was read. */
 	sizeBytes: number
+	/** The sha256 the host computed from the bytes it read. The bytes parsed here must hash to the same value. */
+	sha256: string
 	mtimeMs: number
 }
 
@@ -34,18 +36,26 @@ export interface RefreshFileResult {
 }
 
 export interface RefreshIo {
-	fetchBlob: (uri: string) => Promise<Blob>
+	fetchBytes: (uri: string) => Promise<Uint8Array>
+	/** Hex sha256 of the bytes, or undefined where the page has no crypto (the size check alone then applies). */
+	sha256: (bytes: Uint8Array) => Promise<string | undefined>
 	load: typeof loadFile
 	post: (message: RefreshFileResult) => void
 }
 
 const defaultIo: RefreshIo = {
-	fetchBlob: async (uri) => {
+	fetchBytes: async (uri) => {
 		const response = await fetch(uri)
 		if (!response.ok) {
 			throw new Error(`HTTP ${response.status}`)
 		}
-		return await response.blob()
+		return new Uint8Array(await response.arrayBuffer())
+	},
+	sha256: async (bytes) => {
+		const subtle = globalThis.crypto?.subtle
+		if (!subtle) return undefined
+		const digest = new Uint8Array(await subtle.digest("SHA-256", bytes as BufferSource))
+		return Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("")
 	},
 	load: loadFile,
 	post: (message) => PLATFORM_CONFIG.postMessage(message),
@@ -61,26 +71,29 @@ export function isRefreshFileRequest(msg: unknown): msg is RefreshFileRequest {
 		typeof m.path === "string" &&
 		typeof m.name === "string" &&
 		typeof m.sizeBytes === "number" &&
+		typeof m.sha256 === "string" &&
 		typeof m.mtimeMs === "number"
 	)
 }
 
 export async function answerRefreshRequest(request: RefreshFileRequest, io: RefreshIo = defaultIo): Promise<void> {
 	const base = { type: "aihydro-map-refresh-result" as const, requestId: request.requestId, layerId: request.layerId }
-	let blob: Blob
+	let bytes: Uint8Array
 	try {
-		blob = await io.fetchBlob(request.uri)
+		bytes = await io.fetchBytes(request.uri)
 	} catch {
 		// The file was replaced or removed between the host's read and this one.
 		io.post({ ...base, ok: false, reason: "changed_while_reading" })
 		return
 	}
-	if (blob.size !== request.sizeBytes) {
+	// The bytes parsed must be the bytes the host hashed: a rewrite of the same length is still a different file.
+	const same = bytes.length === request.sizeBytes && ((await io.sha256(bytes)) ?? request.sha256) === request.sha256
+	if (!same) {
 		io.post({ ...base, ok: false, reason: "changed_while_reading" })
 		return
 	}
 	try {
-		const spec = await io.load(new File([blob], request.name), {
+		const spec = await io.load(new File([bytes as BlobPart], request.name), {
 			source: { path: request.path, displayPath: request.path, sizeBytes: request.sizeBytes, mtimeMs: request.mtimeMs },
 		})
 		if (spec.kind !== "vector") {

@@ -35,7 +35,7 @@ Design: `docs/vision-2040/findings/layers-design-2026-11-02.md` (section 7 Slice
 
 ### Not in this slice
 
-Raster layers are flagged, not re-read in place. A file outside the open folders that was loaded in an earlier session is not watched until it is added again (the grant is per session). The Windows watcher was not run.
+Raster layers are flagged, not re-read in place. A file outside the open folders that was loaded in an earlier session is not watched or flagged until it is added again (the grant is per session); its drawer says `Not watched: ...`. The Windows watcher was not run.
 
 ---
 

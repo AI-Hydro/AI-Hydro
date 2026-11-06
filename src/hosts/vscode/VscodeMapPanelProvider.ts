@@ -273,6 +273,8 @@ export class VscodeMapPanelProvider {
 	}
 
 	private static fileWatch: MapFileWatch | undefined
+	/** True once the current panel's page has said it is listening (`aihydro-map-panel-ready`). */
+	private static pageReady = false
 	private static fileWatchSync: ReturnType<typeof setTimeout> | undefined
 
 	/**
@@ -312,7 +314,8 @@ export class VscodeMapPanelProvider {
 				}
 			},
 			onWorkspaceEvent: (listener) => ({ dispose: controller.onWorkspaceFileEvent(listener) }),
-			panelOpen: () => VscodeMapPanelProvider.currentPanel !== undefined,
+			// A panel whose page is not listening yet cannot take a request, so it counts as not open until it says it is ready.
+			panelOpen: () => VscodeMapPanelProvider.currentPanel !== undefined && VscodeMapPanelProvider.pageReady,
 			requestParse: (request) => {
 				const panel = VscodeMapPanelProvider.currentPanel
 				if (!panel) {
@@ -382,6 +385,9 @@ export class VscodeMapPanelProvider {
 			case "unreadable":
 				message = `Could not read the new version of ${report.name}: ${report.reason}. Showing the last good copy.`
 				kind = "err"
+				break
+			case "watch_limit":
+				message = `Watching the first ${report.limit} folders. Files in other folders are found when the map is shown again.`
 				break
 			case "missing":
 				message = `File not found for ${report.name}. Showing the last loaded copy.`
@@ -943,6 +949,7 @@ export class VscodeMapPanelProvider {
 		)
 
 		VscodeMapPanelProvider.currentPanel = panel
+		VscodeMapPanelProvider.pageReady = false
 
 		// Set the webview's HTML content
 		panel.webview.html = VscodeMapPanelProvider.getHtmlForWebview(panel.webview)
@@ -961,6 +968,7 @@ export class VscodeMapPanelProvider {
 		panel.onDidDispose(
 			() => {
 				VscodeMapPanelProvider.currentPanel = undefined
+				VscodeMapPanelProvider.pageReady = false
 				VscodeMapPanelProvider.fileWatch?.cancelRequests()
 				// Clean up disposables
 				while (VscodeMapPanelProvider.disposables.length) {
@@ -1033,6 +1041,7 @@ export class VscodeMapPanelProvider {
 						break
 					}
 					case "aihydro-map-panel-ready": {
+						VscodeMapPanelProvider.pageReady = true
 						// The page is listening: look at every loaded file once (after the layers have been restored).
 						void mainWebview.controller.whenMapRestored().then(() => VscodeMapPanelProvider.fileWatch?.checkAll())
 						break

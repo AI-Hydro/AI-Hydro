@@ -1479,7 +1479,12 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-layers-file-changed-manual", "Layers: a layer that cannot follow its file says to load it again", {
 		layers: [fileStateLayer("manual")],
 		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("flowlines.geojson")' }, { wait: 300 }],
-		expectVisible: ["text=This kind of layer does not update by itself"],
+		expectVisible: ["text=does not update by itself"],
+	}),
+	mapScreen("map-layers-file-not-watched", "Layers: a file outside the open folders is not watched, and the layer says so", {
+		layers: [fileStateLayer("unwatched")],
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("flowlines.geojson")' }, { wait: 300 }],
+		expectVisible: ['[data-source-note="not_watched"]', "text=Not watched: this file is outside the open folders"],
 	}),
 	mapScreen("map-layers-reference-group", "Layers: a reference layer under Reference data, not in any run", {
 		layers: [...featureLayers(), referenceGauges],

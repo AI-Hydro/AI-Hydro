@@ -71,6 +71,7 @@ export type WatchReport =
 	| { kind: "flagged"; layerId: string; name: string }
 	| { kind: "unreadable"; layerId: string; name: string; reason: string }
 	| { kind: "missing"; layerId: string; name: string }
+	| { kind: "watch_limit"; limit: number }
 
 export interface MapFileWatchDeps {
 	layers(): WatchableLayer[]
@@ -205,6 +206,7 @@ export class MapFileWatch {
 	private syncing: Promise<void> = Promise.resolve()
 	private disposed = false
 	private requestCounter = 0
+	private capReported = false
 
 	constructor(
 		private readonly deps: MapFileWatchDeps,
@@ -271,9 +273,15 @@ export class MapFileWatch {
 		const next = new Map<string, string>()
 		for (const layer of this.deps.layers()) {
 			const key = watchedPathOf(layer)
-			if (!key || next.has(key)) continue
-			const real = await this.deps.authorize(key)
-			if (!real) continue
+			if (!key) continue
+			const real = next.get(key) ?? (await this.deps.authorize(key))
+			// A layer that names a file the map may not load (outside the open folders, loaded in an earlier session, or put
+			// there by a scene) is not watched and not looked at. It says so, quietly, instead of looking up to date.
+			const watched = real !== undefined
+			const marked = layer.metadata?.source_watch === "not_watched"
+			if (!watched && !marked) this.deps.patchLayer(layer.id, { source_watch: "not_watched" })
+			if (watched && marked) this.deps.patchLayer(layer.id, { source_watch: "" })
+			if (!real || next.has(key)) continue
 			next.set(key, real)
 			next.set(this.keyOf(real), real)
 		}
@@ -289,11 +297,19 @@ export class MapFileWatch {
 				this.folderWatchers.delete(folder)
 			}
 		}
+		let capped = false
 		for (const folder of wantedFolders) {
-			if (this.folderWatchers.has(folder) || this.folderWatchers.size >= this.options.maxFolderWatchers) continue
+			if (this.folderWatchers.has(folder)) continue
+			if (this.folderWatchers.size >= this.options.maxFolderWatchers) {
+				capped = true
+				continue
+			}
 			const watcher = this.deps.watchFolder(folder, (file) => this.onFileEvent(file))
 			if (watcher) this.folderWatchers.set(folder, watcher)
 		}
+		// Said once per time the limit starts to bind, not on every sync.
+		if (capped && !this.capReported) this.deps.report({ kind: "watch_limit", limit: this.options.maxFolderWatchers })
+		this.capReported = capped
 	}
 
 	private keyOf(p: string): string {
@@ -446,6 +462,11 @@ export class MapFileWatch {
 			)
 				continue
 
+			// Too large to read for a hash: the stat is all there is. The layer is flagged, never updated, whatever it is linked to.
+			if (now.size > this.options.maxHashBytes) {
+				this.flagChanged(layer, { sizeBytes: now.size, mtimeMs: now.mtimeMs, sha256: "" })
+				continue
+			}
 			if (!snapshot) {
 				const read = await this.readStable(real)
 				if (read === undefined) {
@@ -521,7 +542,12 @@ export class MapFileWatch {
 
 	private flagChanged(layer: WatchableLayer, snapshot: FileSnapshot): void {
 		const meta = layer.metadata ?? {}
-		if (meta.source_status === "source_changed" && meta.source_seen_sha256 === snapshot.sha256) return
+		if (
+			meta.source_status === "source_changed" &&
+			(meta.source_seen_sha256 ?? "") === snapshot.sha256 &&
+			alreadySeen(meta, { size: snapshot.sizeBytes, mtimeMs: snapshot.mtimeMs })
+		)
+			return
 		this.deps.patchLayer(layer.id, {
 			source_status: "source_changed",
 			source_seen_size_bytes: String(snapshot.sizeBytes),
@@ -561,12 +587,17 @@ export class MapFileWatch {
 			layerId: layer.id,
 			mode,
 			snapshot,
+			// A page that never answered (not listening yet, busy, gone) says nothing about the file: the request is dropped,
+			// the layer is not called unreadable, and the next look asks again.
 			timeout: setTimeout(() => {
-				if (!this.deps.panelOpen()) {
-					this.cancelRequests()
-					return
+				const current = this.states.get(real)
+				if (current?.inflight?.requestId === requestId) {
+					current.inflight = undefined
+					if (current.dirty) {
+						current.dirty = false
+						this.schedule(real, 0, true)
+					}
 				}
-				this.onParseResult({ requestId, ok: false, reason: "parse", message: "The map did not answer." })
 			}, this.options.requestTimeoutMs),
 		}
 		return true
@@ -587,9 +618,18 @@ export class MapFileWatch {
 		if (!this.deps.panelOpen()) return { ok: false, reason: "The map is not open." }
 		const state = this.stateOf(real)
 		if (state.inflight) return { ok: false, reason: "The file is being read. Try again in a moment." }
+		const meta = layer.metadata ?? {}
+		const flagged = meta.source_status === "source_changed"
+		const stat = await this.statOrMissing(real)
+		if (!stat) return { ok: false, reason: "File not found." }
+		if (stat.size > this.options.maxHashBytes) return { ok: false, reason: "The file is too large to read here." }
 		const snapshot = await this.readStable(real)
 		if (snapshot === undefined) return { ok: false, reason: "File not found." }
 		if (snapshot === "unstable") return { ok: false, reason: "The file is changing. Try again in a moment." }
+		// Only a file that differs from what the layer holds can be chosen over it.
+		if (!flagged && (!meta.source_sha256 || meta.source_sha256 === snapshot.sha256)) {
+			return { ok: false, reason: "The file has not changed since this layer was loaded." }
+		}
 		return this.request(real, layer, snapshot, "use_new_file") ? { ok: true } : { ok: false, reason: "The map is not open." }
 	}
 

@@ -32,7 +32,7 @@ export const SourceNote: React.FC<{ layer: MapLayer }> = ({ layer }) => {
 			{note.useNewFile && asking && (
 				<div aria-label="Use the new file" className="map-layers__confirm" role="alertdialog">
 					<span>{note.useNewFile.question}</span>
-					<button className="map-chip map-chip--danger" onClick={choose} type="button">
+					<button className="map-chip" onClick={choose} type="button">
 						Use new file
 					</button>
 					<button className="map-chip" onClick={() => setAsking(false)} type="button">

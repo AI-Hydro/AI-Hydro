@@ -9,8 +9,11 @@
 import { hasEvidenceLink } from "@shared/map/layerIdentity"
 import type { MapLayer } from "@shared/proto/cline/map"
 
+/** Layer types whose file cannot be re-read in place. */
+const NOT_IN_PLACE = new Set(["raster", "inundation_3d", "gee_tile"])
+
 export interface SourceNote {
-	kind: "changed" | "changed_manual" | "unreadable" | "missing" | "updated"
+	kind: "changed" | "changed_manual" | "unreadable" | "missing" | "updated" | "not_watched"
 	text: string
 	/** With a note about a changed file that has a link: the user may choose the new file, after this question. */
 	useNewFile?: { question: string }
@@ -49,7 +52,14 @@ export function sourceNote(layer: MapLayer): SourceNote | undefined {
 		if (!linked) {
 			return {
 				kind: "changed_manual",
-				text: "The file changed on disk. This kind of layer does not update by itself. Remove it and load the file again.",
+				text: "The file changed on disk. This layer does not update by itself. Remove it and load the file again.",
+			}
+		}
+		if (NOT_IN_PLACE.has(layer.layerType)) {
+			// A raster cannot take a new file in place, so no button: offering one would promise what the host cannot do.
+			return {
+				kind: "changed",
+				text: `The file changed ${run ? "after this run" : "after this layer's evidence was recorded"}. The layer keeps what it was made from. Load the file again to use the new version.`,
 			}
 		}
 		const after = run ? "after this run" : "after this layer's evidence was recorded"
@@ -67,6 +77,12 @@ export function sourceNote(layer: MapLayer): SourceNote | undefined {
 	if (meta.source_updated_at_utc && !linked) {
 		const removed = meta._prior_run_id ? ` The link to run ${runTag(meta._prior_run_id)} was removed.` : ""
 		return { kind: "updated", text: `Updated from the file on disk at ${timeOf(meta.source_updated_at_utc)}.${removed}` }
+	}
+	if (meta.source_watch === "not_watched") {
+		return {
+			kind: "not_watched",
+			text: "Not watched: this file is outside the open folders, so changes to it are not picked up. Add it again to watch it.",
+		}
 	}
 	return undefined
 }

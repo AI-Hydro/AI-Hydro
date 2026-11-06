@@ -57,6 +57,25 @@ describe("what a layer says about its file", () => {
 		expect(note?.useNewFile).toBeUndefined()
 	})
 
+	it("a changed linked raster offers no Use new file (it cannot be replaced in place)", () => {
+		const raster = {
+			...L({ source_status: "source_changed", _run_id: "dfetch.1.2.ab12cd34" }),
+			layerType: "raster",
+		} as unknown as MapLayer
+		const note = sourceNote(raster)
+		expect(note?.useNewFile).toBeUndefined()
+		expect(note?.text).toContain("Load the file again")
+	})
+
+	it("a layer whose file is not watched says so quietly, and an update line wins over it", () => {
+		expect(sourceNote(L({ source_watch: "not_watched", source_path: "/home/u/x.geojson" }))?.text).toMatch(
+			/^Not watched: this file is outside the open folders/,
+		)
+		expect(sourceNote(L({ source_watch: "not_watched", source_status: "source_missing", source_path: "/x" }))?.kind).toBe(
+			"missing",
+		)
+	})
+
 	it("unreadable and missing say what happened and which copy is shown", () => {
 		expect(sourceNote(L({ source_status: "source_unreadable", source_error: "Unexpected end of JSON input" }))?.text).toBe(
 			"Could not read the new version: Unexpected end of JSON input. Showing the last good copy.",

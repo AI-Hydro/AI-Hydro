@@ -475,6 +475,99 @@ describe("MapFileWatch", function () {
 		})
 	})
 
+	describe("hash on arrival, same length", () => {
+		it("a rewrite of the same length between the host's read and the page's is caught by the hash, not taken", async () => {
+			await load()
+			await fsp.writeFile(file, fc(2))
+			h.fetchHook = async () => {
+				h.fetchHook = undefined
+				await fsp.writeFile(file, fc(3)) // same byte length as fc(2)
+			}
+			h.emit(file)
+			expect(await until(() => layer().geojson === fc(3))).to.equal(true)
+			expect(h.requests.length).to.equal(2)
+			expect(layer().metadata.source_sha256).to.equal(sha(fc(3)))
+		})
+	})
+
+	describe("a file too large to hash", () => {
+		const small = { maxHashBytes: 10 }
+		const open = async (meta: Record<string, string>) => {
+			await h.cleanup()
+			h = await makeHarness({ options: small })
+			file = path.join(h.dir, "basin.geojson")
+			await fsp.writeFile(file, fc(1))
+			const past = new Date(Date.now() - 60_000)
+			await fsp.utimes(file, past, past)
+			addLayer(h, layerFor(file, fc(1), meta))
+			await h.watch.sync()
+		}
+		it("is flagged from its size and time alone; never read, never updated", async () => {
+			await open({})
+			await fsp.writeFile(file, fc(2, "now different"))
+			h.emit(file)
+			expect(await until(() => layer().metadata.source_status === "source_changed")).to.equal(true)
+			expect(layer().metadata.source_seen_size_bytes).to.equal(String(Buffer.byteLength(fc(2, "now different"))))
+			expect(layer().geojson).to.equal(fc(1))
+			expect(h.requests.length).to.equal(0)
+			await h.watch.checkAll()
+			expect(h.patches.filter((p) => p.metadata.source_status === "source_changed").length).to.equal(1)
+		})
+		it("with an evidence link, the same", async () => {
+			await open({ _run_id: "dfetch.1.2.abcd1234" })
+			await fsp.writeFile(file, fc(2, "now different"))
+			await h.watch.checkAll()
+			expect(layer().metadata.source_status).to.equal("source_changed")
+			expect(layer().metadata._run_id).to.equal("dfetch.1.2.abcd1234")
+			expect(h.requests.length).to.equal(0)
+		})
+		it("Use new file says it is too large rather than failing quietly", async () => {
+			await open({ _run_id: "dfetch.1.2.abcd1234" })
+			await fsp.writeFile(file, fc(2, "now different"))
+			await h.watch.checkAll()
+			const out = await h.watch.useNewFile(layer().id)
+			expect(out).to.deep.include({ ok: false })
+			expect((out as { reason: string }).reason).to.contain("too large")
+		})
+	})
+
+	describe("Use new file is honoured only for a file that differs", () => {
+		it("a layer that was never flagged, with a file that is the same, is refused", async () => {
+			await load({ _run_id: "dfetch.1.2.abcd1234", source_sha256: sha(fc(1)) })
+			const out = await h.watch.useNewFile(layer().id)
+			expect(out.ok).to.equal(false)
+			expect(h.requests.length).to.equal(0)
+		})
+		it("a layer not yet flagged but whose file differs from its hash is allowed", async () => {
+			await load({ _run_id: "dfetch.1.2.abcd1234", source_sha256: sha(fc(1)) })
+			await fsp.writeFile(file, fc(2))
+			expect((await h.watch.useNewFile(layer().id)).ok).to.equal(true)
+		})
+	})
+
+	describe("the page does not answer", () => {
+		it("is not an unreadable file: the request is dropped, the layer stays current, the next look asks again", async () => {
+			await h.cleanup()
+			h = await makeHarness({ options: { requestTimeoutMs: 80 } })
+			file = path.join(h.dir, "basin.geojson")
+			await fsp.writeFile(file, fc(1))
+			const past = new Date(Date.now() - 60_000)
+			await fsp.utimes(file, past, past)
+			addLayer(h, layerFor(file, fc(1)))
+			await h.watch.sync()
+			h.panel.answer = "never"
+			await fsp.writeFile(file, fc(2))
+			h.emit(file)
+			await until(() => h.requests.length === 1)
+			await wait(200)
+			expect(layer().metadata.source_status).to.equal("current")
+			expect(h.reports.some((r) => r.kind === "unreadable")).to.equal(false)
+			h.panel.answer = "page"
+			await h.watch.checkAll()
+			expect(await until(() => layer().geojson === fc(2))).to.equal(true)
+		})
+	})
+
 	describe("which paths are watched", () => {
 		it("a path the map may not load (a scene's, a message's) gets no watcher and its events are ignored", async () => {
 			h.denied.add(file)
@@ -506,6 +599,33 @@ describe("MapFileWatch", function () {
 			await fsp.writeFile(file, "lat,lon\n1,1\n")
 			await load()
 			expect(h.watchedFolders).to.deep.equal([h.dir])
+		})
+
+		it("a layer whose file the map may not load says it is not watched, once, and clears it when it becomes watched", async () => {
+			h.denied.add(file)
+			await load()
+			expect(layer().metadata.source_watch).to.equal("not_watched")
+			await h.watch.sync()
+			expect(h.patches.filter((p) => p.metadata.source_watch === "not_watched").length).to.equal(1)
+			h.denied.delete(file)
+			await h.watch.sync()
+			expect(layer().metadata.source_watch).to.equal(undefined)
+		})
+
+		it("beyond the folder limit the user is told, once", async () => {
+			await h.cleanup()
+			h = await makeHarness({ workspace: false, options: { maxFolderWatchers: 1 } })
+			for (const name of ["a", "b"]) {
+				const dir = path.join(h.dir, name)
+				await fsp.mkdir(dir)
+				const f = path.join(dir, "x.geojson")
+				await fsp.writeFile(f, fc(1))
+				addLayer(h, layerFor(f, fc(1), {}, { id: `user-${name}` }))
+			}
+			await h.watch.sync()
+			await h.watch.sync()
+			expect(h.watchedFolders.length).to.equal(1)
+			expect(h.reports.filter((r) => r.kind === "watch_limit").length).to.equal(1)
 		})
 
 		it("a layer from a URL, or one whose path is gone from the map, is not watched", async () => {
