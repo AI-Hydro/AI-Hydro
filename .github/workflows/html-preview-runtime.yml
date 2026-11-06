@@ -110,12 +110,12 @@ jobs:
       - name: Run installed Learning Pack real-panel specs (Ubuntu)
         if: matrix.runner == 'ubuntu'
         shell: bash
-        run: xvfb-run -a npx playwright test -c playwright.config.ts src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts --grep '@phase1-(pack|charts)'
+        run: xvfb-run -a npx playwright test -c playwright.config.ts src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts src/test/e2e/studio-large-course.test.ts --grep '@phase1-(pack|charts|large-course)'
 
       - name: Run installed Learning Pack real-panel specs
         if: matrix.runner != 'ubuntu'
         shell: bash
-        run: npx playwright test -c playwright.config.ts src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts --grep '@phase1-(pack|charts)'
+        run: npx playwright test -c playwright.config.ts src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts src/test/e2e/studio-large-course.test.ts --grep '@phase1-(pack|charts|large-course)'
 
       - name: Sanitize allowlisted failure evidence
         if: failure()

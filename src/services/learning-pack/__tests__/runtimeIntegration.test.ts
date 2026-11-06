@@ -6,6 +6,7 @@ import { afterEach, describe, it } from "mocha"
 import type { LearningPackRegistry } from "../learningPackLifecycle"
 import { atomicWriteJson, learningPackStoragePaths } from "../lifecycleStorage"
 import {
+	installationRootAsSpelled,
 	learningPackArtifactMetadata,
 	learningPackControlsKey,
 	learningPackProgressKey,
@@ -222,5 +223,48 @@ describe("Learning Pack load-time integrity", function () {
 		const foreignLink = path.join(root, "packs", "hmfp", "versions", "archive-sha", "modules", "foreign-link.html")
 		await fs.symlink(path.join(outside, "foreign.html"), foreignLink).catch(() => this.skip())
 		assert.equal(await resolveInstalledLearningPackArtifact(foreignLink, root), null)
+	})
+})
+
+describe("installationRootAsSpelled", () => {
+	afterEach(async () => {
+		await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
+	})
+
+	async function linkedStore(): Promise<{ spelledModule: string; spelledRoot: string; realRoot: string }> {
+		const base = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-spelled-"))
+		roots.push(base)
+		const realStore = path.join(base, "real", "packs", "hmfp")
+		const moduleDir = path.join(realStore, "modules", "m1")
+		await fs.mkdir(moduleDir, { recursive: true })
+		await fs.writeFile(path.join(moduleDir, "module.html"), "<!doctype html>", "utf8")
+		// The pack store is reached through a link, as macOS temporary directories are.
+		await fs.symlink(path.join(base, "real"), path.join(base, "link"))
+		return {
+			spelledModule: path.join(base, "link", "packs", "hmfp", "modules", "m1", "module.html"),
+			spelledRoot: path.join(base, "link", "packs", "hmfp"),
+			realRoot: await fs.realpath(realStore),
+		}
+	}
+
+	it("returns the root spelled like the document when a parent directory is a link", async () => {
+		const { spelledModule, spelledRoot, realRoot } = await linkedStore()
+		assert.notEqual(spelledRoot, realRoot)
+		assert.equal(await installationRootAsSpelled(spelledModule, realRoot), spelledRoot)
+	})
+
+	it("returns the real root unchanged when nothing is linked", async () => {
+		const { realRoot } = await linkedStore()
+		const direct = path.join(realRoot, "modules", "m1", "module.html")
+		assert.equal(await installationRootAsSpelled(direct, realRoot), realRoot)
+	})
+
+	it("never returns a root other than the verified installation", async () => {
+		const { spelledModule, realRoot } = await linkedStore()
+		const elsewhere = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-other-"))
+		roots.push(elsewhere)
+		// A document outside the installation, or a missing file, falls back to the real root.
+		assert.equal(await installationRootAsSpelled(path.join(elsewhere, "x.html"), realRoot), realRoot)
+		assert.equal(await installationRootAsSpelled(`${spelledModule}.missing`, realRoot), realRoot)
 	})
 })

@@ -9,6 +9,14 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Opening a course module no longer reloads the whole Studio shell and replays every document opened before it.** Each installed Learning Pack module lives in its own directory, and the shell treated every new directory as a new webview resource root. A new root reloads the shell, and the reload re-sent every registered document (about 1.9 MB each for the Hydrologic Modeling book) to it, so the data moved between the extension host and the webview grew with the square of the modules opened: 805 documents pushed over a 12-module walk of the shipped 0.4.7 build, one shell mount per module. On a small machine this starved the VS Code window ("CodeWindow: recovered from unresponsive") and replaced the document being opened, which the book's real-panel run showed as an empty output, a missing cell frame or a missing Run bridge at module 4 to 10. A root that lies inside another root is no longer a root of its own (it grants nothing extra), and a pack's root is now spelled the way its documents are, so it contains them when a parent directory is a link (macOS temporary directories). The same walk now pushes 47 documents and mounts the shell twice. New real-panel test `studio-large-course.test.ts` (`@phase1-large-course`) opens twelve 1.9 MB synthetic modules in sequence and bounds shell mounts, documents pushed, live frames, memory and window stall. Still quadratic, at a smaller constant: each state change fetches a snapshot that carries every document opened so far (five snapshots per module).
+
+---
+
 ## [0.4.7] - 2026-11-05
 
 **Needs aihydro-tools 2.8.8** for the tracing facts and for layer alias resolution. With an older aihydro-tools the trace card reads "not recorded" for each fact it cannot read.

@@ -183,6 +183,32 @@ export async function resolveInstalledLearningPackStatus(
 	return { kind: "none" }
 }
 
+/**
+ * The installation root spelled the way `filePath` is spelled.
+ *
+ * `installationRoot` is a real path (symlinks resolved), while the document path the shell serves is the
+ * path as the pack store spells it. They differ wherever a parent directory is a link (macOS temporary
+ * directories, a symlinked home), and the webview grants resource access by comparing path text. A root
+ * that does not textually contain the document makes every module directory a root of its own (see
+ * pruneNestedRoots), which reloads the Studio shell once per module. The spelled root is returned only when
+ * it resolves to exactly the verified installation, so it grants the same directory and nothing else;
+ * otherwise the real root is returned unchanged.
+ */
+export async function installationRootAsSpelled(filePath: string, installationRoot: string): Promise<string> {
+	try {
+		const resolvedFile = await fs.realpath(filePath)
+		const relative = path.relative(installationRoot, resolvedFile)
+		if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return installationRoot
+		const spelledFile = path.resolve(filePath)
+		const suffix = path.sep + relative
+		if (!spelledFile.endsWith(suffix)) return installationRoot
+		const spelledRoot = spelledFile.slice(0, spelledFile.length - suffix.length)
+		return (await fs.realpath(spelledRoot)) === installationRoot ? spelledRoot : installationRoot
+	} catch {
+		return installationRoot
+	}
+}
+
 export async function resolveInstalledLearningPackArtifact(
 	filePath: string,
 	root = defaultLearningPackRoot(),
