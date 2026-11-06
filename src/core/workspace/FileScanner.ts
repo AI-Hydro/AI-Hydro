@@ -11,7 +11,6 @@ import { AIHYDRO_STATE_DIR, MAX_PROJECT_FILES, PROJECT_FILE_EXTENSIONS } from "@
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as vscode from "vscode"
-import { readPrefix, looksLikeGeoJson } from "./geoSniff"
 import {
 	buildExcludeGlob,
 	isExcludedByNames,
@@ -19,6 +18,7 @@ import {
 	mergeFilesExclude,
 	WORKSPACE_GEO_EXCLUDED_DIRS,
 } from "./geoScanExclusions"
+import { looksLikeGeoJson, readPrefix } from "./geoSniff"
 import { realPathInsideFolder } from "./workspaceGeoPaths"
 
 const GEO_GLOB = `**/*.{${PROJECT_FILE_EXTENSIONS.join(",")}}`
@@ -60,6 +60,8 @@ export class FileScanner {
 	private configWatcher: vscode.Disposable | null = null
 	private files: Map<string, WorkspaceGeoJsonFile> = new Map()
 	private onFilesChangedCallback: ((files: WorkspaceGeoJsonFile[]) => void) | null = null
+	/** Listeners for every raw watcher event, before batching and before the list's own judging (the map's layer watcher). */
+	private readonly fileEventListeners = new Set<(file: string) => void>()
 	private debounceTimer: NodeJS.Timeout | null = null
 	private readonly DEBOUNCE_MS = 500
 	/** Watcher events waiting for the quiet period: `true` means check the file again, `false` means it is gone. */
@@ -129,7 +131,10 @@ export class FileScanner {
 					console.warn(`[FileScanner] files.exclude pattern not merged (braces or commas): ${pattern}`)
 				}
 				// `findFiles` gives back the files that match; excluded directories are counted from the folder's top level.
-				for (const name of await this.presentExcludedDirs(folder.uri.fsPath, [...WORKSPACE_GEO_EXCLUDED_DIRS, ...merged.dirNames])) {
+				for (const name of await this.presentExcludedDirs(folder.uri.fsPath, [
+					...WORKSPACE_GEO_EXCLUDED_DIRS,
+					...merged.dirNames,
+				])) {
 					excluded.add(name)
 					stats.foldersSkipped++
 				}
@@ -264,9 +269,27 @@ export class FileScanner {
 				void this.flushPending()
 			}, this.BATCH_MS)
 		}
-		this.watcher.onDidCreate((uri) => queue(uri, true))
-		this.watcher.onDidChange((uri) => queue(uri, true))
-		this.watcher.onDidDelete((uri) => queue(uri, false))
+		const emit = (uri: vscode.Uri) => {
+			for (const listener of this.fileEventListeners) {
+				try {
+					listener(uri.fsPath)
+				} catch (error) {
+					console.warn("[FileScanner] A file event listener failed:", error)
+				}
+			}
+		}
+		this.watcher.onDidCreate((uri) => {
+			emit(uri)
+			queue(uri, true)
+		})
+		this.watcher.onDidChange((uri) => {
+			emit(uri)
+			queue(uri, true)
+		})
+		this.watcher.onDidDelete((uri) => {
+			emit(uri)
+			queue(uri, false)
+		})
 		// A changed `files.exclude` changes which files exist for the list.
 		this.configWatcher = vscode.workspace.onDidChangeConfiguration((event) => {
 			if (event.affectsConfiguration("files.exclude")) this.refreshDebounced()
@@ -337,6 +360,15 @@ export class FileScanner {
 	}
 
 	/**
+	 * Listen to every file event of the shared watcher (created, changed, removed), as it happens. Returns the way to stop.
+	 * The events are not filtered: a listener decides which files matter to it.
+	 */
+	onFileEvent(listener: (file: string) => void): () => void {
+		this.fileEventListeners.add(listener)
+		return () => this.fileEventListeners.delete(listener)
+	}
+
+	/**
 	 * Set callback for file changes
 	 */
 	onFilesChanged(callback: (files: WorkspaceGeoJsonFile[]) => void): void {
@@ -397,6 +429,7 @@ export class FileScanner {
 		}
 		this.pending.clear()
 		this.files.clear()
+		this.fileEventListeners.clear()
 		this.onFilesChangedCallback = null
 		console.log("[FileScanner] Disposed")
 	}

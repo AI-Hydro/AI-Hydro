@@ -1,11 +1,13 @@
 import type { MapLayer } from "@shared/proto/cline/map"
-import React from "react"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const removeMapLayer = vi.fn(() => Promise.resolve({}))
 const unloadMapLayer = vi.fn((_req: unknown) => Promise.resolve({ unloaded: true, settingsKept: true }))
-const addWorkspaceGeoFile = vi.fn((_req: unknown) => Promise.resolve({ layerId: "workspace_new", settingsRestored: false, positionFromTop: -1 }))
+const addWorkspaceGeoFile = vi.fn((_req: unknown) =>
+	Promise.resolve({ layerId: "workspace_new", settingsRestored: false, positionFromTop: -1 }),
+)
 const removeFromFileList = vi.fn((_req: unknown) => Promise.resolve({ changed: 1 }))
 const restoreToFileList = vi.fn((_req: unknown) => Promise.resolve({ changed: 1 }))
 const addMapLayer = vi.fn(() => Promise.resolve({}))
@@ -291,40 +293,57 @@ describe("LayerPanel", () => {
 		postMessage.mockRestore()
 	})
 
-	it("Reload source loads the file by the absolute path the host found it at, not the relative spelling", async () => {
-		loadEntries.mockResolvedValue({ loaded: 1, skipped: 0, errors: [] })
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(() => Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(["{}"])) })),
-		)
-		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation((message: any) => {
-			if (message.type === "aihydro-resolve-file-uri") {
-				expect(message.workspaceFolder).toBe("/proj")
-				expect(message.kind).toBe("project")
-				window.dispatchEvent(
-					new MessageEvent("message", {
-						data: {
-							type: "aihydro-resolve-file-uri-result",
-							requestId: message.requestId,
-							ok: true,
-							uri: "vscode-resource://x",
-							name: "a.geojson",
-							path: "/proj/a.geojson",
-						},
-					}),
-				)
-			}
-		})
+	it("the row menu of a file layer has no Reload source: the layer follows its file by itself", () => {
 		state.layers = [
 			poly("w", "a.geojson", { source: "workspace", path: "a.geojson", workspace_folder: "/proj", tool: "", _run_id: "" }),
 		]
 		render(<LayerPanelContent {...baseProps()} />)
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for a\.geojson/ }))
-		fireEvent.click(screen.getByRole("menuitem", { name: "Reload source" }))
-		await waitFor(() => expect(loadEntries).toHaveBeenCalledTimes(1))
-		expect(loadEntries.mock.calls[0][0][0].source.path).toBe("/proj/a.geojson")
+		expect(screen.getByRole("menuitem", { name: "Open file" })).toBeInTheDocument()
+		expect(screen.queryByRole("menuitem", { name: /Reload/ })).toBeNull()
+	})
+
+	it("a layer that changed under a run says so, offers Use new file, and asks before it posts anything", () => {
+		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation(() => {})
+		state.layers = [
+			poly("w", "flow.geojson", {
+				source_path: "/proj/flow.geojson",
+				source_status: "source_changed",
+				_run_id: "dfetch.1.2.ab12cd34",
+			}),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByText("flow.geojson"))
+		const note = document.querySelector('[data-source-note="changed"]') as HTMLElement
+		expect(note.textContent).toContain("The file changed after this run.")
+		expect(note.textContent).toContain("The map still shows the run's result.")
+		fireEvent.click(within(note).getByRole("button", { name: "Use new file" }))
+		expect(postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "aihydro-map-use-new-file" }))
+		expect(screen.getByRole("alertdialog", { name: "Use the new file" }).textContent).toContain(
+			"The link to run ab12cd34 will be removed",
+		)
+		fireEvent.click(
+			within(screen.getByRole("alertdialog", { name: "Use the new file" })).getByRole("button", { name: "Use new file" }),
+		)
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-map-use-new-file", layerId: "w" })
 		postMessage.mockRestore()
-		vi.unstubAllGlobals()
+	})
+
+	it("an unlinked layer that followed its file keeps a line saying so, and no button", () => {
+		state.layers = [
+			poly("w", "a.geojson", {
+				source_path: "/proj/a.geojson",
+				source_updated_at_utc: "2026-11-07T10:00:00.000Z",
+				tool: "",
+				_run_id: "",
+				provenance_path: "",
+			}),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByText("a.geojson"))
+		const note = document.querySelector('[data-source-note="updated"]') as HTMLElement
+		expect(note.textContent).toMatch(/^Updated from the file on disk at /)
+		expect(within(note).queryByRole("button")).toBeNull()
 	})
 
 	it("Move up is disabled with its reason on the layer on top of the map", () => {
@@ -396,7 +415,7 @@ describe("LayerPanel", () => {
 		const list = screen.getByRole("list", { name: "Warnings" })
 		expect(list).toHaveTextContent("Rendering a preview: 10 of 500")
 		expect(list).toHaveTextContent("Auto-simplified")
-		expect(list).toHaveTextContent("source file changed")
+		expect(list).toHaveTextContent("The file changed after this run")
 	})
 
 	it("Rename from the menu leaves the name field focused after the menu's focus timer", async () => {
@@ -513,7 +532,9 @@ describe("Not on the map (project files)", () => {
 	})
 
 	it("a loaded file is its layer row under On the map and is not listed below; Unload uses the unload route, says where it went, and offers Undo", async () => {
-		state.layers = [poly("L1", "a.geojson", { source: "workspace", tool: "", _run_id: "", path: "a.geojson", workspace_folder: "/w" })]
+		state.layers = [
+			poly("L1", "a.geojson", { source: "workspace", tool: "", _run_id: "", path: "a.geojson", workspace_folder: "/w" }),
+		]
 		answer([file("a.geojson"), file("b.geojson")])
 		render(<LayerPanelContent {...baseProps()} />)
 		await openSection(/Not on the map · 1 file/)
@@ -527,7 +548,9 @@ describe("Not on the map (project files)", () => {
 		await waitFor(() => expect(unloadMapLayer).toHaveBeenCalledOnce())
 		expect(unloadMapLayer.mock.calls[0][0]).toMatchObject({ layerId: "L1" })
 		expect(removeMapLayer).not.toHaveBeenCalled()
-		expect(await screen.findByText(/Unloaded a.geojson\. It is now under Not on the map\. The file stays on disk\./)).toBeInTheDocument()
+		expect(
+			await screen.findByText(/Unloaded a.geojson\. It is now under Not on the map\. The file stays on disk\./),
+		).toBeInTheDocument()
 		expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument()
 		// The row moved down: it is listed now, marked for a moment, and its layer row is gone.
 		const moved = await screen.findByRole("button", { name: "Load a.geojson" })
@@ -538,7 +561,15 @@ describe("Not on the map (project files)", () => {
 	})
 
 	it("a project file's row on the map shows its folder path on hover and offers Unload and Unload and remove from list", async () => {
-		state.layers = [poly("L1", "a.geojson", { source: "workspace", tool: "", _run_id: "", path: "data/a.geojson", workspace_folder: "/w" })]
+		state.layers = [
+			poly("L1", "a.geojson", {
+				source: "workspace",
+				tool: "",
+				_run_id: "",
+				path: "data/a.geojson",
+				workspace_folder: "/w",
+			}),
+		]
 		answer([file("data/a.geojson")])
 		render(<LayerPanelContent {...baseProps()} />)
 		await screen.findByRole("button", { name: /Not on the map · 0 files/ })
@@ -552,10 +583,24 @@ describe("Not on the map (project files)", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Actions for a.geojson" }))
 		const item = await screen.findByRole("menuitem", { name: "Remove from list" })
 		expect(item.getAttribute("title")).toMatch(/on this machine/)
-		answer([], [{ relativePath: "a.geojson", workspaceFolder: "/w", folderName: "w", name: "a.geojson", kind: "file", removedAt: 1 }])
+		answer(
+			[],
+			[
+				{
+					relativePath: "a.geojson",
+					workspaceFolder: "/w",
+					folderName: "w",
+					name: "a.geojson",
+					kind: "file",
+					removedAt: 1,
+				},
+			],
+		)
 		fireEvent.click(item)
 		await waitFor(() => expect(removeFromFileList).toHaveBeenCalledOnce())
-		expect(removeFromFileList.mock.calls[0][0]).toMatchObject({ entries: [{ workspaceFolder: "/w", relativePath: "a.geojson", kind: "file" }] })
+		expect(removeFromFileList.mock.calls[0][0]).toMatchObject({
+			entries: [{ workspaceFolder: "/w", relativePath: "a.geojson", kind: "file" }],
+		})
 		expect(await screen.findByText(/Removed a.geojson from this list\. The file stays on disk\./)).toBeInTheDocument()
 		expect(await screen.findByRole("button", { name: /Removed from list \(1\)/ })).toBeInTheDocument()
 		fireEvent.click(screen.getByRole("button", { name: "Undo" }))
@@ -588,7 +633,15 @@ describe("Not on the map (project files)", () => {
 	})
 
 	it("with more than ten files a filter appears, and Remove N matches hides only the unloaded matches", async () => {
-		state.layers = [poly("L1", "huc_00.geojson", { source: "workspace", tool: "", _run_id: "", path: "huc_00.geojson", workspace_folder: "/w" })]
+		state.layers = [
+			poly("L1", "huc_00.geojson", {
+				source: "workspace",
+				tool: "",
+				_run_id: "",
+				path: "huc_00.geojson",
+				workspace_folder: "/w",
+			}),
+		]
 		const files = Array.from({ length: 13 }, (_, i) => file(`huc_${String(i).padStart(2, "0")}.geojson`))
 		answer(files)
 		render(<LayerPanelContent {...baseProps()} />)
@@ -657,7 +710,16 @@ describe("Not on the map (project files)", () => {
 		await openSection(/Not on the map · 1 file/)
 		fireEvent.click(screen.getByRole("button", { name: "Load b.geojson" }))
 		await screen.findByText(/It moved up to On the map\./)
-		state.layers = [...state.layers, poly("workspace_new", "b.geojson", { source: "workspace", tool: "", _run_id: "", path: "b.geojson", workspace_folder: "/w" })]
+		state.layers = [
+			...state.layers,
+			poly("workspace_new", "b.geojson", {
+				source: "workspace",
+				tool: "",
+				_run_id: "",
+				path: "b.geojson",
+				workspace_folder: "/w",
+			}),
+		]
 		rerender(<LayerPanelContent {...baseProps()} />)
 		const row = document.querySelector('[data-layer-id="workspace_new"]') as HTMLElement
 		expect(row).not.toBeNull()
@@ -671,9 +733,17 @@ describe("Not on the map (project files)", () => {
 		const { rerender } = render(<LayerPanelContent {...baseProps()} />)
 		await openSection(/Not on the map · 1 file/)
 		fireEvent.click(screen.getByRole("button", { name: "Load dem.tif" }))
-		expect(post).toHaveBeenCalledWith(expect.objectContaining({ type: "aihydro-map-load-project-file", relativePath: "dem.tif" }))
+		expect(post).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "aihydro-map-load-project-file", relativePath: "dem.tif" }),
+		)
 		expect(addWorkspaceGeoFile).not.toHaveBeenCalled()
-		state.layers = [...state.layers, { ...poly("tif-1", "dem.tif", { source: "user", tool: "", _run_id: "", source_path: "/w/dem.tif" }), layerType: "raster" } as MapLayer]
+		state.layers = [
+			...state.layers,
+			{
+				...poly("tif-1", "dem.tif", { source: "user", tool: "", _run_id: "", source_path: "/w/dem.tif" }),
+				layerType: "raster",
+			} as MapLayer,
+		]
 		rerender(<LayerPanelContent {...baseProps()} />)
 		expect(await screen.findByText(/Loaded dem.tif\. It moved up to On the map\./)).toBeInTheDocument()
 		expect(screen.getByRole("button", { name: "Zoom to" })).toBeInTheDocument()
@@ -682,7 +752,16 @@ describe("Not on the map (project files)", () => {
 	})
 
 	it("multi-root: loading one folder's file leaves the same relative path in the other folder listed", async () => {
-		state.layers = [poly("L1", "basin.geojson", { source: "workspace", tool: "", _run_id: "", path: "data/basin.geojson", source_path: "/one/data/basin.geojson", workspace_folder: "/one" })]
+		state.layers = [
+			poly("L1", "basin.geojson", {
+				source: "workspace",
+				tool: "",
+				_run_id: "",
+				path: "data/basin.geojson",
+				source_path: "/one/data/basin.geojson",
+				workspace_folder: "/one",
+			}),
+		]
 		list.mockResolvedValue({
 			files: [fileIn("data/basin.geojson", "/one", "one"), fileIn("data/basin.geojson", "/two", "two")],
 			removed: [],
@@ -711,7 +790,14 @@ describe("Not on the map (project files)", () => {
 	})
 
 	it("two layers made from one file: the file is not listed, and unloading one of them does not list it", async () => {
-		const meta = { source: "workspace", tool: "", _run_id: "", path: "a.geojson", source_path: "/w/a.geojson", workspace_folder: "/w" }
+		const meta = {
+			source: "workspace",
+			tool: "",
+			_run_id: "",
+			path: "a.geojson",
+			source_path: "/w/a.geojson",
+			workspace_folder: "/w",
+		}
 		state.layers = [poly("L1", "a.geojson", meta), poly("L2", "a copy", meta)]
 		answer([file("a.geojson"), file("b.geojson")])
 		render(<LayerPanelContent {...baseProps()} />)
@@ -726,7 +812,15 @@ describe("Not on the map (project files)", () => {
 	})
 
 	it("Unload while a filter is typed clears the filter, so the moved row is visible and focused", async () => {
-		state.layers = [poly("L1", "huc_00.geojson", { source: "workspace", tool: "", _run_id: "", path: "huc_00.geojson", workspace_folder: "/w" })]
+		state.layers = [
+			poly("L1", "huc_00.geojson", {
+				source: "workspace",
+				tool: "",
+				_run_id: "",
+				path: "huc_00.geojson",
+				workspace_folder: "/w",
+			}),
+		]
 		answer(Array.from({ length: 13 }, (_, i) => file(`huc_${String(i).padStart(2, "0")}.geojson`)))
 		render(<LayerPanelContent {...baseProps()} />)
 		await openSection(/Not on the map · 12 files/)
@@ -741,7 +835,14 @@ describe("Not on the map (project files)", () => {
 	})
 
 	it("says what the skipped folders are in a tooltip", async () => {
-		list.mockResolvedValue({ files: [file("a.geojson")], removed: [], totalCount: 1, foldersSkipped: 2, skippedNames: [".git", ".aihydro"], folderCount: 1 })
+		list.mockResolvedValue({
+			files: [file("a.geojson")],
+			removed: [],
+			totalCount: 1,
+			foldersSkipped: 2,
+			skippedNames: [".git", ".aihydro"],
+			folderCount: 1,
+		})
 		render(<LayerPanelContent {...baseProps()} />)
 		await openSection(/Not on the map/)
 		const tip = screen.getByText("2 folders skipped").getAttribute("title") ?? ""
@@ -751,10 +852,17 @@ describe("Not on the map (project files)", () => {
 	})
 
 	it("focus is not stolen: the user focuses another control while the Unload is in flight and focus stays there", async () => {
-		state.layers = [poly("L1", "a.geojson", { source: "workspace", tool: "", _run_id: "", path: "a.geojson", workspace_folder: "/w" })]
+		state.layers = [
+			poly("L1", "a.geojson", { source: "workspace", tool: "", _run_id: "", path: "a.geojson", workspace_folder: "/w" }),
+		]
 		answer([file("a.geojson"), file("b.geojson")])
 		let release: () => void = () => {}
-		unloadMapLayer.mockImplementationOnce(() => new Promise((r) => { release = () => r({ unloaded: true, settingsKept: true }) }) as never)
+		unloadMapLayer.mockImplementationOnce(
+			() =>
+				new Promise((r) => {
+					release = () => r({ unloaded: true, settingsKept: true })
+				}) as never,
+		)
 		render(<LayerPanelContent {...baseProps()} />)
 		await openSection(/Not on the map · 1 file/)
 		fireEvent.click(screen.getByRole("button", { name: "Actions for a.geojson" }))
@@ -780,7 +888,16 @@ describe("Not on the map (project files)", () => {
 		await screen.findByText(/It moved up to On the map\./)
 		const add = screen.getByRole("button", { name: "Add layer" })
 		add.focus()
-		state.layers = [...state.layers, poly("workspace_new", "b.geojson", { source: "workspace", tool: "", _run_id: "", path: "b.geojson", workspace_folder: "/w" })]
+		state.layers = [
+			...state.layers,
+			poly("workspace_new", "b.geojson", {
+				source: "workspace",
+				tool: "",
+				_run_id: "",
+				path: "b.geojson",
+				workspace_folder: "/w",
+			}),
+		]
 		rerender(<LayerPanelContent {...baseProps()} />)
 		await new Promise((r) => setTimeout(r, 100))
 		expect(add).toHaveFocus()
@@ -800,10 +917,16 @@ describe("Not on the map (project files)", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Load two.kmz" }))
 		expect(post.mock.calls.filter(([m]) => (m as { type: string }).type === "aihydro-map-load-project-file")).toHaveLength(2)
 		// The second file's layer arrives first, then the first's.
-		state.layers = [...state.layers, poly("kmz-2", "two.kmz", { source: "user", tool: "", _run_id: "", source_path: "/w/two.kmz" })]
+		state.layers = [
+			...state.layers,
+			poly("kmz-2", "two.kmz", { source: "user", tool: "", _run_id: "", source_path: "/w/two.kmz" }),
+		]
 		rerender(<LayerPanelContent {...baseProps()} />)
 		expect(await screen.findByText(/Loaded two.kmz\. It moved up to On the map\./)).toBeInTheDocument()
-		state.layers = [...state.layers, poly("tif-1", "one.tif", { source: "user", tool: "", _run_id: "", source_path: "/w/one.tif" })]
+		state.layers = [
+			...state.layers,
+			poly("tif-1", "one.tif", { source: "user", tool: "", _run_id: "", source_path: "/w/one.tif" }),
+		]
 		rerender(<LayerPanelContent {...baseProps()} />)
 		expect(await screen.findByText(/Loaded one.tif\. It moved up to On the map\./)).toBeInTheDocument()
 		expect(document.querySelector('[data-layer-id="tif-1"]')?.hasAttribute("data-just-moved")).toBe(true)

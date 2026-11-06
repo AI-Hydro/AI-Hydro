@@ -3,17 +3,18 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
 import { LedgerEventWatcher } from "@core/ledger/LedgerEventWatcher"
 import { type AddOutcome, applyAddLayer, dropAliasesFor, resolveAlias } from "@core/map/applyAddLayer"
+import { authorizeMapPath, type MapPathDeps } from "@core/map/authorizeMapPath"
 import { applyFactStampPolicy } from "@core/map/factStamp"
 import { MapCommandWatcher } from "@core/map/MapCommandWatcher"
 import { MapEventWatcher } from "@core/map/MapEventWatcher"
-import { authorizeMapPath, type MapPathDeps } from "@core/map/authorizeMapPath"
 import { buildMapLayerCatalogAsync, type MapLayerCatalogEntry, persistMapLayerCatalog } from "@core/map/mapLayerCatalog"
 import { type MapLayerPatch, mergeMapLayerPatch } from "@core/map/mergeMapLayerPatch"
-import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview"
-import { takeUnloaded, saveUnloaded } from "@core/map/unloadedLayerSidecar"
-import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
-import { NO_FOLDER_KEY } from "@core/project/pinStore"
 import type { ProjectFilesHost } from "@core/map/projectFiles"
+import { type FileSnapshot, type RefreshOutcome, refreshLayerFromFile } from "@core/map/refreshFromFile"
+import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview"
+import { saveUnloaded, takeUnloaded } from "@core/map/unloadedLayerSidecar"
+import { NO_FOLDER_KEY } from "@core/project/pinStore"
+import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
 import { FileScanner, WEBVIEW_PARSED_EXTENSIONS, WorkspaceGeoJsonFile } from "@core/workspace/FileScanner"
@@ -2169,6 +2170,31 @@ export class Controller {
 		return merged
 	}
 
+	/**
+	 * A layer's file changed and the new version was read and parsed (see `MapFileWatch`). The layer stays the same layer: id,
+	 * style, visibility and order are kept, no focus event is sent, so nothing selects the layer or moves the camera.
+	 * `auto` is refused for a layer with an evidence link (a run, a study, a tool, a claim).
+	 */
+	refreshMapLayerFromFile(
+		requestedId: string,
+		update: { geojson: string; metadata?: Record<string, string>; snapshot: FileSnapshot; updatedAtIso: string },
+		mode: "auto" | "use_new_file",
+	): RefreshOutcome {
+		const layerId = this.resolveMapLayerId(requestedId)
+		const existing = this.mapLayers.get(layerId)
+		if (!existing) {
+			return { ok: false, reason: "The layer is no longer on the map." }
+		}
+		const outcome = refreshLayerFromFile(existing, update, mode)
+		if (!outcome.ok) {
+			return outcome
+		}
+		this.mapLayers.set(layerId, outcome.layer)
+		this.notifyMapLayerSubscribers(outcome.layer)
+		void this.syncMapLayerCatalog()
+		return outcome
+	}
+
 	/** Workspace folder that scopes the persisted layer catalog ("" when no folder is open). */
 	private currentMapScope(): string {
 		return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
@@ -2205,6 +2231,11 @@ export class Controller {
 	/** Entries beyond the restore cap (set by startup hydration). They stay in the catalog file. */
 	setMapOverflowEntries(entries: MapLayerCatalogEntry[]): void {
 		this.mapOverflowEntries = entries
+	}
+
+	/** Resolves once the layers saved from the last session have been restored. */
+	whenMapRestored(): Promise<void> {
+		return this.mapHydration
 	}
 
 	getMapRestoreState(): { hydrating: boolean; olderCount: number; mergedCount: number; aliases: Record<string, string> } {
@@ -2585,6 +2616,9 @@ export class Controller {
 
 		try {
 			this.fileScanner = new FileScanner()
+			this.fileScanner.onFileEvent((file) => {
+				for (const listener of this.workspaceFileEventListeners) listener(file)
+			})
 			await this.fileScanner.initialize(workspaceFolders)
 
 			// Set up callback for file changes
@@ -2599,6 +2633,15 @@ export class Controller {
 		} catch (error) {
 			console.error("[Controller] Failed to initialize file scanner:", error)
 		}
+	}
+
+	/** Listeners for raw file events in the open folders. Kept here so they outlive a scanner that starts late. */
+	private readonly workspaceFileEventListeners = new Set<(file: string) => void>()
+
+	/** Hear every created, changed or removed map file in the open folders. Returns the way to stop. */
+	onWorkspaceFileEvent(listener: (file: string) => void): () => void {
+		this.workspaceFileEventListeners.add(listener)
+		return () => this.workspaceFileEventListeners.delete(listener)
 	}
 
 	/**

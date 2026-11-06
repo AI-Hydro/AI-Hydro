@@ -812,7 +812,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Trigger auto-open on save (e.g. agent edits an existing module)
 	context.subscriptions.push(
 		vscode.workspace.onDidSaveTextDocument((doc) => {
-			void VscodeMapPanelProvider.notifyFileSaved(doc.uri)
 			void autoOpenIfAiHydroModule(doc.uri)
 		}),
 	)

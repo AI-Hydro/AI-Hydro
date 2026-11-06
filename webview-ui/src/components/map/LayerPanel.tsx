@@ -26,10 +26,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useMapContext } from "../../context/MapContext"
 import { FileServiceClient, MapServiceClient } from "../../services/grpc-client"
-import { loadAndPushFileEntries } from "./formats"
+import { type FocusHandoff, startFocusHandoff } from "./focusHandoff"
 import { rasterCache } from "./formats/rasterCache"
 import GraduatedSymbologyEditor from "./GraduatedSymbologyEditor"
-import { type FocusHandoff, startFocusHandoff } from "./focusHandoff"
 import { LayerRow } from "./LayerRow"
 import { deriveLayerIntelligence } from "./layerIntelligence"
 import {
@@ -47,10 +46,10 @@ import {
 import { AttributeTable, LayerInspector, niceMetadata } from "./layerPanelParts"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
-import { resolveFileUri } from "./resolveFileUri"
-import { SymbologyEditor } from "./SymbologyEditor"
-import { type FolderRef, fileResolved, layerOfFile, layersByFile, notOnMap, WEBVIEW_PARSED } from "./projectFilesModel"
 import { ProjectFilesSection } from "./ProjectFilesSection"
+import { type FolderRef, fileResolved, layerOfFile, layersByFile, notOnMap, WEBVIEW_PARSED } from "./projectFilesModel"
+import { SourceNote } from "./SourceNote"
+import { SymbologyEditor } from "./SymbologyEditor"
 import { restoredLayersNote, useProjectFiles } from "./WorkspaceFilesSection"
 
 interface LayerPanelContentProps {
@@ -242,10 +241,13 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		[],
 	)
 
-	const say = useCallback((kind: "ok" | "err" | "idle", msg: string, ms = 3500, action?: { label: string; run: () => void }) => {
-		setLoadStatus({ kind, msg, action })
-		if (msg) window.setTimeout(() => setLoadStatus((cur) => (cur.msg === msg ? { kind: "idle", msg: "" } : cur)), ms)
-	}, [])
+	const say = useCallback(
+		(kind: "ok" | "err" | "idle", msg: string, ms = 3500, action?: { label: string; run: () => void }) => {
+			setLoadStatus({ kind, msg, action })
+			if (msg) window.setTimeout(() => setLoadStatus((cur) => (cur.msg === msg ? { kind: "idle", msg: "" } : cur)), ms)
+		},
+		[],
+	)
 
 	// Project files: every map file of the open folders. A loaded file stays in the tree with a check.
 	const project = useProjectFiles()
@@ -390,48 +392,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		}
 	}
 
-	const handleReloadSource = async (layer: MapLayer, displayName: string) => {
-		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
-		if (!sourcePath) {
-			say("err", "No source file path recorded for this layer.", 5000)
-			return
-		}
-		say("idle", `Reloading ${displayName}…`, 15_000)
-		try {
-			const resolved = await resolveFileUri(sourcePath, {
-				workspaceFolder: layer.metadata?.workspace_folder,
-				kind: "project",
-			})
-			// One file has one path: the absolute one the host found it at, whatever spelling the layer stored.
-			const absolutePath = resolved.path ?? sourcePath
-			const response = await fetch(resolved.uri)
-			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}`)
-			}
-			const blob = await response.blob()
-			const file = new File([blob], resolved.name)
-			const result = await loadAndPushFileEntries([
-				{
-					file,
-					source: {
-						path: absolutePath,
-						uri: layer.metadata?.source_uri,
-						displayPath: layer.metadata?.source_display_path ?? sourcePath,
-						format: layer.metadata?.source_format ?? layer.metadata?.format,
-					},
-				},
-			])
-			if (result.loaded > 0) {
-				// The host says what happened (the file changed, or it is unchanged and already on the map).
-				say("ok", `Reload finished for ${displayName}.`, 5000)
-			} else {
-				say("err", result.errors[0] ?? "Reload failed.", 6000)
-			}
-		} catch (err) {
-			say("err", err instanceof Error ? err.message : "Reload failed.", 6000)
-		}
-	}
-
 	// ── removal, with undo ────────────────────────────────────────────────
 
 	/** The window closes: nothing can be undone any more, so the raster values of removed layers can go. */
@@ -499,7 +459,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				}
 			}),
 		)
-		if (failed > 0) say("err", `Could not ${opts.unload ? "unload" : "remove"} ${failed === 1 ? "the layer" : `${failed} layers`}.`, 6000)
+		if (failed > 0)
+			say("err", `Could not ${opts.unload ? "unload" : "remove"} ${failed === 1 ? "the layer" : `${failed} layers`}.`, 6000)
 		if (removed.length === 0) return
 		const gone = new Set(removed.map((l) => l.id))
 		for (const layer of removed) {
@@ -639,7 +600,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	/** For a project file's row on the map: where the file is, shown on hover so the move is traceable. */
 	const sourceHintOf = (layerId: string): string | undefined => {
 		const file = fileOfLayerId.get(layerId)
-		return file ? `${project.data.folderCount > 1 && file.folderName ? `${file.folderName} / ` : ""}${file.relativePath}` : undefined
+		return file
+			? `${project.data.folderCount > 1 && file.folderName ? `${file.folderName} / ` : ""}${file.relativePath}`
+			: undefined
 	}
 
 	/** A Load put this layer on the map: mark its row, say where it went, offer Zoom to, and fit the camera on an empty map. */
@@ -660,7 +623,10 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	 * its own layer: one entry per file with its own timer, so two loads at once each get their feedback.
 	 */
 	const pendingParsed = useRef(
-		new Map<string, { file: WorkspaceGeoFile; known: Set<string>; wasEmpty: boolean; timer: number; handoff: FocusHandoff }>(),
+		new Map<
+			string,
+			{ file: WorkspaceGeoFile; known: Set<string>; wasEmpty: boolean; timer: number; handoff: FocusHandoff }
+		>(),
 	)
 	const finishLoadRef = useRef(finishLoad)
 	finishLoadRef.current = finishLoad
@@ -752,7 +718,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const listEntries: UndoEntry["listEntries"] = alsoRemove
 			? targets.flatMap((l): NonNullable<UndoEntry["listEntries"]> => {
 					const file = fileOfLayerId.get(l.id) ?? fileByResolved.get(resolvedSourcePath(l.metadata) ?? "")
-					return file ? [{ workspaceFolder: file.workspaceFolder, relativePath: file.relativePath, kind: "file" as const }] : []
+					return file
+						? [{ workspaceFolder: file.workspaceFolder, relativePath: file.relativePath, kind: "file" as const }]
+						: []
 				})
 			: undefined
 		const moved = alsoRemove ? [] : targets.flatMap((l) => fileOfLayerId.get(l.id) ?? [])
@@ -767,12 +735,19 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	}
 
 	const removeFromList = async (entries: { file?: WorkspaceGeoFile; folder?: FolderRef }[], label: string) => {
-		const list: NonNullable<UndoEntry["listEntries"]> = entries.flatMap((e): NonNullable<UndoEntry["listEntries"]> =>
-			e.file
-				? [{ workspaceFolder: e.file.workspaceFolder, relativePath: e.file.relativePath, kind: "file" as const }]
-				: e.folder && e.folder.relativePath
-					? [{ workspaceFolder: e.folder.workspaceFolder, relativePath: e.folder.relativePath, kind: "folder" as const }]
-					: [],
+		const list: NonNullable<UndoEntry["listEntries"]> = entries.flatMap(
+			(e): NonNullable<UndoEntry["listEntries"]> =>
+				e.file
+					? [{ workspaceFolder: e.file.workspaceFolder, relativePath: e.file.relativePath, kind: "file" as const }]
+					: e.folder && e.folder.relativePath
+						? [
+								{
+									workspaceFolder: e.folder.workspaceFolder,
+									relativePath: e.folder.relativePath,
+									kind: "folder" as const,
+								},
+							]
+						: [],
 		)
 		if (list.length === 0) return
 		try {
@@ -889,12 +864,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				label: "Open file",
 				icon: "go-to-file",
 				onSelect: () => openSourceFile(sourcePath, layer.metadata?.workspace_folder),
-			},
-			!!sourcePath && {
-				key: "reload",
-				label: "Reload source",
-				icon: "refresh",
-				onSelect: () => void handleReloadSource(layer, displayName),
 			},
 			!!openable && {
 				key: "open-run",
@@ -1020,6 +989,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 					<output>{Math.round(opacity * 100)}%</output>
 				</label>
 				{!visible && <div className="map-layer-hint">Hidden. Show the layer to change its opacity.</div>}
+				<SourceNote layer={layer} />
 				<div className="map-layer-drawer__actions">
 					<button
 						aria-pressed={drawer.style}
@@ -1259,7 +1229,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 														justMoved={justLoadedId === layer.id}
 														key={layer.id}
 														layer={layer}
-														sourceHint={sourceHintOf(layer.id)}
 														menuItems={menuFor(layer, displayName)}
 														note={groupNote ? undefined : indicators[i].note}
 														onDragEnd={finishDrag}
@@ -1288,6 +1257,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 														renameDraft={renameDraft}
 														renaming={renamingId === layer.id}
 														selected={selected}
+														sourceHint={sourceHintOf(layer.id)}
 														visible={visibleLayerIds.has(layer.id)}
 														warnings={indicators[i].warnings}>
 														{selected && renderDrawer(layer, displayName)}

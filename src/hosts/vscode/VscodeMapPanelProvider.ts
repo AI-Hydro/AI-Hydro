@@ -1,11 +1,13 @@
 import * as crypto from "node:crypto"
+import * as fsp from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import type { Controller } from "@core/controller"
-import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
-import { writeDerivedGeojson } from "@core/map/derivedWrite"
-import { checkProjectFileRequest } from "@core/map/projectFiles"
 import { authorizeMapPath, grantMapPath, type MapPathDeps, type MapPathPurpose } from "@core/map/authorizeMapPath"
+import { writeDerivedGeojson } from "@core/map/derivedWrite"
+import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
+import { MapFileWatch, type ParseResult, type WatchReport } from "@core/map/mapFileWatch"
+import { checkProjectFileRequest } from "@core/map/projectFiles"
 import { resolveMapFilePath as resolveMapFilePathIn } from "@core/map/resolveMapFilePath"
 import { checkSaveTarget, loadPinsForProject, NO_FOLDER_KEY, quarantinePins, savePinsForProject } from "@core/project/pinStore"
 import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
@@ -267,6 +269,126 @@ export class VscodeMapPanelProvider {
 	public static initialize(context: vscode.ExtensionContext, controller: Controller) {
 		VscodeMapPanelProvider.context = context
 		VscodeMapPanelProvider.controller = controller
+		VscodeMapPanelProvider.startFileWatch(context, controller)
+	}
+
+	private static fileWatch: MapFileWatch | undefined
+	private static fileWatchSync: ReturnType<typeof setTimeout> | undefined
+
+	/**
+	 * A layer that names a file follows the file (see `MapFileWatch`). The watcher lives as long as the extension, not the
+	 * panel: a file can change while the map is closed, and the next open finds it. It never opens or reveals the panel.
+	 */
+	private static startFileWatch(context: vscode.ExtensionContext, controller: Controller): void {
+		VscodeMapPanelProvider.fileWatch?.dispose()
+		const watch = new MapFileWatch({
+			layers: () => controller.getMapLayers(),
+			fs: {
+				stat: async (p) => {
+					const st = await fsp.stat(p)
+					return { size: st.size, mtimeMs: st.mtimeMs }
+				},
+				readFile: (p) => fsp.readFile(p),
+			},
+			// "load", not "read": a path a map scene or a message put on a layer is not a file the map was allowed to open.
+			authorize: async (p) => {
+				const decision = await authorizeForMap(p, "load", controller)
+				return decision.ok ? decision.path : undefined
+			},
+			workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+			watchFolder: (folder, onEvent) => {
+				try {
+					// A plain `*` pattern on a base folder is a non-recursive watch, inside the workspace or outside it.
+					const watcher = vscode.workspace.createFileSystemWatcher(
+						new vscode.RelativePattern(vscode.Uri.file(folder), "*"),
+					)
+					watcher.onDidCreate((uri) => onEvent(uri.fsPath))
+					watcher.onDidChange((uri) => onEvent(uri.fsPath))
+					watcher.onDidDelete((uri) => onEvent(uri.fsPath))
+					return watcher
+				} catch (err) {
+					console.warn(`[VscodeMapPanelProvider] Could not watch ${folder}:`, err)
+					return undefined
+				}
+			},
+			onWorkspaceEvent: (listener) => ({ dispose: controller.onWorkspaceFileEvent(listener) }),
+			panelOpen: () => VscodeMapPanelProvider.currentPanel !== undefined,
+			requestParse: (request) => {
+				const panel = VscodeMapPanelProvider.currentPanel
+				if (!panel) {
+					return false
+				}
+				const uri = vscode.Uri.file(request.path)
+				VscodeMapPanelProvider.allowLocalFileRoots(panel, [vscode.Uri.file(path.dirname(request.path))])
+				void panel.webview.postMessage({
+					type: "aihydro-map-refresh-file",
+					...request,
+					uri: panel.webview.asWebviewUri(uri).toString(),
+				})
+				return true
+			},
+			patchLayer: (layerId, metadata) => {
+				controller.updateMapLayer(layerId, { metadata })
+			},
+			applyRefresh: (layerId, update, mode) => controller.refreshMapLayerFromFile(layerId, update, mode),
+			report: (report) => VscodeMapPanelProvider.postFileStatus(report),
+		})
+		VscodeMapPanelProvider.fileWatch = watch
+		watch.start()
+		const scheduleSync = () => {
+			if (VscodeMapPanelProvider.fileWatchSync) {
+				clearTimeout(VscodeMapPanelProvider.fileWatchSync)
+			}
+			VscodeMapPanelProvider.fileWatchSync = setTimeout(() => {
+				VscodeMapPanelProvider.fileWatchSync = undefined
+				void watch.sync()
+			}, 200)
+		}
+		const unsubscribe = controller.subscribeToMapLayerUpdates(scheduleSync)
+		// Layers come back from the catalog a few at a time. Once they are all here, every file is looked at once.
+		void controller.whenMapRestored().then(() => watch.checkAll())
+		context.subscriptions.push({
+			dispose: () => {
+				unsubscribe()
+				if (VscodeMapPanelProvider.fileWatchSync) {
+					clearTimeout(VscodeMapPanelProvider.fileWatchSync)
+				}
+				watch.dispose()
+				if (VscodeMapPanelProvider.fileWatch === watch) {
+					VscodeMapPanelProvider.fileWatch = undefined
+				}
+			},
+		})
+	}
+
+	/** What the watcher did, said in the panel's status line. Posted only to a panel that exists. */
+	private static postFileStatus(report: WatchReport): void {
+		const panel = VscodeMapPanelProvider.currentPanel
+		if (!panel) {
+			return
+		}
+		let message: string
+		let kind: "ok" | "err" = "ok"
+		switch (report.kind) {
+			case "updated":
+				message =
+					report.mode === "use_new_file"
+						? `Now using the new file for ${report.name}.${report.priorRun ? ` The link to run ${report.priorRun.slice(-8)} was removed.` : ""}`
+						: `Updated ${report.name}: the file changed on disk.`
+				break
+			case "flagged":
+				message = `The file behind ${report.name} changed. The layer is linked to a run, so it was not changed.`
+				break
+			case "unreadable":
+				message = `Could not read the new version of ${report.name}: ${report.reason}. Showing the last good copy.`
+				kind = "err"
+				break
+			case "missing":
+				message = `File not found for ${report.name}. Showing the last loaded copy.`
+				kind = "err"
+				break
+		}
+		void panel.webview.postMessage({ type: "aihydro-map-file-status", kind, message })
 	}
 
 	/** Pin bucket keys per workspace root. A lookup that fell back to `dir:` is retried, so a project that gets an id later is picked up. */
@@ -760,29 +882,6 @@ export class VscodeMapPanelProvider {
 		})
 	}
 
-	public static async notifyFileSaved(uri: vscode.Uri): Promise<void> {
-		if (!VscodeMapPanelProvider.currentPanel || uri.scheme !== "file") {
-			return
-		}
-		const ext = path.extname(uri.fsPath).toLowerCase()
-		if (!MAP_SUPPORTED_EXTENSIONS.has(ext)) {
-			return
-		}
-		let stat: vscode.FileStat | undefined
-		try {
-			stat = await vscode.workspace.fs.stat(uri)
-		} catch {
-			/* ignore */
-		}
-		await VscodeMapPanelProvider.currentPanel.webview.postMessage({
-			type: "aihydro-source-file-saved",
-			path: uri.fsPath,
-			uri: uri.toString(),
-			mtimeMs: stat?.mtime,
-			sizeBytes: stat?.size,
-		})
-	}
-
 	private static allowLocalFileRoots(panel: vscode.WebviewPanel, roots: vscode.Uri[]): void {
 		const existing = panel.webview.options.localResourceRoots ?? []
 		const next = [...existing]
@@ -851,10 +950,18 @@ export class VscodeMapPanelProvider {
 		// CRITICAL: Set up message handler so this panel can communicate with the extension
 		VscodeMapPanelProvider.setupMessageHandler(panel)
 
+		// The map is shown again (a tab switch, a window focus): watchers can drop events, so every file is looked at once.
+		panel.onDidChangeViewState((event) => {
+			if (event.webviewPanel.visible) {
+				void VscodeMapPanelProvider.fileWatch?.checkAll()
+			}
+		})
+
 		// Handle disposal
 		panel.onDidDispose(
 			() => {
 				VscodeMapPanelProvider.currentPanel = undefined
+				VscodeMapPanelProvider.fileWatch?.cancelRequests()
 				// Clean up disposables
 				while (VscodeMapPanelProvider.disposables.length) {
 					const x = VscodeMapPanelProvider.disposables.pop()
@@ -866,6 +973,30 @@ export class VscodeMapPanelProvider {
 			null,
 			[],
 		)
+	}
+
+	/** The page's answer to a parse request, checked for shape: it is page input, so nothing in it is taken on trust. */
+	private static parseRefreshResult(message: any): ParseResult | undefined {
+		if (typeof message?.requestId !== "string" || typeof message.ok !== "boolean") {
+			return undefined
+		}
+		const metadata: Record<string, string> = {}
+		if (message.metadata && typeof message.metadata === "object") {
+			for (const [key, value] of Object.entries(message.metadata)) {
+				if (typeof value === "string") {
+					metadata[key] = value
+				}
+			}
+		}
+		const reason = message.reason === "changed_while_reading" || message.reason === "unsupported" ? message.reason : "parse"
+		return {
+			requestId: message.requestId,
+			ok: message.ok,
+			...(message.ok ? {} : { reason }),
+			...(typeof message.message === "string" ? { message: message.message.slice(0, 300) } : {}),
+			...(typeof message.geojson === "string" ? { geojson: message.geojson } : {}),
+			metadata,
+		}
 	}
 
 	/**
@@ -898,6 +1029,31 @@ export class VscodeMapPanelProvider {
 					case "grpc_request_cancel": {
 						if (message.grpc_request_cancel) {
 							await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
+						}
+						break
+					}
+					case "aihydro-map-panel-ready": {
+						// The page is listening: look at every loaded file once (after the layers have been restored).
+						void mainWebview.controller.whenMapRestored().then(() => VscodeMapPanelProvider.fileWatch?.checkAll())
+						break
+					}
+					case "aihydro-map-refresh-result": {
+						const result = VscodeMapPanelProvider.parseRefreshResult(message)
+						if (result) {
+							VscodeMapPanelProvider.fileWatch?.onParseResult(result)
+						}
+						break
+					}
+					case "aihydro-map-use-new-file": {
+						if (typeof message.layerId === "string" && VscodeMapPanelProvider.fileWatch) {
+							const outcome = await VscodeMapPanelProvider.fileWatch.useNewFile(message.layerId)
+							if (!outcome.ok) {
+								await panel.webview.postMessage({
+									type: "aihydro-map-file-status",
+									kind: "err",
+									message: outcome.reason,
+								})
+							}
 						}
 						break
 					}

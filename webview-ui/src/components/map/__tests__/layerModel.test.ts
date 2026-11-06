@@ -99,7 +99,7 @@ describe("what a row says about itself", () => {
 		)
 		const text = rowIndicators(bad).warnings.join(" | ")
 		expect(text).toMatch(/Missing provenance/)
-		expect(text).toMatch(/source file changed/)
+		expect(text).toMatch(/file changed after/)
 		expect(text).toMatch(/preview/i)
 		expect(text).toMatch(/simplified/i)
 	})
