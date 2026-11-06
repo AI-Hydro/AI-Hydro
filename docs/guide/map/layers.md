@@ -125,6 +125,8 @@ Each action lives in one place. Click a layer's name to open its drawer; the `..
 |---|---|---|
 | Row | Eye | Show or hide the layer |
 | Row | Grip | Drag to reorder |
+| Row, Results only | History icon | **Open run**, when the layer records both its study and its run |
+| Drawer, first line | **Run** line | `<tool> · run <id>` with an **Open run** button. A layer with no `_run_id` reads `Not linked to a run`; a run with no study reads `Run <id>. No study recorded, so it cannot open here.` |
 | Drawer | Opacity slider | Layer opacity |
 | Drawer | **Style** | Symbology editor; **Cluster points** for point layers |
 | Drawer | **Attributes** | Attribute table (vector layers) |
@@ -132,7 +134,9 @@ Each action lives in one place. Click a layer's name to open its drawer; the `..
 | `...` menu | Zoom to layer, Rename on map | Rename on map sets the name shown on the map; the file is not renamed |
 | `...` menu | **Save as…** | A workspace file, or a GeoJSON download |
 | `...` menu | Open file, Reload source | Only when the layer has a source file |
-| `...` menu and Details | **Open run** | Opens the run that made the layer in Replay. Shown only when the layer records both its study and its run |
+| `...` menu | **Open run** | Always listed. Opens the run that made the layer in Replay. Off, with the reason beside it (`Not linked to a run`, or `No study recorded`), when the layer cannot open one |
+| Details, Provenance | **Open run** | The same action, when the layer records both its study and its run |
+| Drawer, Run line | **Use new file** | For a layer with a run whose file changed after it. The map keeps showing the run's result until you choose it; choosing asks once, because the link to the run is removed |
 | Details, Provenance | Open provenance record | When the layer has one |
 | `...` menu | Move up, Move down | Render order |
 | `...` menu | **Unload**, Unload and remove from list | For a file in the project list; the file stays on disk and Undo appears |
@@ -251,3 +255,16 @@ Warping uses bilinear interpolation; output is capped at 512 px on the long axis
 | `gee.preview_layer` | Google Earth Engine tile mosaic | GEE tile |
 | `merit_add_map_layers` | MERIT river network for a basin | Vector |
 | `wbd_add_map_layers` | WBD HUC boundaries | Vector |
+
+## Show on map (from a run back to its layers)
+
+The other direction of Open run. It appears wherever a run is named, and says so when the run made no layer on the map.
+
+| Where | Control | When there is no layer |
+|---|---|---|
+| Tool card, Run row | `On map (N)` | Not shown |
+| Claim chip | A globe icon beside the chip (no need to open the claim) | Not shown |
+| Claim details | `Show on map (N)` | `No map layer from this claim's run.` |
+| Replay, selected run | `Show on map (N)` | `This run has no layer on the map.` |
+
+A file is only said to belong to a run when its layer carries that run's id. A file name, a folder or a path is never evidence of a run, and a lookup by file content may only say `Study X, matched by file hash` when the study's own manifest recorded that file's sha256.

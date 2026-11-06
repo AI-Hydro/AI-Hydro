@@ -72,11 +72,18 @@ export interface RowIndicators {
  * What a row says about itself. A warning is something the reader must not miss (missing provenance, a changed
  * source, a preview that is not the full data, values not loaded). A note is a capability limit ("Limited layer").
  */
+/** What a run-linked layer says when its file changed: the map still shows the run's result until the user chooses the new file. */
+export const CHANGED_AFTER_RUN = "The file changed after this run. The map still shows the run's result."
+
 export function rowIndicators(layer: MapLayer, intelligence: LayerIntelligence = deriveLayerIntelligence(layer)): RowIndicators {
 	const meta = layer.metadata ?? {}
 	const warnings = intelligence.warnings.filter((w) => w !== "UNSUPPORTED_SYMBOLOGY").map(warningText)
 	if (meta.source_status === "source_changed") {
-		warnings.push("The source file changed after this layer was loaded. Reload the source to refresh it.")
+		warnings.push(
+			layerRunId(meta)
+				? CHANGED_AFTER_RUN
+				: "The source file changed after this layer was loaded. Reload the source to refresh it.",
+		)
 	}
 	if (meta.display_mode === "preview") {
 		warnings.push(

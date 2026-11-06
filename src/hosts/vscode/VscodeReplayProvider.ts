@@ -149,6 +149,18 @@ export class VscodeReplayProvider {
 							panel.webview.postMessage({ type: "session_list", ...listed })
 						}
 						break
+					case "aihydro-show-on-map": {
+						// "Show on map" in the selected run's header: the webview sends run ids; the host finds the layers.
+						// The main controller owns the map, so the same handler the chat uses answers here.
+						if (mainWebview) {
+							const { showRunsOnMap } = require("@core/map/showOnMap")
+							const result = await showRunsOnMap(mainWebview.controller, message.run_ids)
+							if (!result.ok) {
+								void vscode.window.showInformationMessage("No layer on the map came from that run.")
+							}
+						}
+						break
+					}
 					case "load_replay":
 						VscodeReplayProvider.handleLoadReplay(panel, message.session_id, message.focus_run_id)
 						break

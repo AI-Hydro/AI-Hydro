@@ -48,6 +48,7 @@ import {
 	pfFile,
 	referenceGauges,
 	restoredLayers,
+	runActionLayers,
 	TRANSECTS_STORAGE_KEY,
 	threeProjectFiles,
 	workspaceFileLayer,
@@ -1233,6 +1234,8 @@ export const screens: ScreenDef[] = [
 		flags: [REPLAY],
 		onMessage: replayHost(replaySession),
 		render: app,
+		// No layer on the map came from the selected run, and the panel says so where the action would be.
+		expectVisible: ['[data-testid="replay-no-map-layer"]'],
 	},
 	{
 		id: "replay-capsule",
@@ -1415,6 +1418,51 @@ export const screens: ScreenDef[] = [
 		steps: [...openTool("Layer manager"), { click: 'button[aria-label^="Actions for Synthetic gauge"]' }, { wait: 300 }],
 		expectVisible: ['[role="menu"]', '[role="menuitem"]:has-text("Open run")'],
 	}),
+	// Findable run actions (Slice 3): the Run line is the first line of the drawer and Open run is always in the menu.
+	mapScreen("map-layers-no-run-drawer", "Layers: a file with no run says so on the Run line; Open run is listed but off", {
+		layers: runActionLayers(),
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button.map-layer-name:has-text("watershed_01013500.geojson")' },
+			{ click: 'button[aria-label^="Actions for watershed_01013500.geojson"]' },
+			{ wait: 300 },
+		],
+		expectVisible: [
+			'[aria-label="Run"]:has-text("Not linked to a run")',
+			'[role="menuitem"][aria-disabled="true"]:has-text("Open run")',
+		],
+		expectAbsent: [
+			'[aria-label="Run"] button:has-text("Open run")',
+			'button[aria-label="Open run for watershed_01013500.geojson"]',
+		],
+	}),
+	mapScreen(
+		"map-layers-run-drawer",
+		"Layers: a result names its run in the drawer with Open run, and a history icon on the row",
+		{
+			layers: runActionLayers(),
+			steps: [
+				...openTool("Layer manager"),
+				{ click: 'button.map-layer-name:has-text("Basin from delineate_watershed")' },
+				{ wait: 300 },
+			],
+			expectVisible: [
+				'[aria-label="Run"]:has-text("delineate_watershed · run run-ab12cd34.1")',
+				'[aria-label="Run"] button:has-text("Open run")',
+				'button[aria-label="Open run for Basin from delineate_watershed"]',
+			],
+		},
+	),
+	mapScreen("map-layers-run-changed", "Layers: the file changed after the run; the run stays and Use new file is offered", {
+		layers: runActionLayers(),
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("Basin, file edited")' }, { wait: 300 }],
+		expectVisible: [
+			'button[aria-label^="Warning for Basin, file edited"]',
+			'[aria-label="Run"]:has-text("The file changed after this run.")',
+			'[aria-label="Run"] button:has-text("Use new file")',
+			'button[aria-label="Open run for Basin, file edited"]',
+		],
+	}),
 	mapScreen("map-layers-reference-group", "Layers: a reference layer under Reference data, not in any run", {
 		layers: [...featureLayers(), referenceGauges],
 		steps: [
@@ -1429,7 +1477,11 @@ export const screens: ScreenDef[] = [
 	}),
 	mapScreen("map-layers-collapsed-group", "Layers: a group collapsed to its header", {
 		layers: manyLayers(),
-		steps: [...openTool("Layer manager"), { click: 'button.map-layer-group__head:has(.map-layer-group__title:text-is("Files"))' }, { wait: 200 }],
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button.map-layer-group__head:has(.map-layer-group__title:text-is("Files"))' },
+			{ wait: 200 },
+		],
 	}),
 	mapScreen("map-time-slider", "Map date filter", {
 		layers: featureLayers(),
@@ -1641,20 +1693,32 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-layers-files-empty", "Not on the map: an open folder with no map files", {
 		layers: featureLayers(),
 		projectFiles: { files: [], folderCount: 1, foldersSkipped: 2, skippedNames: [".git", "node_modules"] },
-		steps: [...openTool("Layer manager"), { click: 'button[aria-expanded="false"]:has-text("Not on the map")' }, { wait: 300 }],
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button[aria-expanded="false"]:has-text("Not on the map")' },
+			{ wait: 300 },
+		],
 		expectVisible: ['[aria-label="Not on the map"] >> text=No map files in this folder.'],
 	}),
-	mapScreen("map-layers-files-three", "Not on the map: three project files, one on the map (its layer row above), two listed below", {
-		layers: [workspaceFileLayer("data/huc8_boundaries.geojson")],
-		projectFiles: { files: threeProjectFiles(), foldersSkipped: 3, skippedNames: [".aihydro", ".git", "node_modules"] },
-		steps: [...openTool("Layer manager"), { click: 'button[aria-expanded="false"]:has-text("Not on the map")' }, { wait: 300 }],
-		expectVisible: [
-			'button[aria-expanded="true"]:has-text("Not on the map · 2 files")',
-			'button[aria-label="Load data/gauges.geojson"]',
-			'.map-layer-row:has-text("huc8_boundaries.geojson")',
-		],
-		expectAbsent: ['button[aria-label="Load data/huc8_boundaries.geojson"]'],
-	}),
+	mapScreen(
+		"map-layers-files-three",
+		"Not on the map: three project files, one on the map (its layer row above), two listed below",
+		{
+			layers: [workspaceFileLayer("data/huc8_boundaries.geojson")],
+			projectFiles: { files: threeProjectFiles(), foldersSkipped: 3, skippedNames: [".aihydro", ".git", "node_modules"] },
+			steps: [
+				...openTool("Layer manager"),
+				{ click: 'button[aria-expanded="false"]:has-text("Not on the map")' },
+				{ wait: 300 },
+			],
+			expectVisible: [
+				'button[aria-expanded="true"]:has-text("Not on the map · 2 files")',
+				'button[aria-label="Load data/gauges.geojson"]',
+				'.map-layer-row:has-text("huc8_boundaries.geojson")',
+			],
+			expectAbsent: ['button[aria-label="Load data/huc8_boundaries.geojson"]'],
+		},
+	),
 	mapScreen("map-layers-files-collapsed", "Not on the map: collapsed by default when layers are on the map", {
 		layers: [workspaceFileLayer("data/huc8_boundaries.geojson")],
 		projectFiles: { files: threeProjectFiles() },
@@ -1662,30 +1726,38 @@ export const screens: ScreenDef[] = [
 		expectVisible: ['button[aria-expanded="false"]:has-text("Not on the map · 2 files")'],
 		expectAbsent: ['[role="treeitem"]'],
 	}),
-	mapScreen("map-layers-files-many-filter", "Not on the map: 200 files, folders collapsed, a filter typed (matches only, Remove N matches)", {
-		layers: [workspaceFileLayer("huc/huc_000.geojson")],
-		projectFiles: { files: manyProjectFiles() },
-		steps: [
-			...openTool("Layer manager"),
-			{ click: 'button[aria-expanded="false"]:has-text("Not on the map")' },
-			{ wait: 300 },
-			{ fill: ['input[aria-label="Filter project files"]', "huc_"] },
-			{ wait: 300 },
-		],
-		expectVisible: ['input[aria-label="Filter project files"]', 'button:has-text("Remove 19 matches")'],
-	}),
-	mapScreen("map-layers-files-removed-undo", "Not on the map: a file removed from the list, the status line with Undo, and Removed from list (1)", {
-		layers: [workspaceFileLayer("data/huc8_boundaries.geojson")],
-		projectFiles: { files: threeProjectFiles() },
-		steps: [
-			...openTool("Layer manager"),
-			{ click: 'button[aria-expanded="false"]:has-text("Not on the map")' },
-			{ click: 'button[aria-label="Actions for data/gauges.geojson"]' },
-			{ click: '[role="menuitem"]:has-text("Remove from list")' },
-			{ wait: 400 },
-		],
-		expectVisible: ["text=The file stays on disk.", 'button:text-is("Undo")', 'button:has-text("Removed from list (1)")'],
-	}),
+	mapScreen(
+		"map-layers-files-many-filter",
+		"Not on the map: 200 files, folders collapsed, a filter typed (matches only, Remove N matches)",
+		{
+			layers: [workspaceFileLayer("huc/huc_000.geojson")],
+			projectFiles: { files: manyProjectFiles() },
+			steps: [
+				...openTool("Layer manager"),
+				{ click: 'button[aria-expanded="false"]:has-text("Not on the map")' },
+				{ wait: 300 },
+				{ fill: ['input[aria-label="Filter project files"]', "huc_"] },
+				{ wait: 300 },
+			],
+			expectVisible: ['input[aria-label="Filter project files"]', 'button:has-text("Remove 19 matches")'],
+		},
+	),
+	mapScreen(
+		"map-layers-files-removed-undo",
+		"Not on the map: a file removed from the list, the status line with Undo, and Removed from list (1)",
+		{
+			layers: [workspaceFileLayer("data/huc8_boundaries.geojson")],
+			projectFiles: { files: threeProjectFiles() },
+			steps: [
+				...openTool("Layer manager"),
+				{ click: 'button[aria-expanded="false"]:has-text("Not on the map")' },
+				{ click: 'button[aria-label="Actions for data/gauges.geojson"]' },
+				{ click: '[role="menuitem"]:has-text("Remove from list")' },
+				{ wait: 400 },
+			],
+			expectVisible: ["text=The file stays on disk.", 'button:text-is("Undo")', 'button:has-text("Removed from list (1)")'],
+		},
+	),
 	mapScreen("map-layers-files-large-confirm", "Not on the map: loading a 48 MB file asks first", {
 		layers: featureLayers(),
 		projectFiles: { files: [pfFile("data/nhd_flowlines_all.geojson", 48_000_000), ...threeProjectFiles()] },
@@ -1697,32 +1769,44 @@ export const screens: ScreenDef[] = [
 		],
 		expectVisible: ['[role="alertdialog"][aria-label="Confirm large load"]'],
 	}),
-	mapScreen("map-layers-files-multi-root", "Not on the map: two folders open, the same relative path in each, a root row per folder", {
-		layers: featureLayers(),
-		projectFiles: {
-			files: [
-				pfFile("data/basin.geojson", 410_000, "/fixture/upper", "upper"),
-				pfFile("data/basin.geojson", 388_000, "/fixture/lower", "lower"),
-				pfFile("data/gauges.geojson", 52_000, "/fixture/lower", "lower"),
+	mapScreen(
+		"map-layers-files-multi-root",
+		"Not on the map: two folders open, the same relative path in each, a root row per folder",
+		{
+			layers: featureLayers(),
+			projectFiles: {
+				files: [
+					pfFile("data/basin.geojson", 410_000, "/fixture/upper", "upper"),
+					pfFile("data/basin.geojson", 388_000, "/fixture/lower", "lower"),
+					pfFile("data/gauges.geojson", 52_000, "/fixture/lower", "lower"),
+				],
+				folderCount: 2,
+			},
+			steps: [
+				...openTool("Layer manager"),
+				{ click: 'button[aria-expanded="false"]:has-text("Not on the map")' },
+				{ wait: 300 },
 			],
-			folderCount: 2,
+			expectVisible: ['button[aria-label="Collapse upper"]', 'button[aria-label="Collapse lower"]'],
 		},
-		steps: [...openTool("Layer manager"), { click: 'button[aria-expanded="false"]:has-text("Not on the map")' }, { wait: 300 }],
-		expectVisible: ['button[aria-label="Collapse upper"]', 'button[aria-label="Collapse lower"]'],
-	}),
-	mapScreen("map-layers-files-just-loaded", "Not on the map: Load moved a file up; its layer row is marked for a moment and the status says where it went", {
-		layers: featureLayers(),
-		layersAfterLoad: [...featureLayers(), workspaceFileLayer("data/gauges.geojson")],
-		projectFiles: { files: threeProjectFiles() },
-		steps: [
-			...openTool("Layer manager"),
-			{ click: 'button[aria-expanded="false"]:has-text("Not on the map")' },
-			{ click: 'button[aria-label="Load data/gauges.geojson"]' },
-			{ wait: 400 },
-		],
-		expectVisible: ['.map-layer-row[data-just-moved]', "text=It moved up to On the map."],
-		expectAbsent: ['button[aria-label="Load data/gauges.geojson"]'],
-	}),
+	),
+	mapScreen(
+		"map-layers-files-just-loaded",
+		"Not on the map: Load moved a file up; its layer row is marked for a moment and the status says where it went",
+		{
+			layers: featureLayers(),
+			layersAfterLoad: [...featureLayers(), workspaceFileLayer("data/gauges.geojson")],
+			projectFiles: { files: threeProjectFiles() },
+			steps: [
+				...openTool("Layer manager"),
+				{ click: 'button[aria-expanded="false"]:has-text("Not on the map")' },
+				{ click: 'button[aria-label="Load data/gauges.geojson"]' },
+				{ wait: 400 },
+			],
+			expectVisible: [".map-layer-row[data-just-moved]", "text=It moved up to On the map."],
+			expectAbsent: ['button[aria-label="Load data/gauges.geojson"]'],
+		},
+	),
 	mapScreen("map-more-flyout", "More menu with Swipe, Time and Flood disabled and why", {
 		steps: [
 			{ click: 'button[aria-label^="Map tools"]', optional: true },

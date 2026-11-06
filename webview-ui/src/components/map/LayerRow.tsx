@@ -1,7 +1,7 @@
 /**
  * LayerRow: one layer in the Layers list, on one line.
  *
- *   [grip] [eye] [swatch] name .................. [warning] [note] [duplicate] [more]
+ *   [grip] [eye] [swatch] name .................. [run] [warning] [note] [duplicate] [more]
  *
  * Everything else lives behind the "more" menu (zoom to, rename, style, save, export, copy tool and run id, move,
  * remove) or in the drawer a selected row opens (opacity, style, attributes, details). The row never shows a status
@@ -21,6 +21,8 @@ export interface LayerRowProps {
 	displayName: string
 	visible: boolean
 	selected: boolean
+	/** Open this layer's run. Given only for a Results row whose run can open; it shows as the history icon. */
+	onOpenRun?: () => void
 	/** Real warnings; always shown. */
 	warnings: string[]
 	/** A quiet capability note, shown on the row unless the group states it once. */
@@ -71,6 +73,7 @@ export const LayerRow: React.FC<LayerRowProps> = ({
 	displayName,
 	visible,
 	selected,
+	onOpenRun,
 	warnings,
 	note,
 	duplicate,
@@ -144,6 +147,16 @@ export const LayerRow: React.FC<LayerRowProps> = ({
 						title={`${displayName}${sourceHint ? `\n${sourceHint}` : ""}\nClick for opacity and style. Double-click to rename.`}
 						type="button">
 						<span>{displayName}</span>
+					</button>
+				)}
+				{onOpenRun && (
+					<button
+						aria-label={`Open run for ${displayName}`}
+						className="map-layer-flag"
+						onClick={onOpenRun}
+						title="Open run"
+						type="button">
+						<span aria-hidden="true" className="codicon codicon-history" />
 					</button>
 				)}
 				{warnings.length > 0 && (

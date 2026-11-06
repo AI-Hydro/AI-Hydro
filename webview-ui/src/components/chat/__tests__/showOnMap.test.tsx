@@ -65,15 +65,27 @@ describe("On map, from a tool card", () => {
 describe("Show on map, from a claim", () => {
 	const open = () => {
 		render(<ClaimChip claimId="c1" />)
-		fireEvent.click(screen.getByRole("button", { name: /c1/ }))
+		fireEvent.click(screen.getByRole("button", { name: /^c1/ }))
 	}
 
 	it("a claim whose evidence run has layers gets the button, and only run evidence counts", () => {
 		state.claims.c1 = claim(["run-1"])
 		state.layers = [layer("a", "run-1")]
 		open()
-		fireEvent.click(screen.getByRole("button", { name: /Show on map \(1\)/ }))
+		// Two ways in: the globe on the chip (no expanding) and the button in the popover.
+		const buttons = screen.getAllByRole("button", { name: /Show on map \(1\)/ })
+		expect(buttons).toHaveLength(2)
+		fireEvent.click(buttons[1])
 		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-show-on-map", run_ids: ["run-1"] })
+	})
+
+	it("the globe on the chip shows the layers without opening the claim", () => {
+		state.claims.c1 = claim(["run-1"])
+		state.layers = [layer("a", "run-1")]
+		render(<ClaimChip claimId="c1" />)
+		fireEvent.click(screen.getByTestId("chip-show-on-map"))
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-show-on-map", run_ids: ["run-1"] })
+		expect(screen.queryByText("Evidence:")).toBeNull()
 	})
 
 	it("a claim with no run on the map, or no run evidence, gets no button", () => {
@@ -81,5 +93,15 @@ describe("Show on map, from a claim", () => {
 		state.layers = [layer("a", "run-2")]
 		open()
 		expect(screen.queryByRole("button", { name: /Show on map/ })).toBeNull()
+		expect(screen.queryByTestId("chip-show-on-map")).toBeNull()
+		// The absence is stated where the action would be.
+		expect(screen.getByTestId("chip-no-map-layer")).toHaveTextContent("No map layer from this claim's run.")
+	})
+
+	it("a claim whose evidence names no run says so instead of promising a layer", () => {
+		state.claims.c1 = claim([])
+		state.layers = []
+		open()
+		expect(screen.getByTestId("chip-no-map-layer")).toHaveTextContent("names no run")
 	})
 })

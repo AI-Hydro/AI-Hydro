@@ -92,7 +92,8 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId, variant = "strip"
 	const [open, setOpen] = useState(false)
 	const claim = getClaim(claimId)
 	// A claim links to the map through the runs its evidence names; no run on the map, no button.
-	const onMap = useRunLayers(claim?.evidenceSpans.filter((e) => e.sourceType === "run").map((e) => e.sourceId) ?? [])
+	const runIds = claim?.evidenceSpans.filter((e) => e.sourceType === "run").map((e) => e.sourceId) ?? []
+	const onMap = useRunLayers(runIds)
 
 	const { statusKey, approval, approved } = claimApprovalState(claim)
 	const def = evidenceState(chipState(statusKey, approved, approval?.tone))
@@ -138,6 +139,19 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId, variant = "strip"
 				</button>
 			)}
 
+			{/* The globe sits on the chip itself, so Show on map needs no expanding. Beside the chip, never inside its button. */}
+			{onMap.count > 0 && (
+				<button
+					aria-label={`Show on map (${onMap.count})`}
+					className="codicon codicon-globe cursor-pointer opacity-70 hover:opacity-100"
+					data-testid="chip-show-on-map"
+					onClick={onMap.show}
+					style={{ ...INLINE_HIT_STYLE, justifyContent: "center", margin: "-5px 0" }}
+					title={`Show on map (${onMap.count})`}
+					type="button"
+				/>
+			)}
+
 			{open && claim && (
 				<span
 					className="
@@ -180,7 +194,7 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId, variant = "strip"
 							))}
 						</div>
 					)}
-					{onMap.count > 0 && (
+					{onMap.count > 0 ? (
 						<button
 							className="mt-1 cursor-pointer rounded border border-[var(--vscode-panel-border)] bg-transparent px-2 text-xs"
 							onClick={onMap.show}
@@ -188,6 +202,10 @@ export const ClaimChip: React.FC<ClaimChipProps> = ({ claimId, variant = "strip"
 							type="button">
 							<span aria-hidden="true" className="codicon codicon-globe" /> Show on map ({onMap.count})
 						</button>
+					) : (
+						<p className="mt-1 opacity-60" data-testid="chip-no-map-layer">
+							{runIds.length > 0 ? "No map layer from this claim's run." : "This claim's evidence names no run."}
+						</p>
 					)}
 					{claim.limitations.length > 0 && (
 						<div className="mt-1">

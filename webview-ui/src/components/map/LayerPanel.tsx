@@ -26,10 +26,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useMapContext } from "../../context/MapContext"
 import { FileServiceClient, MapServiceClient } from "../../services/grpc-client"
+import { type FocusHandoff, startFocusHandoff } from "./focusHandoff"
 import { loadAndPushFileEntries } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
 import GraduatedSymbologyEditor from "./GraduatedSymbologyEditor"
-import { type FocusHandoff, startFocusHandoff } from "./focusHandoff"
 import { LayerRow } from "./LayerRow"
 import { deriveLayerIntelligence } from "./layerIntelligence"
 import {
@@ -47,10 +47,12 @@ import {
 import { AttributeTable, LayerInspector, niceMetadata } from "./layerPanelParts"
 import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
-import { resolveFileUri } from "./resolveFileUri"
-import { SymbologyEditor } from "./SymbologyEditor"
-import { type FolderRef, fileResolved, layerOfFile, layersByFile, notOnMap, WEBVIEW_PARSED } from "./projectFilesModel"
 import { ProjectFilesSection } from "./ProjectFilesSection"
+import { type FolderRef, fileResolved, layerOfFile, layersByFile, notOnMap, WEBVIEW_PARSED } from "./projectFilesModel"
+import { RunLineView } from "./RunLineView"
+import { resolveFileUri } from "./resolveFileUri"
+import { openRunDisabledReason, showsRunIcon, useNewFileQuestion } from "./runLine"
+import { SymbologyEditor } from "./SymbologyEditor"
 import { restoredLayersNote, useProjectFiles } from "./WorkspaceFilesSection"
 
 interface LayerPanelContentProps {
@@ -198,7 +200,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [drawer, setDrawer] = useState<DrawerView>(CLOSED_DRAWER)
 	const [symbologyMode, setSymbologyMode] = useState<"basic" | "graduated">("basic")
-	const [confirm, setConfirm] = useState<null | { kind: "all" } | { kind: "duplicates"; names: string[] }>(null)
+	const [confirm, setConfirm] = useState<
+		null | { kind: "all" } | { kind: "duplicates"; names: string[] } | { kind: "new-file"; layer: MapLayer; name: string }
+	>(null)
 	const [loadStatus, setLoadStatus] = useState<{
 		kind: "idle" | "ok" | "err"
 		msg: string
@@ -242,10 +246,13 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		[],
 	)
 
-	const say = useCallback((kind: "ok" | "err" | "idle", msg: string, ms = 3500, action?: { label: string; run: () => void }) => {
-		setLoadStatus({ kind, msg, action })
-		if (msg) window.setTimeout(() => setLoadStatus((cur) => (cur.msg === msg ? { kind: "idle", msg: "" } : cur)), ms)
-	}, [])
+	const say = useCallback(
+		(kind: "ok" | "err" | "idle", msg: string, ms = 3500, action?: { label: string; run: () => void }) => {
+			setLoadStatus({ kind, msg, action })
+			if (msg) window.setTimeout(() => setLoadStatus((cur) => (cur.msg === msg ? { kind: "idle", msg: "" } : cur)), ms)
+		},
+		[],
+	)
 
 	// Project files: every map file of the open folders. A loaded file stays in the tree with a check.
 	const project = useProjectFiles()
@@ -432,6 +439,15 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		}
 	}
 
+	/**
+	 * Take the changed file for a run-linked layer. The host drops the run link when the content differs (`planMerge`
+	 * keeps `_prior_run_id`), which is why this asks first.
+	 */
+	const handleUseNewFile = async (layer: MapLayer, displayName: string) => {
+		setConfirm(null)
+		await handleReloadSource(layer, displayName)
+	}
+
 	// ── removal, with undo ────────────────────────────────────────────────
 
 	/** The window closes: nothing can be undone any more, so the raster values of removed layers can go. */
@@ -499,7 +515,8 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				}
 			}),
 		)
-		if (failed > 0) say("err", `Could not ${opts.unload ? "unload" : "remove"} ${failed === 1 ? "the layer" : `${failed} layers`}.`, 6000)
+		if (failed > 0)
+			say("err", `Could not ${opts.unload ? "unload" : "remove"} ${failed === 1 ? "the layer" : `${failed} layers`}.`, 6000)
 		if (removed.length === 0) return
 		const gone = new Set(removed.map((l) => l.id))
 		for (const layer of removed) {
@@ -639,7 +656,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	/** For a project file's row on the map: where the file is, shown on hover so the move is traceable. */
 	const sourceHintOf = (layerId: string): string | undefined => {
 		const file = fileOfLayerId.get(layerId)
-		return file ? `${project.data.folderCount > 1 && file.folderName ? `${file.folderName} / ` : ""}${file.relativePath}` : undefined
+		return file
+			? `${project.data.folderCount > 1 && file.folderName ? `${file.folderName} / ` : ""}${file.relativePath}`
+			: undefined
 	}
 
 	/** A Load put this layer on the map: mark its row, say where it went, offer Zoom to, and fit the camera on an empty map. */
@@ -660,7 +679,10 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	 * its own layer: one entry per file with its own timer, so two loads at once each get their feedback.
 	 */
 	const pendingParsed = useRef(
-		new Map<string, { file: WorkspaceGeoFile; known: Set<string>; wasEmpty: boolean; timer: number; handoff: FocusHandoff }>(),
+		new Map<
+			string,
+			{ file: WorkspaceGeoFile; known: Set<string>; wasEmpty: boolean; timer: number; handoff: FocusHandoff }
+		>(),
 	)
 	const finishLoadRef = useRef(finishLoad)
 	finishLoadRef.current = finishLoad
@@ -752,7 +774,9 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const listEntries: UndoEntry["listEntries"] = alsoRemove
 			? targets.flatMap((l): NonNullable<UndoEntry["listEntries"]> => {
 					const file = fileOfLayerId.get(l.id) ?? fileByResolved.get(resolvedSourcePath(l.metadata) ?? "")
-					return file ? [{ workspaceFolder: file.workspaceFolder, relativePath: file.relativePath, kind: "file" as const }] : []
+					return file
+						? [{ workspaceFolder: file.workspaceFolder, relativePath: file.relativePath, kind: "file" as const }]
+						: []
 				})
 			: undefined
 		const moved = alsoRemove ? [] : targets.flatMap((l) => fileOfLayerId.get(l.id) ?? [])
@@ -767,12 +791,19 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	}
 
 	const removeFromList = async (entries: { file?: WorkspaceGeoFile; folder?: FolderRef }[], label: string) => {
-		const list: NonNullable<UndoEntry["listEntries"]> = entries.flatMap((e): NonNullable<UndoEntry["listEntries"]> =>
-			e.file
-				? [{ workspaceFolder: e.file.workspaceFolder, relativePath: e.file.relativePath, kind: "file" as const }]
-				: e.folder && e.folder.relativePath
-					? [{ workspaceFolder: e.folder.workspaceFolder, relativePath: e.folder.relativePath, kind: "folder" as const }]
-					: [],
+		const list: NonNullable<UndoEntry["listEntries"]> = entries.flatMap(
+			(e): NonNullable<UndoEntry["listEntries"]> =>
+				e.file
+					? [{ workspaceFolder: e.file.workspaceFolder, relativePath: e.file.relativePath, kind: "file" as const }]
+					: e.folder && e.folder.relativePath
+						? [
+								{
+									workspaceFolder: e.folder.workspaceFolder,
+									relativePath: e.folder.relativePath,
+									kind: "folder" as const,
+								},
+							]
+						: [],
 		)
 		if (list.length === 0) return
 		try {
@@ -857,7 +888,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const menuFor = (layer: MapLayer, displayName: string): OverflowItem[] => {
 		const isRaster = layer.layerType === "raster"
 		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
-		const openable = openableRun(layer)
 		const rank = displayIds.indexOf(layer.id)
 		// A file in the Project files tree (listed, or removed from the list) can be unloaded and loaded again from there.
 		// A layer with no such row (an inline layer, a file outside the project) can only be removed.
@@ -896,10 +926,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				icon: "refresh",
 				onSelect: () => void handleReloadSource(layer, displayName),
 			},
-			!!openable && {
+			// Always listed, so a user learns the action exists; without a run it says why it is off.
+			{
 				key: "open-run",
 				label: "Open run",
 				icon: "history",
+				disabledReason: openRunDisabledReason(layer),
 				onSelect: () => openRun(layer),
 			},
 			{ key: "d4", divider: true },
@@ -1005,6 +1037,15 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const border = "var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
 		return (
 			<div aria-label={`Settings for ${displayName}`} className="map-layer-drawer" role="group">
+				<RunLineView
+					layer={layer}
+					onOpenRun={() => openRun(layer)}
+					onUseNewFile={
+						layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
+							? () => setConfirm({ kind: "new-file", layer, name: displayName })
+							: undefined
+					}
+				/>
 				<label className="map-layer-opacity" htmlFor={`map-layer-opacity-${layer.id}`}>
 					<span>Opacity</span>
 					<input
@@ -1259,7 +1300,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 														justMoved={justLoadedId === layer.id}
 														key={layer.id}
 														layer={layer}
-														sourceHint={sourceHintOf(layer.id)}
 														menuItems={menuFor(layer, displayName)}
 														note={groupNote ? undefined : indicators[i].note}
 														onDragEnd={finishDrag}
@@ -1270,6 +1310,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 															setDrag({ id: layer.id })
 														}}
 														onDrop={(e) => onRowDrop(e, layer)}
+														onOpenRun={showsRunIcon(layer) ? () => openRun(layer) : undefined}
 														onRenameCancel={() => {
 															setRenamingId(null)
 															setRenameDraft("")
@@ -1288,6 +1329,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 														renameDraft={renameDraft}
 														renaming={renamingId === layer.id}
 														selected={selected}
+														sourceHint={sourceHintOf(layer.id)}
 														visible={visibleLayerIds.has(layer.id)}
 														warnings={indicators[i].warnings}>
 														{selected && renderDrawer(layer, displayName)}
@@ -1342,17 +1384,28 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 			)}
 
 			{confirm && (
-				<div aria-label="Confirm removal" className="map-layers__confirm" role="alertdialog">
+				<div
+					aria-label={confirm.kind === "new-file" ? "Confirm new file" : "Confirm removal"}
+					className="map-layers__confirm"
+					role="alertdialog">
 					<span>
 						{confirm.kind === "all"
 							? `Remove all ${layers.length} layers from the map?`
-							: `Remove ${confirm.names.length} duplicate layer${confirm.names.length === 1 ? "" : "s"}? One copy of each stays: ${confirm.names.join(", ")}.`}
+							: confirm.kind === "new-file"
+								? useNewFileQuestion(confirm.layer)
+								: `Remove ${confirm.names.length} duplicate layer${confirm.names.length === 1 ? "" : "s"}? One copy of each stays: ${confirm.names.join(", ")}.`}
 					</span>
 					<button
 						className="map-chip map-chip--danger"
-						onClick={() => void (confirm.kind === "all" ? handleClearAll() : handleRemoveDuplicates())}
+						onClick={() =>
+							void (confirm.kind === "all"
+								? handleClearAll()
+								: confirm.kind === "new-file"
+									? handleUseNewFile(confirm.layer, confirm.name)
+									: handleRemoveDuplicates())
+						}
 						type="button">
-						Remove
+						{confirm.kind === "new-file" ? "Use new file" : "Remove"}
 					</button>
 					<button className="map-chip" onClick={() => setConfirm(null)} type="button">
 						Cancel

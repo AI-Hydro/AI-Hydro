@@ -292,6 +292,29 @@ export const restoredLayers = (): MapLayer[] => {
 	]
 }
 
+/**
+ * Run actions on the Layers panel (Slice 3): a file the user loaded (no run), a tool result that names its study and run,
+ * and a tool result whose file changed after the run. Only a layer with `_run_id` shows a run.
+ */
+export const runActionLayers = (): MapLayer[] => [
+	polygonLayer("ra-file", "watershed_01013500.geojson", { source: "user", source_path: "/fixture/watershed_01013500.geojson" }),
+	polygonLayer("ra-run", "Basin from delineate_watershed", {
+		tool: "delineate_watershed",
+		_run_id: "run-ab12cd34.1",
+		study_id: "fx-study",
+		provenance_path: "/fixture/provenance/run-ab12cd34.json",
+	}),
+	polygonLayer("ra-changed", "Basin, file edited", {
+		tool: "delineate_watershed",
+		_run_id: "run-ab12cd34.2",
+		study_id: "fx-study",
+		provenance_path: "/fixture/provenance/run-ab12cd34.json",
+		source_path: "/fixture/basin_edited.geojson",
+		source_status: "source_changed",
+		synthetic: "true",
+	}),
+]
+
 /** A busy session: tool output, workspace files and files the user loaded, with one duplicated run. */
 export const manyLayers = (): MapLayer[] => {
 	const tool = (i: number, name: string, over: Record<string, string> = {}, id = `ml-t${i}`) =>
@@ -453,7 +476,12 @@ export const traceLayer = (direction: "upstream" | "downstream", km: number, n: 
 type PfFixtureFile = NonNullable<import("../types").ScreenDef["projectFiles"]>["files"][number]
 
 /** One file of the fixture project. */
-export const pfFile = (relativePath: string, sizeBytes: number, workspaceFolder = "/fixture", folderName = "fixture"): PfFixtureFile => ({
+export const pfFile = (
+	relativePath: string,
+	sizeBytes: number,
+	workspaceFolder = "/fixture",
+	folderName = "fixture",
+): PfFixtureFile => ({
 	relativePath,
 	name: relativePath.split("/").pop() ?? relativePath,
 	extension: `.${relativePath.split(".").pop()}`,
@@ -481,5 +509,8 @@ export const threeProjectFiles = (): PfFixtureFile[] => [
 /** 200 files in ten folders, as a long-running project looks. */
 export const manyProjectFiles = (): PfFixtureFile[] =>
 	Array.from({ length: 200 }, (_, i) =>
-		pfFile(`${["huc", "gauges", "roi", "rivers", "dams", "soils", "land", "lakes", "wells", "misc"][i % 10]}/${i % 10 === 0 ? "huc" : "part"}_${String(i).padStart(3, "0")}.geojson`, 12_000 + i * 731),
+		pfFile(
+			`${["huc", "gauges", "roi", "rivers", "dams", "soils", "land", "lakes", "wells", "misc"][i % 10]}/${i % 10 === 0 ? "huc" : "part"}_${String(i).padStart(3, "0")}.geojson`,
+			12_000 + i * 731,
+		),
 	)
