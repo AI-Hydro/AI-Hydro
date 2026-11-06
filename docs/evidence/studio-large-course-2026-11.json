@@ -1,0 +1,224 @@
+{
+ "note": "Console JSON of src/test/e2e/studio-large-course.test.ts, one local macOS run per build (scratch HOME). Synthetic 12 x 1.9 MB modules. Baseline run predates the snapshot counter.",
+ "shipped_equivalent_f735b6b14": {
+  "samples": [
+   {
+    "module": 0,
+    "memoryMb": 1510,
+    "frames": 6,
+    "pushes": 2,
+    "shells": 2,
+    "ms": 5
+   },
+   {
+    "module": 1,
+    "memoryMb": 1492,
+    "frames": 6,
+    "pushes": 10,
+    "shells": 3,
+    "ms": 1827
+   },
+   {
+    "module": 2,
+    "memoryMb": 1580,
+    "frames": 6,
+    "pushes": 25,
+    "shells": 4,
+    "ms": 1547
+   },
+   {
+    "module": 3,
+    "memoryMb": 1468,
+    "frames": 6,
+    "pushes": 49,
+    "shells": 5,
+    "ms": 1833
+   },
+   {
+    "module": 4,
+    "memoryMb": 1247,
+    "frames": 6,
+    "pushes": 84,
+    "shells": 6,
+    "ms": 3095
+   },
+   {
+    "module": 5,
+    "memoryMb": 1821,
+    "frames": 6,
+    "pushes": 132,
+    "shells": 7,
+    "ms": 1940
+   },
+   {
+    "module": 6,
+    "memoryMb": 1618,
+    "frames": 6,
+    "pushes": 195,
+    "shells": 8,
+    "ms": 1931
+   },
+   {
+    "module": 7,
+    "memoryMb": 1452,
+    "frames": 6,
+    "pushes": 275,
+    "shells": 9,
+    "ms": 1944
+   },
+   {
+    "module": 8,
+    "memoryMb": 1272,
+    "frames": 6,
+    "pushes": 374,
+    "shells": 10,
+    "ms": 2768
+   },
+   {
+    "module": 9,
+    "memoryMb": 1351,
+    "frames": 6,
+    "pushes": 494,
+    "shells": 11,
+    "ms": 3037
+   },
+   {
+    "module": 10,
+    "memoryMb": 1235,
+    "frames": 6,
+    "pushes": 637,
+    "shells": 12,
+    "ms": 2736
+   },
+   {
+    "module": 11,
+    "memoryMb": 2219,
+    "frames": 6,
+    "pushes": 805,
+    "shells": 13,
+    "ms": 2684
+   }
+  ],
+  "maxStallMs": 442
+ },
+ "fixed_0bf17c666_code": {
+  "samples": [
+   {
+    "module": 0,
+    "memoryMb": 812,
+    "frames": 6,
+    "pushes": 3,
+    "shells": 2,
+    "ms": 11
+   },
+   {
+    "module": 1,
+    "memoryMb": 1292,
+    "frames": 6,
+    "pushes": 7,
+    "shells": 2,
+    "ms": 1851
+   },
+   {
+    "module": 2,
+    "memoryMb": 1384,
+    "frames": 6,
+    "pushes": 11,
+    "shells": 2,
+    "ms": 729
+   },
+   {
+    "module": 3,
+    "memoryMb": 1634,
+    "frames": 6,
+    "pushes": 15,
+    "shells": 2,
+    "ms": 723
+   },
+   {
+    "module": 4,
+    "memoryMb": 1624,
+    "frames": 6,
+    "pushes": 19,
+    "shells": 2,
+    "ms": 876
+   },
+   {
+    "module": 5,
+    "memoryMb": 1652,
+    "frames": 6,
+    "pushes": 23,
+    "shells": 2,
+    "ms": 800
+   },
+   {
+    "module": 6,
+    "memoryMb": 1751,
+    "frames": 6,
+    "pushes": 27,
+    "shells": 2,
+    "ms": 1126
+   },
+   {
+    "module": 7,
+    "memoryMb": 1819,
+    "frames": 6,
+    "pushes": 31,
+    "shells": 2,
+    "ms": 1026
+   },
+   {
+    "module": 8,
+    "memoryMb": 1727,
+    "frames": 6,
+    "pushes": 35,
+    "shells": 2,
+    "ms": 1165
+   },
+   {
+    "module": 9,
+    "memoryMb": 1991,
+    "frames": 6,
+    "pushes": 39,
+    "shells": 2,
+    "ms": 1019
+   },
+   {
+    "module": 10,
+    "memoryMb": 1933,
+    "frames": 6,
+    "pushes": 43,
+    "shells": 2,
+    "ms": 1167
+   },
+   {
+    "module": 11,
+    "memoryMb": 1938,
+    "frames": 6,
+    "pushes": 47,
+    "shells": 2,
+    "ms": 1307
+   }
+  ],
+  "maxStallMs": 126,
+  "snapshots": 70,
+  "documentPushes": 47,
+  "shellInstances": 2
+ },
+ "book_path_local_runs": {
+  "f735b6b14": {
+   "modules_executed_of_12": [
+    4,
+    6,
+    9
+   ]
+  },
+  "fix_pr_163_first_head": {
+   "modules_executed_of_12": [
+    12,
+    12,
+    12
+   ]
+  }
+ }
+}
