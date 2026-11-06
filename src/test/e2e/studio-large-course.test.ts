@@ -132,12 +132,15 @@ largeCourseE2E(
 		const shellInstances = new Set<string>()
 		let documentPushes = 0
 		let snapshots = 0
+		const rootChanges: string[] = []
 		page.on("console", (message) => {
 			const text = message.text()
 			const instance = text.match(/\[HtmlPreviewContext:([a-z0-9]+)\]/)
 			if (instance) shellInstances.add(instance[1])
 			if (text.includes("[subscribeToHtmlPreviews] Streaming preview to client")) documentPushes++
 			if (text.includes("[getHtmlPreviewState] Retrieving")) snapshots++
+			if (text.includes("resource roots changed"))
+				rootChanges.push(text.slice(text.indexOf("added:"), text.indexOf("added:") + 400))
 		})
 
 		// Longest stall of the VS Code window's main thread while the walk runs. The window is what Electron
@@ -205,7 +208,14 @@ largeCourseE2E(
 		)
 		console.log(
 			"[large-course]",
-			JSON.stringify({ samples, maxStallMs, snapshots, documentPushes, shellInstances: shellInstances.size }),
+			JSON.stringify({
+				samples,
+				maxStallMs,
+				snapshots,
+				documentPushes,
+				shellInstances: shellInstances.size,
+				rootChanges: rootChanges.slice(0, 4),
+			}),
 		)
 
 		// Webviews are reused, not accumulated: the live frame count is flat while the course advances.

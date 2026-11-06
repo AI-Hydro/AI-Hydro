@@ -115,8 +115,13 @@ interface RootLike {
  * path-segment prefix: a root that is not provably inside another one is kept, so this can only fail
  * toward an extra reload, never toward serving more files.
  */
-export function pruneNestedRoots<T extends RootLike>(roots: readonly T[]): T[] {
-	const withDir = (path: string) => (path.endsWith("/") ? path : `${path}/`)
+export function pruneNestedRoots<T extends RootLike>(
+	roots: readonly T[],
+	/** VS Code compares file paths case-insensitively everywhere but Linux (drive letters, NTFS, APFS). */
+	ignoreCase: boolean = process.platform !== "linux",
+): T[] {
+	const fold = (path: string) => (ignoreCase ? path.toLowerCase() : path)
+	const withDir = (path: string) => fold(path.endsWith("/") ? path : `${path}/`)
 	// A path with a "." or ".." segment is not normalised, so text containment proves nothing: it is neither
 	// pruned nor allowed to prune another root.
 	const plain = (path: string) => !path.split("/").some((segment) => segment === ".." || segment === ".")

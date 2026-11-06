@@ -232,13 +232,30 @@ describe("OS alias spelling of the installation root", () => {
 		await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
 	})
 
-	it("maps only the OS-owned alias prefixes", () => {
-		assert.equal(osAliasSpelling("/private/var/folders/x/pack"), "/var/folders/x/pack")
-		assert.equal(osAliasSpelling("/private/tmp/pack"), "/tmp/pack")
-		assert.equal(osAliasSpelling("/private/etc/pack"), "/etc/pack")
-		assert.equal(osAliasSpelling("/private/variant/pack"), undefined)
-		assert.equal(osAliasSpelling("/Users/u/.aihydro/packs/hmfp"), undefined)
-		assert.equal(osAliasSpelling("/home/u/pack"), undefined)
+	it("maps only the macOS alias prefixes, and only on macOS", () => {
+		assert.equal(osAliasSpelling("/private/var/folders/x/pack", undefined, "darwin"), "/var/folders/x/pack")
+		assert.equal(osAliasSpelling("/private/tmp/pack", undefined, "darwin"), "/tmp/pack")
+		assert.equal(osAliasSpelling("/private/etc/pack", undefined, "darwin"), "/etc/pack")
+		assert.equal(osAliasSpelling("/private/variant/pack", undefined, "darwin"), undefined)
+		assert.equal(osAliasSpelling("/Users/u/.aihydro/packs/hmfp", undefined, "darwin"), undefined)
+		// A no-op elsewhere: a Linux path that happens to start with /private/var is not aliased.
+		assert.equal(osAliasSpelling("/private/var/x", undefined, "linux"), undefined)
+		assert.equal(osAliasSpelling("/private/var/x", undefined, "win32"), undefined)
+	})
+
+	it("on Windows accepts 8.3 short names and letter case, nothing else", () => {
+		const real = "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\home\\.aihydro\\packs\\hmfp"
+		const file = (root: string) => `${root}\\modules\\m1\\module.html`
+		const short = "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\home\\.aihydro\\packs\\hmfp"
+		assert.equal(osAliasSpelling(real, file(short), "win32"), short)
+		// Letter case only: same text up to case is already contained once paths are compared case-insensitively.
+		assert.equal(osAliasSpelling(real, file(real.toUpperCase()), "win32")?.toLowerCase(), real.toLowerCase())
+		// A different directory name is a link or a different tree, not an alias.
+		assert.equal(osAliasSpelling(real, file(real.replace("hmfp", "other")), "win32"), undefined)
+		assert.equal(osAliasSpelling(real, file(real.replace("Temp", "Linked")), "win32"), undefined)
+		// A file outside the root, or no file, yields nothing.
+		assert.equal(osAliasSpelling(real, "C:\\elsewhere\\module.html", "win32"), undefined)
+		assert.equal(osAliasSpelling(real, undefined, "win32"), undefined)
 	})
 
 	it("stops resolving when the spelled root is retargeted or missing", async () => {
@@ -249,23 +266,23 @@ describe("OS alias spelling of the installation root", () => {
 		await fs.mkdir(a)
 		await fs.mkdir(b)
 		const link = path.join(base, "link")
-		await fs.symlink(a, link)
+		// A junction needs no privilege on Windows and is an ordinary directory link elsewhere.
+		await fs.symlink(a, link, "junction")
 		const realA = await fs.realpath(a)
 		assert.equal(spelledRootStillResolves(link, realA), true)
-		await fs.rm(link)
-		await fs.symlink(b, link)
+		await fs.rm(link, { recursive: true })
+		await fs.symlink(b, link, "junction")
 		assert.equal(spelledRootStillResolves(link, realA), false)
 		assert.equal(spelledRootStillResolves(path.join(base, "missing"), realA), false)
 	})
 
-	it("does not follow a symlinked directory inside the pack to a different root", async () => {
+	it("does not follow a linked directory inside the pack to a different root", async () => {
 		const base = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-inner-"))
 		roots.push(base)
 		const pack = await fs.realpath(base)
 		const outside = path.join(pack, "outside")
 		await fs.mkdir(outside)
-		await fs.symlink(outside, path.join(pack, "modules"))
-		// A spelling that goes through the inner link resolves elsewhere than the pack root.
+		await fs.symlink(outside, path.join(pack, "modules"), "junction")
 		assert.equal(spelledRootStillResolves(path.join(pack, "modules"), pack), false)
 	})
 })

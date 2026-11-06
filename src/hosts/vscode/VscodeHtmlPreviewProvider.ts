@@ -225,6 +225,10 @@ export class VscodeHtmlPreviewProvider {
 		if (!panel) return
 		const key = rootsKey(VscodeHtmlPreviewProvider.computeLocalResourceRoots())
 		if (key !== VscodeHtmlPreviewProvider.appliedRootsKey) {
+			// Say what changed (paths only), so a shell reload per module is explained by the log, not guessed.
+			const before = new Set(VscodeHtmlPreviewProvider.appliedRootsKey.split("\n"))
+			const added = key.split("\n").filter((root) => !before.has(root))
+			console.log(`[VscodeHtmlPreviewProvider] resource roots changed, reloading shell; added: ${added.join(", ")}`)
 			VscodeHtmlPreviewProvider.appliedRootsKey = key
 			VscodeHtmlPreviewProvider.shellReloadGate?.request()
 		}

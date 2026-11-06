@@ -96,7 +96,7 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 					? {
 							metadata: learningPackArtifactMetadata(packArtifact.scope),
 							localResourceRoot: packArtifact.installationRoot,
-							localResourceRootAlias: osAliasSpelling(packArtifact.installationRoot),
+							localResourceRootAlias: osAliasSpelling(packArtifact.installationRoot, fsPath),
 						}
 					: packStatus.kind === "failed"
 						? { metadata: { [ARTIFACT_TRUST_METADATA_KEYS.integrityFailure]: packStatus.reason } }
