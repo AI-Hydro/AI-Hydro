@@ -82,7 +82,7 @@ npm run e2e -- --headed
 ### Testing the packaged VSIX
 
 By default the suite loads the checkout through `--extensionDevelopmentPath`. To run the installed
-Learning Pack specs (`@phase1-pack`, `@phase1-charts`) against a packaged build instead, point
+Learning Pack specs (`@phase1-pack`, `@phase1-charts`, `@phase1-large-course`) against a packaged build instead, point
 `AIHYDRO_E2E_VSIX` at a `.vsix`. Each test installs it with the VS Code CLI into its own clean
 extensions dir and launches VS Code on that dir alone, so the code under test is the shipped bytes:
 
@@ -90,13 +90,24 @@ extensions dir and launches VS Code on that dir alone, so the code under test is
 npm run package:vsix -- --out /tmp/ai-hydro.vsix   # needs a clean git tree
 AIHYDRO_E2E_VSIX=/tmp/ai-hydro.vsix npx playwright test -c playwright.config.ts \
   src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts \
-  --grep '@phase1-(pack|charts)'
+  src/test/e2e/studio-large-course.test.ts --grep '@phase1-(pack|charts|large-course)'
 ```
 
 The restart test closes and relaunches VS Code, then issues the install command again, which returns `noop` and reopens the course. Studio does not restore the course on its own after a restart, so this is a reinstall-noop reopen, not a restore.
 
 CI does this on Ubuntu, macOS and Windows in `studio-vsix-e2e.yml`. Dispatch it with `repeat` set to 20 to
 measure the flake rate (`scripts/e2e-repeat.mjs`: a fresh process per run, retries disabled).
+
+### Known first-load failure (cause unknown)
+
+One failure was seen in 19 local runs of the 12-module course path on the fixed build: the first module's
+document opened with no Run bridge and the trust bar never appeared ("Studio trust bar never offered or
+confirmed execution"). It did not reproduce in 12 further cold runs (6 on the fixed build, 6 on the #161 base),
+so the cause is unknown. The `lifecycle` fixture now prints, on any failure only, the shell load sequence
+(shell mounts, ready messages and document pushes, as event kinds with seconds since launch) and per frame the
+trust-bar state (allow/revoke buttons), course header, iframe count, cell status and bridge presence. It prints
+structure only, never course text, so it is safe in the log of a private caller. If it recurs in CI, read the
+`[lifecycle-diagnostics]` lines first.
 
 ## Writing Tests
 

@@ -28,7 +28,7 @@ import {
 	decideSaveDocument,
 	decideShellReady,
 } from "./previewMessageGuards"
-import { rootsKey, ShellReloadGate } from "./shellReloadGate"
+import { pruneNestedRoots, rootsKey, ShellReloadGate } from "./shellReloadGate"
 
 /**
  * Owns the single AI-Hydro HTML Preview webview panel.
@@ -240,7 +240,8 @@ export class VscodeHtmlPreviewProvider {
 			vscode.Uri.joinPath(ctx.extensionUri, "node_modules", "@vscode", "codicons", "dist"),
 		]
 		const dynamic = controller?.getArtifactPreviewService().getLocalResourceRoots() ?? []
-		return [...baseRoots, ...dynamic]
+		// Nested roots grant nothing extra but would make every module directory a new identity (see pruneNestedRoots).
+		return pruneNestedRoots([...baseRoots, ...dynamic])
 	}
 
 	private static setupMessageHandler(panel: vscode.WebviewPanel): void {

@@ -6,6 +6,8 @@ import { afterEach, describe, it } from "mocha"
 import type { LearningPackRegistry } from "../learningPackLifecycle"
 import { atomicWriteJson, learningPackStoragePaths } from "../lifecycleStorage"
 import {
+	osAliasSpelling,
+	spelledRootStillResolves,
 	learningPackArtifactMetadata,
 	learningPackControlsKey,
 	learningPackProgressKey,
@@ -222,5 +224,48 @@ describe("Learning Pack load-time integrity", function () {
 		const foreignLink = path.join(root, "packs", "hmfp", "versions", "archive-sha", "modules", "foreign-link.html")
 		await fs.symlink(path.join(outside, "foreign.html"), foreignLink).catch(() => this.skip())
 		assert.equal(await resolveInstalledLearningPackArtifact(foreignLink, root), null)
+	})
+})
+
+describe("OS alias spelling of the installation root", () => {
+	afterEach(async () => {
+		await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
+	})
+
+	it("maps only the OS-owned alias prefixes", () => {
+		assert.equal(osAliasSpelling("/private/var/folders/x/pack"), "/var/folders/x/pack")
+		assert.equal(osAliasSpelling("/private/tmp/pack"), "/tmp/pack")
+		assert.equal(osAliasSpelling("/private/etc/pack"), "/etc/pack")
+		assert.equal(osAliasSpelling("/private/variant/pack"), undefined)
+		assert.equal(osAliasSpelling("/Users/u/.aihydro/packs/hmfp"), undefined)
+		assert.equal(osAliasSpelling("/home/u/pack"), undefined)
+	})
+
+	it("stops resolving when the spelled root is retargeted or missing", async () => {
+		const base = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-retarget-"))
+		roots.push(base)
+		const a = path.join(base, "a")
+		const b = path.join(base, "b")
+		await fs.mkdir(a)
+		await fs.mkdir(b)
+		const link = path.join(base, "link")
+		await fs.symlink(a, link)
+		const realA = await fs.realpath(a)
+		assert.equal(spelledRootStillResolves(link, realA), true)
+		await fs.rm(link)
+		await fs.symlink(b, link)
+		assert.equal(spelledRootStillResolves(link, realA), false)
+		assert.equal(spelledRootStillResolves(path.join(base, "missing"), realA), false)
+	})
+
+	it("does not follow a symlinked directory inside the pack to a different root", async () => {
+		const base = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-inner-"))
+		roots.push(base)
+		const pack = await fs.realpath(base)
+		const outside = path.join(pack, "outside")
+		await fs.mkdir(outside)
+		await fs.symlink(outside, path.join(pack, "modules"))
+		// A spelling that goes through the inner link resolves elsewhere than the pack root.
+		assert.equal(spelledRootStillResolves(path.join(pack, "modules"), pack), false)
 	})
 })

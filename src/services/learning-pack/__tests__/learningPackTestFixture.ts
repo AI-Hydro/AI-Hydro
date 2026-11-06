@@ -30,6 +30,13 @@ export function createValidLearningPackFiles(options?: {
 	provenanceBytes?: Uint8Array
 	/** SemVer range the pack declares; defaults to the 0.2.x line the unit tests pin their runtime to. */
 	aiHydroRange?: string
+	/**
+	 * Module ids of the pack (default: the two `TEST_MODULE_IDS`). The first is the entry module. When set,
+	 * `moduleBytes` supplies each module's HTML (default: a tiny synthetic module); `firstModuleBytes` and
+	 * `secondModuleBytes` apply only to the default two-module pack.
+	 */
+	moduleIds?: readonly string[]
+	moduleBytes?: (id: string, index: number) => Uint8Array
 }): {
 	files: Map<string, Uint8Array>
 	fingerprint: string
@@ -39,6 +46,7 @@ export function createValidLearningPackFiles(options?: {
 	const publicKey = options?.privateKey ? createPublicKey(options.privateKey) : generated!.publicKey
 	const publicKeyDer = publicKey.export({ format: "der", type: "spki" })
 	const fingerprint = spkiFingerprint(publicKeyDer)
+	const moduleIds = options?.moduleIds ?? TEST_MODULE_IDS
 	const manifest: LearningPackManifest = {
 		schemaVersion: 1,
 		packId: options?.packId ?? "hmfp",
@@ -47,8 +55,8 @@ export function createValidLearningPackFiles(options?: {
 		title: "Hydrologic Modeling from First Principles",
 		license: "CC-BY-4.0",
 		publisher: { name: "Synthetic Test", keyId: fingerprint },
-		ownership: { courseId: options?.courseId ?? "hmfp", moduleIds: TEST_MODULE_IDS },
-		entryModuleId: TEST_MODULE_IDS[0],
+		ownership: { courseId: options?.courseId ?? "hmfp", moduleIds: [...moduleIds] },
+		entryModuleId: moduleIds[0],
 		compatibility: { aiHydro: options?.aiHydroRange ?? ">=0.2.5 <0.3.0", packApi: 1, runtimeContract: "html-preview-v1" },
 		capabilities: { localPython: "terminal-equivalent", webExternalOrigins: [] },
 		environmentPath: "environments/environment.json",
@@ -57,13 +65,26 @@ export function createValidLearningPackFiles(options?: {
 	const course = {
 		courseId: options?.courseId ?? "hmfp",
 		title: "Synthetic Course",
-		modules: TEST_MODULE_IDS.map((id) => ({ id, path: `modules/${id}/module.html`, title: id })),
+		modules: moduleIds.map((id) => ({ id, path: `modules/${id}/module.html`, title: id })),
 	}
 	const payload = new Map<string, Uint8Array>([
 		["pack.json", canonicalJsonBytes(manifest)],
 		["course.json", canonicalJsonBytes(course)],
-		[`modules/${TEST_MODULE_IDS[0]}/module.html`, options?.firstModuleBytes ?? moduleHtml(TEST_MODULE_IDS[0], false)],
-		[`modules/${TEST_MODULE_IDS[1]}/module.html`, options?.secondModuleBytes ?? moduleHtml(TEST_MODULE_IDS[1], true)],
+		...(options?.moduleIds
+			? moduleIds.map((id, index): [string, Uint8Array] => [
+					`modules/${id}/module.html`,
+					options.moduleBytes?.(id, index) ?? moduleHtml(id, false),
+				])
+			: ([
+					[
+						`modules/${TEST_MODULE_IDS[0]}/module.html`,
+						options?.firstModuleBytes ?? moduleHtml(TEST_MODULE_IDS[0], false),
+					],
+					[
+						`modules/${TEST_MODULE_IDS[1]}/module.html`,
+						options?.secondModuleBytes ?? moduleHtml(TEST_MODULE_IDS[1], true),
+					],
+				] as [string, Uint8Array][])),
 		["environments/environment.json", canonicalJsonBytes({ python: ">=3.11" })],
 		[
 			"provenance/provenance.json",

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import * as fsSync from "node:fs"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
@@ -181,6 +182,42 @@ export async function resolveInstalledLearningPackStatus(
 		}
 	}
 	return { kind: "none" }
+}
+
+/** OS-owned aliases: the spelled prefix and the real prefix it resolves to. Not user-writable. */
+const OS_ALIAS_PREFIXES: readonly (readonly [string, string])[] = [
+	["/var", "/private/var"],
+	["/tmp", "/private/tmp"],
+	["/etc", "/private/etc"],
+]
+
+/**
+ * The installation root spelled the way the pack store spells its documents, but only when the two spellings
+ * differ by an OS-owned alias prefix (macOS `/var` to `/private/var`, `/tmp`, `/etc`).
+ *
+ * `installationRoot` is a real path while the document path the shell serves is spelled through the alias, and
+ * the webview grants resource access by comparing path text. A root that does not textually contain the
+ * document makes every module directory a root of its own (see pruneNestedRoots) and reloads the Studio shell
+ * once per module. Any other difference (a user-writable link, a link inside the pack) returns undefined: such
+ * a spelling could be retargeted later, so only the real root is granted. Callers must also re-check
+ * `spelledRootStillResolves` whenever the roots are computed.
+ */
+export function osAliasSpelling(installationRoot: string): string | undefined {
+	for (const [alias, real] of OS_ALIAS_PREFIXES) {
+		if (installationRoot === real || installationRoot.startsWith(`${real}/`)) {
+			return alias + installationRoot.slice(real.length)
+		}
+	}
+	return undefined
+}
+
+/** True while `spelledRoot` still resolves to exactly `installationRoot` (checked at use, never cached). */
+export function spelledRootStillResolves(spelledRoot: string, installationRoot: string): boolean {
+	try {
+		return fsSync.realpathSync(spelledRoot) === installationRoot
+	} catch {
+		return false
+	}
 }
 
 export async function resolveInstalledLearningPackArtifact(

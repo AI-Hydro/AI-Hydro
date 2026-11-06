@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import * as path from "node:path"
 import type { ArtifactTrustSource } from "@shared/artifactTrust"
 import * as vscode from "vscode"
+import { spelledRootStillResolves } from "@/services/learning-pack/runtimeIntegration"
 import { ArtifactTrustStore } from "./artifactTrust"
 import { type DetectedMode, detectMode } from "./detectMode"
 import { getHtmlUtf8ByteLength, shouldInlineHtml } from "./inlineHtmlPolicy"
@@ -39,6 +40,8 @@ export interface ArtifactRef {
 	byteLength: number
 	/** Optional verified package root exposed to the webview resource server. */
 	localResourceRoot?: string
+	/** OS-alias spelling of `localResourceRoot` (see osAliasSpelling); granted only while it still resolves to it. */
+	localResourceRootAlias?: string
 	/**
 	 * Host-determined provenance used by the execution-trust gate. Never derived
 	 * from document content; defaults to the untrusted "document".
@@ -111,6 +114,7 @@ export class ArtifactPreviewService {
 		preferredMode?: DetectedMode
 		metadata?: Readonly<Record<string, string>>
 		localResourceRoot?: string
+		localResourceRootAlias?: string
 		trustSource?: ArtifactTrustSource
 	}): Promise<ArtifactRef> {
 		const fileUri = vscode.Uri.file(path.resolve(opts.fsPath))
@@ -147,6 +151,7 @@ export class ArtifactPreviewService {
 			preferredMode: opts.preferredMode,
 			metadata: isMultiFileSite ? { ...opts.metadata, multiFileSite: "true" } : opts.metadata,
 			localResourceRoot,
+			localResourceRootAlias: opts.localResourceRootAlias,
 			trustSource: opts.trustSource,
 		})
 		this.upsert(ref)
@@ -247,6 +252,12 @@ export class ArtifactPreviewService {
 			if (a.localResourceRoot) {
 				const packageRoot = vscode.Uri.file(a.localResourceRoot)
 				roots.set(packageRoot.toString(), packageRoot)
+				// The alias spelling is re-verified on every call; if it no longer resolves to the real root
+				// (a retargeted link) only the real root stays granted.
+				if (a.localResourceRootAlias && spelledRootStillResolves(a.localResourceRootAlias, a.localResourceRoot)) {
+					const aliasRoot = vscode.Uri.file(a.localResourceRootAlias)
+					roots.set(aliasRoot.toString(), aliasRoot)
+				}
 			}
 		}
 		for (const wf of vscode.workspace.workspaceFolders ?? []) {
@@ -270,6 +281,7 @@ export class ArtifactPreviewService {
 		preferredMode?: DetectedMode
 		metadata?: Readonly<Record<string, string>>
 		localResourceRoot?: string
+		localResourceRootAlias?: string
 		trustSource?: ArtifactTrustSource
 	}): ArtifactRef {
 		const byteLength = getHtmlUtf8ByteLength(args.html)
@@ -288,6 +300,7 @@ export class ArtifactPreviewService {
 			html: args.html,
 			byteLength,
 			localResourceRoot: args.localResourceRoot,
+			localResourceRootAlias: args.localResourceRootAlias,
 			trustSource: args.trustSource ?? "document",
 			metadata: {
 				timestamp: new Date().toISOString(),

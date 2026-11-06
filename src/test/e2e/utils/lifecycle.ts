@@ -9,6 +9,27 @@ export interface LifecycleSession {
 	close: () => Promise<number | null>
 }
 
+/**
+ * Order of shell loads seen by the window, as event kinds with seconds since launch (no text content):
+ * "shell-mount <instance>" for each Studio React mount, "shell-ready" for each host-side ready message,
+ * "doc-push" for each document streamed to the shell.
+ */
+const shellLoadSequence: string[] = []
+
+function recordShellLoads(page: Page): void {
+	const started = Date.now()
+	page.on("console", (message) => {
+		const text = message.text()
+		const at = ((Date.now() - started) / 1000).toFixed(1)
+		const mount = text.match(/\[HtmlPreviewContext:([a-z0-9]+)\] mount:/)
+		if (mount) shellLoadSequence.push(`${at}s shell-mount ${mount[1]}`)
+		else if (text.includes("Shell ready: re-pushing")) shellLoadSequence.push(`${at}s shell-ready`)
+		else if (text.includes("Ignored shell-ready from a stale document")) shellLoadSequence.push(`${at}s shell-ready-stale`)
+		else if (text.includes("[subscribeToHtmlPreviews] Streaming preview")) shellLoadSequence.push(`${at}s doc-push`)
+		if (shellLoadSequence.length > 400) shellLoadSequence.shift()
+	})
+}
+
 function processIsRunning(pid: number): boolean {
 	try {
 		process.kill(pid, 0)
@@ -26,6 +47,7 @@ async function describeOpenFrames(app: ElectronApplication | null): Promise<void
 	if (!app) {
 		return
 	}
+	console.error("[lifecycle-diagnostics] shell-load-sequence", JSON.stringify(shellLoadSequence.slice(-120)))
 	try {
 		for (const page of app.windows()) {
 			for (const frame of page.frames()) {
@@ -46,6 +68,10 @@ async function describeOpenFrames(app: ElectronApplication | null): Promise<void
 							outputChars: element.querySelector(".aihydro-output")?.textContent?.length ?? -1,
 							awaiting: element.querySelector(".aihydro-output")?.getAttribute("data-aihydro-awaiting") ?? null,
 						})),
+						trustAllow: document.querySelectorAll('[data-testid="artifact-trust-allow"]').length,
+						trustRevoke: document.querySelectorAll('[data-testid="artifact-trust-revoke"]').length,
+						courseHeader: document.querySelectorAll('[title="Course options"]').length,
+						iframes: document.querySelectorAll("iframe").length,
 						bridge: typeof (window as unknown as { aihydro?: unknown }).aihydro,
 						documentChars: document.documentElement.outerHTML.length,
 					}))
@@ -132,6 +158,7 @@ export const lifecycleFixture = {
 					await close()
 					current = await openVSCode(workspaceDir)
 					const page = await current.firstWindow()
+					recordShellLoads(page)
 					await page.waitForLoadState("domcontentloaded")
 					await page.locator(".monaco-workbench").waitFor({ state: "visible", timeout: 20_000 })
 					return { app: current, page }
