@@ -220,5 +220,27 @@
     12
    ]
   }
+ },
+ "snapshot_protocol_24_modules_macos": {
+  "note": "One local run per build, 24 synthetic 1.9 MB modules, retained heap = JS heap after forced GC summed over window and webviews. 'eager' = same build with the client listing no held documents (the previous behaviour).",
+  "eager": {
+   "heap_mb_first_last": [
+    124,
+    304
+   ],
+   "heap_slope_mb_per_module": 7.47,
+   "snapshots": 142,
+   "snapshot_content_mb": 3414
+  },
+  "lazy": {
+   "heap_mb_first_last": [
+    122,
+    216
+   ],
+   "heap_slope_mb_per_module": 3.81,
+   "snapshots": 142,
+   "snapshot_content_mb": 6
+  },
+  "mac_working_set_note": "Total process working set on macOS oscillated 800-1900 MB over 24 modules with no trend (GC timing); it is not bounded by the test."
  }
 }

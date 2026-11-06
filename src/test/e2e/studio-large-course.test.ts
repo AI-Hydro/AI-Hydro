@@ -1,7 +1,7 @@
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { expect, type Frame, type Page } from "@playwright/test"
+import { type CDPSession, expect, type Frame, type Page } from "@playwright/test"
 import type { ElectronApplication } from "playwright"
 import {
 	createLearningPackTestArchive,
@@ -29,7 +29,7 @@ const EXTENSION_VERSION = (
 	JSON.parse(readFileSync(path.join(E2ETestHelper.CODEBASE_ROOT_DIR, "package.json"), "utf8")) as { version: string }
 ).version
 
-const MODULE_COUNT = 12
+const MODULE_COUNT = Number(process.env.LARGE_COURSE_MODULES ?? 12)
 const MODULE_BYTES = 1_900_000
 const MODULE_IDS = [
 	"hmfp.orientation.00",
@@ -117,12 +117,58 @@ const studioShell = (page: Page) =>
 const moduleFrame = (page: Page, index: number) =>
 	findFrame(page, async (frame) => (await frame.locator(`body[data-large-module="${index}"]`).count()) === 1)
 
-/** Total working set of the processes that host the window, the extension host and the webviews. */
-async function workingSetMb(app: ElectronApplication): Promise<number> {
+/** Working set by process type (window, GPU, renderers = window and webviews, utility = extension host), in MB. */
+async function workingSetByType(app: ElectronApplication): Promise<Record<string, number>> {
 	const metrics = await app.evaluate(({ app: electronApp }) =>
 		electronApp.getAppMetrics().map((m) => ({ type: m.type, kb: m.memory.workingSetSize })),
 	)
-	return Math.round(metrics.reduce((sum, m) => sum + m.kb, 0) / 1024)
+	const byType: Record<string, number> = {}
+	for (const m of metrics) byType[m.type] = (byType[m.type] ?? 0) + Math.round(m.kb / 1024)
+	return byType
+}
+
+/**
+ * JavaScript heap retained after a forced collection, summed over the window and every webview frame, in MB.
+ * Unlike a process working set this does not depend on when the garbage collector last ran or on how much
+ * memory the machine has, so its slope over the modules opened says whether anything is being retained.
+ */
+async function retainedHeapMb(page: Page): Promise<number> {
+	let total = 0
+	const seen = new Set<string>()
+	for (const frame of page.frames()) {
+		if (frame.isDetached()) continue
+		let session: CDPSession | undefined
+		try {
+			session = await page.context().newCDPSession(frame)
+			await session.send("HeapProfiler.collectGarbage")
+			const usage = (await session.send("Runtime.getHeapUsage")) as { usedSize: number }
+			// Frames of one process share a heap; count each heap once (same used size and total to the byte).
+			const key = String(usage.usedSize)
+			if (!seen.has(key)) {
+				seen.add(key)
+				total += usage.usedSize
+			}
+		} catch {
+			// A frame can be replaced while sampling; the next module samples again.
+		} finally {
+			await session?.detach().catch(() => undefined)
+		}
+	}
+	return Math.round(total / 1024 / 1024)
+}
+
+/** Least-squares slope of `values` against their index (MB per module). */
+function leastSquaresSlope(values: number[]): number {
+	const n = values.length
+	const meanX = (n - 1) / 2
+	const meanY = values.reduce((sum, v) => sum + v, 0) / n
+	let num = 0
+	let den = 0
+	values.forEach((v, i) => {
+		num += (i - meanX) * (v - meanY)
+		den += (i - meanX) ** 2
+	})
+	return den === 0 ? 0 : num / den
 }
 
 largeCourseE2E(
@@ -132,13 +178,17 @@ largeCourseE2E(
 		const shellInstances = new Set<string>()
 		let documentPushes = 0
 		let snapshots = 0
+		let snapshotBytes = 0
 		const rootChanges: string[] = []
 		page.on("console", (message) => {
 			const text = message.text()
 			const instance = text.match(/\[HtmlPreviewContext:([a-z0-9]+)\]/)
 			if (instance) shellInstances.add(instance[1])
 			if (text.includes("[subscribeToHtmlPreviews] Streaming preview to client")) documentPushes++
-			if (text.includes("[getHtmlPreviewState] Retrieving")) snapshots++
+			if (text.includes("[getHtmlPreviewStateSince] sent")) {
+				snapshots++
+				snapshotBytes += Number(text.match(/contentBytes=(\d+)/)?.[1] ?? 0)
+			}
 			if (text.includes("resource roots changed"))
 				rootChanges.push(text.slice(text.indexOf("added:"), text.indexOf("added:") + 400))
 		})
@@ -180,7 +230,16 @@ largeCourseE2E(
 			.toBe(200)
 		expect(((await response!.json()) as { result?: { status?: string } }).result?.status).toBe("installed")
 
-		const samples: { module: number; memoryMb: number; frames: number; pushes: number; shells: number; ms: number }[] = []
+		const samples: {
+			module: number
+			memoryMb: number
+			byType: Record<string, number>
+			heapMb: number
+			frames: number
+			pushes: number
+			shells: number
+			ms: number
+		}[] = []
 		await moduleFrame(page, 0)
 		for (let index = 0; index < MODULE_COUNT; index++) {
 			const startedAt = Date.now()
@@ -194,9 +253,14 @@ largeCourseE2E(
 				await next.evaluate((element: HTMLElement) => element.click())
 				await moduleFrame(page, index)
 			}
+			// Let garbage collection and the panel settle so the sample is retained memory, not a transient.
+			await page.waitForTimeout(1_500)
+			const byType = await workingSetByType(app)
 			samples.push({
 				module: index,
-				memoryMb: await workingSetMb(app),
+				memoryMb: Object.values(byType).reduce((sum, mb) => sum + mb, 0),
+				byType,
+				heapMb: await retainedHeapMb(page),
 				frames: page.frames().filter((frame) => !frame.isDetached()).length,
 				pushes: documentPushes,
 				shells: shellInstances.size,
@@ -212,6 +276,7 @@ largeCourseE2E(
 				samples,
 				maxStallMs,
 				snapshots,
+				snapshotBytes,
 				documentPushes,
 				shellInstances: shellInstances.size,
 				rootChanges: rootChanges.slice(0, 4),
@@ -232,16 +297,25 @@ largeCourseE2E(
 		// so their count is bounded: about five per module today. This stops it growing unnoticed.
 		expect(snapshots).toBeGreaterThanOrEqual(MODULE_COUNT)
 		expect(snapshots).toBeLessThanOrEqual(MODULE_COUNT * 7 + 10)
+		expect(snapshotBytes).toBeGreaterThan(0)
 
 		// Documents pushed to the webview grow with the modules opened, not with their square. Opening a
 		// module registers it once and allowing or completing it pushes it again, so allow a few per module
 		// plus the initial snapshot; replaying all documents on every module would be several hundred.
 		expect(documentPushes).toBeLessThanOrEqual(MODULE_COUNT * 5 + 10)
 
-		// Memory is bounded: the last modules do not cost much more than the first ones.
-		const memory = samples.map((sample) => sample.memoryMb)
-		expect(Math.max(...memory)).toBeLessThan(4_000)
-		expect(memory[MODULE_COUNT - 1]).toBeLessThan(memory[1] * 2 + 500)
+		// Snapshot payload is linear in the modules opened. Every snapshot used to carry the HTML of every document
+		// opened so far (about five snapshots per module, each k documents); now a document the shell already
+		// holds is not sent again, so the whole walk moves a small multiple of the documents' own size.
+		expect(snapshotBytes).toBeLessThanOrEqual(MODULE_COUNT * MODULE_BYTES * 3)
+
+		// Retained memory grows by about one document per module, not by a multiple of it: the JavaScript heap
+		// left after a forced collection, summed over the window and the webviews, is compared across the walk
+		// as a slope, which does not depend on the machine or on when its garbage collector last ran. (Process
+		// working sets are reported in the samples but not bounded: they follow the allocator and the OS.)
+		const heap = samples.map((sample) => sample.heapMb)
+		const slope = leastSquaresSlope(heap)
+		expect(slope).toBeLessThan((MODULE_BYTES / 1024 / 1024) * 3)
 
 		// The window stayed responsive (Electron marks a window unresponsive after a multi-second stall).
 		expect(maxStallMs).toBeLessThan(5_000)

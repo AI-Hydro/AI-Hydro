@@ -70,6 +70,17 @@ message HtmlPreviewStateResponse {
     int32 item_count = 2;
 }
 
+// An item the requester already holds, identified by id and content hash.
+message HtmlPreviewKnownItem {
+    string id = 1;
+    string content_hash = 2;          // SHA-256 the requester holds for this id (HtmlPreviewItem.content_hash)
+}
+
+// Request for the preview state that skips content the requester already holds.
+message HtmlPreviewStateRequest {
+    repeated HtmlPreviewKnownItem known = 1;
+}
+
 // Language for executable artifact code cells.
 enum ArtifactCodeLanguage {
     ARTIFACT_CODE_LANGUAGE_UNSPECIFIED = 0;
@@ -374,6 +385,10 @@ service HtmlPreviewService {
 
     // Get current HTML preview state
     rpc getHtmlPreviewState(EmptyRequest) returns (HtmlPreviewStateResponse);
+
+    // Get current HTML preview state, leaving `html_content` empty (and setting metadata `contentOmitted`
+    // to "true") for every item whose id and content hash the requester already holds.
+    rpc getHtmlPreviewStateSince(HtmlPreviewStateRequest) returns (HtmlPreviewStateResponse);
 
     // Subscribe to HTML preview updates
     rpc subscribeToHtmlPreviews(EmptyRequest) returns (stream HtmlPreviewItem);
