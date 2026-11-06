@@ -98,6 +98,17 @@ The restart test closes and relaunches VS Code, then issues the install command 
 CI does this on Ubuntu, macOS and Windows in `studio-vsix-e2e.yml`. Dispatch it with `repeat` set to 20 to
 measure the flake rate (`scripts/e2e-repeat.mjs`: a fresh process per run, retries disabled).
 
+### Known first-load failure (cause unknown)
+
+One failure was seen in 19 local runs of the 12-module course path on the fixed build: the first module's
+document opened with no Run bridge and the trust bar never appeared ("Studio trust bar never offered or
+confirmed execution"). It did not reproduce in 12 further cold runs (6 on the fixed build, 6 on the #161 base),
+so the cause is unknown. The `lifecycle` fixture now prints, on any failure only, the shell load sequence
+(shell mounts, ready messages and document pushes, as event kinds with seconds since launch) and per frame the
+trust-bar state (allow/revoke buttons), course header, iframe count, cell status and bridge presence. It prints
+structure only, never course text, so it is safe in the log of a private caller. If it recurs in CI, read the
+`[lifecycle-diagnostics]` lines first.
+
 ## Writing Tests
 
 ### Basic Test Structure
