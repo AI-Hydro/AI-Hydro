@@ -1,11 +1,11 @@
 import { EmptyRequest } from "@shared/proto/cline/common"
 import type { HtmlPreviewItem } from "@shared/proto/cline/html_preview"
-import { RemoveHtmlPreviewItemRequest } from "@shared/proto/cline/html_preview"
+import { HtmlPreviewKnownItem, HtmlPreviewStateRequest, RemoveHtmlPreviewItemRequest } from "@shared/proto/cline/html_preview"
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { webviewState } from "../config/platform.config"
 import { HtmlPreviewServiceClient } from "../services/grpc-client"
 import { useExtensionState } from "./ExtensionStateContext"
-import { applyPreviewItemOp, type PreviewItemOp, reconcileSnapshot } from "./htmlPreviewReconcile"
+import { applyPreviewItemOp, hydrateOmittedContent, type PreviewItemOp, reconcileSnapshot } from "./htmlPreviewReconcile"
 
 /**
  * HtmlPreviewContext — webview-side state for the AI-Hydro HTML Preview panel.
@@ -108,7 +108,22 @@ export const HtmlPreviewContextProvider: React.FC<{ children: React.ReactNode }>
 		const seq = ++requestSeqRef.current
 		inflightSnapshotsRef.current.add(laterOps)
 		try {
-			const response = await HtmlPreviewServiceClient.getHtmlPreviewState(EmptyRequest.create())
+			// Say which documents are already held so the host does not send their HTML again (it is about 1.9
+			// MB per course module, and every state change fetches a snapshot).
+			const held = new Map(itemsRef.current.filter((i) => i.htmlContent && i.contentHash).map((i) => [i.id, i]))
+			const response = await HtmlPreviewServiceClient.getHtmlPreviewStateSince(
+				HtmlPreviewStateRequest.create({
+					known: [...held.values()].map((i) => HtmlPreviewKnownItem.create({ id: i.id, contentHash: i.contentHash })),
+				}),
+			)
+			const hydrated = hydrateOmittedContent(response.items, held)
+			if (!hydrated) {
+				// An omitted item is no longer held (it was replaced or removed while the request was in flight): ask for all.
+				const full = await HtmlPreviewServiceClient.getHtmlPreviewState(EmptyRequest.create())
+				response.items = full.items
+			} else {
+				response.items = hydrated
+			}
 			if (seq < lastAppliedSeqRef.current) {
 				console.debug(
 					`[HtmlPreviewContext:${instanceIdRef.current}] snapshot #${seq} ignored (newer #${lastAppliedSeqRef.current} already applied)`,

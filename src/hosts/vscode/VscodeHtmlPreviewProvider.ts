@@ -28,7 +28,7 @@ import {
 	decideSaveDocument,
 	decideShellReady,
 } from "./previewMessageGuards"
-import { rootsKey, ShellReloadGate } from "./shellReloadGate"
+import { pruneNestedRoots, rootsKey, ShellReloadGate } from "./shellReloadGate"
 
 /**
  * Owns the single AI-Hydro HTML Preview webview panel.
@@ -225,6 +225,10 @@ export class VscodeHtmlPreviewProvider {
 		if (!panel) return
 		const key = rootsKey(VscodeHtmlPreviewProvider.computeLocalResourceRoots())
 		if (key !== VscodeHtmlPreviewProvider.appliedRootsKey) {
+			// Say what changed (paths only), so a shell reload per module is explained by the log, not guessed.
+			const before = new Set(VscodeHtmlPreviewProvider.appliedRootsKey.split("\n"))
+			const added = key.split("\n").filter((root) => !before.has(root))
+			console.log(`[VscodeHtmlPreviewProvider] resource roots changed, reloading shell; added: ${added.join(", ")}`)
 			VscodeHtmlPreviewProvider.appliedRootsKey = key
 			VscodeHtmlPreviewProvider.shellReloadGate?.request()
 		}
@@ -240,7 +244,8 @@ export class VscodeHtmlPreviewProvider {
 			vscode.Uri.joinPath(ctx.extensionUri, "node_modules", "@vscode", "codicons", "dist"),
 		]
 		const dynamic = controller?.getArtifactPreviewService().getLocalResourceRoots() ?? []
-		return [...baseRoots, ...dynamic]
+		// Nested roots grant nothing extra but would make every module directory a new identity (see pruneNestedRoots).
+		return pruneNestedRoots([...baseRoots, ...dynamic])
 	}
 
 	private static setupMessageHandler(panel: vscode.WebviewPanel): void {

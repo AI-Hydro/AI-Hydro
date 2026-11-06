@@ -95,3 +95,47 @@ export function rootsKey(roots: readonly { toString(): string }[]): string {
 		.sort()
 		.join("\n")
 }
+
+/** The parts of a `vscode.Uri` the containment test needs (kept structural so tests need no VS Code). */
+interface RootLike {
+	scheme: string
+	authority: string
+	path: string
+	toString(): string
+}
+
+/**
+ * Drop every root that lies inside another root of the same list.
+ *
+ * The webview serves a file when it is under any listed root, so a root nested in another one adds no
+ * access; it only changes the set's identity. Without this, each installed Learning Pack module
+ * (`<pack>/modules/<id>/module.html`) put its own directory next to the pack root, `rootsKey` changed for
+ * every module the learner opened, and each change reloaded the whole Studio shell and replayed every
+ * document to it (quadratic in the number of modules opened). Containment is a plain, case-sensitive
+ * path-segment prefix: a root that is not provably inside another one is kept, so this can only fail
+ * toward an extra reload, never toward serving more files.
+ */
+export function pruneNestedRoots<T extends RootLike>(
+	roots: readonly T[],
+	/** VS Code compares file paths case-insensitively everywhere but Linux (drive letters, NTFS, APFS). */
+	ignoreCase: boolean = process.platform !== "linux",
+): T[] {
+	const fold = (path: string) => (ignoreCase ? path.toLowerCase() : path)
+	const withDir = (path: string) => fold(path.endsWith("/") ? path : `${path}/`)
+	// A path with a "." or ".." segment is not normalised, so text containment proves nothing: it is neither
+	// pruned nor allowed to prune another root.
+	const plain = (path: string) => !path.split("/").some((segment) => segment === ".." || segment === ".")
+	const containedElsewhere = (root: T, index: number) =>
+		plain(root.path) &&
+		roots.some(
+			(other, otherIndex) =>
+				otherIndex !== index &&
+				plain(other.path) &&
+				other.scheme === root.scheme &&
+				other.authority === root.authority &&
+				withDir(root.path).startsWith(withDir(other.path)) &&
+				// Equal paths are duplicates: keep the first only.
+				(withDir(root.path) !== withDir(other.path) || otherIndex < index),
+		)
+	return roots.filter((root, index) => !containedElsewhere(root, index))
+}

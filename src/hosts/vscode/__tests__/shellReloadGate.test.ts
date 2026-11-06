@@ -1,5 +1,5 @@
 import { expect } from "chai"
-import { rootsKey, ShellReloadGate } from "../shellReloadGate"
+import { pruneNestedRoots, rootsKey, ShellReloadGate } from "../shellReloadGate"
 
 function makeGate(settleTimeoutMs = 10_000) {
 	const applied: number[] = []
@@ -122,5 +122,66 @@ describe("rootsKey", () => {
 		const b = { toString: () => "file:///b" }
 		expect(rootsKey([a, b])).to.equal(rootsKey([b, a]))
 		expect(rootsKey([a])).to.not.equal(rootsKey([a, b]))
+	})
+})
+
+describe("pruneNestedRoots", () => {
+	const root = (path: string, scheme = "file", authority = "") => ({
+		scheme,
+		authority,
+		path,
+		toString: () => `${scheme}://${authority}${path}`,
+	})
+
+	it("drops a directory inside another root", () => {
+		const pack = root("/home/u/packs/hmfp")
+		const roots = [pack, root("/home/u/packs/hmfp/modules/04"), root("/home/u/packs/hmfp/modules/05"), root("/ws")]
+		expect(pruneNestedRoots(roots)).to.deep.equal([pack, roots[3]])
+	})
+
+	it("keeps the root set identical as module directories are opened under a pack root", () => {
+		const pack = root("/p/pack")
+		const key = (modules: string[]) => rootsKey(pruneNestedRoots([pack, ...modules.map((m) => root(`/p/pack/modules/${m}`))]))
+		expect(key([])).to.equal(key(["01"]))
+		expect(key(["01"])).to.equal(key(["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]))
+	})
+
+	it("matches whole path segments, not string prefixes", () => {
+		const roots = [root("/p/pack"), root("/p/pack-two")]
+		expect(pruneNestedRoots(roots)).to.have.length(2)
+	})
+
+	it("keeps roots of another scheme or authority and keeps one of two duplicates", () => {
+		const a = root("/p/pack")
+		const otherScheme = root("/p/pack/x", "vscode-remote", "host")
+		expect(pruneNestedRoots([a, otherScheme])).to.have.length(2)
+		expect(pruneNestedRoots([root("/p/pack"), root("/p/pack/")])).to.have.length(1)
+	})
+
+	it("never keeps less access: every dropped root lies under a kept one", () => {
+		const roots = [root("/a/b/c"), root("/a/b"), root("/a/b/c/d"), root("/z")]
+		const kept = pruneNestedRoots(roots)
+		expect(kept.map((r) => r.path)).to.have.members(["/a/b", "/z"])
+	})
+
+	it("keeps Windows drive-letter roots apart and prunes within a drive", () => {
+		const c = root("/c:/packs/hmfp")
+		const inner = root("/c:/packs/hmfp/modules/04")
+		const d = root("/d:/packs/hmfp/modules/04")
+		expect(pruneNestedRoots([c, inner, d])).to.deep.equal([c, d])
+	})
+
+	it("does not treat a path with .. segments as contained", () => {
+		// URIs are normalised by VS Code, but a literal ".." must never be read as inside the parent.
+		const pack = root("/p/pack")
+		const escape = root("/p/pack/../other")
+		expect(pruneNestedRoots([pack, escape])).to.have.length(2)
+	})
+
+	it("compares case-insensitively when asked (Windows and macOS), not otherwise", () => {
+		const pack = root("/c:/Users/Runner/packs/hmfp")
+		const inner = root("/c:/users/runner/packs/hmfp/modules/04")
+		expect(pruneNestedRoots([pack, inner], true)).to.deep.equal([pack])
+		expect(pruneNestedRoots([pack, inner], false)).to.have.length(2)
 	})
 })

@@ -68,3 +68,30 @@ export function reconcileSnapshot(snapshot: HtmlPreviewItem[], laterOps: readonl
 		[...snapshot],
 	)
 }
+
+/**
+ * Put back the HTML the host left out of a `getHtmlPreviewStateSince` reply.
+ *
+ * The host marks an item `metadata.contentOmitted = "true"` only when the requester listed the same id and
+ * content hash, so the held copy is byte-identical to what the host would have sent. Returns null if an omitted
+ * item has no matching held copy (it cannot be rendered), so the caller asks for the full state instead.
+ */
+export function hydrateOmittedContent(
+	items: readonly HtmlPreviewItem[],
+	held: ReadonlyMap<string, HtmlPreviewItem>,
+): HtmlPreviewItem[] | null {
+	const result: HtmlPreviewItem[] = []
+	for (const item of items) {
+		if (item.metadata?.contentOmitted !== "true") {
+			result.push(item)
+			continue
+		}
+		const mine = held.get(item.id)
+		if (!mine || !mine.htmlContent || mine.contentHash !== item.contentHash) {
+			return null
+		}
+		const { contentOmitted: _omitted, ...metadata } = item.metadata
+		result.push({ ...item, htmlContent: mine.htmlContent, metadata })
+	}
+	return result
+}

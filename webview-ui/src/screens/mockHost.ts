@@ -84,7 +84,7 @@ export function hostCall(service: string, method: string, request: unknown): Pro
 			totalCount: buildState(screen?.state).taskHistory.length,
 		})
 	}
-	if (service === "HtmlPreviewServiceClient" && method === "getHtmlPreviewState") {
+	if (service === "HtmlPreviewServiceClient" && (method === "getHtmlPreviewState" || method === "getHtmlPreviewStateSince")) {
 		const items = screen?.htmlPreviews ?? []
 		return Promise.resolve({ items, itemCount: items.length })
 	}
