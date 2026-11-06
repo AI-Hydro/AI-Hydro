@@ -56,29 +56,93 @@ describe("vendored chart libraries", () => {
 })
 
 describe("vendored library notices", () => {
-	const notices = readFileSync(join(__dirname, "..", "..", "..", "..", "..", "THIRD_PARTY_NOTICES"), "utf8")
+	const repoRoot = join(__dirname, "..", "..", "..", "..", "..")
+	const notices = readFileSync(join(repoRoot, "THIRD_PARTY_NOTICES"), "utf8")
+	const lock = JSON.parse(readFileSync(join(repoRoot, "scripts", "third-party", "notices.lock.json"), "utf8")) as {
+		plotlyJs: string
+		noticesSha256: string
+		packages: { name: string; version: string; license: string; licenseFiles: { name: string; sha256: string }[] }[]
+	}
+	const normalize = (text: string) => text.replace(/\r\n/g, "\n").replace(/\s+$/u, "")
 
-	it("carries the full licence text and version of every vendored package, matching the manifest", () => {
+	it("is the generated file: its SHA-256 matches the pin", () => {
+		expect(createHash("sha256").update(notices).digest("hex")).toBe(lock.noticesSha256)
+		expect(lock.plotlyJs).toBe(manifest.plotly.version)
+	})
+
+	it("has an entry, with every licence file's text, for every package in the lock", () => {
+		expect(lock.packages.length).toBeGreaterThan(300)
+		for (const pkg of lock.packages) {
+			const heading = `${"-".repeat(80)}\n${pkg.name} ${pkg.version}\nLicense: ${pkg.license}\n${"-".repeat(80)}`
+			expect(notices.includes(heading), `${pkg.name}@${pkg.version}`).toBe(true)
+			if (pkg.licenseFiles.length === 0) {
+				expect(notices).toContain("This package contains no LICENSE")
+			}
+		}
+		// Each licence file's text is present verbatim: cut each package's section out (packages are written in
+		// lock order) and hash the text after each "[file]" marker against the lock.
+		const rule = "-".repeat(80)
+		const starts = lock.packages.map((pkg) =>
+			notices.indexOf(`${rule}\n${pkg.name} ${pkg.version}\nLicense: ${pkg.license}\n${rule}`),
+		)
+		const endOfPlotly = notices.indexOf(`\n${"=".repeat(80)}\nthree.js - three`)
+		expect(endOfPlotly).toBeGreaterThan(0)
+		lock.packages.forEach((pkg, index) => {
+			const section = notices.slice(starts[index], index + 1 < starts.length ? starts[index + 1] : endOfPlotly)
+			const markers = pkg.licenseFiles.map((file) => section.indexOf(`\n[${file.name}]\n\n`))
+			pkg.licenseFiles.forEach((file, fileIndex) => {
+				const from = markers[fileIndex] + `\n[${file.name}]\n\n`.length
+				const to = fileIndex + 1 < markers.length ? markers[fileIndex + 1] : section.length
+				expect(markers[fileIndex], `${pkg.name} ${file.name}`).toBeGreaterThan(-1)
+				expect(
+					createHash("sha256")
+						.update(normalize(section.slice(from, to)))
+						.digest("hex"),
+					`${pkg.name} ${file.name}`,
+				).toBe(file.sha256)
+			})
+		})
+	})
+
+	it("covers the packages Plotly is known to bundle (d3, turf, regl, stackgl, maplibre)", () => {
+		const names = new Set(lock.packages.map((pkg) => pkg.name))
+		for (const name of [
+			"plotly.js",
+			"@plotly/d3",
+			"d3-array",
+			"@turf/area",
+			"@plotly/regl",
+			"gl-plot3d",
+			"maplibre-gl",
+			"buffer",
+		]) {
+			expect(names.has(name), name).toBe(true)
+		}
+		// Build tooling that plotly.js merely lists as a dependency is not bundled and must not be claimed.
+		expect(names.has("webpack")).toBe(false)
+		expect(names.has("css-loader")).toBe(false)
+	})
+
+	it("names the vendored files and matches the manifest and the installed vendored packages", () => {
 		for (const [id, entry] of Object.entries(manifest)) {
 			const root = dirname(require.resolve(`${entry.package}/package.json`))
 			const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string; license: string }
 			expect(pkg.version, id).toBe(entry.version)
 			expect(pkg.license, id).toBe(entry.license)
 			expect(notices, id).toContain(`${entry.package} ${entry.version}`)
-			expect(notices, id).toContain(`license: ${entry.license}`)
-			expect(notices, id).toContain(readFileSync(join(root, "LICENSE"), "utf8").trim())
 			expect(notices, id).toContain(entry.file.split("/").pop() as string)
 		}
+		expect(notices).toContain(
+			normalize(readFileSync(join(dirname(require.resolve("three/package.json")), "LICENSE"), "utf8")),
+		)
+		expect(notices).toContain("three declares no")
 	})
 
-	it("ships the bundled-dependency notices verbatim and names them in THIRD_PARTY_NOTICES", () => {
+	it("ships Plotly's own bundle notices verbatim, pinned by hash", () => {
 		const recorded = manifest.plotly.bundledNotices
 		const shipped = readFileSync(join(__dirname, "..", "..", "..", "..", "public", "assets", "plotly.min.js.LICENSE.txt"))
-		const upstream = readFileSync(join(dirname(require.resolve(`${recorded.package}/package.json`)), recorded.file))
 		expect(createHash("sha256").update(shipped).digest("hex")).toBe(recorded.sha256)
-		expect(Buffer.compare(shipped, upstream)).toBe(0)
-		expect(notices).toContain(`${recorded.package} 2.35.2 npm package`)
-		expect(notices).toContain(recorded.file)
+		expect(notices).toContain(recorded.sha256)
 		expect(recorded.version).toBe(manifest.plotly.version)
 	})
 })
