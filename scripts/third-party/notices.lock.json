@@ -1,7 +1,7 @@
 {
 	"generator": "scripts/third-party/generate-third-party-notices.mjs",
 	"plotlyJs": "2.35.2",
-	"plotlyLockfileSha256": "8db86824932e027721066e777ff30e75b4994a90e1b57cf44758b089cc0b8e5e",
+	"plotlyLockfileSha256": "f3c03157fcd29bb685b92cfcb5763a35e87631ed970dfa9bd6fbc426ed0bb268",
 	"noticesSha256": "9102fa2db6eb90a1957514b575e2a8ab32512302491a9c385d6abbe468b5af6c",
 	"packages": [
 		{

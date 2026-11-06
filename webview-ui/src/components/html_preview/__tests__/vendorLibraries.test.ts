@@ -60,6 +60,7 @@ describe("vendored library notices", () => {
 	const notices = readFileSync(join(repoRoot, "THIRD_PARTY_NOTICES"), "utf8")
 	const lock = JSON.parse(readFileSync(join(repoRoot, "scripts", "third-party", "notices.lock.json"), "utf8")) as {
 		plotlyJs: string
+		plotlyLockfileSha256: string
 		noticesSha256: string
 		packages: { name: string; version: string; license: string; licenseFiles: { name: string; sha256: string }[] }[]
 	}
@@ -68,6 +69,13 @@ describe("vendored library notices", () => {
 	it("is the generated file: its SHA-256 matches the pin", () => {
 		expect(createHash("sha256").update(notices).digest("hex")).toBe(lock.noticesSha256)
 		expect(lock.plotlyJs).toBe(manifest.plotly.version)
+	})
+
+	it("records the SHA-256 of the committed plotly.js lockfile the notices were generated from (offline)", () => {
+		const lockfile = readFileSync(
+			join(repoRoot, "scripts", "third-party", `plotly-${manifest.plotly.version}.package-lock.json`),
+		)
+		expect(createHash("sha256").update(lockfile).digest("hex")).toBe(lock.plotlyLockfileSha256)
 	})
 
 	it("has an entry, with every licence file's text, for every package in the lock", () => {
