@@ -184,16 +184,21 @@ export async function resolveInstalledLearningPackStatus(
 	return { kind: "none" }
 }
 
-/** OS-owned aliases: the spelled prefix and the real prefix it resolves to. Not user-writable. */
-const OS_ALIAS_PREFIXES: readonly (readonly [string, string])[] = [
+/** macOS OS-owned aliases: the spelled prefix and the real prefix it resolves to. Not user-writable. */
+const MACOS_ALIAS_PREFIXES: readonly (readonly [string, string])[] = [
 	["/var", "/private/var"],
 	["/tmp", "/private/tmp"],
 	["/etc", "/private/etc"],
 ]
 
+/** A Windows 8.3 short name as the filesystem generates it (`RUNNER~1`, `PROGRA~1`, `FILE~1.TXT`). */
+const WINDOWS_SHORT_NAME = /^[^.~\\/]{1,6}~\d+(\.[^.\\/]{0,3})?$/
+
 /**
  * The installation root spelled the way the pack store spells its documents, but only when the two spellings
- * differ by an OS-owned alias prefix (macOS `/var` to `/private/var`, `/tmp`, `/etc`).
+ * differ by something the OS itself produces and not by a link a user could create:
+ * - macOS: the `/var`, `/tmp`, `/etc` aliases of `/private/...`;
+ * - Windows: 8.3 short names (a temporary directory under `C:\Users\RUNNER~1`) and letter case.
  *
  * `installationRoot` is a real path while the document path the shell serves is spelled through the alias, and
  * the webview grants resource access by comparing path text. A root that does not textually contain the
@@ -201,12 +206,34 @@ const OS_ALIAS_PREFIXES: readonly (readonly [string, string])[] = [
  * once per module. Any other difference (a user-writable link, a link inside the pack) returns undefined: such
  * a spelling could be retargeted later, so only the real root is granted. Callers must also re-check
  * `spelledRootStillResolves` whenever the roots are computed.
+ *
+ * `spelledFile` is the document path as spelled by the pack store; only the Windows case needs it.
  */
-export function osAliasSpelling(installationRoot: string): string | undefined {
-	for (const [alias, real] of OS_ALIAS_PREFIXES) {
-		if (installationRoot === real || installationRoot.startsWith(`${real}/`)) {
-			return alias + installationRoot.slice(real.length)
+export function osAliasSpelling(
+	installationRoot: string,
+	spelledFile?: string,
+	platform: NodeJS.Platform = process.platform,
+): string | undefined {
+	if (platform === "darwin") {
+		for (const [alias, real] of MACOS_ALIAS_PREFIXES) {
+			if (installationRoot === real || installationRoot.startsWith(`${real}/`)) {
+				return alias + installationRoot.slice(real.length)
+			}
 		}
+		return undefined
+	}
+	if (platform === "win32" && spelledFile) {
+		const win = path.win32
+		const real = win.resolve(installationRoot).split(win.sep).filter(Boolean)
+		const spelled = win.resolve(spelledFile).split(win.sep).filter(Boolean)
+		if (spelled.length <= real.length) return undefined
+		const head = spelled.slice(0, real.length)
+		const sameDepth = head.every(
+			(segment, index) => segment.toLowerCase() === real[index].toLowerCase() || WINDOWS_SHORT_NAME.test(segment),
+		)
+		if (!sameDepth) return undefined
+		const root = win.resolve(`${head[0]}${win.sep}`, ...head.slice(1))
+		return root === win.resolve(installationRoot) ? undefined : root
 	}
 	return undefined
 }
@@ -214,7 +241,7 @@ export function osAliasSpelling(installationRoot: string): string | undefined {
 /** True while `spelledRoot` still resolves to exactly `installationRoot` (checked at use, never cached). */
 export function spelledRootStillResolves(spelledRoot: string, installationRoot: string): boolean {
 	try {
-		return fsSync.realpathSync(spelledRoot) === installationRoot
+		return fsSync.realpathSync.native(spelledRoot) === installationRoot
 	} catch {
 		return false
 	}

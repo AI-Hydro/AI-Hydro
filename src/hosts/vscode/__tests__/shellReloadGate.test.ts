@@ -177,4 +177,11 @@ describe("pruneNestedRoots", () => {
 		const escape = root("/p/pack/../other")
 		expect(pruneNestedRoots([pack, escape])).to.have.length(2)
 	})
+
+	it("compares case-insensitively when asked (Windows and macOS), not otherwise", () => {
+		const pack = root("/c:/Users/Runner/packs/hmfp")
+		const inner = root("/c:/users/runner/packs/hmfp/modules/04")
+		expect(pruneNestedRoots([pack, inner], true)).to.deep.equal([pack])
+		expect(pruneNestedRoots([pack, inner], false)).to.have.length(2)
+	})
 })
