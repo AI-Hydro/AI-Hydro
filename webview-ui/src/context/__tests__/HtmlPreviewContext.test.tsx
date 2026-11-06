@@ -39,6 +39,7 @@ const mockSubscribeToHtmlPreviews = vi.fn()
 vi.mock("../../services/grpc-client", () => ({
 	HtmlPreviewServiceClient: {
 		getHtmlPreviewState: (...args: any[]) => mockGetHtmlPreviewState(...args),
+		getHtmlPreviewStateSince: (...args: any[]) => mockGetHtmlPreviewState(...args),
 		removeHtmlPreviewItem: (...args: any[]) => mockRemoveHtmlPreviewItem(...args),
 		subscribeToHtmlPreviews: (...args: any[]) => mockSubscribeToHtmlPreviews(...args),
 	},

@@ -1,6 +1,7 @@
 export { clearHtmlPreview } from "./clearHtmlPreview"
 export { getArtifactKernelInfo } from "./getArtifactKernelInfo"
 export { getHtmlPreviewState } from "./getHtmlPreviewState"
+export { getHtmlPreviewStateSince } from "./getHtmlPreviewStateSince"
 export { installCourse } from "./installCourse"
 export { installModule } from "./installModule"
 export { interruptArtifactKernel } from "./interruptArtifactKernel"
