@@ -7,7 +7,7 @@ import * as vscode from "vscode"
 import { HostProvider } from "@/hosts/host-provider"
 import { classifyArtifactFile } from "@/services/artifact-preview/artifactTrust"
 import {
-	installationRootAsSpelled,
+	osAliasSpelling,
 	learningPackArtifactMetadata,
 	resolveInstalledLearningPackStatus,
 } from "@/services/learning-pack/runtimeIntegration"
@@ -95,7 +95,8 @@ export async function previewHtml(controller: Controller, request: PreviewHtmlRe
 				...(packArtifact
 					? {
 							metadata: learningPackArtifactMetadata(packArtifact.scope),
-							localResourceRoot: await installationRootAsSpelled(fsPath, packArtifact.installationRoot),
+							localResourceRoot: packArtifact.installationRoot,
+							localResourceRootAlias: osAliasSpelling(packArtifact.installationRoot),
 						}
 					: packStatus.kind === "failed"
 						? { metadata: { [ARTIFACT_TRUST_METADATA_KEYS.integrityFailure]: packStatus.reason } }

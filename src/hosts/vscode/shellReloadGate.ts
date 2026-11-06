@@ -117,16 +117,20 @@ interface RootLike {
  */
 export function pruneNestedRoots<T extends RootLike>(roots: readonly T[]): T[] {
 	const withDir = (path: string) => (path.endsWith("/") ? path : `${path}/`)
-	return roots.filter(
-		(root, index) =>
-			!roots.some(
-				(other, otherIndex) =>
-					otherIndex !== index &&
-					other.scheme === root.scheme &&
-					other.authority === root.authority &&
-					withDir(root.path).startsWith(withDir(other.path)) &&
-					// Equal paths are duplicates: keep the first only.
-					(withDir(root.path) !== withDir(other.path) || otherIndex < index),
-			),
-	)
+	// A path with a "." or ".." segment is not normalised, so text containment proves nothing: it is neither
+	// pruned nor allowed to prune another root.
+	const plain = (path: string) => !path.split("/").some((segment) => segment === ".." || segment === ".")
+	const containedElsewhere = (root: T, index: number) =>
+		plain(root.path) &&
+		roots.some(
+			(other, otherIndex) =>
+				otherIndex !== index &&
+				plain(other.path) &&
+				other.scheme === root.scheme &&
+				other.authority === root.authority &&
+				withDir(root.path).startsWith(withDir(other.path)) &&
+				// Equal paths are duplicates: keep the first only.
+				(withDir(root.path) !== withDir(other.path) || otherIndex < index),
+		)
+	return roots.filter((root, index) => !containedElsewhere(root, index))
 }

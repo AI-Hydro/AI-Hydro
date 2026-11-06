@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import * as fsSync from "node:fs"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
@@ -183,29 +184,39 @@ export async function resolveInstalledLearningPackStatus(
 	return { kind: "none" }
 }
 
+/** OS-owned aliases: the spelled prefix and the real prefix it resolves to. Not user-writable. */
+const OS_ALIAS_PREFIXES: readonly (readonly [string, string])[] = [
+	["/var", "/private/var"],
+	["/tmp", "/private/tmp"],
+	["/etc", "/private/etc"],
+]
+
 /**
- * The installation root spelled the way `filePath` is spelled.
+ * The installation root spelled the way the pack store spells its documents, but only when the two spellings
+ * differ by an OS-owned alias prefix (macOS `/var` to `/private/var`, `/tmp`, `/etc`).
  *
- * `installationRoot` is a real path (symlinks resolved), while the document path the shell serves is the
- * path as the pack store spells it. They differ wherever a parent directory is a link (macOS temporary
- * directories, a symlinked home), and the webview grants resource access by comparing path text. A root
- * that does not textually contain the document makes every module directory a root of its own (see
- * pruneNestedRoots), which reloads the Studio shell once per module. The spelled root is returned only when
- * it resolves to exactly the verified installation, so it grants the same directory and nothing else;
- * otherwise the real root is returned unchanged.
+ * `installationRoot` is a real path while the document path the shell serves is spelled through the alias, and
+ * the webview grants resource access by comparing path text. A root that does not textually contain the
+ * document makes every module directory a root of its own (see pruneNestedRoots) and reloads the Studio shell
+ * once per module. Any other difference (a user-writable link, a link inside the pack) returns undefined: such
+ * a spelling could be retargeted later, so only the real root is granted. Callers must also re-check
+ * `spelledRootStillResolves` whenever the roots are computed.
  */
-export async function installationRootAsSpelled(filePath: string, installationRoot: string): Promise<string> {
+export function osAliasSpelling(installationRoot: string): string | undefined {
+	for (const [alias, real] of OS_ALIAS_PREFIXES) {
+		if (installationRoot === real || installationRoot.startsWith(`${real}/`)) {
+			return alias + installationRoot.slice(real.length)
+		}
+	}
+	return undefined
+}
+
+/** True while `spelledRoot` still resolves to exactly `installationRoot` (checked at use, never cached). */
+export function spelledRootStillResolves(spelledRoot: string, installationRoot: string): boolean {
 	try {
-		const resolvedFile = await fs.realpath(filePath)
-		const relative = path.relative(installationRoot, resolvedFile)
-		if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return installationRoot
-		const spelledFile = path.resolve(filePath)
-		const suffix = path.sep + relative
-		if (!spelledFile.endsWith(suffix)) return installationRoot
-		const spelledRoot = spelledFile.slice(0, spelledFile.length - suffix.length)
-		return (await fs.realpath(spelledRoot)) === installationRoot ? spelledRoot : installationRoot
+		return fsSync.realpathSync(spelledRoot) === installationRoot
 	} catch {
-		return installationRoot
+		return false
 	}
 }
 

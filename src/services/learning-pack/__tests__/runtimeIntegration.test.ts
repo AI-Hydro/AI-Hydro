@@ -6,7 +6,8 @@ import { afterEach, describe, it } from "mocha"
 import type { LearningPackRegistry } from "../learningPackLifecycle"
 import { atomicWriteJson, learningPackStoragePaths } from "../lifecycleStorage"
 import {
-	installationRootAsSpelled,
+	osAliasSpelling,
+	spelledRootStillResolves,
 	learningPackArtifactMetadata,
 	learningPackControlsKey,
 	learningPackProgressKey,
@@ -226,45 +227,45 @@ describe("Learning Pack load-time integrity", function () {
 	})
 })
 
-describe("installationRootAsSpelled", () => {
+describe("OS alias spelling of the installation root", () => {
 	afterEach(async () => {
 		await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
 	})
 
-	async function linkedStore(): Promise<{ spelledModule: string; spelledRoot: string; realRoot: string }> {
-		const base = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-spelled-"))
+	it("maps only the OS-owned alias prefixes", () => {
+		assert.equal(osAliasSpelling("/private/var/folders/x/pack"), "/var/folders/x/pack")
+		assert.equal(osAliasSpelling("/private/tmp/pack"), "/tmp/pack")
+		assert.equal(osAliasSpelling("/private/etc/pack"), "/etc/pack")
+		assert.equal(osAliasSpelling("/private/variant/pack"), undefined)
+		assert.equal(osAliasSpelling("/Users/u/.aihydro/packs/hmfp"), undefined)
+		assert.equal(osAliasSpelling("/home/u/pack"), undefined)
+	})
+
+	it("stops resolving when the spelled root is retargeted or missing", async () => {
+		const base = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-retarget-"))
 		roots.push(base)
-		const realStore = path.join(base, "real", "packs", "hmfp")
-		const moduleDir = path.join(realStore, "modules", "m1")
-		await fs.mkdir(moduleDir, { recursive: true })
-		await fs.writeFile(path.join(moduleDir, "module.html"), "<!doctype html>", "utf8")
-		// The pack store is reached through a link, as macOS temporary directories are.
-		await fs.symlink(path.join(base, "real"), path.join(base, "link"))
-		return {
-			spelledModule: path.join(base, "link", "packs", "hmfp", "modules", "m1", "module.html"),
-			spelledRoot: path.join(base, "link", "packs", "hmfp"),
-			realRoot: await fs.realpath(realStore),
-		}
-	}
-
-	it("returns the root spelled like the document when a parent directory is a link", async () => {
-		const { spelledModule, spelledRoot, realRoot } = await linkedStore()
-		assert.notEqual(spelledRoot, realRoot)
-		assert.equal(await installationRootAsSpelled(spelledModule, realRoot), spelledRoot)
+		const a = path.join(base, "a")
+		const b = path.join(base, "b")
+		await fs.mkdir(a)
+		await fs.mkdir(b)
+		const link = path.join(base, "link")
+		await fs.symlink(a, link)
+		const realA = await fs.realpath(a)
+		assert.equal(spelledRootStillResolves(link, realA), true)
+		await fs.rm(link)
+		await fs.symlink(b, link)
+		assert.equal(spelledRootStillResolves(link, realA), false)
+		assert.equal(spelledRootStillResolves(path.join(base, "missing"), realA), false)
 	})
 
-	it("returns the real root unchanged when nothing is linked", async () => {
-		const { realRoot } = await linkedStore()
-		const direct = path.join(realRoot, "modules", "m1", "module.html")
-		assert.equal(await installationRootAsSpelled(direct, realRoot), realRoot)
-	})
-
-	it("never returns a root other than the verified installation", async () => {
-		const { spelledModule, realRoot } = await linkedStore()
-		const elsewhere = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-other-"))
-		roots.push(elsewhere)
-		// A document outside the installation, or a missing file, falls back to the real root.
-		assert.equal(await installationRootAsSpelled(path.join(elsewhere, "x.html"), realRoot), realRoot)
-		assert.equal(await installationRootAsSpelled(`${spelledModule}.missing`, realRoot), realRoot)
+	it("does not follow a symlinked directory inside the pack to a different root", async () => {
+		const base = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-pack-inner-"))
+		roots.push(base)
+		const pack = await fs.realpath(base)
+		const outside = path.join(pack, "outside")
+		await fs.mkdir(outside)
+		await fs.symlink(outside, path.join(pack, "modules"))
+		// A spelling that goes through the inner link resolves elsewhere than the pack root.
+		assert.equal(spelledRootStillResolves(path.join(pack, "modules"), pack), false)
 	})
 })

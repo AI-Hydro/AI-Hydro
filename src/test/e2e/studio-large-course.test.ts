@@ -131,11 +131,13 @@ largeCourseE2E(
 		// Counters from the console, which forwards the extension host's log and the shell's debug lines.
 		const shellInstances = new Set<string>()
 		let documentPushes = 0
+		let snapshots = 0
 		page.on("console", (message) => {
 			const text = message.text()
 			const instance = text.match(/\[HtmlPreviewContext:([a-z0-9]+)\]/)
 			if (instance) shellInstances.add(instance[1])
 			if (text.includes("[subscribeToHtmlPreviews] Streaming preview to client")) documentPushes++
+			if (text.includes("[getHtmlPreviewState] Retrieving")) snapshots++
 		})
 
 		// Longest stall of the VS Code window's main thread while the walk runs. The window is what Electron
@@ -201,7 +203,10 @@ largeCourseE2E(
 		const maxStallMs = Math.round(
 			await page.evaluate(() => (window as unknown as { __stall: { maxStallMs: number } }).__stall.maxStallMs),
 		)
-		console.log("[large-course]", JSON.stringify({ samples, maxStallMs }))
+		console.log(
+			"[large-course]",
+			JSON.stringify({ samples, maxStallMs, snapshots, documentPushes, shellInstances: shellInstances.size }),
+		)
 
 		// Webviews are reused, not accumulated: the live frame count is flat while the course advances.
 		const frameCounts = samples.map((sample) => sample.frames)
@@ -210,6 +215,13 @@ largeCourseE2E(
 		// One shell for the whole walk. A second mount is allowed for the first resource-root change when the
 		// pack is registered; one mount per module is the failure this test exists to catch.
 		expect(shellInstances.size).toBeLessThanOrEqual(3)
+		// Floors: the counters must have seen the walk, or the upper bounds above would pass on silence.
+		expect(shellInstances.size).toBeGreaterThanOrEqual(1)
+		expect(documentPushes).toBeGreaterThanOrEqual(MODULE_COUNT)
+		// Snapshots still carry every document opened so far (a known quadratic term, tracked as a follow-up),
+		// so their count is bounded: about five per module today. This stops it growing unnoticed.
+		expect(snapshots).toBeGreaterThanOrEqual(MODULE_COUNT)
+		expect(snapshots).toBeLessThanOrEqual(MODULE_COUNT * 7 + 10)
 
 		// Documents pushed to the webview grow with the modules opened, not with their square. Opening a
 		// module registers it once and allowing or completing it pushes it again, so allow a few per module

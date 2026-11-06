@@ -163,4 +163,18 @@ describe("pruneNestedRoots", () => {
 		const kept = pruneNestedRoots(roots)
 		expect(kept.map((r) => r.path)).to.have.members(["/a/b", "/z"])
 	})
+
+	it("keeps Windows drive-letter roots apart and prunes within a drive", () => {
+		const c = root("/c:/packs/hmfp")
+		const inner = root("/c:/packs/hmfp/modules/04")
+		const d = root("/d:/packs/hmfp/modules/04")
+		expect(pruneNestedRoots([c, inner, d])).to.deep.equal([c, d])
+	})
+
+	it("does not treat a path with .. segments as contained", () => {
+		// URIs are normalised by VS Code, but a literal ".." must never be read as inside the parent.
+		const pack = root("/p/pack")
+		const escape = root("/p/pack/../other")
+		expect(pruneNestedRoots([pack, escape])).to.have.length(2)
+	})
 })
