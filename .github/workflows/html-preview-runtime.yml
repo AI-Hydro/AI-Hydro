@@ -18,6 +18,8 @@ on:
       - "src/shared/artifactTrust.ts"
       - "src/core/htmlPreview/**"
       - "src/test/e2e/learning-pack-*.test.ts"
+      - "src/test/e2e/utils/**"
+      - "webview-ui/package.json"
       - "webview-ui/src/components/html_preview/**"
       - "proto/cline/html_preview.proto"
       - ".nvmrc"
@@ -100,6 +102,20 @@ jobs:
         if: matrix.runner != 'ubuntu'
         shell: bash
         run: npx playwright test -c playwright.config.ts src/test/e2e/html-preview-*.test.ts --grep '${{ matrix.grep }}'
+
+      # Real-panel installed Learning Pack specs on the development host: install a signed pack and
+      # enforce its CSP (@phase1-pack), restart the application and reopen it (@phase1-pack), and load
+      # the vendored Plotly/three.js helpers with no CDN request (@phase1-charts). The same specs run
+      # against the packaged VSIX in studio-vsix-e2e.yml.
+      - name: Run installed Learning Pack real-panel specs (Ubuntu)
+        if: matrix.runner == 'ubuntu'
+        shell: bash
+        run: xvfb-run -a npx playwright test -c playwright.config.ts src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts --grep '@phase1-(pack|charts)'
+
+      - name: Run installed Learning Pack real-panel specs
+        if: matrix.runner != 'ubuntu'
+        shell: bash
+        run: npx playwright test -c playwright.config.ts src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts --grep '@phase1-(pack|charts)'
 
       - name: Sanitize allowlisted failure evidence
         if: failure()

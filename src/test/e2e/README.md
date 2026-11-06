@@ -79,6 +79,25 @@ Run tests in headed mode (visible browser):
 npm run e2e -- --headed
 ```
 
+### Testing the packaged VSIX
+
+By default the suite loads the checkout through `--extensionDevelopmentPath`. To run the installed
+Learning Pack specs (`@phase1-pack`, `@phase1-charts`) against a packaged build instead, point
+`AIHYDRO_E2E_VSIX` at a `.vsix`. Each test installs it with the VS Code CLI into its own clean
+extensions dir and launches VS Code on that dir alone, so the code under test is the shipped bytes:
+
+```bash
+npm run package:vsix -- --out /tmp/ai-hydro.vsix   # needs a clean git tree
+AIHYDRO_E2E_VSIX=/tmp/ai-hydro.vsix npx playwright test -c playwright.config.ts \
+  src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts \
+  --grep '@phase1-(pack|charts)'
+```
+
+The restart test closes and relaunches VS Code, then issues the install command again, which returns `noop` and reopens the course. Studio does not restore the course on its own after a restart, so this is a reinstall-noop reopen, not a restore.
+
+CI does this on Ubuntu, macOS and Windows in `studio-vsix-e2e.yml`. Dispatch it with `repeat` set to 20 to
+measure the flake rate (`scripts/e2e-repeat.mjs`: a fresh process per run, retries disabled).
+
 ## Writing Tests
 
 ### Basic Test Structure

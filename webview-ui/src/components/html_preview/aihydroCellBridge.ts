@@ -705,6 +705,41 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
     try { window.parent.postMessage(payload, "*"); } catch(_) {}
   }
 
+  // ── Vendored chart libraries ─────────────────────────────────────────
+  // Plotly and three.js ship inside the extension. A document cannot fetch them (installed packs
+  // run under script-src 'unsafe-inline' with no network), so the host reads the file from the
+  // extension, verifies its SHA-256 against the pinned manifest, and returns the source, which is
+  // run as an inline script. The id is looked up in a fixed list on the host; a document cannot
+  // name a URL. Outside the host (standalone file) or if the host cannot answer, fall back to the
+  // CDN, which a pack's CSP blocks.
+  var vendorPending = {};
+  var vendorSeq = 0;
+  var vendorLoads = {};
+  function loadCdnScript(src) {
+    return new Promise(function(resolve, reject) {
+      var s = document.createElement("script");
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  function loadVendorLibrary(lib, cdnUrl) {
+    if (vendorLoads[lib]) return vendorLoads[lib];
+    var viaHost = new Promise(function(resolve, reject) {
+      if (isStandalone) { reject(new Error("no host")); return; }
+      var id = "vendor-" + (++vendorSeq);
+      var timer = setTimeout(function() { delete vendorPending[id]; reject(new Error("host timeout")); }, 30000);
+      vendorPending[id] = { resolve: resolve, reject: reject, timer: timer };
+      postToParent(artifactPayload({ type: "artifact/vendorLibrary", lib: lib, requestId: id }));
+    }).then(function(source) {
+      var el = document.createElement("script");
+      el.setAttribute("data-aihydro-vendor", lib);
+      el.textContent = source;
+      document.head.appendChild(el);
+    });
+    vendorLoads[lib] = viaHost.catch(function() { return loadCdnScript(cdnUrl); });
+    return vendorLoads[lib];
+  }
+
   function cellId(el) {
     return el.getAttribute("data-aihydro-cell-id") || el.id || "";
   }
@@ -1099,6 +1134,15 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
   window.addEventListener("message", function(event) {
     var msg = event.data;
     if (!msg) return;
+    if (msg.type === "artifact/vendorLibraryResult") {
+      var waiting = vendorPending[msg.requestId];
+      if (!waiting) return;
+      delete vendorPending[msg.requestId];
+      clearTimeout(waiting.timer);
+      if (msg.status === "ok" && typeof msg.source === "string") waiting.resolve(msg.source);
+      else waiting.reject(new Error(msg.error || "vendor library unavailable"));
+      return;
+    }
     if (msg.type === "artifact/runCodeResult") {
       // A returned result proves the kernel is up; later runs skip the warming hint.
       window.__aihydroKernelWarmed = true;
@@ -1441,7 +1485,8 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
     },
 
     /**
-     * Branded Plotly wrapper. Lazy-loads Plotly from the CSP-whitelisted CDN.
+     * Branded Plotly wrapper. Lazy-loads the Plotly build vendored with the extension (see
+     * loadVendorLibrary); a CDN is only a fallback for documents opened outside the host.
      *   aihydro.plot({ mount: '#chart', data: [...], layout: {...} });
      * Applies the AI-Hydro dark palette unless overridden in layout.
      */
@@ -1459,19 +1504,12 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
       var config = Object.assign({ displayModeBar: false, responsive: true }, spec.config || {});
       function draw() { window.Plotly.newPlot(mount, spec.data || [], layout, config); }
       if (window.Plotly) { draw(); return; }
-      if (!window.__aihydroPlotlyLoading) {
-        window.__aihydroPlotlyLoading = [];
-        var s = document.createElement("script");
-        s.src = "https://cdn.plot.ly/plotly-2.35.2.min.js";
-        s.onload = function() { (window.__aihydroPlotlyLoading || []).forEach(function(fn){ fn(); }); window.__aihydroPlotlyLoading = null; };
-        document.head.appendChild(s);
-      }
-      window.__aihydroPlotlyLoading.push(draw);
+      loadVendorLibrary("plotly", "https://cdn.plot.ly/plotly-2.35.2.min.js").then(draw, function() {});
     },
 
     /**
-     * 3D / manipulable scene over a <canvas data-aihydro-scene3d>. Lazy-loads
-     * three.js from the CSP-whitelisted jsdelivr CDN and hands the author a
+     * 3D / manipulable scene over a <canvas data-aihydro-scene3d>. Lazy-loads the
+     * three.js build vendored with the extension (CDN only as a fallback outside the host) and hands the author a
      * branded scene/camera/renderer with OrbitControls so terrain, DEM/TWI
      * surfaces and watershed flythroughs are draggable.
      *
@@ -1492,21 +1530,14 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
       // Later releases moved OrbitControls to ESM-only (examples/jsm/).
       var THREE_URL = "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js";
       var ORBIT_URL = "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js";
-      function loadScript(src) {
-        return new Promise(function(resolve, reject) {
-          var s = document.createElement("script");
-          s.src = src; s.onload = resolve; s.onerror = reject;
-          document.head.appendChild(s);
-        });
-      }
       function ensureThree() {
         if (window.THREE && window.THREE.OrbitControls) return Promise.resolve();
-        var p = window.THREE ? Promise.resolve() : loadScript(THREE_URL);
+        var p = window.THREE ? Promise.resolve() : loadVendorLibrary("three", THREE_URL);
         return p.then(function() {
           // OrbitControls is optional — if it fails, the scene still renders
           // without drag-orbit rather than failing entirely.
           if (window.THREE.OrbitControls) return Promise.resolve();
-          return loadScript(ORBIT_URL).catch(function() {});
+          return loadVendorLibrary("three-orbit", ORBIT_URL).catch(function() {});
         });
       }
       return ensureThree().then(function() {

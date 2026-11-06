@@ -1,9 +1,19 @@
-import { execFileSync } from "node:child_process"
-import { cpSync, existsSync, mkdirSync, mkdtempSync, type PathLike, type RmOptions, rmSync, writeFileSync } from "node:fs"
+import { execFileSync, spawnSync } from "node:child_process"
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	type PathLike,
+	type RmOptions,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type ElectronApplication, expect, type Frame, type Page, test } from "@playwright/test"
-import { downloadAndUnzipVSCode, SilentReporter } from "@vscode/test-electron"
+import { downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath, SilentReporter } from "@vscode/test-electron"
 import { _electron } from "playwright"
 import { AiHydroApiServerMock } from "../fixtures/server"
 
@@ -27,6 +37,46 @@ function getVSCodeExecutablePath(channel: "stable" | "insiders"): Promise<string
 		vscodeExecutablePathPromises.set(channel, executablePath)
 	}
 	return executablePath
+}
+
+/**
+ * Installed-artifact mode. When AIHYDRO_E2E_VSIX names a packaged `.vsix`, the suite does not load the
+ * checkout through `--extensionDevelopmentPath`: the VSIX is installed with the VS Code CLI into the
+ * test's clean extensions dir and VS Code is launched against that dir alone, so the code under test
+ * is the shipped bytes. Unset, the development-host behaviour is unchanged.
+ */
+export function installedVsixPath(): string | undefined {
+	const configured = process.env.AIHYDRO_E2E_VSIX
+	return configured ? path.resolve(configured) : undefined
+}
+
+function installVsixIntoCleanProfile(executablePath: string, vsixPath: string, extensionsDir: string, userDataDir: string): void {
+	if (!existsSync(vsixPath)) {
+		throw new Error(`AIHYDRO_E2E_VSIX does not exist: ${vsixPath}`)
+	}
+	const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(executablePath)
+	const profileArgs = [`--extensions-dir=${extensionsDir}`, `--user-data-dir=${userDataDir}`]
+	// code.cmd needs a shell on Windows, which does not quote for us.
+	const quote = (arg: string) => (process.platform === "win32" && /\s/.test(arg) ? `"${arg}"` : arg)
+	const run = (args: string[]) =>
+		spawnSync(quote(cli), [...cliArgs, ...profileArgs, ...args].map(quote), {
+			encoding: "utf8",
+			shell: process.platform === "win32",
+			timeout: 120_000,
+		})
+	const install = run(["--install-extension", vsixPath, "--force"])
+	if (install.status !== 0) {
+		throw new Error(`VSIX install failed (${install.status}): ${install.stdout}${install.stderr}`)
+	}
+	const listed = run(["--list-extensions", "--show-versions"])
+	const expectedVersion = (
+		JSON.parse(readFileSync(path.join(E2ETestHelper.CODEBASE_ROOT_DIR, "package.json"), "utf8")) as {
+			version: string
+		}
+	).version
+	if (listed.status !== 0 || !listed.stdout.includes(`aihydro.ai-hydro@${expectedVersion}`)) {
+		throw new Error(`Installed VSIX is not aihydro.ai-hydro@${expectedVersion}: ${listed.stdout}${listed.stderr}`)
+	}
 }
 
 /**
@@ -515,8 +565,14 @@ export const e2e = test
 			if (pythonInterpreter) {
 				execFileSync(pythonInterpreter, ["-c", "import matplotlib.pyplot"], {
 					env: { ...process.env, HOME: homeDir, USERPROFILE: homeDir, MPLCONFIGDIR: matplotlibConfigDir },
-					timeout: 60_000,
+					// A cold matplotlib font cache can take over a minute on a developer machine.
+					timeout: 180_000,
 				})
+			}
+
+			const vsixPath = installedVsixPath()
+			if (vsixPath) {
+				installVsixIntoCleanProfile(executablePath, vsixPath, extensionsDir, userDataDir)
 			}
 
 			await use(async (workspacePath: string) => {
@@ -547,13 +603,19 @@ export const e2e = test
 						"--use-inmemory-secretstorage",
 						"--disable-updates",
 						...(workspaceTrust === "disabled" ? ["--disable-workspace-trust"] : []),
-						"--disable-extensions", // Run VS Code with all extensions disabled other than the one under test.
+						// Development host: all installed extensions disabled other than the checkout under test.
+						// Installed-VSIX mode: the clean extensions dir holds only the packaged extension, so it stays enabled.
+						...(vsixPath ? [] : ["--disable-extensions"]),
 						"--skip-welcome",
 						"--skip-release-notes",
 						`--user-data-dir=${userDataDir}`,
 						`--extensions-dir=${extensionsDir}`,
-						`--install-extension=${path.join(E2ETestHelper.CODEBASE_ROOT_DIR, "dist", "e2e.vsix")}`,
-						`--extensionDevelopmentPath=${E2ETestHelper.CODEBASE_ROOT_DIR}`,
+						...(vsixPath
+							? []
+							: [
+									`--install-extension=${path.join(E2ETestHelper.CODEBASE_ROOT_DIR, "dist", "e2e.vsix")}`,
+									`--extensionDevelopmentPath=${E2ETestHelper.CODEBASE_ROOT_DIR}`,
+								]),
 						workspacePath,
 					],
 				})

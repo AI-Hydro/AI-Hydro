@@ -46,6 +46,7 @@ import { LEAFLET_NORMALIZER_SCRIPT, LEAFLET_NORMALIZER_STYLE } from "./leafletNo
 import { reportPreviewEvent, requestSaveDocument, startPreviewAgentTask } from "./previewBridge"
 import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
+import { isVendorLibraryId, loadVendorLibrarySource } from "./vendorLibraries"
 
 /**
  * HtmlPreviewView — single-iframe renderer for one HTML artifact.
@@ -936,6 +937,8 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				state?: Record<string, string>
 				paramName?: string
 				paramValueJson?: string
+				lib?: string
+				requestId?: string
 			}
 			if (!data || data.source !== "aihydro-artifact") {
 				return
@@ -951,6 +954,35 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				if (data.type === "artifact/runCode") {
 					void handleArtifactRunCode(data.code ?? "", data.language ?? "python", data.cellId)
 				}
+				return
+			}
+
+			// A chart helper asks for a library bundled with the extension. Only a fixed id is
+			// accepted, and the source is sent only after its digest matched the pinned manifest.
+			if (data.type === "artifact/vendorLibrary") {
+				const requestId = typeof data.requestId === "string" ? data.requestId.slice(0, 64) : ""
+				if (!isVendorLibraryId(data.lib)) {
+					postResultToIframe({
+						type: "artifact/vendorLibraryResult",
+						requestId,
+						status: "error",
+						error: "unknown vendor library",
+					})
+					return
+				}
+				const lib = data.lib
+				void loadVendorLibrarySource(lib).then(
+					(source) =>
+						postResultToIframe({ type: "artifact/vendorLibraryResult", requestId, lib, status: "ok", source }),
+					(error) =>
+						postResultToIframe({
+							type: "artifact/vendorLibraryResult",
+							requestId,
+							lib,
+							status: "error",
+							error: error instanceof Error ? error.message : String(error),
+						}),
+				)
 				return
 			}
 
