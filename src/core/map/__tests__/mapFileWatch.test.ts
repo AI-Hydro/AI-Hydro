@@ -671,12 +671,12 @@ describe("MapFileWatch", function () {
 				files.set(p, { size: Buffer.byteLength(text), mtimeMs: Date.now() - 5000, bytes: Buffer.from(text) })
 			const virtual = {
 				stat: async (p: string) => {
-					const f = files.get(p)
+					const f = files.get(path.normalize(p))
 					if (!f) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" })
 					return { size: f.size, mtimeMs: f.mtimeMs }
 				},
 				readFile: async (p: string) => {
-					const f = files.get(p)
+					const f = files.get(path.normalize(p))
 					if (!f) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" })
 					return f.bytes
 				},
@@ -709,8 +709,9 @@ describe("MapFileWatch", function () {
 				)
 			}
 			await h.watch.checkAll()
-			expect(h.requests.map((r) => r.path).sort()).to.deep.equal([upper, lower].sort())
-			expect(h.requests.find((r) => r.layerId === "lower")?.path).to.equal(lower)
+			const [nu, nl] = [path.normalize(upper), path.normalize(lower)]
+			expect(h.requests.map((r) => r.path).sort()).to.deep.equal([nu, nl].sort())
+			expect(h.requests.find((r) => r.layerId === "lower")?.path).to.equal(nl)
 		})
 
 		it("on a case-sensitive volume the other spelling is another file", async () => {
