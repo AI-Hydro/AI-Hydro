@@ -587,7 +587,7 @@ describe("MapFileWatch", function () {
 		it("asks again after a timeout, and after three in a row calls the layer unreadable and stops asking", async () => {
 			await setup()
 			expect(await until(() => layer().metadata.source_status === "source_unreadable", 3000)).to.equal(true)
-			expect(layer().metadata.source_error).to.equal("The map took too long to read this file")
+			expect(layer().metadata.source_error).to.equal("The map did not finish reading this file")
 			expect(h.requests.length).to.equal(3)
 			expect(h.reports.filter((r) => r.kind === "unreadable").length).to.equal(1)
 			await wait(300)
@@ -616,6 +616,29 @@ describe("MapFileWatch", function () {
 			expect(layer().metadata.source_status).to.equal("current")
 		})
 
+		it("marks every layer on the file, not only the one that asked", async () => {
+			await setup({ maxTimeouts: 1 })
+			addLayer(h, layerFor(file, fc(1), {}, { id: "second" }))
+			await until(() => h.layers.get("user-basin.geojson")?.metadata.source_status === "source_unreadable", 3000)
+			expect(h.layers.get("second")?.metadata.source_status).to.equal("source_unreadable")
+		})
+
+		it("a page that cannot verify the bytes is not retried and does not record the file as seen", async () => {
+			await setup()
+			await until(() => h.requests.length === 1)
+			h.watch.onParseResult({
+				requestId: h.requests[0].requestId,
+				ok: false,
+				reason: "unverified",
+				message: "Could not verify the file: no hash.",
+			})
+			expect(layer().metadata.source_status).to.equal("source_unreadable")
+			expect(layer().metadata.source_error).to.contain("Could not verify")
+			expect(layer().metadata.source_seen_sha256).to.equal(undefined)
+			await wait(1500)
+			expect(h.requests.length).to.equal(1)
+		})
+
 		it("a late answer to a dropped request changes nothing", async () => {
 			await setup({ maxTimeouts: 1 })
 			await until(() => layer().metadata.source_status === "source_unreadable", 3000)
@@ -639,6 +662,55 @@ describe("MapFileWatch", function () {
 			expect(await until(() => layer().geojson === fc(2))).to.equal(true)
 			expect(h.requests[0].path).to.equal(file)
 			expect(h.watchedFolders).to.deep.equal([h.dir])
+		})
+
+		it("two files that differ only by case stay two files, each with its own layer", async () => {
+			await h.cleanup()
+			const files = new Map<string, { size: number; mtimeMs: number; bytes: Buffer }>()
+			const put = (p: string, text: string) =>
+				files.set(p, { size: Buffer.byteLength(text), mtimeMs: Date.now() - 5000, bytes: Buffer.from(text) })
+			const virtual = {
+				stat: async (p: string) => {
+					const f = files.get(p)
+					if (!f) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" })
+					return { size: f.size, mtimeMs: f.mtimeMs }
+				},
+				readFile: async (p: string) => {
+					const f = files.get(p)
+					if (!f) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" })
+					return f.bytes
+				},
+			}
+			h = await makeHarness({ options: { caseInsensitive: true }, workspace: false, fs: virtual })
+			h.panel.answer = "never"
+			const upper = "/virtual/Basin.geojson"
+			const lower = "/virtual/basin.geojson"
+			put(upper, fc(11))
+			put(lower, fc(22))
+			for (const [id, p] of [
+				["upper", upper],
+				["lower", lower],
+			] as const) {
+				addLayer(
+					h,
+					MapLayer.create({
+						id,
+						name: id,
+						geojson: fc(1),
+						layerType: "polygon",
+						metadata: {
+							source: "user",
+							source_path: p,
+							source_size_bytes: "1",
+							source_mtime_ms: "1",
+							source_status: "current",
+						},
+					}),
+				)
+			}
+			await h.watch.checkAll()
+			expect(h.requests.map((r) => r.path).sort()).to.deep.equal([upper, lower].sort())
+			expect(h.requests.find((r) => r.layerId === "lower")?.path).to.equal(lower)
 		})
 
 		it("on a case-sensitive volume the other spelling is another file", async () => {

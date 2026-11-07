@@ -21,6 +21,18 @@ describe("isWatcherExcluded", () => {
 		expect(isWatcherExcluded({ "**/*.{shp,geojson}": true }, folders, "/w/proj/d/a.geojson")).to.equal(true)
 		expect(isWatcherExcluded({ "**/*.{shp,geojson}": true }, folders, "/w/proj/d/a.csv")).to.equal(false)
 	})
+	it("supports character classes", () => {
+		expect(isWatcherExcluded({ "**/[ab]/**": true }, folders, "/w/proj/a/x.geojson")).to.equal(true)
+		expect(isWatcherExcluded({ "**/[ab]/**": true }, folders, "/w/proj/c/x.geojson")).to.equal(false)
+		expect(isWatcherExcluded({ "[!a]/**": true }, folders, "/w/proj/a/x.geojson")).to.equal(false)
+		expect(isWatcherExcluded({ "[!a]/**": true }, folders, "/w/proj/c/x.geojson")).to.equal(true)
+	})
+	it("matches dot folders", () => {
+		expect(isWatcherExcluded({ "**/.cache/**": true }, folders, "/w/proj/.cache/a.geojson")).to.equal(true)
+	})
+	it("takes a drive letter in either case", () => {
+		expect(isWatcherExcluded({ "big/**": true }, ["c:\\w\\proj"], "C:\\w\\proj\\big\\a.geojson")).to.equal(true)
+	})
 	it("reads Windows separators", () => {
 		expect(isWatcherExcluded(defaults, ["C:\\w\\proj"], "C:\\w\\proj\\node_modules\\p\\a.geojson")).to.equal(true)
 	})

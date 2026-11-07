@@ -60,7 +60,7 @@ export interface ParseResult {
 	requestId: string
 	ok: boolean
 	/** Why not: the file changed while it was read, the layer is not a vector layer, or the parser's message. */
-	reason?: "changed_while_reading" | "unsupported" | "parse"
+	reason?: "changed_while_reading" | "unsupported" | "parse" | "unverified"
 	message?: string
 	geojson?: string
 	metadata?: Record<string, string>
@@ -233,6 +233,8 @@ export class MapFileWatch {
 	private readonly options: MapFileWatchOptions
 	/** Comparable path -> the path the file system knows it by, for every file the map may load and a layer names. */
 	private targets = new Map<string, string>()
+	/** Case-folded comparable path -> the paths in `targets` it could mean. Only for finding the file an event is about. */
+	private foldedTargets = new Map<string, Set<string>>()
 	private readonly states = new Map<string, FileState>()
 	private readonly folderWatchers = new Map<string, Disposable>()
 	private workspaceSubscription: Disposable | undefined
@@ -305,7 +307,7 @@ export class MapFileWatch {
 		if (this.disposed) return
 		const next = new Map<string, string>()
 		for (const layer of this.deps.layers()) {
-			const key = this.layerKey(layer)
+			const key = watchedPathOf(layer)
 			if (!key) continue
 			const real = next.get(key) ?? (await this.deps.authorize(nativePathOf(layer) ?? key))
 			// A layer that names a file the map may not load (outside the open folders, loaded in an earlier session, or put
@@ -320,6 +322,13 @@ export class MapFileWatch {
 		}
 		if (this.disposed) return
 		this.targets = next
+		this.foldedTargets = new Map()
+		for (const real of new Set(next.values())) {
+			const folded = this.fold(this.keyOf(real))
+			const set = this.foldedTargets.get(folded) ?? new Set<string>()
+			set.add(real)
+			this.foldedTargets.set(folded, set)
+		}
 		const wantedFolders = new Set<string>()
 		for (const real of new Set(next.values())) {
 			if (!this.coveredByWorkspaceWatcher(real)) wantedFolders.add(path.dirname(real))
@@ -346,17 +355,11 @@ export class MapFileWatch {
 	}
 
 	private keyOf(p: string): string {
-		return this.fold(resolvedSourcePath({ source_path: p }) ?? p)
+		return resolvedSourcePath({ source_path: p }) ?? p
 	}
 
 	private fold(p: string): string {
 		return this.options.caseInsensitive ? p.toLowerCase() : p
-	}
-
-	/** The map key of the file a layer names. */
-	private layerKey(layer: WatchableLayer): string | undefined {
-		const key = watchedPathOf(layer)
-		return key === undefined ? undefined : this.fold(key)
 	}
 
 	private coveredByWorkspaceWatcher(real: string): boolean {
@@ -379,8 +382,12 @@ export class MapFileWatch {
 
 	/** A watcher said something happened to a file. Files no layer names are none of the map's business. */
 	private onFileEvent(file: string): void {
-		const real = this.targets.get(this.keyOf(file))
-		if (real) this.schedule(real, this.options.debounceMs, true)
+		const key = this.keyOf(file)
+		const exact = this.targets.get(key)
+		// A watcher may spell a path in another case than the layer does. Case is only folded to find the file; two paths that
+		// differ only by case stay two files (on a case-sensitive volume they are), each with its own layer.
+		const reals = exact ? [exact] : this.options.caseInsensitive ? [...(this.foldedTargets.get(this.fold(key)) ?? [])] : []
+		for (const real of reals) this.schedule(real, this.options.debounceMs, true)
 	}
 
 	private schedule(real: string, delayMs: number, fromEvent: boolean): void {
@@ -443,7 +450,7 @@ export class MapFileWatch {
 	private layersAt(real: string): WatchableLayer[] {
 		const key = this.keyOf(real)
 		return this.deps.layers().filter((layer) => {
-			const k = this.layerKey(layer)
+			const k = watchedPathOf(layer)
 			return !!k && (k === key || this.targets.get(k) === real)
 		})
 	}
@@ -653,12 +660,15 @@ export class MapFileWatch {
 		const sha = inflight.snapshot.sha256
 		current.timeouts = current.timedOutSha === sha ? current.timeouts + 1 : 1
 		current.timedOutSha = sha
-		const layer = this.deps.layers().find((l) => l.id === inflight.layerId)
-		if (layer && current.timeouts >= this.options.maxTimeouts) {
-			const reason = "The map took too long to read this file"
-			// No `source_seen_*`: the layer is asked about again when the panel is shown (the look skips what it already saw).
-			this.deps.patchLayer(layer.id, { source_status: "source_unreadable", source_error: reason })
-			this.deps.report({ kind: "unreadable", layerId: layer.id, name: this.nameOf(layer), reason })
+		if (current.timeouts >= this.options.maxTimeouts) {
+			// Every layer on the file says so: the map's page did not finish, which says nothing about the file itself.
+			const reason = "The map did not finish reading this file"
+			for (const layer of this.layersAt(real)) {
+				if (!this.followsByItself(layer)) continue
+				// No `source_seen_*`: the layer is asked about again when the panel is shown (the look skips what it already saw).
+				this.deps.patchLayer(layer.id, { source_status: "source_unreadable", source_error: reason })
+				this.deps.report({ kind: "unreadable", layerId: layer.id, name: this.nameOf(layer), reason })
+			}
 			current.dirty = false
 			return
 		}
@@ -673,7 +683,7 @@ export class MapFileWatch {
 	async useNewFile(layerId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
 		await this.sync()
 		const layer = this.deps.layers().find((l) => l.id === layerId)
-		const key = layer ? this.layerKey(layer) : undefined
+		const key = layer ? watchedPathOf(layer) : undefined
 		const real = key ? this.targets.get(key) : undefined
 		if (!layer || !real) return { ok: false, reason: "That layer does not name a file the map may read." }
 		if (NOT_VECTOR_TYPES.has(layer.layerType ?? ""))
@@ -749,6 +759,13 @@ export class MapFileWatch {
 		}
 		if (result.reason === "changed_while_reading" && ++state.pageFailures < this.options.unstableMaxAttempts) {
 			this.schedule(real, this.options.unstableRetryMs, false)
+			return
+		}
+		if (result.reason === "unverified") {
+			// The page cannot check the bytes it fetched. Retrying cannot help and the file is not at fault: say so, once per look.
+			const reason = result.message || "The map could not verify this file."
+			this.deps.patchLayer(layer.id, { source_status: "source_unreadable", source_error: reason.slice(0, 300) })
+			this.deps.report({ kind: "unreadable", layerId: layer.id, name, reason })
 			return
 		}
 		if (result.reason === "unsupported") {

@@ -1004,7 +1004,10 @@ export class VscodeMapPanelProvider {
 				}
 			}
 		}
-		const reason = message.reason === "changed_while_reading" || message.reason === "unsupported" ? message.reason : "parse"
+		const reason =
+			message.reason === "changed_while_reading" || message.reason === "unsupported" || message.reason === "unverified"
+				? message.reason
+				: "parse"
 		return {
 			requestId: message.requestId,
 			ok: message.ok,
