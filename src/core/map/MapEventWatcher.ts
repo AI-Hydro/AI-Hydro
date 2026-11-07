@@ -20,6 +20,7 @@
 import type { Controller } from "@core/controller"
 import { buildInundation3dLayerFromPath, hydrateInundation3dLayers } from "@core/map/inundation3dLayer"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
+import { resolvedSourcePath } from "@shared/map/layerIdentity"
 import { MapLayer, MapLayerStyle } from "@shared/proto/cline/map"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -55,6 +56,25 @@ interface MapEventPayload {
 	openMap?: boolean
 	metadata?: Record<string, string>
 	timestamp?: string
+}
+
+/**
+ * A tool's layer that names a file by an absolute path is not copied to the cache, so after a restart it is drawn from that
+ * file. Recording the file's size and time now lets the restore see that the file changed while VS Code was closed, instead
+ * of drawing new content under the run's link. A tool that recorded its own values keeps them.
+ */
+export async function stampSourceStat(metadata: Record<string, string>): Promise<void> {
+	if (metadata.source_size_bytes || metadata.source_mtime_ms) return
+	const file = resolvedSourcePath(metadata)
+	if (!file || !path.isAbsolute(file)) return
+	try {
+		const stat = await fs.stat(file)
+		if (!stat.isFile()) return
+		metadata.source_size_bytes = String(stat.size)
+		metadata.source_mtime_ms = String(Math.round(stat.mtimeMs))
+	} catch {
+		/* the file is not there (yet): nothing to record */
+	}
 }
 
 export class MapEventWatcher {
@@ -206,6 +226,7 @@ export class MapEventWatcher {
 			...(event.metadata ?? {}),
 			...(event.timestamp ? { addedAt: event.timestamp } : {}),
 		}
+		await stampSourceStat(metadata)
 		if (geojson) {
 			try {
 				const preview = await ensureGeoJsonPreviewArtifact(event.id, geojson)

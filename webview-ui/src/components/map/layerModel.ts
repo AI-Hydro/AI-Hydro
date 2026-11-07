@@ -11,6 +11,7 @@
 import { layerRunId, layerTool } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { deriveLayerIntelligence, type LayerIntelligence, warningText } from "./layerIntelligence"
+import { sourceNote } from "./sourceNoteText"
 
 /** What a layer is, not how it reached the map: a result of a run, a file of the user's, reference data, Earth Engine. */
 export type LayerOrigin = "tool" | "files" | "reference" | "gee" | "pushed"
@@ -76,7 +77,10 @@ export function rowIndicators(layer: MapLayer, intelligence: LayerIntelligence =
 	const meta = layer.metadata ?? {}
 	const warnings = intelligence.warnings.filter((w) => w !== "UNSUPPORTED_SYMBOLOGY").map(warningText)
 	if (meta.source_status === "source_changed") {
-		warnings.push("The source file changed after this layer was loaded. Reload the source to refresh it.")
+		warnings.push(sourceNote(layer)?.text ?? "The source file changed.")
+	}
+	if (meta.source_status === "source_unreadable" || meta.source_status === "source_missing") {
+		warnings.push(sourceNote(layer)?.text ?? "The source file could not be read.")
 	}
 	if (meta.display_mode === "preview") {
 		warnings.push(

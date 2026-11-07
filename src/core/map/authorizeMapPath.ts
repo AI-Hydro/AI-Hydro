@@ -25,8 +25,8 @@ export interface MapPathDeps {
 	workspaceFolders: () => string[]
 	aihydroDirs: () => string[]
 	/**
-	 * Source files of layers already on the map. Only for reading or opening what is already there (Reload source,
-	 * Open file): a layer's recorded path does not make a new file loadable, so `load` ignores it.
+	 * Source files of layers already on the map. Only for reading or opening what is already there (Open file,
+	 * Use new file): a layer's recorded path does not make a new file loadable, so `load` ignores it.
 	 */
 	onMapPaths?: () => string[]
 	/** `fs.realpath` semantics; replaceable in tests. */
@@ -60,11 +60,7 @@ async function resolveLoose(p: string, realpath: (p: string) => Promise<string>)
 	}
 }
 
-export async function authorizeMapPath(
-	candidate: string,
-	purpose: MapPathPurpose,
-	deps: MapPathDeps,
-): Promise<MapPathDecision> {
+export async function authorizeMapPath(candidate: string, purpose: MapPathPurpose, deps: MapPathDeps): Promise<MapPathDecision> {
 	if (typeof candidate !== "string" || candidate === "" || candidate.includes("\0")) {
 		return { ok: false, reason: "No file path." }
 	}
@@ -87,7 +83,8 @@ export async function authorizeMapPath(
 	}
 	if (purpose !== "load") {
 		for (const onMap of deps.onMapPaths?.() ?? []) {
-			if (path.isAbsolute(onMap) && (await resolveLoose(onMap, realpath)) === real) return { ok: true, path: real, via: "on-map" }
+			if (path.isAbsolute(onMap) && (await resolveLoose(onMap, realpath)) === real)
+				return { ok: true, path: real, via: "on-map" }
 		}
 	}
 	return {

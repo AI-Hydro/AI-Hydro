@@ -35,3 +35,21 @@ export function drawSources(layer: MapLayer): DrawSource[] {
 	}
 	return out
 }
+
+/**
+ * Which version of its file a layer holds. A parse read from disk is kept per layer id; when a layer takes a new version
+ * of its file (same id) this string changes and the old parse is dropped, so the map never draws the old version of a file
+ * the layer has already replaced. The preview path is part of it: a preview was made from one version.
+ */
+export function fileVersionOf(layer: MapLayer): string {
+	const meta = layer.metadata ?? {}
+	return [
+		meta.source_size_bytes,
+		meta.source_mtime_ms,
+		meta.source_sha256,
+		meta.source_updated_at_utc,
+		meta.display_geojson_path,
+	]
+		.map((v) => v ?? "")
+		.join("|")
+}

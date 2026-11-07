@@ -2,7 +2,6 @@ import { LightingEffect, type MapViewState, WebMercatorViewport } from "@deck.gl
 import { TileLayer } from "@deck.gl/geo-layers"
 import { BitmapLayer, GeoJsonLayer, PathLayer, TextLayer } from "@deck.gl/layers"
 import DeckGL from "@deck.gl/react"
-import { resolvedSourcePath } from "@shared/map/layerIdentity"
 import { EmptyRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
@@ -74,7 +73,7 @@ import { meshTriangleCount } from "./inundation3d/meshCoordinates"
 import { hydrographFrameVisibilityUpdates } from "./inundation3d/syncHydrographFrame"
 import { terrainOffsetForManifest } from "./inundation3d/verticalAlignment"
 import { clusterGeoJSON, LayerClusterCache } from "./layerClusterCache"
-import { drawSources } from "./layerDrawPath"
+import { drawSources, fileVersionOf } from "./layerDrawPath"
 import { drawOrder } from "./layerModel"
 import { MapConnectionStatus } from "./MapConnectionStatus"
 import MapContextMenu from "./MapContextMenu"
@@ -129,6 +128,7 @@ import {
 	undoEdit,
 } from "./pins"
 import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGalleryPanel"
+import { answerRefreshRequest, isRefreshFileRequest } from "./refreshFile"
 import { resolveFileUri } from "./resolveFileUri"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
@@ -851,6 +851,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// Raster resource revision drives rendering and inspection after async loads.
 	const [geojsonReadyTick, setGeojsonReadyTick] = useState(0)
 	const geojsonFileCacheRef = useRef<Map<string, unknown>>(new Map())
+	/** The version of the file each cached parse was read at (see `fileVersionOf`). */
+	const geojsonFileVersionRef = useRef<Map<string, string>>(new Map())
 	/** Layers already reported as showing a saved copy because their file could not be read. */
 	const missingReportedRef = useRef<Set<string>>(new Set())
 	const [manifestReadyTick, setManifestReadyTick] = useState(0)
@@ -1598,39 +1600,14 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			} else if (msg?.type === "aihydro-load-file" && msg.name && Array.isArray(msg.data)) {
 				const bytes = new Uint8Array(msg.data)
 				file = new File([bytes], msg.name)
-			} else if (msg?.type === "aihydro-source-file-saved" && typeof msg.path === "string") {
-				const savedPath = resolvedSourcePath({ source_path: msg.path })
-				let matched = 0
-				for (const layer of layers) {
-					// The same file by its one resolved path, whichever way the layer spelled it (relative, workspace list).
-					if (!savedPath || resolvedSourcePath(layer.metadata) !== savedPath) {
-						continue
-					}
-					matched++
-					await MapServiceClient.addMapLayer(
-						AddMapLayerRequest.create({
-							layer: {
-								...layer,
-								metadata: {
-									...(layer.metadata ?? {}),
-									source_status: "source_changed",
-									source_mtime_ms:
-										typeof msg.mtimeMs === "number" ? String(msg.mtimeMs) : layer.metadata?.source_mtime_ms,
-									source_size_bytes:
-										typeof msg.sizeBytes === "number"
-											? String(msg.sizeBytes)
-											: layer.metadata?.source_size_bytes,
-								},
-							},
-							replaceExisting: true,
-						}),
-					)
-				}
-				// Said only when a layer on the map is that file; a save of any other .json, .csv or .zip is none of the map's business.
-				if (matched > 0) {
-					setDropStatus({ kind: "ok", msg: "A source file changed. Use Reload source in Layers to refresh it." })
-					window.setTimeout(() => setDropStatus(null), 5000)
-				}
+			} else if (msg?.type === "aihydro-map-refresh-file" && isRefreshFileRequest(msg)) {
+				// A file a layer follows changed: parse exactly the bytes the host hashed and send the result back. The host
+				// decides whether the layer may take it; nothing here changes a layer.
+				void answerRefreshRequest(msg)
+				return
+			} else if (msg?.type === "aihydro-map-file-status" && typeof msg.message === "string") {
+				setDropStatus({ kind: msg.kind === "err" ? "err" : "ok", msg: msg.message.slice(0, 300) })
+				window.setTimeout(() => setDropStatus(null), 6000)
 				return
 			} else if (msg?.type === "aihydro-map-save-scene-request") {
 				const scene = {
@@ -1708,6 +1685,12 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		window.addEventListener("message", handler)
 		return () => window.removeEventListener("message", handler)
 	}, [layers, viewState, selectedBaseMap, visibleLayerIds, layerOrder, layerOpacities])
+
+	// Tell the host once that this page is listening, so it looks at every loaded file's version on disk (a file can change
+	// while the map is closed). Later looks come from its own watchers and from the panel being shown again.
+	useEffect(() => {
+		PLATFORM_CONFIG.postMessage({ type: "aihydro-map-panel-ready" })
+	}, [])
 
 	// Build the deck.gl TileLayers for the base map (base + any hydrography overlay).
 	// Uses fetch + createImageBitmap so no loaders.gl or Mapbox token is needed.
@@ -1853,6 +1836,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		for (const id of geojsonFileCacheRef.current.keys()) {
 			if (!liveIds.has(id)) {
 				geojsonFileCacheRef.current.delete(id)
+				geojsonFileVersionRef.current.delete(id)
 			}
 		}
 		for (const id of manifestFileCacheRef.current.keys()) {
@@ -1883,8 +1867,15 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				if (layer.geojson?.trim()) {
 					continue
 				}
+				// A parse read from the file belongs to the version of the file it was read at. A layer that took a new
+				// version (same id, new size, time or hash) must not keep drawing the old one, so it is dropped and read again.
+				const version = fileVersionOf(layer)
 				if (geojsonFileCacheRef.current.has(layer.id)) {
-					continue
+					if (geojsonFileVersionRef.current.get(layer.id) === version) {
+						continue
+					}
+					geojsonFileCacheRef.current.delete(layer.id)
+					setGeojsonReadyTick((t) => t + 1)
 				}
 				const sources = drawSources(layer)
 				if (sources.length === 0) {
@@ -1938,7 +1929,12 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					if (cancelled) {
 						return
 					}
+					// Read for a version that has since been replaced: not kept (the effect runs again for the new one).
+					if (fileVersionOf(layersRef.current.find((l) => l.id === layer.id) ?? layer) !== version) {
+						return
+					}
 					geojsonFileCacheRef.current.set(layer.id, parsed)
+					geojsonFileVersionRef.current.set(layer.id, version)
 					setGeojsonReadyTick((t) => t + 1)
 				} catch (err) {
 					console.warn(`[MapView] GeoJSON load failed for ${layer.id}:`, err)

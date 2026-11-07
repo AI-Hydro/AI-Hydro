@@ -1,7 +1,9 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
 import {
+	EVIDENCE_KEYS,
 	findDuplicate,
+	hasEvidenceLink,
 	matchFile,
 	mergedMetadata,
 	pathHash,
@@ -315,5 +317,61 @@ describe("layer identity: one file is one layer", () => {
 		const b = L("b", {}, pretty.geojson)
 		expect(matchFile(a, b)).to.equal("same")
 		expect(matchFile(a, L("d", {}, '{"type":"Polygon","coordinates":[[0,1],[2,4]]}'))).to.equal("different")
+	})
+})
+
+describe("evidence links and new content", () => {
+	it("a layer is linked by a run, a study, a tool or a claim, and by nothing else", () => {
+		expect([...EVIDENCE_KEYS]).to.have.members(["_run_id", "study_id", "tool", "claim_id"])
+		for (const key of EVIDENCE_KEYS) expect(hasEvidenceLink({ [key]: "x" }), key).to.equal(true)
+		expect(
+			hasEvidenceLink({ source: "user", source_path: "/w/a.geojson", provenance_path: "/p", retrieved_at: "t" }),
+		).to.equal(false)
+		expect(hasEvidenceLink({ _run_id: "" })).to.equal(false)
+		expect(hasEvidenceLink(undefined)).to.equal(false)
+	})
+
+	it("new content under a link that is not a run (a tool, a study, a claim) takes the link with it, with no run to name", () => {
+		const existing = L(
+			"e",
+			{ source_path: "/w/a.geojson", tool: "extract_rivers", study_id: "prj", claim_id: "c1", uncertainty: "ci" },
+			GJ,
+		)
+		const plan = planMerge(existing, L("n", { source_path: "/w/a.geojson" }, GJ2), "changed")
+		expect(plan.metadata.tool).to.equal(undefined)
+		expect(plan.metadata.study_id).to.equal(undefined)
+		expect(plan.metadata.claim_id).to.equal(undefined)
+		expect(plan.metadata.uncertainty).to.equal(undefined)
+		expect(plan.metadata._prior_run_id).to.equal(undefined)
+		expect(plan.priorRun).to.equal(undefined)
+	})
+
+	it("new content from a run keeps the link it brings", () => {
+		const existing = L("e", { source_path: "/w/a.geojson", _run_id: "r.1", tool: "t" }, GJ)
+		const plan = planMerge(existing, L("n", { source_path: "/w/a.geojson", _run_id: "r.2", tool: "t" }, GJ2), "changed")
+		expect(plan.metadata._run_id).to.equal("r.2")
+	})
+
+	it("new content drops the preview made from the old content and what was said about the file after it", () => {
+		const existing = L(
+			"e",
+			{
+				source_path: "/w/a.geojson",
+				display_geojson_path: "/c/p.geojson",
+				display_mode: "preview",
+				source_seen_sha256: "z",
+				source_error: "x",
+			},
+			GJ,
+		)
+		const plan = planMerge(existing, L("n", { source_path: "/w/a.geojson" }, GJ2), "changed")
+		for (const key of ["display_geojson_path", "display_mode", "source_seen_sha256", "source_error"])
+			expect(plan.metadata[key], key).to.equal(undefined)
+		const withPreview = planMerge(
+			existing,
+			L("n", { source_path: "/w/a.geojson", display_geojson_path: "/c/new.geojson" }, GJ2),
+			"changed",
+		)
+		expect(withPreview.metadata.display_geojson_path).to.equal("/c/new.geojson")
 	})
 })

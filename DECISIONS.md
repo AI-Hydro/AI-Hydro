@@ -4,6 +4,18 @@ Append-only. Newest first. One entry per non-obvious choice, with the **why**.
 
 ---
 
+## 2026-11-07 — Layers slice 2: a layer follows its file; the host reads and hashes once; evidence links stop auto-update
+
+Design: `docs/vision-2040/findings/layers-design-2026-11-02.md`, section 5.7, section 7 Slice 2 and the Addendum (items 3, 4 and 9).
+
+- **One check, three triggers.** A watcher event, the look when the map opens (after restore) and the look when the panel is shown again all run `MapFileWatch.checkFile`. *Why:* VS Code says events can be dropped and network drives are not guaranteed, so the look is the backstop, and one code path means a missed event is repaired by the same code that handles a heard one. The spec's `Check for changes` menu item is not built: no scripted write of the 20-write runs (Python writer; in place, os.replace and delete-then-create) was missed, with watcher events or with every event dropped and only the look, so its kill criterion did not fire.
+- **The host reads the file once, hashes it, and the page parses exactly those bytes.** The page compares the size it fetched with the size the host measured; a different number is `changed_while_reading` and the host looks again. The layer records the host's size, time and sha256, never the page's. *Why:* the spec forbids showing a copy that was not made from the bytes that were hashed, and a second read by the page can see a later version.
+- **The update does not go through `addMapLayer`.** `Controller.refreshMapLayerFromFile` applies it by id. *Why:* the spec's "send the existing load message and let `planMerge` merge" would also have sent the `command.focus_layers` event that `afterMapMerge` emits for every merge (it selects the layer and can move the camera), would have counted a merge in the restore note, and would have revealed the panel through `sendFileUrisToMap`. `planMerge` is still the rule for metadata (user keys kept, links removed with the content they vouched for).
+- **Any evidence link stops auto-update: `_run_id`, `study_id`, `tool`, `claim_id`.** The host refuses an automatic update for such a layer even if one is asked for, and re-checks when the page answers (a link added while a request was out turns the update into a flag). `Use new file` is the only way across, asks once, and removes the whole link; `planMerge` used to remove only `_run_id`.
+- **Paths are authorized with purpose `load`.** *Why:* `read` also admits any path a layer on the map already names, so a map scene that names `~/.ssh/config` would be watched. With `load`, a path outside the open folders and AI-Hydro's folders is watched only if the user picked it this session. The cost: a file outside the project that was loaded in an earlier session is not watched until it is added again.
+- **A stale parse is dropped, not shown.** The page keeps a parse of a large layer's file per layer id; it now keeps the file version with it (`fileVersionOf`) and drops the parse when the layer's size, time, hash, update stamp or preview path changes. The host drops `display_geojson_path` and the keys that describe it when the content is replaced.
+- **Rasters are flagged, not re-read.** `planMerge` has no raster content to take, and the raster cache is keyed by the layer id. A raster layer says the file changed and to load it again.
+
 ## 2026-11-05 — Layers slice 1: the moving row; Unload settings in a sidecar; "Remove from list" in globalState
 
 PR #159. Design: `docs/vision-2040/findings/layers-design-2026-11-02.md`, section 5.5, 5.6 and the Addendum (items 5 and 8).
