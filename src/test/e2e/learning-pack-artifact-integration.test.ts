@@ -571,10 +571,10 @@ async function completeCurrentAndOpenNext(page: Page, nextTitle: string): Promis
 	const shell = await waitForCourseShell(page)
 	const complete = shell.getByTitle("Mark complete & continue to next module")
 	await expect(complete).toBeVisible({ timeout: 30_000 })
+	await expect(shell.getByTitle(`Next: ${nextTitle}`)).toBeEnabled({ timeout: 30_000 })
+	// Marking complete advances to the next module by itself (CourseHeader, 350 ms after the save); a second
+	// Next click could land on the following module's button once the header had moved on, and skip one.
 	await complete.evaluate((element: HTMLElement) => element.click())
-	const next = shell.getByTitle(`Next: ${nextTitle}`)
-	await expect(next).toBeEnabled({ timeout: 30_000 })
-	await next.evaluate((element: HTMLElement) => element.click())
 }
 
 async function executeBookModule(

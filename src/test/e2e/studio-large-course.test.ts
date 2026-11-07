@@ -247,10 +247,10 @@ largeCourseE2E(
 				const shell = await studioShell(page)
 				const complete = shell.getByTitle("Mark complete & continue to next module")
 				await expect(complete).toBeVisible({ timeout: 30_000 })
+				// Marking complete advances to the next module by itself (CourseHeader, 350 ms after the save).
+				// Clicking Next as well raced that advance: on a slow runner the resolved Next button had
+				// already become the following module's, and the walk skipped one.
 				await complete.evaluate((element: HTMLElement) => element.click())
-				const next = shell.getByTitle(`Next: ${MODULE_IDS[index]}`)
-				await expect(next).toBeEnabled({ timeout: 30_000 })
-				await next.evaluate((element: HTMLElement) => element.click())
 				await moduleFrame(page, index)
 			}
 			// Let garbage collection and the panel settle so the sample is retained memory, not a transient.
