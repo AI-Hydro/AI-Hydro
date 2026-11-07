@@ -11,6 +11,13 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Layers file watcher follow-ups
+
+- A file the map cannot get parsed (no answer from the page three times in a row) is marked unreadable ("The map took too long to read this file") and is asked about again only after the file changes or the panel is shown.
+- Where the page cannot hash the bytes it fetched (`crypto.subtle` missing), it replies "could not verify" and nothing is parsed or updated, instead of checking the size alone.
+- Watcher keys ignore case on macOS and Windows, so an event spelled in another case still reaches the layer.
+- A file in an open folder that `files.watcherExclude` hides from the workspace watcher gets its own non-recursive folder watcher.
+
 ## [0.4.10] - 2026-11-07
 
 ### Layers slice 2: a layer follows its file (the watcher replaces Reload source)

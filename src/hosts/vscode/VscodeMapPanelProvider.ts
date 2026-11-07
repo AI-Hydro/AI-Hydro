@@ -9,6 +9,7 @@ import { handleMapAgentTaskMessage } from "@core/map/handleMapAgentTask"
 import { MapFileWatch, type ParseResult, type WatchReport } from "@core/map/mapFileWatch"
 import { checkProjectFileRequest } from "@core/map/projectFiles"
 import { resolveMapFilePath as resolveMapFilePathIn } from "@core/map/resolveMapFilePath"
+import { isWatcherExcluded } from "@core/map/watcherExclude"
 import { checkSaveTarget, loadPinsForProject, NO_FOLDER_KEY, quarantinePins, savePinsForProject } from "@core/project/pinStore"
 import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
@@ -298,6 +299,13 @@ export class VscodeMapPanelProvider {
 				return decision.ok ? decision.path : undefined
 			},
 			workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+			// The merged setting: the workspace watcher does not report these, so their files get a folder watcher of their own.
+			watcherExcluded: (file) =>
+				isWatcherExcluded(
+					vscode.workspace.getConfiguration("files").get<Record<string, boolean>>("watcherExclude"),
+					(vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+					file,
+				),
 			watchFolder: (folder, onEvent) => {
 				try {
 					// A plain `*` pattern on a base folder is a non-recursive watch, inside the workspace or outside it.

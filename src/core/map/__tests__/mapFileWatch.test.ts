@@ -569,7 +569,102 @@ describe("MapFileWatch", function () {
 		})
 	})
 
+	describe("the page keeps not answering", () => {
+		const setup = async (options: Record<string, unknown> = {}) => {
+			await h.cleanup()
+			h = await makeHarness({ options: { requestTimeoutMs: 60, ...options } })
+			file = path.join(h.dir, "basin.geojson")
+			await fsp.writeFile(file, fc(1))
+			const past = new Date(Date.now() - 60_000)
+			await fsp.utimes(file, past, past)
+			addLayer(h, layerFor(file, fc(1)))
+			await h.watch.sync()
+			h.panel.answer = "never"
+			await fsp.writeFile(file, fc(2))
+			h.emit(file)
+		}
+
+		it("asks again after a timeout, and after three in a row calls the layer unreadable and stops asking", async () => {
+			await setup()
+			expect(await until(() => layer().metadata.source_status === "source_unreadable", 3000)).to.equal(true)
+			expect(layer().metadata.source_error).to.equal("The map took too long to read this file")
+			expect(h.requests.length).to.equal(3)
+			expect(h.reports.filter((r) => r.kind === "unreadable").length).to.equal(1)
+			await wait(300)
+			expect(h.requests.length).to.equal(3)
+			h.emit(file) // a touch: same bytes
+			await wait(200)
+			expect(h.requests.length).to.equal(3)
+		})
+
+		it("asks again when the file changes", async () => {
+			await setup()
+			await until(() => layer().metadata.source_status === "source_unreadable", 3000)
+			h.panel.answer = "page"
+			await fsp.writeFile(file, fc(3))
+			h.emit(file)
+			expect(await until(() => layer().geojson === fc(3), 3000)).to.equal(true)
+			expect(layer().metadata.source_status).to.equal("current")
+		})
+
+		it("asks again when the panel is shown", async () => {
+			await setup()
+			await until(() => layer().metadata.source_status === "source_unreadable", 3000)
+			h.panel.answer = "page"
+			await h.watch.checkAll()
+			expect(await until(() => layer().geojson === fc(2), 3000)).to.equal(true)
+			expect(layer().metadata.source_status).to.equal("current")
+		})
+
+		it("a late answer to a dropped request changes nothing", async () => {
+			await setup({ maxTimeouts: 1 })
+			await until(() => layer().metadata.source_status === "source_unreadable", 3000)
+			h.watch.onParseResult({ requestId: h.requests[0].requestId, ok: true, geojson: fc(2) })
+			expect(layer().geojson).to.equal(fc(1))
+		})
+	})
+
+	describe("case-insensitive volumes", () => {
+		it("an event spelled in another case still reaches the layer, and the file system gets the native path", async () => {
+			await h.cleanup()
+			h = await makeHarness({ options: { caseInsensitive: true }, workspace: false })
+			file = path.join(h.dir, "Basin.geojson")
+			await fsp.writeFile(file, fc(1))
+			const past = new Date(Date.now() - 60_000)
+			await fsp.utimes(file, past, past)
+			addLayer(h, layerFor(file, fc(1)))
+			await h.watch.sync()
+			await fsp.writeFile(file, fc(2))
+			h.emit(file.toUpperCase())
+			expect(await until(() => layer().geojson === fc(2))).to.equal(true)
+			expect(h.requests[0].path).to.equal(file)
+			expect(h.watchedFolders).to.deep.equal([h.dir])
+		})
+
+		it("on a case-sensitive volume the other spelling is another file", async () => {
+			await h.cleanup()
+			h = await makeHarness({ options: { caseInsensitive: false }, workspace: false })
+			file = path.join(h.dir, "Basin.geojson")
+			await fsp.writeFile(file, fc(1))
+			addLayer(h, layerFor(file, fc(1)))
+			await h.watch.sync()
+			await fsp.writeFile(file, fc(2))
+			h.emit(file.toUpperCase())
+			await wait(150)
+			expect(h.requests.length).to.equal(0)
+		})
+	})
+
 	describe("which paths are watched", () => {
+		it("a file inside an open folder that files.watcherExclude hides gets a folder watcher of its own", async () => {
+			await h.cleanup()
+			h = await makeHarness({ watcherExcluded: (p) => p.includes("basin") })
+			file = path.join(h.dir, "basin.geojson")
+			await fsp.writeFile(file, fc(1))
+			await load()
+			expect(h.watchedFolders).to.deep.equal([h.dir])
+		})
+
 		it("a path the map may not load (a scene's, a message's) gets no watcher and its events are ignored", async () => {
 			h.denied.add(file)
 			await load()

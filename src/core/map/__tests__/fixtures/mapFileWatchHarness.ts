@@ -67,6 +67,7 @@ export interface HarnessOptions {
 	workspace?: boolean
 	fs?: ConstructorParameters<typeof MapFileWatch>[0]["fs"]
 	panelOpen?: boolean
+	watcherExcluded?: (absolutePath: string) => boolean
 }
 
 export function layerFor(
@@ -170,6 +171,7 @@ export async function makeHarness(opts: HarnessOptions = {}): Promise<Harness> {
 			fs: opts.fs ?? { stat: (p) => fsp.stat(p), readFile: (p) => fsp.readFile(p) },
 			authorize: async (p) => (h.denied.has(p) ? undefined : p),
 			workspaceFolders: () => (opts.workspace === false ? [] : [dir]),
+			watcherExcluded: opts.watcherExcluded,
 			watchFolder: (folder, onEvent) => {
 				h.watchedFolders.push(folder)
 				folderListeners.set(folder, onEvent)

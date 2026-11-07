@@ -81,6 +81,8 @@ export interface MapFileWatchDeps {
 	workspaceFolders(): string[]
 	/** A non-recursive watcher on one folder; `onEvent` gets the absolute path of each file that changed, was made or was removed. */
 	watchFolder(folder: string, onEvent: (file: string) => void): Disposable | undefined
+	/** True when VS Code's `files.watcherExclude` hides this file from the workspace watcher, so it needs a watcher of its own. */
+	watcherExcluded?(absolutePath: string): boolean
 	/** Raw events for map files inside the open folders (the Project files scanner's watcher). */
 	onWorkspaceEvent(listener: (file: string) => void): Disposable
 	/** True while the map panel exists. Nothing here ever opens or reveals it. */
@@ -109,6 +111,10 @@ export interface MapFileWatchOptions {
 	unstableMaxAttempts: number
 	/** The page did not answer. */
 	requestTimeoutMs: number
+	/** Consecutive unanswered requests for one version of a file before the layer is called unreadable. */
+	maxTimeouts: number
+	/** Paths differ only by case on this file system (macOS, Windows): map keys compare without case. */
+	caseInsensitive: boolean
 	maxFolderWatchers: number
 	/** Files above this are never read to be hashed; they can only be flagged. */
 	maxHashBytes: number
@@ -121,6 +127,8 @@ export const DEFAULT_WATCH_OPTIONS: MapFileWatchOptions = {
 	unstableRetryMs: 150,
 	unstableMaxAttempts: 8,
 	requestTimeoutMs: 20_000,
+	maxTimeouts: 3,
+	caseInsensitive: process.platform === "darwin" || process.platform === "win32",
 	maxFolderWatchers: 50,
 	maxHashBytes: 256 * 1024 * 1024,
 }
@@ -205,6 +213,9 @@ interface FileState {
 	unstableAttempts: number
 	/** Requests the page could not carry out (the file moved under it). Reset by a version that was applied. */
 	pageFailures: number
+	/** Requests for `timedOutSha` the page never answered, in a row. */
+	timeouts: number
+	timedOutSha?: string
 	inflight?: {
 		requestId: string
 		layerId: string
@@ -294,7 +305,7 @@ export class MapFileWatch {
 		if (this.disposed) return
 		const next = new Map<string, string>()
 		for (const layer of this.deps.layers()) {
-			const key = watchedPathOf(layer)
+			const key = this.layerKey(layer)
 			if (!key) continue
 			const real = next.get(key) ?? (await this.deps.authorize(nativePathOf(layer) ?? key))
 			// A layer that names a file the map may not load (outside the open folders, loaded in an earlier session, or put
@@ -335,11 +346,22 @@ export class MapFileWatch {
 	}
 
 	private keyOf(p: string): string {
-		return resolvedSourcePath({ source_path: p }) ?? p
+		return this.fold(resolvedSourcePath({ source_path: p }) ?? p)
+	}
+
+	private fold(p: string): string {
+		return this.options.caseInsensitive ? p.toLowerCase() : p
+	}
+
+	/** The map key of the file a layer names. */
+	private layerKey(layer: WatchableLayer): string | undefined {
+		const key = watchedPathOf(layer)
+		return key === undefined ? undefined : this.fold(key)
 	}
 
 	private coveredByWorkspaceWatcher(real: string): boolean {
 		if (!COVERED_EXTENSIONS.has(path.extname(real).toLowerCase())) return false
+		if (this.deps.watcherExcluded?.(real)) return false
 		return this.deps.workspaceFolders().some((folder) => {
 			const rel = path.relative(folder, real)
 			return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel)
@@ -349,7 +371,7 @@ export class MapFileWatch {
 	private stateOf(real: string): FileState {
 		let state = this.states.get(real)
 		if (!state) {
-			state = { running: false, dirty: false, unstableAttempts: 0, pageFailures: 0 }
+			state = { running: false, dirty: false, unstableAttempts: 0, pageFailures: 0, timeouts: 0 }
 			this.states.set(real, state)
 		}
 		return state
@@ -402,6 +424,11 @@ export class MapFileWatch {
 	 */
 	async checkAll(): Promise<void> {
 		await this.sync()
+		// A panel show is a fresh look: files given up on after unanswered requests are asked about again.
+		for (const state of this.states.values()) {
+			state.timeouts = 0
+			state.timedOutSha = undefined
+		}
 		const reals = [...new Set(this.targets.values())]
 		let next = 0
 		const worker = async () => {
@@ -416,7 +443,7 @@ export class MapFileWatch {
 	private layersAt(real: string): WatchableLayer[] {
 		const key = this.keyOf(real)
 		return this.deps.layers().filter((layer) => {
-			const k = watchedPathOf(layer)
+			const k = this.layerKey(layer)
 			return !!k && (k === key || this.targets.get(k) === real)
 		})
 	}
@@ -515,6 +542,7 @@ export class MapFileWatch {
 			if (this.followsByItself(layer)) {
 				if (started) continue // one request at a time per file; the next look takes the others
 				if (state.unreadableSha === snapshot.sha256) continue
+				if (state.timedOutSha === snapshot.sha256 && state.timeouts >= this.options.maxTimeouts) continue
 				if (!this.deps.panelOpen()) continue // waits for the next open; never opens the panel
 				started = this.request(real, layer, snapshot, "auto")
 			} else {
@@ -609,20 +637,33 @@ export class MapFileWatch {
 			layerId: layer.id,
 			mode,
 			snapshot,
-			// A page that never answered (not listening yet, busy, gone) says nothing about the file: the request is dropped,
-			// the layer is not called unreadable, and the next look asks again.
-			timeout: setTimeout(() => {
-				const current = this.states.get(real)
-				if (current?.inflight?.requestId === requestId) {
-					current.inflight = undefined
-					if (current.dirty) {
-						current.dirty = false
-						this.schedule(real, 0, true)
-					}
-				}
-			}, this.options.requestTimeoutMs),
+			// A page that never answered (not listening yet, busy, gone) says nothing about the file once: the request is dropped
+			// and asked again. The same version going unanswered `maxTimeouts` times in a row (a parse that always runs too long)
+			// is called unreadable, and not asked again until the file changes or the panel is shown.
+			timeout: setTimeout(() => this.onTimeout(real, requestId), this.options.requestTimeoutMs),
 		}
 		return true
+	}
+
+	private onTimeout(real: string, requestId: string): void {
+		const current = this.states.get(real)
+		const inflight = current?.inflight
+		if (!current || !inflight || inflight.requestId !== requestId) return
+		current.inflight = undefined
+		const sha = inflight.snapshot.sha256
+		current.timeouts = current.timedOutSha === sha ? current.timeouts + 1 : 1
+		current.timedOutSha = sha
+		const layer = this.deps.layers().find((l) => l.id === inflight.layerId)
+		if (layer && current.timeouts >= this.options.maxTimeouts) {
+			const reason = "The map took too long to read this file"
+			// No `source_seen_*`: the layer is asked about again when the panel is shown (the look skips what it already saw).
+			this.deps.patchLayer(layer.id, { source_status: "source_unreadable", source_error: reason })
+			this.deps.report({ kind: "unreadable", layerId: layer.id, name: this.nameOf(layer), reason })
+			current.dirty = false
+			return
+		}
+		current.dirty = false
+		this.schedule(real, 0, true)
 	}
 
 	/**
@@ -632,7 +673,7 @@ export class MapFileWatch {
 	async useNewFile(layerId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
 		await this.sync()
 		const layer = this.deps.layers().find((l) => l.id === layerId)
-		const key = layer ? watchedPathOf(layer) : undefined
+		const key = layer ? this.layerKey(layer) : undefined
 		const real = key ? this.targets.get(key) : undefined
 		if (!layer || !real) return { ok: false, reason: "That layer does not name a file the map may read." }
 		if (NOT_VECTOR_TYPES.has(layer.layerType ?? ""))
@@ -662,6 +703,8 @@ export class MapFileWatch {
 			if (!inflight || inflight.requestId !== result.requestId) continue
 			clearTimeout(inflight.timeout)
 			state.inflight = undefined
+			state.timeouts = 0
+			state.timedOutSha = undefined
 			const layer = this.deps.layers().find((l) => l.id === inflight.layerId)
 			if (layer) this.finish(real, state, layer, inflight, result)
 			if (state.dirty) {
