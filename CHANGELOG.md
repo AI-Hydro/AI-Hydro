@@ -11,6 +11,8 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+## [0.4.10] - 2026-11-07
+
 ### Layers slice 2: a layer follows its file (the watcher replaces Reload source)
 
 Design: `docs/vision-2040/findings/layers-design-2026-11-02.md` (section 7 Slice 2 and the Addendum).
