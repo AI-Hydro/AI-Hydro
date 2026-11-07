@@ -111,7 +111,7 @@ Each layer row shows a coloured pill describing its analysis readiness:
 | **Reference vector** | MERIT / WBD boundary layer |
 | **Analysis output** | Vector produced by a Python tool |
 
-A **stale** badge appears when the source file has changed since the layer was loaded. Click ⟳ to reload.
+A warning icon appears on a row when its file changed and the layer did not follow it (see [A layer follows its file](#a-layer-follows-its-file)).
 
 > **Profile charts and cursor readings require an analysis-ready raster.** If the value probe shows nothing, open Symbology and click **Load raster values**.
 
@@ -133,10 +133,10 @@ Each action lives in one place. Click a layer's name to open its drawer; the `..
 | Drawer | **Details** | Overview, Data and Provenance. The run and tool names copy from here |
 | `...` menu | Zoom to layer, Rename on map | Rename on map sets the name shown on the map; the file is not renamed |
 | `...` menu | **Save as…** | A workspace file, or a GeoJSON download |
-| `...` menu | Open file, Reload source | Only when the layer has a source file |
+| `...` menu | Open file | Only when the layer has a source file |
+| Drawer | **Use new file** | Only on a layer with a run (or another evidence link) whose file changed. It asks first, then replaces the content and removes the link |
 | `...` menu | **Open run** | Always listed. Opens the run that made the layer in Replay. Off, with the reason beside it (`Not linked to a run`, or `No study recorded`), when the layer cannot open one |
 | Details, Provenance | **Open run** | The same action, when the layer records both its study and its run |
-| Drawer, Run line | **Use new file** | For a layer with a run whose file changed after it. The map keeps showing the run's result until you choose it; choosing asks once, because the link to the run is removed |
 | Details, Provenance | Open provenance record | When the layer has one |
 | `...` menu | Move up, Move down | Render order |
 | `...` menu | **Unload**, Unload and remove from list | For a file in the project list; the file stays on disk and Undo appears |
@@ -145,6 +145,18 @@ Each action lives in one place. Click a layer's name to open its drawer; the `..
 Layers are grouped by what they are, not by how they got there: **Results** (made by a tool run, even if saved in the workspace; Details shows the path), **Files** (any file from disk, in the workspace or not; `Not linked to a run`), **Reference data**, **Earth Engine**. One file is one layer: adding a file that is already on the map (same source path, else the same content) selects the existing layer and says so, and layers from two different runs are never merged. **Reference data** holds MERIT rivers, WBD boundaries, NWIS gauges and NID dams that no run made: they are labelled "Reference, not in any run" and are not from a recorded run. The same layer made by a study's run sits under Results instead.
 
 Show all and Hide all are in the Layers panel `...` menu. The Provenance tab lists what is recorded and ends with one "Not recorded: ..." line for the facts that are not.
+
+### A layer follows its file
+
+A layer that names a file follows it. There is no Reload button.
+
+- **A layer with no run** (a file you loaded, or one an agent wrote that no run recorded) is updated in place when its file changes on disk: same row, name, style, visibility and place in the stack, and the camera does not move. The drawer keeps a line, `Updated from the file on disk at 14:03:09.`, and the status line says so once. The map reads exactly the bytes it hashed; a file caught part-way through a write is tried once more after a second, then the layer says `Could not read the new version: ...` and keeps the last good copy.
+- **A layer with an evidence link** (a run, a study, a tool or a claim) never changes by itself. Its row gets a warning icon and the drawer says `The file changed after this run. The map still shows the run's result.` **Use new file** replaces the content after one question, and removes the link, because the new content did not come from that run. A layer that holds no saved copy says `The map draws the file as it is now, so it may not match.` instead of claiming one.
+- **A file that is gone** keeps the last loaded copy and says `File not found: ...`. A file replaced in one step (save by rename, delete then create) is waited for and never shows as gone.
+- **Raster layers** (GeoTIFF) are not re-read in place: they say the file changed and to load it again.
+- It looks when a watcher says something changed, when the map opens, and when the map panel is shown again. A watcher can drop events (network drives promise none), so the look on show is the backstop. While the map is closed nothing is read or drawn; the next open applies the changes to layers that follow their file and flags the others.
+- **Only files the map was allowed to load are watched:** inside an open folder, in AI-Hydro's own folders, or picked this session with Add file or the Explorer. A file outside the open folders that was loaded in an earlier session, or whose path came from a map scene, is **not watched and not flagged** when it changes. Its drawer says `Not watched: this file is outside the open folders...`; add the file again to watch it.
+- A file too large to hash (over 256 MB) is flagged from its size and time and never updated in place. Beyond 50 watched folders outside the open folders, the status line says so and those files are found only by the look on show.
 
 ### Renaming
 

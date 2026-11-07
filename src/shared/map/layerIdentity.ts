@@ -130,6 +130,17 @@ export const sameGeojson = (a: string, b: string): boolean =>
 
 const runOf = (l: IdentityLayer): string | undefined => l.metadata?._run_id || undefined
 
+/** Keys that tie a layer to evidence: the run, the study, the tool or the claim it supports. */
+export const EVIDENCE_KEYS = ["_run_id", "study_id", "tool", "claim_id"] as const
+
+/**
+ * True when the layer's content stands for something recorded elsewhere. Such a layer never changes content by itself:
+ * a new version of its file is announced, and only the user's choice (`Use new file`) replaces what the evidence is about.
+ */
+export function hasEvidenceLink(meta: Record<string, string> | undefined): boolean {
+	return !!meta && EVIDENCE_KEYS.some((key) => !!meta[key])
+}
+
 export type FileMatch = "different" | "same" | "changed"
 
 /** What the incoming layer is to the existing one. A layer is never a duplicate of itself. */
@@ -261,6 +272,26 @@ const USER_KEYS = ["display_name", "symbology_user_override", "graduated_attr", 
 /** Keys that belong to the run that made the content. They leave with it when the content changes under them. */
 const RUN_KEYS = ["_run_id", "tool", "provenance_path", "retrieved_at", "agent_step", "claim_id"]
 /**
+ * Keys describing the content as it was drawn: a simplified preview made from it, and what was said about the file after
+ * it. When the content is replaced they are stale, so they go unless the incoming layer brings its own.
+ */
+const CONTENT_DERIVED_KEYS = [
+	"display_geojson_path",
+	"display_mode",
+	"original_feature_count",
+	"preview_feature_count",
+	"original_coord_count",
+	"preview_coord_count",
+	"preview_bytes",
+	"full_geojson_embedded",
+	"simplified",
+	"simplified_coord_count",
+	"source_seen_size_bytes",
+	"source_seen_mtime_ms",
+	"source_seen_sha256",
+	"source_error",
+]
+/**
  * Annotations that describe the run's result, not the file. When the run link goes, these go too unless the incoming
  * layer supplies them, so old annotations never sit beside new content.
  */
@@ -320,17 +351,22 @@ export function planMerge(existing: IdentityLayer, incoming: IdentityLayer, matc
 	for (const key of USER_KEYS) {
 		if (existing.metadata?.[key]) meta[key] = existing.metadata[key]
 	}
+	for (const key of CONTENT_DERIVED_KEYS) {
+		if (!incoming.metadata?.[key]) delete meta[key]
+	}
 	const re = runOf(existing)
-	const ri = runOf(incoming)
 	let priorRun: string | undefined
-	if (re && !ri) {
-		// The content is no longer what the run produced: say so instead of keeping the link.
+	if (hasEvidenceLink(existing.metadata) && !hasEvidenceLink(incoming.metadata)) {
+		// The content is no longer what the run produced: say so instead of keeping the link. A link that is not a run (a
+		// study, a tool, a claim) goes the same way: it vouched for content that is no longer there.
 		for (const key of RUN_KEYS) delete meta[key]
 		for (const key of RUN_ANNOTATION_KEYS) {
 			if (!incoming.metadata?.[key]) delete meta[key]
 		}
-		meta._prior_run_id = re
-		priorRun = re
+		if (re) {
+			meta._prior_run_id = re
+			priorRun = re
+		}
 	}
 	meta.source_status = "current"
 	return {

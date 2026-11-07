@@ -105,7 +105,8 @@ describe("research inspection", () => {
 	})
 	it("does not call provisional or unfamiliar sources current", () => {
 		expect(sourceStatusText("provisional")).toBe("Reported source status: provisional")
-		expect(sourceStatusText("source_changed")).toContain("reload recommended")
+		expect(sourceStatusText("source_changed")).toBe("File changed on disk")
+		expect(sourceStatusText("source_changed")).not.toMatch(/reload/i)
 		expect(sourceStatusText("future_status")).toContain("future_status")
 	})
 	it("retains product and run identity for inspection, one row per fact", () => {

@@ -16,9 +16,9 @@ describe("screen harness registry", () => {
 	it("labels every map layer fixture as synthetic", () => {
 		for (const s of screens) {
 			for (const layer of s.layers ?? []) {
-				// A layer in the "file changed" state has its status taken by that state, so it is marked on its own key.
-				const status = layer.metadata.source_status === "source_changed" && layer.metadata.synthetic === "true"
-				expect(status ? "synthetic" : layer.metadata.source_status, `${s.id}/${layer.id}`).toBe("synthetic")
+				// A layer showing a file state (changed, unreadable, missing) has a real status; it is labelled by `fixture` instead.
+				const label = layer.metadata.fixture === "synthetic" ? "synthetic" : layer.metadata.source_status
+				expect(label, `${s.id}/${layer.id}`).toBe("synthetic")
 			}
 		}
 	})

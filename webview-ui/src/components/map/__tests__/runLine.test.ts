@@ -1,7 +1,6 @@
 import type { MapLayer } from "@shared/proto/cline/map"
 import { describe, expect, it } from "vitest"
-import { rowIndicators } from "../layerModel"
-import { changedAfterRun, hashMatch, openRunDisabledReason, runLineOf, showsRunIcon, useNewFileQuestion } from "../runLine"
+import { hashMatch, openRunDisabledReason, runLineOf, showsRunIcon } from "../runLine"
 
 const layer = (metadata: Record<string, string>): MapLayer =>
 	({ id: "x", name: "x", layerType: "polygon", visible: true, geojson: "", metadata }) as unknown as MapLayer
@@ -69,24 +68,5 @@ describe("the Run line", () => {
 	it("a matched file never overrides a layer's own run", () => {
 		const l = layer({ tool: "t", _run_id: "r1", study_id: "s1" })
 		expect(runLineOf(l, { rule: "manifest", sha256: "ab", studyId: "OTHER" }).kind).toBe("openable")
-	})
-})
-
-describe("a run-linked layer whose file changed", () => {
-	it("is in the changed state only with a run, and the row warning says the map still shows the run's result", () => {
-		const withRun = layer({ _run_id: "r1", study_id: "s1", tool: "t", source_status: "source_changed" })
-		const noRun = layer({ source: "user", source_status: "source_changed" })
-		expect(changedAfterRun(withRun)).toBe(true)
-		expect(changedAfterRun(noRun)).toBe(false)
-		expect(rowIndicators(withRun).warnings).toContain(
-			"The file changed after this run. The map still shows the run's result.",
-		)
-		expect(rowIndicators(noRun).warnings.join(" ")).not.toContain("after this run")
-	})
-
-	it("Use new file asks once, naming the link that goes", () => {
-		expect(useNewFileQuestion(layer({ _run_id: "ab12cd34" }))).toBe(
-			"Use the new file? The link to run ab12cd34 will be removed, because this content did not come from that run.",
-		)
 	})
 })

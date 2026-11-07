@@ -36,6 +36,7 @@ import { experimentFailed, experimentNoCi, experimentWithCi } from "./fixtures/e
 import {
 	basinPolygon,
 	featureLayers,
+	fileStateLayer,
 	fixturePins,
 	fixtureSketches,
 	fixtureTransectsJson,
@@ -1235,6 +1236,8 @@ export const screens: ScreenDef[] = [
 		onMessage: replayHost(replaySession),
 		render: app,
 		// No layer on the map came from the selected run, and the panel says so where the action would be.
+		// At 320 px the run detail sits below the timeline, so the screen scrolls to it first.
+		steps: [{ scroll: '[data-testid="replay-no-map-layer"]' }],
 		expectVisible: ['[data-testid="replay-no-map-layer"]'],
 	},
 	{
@@ -1453,15 +1456,78 @@ export const screens: ScreenDef[] = [
 			],
 		},
 	),
-	mapScreen("map-layers-run-changed", "Layers: the file changed after the run; the run stays and Use new file is offered", {
-		layers: runActionLayers(),
-		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("Basin, file edited")' }, { wait: 300 }],
-		expectVisible: [
-			'button[aria-label^="Warning for Basin, file edited"]',
-			'[aria-label="Run"]:has-text("The file changed after this run.")',
-			'[aria-label="Run"] button:has-text("Use new file")',
-			'button[aria-label="Open run for Basin, file edited"]',
+	// Slice 2: a layer follows its file; one with a run link only says the file changed.
+	mapScreen(
+		"map-layers-run-changed",
+		"Layers: a layer with a run whose file changed (warning, the run's result still shown, Use new file)",
+		{
+			layers: [fileStateLayer("run-changed")],
+			steps: [
+				...openTool("Layer manager"),
+				{ click: 'button.map-layer-name:has-text("flowlines_01031500")' },
+				{ wait: 300 },
+			],
+			expectVisible: [
+				'[data-source-note="changed"]',
+				"text=The file changed after this run.",
+				"text=The map still shows the run's result.",
+				'button.map-chip:has-text("Use new file")',
+				// Slice 3: the Run line stays above the note, and the row keeps its history icon.
+				'[aria-label="Run"]:has-text("extract_rivers · run dfetch.20261017.e2eproo.48d4b668")',
+				'button[aria-label="Open run for flowlines_01031500"]',
+			],
+			expectAbsent: ["text=Reload"],
+		},
+	),
+	mapScreen("map-layers-run-changed-confirm", "Layers: Use new file asks once what it removes", {
+		layers: [fileStateLayer("run-changed")],
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button.map-layer-name:has-text("flowlines_01031500")' },
+			{ click: 'button.map-chip:has-text("Use new file")' },
+			{ wait: 300 },
 		],
+		expectVisible: ['[role="alertdialog"][aria-label="Use the new file"]', "text=The link to run 48d4b668 will be removed"],
+	}),
+	mapScreen(
+		"map-layers-run-changed-no-copy",
+		"Layers: a changed file under a run, with no saved copy, does not claim the run's result is shown",
+		{
+			layers: [fileStateLayer("run-changed-no-copy")],
+			steps: [
+				...openTool("Layer manager"),
+				{ click: 'button.map-layer-name:has-text("flowlines_01031500")' },
+				{ wait: 300 },
+			],
+			expectVisible: ['[data-source-note="changed"]', "text=The map draws the file as it is now"],
+			expectAbsent: ["text=still shows"],
+		},
+	),
+	mapScreen("map-layers-file-updated", "Layers: a file layer that followed its file keeps a line saying when", {
+		layers: [fileStateLayer("updated")],
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("flowlines.geojson")' }, { wait: 300 }],
+		expectVisible: ['[data-source-note="updated"]', "text=Updated from the file on disk at"],
+		expectAbsent: ['button:has-text("Use new file")'],
+	}),
+	mapScreen("map-layers-file-unreadable", "Layers: the new version could not be read; the last good copy is shown", {
+		layers: [fileStateLayer("unreadable")],
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("flowlines.geojson")' }, { wait: 300 }],
+		expectVisible: ["text=Could not read the new version: Unexpected end of JSON input. Showing the last good copy."],
+	}),
+	mapScreen("map-layers-file-missing", "Layers: the file is gone; the last loaded copy is shown", {
+		layers: [fileStateLayer("missing")],
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("flowlines.geojson")' }, { wait: 300 }],
+		expectVisible: ["text=File not found: /fixture/data/flowlines.geojson. Showing the last loaded copy."],
+	}),
+	mapScreen("map-layers-file-changed-manual", "Layers: a layer that cannot follow its file says to load it again", {
+		layers: [fileStateLayer("manual")],
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("flowlines.geojson")' }, { wait: 300 }],
+		expectVisible: ["text=does not update by itself"],
+	}),
+	mapScreen("map-layers-file-not-watched", "Layers: a file outside the open folders is not watched, and the layer says so", {
+		layers: [fileStateLayer("unwatched")],
+		steps: [...openTool("Layer manager"), { click: 'button.map-layer-name:has-text("flowlines.geojson")' }, { wait: 300 }],
+		expectVisible: ['[data-source-note="not_watched"]', "text=Not watched: this file is outside the open folders"],
 	}),
 	mapScreen("map-layers-reference-group", "Layers: a reference layer under Reference data, not in any run", {
 		layers: [...featureLayers(), referenceGauges],

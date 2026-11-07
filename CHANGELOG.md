@@ -11,6 +11,32 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Layers slice 2: a layer follows its file (the watcher replaces Reload source)
+
+Design: `docs/vision-2040/findings/layers-design-2026-11-02.md` (section 7 Slice 2 and the Addendum).
+
+### Added
+
+- **A layer with no run follows its file.** A watcher on the file (the Project files watcher inside open folders, one non-recursive folder watcher outside them) updates the layer in place when the file changes: same id, name, style, visibility and place in the stack, and no camera move. The host reads the file once, hashes it, and the map parses exactly those bytes (`src/core/map/mapFileWatch.ts`, `refreshFromFile.ts`). The drawer keeps a lasting line, `Updated from the file on disk at <time>.`
+- **A layer with an evidence link never changes by itself.** Any of `_run_id`, `study_id`, `tool` or `claim_id` stops auto-update: the layer gets `source_changed` (a warning icon, `The file changed after this run. The map still shows the run's result.`) and **Use new file**, which asks once, then replaces the content and removes the link. A layer that holds no saved copy says the map draws the file as it is now.
+- A version that will not parse is tried once more after one second (a writer may be mid-write), then the layer says `Could not read the new version: <reason>. Showing the last good copy.` A file that is gone says `File not found: <path>. Showing the last loaded copy.`; delete-then-create and save-by-rename are waited out and never show as gone.
+- The look runs when the map opens (after the layers are restored) and whenever the panel is shown again (`onDidChangeViewState`), so a dropped watcher event is repaired by the next look. It also finds a file that changed while VS Code was closed, including the file of a tool's layer with an absolute path (the layer now records its size and time when the tool pushes it).
+- Never: reveal or open the panel (a check that finds it closed waits), watch a path the map may not load (`authorizeMapPath` with purpose `load`: a scene's path gets no watcher), or keep an older parse or preview of a file after the layer took a new version (the page drops its cached parse when the layer's size, time or hash changes, and the host drops the stored preview).
+- Screens: `map-layers-run-changed`, `-run-changed-confirm`, `-run-changed-no-copy`, `-file-updated`, `-file-unreadable`, `-file-missing`, `-file-changed-manual`.
+
+### Changed
+
+- New content under a link that is not a run (a study, a tool, a claim) now takes that link with it when the user chooses the new file; before, only `_run_id` did. New content also drops the preview made from the old content.
+- `FileScanner` reports every raw watcher event to listeners (`onFileEvent`); `Controller.refreshMapLayerFromFile` applies a refresh without a selection or focus event.
+
+### Removed
+
+- **Reload source**, the `aihydro-source-file-saved` webview message, `VscodeMapPanelProvider.notifyFileSaved` and the save hook in `extension.ts`. Saving a file in the editor reaches the map through the same watcher as any other write.
+
+### Not in this slice
+
+Raster layers are flagged, not re-read in place. A file outside the open folders that was loaded in an earlier session is not watched or flagged until it is added again (the grant is per session); its drawer says `Not watched: ...`. The Windows watcher was not run.
+
 ### Layers slice 3: Open run and Show on map are findable
 
 Design: `docs/vision-2040/findings/layers-design-2026-11-02.md` (section 3, and the Addendum, which overrides the body: a file reads `Not linked to a run` and a run is shown only on a layer that carries `_run_id`).
@@ -20,7 +46,6 @@ Design: `docs/vision-2040/findings/layers-design-2026-11-02.md` (section 3, and 
 - **A Run line is the first line of every layer's drawer**, above Opacity: `<tool> · run <id>` with an **Open run** button, `Run <id>. No study recorded, so it cannot open here.`, or `Not linked to a run`. The run is read from `_run_id` and nothing else: no tool name, folder, file name or path makes a run.
 - **Open run is always in the row menu.** Without a run it is shown off with the reason (`Not linked to a run`, or `No study recorded`), so the action can be found before it can be used. This reverses the old rule that a layer without a run showed no Open run item.
 - **A history icon on Results rows** whose study and run are both recorded, which opens the run.
-- **A changed file under a run** reads `The file changed after this run. The map still shows the run's result.` with **Use new file**, which asks once and says the link to the run is removed. It is built on the existing `source_status: source_changed` field; the watcher that sets it from outside the editor is separate work.
 - **Show on map from the run's side**: a globe on the claim chip itself, `No map layer from this claim's run.` in the claim details when there is none, and `Show on map (N)` or `This run has no layer on the map.` on the selected run in Replay (the Replay panel now answers `aihydro-show-on-map` too).
 
 ---

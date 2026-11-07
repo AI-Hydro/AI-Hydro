@@ -293,8 +293,8 @@ export const restoredLayers = (): MapLayer[] => {
 }
 
 /**
- * Run actions on the Layers panel (Slice 3): a file the user loaded (no run), a tool result that names its study and run,
- * and a tool result whose file changed after the run. Only a layer with `_run_id` shows a run.
+ * Run actions on the Layers panel (Slice 3): a file the user loaded (no run) and a tool result that names its study and
+ * run. Only a layer with `_run_id` shows a run.
  */
 export const runActionLayers = (): MapLayer[] => [
 	polygonLayer("ra-file", "watershed_01013500.geojson", { source: "user", source_path: "/fixture/watershed_01013500.geojson" }),
@@ -303,15 +303,6 @@ export const runActionLayers = (): MapLayer[] => [
 		_run_id: "run-ab12cd34.1",
 		study_id: "fx-study",
 		provenance_path: "/fixture/provenance/run-ab12cd34.json",
-	}),
-	polygonLayer("ra-changed", "Basin, file edited", {
-		tool: "delineate_watershed",
-		_run_id: "run-ab12cd34.2",
-		study_id: "fx-study",
-		provenance_path: "/fixture/provenance/run-ab12cd34.json",
-		source_path: "/fixture/basin_edited.geojson",
-		source_status: "source_changed",
-		synthetic: "true",
 	}),
 ]
 
@@ -499,6 +490,70 @@ export const workspaceFileLayer = (relativePath: string, workspaceFolder = "/fix
 		workspace_folder: workspaceFolder,
 	}),
 })
+
+/**
+ * A file layer after its file changed, was updated, could not be read, or went missing. These states are the real status
+ * values, so the layer's `source_status` cannot read "synthetic"; `fixture: "synthetic"` labels it instead (the registry test
+ * accepts either).
+ */
+export const fileStateLayer = (
+	state: "run-changed" | "run-changed-no-copy" | "updated" | "unreadable" | "missing" | "manual" | "unwatched",
+): MapLayer => {
+	const common = { fixture: "synthetic", source_path: "/fixture/data/flowlines.geojson", source_format: "geojson" }
+	switch (state) {
+		case "run-changed":
+		case "run-changed-no-copy":
+			return {
+				...polygonLayer(
+					"fs-run",
+					"flowlines_01031500",
+					{
+						...common,
+						tool: "extract_rivers",
+						_run_id: "dfetch.20261017.e2eproo.48d4b668",
+						study_id: "prj_FIXTURE",
+						provenance_path: "/fixture/provenance/fs-run.json",
+						source_status: "source_changed",
+					},
+					"#e31a1c",
+					state === "run-changed-no-copy" ? "" : basinPolygon.geojson,
+				),
+			}
+		case "updated":
+			return polygonLayer("fs-upd", "flowlines.geojson", {
+				...common,
+				source: "workspace",
+				source_status: "current",
+				source_updated_at_utc: "2026-11-07T14:03:09.000Z",
+			})
+		case "unreadable":
+			return polygonLayer("fs-bad", "flowlines.geojson", {
+				...common,
+				source: "workspace",
+				source_status: "source_unreadable",
+				source_error: "Unexpected end of JSON input",
+			})
+		case "missing":
+			return polygonLayer("fs-gone", "flowlines.geojson", {
+				...common,
+				source: "workspace",
+				source_status: "source_missing",
+			})
+		case "unwatched":
+			return polygonLayer("fs-unw", "flowlines.geojson", {
+				...common,
+				source: "user",
+				source_status: "current",
+				source_watch: "not_watched",
+			})
+		case "manual":
+			return polygonLayer("fs-man", "flowlines.geojson", {
+				...common,
+				source: "workspace",
+				source_status: "source_changed",
+			})
+	}
+}
 
 export const threeProjectFiles = (): PfFixtureFile[] => [
 	pfFile("data/huc8_boundaries.geojson", 1_240_000),

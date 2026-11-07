@@ -268,72 +268,19 @@ describe("LayerPanel", () => {
 		expect(within(noStudy).queryByRole("button", { name: "Open run" })).toBeNull()
 	})
 
-	it("a run-linked layer whose file changed keeps its run, warns, and asks once before Use new file", async () => {
-		loadEntries.mockClear()
-		loadEntries.mockResolvedValue({ loaded: 1, skipped: 0, errors: [] })
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(() => Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(["{}"])) })),
-		)
-		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation((message: any) => {
-			if (message.type === "aihydro-resolve-file-uri") {
-				window.dispatchEvent(
-					new MessageEvent("message", {
-						data: {
-							type: "aihydro-resolve-file-uri-result",
-							requestId: message.requestId,
-							ok: true,
-							uri: "vscode-resource://x",
-							name: "a.geojson",
-							path: "/w/a.geojson",
-						},
-					}),
-				)
-			}
-		})
+	it("a run-linked layer whose file changed keeps its run and its history icon; the file note is Slice 2's SourceNote, below the Run line", () => {
 		state.layers = [
 			poly("a", "edited", { source_path: "/w/a.geojson", study_id: "study-1", source_status: "source_changed" }),
 		]
 		render(<LayerPanelContent {...baseProps()} />)
 		expect(screen.getByRole("button", { name: "Open run for edited" })).toBeInTheDocument()
-		expect(screen.getByRole("button", { name: /^Warning for edited: The file changed after this run/ })).toBeInTheDocument()
 		fireEvent.click(screen.getByRole("button", { name: /^edited/ }))
-		const run = screen.getByRole("group", { name: "Run" })
-		expect(run).toHaveTextContent("The file changed after this run. The map still shows the run's result.")
+		const drawer = screen.getByRole("group", { name: /^Settings for edited/ })
+		const run = within(drawer).getByRole("group", { name: "Run" })
 		expect(run).toHaveTextContent("delineate_watershed · run run-7f3a.1")
-		// Nothing changes until the user confirms; Cancel leaves it as it was.
-		fireEvent.click(within(run).getByRole("button", { name: "Use new file" }))
-		const dialog = screen.getByRole("alertdialog", { name: "Confirm new file" })
-		expect(dialog).toHaveTextContent(
-			"The link to run run-7f3a.1 will be removed, because this content did not come from that run.",
-		)
-		expect(loadEntries).not.toHaveBeenCalled()
-		fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
-		expect(screen.queryByRole("alertdialog")).toBeNull()
-		expect(loadEntries).not.toHaveBeenCalled()
-		fireEvent.click(within(run).getByRole("button", { name: "Use new file" }))
-		fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Use new file" }))
-		await waitFor(() => expect(loadEntries).toHaveBeenCalledTimes(1))
-		expect(loadEntries.mock.calls[0][0][0].source.path).toBe("/w/a.geojson")
-		loadEntries.mockClear()
-		postMessage.mockRestore()
-		vi.unstubAllGlobals()
-	})
-
-	it("a layer with no run and a changed file offers no Use new file and shows no run", () => {
-		state.layers = [
-			poly("c", "a file", {
-				source: "user",
-				tool: "",
-				_run_id: "",
-				source_path: "/w/c.geojson",
-				source_status: "source_changed",
-			}),
-		]
-		render(<LayerPanelContent {...baseProps()} />)
-		fireEvent.click(screen.getByRole("button", { name: /^a file/ }))
-		expect(screen.queryByRole("button", { name: "Use new file" })).toBeNull()
-		expect(screen.queryByRole("button", { name: /^Open run for/ })).toBeNull()
+		expect(drawer.firstElementChild).toBe(run)
+		expect(run).not.toHaveTextContent("The file changed")
+		expect(drawer.querySelector('[data-source-note="changed"]')).not.toBeNull()
 	})
 
 	it("a reference layer with no study open sits under Reference data and says it is not in any run", () => {
@@ -400,40 +347,57 @@ describe("LayerPanel", () => {
 		postMessage.mockRestore()
 	})
 
-	it("Reload source loads the file by the absolute path the host found it at, not the relative spelling", async () => {
-		loadEntries.mockResolvedValue({ loaded: 1, skipped: 0, errors: [] })
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(() => Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob(["{}"])) })),
-		)
-		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation((message: any) => {
-			if (message.type === "aihydro-resolve-file-uri") {
-				expect(message.workspaceFolder).toBe("/proj")
-				expect(message.kind).toBe("project")
-				window.dispatchEvent(
-					new MessageEvent("message", {
-						data: {
-							type: "aihydro-resolve-file-uri-result",
-							requestId: message.requestId,
-							ok: true,
-							uri: "vscode-resource://x",
-							name: "a.geojson",
-							path: "/proj/a.geojson",
-						},
-					}),
-				)
-			}
-		})
+	it("the row menu of a file layer has no Reload source: the layer follows its file by itself", () => {
 		state.layers = [
 			poly("w", "a.geojson", { source: "workspace", path: "a.geojson", workspace_folder: "/proj", tool: "", _run_id: "" }),
 		]
 		render(<LayerPanelContent {...baseProps()} />)
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for a\.geojson/ }))
-		fireEvent.click(screen.getByRole("menuitem", { name: "Reload source" }))
-		await waitFor(() => expect(loadEntries).toHaveBeenCalledTimes(1))
-		expect(loadEntries.mock.calls[0][0][0].source.path).toBe("/proj/a.geojson")
+		expect(screen.getByRole("menuitem", { name: "Open file" })).toBeInTheDocument()
+		expect(screen.queryByRole("menuitem", { name: /Reload/ })).toBeNull()
+	})
+
+	it("a layer that changed under a run says so, offers Use new file, and asks before it posts anything", () => {
+		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation(() => {})
+		state.layers = [
+			poly("w", "flow.geojson", {
+				source_path: "/proj/flow.geojson",
+				source_status: "source_changed",
+				_run_id: "dfetch.1.2.ab12cd34",
+			}),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByText("flow.geojson"))
+		const note = document.querySelector('[data-source-note="changed"]') as HTMLElement
+		expect(note.textContent).toContain("The file changed after this run.")
+		expect(note.textContent).toContain("The map still shows the run's result.")
+		fireEvent.click(within(note).getByRole("button", { name: "Use new file" }))
+		expect(postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "aihydro-map-use-new-file" }))
+		expect(screen.getByRole("alertdialog", { name: "Use the new file" }).textContent).toContain(
+			"The link to run ab12cd34 will be removed",
+		)
+		fireEvent.click(
+			within(screen.getByRole("alertdialog", { name: "Use the new file" })).getByRole("button", { name: "Use new file" }),
+		)
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-map-use-new-file", layerId: "w" })
 		postMessage.mockRestore()
-		vi.unstubAllGlobals()
+	})
+
+	it("an unlinked layer that followed its file keeps a line saying so, and no button", () => {
+		state.layers = [
+			poly("w", "a.geojson", {
+				source_path: "/proj/a.geojson",
+				source_updated_at_utc: "2026-11-07T10:00:00.000Z",
+				tool: "",
+				_run_id: "",
+				provenance_path: "",
+			}),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		fireEvent.click(screen.getByText("a.geojson"))
+		const note = document.querySelector('[data-source-note="updated"]') as HTMLElement
+		expect(note.textContent).toMatch(/^Updated from the file on disk at /)
+		expect(within(note).queryByRole("button")).toBeNull()
 	})
 
 	it("Move up is disabled with its reason on the layer on top of the map", () => {
@@ -505,7 +469,6 @@ describe("LayerPanel", () => {
 		const list = screen.getByRole("list", { name: "Warnings" })
 		expect(list).toHaveTextContent("Rendering a preview: 10 of 500")
 		expect(list).toHaveTextContent("Auto-simplified")
-		// This layer names a run, so the warning is the run-linked one.
 		expect(list).toHaveTextContent("The file changed after this run")
 	})
 

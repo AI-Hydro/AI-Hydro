@@ -2,6 +2,7 @@ import type { Controller } from "@core/controller"
 import * as vscode from "vscode"
 import { LatestResearchRequest, readResearchSnapshot } from "@/integrations/aihydro-session/researchSnapshot"
 import { listSessionIds, loadReplaySurface } from "@/integrations/aihydro-session/sessionSurfaces"
+import { handleReplayShowOnMap } from "./replayShowOnMap"
 
 /**
  * Owns the single AI-Hydro Session Replay webview panel.
@@ -151,14 +152,11 @@ export class VscodeReplayProvider {
 						break
 					case "aihydro-show-on-map": {
 						// "Show on map" in the selected run's header: the webview sends run ids; the host finds the layers.
-						// The main controller owns the map, so the same handler the chat uses answers here.
-						if (mainWebview) {
-							const { showRunsOnMap } = require("@core/map/showOnMap")
-							const result = await showRunsOnMap(mainWebview.controller, message.run_ids)
-							if (!result.ok) {
-								void vscode.window.showInformationMessage("No layer on the map came from that run.")
-							}
-						}
+						const { showRunsOnMap } = require("@core/map/showOnMap")
+						await handleReplayShowOnMap(mainWebview?.controller, message.run_ids, {
+							show: showRunsOnMap,
+							notify: (text) => void vscode.window.showInformationMessage(text),
+						})
 						break
 					}
 					case "load_replay":

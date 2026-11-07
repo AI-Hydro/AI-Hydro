@@ -27,7 +27,6 @@ import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useMapContext } from "../../context/MapContext"
 import { FileServiceClient, MapServiceClient } from "../../services/grpc-client"
 import { type FocusHandoff, startFocusHandoff } from "./focusHandoff"
-import { loadAndPushFileEntries } from "./formats"
 import { rasterCache } from "./formats/rasterCache"
 import GraduatedSymbologyEditor from "./GraduatedSymbologyEditor"
 import { LayerRow } from "./LayerRow"
@@ -50,8 +49,8 @@ import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { ProjectFilesSection } from "./ProjectFilesSection"
 import { type FolderRef, fileResolved, layerOfFile, layersByFile, notOnMap, WEBVIEW_PARSED } from "./projectFilesModel"
 import { RunLineView } from "./RunLineView"
-import { resolveFileUri } from "./resolveFileUri"
-import { openRunDisabledReason, showsRunIcon, useNewFileQuestion } from "./runLine"
+import { openRunDisabledReason, showsRunIcon } from "./runLine"
+import { SourceNote } from "./SourceNote"
 import { SymbologyEditor } from "./SymbologyEditor"
 import { restoredLayersNote, useProjectFiles } from "./WorkspaceFilesSection"
 
@@ -200,9 +199,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [drawer, setDrawer] = useState<DrawerView>(CLOSED_DRAWER)
 	const [symbologyMode, setSymbologyMode] = useState<"basic" | "graduated">("basic")
-	const [confirm, setConfirm] = useState<
-		null | { kind: "all" } | { kind: "duplicates"; names: string[] } | { kind: "new-file"; layer: MapLayer; name: string }
-	>(null)
+	const [confirm, setConfirm] = useState<null | { kind: "all" } | { kind: "duplicates"; names: string[] }>(null)
 	const [loadStatus, setLoadStatus] = useState<{
 		kind: "idle" | "ok" | "err"
 		msg: string
@@ -395,57 +392,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		} catch (err) {
 			say("err", err instanceof Error ? err.message : "Save failed", 6000)
 		}
-	}
-
-	const handleReloadSource = async (layer: MapLayer, displayName: string) => {
-		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
-		if (!sourcePath) {
-			say("err", "No source file path recorded for this layer.", 5000)
-			return
-		}
-		say("idle", `Reloading ${displayName}…`, 15_000)
-		try {
-			const resolved = await resolveFileUri(sourcePath, {
-				workspaceFolder: layer.metadata?.workspace_folder,
-				kind: "project",
-			})
-			// One file has one path: the absolute one the host found it at, whatever spelling the layer stored.
-			const absolutePath = resolved.path ?? sourcePath
-			const response = await fetch(resolved.uri)
-			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}`)
-			}
-			const blob = await response.blob()
-			const file = new File([blob], resolved.name)
-			const result = await loadAndPushFileEntries([
-				{
-					file,
-					source: {
-						path: absolutePath,
-						uri: layer.metadata?.source_uri,
-						displayPath: layer.metadata?.source_display_path ?? sourcePath,
-						format: layer.metadata?.source_format ?? layer.metadata?.format,
-					},
-				},
-			])
-			if (result.loaded > 0) {
-				// The host says what happened (the file changed, or it is unchanged and already on the map).
-				say("ok", `Reload finished for ${displayName}.`, 5000)
-			} else {
-				say("err", result.errors[0] ?? "Reload failed.", 6000)
-			}
-		} catch (err) {
-			say("err", err instanceof Error ? err.message : "Reload failed.", 6000)
-		}
-	}
-
-	/**
-	 * Take the changed file for a run-linked layer. The host drops the run link when the content differs (`planMerge`
-	 * keeps `_prior_run_id`), which is why this asks first.
-	 */
-	const handleUseNewFile = async (layer: MapLayer, displayName: string) => {
-		setConfirm(null)
-		await handleReloadSource(layer, displayName)
 	}
 
 	// ── removal, with undo ────────────────────────────────────────────────
@@ -920,12 +866,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				icon: "go-to-file",
 				onSelect: () => openSourceFile(sourcePath, layer.metadata?.workspace_folder),
 			},
-			!!sourcePath && {
-				key: "reload",
-				label: "Reload source",
-				icon: "refresh",
-				onSelect: () => void handleReloadSource(layer, displayName),
-			},
 			// Always listed, so a user learns the action exists; without a run it says why it is off.
 			{
 				key: "open-run",
@@ -1037,15 +977,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const border = "var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
 		return (
 			<div aria-label={`Settings for ${displayName}`} className="map-layer-drawer" role="group">
-				<RunLineView
-					layer={layer}
-					onOpenRun={() => openRun(layer)}
-					onUseNewFile={
-						layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
-							? () => setConfirm({ kind: "new-file", layer, name: displayName })
-							: undefined
-					}
-				/>
+				<RunLineView layer={layer} onOpenRun={() => openRun(layer)} />
 				<label className="map-layer-opacity" htmlFor={`map-layer-opacity-${layer.id}`}>
 					<span>Opacity</span>
 					<input
@@ -1061,6 +993,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 					<output>{Math.round(opacity * 100)}%</output>
 				</label>
 				{!visible && <div className="map-layer-hint">Hidden. Show the layer to change its opacity.</div>}
+				<SourceNote layer={layer} />
 				<div className="map-layer-drawer__actions">
 					<button
 						aria-pressed={drawer.style}
@@ -1384,28 +1317,17 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 			)}
 
 			{confirm && (
-				<div
-					aria-label={confirm.kind === "new-file" ? "Confirm new file" : "Confirm removal"}
-					className="map-layers__confirm"
-					role="alertdialog">
+				<div aria-label="Confirm removal" className="map-layers__confirm" role="alertdialog">
 					<span>
 						{confirm.kind === "all"
 							? `Remove all ${layers.length} layers from the map?`
-							: confirm.kind === "new-file"
-								? useNewFileQuestion(confirm.layer)
-								: `Remove ${confirm.names.length} duplicate layer${confirm.names.length === 1 ? "" : "s"}? One copy of each stays: ${confirm.names.join(", ")}.`}
+							: `Remove ${confirm.names.length} duplicate layer${confirm.names.length === 1 ? "" : "s"}? One copy of each stays: ${confirm.names.join(", ")}.`}
 					</span>
 					<button
 						className="map-chip map-chip--danger"
-						onClick={() =>
-							void (confirm.kind === "all"
-								? handleClearAll()
-								: confirm.kind === "new-file"
-									? handleUseNewFile(confirm.layer, confirm.name)
-									: handleRemoveDuplicates())
-						}
+						onClick={() => void (confirm.kind === "all" ? handleClearAll() : handleRemoveDuplicates())}
 						type="button">
-						{confirm.kind === "new-file" ? "Use new file" : "Remove"}
+						Remove
 					</button>
 					<button className="map-chip" onClick={() => setConfirm(null)} type="button">
 						Cancel

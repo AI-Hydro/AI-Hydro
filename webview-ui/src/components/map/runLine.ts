@@ -7,9 +7,7 @@
 
 import { layerRunId, layerTool, NO_RUN_RECORD } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
-import { CHANGED_AFTER_RUN, originOf } from "./layerModel"
-
-export { CHANGED_AFTER_RUN }
+import { originOf } from "./layerModel"
 
 /** What a lookup by file content said about a file with no run link (the host's `study/by-artifact` answer). */
 export interface FileRunLookup {
@@ -53,16 +51,6 @@ export function openRunDisabledReason(layer: MapLayer): string | undefined {
 	const line = runLineOf(layer)
 	if (line.kind === "openable") return undefined
 	return line.kind === "no-study" ? "No study recorded" : NO_RUN_RECORD
-}
-
-/** A run-linked layer whose file changed after the run: the map still shows the run's result. */
-export function changedAfterRun(layer: MapLayer): boolean {
-	return !!layerRunId(layer.metadata) && layer.metadata?.source_status === "source_changed"
-}
-
-/** The question `Use new file` asks once. The link goes, because the new content did not come from the run. */
-export function useNewFileQuestion(layer: MapLayer): string {
-	return `Use the new file? The link to run ${layerRunId(layer.metadata) ?? ""} will be removed, because this content did not come from that run.`
 }
 
 /** Whether the row shows the history icon: Results rows only, and only when the run can open. */
