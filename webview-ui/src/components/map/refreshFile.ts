@@ -29,7 +29,7 @@ export interface RefreshFileResult {
 	requestId: string
 	layerId: string
 	ok: boolean
-	reason?: "changed_while_reading" | "unsupported" | "parse"
+	reason?: "changed_while_reading" | "unsupported" | "parse" | "unverified"
 	message?: string
 	geojson?: string
 	metadata?: Record<string, string>
@@ -37,7 +37,7 @@ export interface RefreshFileResult {
 
 export interface RefreshIo {
 	fetchBytes: (uri: string) => Promise<Uint8Array>
-	/** Hex sha256 of the bytes, or undefined where the page has no crypto (the size check alone then applies). */
+	/** Hex sha256 of the bytes, or undefined where the page has no crypto (the bytes then cannot be verified and are not parsed). */
 	sha256: (bytes: Uint8Array) => Promise<string | undefined>
 	load: typeof loadFile
 	post: (message: RefreshFileResult) => void
@@ -87,8 +87,22 @@ export async function answerRefreshRequest(request: RefreshFileRequest, io: Refr
 		return
 	}
 	// The bytes parsed must be the bytes the host hashed: a rewrite of the same length is still a different file.
-	const same = bytes.length === request.sizeBytes && ((await io.sha256(bytes)) ?? request.sha256) === request.sha256
-	if (!same) {
+	if (bytes.length !== request.sizeBytes) {
+		io.post({ ...base, ok: false, reason: "changed_while_reading" })
+		return
+	}
+	const digest = await io.sha256(bytes)
+	if (digest === undefined) {
+		// No way to check the bytes against the host's hash: fail closed rather than parse bytes that may not be the ones hashed.
+		io.post({
+			...base,
+			ok: false,
+			reason: "unverified",
+			message: "Could not verify the file: this page cannot compute its hash.",
+		})
+		return
+	}
+	if (digest !== request.sha256) {
 		io.post({ ...base, ok: false, reason: "changed_while_reading" })
 		return
 	}
