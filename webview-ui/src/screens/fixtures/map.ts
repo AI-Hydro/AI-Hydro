@@ -292,6 +292,20 @@ export const restoredLayers = (): MapLayer[] => {
 	]
 }
 
+/**
+ * Run actions on the Layers panel (Slice 3): a file the user loaded (no run) and a tool result that names its study and
+ * run. Only a layer with `_run_id` shows a run.
+ */
+export const runActionLayers = (): MapLayer[] => [
+	polygonLayer("ra-file", "watershed_01013500.geojson", { source: "user", source_path: "/fixture/watershed_01013500.geojson" }),
+	polygonLayer("ra-run", "Basin from delineate_watershed", {
+		tool: "delineate_watershed",
+		_run_id: "run-ab12cd34.1",
+		study_id: "fx-study",
+		provenance_path: "/fixture/provenance/run-ab12cd34.json",
+	}),
+]
+
 /** A busy session: tool output, workspace files and files the user loaded, with one duplicated run. */
 export const manyLayers = (): MapLayer[] => {
 	const tool = (i: number, name: string, over: Record<string, string> = {}, id = `ml-t${i}`) =>

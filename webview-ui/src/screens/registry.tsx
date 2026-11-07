@@ -49,6 +49,7 @@ import {
 	pfFile,
 	referenceGauges,
 	restoredLayers,
+	runActionLayers,
 	TRANSECTS_STORAGE_KEY,
 	threeProjectFiles,
 	workspaceFileLayer,
@@ -1234,6 +1235,10 @@ export const screens: ScreenDef[] = [
 		flags: [REPLAY],
 		onMessage: replayHost(replaySession),
 		render: app,
+		// No layer on the map came from the selected run, and the panel says so where the action would be.
+		// At 320 px the run detail sits below the timeline, so the screen scrolls to it first.
+		steps: [{ scroll: '[data-testid="replay-no-map-layer"]' }],
+		expectVisible: ['[data-testid="replay-no-map-layer"]'],
 	},
 	{
 		id: "replay-capsule",
@@ -1416,6 +1421,41 @@ export const screens: ScreenDef[] = [
 		steps: [...openTool("Layer manager"), { click: 'button[aria-label^="Actions for Synthetic gauge"]' }, { wait: 300 }],
 		expectVisible: ['[role="menu"]', '[role="menuitem"]:has-text("Open run")'],
 	}),
+	// Findable run actions (Slice 3): the Run line is the first line of the drawer and Open run is always in the menu.
+	mapScreen("map-layers-no-run-drawer", "Layers: a file with no run says so on the Run line; Open run is listed but off", {
+		layers: runActionLayers(),
+		steps: [
+			...openTool("Layer manager"),
+			{ click: 'button.map-layer-name:has-text("watershed_01013500.geojson")' },
+			{ click: 'button[aria-label^="Actions for watershed_01013500.geojson"]' },
+			{ wait: 300 },
+		],
+		expectVisible: [
+			'[aria-label="Run"]:has-text("Not linked to a run")',
+			'[role="menuitem"][aria-disabled="true"]:has-text("Open run")',
+		],
+		expectAbsent: [
+			'[aria-label="Run"] button:has-text("Open run")',
+			'button[aria-label="Open run for watershed_01013500.geojson"]',
+		],
+	}),
+	mapScreen(
+		"map-layers-run-drawer",
+		"Layers: a result names its run in the drawer with Open run, and a history icon on the row",
+		{
+			layers: runActionLayers(),
+			steps: [
+				...openTool("Layer manager"),
+				{ click: 'button.map-layer-name:has-text("Basin from delineate_watershed")' },
+				{ wait: 300 },
+			],
+			expectVisible: [
+				'[aria-label="Run"]:has-text("delineate_watershed · run run-ab12cd34.1")',
+				'[aria-label="Run"] button:has-text("Open run")',
+				'button[aria-label="Open run for Basin from delineate_watershed"]',
+			],
+		},
+	),
 	// Slice 2: a layer follows its file; one with a run link only says the file changed.
 	mapScreen(
 		"map-layers-run-changed",
@@ -1432,6 +1472,9 @@ export const screens: ScreenDef[] = [
 				"text=The file changed after this run.",
 				"text=The map still shows the run's result.",
 				'button.map-chip:has-text("Use new file")',
+				// Slice 3: the Run line stays above the note, and the row keeps its history icon.
+				'[aria-label="Run"]:has-text("extract_rivers · run dfetch.20261017.e2eproo.48d4b668")',
+				'button[aria-label="Open run for flowlines_01031500"]',
 			],
 			expectAbsent: ["text=Reload"],
 		},

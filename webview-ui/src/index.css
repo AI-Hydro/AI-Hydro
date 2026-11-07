@@ -3523,6 +3523,23 @@ vscode-dropdown::part(listbox) {
 	font-size: var(--aih-text-caption, 11px);
 	color: var(--vscode-descriptionForeground);
 }
+.map-layer-run {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	color: var(--vscode-descriptionForeground);
+}
+.map-layer-run__line {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+.map-layer-run__text {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
 .map-layer-drawer__actions {
 	display: flex;
 	flex-wrap: wrap;

@@ -48,6 +48,8 @@ import { loadMapWorkspace, saveMapWorkspace } from "./mapWorkspace"
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { ProjectFilesSection } from "./ProjectFilesSection"
 import { type FolderRef, fileResolved, layerOfFile, layersByFile, notOnMap, WEBVIEW_PARSED } from "./projectFilesModel"
+import { RunLineView } from "./RunLineView"
+import { openRunDisabledReason, showsRunIcon } from "./runLine"
 import { SourceNote } from "./SourceNote"
 import { SymbologyEditor } from "./SymbologyEditor"
 import { restoredLayersNote, useProjectFiles } from "./WorkspaceFilesSection"
@@ -832,7 +834,6 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 	const menuFor = (layer: MapLayer, displayName: string): OverflowItem[] => {
 		const isRaster = layer.layerType === "raster"
 		const sourcePath = layer.metadata?.source_path || layer.metadata?.path || layer.metadata?.raster_source_path
-		const openable = openableRun(layer)
 		const rank = displayIds.indexOf(layer.id)
 		// A file in the Project files tree (listed, or removed from the list) can be unloaded and loaded again from there.
 		// A layer with no such row (an inline layer, a file outside the project) can only be removed.
@@ -865,10 +866,12 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 				icon: "go-to-file",
 				onSelect: () => openSourceFile(sourcePath, layer.metadata?.workspace_folder),
 			},
-			!!openable && {
+			// Always listed, so a user learns the action exists; without a run it says why it is off.
+			{
 				key: "open-run",
 				label: "Open run",
 				icon: "history",
+				disabledReason: openRunDisabledReason(layer),
 				onSelect: () => openRun(layer),
 			},
 			{ key: "d4", divider: true },
@@ -974,6 +977,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 		const border = "var(--vscode-editorWidget-border, rgba(128,128,128,0.35))"
 		return (
 			<div aria-label={`Settings for ${displayName}`} className="map-layer-drawer" role="group">
+				<RunLineView layer={layer} onOpenRun={() => openRun(layer)} />
 				<label className="map-layer-opacity" htmlFor={`map-layer-opacity-${layer.id}`}>
 					<span>Opacity</span>
 					<input
@@ -1239,6 +1243,7 @@ export const LayerPanelContent: React.FC<LayerPanelContentProps> = ({
 															setDrag({ id: layer.id })
 														}}
 														onDrop={(e) => onRowDrop(e, layer)}
+														onOpenRun={showsRunIcon(layer) ? () => openRun(layer) : undefined}
 														onRenameCancel={() => {
 															setRenamingId(null)
 															setRenameDraft("")

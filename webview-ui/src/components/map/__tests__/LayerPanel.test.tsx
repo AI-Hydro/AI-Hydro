@@ -206,27 +206,81 @@ describe("LayerPanel", () => {
 		expect(writeText).toHaveBeenCalledWith("delineate_watershed")
 	})
 
-	it("Open run is a menu item and a Details button only when the layer names its study and run, and it asks the host", () => {
+	it("Open run is always in the menu: active with a study and run, off with the reason otherwise; the drawer's Run line carries the button", () => {
 		const postMessage = vi.spyOn(PLATFORM_CONFIG, "postMessage").mockImplementation(() => {})
 		state.layers = [
 			poly("a", "with run", { source_path: "/w/a.geojson", study_id: "study-1" }),
 			poly("b", "no study", { _run_id: "run-9.1" }),
+			poly("c", "a file", { source: "user", tool: "", _run_id: "" }),
 		]
 		render(<LayerPanelContent {...baseProps()} />)
+		// A layer that names a run but no study: listed, off, and says why.
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for no study/ }))
-		expect(screen.queryByRole("menuitem", { name: "Open run" })).toBeNull()
+		const noStudy = screen.getByRole("menuitem", { name: /Open run/ })
+		expect(noStudy).toHaveAttribute("aria-disabled", "true")
+		expect(noStudy).toHaveTextContent("No study recorded")
+		fireEvent.click(noStudy)
+		expect(postMessage).not.toHaveBeenCalled()
 		fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" })
+		// A file with no run: listed, off, "Not linked to a run".
+		fireEvent.click(screen.getByRole("button", { name: /^Actions for a file/ }))
+		const none = screen.getByRole("menuitem", { name: /Open run/ })
+		expect(none).toHaveAttribute("aria-disabled", "true")
+		expect(none).toHaveAttribute("title", "Open run (Not linked to a run)")
+		fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" })
+		// A layer that names its study and run: active, and it asks the host.
 		fireEvent.click(screen.getByRole("button", { name: /^Actions for with run/ }))
 		expect(within(screen.getByRole("menu")).getAllByRole("menuitem").length).toBeLessThanOrEqual(9)
-		fireEvent.click(screen.getByRole("menuitem", { name: "Open run" }))
+		const active = screen.getByRole("menuitem", { name: "Open run" })
+		expect(active).not.toHaveAttribute("aria-disabled")
+		fireEvent.click(active)
 		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-map-open-run", study_id: "study-1", run_id: "run-7f3a.1" })
 		postMessage.mockClear()
-		fireEvent.click(screen.getByRole("button", { name: /^with run/ }))
-		fireEvent.click(screen.getByRole("button", { name: "Details" }))
-		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
-		fireEvent.click(screen.getByRole("button", { name: "Open run" }))
+		// The row's history icon and the Run line in the drawer do the same.
+		fireEvent.click(screen.getByRole("button", { name: "Open run for with run" }))
 		expect(postMessage).toHaveBeenCalledTimes(1)
+		fireEvent.click(screen.getByRole("button", { name: /^with run/ }))
+		const run = screen.getByRole("group", { name: "Run" })
+		expect(run).toHaveTextContent("delineate_watershed · run run-7f3a.1")
+		fireEvent.click(within(run).getByRole("button", { name: "Open run" }))
+		expect(postMessage).toHaveBeenCalledTimes(2)
 		postMessage.mockRestore()
+	})
+
+	it("the Run line is the drawer's first line; a layer without a run shows no run, no history icon and no Open run button", () => {
+		state.layers = [
+			poly("b", "no study", { _run_id: "run-9.1" }),
+			poly("c", "a file", { source: "user", tool: "", _run_id: "" }),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		// Only a Results row whose run can open gets the history icon.
+		expect(screen.queryByRole("button", { name: /^Open run for/ })).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: /^a file/ }))
+		const drawer = screen.getByRole("group", { name: /^Settings for a file/ })
+		expect(drawer.firstElementChild).toBe(within(drawer).getByRole("group", { name: "Run" }))
+		expect(within(drawer).getByRole("group", { name: "Run" })).toHaveTextContent("Not linked to a run")
+		expect(within(drawer).queryByRole("button", { name: "Open run" })).toBeNull()
+		fireEvent.click(screen.getByRole("button", { name: /^no study/ }))
+		const noStudy = screen.getByRole("group", { name: /^Settings for no study/ })
+		expect(within(noStudy).getByRole("group", { name: "Run" })).toHaveTextContent(
+			"Run run-9.1. No study recorded, so it cannot open here.",
+		)
+		expect(within(noStudy).queryByRole("button", { name: "Open run" })).toBeNull()
+	})
+
+	it("a run-linked layer whose file changed keeps its run and its history icon; the file note is Slice 2's SourceNote, below the Run line", () => {
+		state.layers = [
+			poly("a", "edited", { source_path: "/w/a.geojson", study_id: "study-1", source_status: "source_changed" }),
+		]
+		render(<LayerPanelContent {...baseProps()} />)
+		expect(screen.getByRole("button", { name: "Open run for edited" })).toBeInTheDocument()
+		fireEvent.click(screen.getByRole("button", { name: /^edited/ }))
+		const drawer = screen.getByRole("group", { name: /^Settings for edited/ })
+		const run = within(drawer).getByRole("group", { name: "Run" })
+		expect(run).toHaveTextContent("delineate_watershed · run run-7f3a.1")
+		expect(drawer.firstElementChild).toBe(run)
+		expect(run).not.toHaveTextContent("The file changed")
+		expect(drawer.querySelector('[data-source-note="changed"]')).not.toBeNull()
 	})
 
 	it("a reference layer with no study open sits under Reference data and says it is not in any run", () => {
@@ -237,7 +291,7 @@ describe("LayerPanel", () => {
 		fireEvent.click(screen.getByRole("button", { name: /^NWIS gauges/ }))
 		fireEvent.click(screen.getByRole("button", { name: "Details" }))
 		fireEvent.click(screen.getByRole("button", { name: "Provenance" }))
-		expect(screen.getByText(/Reference, not in any run/)).toBeInTheDocument()
+		expect(screen.getAllByText(/Reference, not in any run/).length).toBeGreaterThan(0)
 		expect(screen.queryByRole("button", { name: "Open run" })).toBeNull()
 	})
 

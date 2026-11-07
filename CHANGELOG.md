@@ -37,6 +37,17 @@ Design: `docs/vision-2040/findings/layers-design-2026-11-02.md` (section 7 Slice
 
 Raster layers are flagged, not re-read in place. A file outside the open folders that was loaded in an earlier session is not watched or flagged until it is added again (the grant is per session); its drawer says `Not watched: ...`. The Windows watcher was not run.
 
+### Layers slice 3: Open run and Show on map are findable
+
+Design: `docs/vision-2040/findings/layers-design-2026-11-02.md` (section 3, and the Addendum, which overrides the body: a file reads `Not linked to a run` and a run is shown only on a layer that carries `_run_id`).
+
+### Added
+
+- **A Run line is the first line of every layer's drawer**, above Opacity: `<tool> · run <id>` with an **Open run** button, `Run <id>. No study recorded, so it cannot open here.`, or `Not linked to a run`. The run is read from `_run_id` and nothing else: no tool name, folder, file name or path makes a run.
+- **Open run is always in the row menu.** Without a run it is shown off with the reason (`Not linked to a run`, or `No study recorded`), so the action can be found before it can be used. This reverses the old rule that a layer without a run showed no Open run item.
+- **A history icon on Results rows** whose study and run are both recorded, which opens the run.
+- **Show on map from the run's side**: a globe on the claim chip itself, `No map layer from this claim's run.` in the claim details when there is none, and `Show on map (N)` or `This run has no layer on the map.` on the selected run in Replay (the Replay panel now answers `aihydro-show-on-map` too).
+
 ---
 
 ## [0.4.9] - 2026-11-06

@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { checkStatusToken, NEUTRAL_TOKEN } from "../../design/approvalPresentation"
 import { evidenceState } from "../../design/evidenceStates"
+import { useRunLayers } from "../map/layersOfRuns"
 
 interface QualityFlag {
 	validator: string
@@ -175,6 +176,25 @@ const RunListRow: React.FC<{
 	)
 }
 
+/** The pair of Open run: the layer goes to its run, and the run comes back to its layer. Says so when it has none. */
+const ShowOnMap: React.FC<{ runId: string }> = ({ runId }) => {
+	const onMap = useRunLayers([runId])
+	if (onMap.count === 0) {
+		return (
+			<p className="mb-3 text-[var(--vscode-descriptionForeground)]" data-testid="replay-no-map-layer">
+				This run has no layer on the map.
+			</p>
+		)
+	}
+	return (
+		<div className="mb-3">
+			<button className={BUTTON_BASE} onClick={onMap.show} type="button">
+				<span aria-hidden="true" className="codicon codicon-globe" /> Show on map ({onMap.count})
+			</button>
+		</div>
+	)
+}
+
 const RunDetail: React.FC<{ entry: RunEntry | null; data: ReplayData }> = ({ entry, data }) => {
 	if (!entry) {
 		return (
@@ -206,6 +226,8 @@ const RunDetail: React.FC<{ entry: RunEntry | null; data: ReplayData }> = ({ ent
 					Copy provenance
 				</button>
 			</div>
+
+			<ShowOnMap runId={entry.run_id} />
 
 			<div className="grid grid-cols-3 gap-2 mb-3">
 				<div className="rounded border border-[var(--vscode-panel-border)] px-2 py-1">

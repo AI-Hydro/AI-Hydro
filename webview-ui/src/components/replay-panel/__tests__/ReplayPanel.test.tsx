@@ -2,8 +2,16 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ReplayPanel } from "../ReplayPanel"
 
-vi.mock("@/config/platform.config", () => ({ PLATFORM_CONFIG: { postMessage: vi.fn() } }))
-afterEach(cleanup)
+const postMessage = vi.hoisted(() => vi.fn())
+const mapLayers = vi.hoisted(() => ({ layers: [] as unknown[] }))
+vi.mock("@/config/platform.config", () => ({ PLATFORM_CONFIG: { postMessage } }))
+vi.mock("../../../config/platform.config", () => ({ PLATFORM_CONFIG: { postMessage } }))
+vi.mock("../../../context/MapContext", () => ({ useOptionalMapLayers: () => mapLayers.layers }))
+afterEach(() => {
+	cleanup()
+	mapLayers.layers = []
+	postMessage.mockClear()
+})
 
 function showRun(evidence: Record<string, unknown>, timestamp = "2026-01-01T12:00:00+05:30") {
 	render(<ReplayPanel />)
@@ -233,5 +241,25 @@ describe("Replay: arrow keys are scoped to the run timeline", () => {
 		showTwoRuns()
 		fireEvent.keyDown(screen.getByPlaceholderText(/Filter by tool/), { key: "Escape" })
 		expect(selectedTitle()).toBe("r1")
+	})
+})
+
+describe("Replay: Show on map for the selected run", () => {
+	it("offers Show on map (N) when layers on the map came from the run, and asks the host for exactly that run", () => {
+		mapLayers.layers = [
+			{ id: "l1", metadata: { _run_id: "actual-run-id" } },
+			{ id: "l2", metadata: { _run_id: "other" } },
+		]
+		showRun({ quality_flags: [] })
+		fireEvent.click(screen.getByRole("button", { name: /Show on map \(1\)/ }))
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-show-on-map", run_ids: ["actual-run-id"] })
+		expect(screen.queryByTestId("replay-no-map-layer")).toBeNull()
+	})
+
+	it("says so, quietly, when the run has no layer on the map", () => {
+		mapLayers.layers = [{ id: "l2", metadata: { _run_id: "other" } }]
+		showRun({ quality_flags: [] })
+		expect(screen.getByTestId("replay-no-map-layer")).toHaveTextContent("This run has no layer on the map.")
+		expect(screen.queryByRole("button", { name: /Show on map/ })).toBeNull()
 	})
 })
