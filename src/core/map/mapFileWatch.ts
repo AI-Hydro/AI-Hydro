@@ -141,6 +141,28 @@ export function watchedPathOf(layer: WatchableLayer): string | undefined {
 	return p && (p.startsWith("/") || /^[A-Za-z]:\//.test(p)) ? p : undefined
 }
 
+/**
+ * The same file as `watchedPathOf`, spelled as the file system spells it (native separators, original case). The
+ * comparable form is only a map key: the host is handed the native one to authorize, stat, read and watch.
+ */
+export function nativePathOf(layer: WatchableLayer): string | undefined {
+	const meta = layer.metadata
+	if (!meta) return undefined
+	const absolute = (v: string) => path.isAbsolute(v) || /^[A-Za-z]:[\\/]/.test(v)
+	for (const key of ["source_path", "workspace_path"]) {
+		const v = meta[key]
+		if (!v) continue
+		if (absolute(v)) return path.normalize(v)
+		if (meta.workspace_folder) return path.join(meta.workspace_folder, v)
+	}
+	const rel = meta.path
+	if (rel) {
+		if (absolute(rel)) return path.normalize(rel)
+		if (meta.workspace_folder) return path.join(meta.workspace_folder, rel)
+	}
+	return undefined
+}
+
 const numberOf = (v: string | undefined): number | undefined => {
 	if (v === undefined || v === "") return undefined
 	const n = Number(v)
@@ -274,7 +296,7 @@ export class MapFileWatch {
 		for (const layer of this.deps.layers()) {
 			const key = watchedPathOf(layer)
 			if (!key) continue
-			const real = next.get(key) ?? (await this.deps.authorize(key))
+			const real = next.get(key) ?? (await this.deps.authorize(nativePathOf(layer) ?? key))
 			// A layer that names a file the map may not load (outside the open folders, loaded in an earlier session, or put
 			// there by a scene) is not watched and not looked at. It says so, quietly, instead of looking up to date.
 			const watched = real !== undefined

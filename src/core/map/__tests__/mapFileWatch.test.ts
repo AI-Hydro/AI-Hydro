@@ -4,6 +4,7 @@ import { sanitizeMapLayerForWebview } from "@core/map/sanitizeMapLayerForWebview
 import { MapLayer } from "@shared/proto/cline/map"
 import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
+import { nativePathOf, watchedPathOf } from "../mapFileWatch"
 import { addLayer, fc, type Harness, layerFor, makeHarness, sha, until, wait } from "./fixtures/mapFileWatchHarness"
 
 /**
@@ -652,5 +653,16 @@ describe("MapFileWatch", function () {
 			await wait(80)
 			expect(h.requests.length).to.equal(0)
 		})
+	})
+})
+
+describe("the comparable path is a key; the file system gets the native one", () => {
+	it("nativePathOf keeps the spelling (case, separators) that watchedPathOf lowercases and slashes on Windows", () => {
+		const layer = { id: "a", metadata: { source_path: "/w/Proj/Data/A.geojson" } }
+		expect(nativePathOf(layer)).to.equal(path.normalize("/w/Proj/Data/A.geojson"))
+		expect(watchedPathOf(layer)).to.equal("/w/Proj/Data/A.geojson")
+		const rel = { id: "b", metadata: { path: "Data/A.geojson", workspace_folder: "/w/Proj" } }
+		expect(nativePathOf(rel)).to.equal(path.join("/w/Proj", "Data/A.geojson"))
+		expect(nativePathOf({ id: "c", metadata: {} })).to.equal(undefined)
 	})
 })

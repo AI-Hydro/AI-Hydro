@@ -38,22 +38,30 @@ target = sys.argv[1]
 n = int(sys.argv[2])
 def doc(i):
     return json.dumps({"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"n": i, "pad": "p" * (i * 7)}, "geometry": {"type": "Point", "coordinates": [i, i]}}]}, separators=(",", ":"))
+def retry(fn):
+    # Windows refuses to replace or remove a file another process has open for a moment; a real tool would try again.
+    for _ in range(100):
+        try:
+            return fn()
+        except PermissionError:
+            time.sleep(0.02)
+    return fn()
+def write(path, text):
+    with open(path, "w", newline="") as f:
+        f.write(text)
 for i in range(2, n + 2):
     mode = ("inplace", "replace", "delete_create")[i % 3]
     text = doc(i)
     if mode == "inplace":
-        with open(target, "w") as f:
-            f.write(text)
+        retry(lambda: write(target, text))
     elif mode == "replace":
         tmp = target + ".tmp"
-        with open(tmp, "w") as f:
-            f.write(text)
-        os.replace(tmp, target)
+        write(tmp, text)
+        retry(lambda: os.replace(tmp, target))
     else:
-        os.remove(target)
+        retry(lambda: os.remove(target))
         time.sleep(0.05)
-        with open(target, "w") as f:
-            f.write(text)
+        retry(lambda: write(target, text))
     sys.stdout.write("wrote %d %s %s\\n" % (i, mode, time.time()))
     sys.stdout.flush()
     sys.stdin.readline()
@@ -122,7 +130,7 @@ describe("MapFileWatch: 20 writes from another process", function () {
 			await afterWrite(Number(i), mode)
 			writer.stdin?.write("go\n")
 		}
-		await new Promise((resolve) => writer?.once("exit", resolve))
+		await wait(0)
 	}
 
 	const layer = () => [...h.layers.values()][0]
