@@ -664,7 +664,9 @@ describe("MapFileWatch", function () {
 			expect(h.watchedFolders).to.deep.equal([h.dir])
 		})
 
-		it("two files that differ only by case stay two files, each with its own layer", async () => {
+		it("two files that differ only by case stay two files, each with its own layer", async function () {
+			// Windows drive paths are already one case in the layer key (`resolvedSourcePath`), so this is a darwin/linux case.
+			if (process.platform === "win32") this.skip()
 			await h.cleanup()
 			const files = new Map<string, { size: number; mtimeMs: number; bytes: Buffer }>()
 			const put = (p: string, text: string) =>
