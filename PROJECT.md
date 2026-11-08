@@ -33,7 +33,7 @@ Active product hardening — last updated 2026-09-08.
   profile (PR-4) is not approved. Agent identity in `_meta` is sent but not yet sealed by the server (WP-H8).
   Decision record in DECISIONS.md; user guide in docs/guide/subagents.md.
 - Managed tools environment (vision-2040 X0-3, PR #94, in review): the extension owns a venv
-  `<aihydro_home>/venvs/tools-2.8` with `aihydro-tools[...]~=2.8.2` (src/core/mcp/toolsEnv/). Install
+  `<aihydro_home>/venvs/tools-2.8` with `aihydro-tools[...]>=2.8.2,<3` (src/core/mcp/toolsEnv/). Install
   is automatic only for a fresh, missing default venv after one consent that names PyPI; an unhealthy
   or outdated venv is repaired only by the Repair action; pip runs only in a verified virtualenv. A
   launcher differing from the recorded one, or a missing record, always needs the modal "Trust this

@@ -5,8 +5,10 @@
  */
 export const TOOLS_PACKAGE = "aihydro-tools"
 export const TOOLS_EXTRAS = ["data", "analysis", "mcp", "viz", "gee", "delineation"] as const
-/** Compatible-release pin: the 2.8.x line, never below 2.8.2. */
-export const TOOLS_VERSION_SPEC = "~=2.8.2"
+/** Lowest accepted tools version. */
+export const TOOLS_VERSION_FLOOR = "2.8.2"
+/** The 2.x line from the floor up (2.9 is released), never 3.0. Pip gets it as one argv entry, so no shell quoting applies. */
+export const TOOLS_VERSION_SPEC = `>=${TOOLS_VERSION_FLOOR},<3`
 export const TOOLS_REQUIREMENT = `${TOOLS_PACKAGE}[${TOOLS_EXTRAS.join(",")}]${TOOLS_VERSION_SPEC}`
 /** Directory (under `<aihydro_home>/venvs/`) of the managed environment for the pinned line. */
 export const MANAGED_VENV_NAME = "tools-2.8"
@@ -98,7 +100,7 @@ export function compareVersions(a: number[], b: number[]): number {
  * Whether `version` is at or above the pinned floor of the compatible-release line. Higher minors count as
  * satisfied: a hand-upgraded environment is adopted, never downgraded.
  */
-export function versionMeetsFloor(version: string, floor: string = TOOLS_VERSION_SPEC.replace(/^~=/, "")): boolean {
+export function versionMeetsFloor(version: string, floor: string = TOOLS_VERSION_FLOOR): boolean {
 	const v = parseVersion(version)
 	const f = parseVersion(floor)
 	return !!v && !!f && compareVersions(v, f) >= 0

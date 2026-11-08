@@ -22,7 +22,7 @@ describe("managed tools venv lifecycle", () => {
 		expect(pip).to.have.length(1)
 		expect(pip[0][0]).to.equal(PY) // never the base interpreter
 		expect(pip[0]).to.include(TOOLS_REQUIREMENT)
-		expect(TOOLS_REQUIREMENT).to.equal("aihydro-tools[data,analysis,mcp,viz,gee,delineation]~=2.8.2")
+		expect(TOOLS_REQUIREMENT).to.equal("aihydro-tools[data,analysis,mcp,viz,gee,delineation]>=2.8.2,<3")
 		expect(m.calls.some((c) => c[0] === "python3" && c.includes("pip"))).to.equal(false)
 		expect(steps.some((s) => /Creating/.test(s))).to.equal(true)
 	})

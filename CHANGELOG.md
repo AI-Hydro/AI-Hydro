@@ -11,6 +11,10 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Changed
+
+- **Tools requirement widened to `aihydro-tools >=2.8.2,<3`** (was `~=2.8.2`), so the managed environment accepts the released tools 2.9. The floor stays 2.8.2, the managed environment directory stays `venvs/tools-2.8` (an existing healthy one is adopted; Repair upgrades it within 2.x).
+
 ### Fixed
 
 - **Hydrology basemap (design `docs/vision-2040/findings/hydrology-basemap-2026-11-08.md`, slice 1).** Interim regression, stated plainly: **in the light theme USGS rivers now show only from map zoom 7 (tile zoom 8) up, and the dark theme has no river overlay at all** until vector rivers land. Below that zoom you see the Esri gray base alone. The trade removes four visible defects:
