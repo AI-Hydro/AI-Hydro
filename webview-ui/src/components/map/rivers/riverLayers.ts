@@ -27,6 +27,8 @@ import {
 	VECTOR_RIVER_MIN_ZOOM,
 } from "./riverStyle"
 
+const ROUNDED_JOIN_MIN_ZOOM = 6
+
 export interface RiverLayerInputs {
 	theme: RiverTheme
 	/** Map zoom. Only its band (see riverBand) matters for rebuilds, but the caller passes the live value. */
@@ -100,9 +102,11 @@ export function buildRiverLayers(input: RiverLayerInputs): unknown[] {
 	}
 
 	const minOrder = minOrderForZoom(zoom)
+	// Rounded caps and joints cost extra geometry per segment and are invisible on thin lines: only from zoom 6.
+	const rounded = zoom >= ROUNDED_JOIN_MIN_ZOOM
 	layers.push(
 		new TileLayer({
-			// The theme is in the id so a theme switch redraws (and re-credits) from the already cached bytes.
+			// The theme is in the id so a theme switch redraws (and re-credits); the reader's decoded-tile cache avoids refetching.
 			id: `${RIVER_TALLY_ID}-${theme}-${retry}`,
 			minZoom: VECTOR_RIVER_MIN_ZOOM,
 			maxZoom: GEOGLOWS_MAX_ZOOM,
@@ -113,7 +117,7 @@ export function buildRiverLayers(input: RiverLayerInputs): unknown[] {
 			onTileLoad: input.onTileLoad,
 			onTileError: input.onTileError,
 			// Sublayers are rebuilt when this changes (deck regenerates cached tile layers on an updateTrigger).
-			updateTriggers: { renderSubLayers: [theme, minOrder] },
+			updateTriggers: { renderSubLayers: [theme, minOrder, rounded] },
 			renderSubLayers: (props: { id: string; data?: RiverTileSegments | null }) => {
 				const segments = props.data
 				if (!segments || segments.length === 0) return null
@@ -127,8 +131,8 @@ export function buildRiverLayers(input: RiverLayerInputs): unknown[] {
 					getWidth: (d: { order: number }) => riverWidthPx(d.order),
 					widthUnits: "pixels",
 					widthMinPixels: 0.5,
-					capRounded: true,
-					jointRounded: true,
+					capRounded: rounded,
+					jointRounded: rounded,
 					pickable: false,
 				} as never)
 			},

@@ -5,7 +5,8 @@
  * no host was added for GEOGLOWS) and are decoded on the main thread by `@loaders.gl/mvt` (the non-worker
  * `MVTLoader`, so nothing is fetched from a CDN and offline use is not broken by a worker script).
  *
- * Only tile requests leave the machine: byte ranges of a public file. No user data is sent.
+ * Only tile requests leave the machine: byte ranges of a public file. No workspace or user content is sent; the host
+ * can see the byte ranges (tile coordinates), the IP address and the user agent.
  *
  * A tile the archive does not contain (open ocean) is an empty tile, not an error. A missing archive (HTTP 404 on
  * the file) is worded "status 404", not "HTTP 404", so tile health counts it as a real failure and not as a
@@ -140,9 +141,13 @@ export interface RiverTileReaderOptions {
 	decompress?: (buf: ArrayBuffer, compression: Compression) => Promise<ArrayBuffer>
 }
 
+/** Decoded tiles kept per reader (a CONUS view at zoom 5 holds about 24k segments; 128 tiles is a few tens of MB at most). */
+export const DECODED_TILE_LIMIT = 128
+
 export class RiverTileReader {
 	readonly stats: RangeStats
 	private readonly archive: PMTiles
+	private readonly decoded = new Map<string, RiverTileSegments>()
 	constructor(
 		readonly url: string,
 		options: RiverTileReaderOptions = {},
@@ -157,10 +162,23 @@ export class RiverTileReader {
 		return this.archive.getHeader()
 	}
 
-	/** Segments of one tile; an empty list for a tile the archive does not contain (open ocean, no rivers). */
+	/**
+	 * Segments of one tile; an empty list for a tile the archive does not contain (open ocean, no rivers).
+	 * The last DECODED_TILE_LIMIT tiles are kept, so a theme switch (which rebuilds the deck layer) or a pan back
+	 * does not fetch and decode them again. Failures and cancelled reads are not cached.
+	 */
 	async getTile(z: number, x: number, y: number, signal?: AbortSignal): Promise<RiverTileSegments> {
+		const key = `${z}/${x}/${y}`
+		const hit = this.decoded.get(key)
+		if (hit) {
+			this.decoded.delete(key)
+			this.decoded.set(key, hit)
+			return hit
+		}
 		const response = await this.archive.getZxy(z, x, y, signal)
-		if (!response) return []
-		return decodeRiverTile(response.data, { x, y, z })
+		const segments = response ? await decodeRiverTile(response.data, { x, y, z }) : []
+		this.decoded.set(key, segments)
+		if (this.decoded.size > DECODED_TILE_LIMIT) this.decoded.delete(this.decoded.keys().next().value as string)
+		return segments
 	}
 }

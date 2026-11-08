@@ -39,9 +39,9 @@ describe("buildRiverLayers", () => {
 		expect(layer.props.tileSize).toBe(512)
 		expect(layer.props.minZoom).toBe(3)
 		expect(layer.props.maxZoom).toBe(12)
-		expect(layer.props.updateTriggers).toEqual({ renderSubLayers: ["light", 1] })
+		expect(layer.props.updateTriggers).toEqual({ renderSubLayers: ["light", 1, true] })
 		const tile = (buildRiverLayers({ ...base, zoom: 4, theme: "dark" }) as { props: Record<string, unknown> }[])[1]
-		expect(tile.props.updateTriggers).toEqual({ renderSubLayers: ["dark", 7] })
+		expect(tile.props.updateTriggers).toEqual({ renderSubLayers: ["dark", 7, false] })
 	})
 	it("sub-layers keep only the segments at or above the zoom band's order, coloured and sized by order", () => {
 		const segments = [1, 3, 5, 8].map((order, i) => ({

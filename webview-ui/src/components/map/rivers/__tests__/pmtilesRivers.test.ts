@@ -34,6 +34,22 @@ describe("fixture writer is spec-correct", () => {
 	})
 })
 
+describe("decoded tile cache", () => {
+	it("serves a repeated tile without another request, and does not cache failures", async () => {
+		const server = rangeFetch(archive(false))
+		const reader = new RiverTileReader("https://example.test/s.pmtiles", { fetchImpl: server.fetchImpl })
+		const first = await reader.getTile(2, 1, 1)
+		const calls = server.calls.length
+		expect(await reader.getTile(2, 1, 1)).toBe(first)
+		expect(server.calls.length).toBe(calls)
+		const offline = new RiverTileReader("https://example.test/s.pmtiles", {
+			fetchImpl: rangeFetch(archive(false), { offline: true }).fetchImpl,
+		})
+		await expect(offline.getTile(2, 1, 1)).rejects.toThrow()
+		await expect(offline.getTile(2, 1, 1)).rejects.toThrow()
+	})
+})
+
 describe("a large archive with leaf directories", () => {
 	it("finds tiles through the root and leaf directories (as the 2.9M-entry GEOGLOWS archive is read)", async () => {
 		const tiles = new Map<string, Uint8Array>()

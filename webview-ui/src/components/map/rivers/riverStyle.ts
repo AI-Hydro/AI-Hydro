@@ -7,7 +7,7 @@
  * The GEOGLOWS tiles carry only `riverId` and `strahlerOrder`: there is NO upstream area in them. So width, colour
  * and the zoom-band density rule all key on Strahler order, which stands in for log10(upstream area). That is a
  * proxy, not a measurement: the network is TDX-Hydro (12 m source), whose orders run higher than a 90 m network's for
- * the same river, and an order does not map to one fixed area. The legend says "Strahler order", never km2.
+ * the same river, and an order does not map to one fixed area. Docs and comments say "Strahler order", never km2 (the map has no legend for it yet).
  * (MERIT-Basins tiles with `uparea`, slice B2, will replace the proxy where they exist.)
  */
 
