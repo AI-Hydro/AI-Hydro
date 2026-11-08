@@ -716,7 +716,9 @@ describe("MapFileWatch", function () {
 			expect(h.requests.find((r) => r.layerId === "lower")?.path).to.equal(nl)
 		})
 
-		it("on a case-sensitive volume the other spelling is another file", async () => {
+		it("on a case-sensitive volume the other spelling is another file", async function () {
+			// Windows layer keys are lower-cased (layerIdentity norm), so a case-sensitive volume cannot be modelled there.
+			if (process.platform === "win32") this.skip()
 			await h.cleanup()
 			h = await makeHarness({ options: { caseInsensitive: false }, workspace: false })
 			file = path.join(h.dir, "Basin.geojson")

@@ -11,6 +11,8 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+## [0.4.11] - 2026-11-08
+
 ### Layers file watcher follow-ups
 
 - A file the map's page cannot get parsed (no answer from the page three times in a row) is marked unreadable ("The map did not finish reading this file", on every layer of that file) and is asked about again only after the file changes or the panel is shown.
