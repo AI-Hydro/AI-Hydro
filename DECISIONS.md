@@ -4,6 +4,21 @@ Append-only. Newest first. One entry per non-obvious choice, with the **why**.
 
 ---
 
+## 2026-11-09 — Basemap B1: vector rivers from GEOGLOWS PMTiles, Strahler order as the width proxy, Natural Earth as the offline tier
+
+Design: `docs/vision-2040/findings/hydrology-basemap-2026-11-08.md`, slice B1. Builds on PR #171 (slice 1).
+
+- **Runtime source: GEOGLOWS's public S3 PMTiles, tile requests only (owner approved 2026-11-09).** Only HTTP byte-range requests for the tiles in view leave the machine; no user data. The map CSP already allowed `connect-src https:`, so no host was added. *Why not host a copy:* 2.39 GB and a licence-credit obligation we would carry; the kill criterion (range request p95 over 800 ms from the owner's location, or the file moving) is how we find out it was the wrong call.
+- **Width, colour and the zoom bands use Strahler order, not upstream area.** The published tiles carry only `riverId` and `strahlerOrder`. Order is a proxy (TDX-Hydro's 12 m source inflates orders against a 90 m network), so the legend and docs say "Strahler order" and never km2. The bands were set from the order counts of real tiles (Mississippi basin, 2026-11-09). MERIT `uparea` tiles (slice B2) replace the proxy where they exist.
+- **Our own `RangeFetchSource`, not pmtiles' `FetchSource`.** A server that ignores `Range` answers 200 with the whole archive; we refuse it without reading the body, and we stop on an ETag change. The fetch function and counters are injectable, so tests use no network.
+- **Decoding on the main thread (`@loaders.gl/mvt` `MVTLoader`, not the worker loader).** The webview CSP has `worker-src blob:` only and the default loaders.gl worker comes from a CDN, which also breaks offline use. Measured decode: 2 to 7 ms per tile (node).
+- **The streamed and bundled river generalisations never draw together,** because the two lines for one river do not coincide. Below zoom 3 the bundled Natural Earth rivers draw (no GEOGLOWS tile is requested); from zoom 3 the stream does; after the stream fails (3 failures and nothing loaded, or half of 8 or more) the bundled tier draws everywhere, river requests stop until Retry, and an alert with Retry says so. Natural Earth lakes draw to zoom 6 (GEOGLOWS has none).
+- **No river labels of our own.** GEOGLOWS has no names; Natural Earth names would be a second label set over the base map's baked-in one (the defect slice 1 removed). The base map's names are the only labels.
+- **Do not set `_pathType: "open"` on the tile PathLayer.** With nested `[x, y]` paths deck 9.3 then draws nothing (found in the screen harness; the attribution still credited the tiles). Recorded in the code.
+- **The harness answers the GEOGLOWS host with a synthetic archive** (Natural Earth trunks plus seeded tributaries), generated in memory from the same writer the unit tests use (`rivers/testing/pmtilesFixture.mjs`). The screens are stamped FIXTURE, and `verify-no-fixtures` now also looks for the fixture writer in the production bundle.
+- **Tools requirement is `>=2.8.2,<3`** (was `~=2.8.2`): accepts the released tools 2.9. The floor stays 2.8.2 and the managed environment directory stays `tools-2.8` (a rename would orphan healthy environments).
+- **The USGS raster overlay stays as an opt-in basemap ("Gray + USGS rivers (US, light theme)")** rather than a layer toggle: it carries its own baked-in names, so it cannot sit on the same base as the default without bringing back the doubled labels.
+
 ## 2026-11-07 — Layers slice 2: a layer follows its file; the host reads and hashes once; evidence links stop auto-update
 
 Design: `docs/vision-2040/findings/layers-design-2026-11-02.md`, section 5.7, section 7 Slice 2 and the Addendum (items 3, 4 and 9).

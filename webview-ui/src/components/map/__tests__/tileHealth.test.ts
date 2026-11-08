@@ -10,6 +10,7 @@ import {
 	PLACEHOLDER_ADDRESS_RING,
 	PLACEHOLDER_MAX_SAMPLE,
 	PLACEHOLDER_MIN_TILES,
+	riverTierDegraded,
 	runControlCheck,
 	TILE_FAILURE_RATIO,
 	TilePlaceholderTracker,
@@ -303,5 +304,41 @@ describe("runControlCheck fails safe", () => {
 		tracker.clear()
 		expect(tracker.controlFailed()).toBe(false)
 		expect(tracker.wantsFingerprint()).toBe(true)
+	})
+})
+
+describe("streamed river tier (basemap-rivers)", () => {
+	const rivers = (loaded: number, failed: number, message = "Failed to fetch"): TileTallies => {
+		let t: TileTallies = {}
+		for (let i = 0; i < loaded; i++) t = tallyTile(t, "basemap-rivers", { ok: true })
+		for (let i = 0; i < failed; i++) t = tallyTile(t, "basemap-rivers", { ok: false, message })
+		return t
+	}
+	it("is healthy while tiles load, however many empty ocean tiles come back", () => {
+		expect(riverTierDegraded(rivers(40, 0)["basemap-rivers"])).toBe(false)
+		expect(riverTierDegraded(undefined)).toBe(false)
+	})
+	it("offline: nothing loaded after three failures degrades the tier, with an alert that says what is shown instead", () => {
+		expect(riverTierDegraded(rivers(0, 2)["basemap-rivers"])).toBe(false)
+		const t = rivers(0, 3)
+		expect(riverTierDegraded(t["basemap-rivers"])).toBe(true)
+		expect(tileErrorsFrom(t)["basemap-rivers"]).toBe(
+			"River tiles could not be loaded (Failed to fetch). Showing the coarse bundled Natural Earth rivers instead.",
+		)
+		expect(tileNotesFrom(t)["basemap-rivers"]).toBeUndefined()
+	})
+	it("a mostly working network with a few failed tiles stays healthy and gets a quiet note, not the fallback", () => {
+		const t = rivers(30, 3)
+		expect(riverTierDegraded(t["basemap-rivers"])).toBe(false)
+		expect(tileErrorsFrom(t)["basemap-rivers"]).toBeUndefined()
+	})
+	it("a network that fails at least half of a real sample degrades", () => {
+		expect(riverTierDegraded(rivers(8, 8)["basemap-rivers"])).toBe(true)
+		expect(riverTierDegraded(rivers(20, 8)["basemap-rivers"])).toBe(false)
+	})
+	it("a moved archive (status 404 wording) counts as failure, not as a coverage gap", () => {
+		const t = rivers(0, 3, "River tile archive not found (status 404). The file may have moved.")
+		expect(riverTierDegraded(t["basemap-rivers"])).toBe(true)
+		expect(tileErrorsFrom(t)["basemap-rivers"]).toContain("status 404")
 	})
 })

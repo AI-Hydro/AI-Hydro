@@ -42,7 +42,18 @@ All basemaps work without an API token or account. CARTO basemaps were removed (
 
 ### Hydrology default (muted)
 
-New profiles open on a muted, global base (Esri Light Gray Canvas / Dark Gray Canvas, chosen by VS Code theme: light for light themes, dark for dark and high-contrast; zoom 0-16) so rivers and your layers carry the colour. Inside the United States the USGS National Map hydrography is drawn above it to emphasise rivers; elsewhere only the muted base is drawn. Attribution: Sources: Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS User Community (plus USGS where the river overlay is in view). Esri's item pages list World Light Gray Base and World Dark Gray Base as mature support, retiring in December 2029 (no day given).
+New profiles open on a muted, global base (Esri Light Gray Canvas / Dark Gray Canvas, chosen by VS Code theme: light for light themes, dark for dark and high-contrast; zoom 0-16) with **vector rivers** drawn above it in both themes, so rivers and your layers carry the colour. Esri's item pages list World Light Gray Base and World Dark Gray Base as mature support, retiring in December 2029 (no day given).
+
+**Where the rivers come from.**
+
+- **From zoom 3 up:** the GEOGLOWS v2 global stream network (CC BY 4.0), streamed from GEOGLOWS's public S3 bucket as a PMTiles archive (about 2.4 GB, never downloaded whole). Only HTTP byte-range requests for the tiles in view are sent; no user data is sent. The map's content-security policy already allowed `https:` connections, so no new host was added.
+- **Below zoom 3, and whenever the GEOGLOWS tiles cannot be reached:** the bundled Natural Earth 1:50m rivers and lakes (public domain, about 290 KB). They are coarse. When the stream fails after a few tries, the map says so ("River tiles could not be loaded ... Showing the coarse bundled Natural Earth rivers instead") with **Retry imagery**, and stops requesting river tiles until you retry. Natural Earth lakes also draw up to zoom 6 (the GEOGLOWS tiles have no water bodies).
+- **Width and colour show Strahler order, not upstream area.** The GEOGLOWS tiles carry only a river id and the Strahler order, so order stands in for log upstream area (0.6 px at order 1 up to 4.2 px at order 10, one scale for every view). The network is TDX-Hydro (12 m source), whose orders run higher than a 90 m network's for the same river, so an order is not a fixed area. Smaller rivers appear as you zoom in (order 9 and up at world scale, everything from zoom 8).
+- **Palettes** follow the design's styles S1 (light, pale violet to dark navy) and S2 (dark, dim blue to white, small reaches at half opacity). Both are single-hue ramps whose lightness rises (dark) or falls (light) monotonically with order, so they read under colour-vision deficiency and in greyscale.
+- **Labels:** the rivers carry none. The base map's own place and water names are the only labels on the map, so nothing is drawn twice.
+- **Credit:** "Rivers: GEOGLOWS ECMWF Streamflow Service (CC BY 4.0)" appears in the map credit once its tiles have loaded, "Natural Earth (public domain)" whenever the bundled tier is on screen, and map exports list both.
+
+The old USGS raster overlay is still available as the **Gray + USGS rivers (US, light theme)** basemap: USGS National Map hydrography from zoom 8 in the United States, light theme only (it is cartography for a light map and carries its own river names).
 
 Profiles saved by an older version are moved to this default **once**, and a saved choice that no longer exists (for example a CARTO basemap) is also moved to it, with a one-time notice saying why. After that your own choice always wins; **Reset to hydrology default** in the Basemap panel brings the default back.
 

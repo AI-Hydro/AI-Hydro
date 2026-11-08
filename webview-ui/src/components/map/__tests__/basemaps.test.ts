@@ -7,6 +7,7 @@ import {
 	coverageNoticeText,
 	DEFAULT_BASEMAP_ID,
 	extentContains,
+	GEOGLOWS_RIVERS,
 	isKnownBaseMap,
 	mapThemeFromBodyClasses,
 	normalizeViewportLongitudes,
@@ -38,6 +39,11 @@ describe("basemap catalogue", () => {
 			for (const overlay of style.overlays ?? []) {
 				expect(overlay.attribution.length, overlay.id).toBeGreaterThan(3)
 				expect(overlay.extents?.length ?? 0, overlay.id).toBeGreaterThan(0)
+			}
+			if (style.rivers) {
+				expect(style.rivers.url, style.id).toMatch(/^https:\/\/.+\.pmtiles$/)
+				expect(style.rivers.attribution, style.id).toContain("CC BY 4.0")
+				expect(style.rivers.bundledAttribution, style.id).toContain("Natural Earth")
 			}
 		}
 	})
@@ -83,6 +89,12 @@ describe("basemap catalogue", () => {
 				.map((u) => new URL(u as string).host),
 		)
 		expect([...hosts].sort()).toEqual(["basemap.nationalmap.gov", "server.arcgisonline.com", "services.arcgisonline.com"])
+	})
+
+	it("the one other host is the GEOGLOWS river archive (CC BY 4.0), read by range requests and keyless", () => {
+		const riverHosts = new Set(BASE_MAP_STYLES.filter((s) => s.rivers).map((s) => new URL(s.rivers?.url as string).host))
+		expect([...riverHosts]).toEqual(["geoglows-v2.s3.us-west-2.amazonaws.com"])
+		expect(GEOGLOWS_RIVERS.url).not.toMatch(/[?&](key|apikey|api_key|access_token|token)=/i)
 	})
 
 	it("the default is global, so a user outside the US never starts on a US-only source", () => {
@@ -150,25 +162,32 @@ describe("removed providers", () => {
 })
 
 describe("resolveBaseMap", () => {
-	it("the default is Esri Light/Dark Gray Canvas per theme, with the required attribution and a hydrography overlay", () => {
+	it("the default is Esri Light/Dark Gray Canvas per theme with vector rivers in both themes and no raster overlay", () => {
 		const light = resolveBaseMap(DEFAULT_BASEMAP_ID, "light")
 		const dark = resolveBaseMap(DEFAULT_BASEMAP_ID, "dark")
 		expect(light.url).toContain("/Canvas/World_Light_Gray_Base/")
 		expect(dark.url).toContain("/Canvas/World_Dark_Gray_Base/")
 		expect(light.attribution).toContain("Esri")
 		expect(light.maxNativeZoom).toBe(16)
-		expect(light.overlays.map((o) => o.id)).toEqual(["usgs-hydro"])
-		expect(light.overlays[0].extent).toEqual(US_EXTENT)
+		// Rivers at every zoom in both themes: no USGS raster (its baked-in labels doubled the base's) and no gap.
+		for (const resolved of [light, dark]) {
+			expect(resolved.overlays).toEqual([])
+			expect(resolved.rivers).toEqual(GEOGLOWS_RIVERS)
+		}
+		expect(GEOGLOWS_RIVERS.maxNativeZoom).toBe(12)
 	})
 
-	it("the USGS hydrography overlay is light-theme only: no pale halos or opaque sea on the dark base", () => {
-		expect(resolveBaseMap(DEFAULT_BASEMAP_ID, "dark").overlays).toEqual([])
+	it("the optional USGS basemap keeps the overlay, light theme only: no pale halos or opaque sea on the dark base", () => {
+		expect(resolveBaseMap("muted-hydro-usgs", "light").overlays.map((o) => o.id)).toEqual(["usgs-hydro"])
+		expect(resolveBaseMap("muted-hydro-usgs", "light").overlays[0].extent).toEqual(US_EXTENT)
+		expect(resolveBaseMap("muted-hydro-usgs", "dark").overlays).toEqual([])
+		expect(resolveBaseMap("muted-hydro-usgs", "light").rivers).toBeUndefined()
 		expect(USGS_HYDRO_OVERLAY.themes).toEqual(["light"])
 	})
 
 	it("the USGS overlay starts at z8, where the Esri base has stopped drawing country and state names", () => {
 		// Both rasters bake their labels in (probed 2026-11-08): Esri names to z7, USGS country names to z5 and state names at z7.
-		expect(resolveBaseMap(DEFAULT_BASEMAP_ID, "light").overlays[0].minZoom).toBe(8)
+		expect(resolveBaseMap("muted-hydro-usgs", "light").overlays[0].minZoom).toBe(8)
 	})
 
 	it("the USGS overlay draws a parent tile over a 404 inside its coverage", () => {
@@ -190,7 +209,7 @@ describe("resolveBaseMap", () => {
 
 describe("attribution reflects what is drawn", () => {
 	// The hydrography overlay is drawn in the light theme only.
-	const resolved = resolveBaseMap(DEFAULT_BASEMAP_ID, "light")
+	const resolved = resolveBaseMap("muted-hydro-usgs", "light")
 	it("credits the hydrography overlay only where it covers the view", () => {
 		expect(attributionFor(resolved, { lon: -90, lat: 39 })).toBe(
 			`${resolved.attribution} · Hydrography: USGS The National Map`,
@@ -225,6 +244,27 @@ describe("attribution reflects what is drawn", () => {
 	it("extentContains is inclusive of the edges", () => {
 		expect(extentContains(US_EXTENT, -64, 15)).toBe(true)
 		expect(extentContains(US_EXTENT, 0, 0)).toBe(false)
+	})
+})
+
+describe("river tier attribution", () => {
+	const resolved = resolveBaseMap(DEFAULT_BASEMAP_ID, "dark")
+	it("credits GEOGLOWS once its tiles are loaded and Natural Earth when the bundled tier is on screen", () => {
+		expect(attributionFor(resolved, undefined, new Set())).toBe(resolved.attribution)
+		expect(attributionFor(resolved, undefined, new Set(["rivers"]))).toBe(
+			`${resolved.attribution} · Rivers: GEOGLOWS ECMWF Streamflow Service (CC BY 4.0)`,
+		)
+		expect(attributionFor(resolved, undefined, new Set(["natural-earth"]))).toBe(
+			`${resolved.attribution} · Natural Earth (public domain)`,
+		)
+	})
+	it("an export credits both, in both themes", () => {
+		for (const theme of ["light", "dark"] as const)
+			expect(attributionList(resolveBaseMap(DEFAULT_BASEMAP_ID, theme))).toEqual([
+				resolved.attribution,
+				"Rivers: GEOGLOWS ECMWF Streamflow Service (CC BY 4.0)",
+				"Natural Earth (public domain)",
+			])
 	})
 })
 

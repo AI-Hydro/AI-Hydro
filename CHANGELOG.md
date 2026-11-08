@@ -26,6 +26,15 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ### Added
 
+- **Vector rivers on the Hydrology default basemap, in both themes and at every zoom (design `docs/vision-2040/findings/hydrology-basemap-2026-11-08.md`, slice B1).** Builds on #171 (it replaces the interim "no rivers in the dark theme, none below zoom 7 in light").
+  - **GEOGLOWS v2 streams** (CC BY 4.0) are streamed from GEOGLOWS's public S3 PMTiles archive (about 2.4 GB, read only by HTTP range requests; only tile requests leave the machine). The reader (`pmtiles` 4.5.0, BSD-3, plus the non-worker `@loaders.gl/mvt` already used by deck.gl) needs no worker and no CDN. The webview CSP already allowed `connect-src https:`, so no host was added. A server that ignores `Range` is refused without downloading the archive, and an archive that changes under an open map stops with a Retry message.
+  - **Width and colour show Strahler order, not upstream area:** the published tiles carry only `riverId` and `strahlerOrder`. Order stands in for log area (0.6 to 4.2 px), and the zoom bands thin the network by order (order 9+ at world scale, everything from zoom 8). Palettes are the design's S1 (light) and S2 (dark), single-hue and monotone in lightness, so CVD-safe.
+  - **Bundled Natural Earth 1:50m rivers and lakes** (public domain, 287 KB raw, 103 KB gzipped; built by `scripts/basemap/build-natural-earth-hydro.py`) draw below zoom 3, lakes draw to zoom 6, and the whole bundled tier is the offline fallback. When the stream is unreachable the map shows an alert ("Vector rivers (GEOGLOWS): River tiles could not be loaded ... Showing the coarse bundled Natural Earth rivers instead") with Retry imagery and stops requesting river tiles until Retry.
+  - **One set of labels:** the rivers carry no labels of their own; the base map's names are the only ones.
+  - **Credits:** "Rivers: GEOGLOWS ECMWF Streamflow Service (CC BY 4.0)" in the map credit once its tiles load, "Natural Earth (public domain)" when the bundled tier is on screen, and both in map exports.
+  - The USGS raster overlay is kept as the optional **Gray + USGS rivers (US, light theme)** basemap.
+- Screens `map-rivers-world`, `-conus`, `-regional`, `-local`, `-border` and `-offline` (light and dark). The harness answers the GEOGLOWS host with a **synthetic** PMTiles archive (`webview-ui/src/components/map/rivers/testing/pmtilesFixture.mjs`: Natural Earth trunks plus seeded random-walk tributaries, never real GEOGLOWS data), so no network is used and the screens are stamped FIXTURE.
+
 - Screens `map-basemap-hydro-z13-hole`, `map-basemap-hydro-gap`, `map-basemap-hydro-border` and `map-basemap-hydro-border-wide` (light and dark, offline fixtures), and unit tests for the parent-tile fallback, the coverage feather and the overlay's theme and zoom rules.
 
 ## [0.4.11] - 2026-11-08

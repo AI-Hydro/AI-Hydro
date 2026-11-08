@@ -1291,7 +1291,7 @@ export const screens: ScreenDef[] = [
 		storage: { [MAP_STORAGE_KEY]: framedWorkspace("esri-topo") },
 	}),
 	mapScreen("map-empty-default", "Map empty state, default basemap"),
-	// Hydrology default basemap: muted base; the USGS hydrography overlay is drawn in the light theme only, from z8 (light and dark come from the theme).
+	// Hydrology default basemap: muted base with vector rivers in both themes (light and dark come from the theme).
 	mapScreen("map-basemap-muted-default", "Map on the muted hydrology default basemap", { layers: [basinPolygon, gaugePoint] }),
 	// Basemap notices: US-only basemap over India, a saved removed (CARTO) basemap migrated, and a provider that
 	// answers every tile with one identical image.
@@ -1304,28 +1304,79 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-basemap-placeholder", "Basemap returning one identical tile for every request (unavailable notice)", {
 		layers: [basinPolygon],
 	}),
+	// Vector rivers of the hydrology default (GEOGLOWS PMTiles; the harness answers from a SYNTHETIC archive, so what is drawn is
+	// a fixture, not the real network). Three zooms plus the bundled Natural Earth tier (world), the US-Canada border and offline.
+	mapScreen(
+		"map-rivers-world",
+		"Hydrology default at world scale: bundled Natural Earth rivers and lakes, no river tiles requested",
+		{
+			storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-30, 30], 2) },
+			steps: [{ wait: 800 }],
+		},
+	),
+	mapScreen("map-rivers-conus", "Hydrology default over the continental US (fixture river tiles, large rivers only)", {
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-96, 38], 4) },
+		steps: [{ wait: 1500 }],
+		expectAbsent: ["text=Vector rivers (GEOGLOWS)"],
+	}),
+	mapScreen(
+		"map-rivers-regional",
+		"Hydrology default over the Mississippi-Missouri confluence at map zoom 7 (fixture river tiles, mid density)",
+		{
+			storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-90.2, 38.7], 7) },
+			steps: [{ wait: 1500 }],
+			expectAbsent: ["text=Vector rivers (GEOGLOWS)"],
+		},
+	),
+	mapScreen(
+		"map-rivers-local",
+		"Hydrology default at map zoom 9 over the Mississippi-Missouri confluence (fixture river tiles, all orders)",
+		{
+			storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-90.2, 38.7], 9) },
+			steps: [{ wait: 1500 }],
+			expectAbsent: ["text=Vector rivers (GEOGLOWS)"],
+		},
+	),
+	mapScreen(
+		"map-rivers-border",
+		"Hydrology default across the US-Canada border near 47.9N 96.2W (no seam: one vector source)",
+		{
+			storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-96.2, 47.9], 8) },
+			steps: [{ wait: 1500 }],
+			expectAbsent: ["text=Vector rivers (GEOGLOWS)"],
+		},
+	),
+	mapScreen(
+		"map-rivers-offline",
+		"Hydrology default with the river archive unreachable: Natural Earth fallback and an honest alert",
+		{
+			storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-96, 38], 5) },
+			steps: [{ wait: 2000 }],
+			expectVisible: ["text=Vector rivers (GEOGLOWS)", "text=Showing the coarse bundled Natural Earth rivers instead"],
+		},
+	),
 	// USGS hydrography cache hole at tile zoom 13 = map zoom 12, as deck draws 256 px tiles one level deeper (central Massachusetts): the overlay is filled from the parent tile, so no
 	// "tiles unavailable" note appears. In the dark theme the overlay is not drawn at all. Light and dark come from the theme.
 	mapScreen("map-basemap-hydro-z13-hole", "Hydrology default at z13 over a USGS cache hole: parent tile fills it, no note", {
-		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-72.0, 42.4], 12) },
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace("muted-hydro-usgs", false, [-72.0, 42.4], 12) },
 		expectAbsent: ["text=River overlay (USGS hydrography)", "text=not available from the provider"],
 	}),
 	// Same cache, but no ancestor exists either: the quiet note stays, and it does not claim "no coverage".
 	mapScreen("map-basemap-hydro-gap", "Hydrology default where the USGS cache has no tile at any nearby zoom (quiet note)", {
-		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-72.0, 42.4], 12) },
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace("muted-hydro-usgs", false, [-72.0, 42.4], 12) },
 		expectAbsent: ["text=no coverage"],
 	}),
 	// A view straddling the US-Canada border (47.9N 96.2W region, at the overlay's first tile zoom, 8 = map zoom 7): the overlay stops at
 	// the 50N coverage edge. Dark: no overlay at all. Light: the edge fades out instead of cutting lakes in a straight line.
 	mapScreen("map-basemap-hydro-border", "Hydrology default across the US-Canada border: no seam, no dark-theme overlay", {
-		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-96.2, 49.6], 7) },
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace("muted-hydro-usgs", false, [-96.2, 49.6], 7) },
 		expectAbsent: ["text=River overlay (USGS hydrography)"],
 	}),
 	mapScreen(
 		"map-basemap-hydro-border-wide",
 		"Hydrology default zoomed out over Minnesota and Manitoba: base only, no USGS overlay",
 		{
-			storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-96.2, 47.9], 6) },
+			storage: { [MAP_STORAGE_KEY]: framedWorkspace("muted-hydro-usgs", false, [-96.2, 47.9], 6) },
 			expectAbsent: ["text=River overlay (USGS hydrography)"],
 		},
 	),
