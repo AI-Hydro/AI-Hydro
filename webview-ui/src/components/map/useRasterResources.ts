@@ -2,6 +2,7 @@ import type { MapLayer } from "@shared/proto/cline/map"
 import { useEffect, useState } from "react"
 import { applyColormap, dataUrlToImage, rasterCache } from "./formats/rasterCache"
 import { resolveFileUri } from "./resolveFileUri"
+import { cropParentToCanvas, isTileNotFound, loadParentFallback, type ParentTileCache, type TileAddress } from "./tileFallback"
 import { fingerprintBlob } from "./tileHealth"
 
 export interface ResourceState {
@@ -179,6 +180,38 @@ export async function loadMapTile(
 		throw new DOMException("Tile request cancelled", "AbortError")
 	}
 	return image
+}
+
+/**
+ * Loads a tile of a sparse overlay. A 404 inside declared coverage is a hole in the provider's cache, so the
+ * nearest existing ancestor is cropped and scaled up (see tileFallback.ts). The tile then counts as loaded and
+ * raises no note. When no ancestor exists either, the original 404 is thrown and tile health reports it.
+ */
+export async function loadMapTileWithParentFallback(
+	tile: { url?: string | null; signal?: AbortSignal; index?: TileAddress },
+	urlTemplate: string,
+	options: {
+		minZoom?: number
+		cache?: ParentTileCache<ImageBitmap | HTMLImageElement>
+		onFilled?: (levels: number) => void
+	} = {},
+): Promise<ImageBitmap | HTMLImageElement> {
+	try {
+		return await loadMapTile(tile)
+	} catch (error) {
+		if (!isTileNotFound(error) || !tile.index || tile.signal?.aborted) throw error
+		const filled = await loadParentFallback({
+			tile: tile.index,
+			urlTemplate,
+			load: (url) => loadMapTile({ url, signal: tile.signal }),
+			crop: cropParentToCanvas,
+			minZoom: options.minZoom,
+			cache: options.cache,
+			onFilled: options.onFilled,
+		})
+		if (!filled) throw error
+		return await createImageBitmap(filled)
+	}
 }
 
 /** Fetches one tile and returns its content fingerprint; rejects on HTTP errors, network errors, abort or hashing failure. */

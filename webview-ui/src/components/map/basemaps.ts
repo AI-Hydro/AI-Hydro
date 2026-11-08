@@ -75,6 +75,17 @@ export interface BaseMapOverlay {
 	/** Precise coverage boxes; a tile that intersects none of them is not requested. */
 	extents?: Extent[]
 	attribution: string
+	/**
+	 * Themes this overlay is drawn in (default: both). A raster cannot be restyled per theme, and USGSHydroCached
+	 * is cartography for a light map: an opaque light-blue sea and dark italic names with thick light halos.
+	 */
+	themes?: BaseMapTheme[]
+	/** Shallowest zoom drawn (default 0). Used where the overlay's baked-in labels would double the base's. */
+	minZoom?: number
+	/** On a 404 inside declared coverage, draw the nearest existing coarser tile instead (see tileFallback.ts). */
+	parentFallback?: boolean
+	/** Fade the overlay out at the edge of `extents` instead of ending it on a straight tile edge. */
+	featherCoverageEdge?: boolean
 }
 
 /** `global` sources serve the whole world; `us` sources serve the United States only (USGS National Map). */
@@ -116,7 +127,23 @@ export const REMOVED_BASEMAPS: Record<string, string> = {
 		"its OpenStreetMap France usage policy needs an identifying user-agent and non-profit use, which this app cannot guarantee",
 }
 
-/** USGS National Map hydrography (NHD) as transparent tiles: the emphasised river layer of the default. */
+/**
+ * USGS National Map hydrography (NHD) as transparent tiles: the emphasised river layer of the default.
+ *
+ * These are NOT label-free rasters (probed 2026-11-08): the tiles carry baked-in labels (country names to about
+ * z5, state names at z7, river and water names from z5 up) and an opaque light-blue sea fill. So:
+ *   - light theme only (`themes`): the sea fill and name halos are made for a light map;
+ *   - from tile zoom 8 only (`minZoom`): Esri's Gray Canvas base also carries baked-in names (letter-spaced
+ *     "UNITED STATES", state names), and neither label set can be removed from a raster. The USGS country and state
+ *     names stop by z7, so from z8 the two sources never carry the same label at the same zoom: USGS draws river
+ *     and water names, Esri draws state and place names. The parent-tile fallback never climbs above `minZoom`,
+ *     because the z5-7 tiles are the ones with the doubled names;
+ *   - the tiles end on a tile edge at the coverage boundary (50N across Lake Manitoba, opaque lake fill on one
+ *     side only), so tiles that straddle the boundary are faded out over its last 48 px (`featherCoverageEdge`);
+ *   - the cache has holes inside its declared coverage (z13 returns 404 across much of the northern US), so a
+ *     404 is filled from the parent tile (`parentFallback`).
+ * Vector rivers (design study `findings/hydrology-basemap-2026-11-08.md`, slice B1) replace this overlay.
+ */
 export const USGS_HYDRO_OVERLAY: BaseMapOverlay = {
 	id: "usgs-hydro",
 	name: "USGS hydrography",
@@ -125,6 +152,10 @@ export const USGS_HYDRO_OVERLAY: BaseMapOverlay = {
 	extent: US_EXTENT,
 	extents: US_EXTENTS,
 	attribution: "Hydrography: USGS The National Map",
+	themes: ["light"],
+	minZoom: 8,
+	parentFallback: true,
+	featherCoverageEdge: true,
 }
 
 export const DEFAULT_BASEMAP_ID = "muted-hydro"
@@ -136,7 +167,7 @@ const USGS_TERMS =
 	"USGS The National Map: public-domain data, no key; credit USGS. Detailed tiles exist for the United States only."
 
 export const BASE_MAP_STYLES: BaseMapStyle[] = [
-	// ── Hydrology default: muted, label-free base so rivers and data layers carry the colour ────────────────
+	// ── Hydrology default: muted gray base (carries its own baked-in place names) so rivers and data layers carry the colour ────────────────
 	{
 		id: DEFAULT_BASEMAP_ID,
 		name: "Hydrology default (muted)",
@@ -147,7 +178,7 @@ export const BASE_MAP_STYLES: BaseMapStyle[] = [
 		maxNativeZoom: 16,
 		overlays: [USGS_HYDRO_OVERLAY],
 		terms: ESRI_TERMS,
-		note: "Esri Light/Dark Gray Canvas (global, muted) with rivers emphasised. River emphasis uses USGS hydrography and covers the United States only.",
+		note: "Esri Light/Dark Gray Canvas (global, muted). In the light theme, USGS hydrography emphasises rivers from zoom 8 in the United States; the dark theme has no river overlay yet.",
 	},
 
 	// ── Hydrology / Earth-science alternatives (US coverage) ───────────────────────────────────────────────
@@ -264,7 +295,7 @@ export function resolveBaseMap(id: string | undefined, theme: BaseMapTheme): Res
 		extent: style.extent,
 		extents: style.extents,
 		coverage: style.coverage,
-		overlays: style.overlays ?? [],
+		overlays: (style.overlays ?? []).filter((overlay) => !overlay.themes || overlay.themes.includes(theme)),
 		attribution: style.attribution ?? "",
 	}
 }

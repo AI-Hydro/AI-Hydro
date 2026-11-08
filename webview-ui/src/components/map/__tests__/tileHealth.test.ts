@@ -32,7 +32,7 @@ describe("tile health classification", () => {
 		const t = run(198, 2)
 		expect(classifyTileHealth(t.basemap)).toBe("partial")
 		expect(tileErrorsFrom(t)).toEqual({})
-		expect(tileNotesFrom(t).basemap).toBe("2 tiles unavailable (2 with no coverage at that location)")
+		expect(tileNotesFrom(t).basemap).toBe("2 tiles are not available from the provider here")
 	})
 
 	it("100% failing is a failure (alert) with the last error", () => {
@@ -51,11 +51,11 @@ describe("tile health classification", () => {
 
 	it("a single missing tile is a note, one miss does not raise a permanent alert", () => {
 		expect(classifyTileHealth(run(40, 1).basemap)).toBe("partial")
-		expect(tileNotesFrom(run(40, 1))).toEqual({ basemap: "1 tile unavailable (1 with no coverage at that location)" })
+		expect(tileNotesFrom(run(40, 1))).toEqual({ basemap: "1 tile is not available from the provider here" })
 	})
 
 	it("non-404 failures are not described as coverage gaps", () => {
-		expect(tileNotesFrom(run(50, 2, "Tile request failed (HTTP 503)")).basemap).toBe("2 tiles unavailable")
+		expect(tileNotesFrom(run(50, 2, "Tile request failed (HTTP 503)")).basemap).toBe("2 tiles failed to load")
 	})
 
 	it("nothing failed is ok", () => {
@@ -91,7 +91,10 @@ describe("sparse overlay sources", () => {
 		const t = overlayRun(0, 40, 40)
 		expect(classifyTileHealth(t["basemap-usgs-hydro"], { sparse: true })).toBe("partial")
 		expect(tileErrorsFrom(t)).toEqual({})
-		expect(tileNotesFrom(t)["basemap-usgs-hydro"]).toContain("no coverage")
+		const note = tileNotesFrom(t)["basemap-usgs-hydro"]
+		expect(note).toMatch(/tiles are not available from the provider here/)
+		// A 404 inside declared coverage is a hole in the cache, never a claim about coverage.
+		expect(note).not.toMatch(/no coverage/)
 	})
 
 	it("the same 404-only tally on the base map (not sparse) still fails", () => {

@@ -56,6 +56,9 @@ const chunk = (type, data) => {
  *   total   every basemap tile fails (HTTP 403)
  *   partial exactly one z=10 tile near the fixture centre (-90, 39) is missing (HTTP 404); the rest load, so the
  *           failure share stays under the alert threshold and the UI shows a quiet note
+ *   usgs-z13-hole  the USGS hydrography cache answers 404 for every z13 tile (the real cache hole over the northern
+ *           US; tile zoom 13 is map zoom 12, deck draws 256 px tiles one level deeper) but serves z12: the overlay must draw the parent tile and show no note
+ *   usgs-gap  the same cache answers 404 at z10-z13, so the parent fallback finds nothing: the quiet note stays
  */
 const lonLatToTile = (lon, lat, z) => {
 	const n = 2 ** z
@@ -68,6 +71,8 @@ const lonLatToTile = (lon, lat, z) => {
 const TILE_FAULTS = {
 	"map-error-imagery": { kind: "total" },
 	"map-error-partial-tiles": { kind: "partial" },
+	"map-basemap-hydro-z13-hole": { kind: "usgs-hole", minZ: 13, maxZ: 13 },
+	"map-basemap-hydro-gap": { kind: "usgs-hole", minZ: 10, maxZ: 13 },
 }
 /** Screens where the basemap answers every tile with one identical image (a provider placeholder). */
 const PLACEHOLDER_SCREENS = new Set(["map-basemap-placeholder"])
@@ -81,6 +86,10 @@ export const esriTileAddress = (url) => {
 
 export function tileFaultStatus(screenId, url) {
 	const fault = TILE_FAULTS[screenId]
+	if (fault?.kind === "usgs-hole") {
+		const hole = /USGSHydroCached/.test(url) ? esriTileAddress(url) : null
+		return hole && hole.z >= fault.minZ && hole.z <= fault.maxZ ? 404 : null
+	}
 	if (!fault || !/World_(Light|Dark)_Gray_Base/.test(url)) return null
 	if (fault.kind === "total") return 403
 	const address = esriTileAddress(url)

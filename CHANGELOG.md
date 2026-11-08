@@ -11,6 +11,19 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Fixed
+
+- **Hydrology basemap (design `docs/vision-2040/findings/hydrology-basemap-2026-11-08.md`, slice 1).** Interim regression, stated plainly: **in the light theme USGS rivers now show only from map zoom 7 (tile zoom 8) up, and the dark theme has no river overlay at all** until vector rivers land. Below that zoom you see the Esri gray base alone. The trade removes four visible defects:
+  - **"UNITED STATES" drawn twice.** Neither raster is label-free (the old catalogue comment was wrong): Esri Gray Canvas has baked-in country and state names, and USGSHydroCached has its own country names (to z5), state names (z7) and river names. The USGS overlay now starts at tile zoom 8, so the two sources never carry the same label at the same zoom (USGS draws river and water names, Esri draws state and place names).
+  - **Blobby labels, opaque light-blue sea and lakes on the dark theme, and a speckle of thousands of small light-blue lakes over Minnesota.** The overlay is cartography for a light map, so it is drawn in the light theme only.
+  - **A hard seam at the overlay's northern coverage edge** (Lake Manitoba cut in two at 50N). Overlay tiles that straddle the edge fade out over their last 48 px.
+  - **False "tiles unavailable ... no coverage at that location".** The USGS cache has holes inside its declared coverage (tile zoom 13 across much of the northern US). On a 404 inside coverage the map draws the nearest coarser tile (up to 3 levels, never coarser than tile zoom 8, so a fallback cannot bring back the doubled names), cropped and scaled up. Sibling tiles share one parent fetch, and a confirmed gap is remembered for 60 seconds. Tiles drawn this way count as loaded and show no toast; the count is kept as tile-health detail (`data-tile-detail` on the map stage). A gap no ancestor can fill still gets a quiet note: "N tiles are not available from the provider here".
+- Map exports credit the overlay whichever theme was drawn.
+
+### Added
+
+- Screens `map-basemap-hydro-z13-hole`, `map-basemap-hydro-gap`, `map-basemap-hydro-border` and `map-basemap-hydro-border-wide` (light and dark, offline fixtures), and unit tests for the parent-tile fallback, the coverage feather and the overlay's theme and zoom rules.
+
 ## [0.4.11] - 2026-11-08
 
 ### Layers file watcher follow-ups

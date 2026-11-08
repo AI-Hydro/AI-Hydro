@@ -136,6 +136,8 @@ import { remapSceneIds } from "./sceneAliases"
 import { sceneLayerForOpen } from "./sceneLayer"
 import TimeSliderPanel from "./TimeSliderPanel"
 import TransectsPanel from "./TransectsPanel"
+import { featherTileToCoverage } from "./tileCoverageMask"
+import { ParentTileCache } from "./tileFallback"
 import {
 	clearTally,
 	controlTileUrl,
@@ -144,13 +146,21 @@ import {
 	type TileOutcome,
 	TilePlaceholderTracker,
 	type TileTallies,
+	tallyAncestorFill,
 	tallyTile,
+	tileDetailsFrom,
 	tileErrorsFrom,
 	tileNotesFrom,
 } from "./tileHealth"
 import { loadTransects, type MapTransect, newTransect, saveTransects, type TransectCollection } from "./transectStorage"
 import { useMapTheme } from "./useMapTheme"
-import { fetchTileFingerprint, loadMapTile, type ResourceState, useRasterResources } from "./useRasterResources"
+import {
+	fetchTileFingerprint,
+	loadMapTile,
+	loadMapTileWithParentFallback,
+	type ResourceState,
+	useRasterResources,
+} from "./useRasterResources"
 import VectorDrawTool, { type CompletedVectorDraw, type VectorDrawMode } from "./VectorDrawTool"
 import VectorSavePanel from "./VectorSavePanel"
 
@@ -775,7 +785,18 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		},
 		[recordTile],
 	)
+	// A tile drawn from a coarser ancestor was already counted as loaded; this adds the detail (see tileDetailsFrom).
+	const reportTileFromAncestor = useCallback(
+		(id: string, source: string, generation: number) => {
+			if (!resourcesMounted.current || generation !== resourceGeneration.current) return
+			if (currentSourcesRef.current[id] !== source) return
+			talliesRef.current = tallyAncestorFill(talliesRef.current, id)
+			flushTallies()
+		},
+		[flushTallies],
+	)
 	const tileErrors = useMemo(() => tileErrorsFrom(tileTallies), [tileTallies])
+	const tileDetails = useMemo(() => tileDetailsFrom(tileTallies), [tileTallies])
 	const tileNotes = useMemo(() => tileNotesFrom(tileTallies), [tileTallies])
 	// Sources whose tiles are all byte-identical (a provider placeholder such as an API-key watermark).
 	const placeholderTracker = useRef(new TilePlaceholderTracker())
@@ -1698,6 +1719,8 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	// do not exist) and to its extent (the USGS caches are US only), and reports per-tile outcomes for tileHealth.
 	const basemapLayers = useMemo(() => {
 		const generation = resourceGeneration.current
+		// Ancestor fetches shared between sibling tiles, and confirmed gaps; fresh per basemap and per Retry.
+		const parentTiles = new ParentTileCache<ImageBitmap | HTMLImageElement>()
 		const sources = [
 			{
 				tallyId: "basemap",
@@ -1706,6 +1729,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				maxNativeZoom: resolvedBaseMap.maxNativeZoom,
 				extent: resolvedBaseMap.extent,
 				extents: resolvedBaseMap.extents,
+				minZoom: 0,
+				parentFallback: false,
+				featherEdges: false,
 				fingerprint: true,
 			},
 			...resolvedBaseMap.overlays.map((overlay) => ({
@@ -1713,6 +1739,9 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				layerId: `basemap-${overlay.id}-${resourceRetry}`,
 				url: overlay.url,
 				maxNativeZoom: overlay.maxNativeZoom,
+				minZoom: overlay.minZoom ?? 0,
+				parentFallback: overlay.parentFallback === true,
+				featherEdges: overlay.featherCoverageEdge === true,
 				extent: overlay.extent,
 				extents: overlay.extents,
 				fingerprint: false,
@@ -1723,7 +1752,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				new TileLayer({
 					id: source.layerId,
 					data: source.url,
-					minZoom: 0,
+					minZoom: source.minZoom,
 					maxZoom: source.maxNativeZoom,
 					extent: source.extent,
 					tileSize: 256,
@@ -1733,6 +1762,19 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						if (source.extents && bbox) {
 							const box: Extent = [bbox.west, bbox.south, bbox.east, bbox.north]
 							if (!source.extents.some((candidate) => extentsIntersect(candidate, box))) return null
+						}
+						// A 404 inside declared coverage is a hole in a sparse cache: draw the parent tile instead.
+						if (source.parentFallback || source.featherEdges) {
+							const filled = source.parentFallback
+								? loadMapTileWithParentFallback(tile, source.url, {
+										minZoom: source.minZoom,
+										cache: parentTiles,
+										onFilled: () => reportTileFromAncestor(source.tallyId, source.url, generation),
+									})
+								: loadMapTile(tile)
+							return source.featherEdges && source.extents && tile.index
+								? filled.then((image) => featherTileToCoverage(image, tile.index, source.extents as Extent[]))
+								: filled
 						}
 						return loadMapTile(
 							tile,
@@ -1763,7 +1805,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					},
 				}),
 		)
-	}, [resolvedBaseMap, resourceRetry, reportTileLoaded, reportTileError, reportTileFingerprint])
+	}, [resolvedBaseMap, resourceRetry, reportTileLoaded, reportTileError, reportTileFingerprint, reportTileFromAncestor])
 
 	// Record which source URLs this render draws (late tile callbacks for an earlier basemap are ignored) and
 	// forget the previous basemap's tile health when the basemap changes, so its errors never linger.
@@ -3557,6 +3599,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			    on the right, so nothing in the chrome covers the map. */}
 			<div
 				className="map-stage"
+				data-tile-detail={Object.keys(tileDetails).length > 0 ? JSON.stringify(tileDetails) : undefined}
 				onDragEnter={onDragEnter}
 				onDragLeave={onDragLeave}
 				onDragOver={onDragOver}

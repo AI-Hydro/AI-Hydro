@@ -17,6 +17,8 @@ export interface TileTally {
 	failed: number
 	/** Failures that were HTTP 404 (no tile at that address: coverage gap, not an outage). */
 	notFound: number
+	/** Tiles drawn from a coarser ancestor because their own tile was a 404 (counted in `loaded` too). Detail, not an alert. */
+	fromAncestor?: number
 	lastError?: string
 }
 
@@ -83,6 +85,23 @@ export function tallyTile(previous: TileTallies, id: string, outcome: TileOutcom
 	return { ...previous, [id]: next }
 }
 
+/** Records that a tile already counted as loaded was drawn from a coarser ancestor. */
+export function tallyAncestorFill(previous: TileTallies, id: string): TileTallies {
+	const current = previous[id] ?? { loaded: 0, failed: 0, notFound: 0 }
+	return { ...previous, [id]: { ...current, fromAncestor: (current.fromAncestor ?? 0) + 1 } }
+}
+
+/** Per-source detail lines (never shown as a toast): tiles drawn from a coarser zoom. */
+export function tileDetailsFrom(tallies: TileTallies): Record<string, string> {
+	const details: Record<string, string> = {}
+	for (const [id, tally] of Object.entries(tallies)) {
+		const n = tally.fromAncestor ?? 0
+		if (n > 0)
+			details[id] = `${n} tile${n === 1 ? "" : "s"} drawn from a coarser zoom because the provider has none at this zoom`
+	}
+	return details
+}
+
 export function clearTally(previous: TileTallies, id: string): TileTallies {
 	if (!(id in previous)) return previous
 	const { [id]: _removed, ...rest } = previous
@@ -104,10 +123,13 @@ export function tileNotesFrom(tallies: TileTallies): Record<string, string> {
 	const notes: Record<string, string> = {}
 	for (const [id, tally] of Object.entries(tallies)) {
 		if (classifyTileHealth(tally, { sparse: isSparseSource(id) }) !== "partial") continue
-		const gaps = tally.notFound
-		notes[id] =
-			`${tally.failed} tile${tally.failed === 1 ? "" : "s"} unavailable` +
-			(gaps > 0 ? ` (${gaps} with no coverage at that location)` : "")
+		// A 404 is a tile the provider does not have here (a hole in its cache, not an outage).
+		const missing = tally.notFound
+		const other = tally.failed - missing
+		const parts: string[] = []
+		if (missing > 0) parts.push(`${missing} tile${missing === 1 ? " is" : "s are"} not available from the provider here`)
+		if (other > 0) parts.push(`${other} tile${other === 1 ? "" : "s"} failed to load`)
+		notes[id] = parts.join("; ")
 	}
 	return notes
 }
