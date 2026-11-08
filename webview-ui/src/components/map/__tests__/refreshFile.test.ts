@@ -64,10 +64,14 @@ describe("the page's half of a file refresh", () => {
 		expect(load).not.toHaveBeenCalled()
 	})
 
-	it("where the page has no crypto, the size check alone applies", async () => {
-		const { full, posted } = io({ sha256: async () => undefined })
+	it("where the page has no crypto, the bytes cannot be verified: nothing is parsed", async () => {
+		const load = vi.fn()
+		const { full, posted } = io({ sha256: async () => undefined, load: load as any })
 		await answerRefreshRequest(request, full)
-		expect(posted[0]).toMatchObject({ ok: true })
+		expect(posted).toHaveLength(1)
+		expect(posted[0]).toMatchObject({ ok: false, reason: "unverified" })
+		expect(posted[0].message).toMatch(/could not verify/i)
+		expect(load).not.toHaveBeenCalled()
 	})
 
 	it("a file that cannot be fetched is the same: it moved between the host's read and this one", async () => {
