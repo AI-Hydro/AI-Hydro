@@ -5,7 +5,7 @@ import * as fs from "fs"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import * as os from "os"
 import * as path from "path"
-import { MeritArchiveRegistry, meritTilesDir, parsePmtilesHeader } from "../meritTiles"
+import { MeritArchiveRegistry, meritTilesDir, nearestExistingDir, parsePmtilesHeader } from "../meritTiles"
 
 /** A file with a valid PMTiles v3 header (MVT tiles, bounds -93..-52 / 40..62) followed by random bytes. */
 function fakeArchive(size: number): Buffer {
@@ -53,7 +53,8 @@ describe("MERIT tile archive registry (host)", () => {
 		fs.writeFileSync(archive(), body)
 		fs.writeFileSync(archive() + MERIT_SIDECAR_SUFFIX, JSON.stringify(sidecar("rivers72.pmtiles", body, extra)))
 	}
-	const registry = (hashFile?: (f: string) => Promise<string>) => new MeritArchiveRegistry({ tilesDir: () => dir, hashFile })
+	const registry = (hashFile?: (f: string) => Promise<string>, afterReadLoop?: () => Promise<void>) =>
+		new MeritArchiveRegistry({ tilesDir: () => dir, hashFile, afterReadLoop })
 
 	beforeEach(function () {
 		this.timeout(20000)
@@ -211,6 +212,42 @@ describe("MERIT tile archive registry (host)", () => {
 			failed = true
 		})
 		expect(failed).to.equal(true)
+	})
+
+	it("refuses a read when the file changes while it is being read (re-stat after the loop)", async () => {
+		write()
+		const reg = registry(undefined, async () => {
+			fs.appendFileSync(archive(), "x")
+		})
+		await reg.scan()
+		let failed = ""
+		await reg.readRange("rivers72", 0, 100).catch((e) => {
+			failed = String(e.message)
+		})
+		expect(failed).to.contain("changed on disk")
+	})
+
+	it("surfaces a sha256 check that could not run as sha256-check-failed, without looping", async () => {
+		write()
+		let calls = 0
+		const reg = registry(async () => {
+			calls++
+			throw new Error("EIO")
+		})
+		await reg.scan()
+		await reg.whenVerified()
+		expect(reg.snapshot().archives[0].provenance.verification).to.equal("sha256-check-failed")
+		await reg.scan()
+		await reg.whenVerified()
+		expect(calls).to.equal(1)
+	})
+
+	it("finds the nearest existing ancestor of a tiles directory that is not there yet", () => {
+		expect(nearestExistingDir(path.join(dir, "merit", "tiles"))).to.equal(dir)
+		fs.mkdirSync(path.join(dir, "merit"))
+		expect(nearestExistingDir(path.join(dir, "merit", "tiles"))).to.equal(path.join(dir, "merit"))
+		fs.mkdirSync(path.join(dir, "merit", "tiles"))
+		expect(nearestExistingDir(path.join(dir, "merit", "tiles"))).to.equal(path.join(dir, "merit", "tiles"))
 	})
 
 	it("rejects a non-PMTiles file and resolves the tiles directory like the builder", () => {

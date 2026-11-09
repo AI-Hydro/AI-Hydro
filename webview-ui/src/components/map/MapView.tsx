@@ -1882,7 +1882,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			merit: meritTiles
 				? {
 						tiles: meritTiles,
-						coversView: meritCoversCentre,
+						coversView: meritCoversCentre && meritDrawn,
 						onTileLoad: (tile) => {
 							if (meritCreditVisible([tile])) setMeritDrawn(true)
 						},
@@ -1894,6 +1894,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	}, [
 		meritTiles,
 		meritCoversCentre,
+		meritDrawn,
 		resolvedBaseMap.rivers,
 		mapTheme,
 		riverZoom,

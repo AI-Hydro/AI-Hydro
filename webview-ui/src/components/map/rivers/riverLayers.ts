@@ -52,7 +52,7 @@ export interface RiverLayerInputs {
 	/** Local MERIT archives, when any are offered and enabled. */
 	merit?: {
 		tiles: MeritTiles
-		/** An archive's bounds contain the view centre: the bundled rivers are then not drawn under it when degraded. */
+		/** MERIT features are drawn in view (not merely an archive's bounds around the centre): only then are the bundled rivers left out when degraded. */
 		coversView: boolean
 		onTileLoad: MeritLayerInputs["onTileLoad"]
 		onViewportLoad: MeritLayerInputs["onViewportLoad"]
@@ -62,6 +62,10 @@ export interface RiverLayerInputs {
 
 /** A streamed tile that was not fetched because a MERIT tile covers it. Not reported as loaded (it draws nothing and credits nothing). */
 const COVERED_BY_MERIT: RiverTileSegments = []
+/** Streamed tiles on a seam (MERIT has features here but not in every neighbour): drawn faintly beneath MERIT. */
+const SEAM_TILES = new WeakSet<object>()
+/** Opacity of the streamed tier on a seam tile. */
+export const SEAM_OPACITY = 0.4
 
 /** First index whose order is at least `min` in a list sorted by ascending order. */
 export function firstAtOrAbove(segments: RiverTileSegments, min: number): number {
@@ -156,7 +160,15 @@ function buildStreamedAndBundledLayers(input: RiverLayerInputs): unknown[] {
 			tileSize: 512,
 			getTileData: async (tile: { index: { x: number; y: number; z: number }; signal?: AbortSignal }) => {
 				const { x, y, z } = tile.index
-				if (merit && (await merit.tiles.covers(z, x, y, tile.signal))) return COVERED_BY_MERIT
+				if (merit && (await merit.tiles.covers(z, x, y, tile.signal))) {
+					if (await merit.tiles.isInterior(z, x, y, tile.signal)) return COVERED_BY_MERIT
+					// A seam: MERIT draws here, but a neighbour has no MERIT river (an archive not built). Keep the streamed
+					// rivers beneath so the map has no gap, at reduced opacity.
+					const segments = await reader.getTile(z, x, y, tile.signal)
+					const marked = segments.slice()
+					SEAM_TILES.add(marked)
+					return marked
+				}
 				return reader.getTile(z, x, y, tile.signal)
 			},
 			onTileLoad: (tile: { content?: unknown }) => {
@@ -181,6 +193,7 @@ function buildStreamedAndBundledLayers(input: RiverLayerInputs): unknown[] {
 					capRounded: rounded,
 					jointRounded: rounded,
 					pickable: false,
+					opacity: SEAM_TILES.has(segments) ? SEAM_OPACITY : 1,
 				} as never)
 			},
 		} as never),

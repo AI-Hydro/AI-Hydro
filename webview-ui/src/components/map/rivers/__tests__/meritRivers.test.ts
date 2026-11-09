@@ -8,11 +8,11 @@ import { Compression } from "pmtiles"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { MeritArchiveRegistry } from "../../../../../../src/hosts/vscode/meritTiles"
 import { attributionFor, attributionList, resolveBaseMap } from "../../basemaps"
-import { buildSnapshot } from "../../MapExport"
+import { buildSnapshot, evaluateReadiness } from "../../MapExport"
 import { HostRangeSource, type HostTransport } from "../hostRangeSource"
 import { formatUpareaKm2, isMeritLayerId, meritReachFeature } from "../meritReach"
-import { MeritTileReader, MeritTiles, meritCreditVisible } from "../meritRivers"
-import { RangeFetchSource } from "../pmtilesRivers"
+import { buildMeritLayer, MeritTileReader, MeritTiles, meritCreditVisible } from "../meritRivers"
+import { RangeFetchSource, RiverTileReader } from "../pmtilesRivers"
 import { buildRiverLayers } from "../riverLayers"
 import { riverColorForUparea, riverWidthPxForUparea } from "../riverStyle"
 import { buildPmtiles, encodeMvtLayer, lonLatToTilePixel } from "../testing/pmtilesFixture.mjs"
@@ -338,5 +338,182 @@ describe("NC-SA attribution", () => {
 		const off = buildSnapshot(spec, { currentBasemap: "muted-hydro" } as never)
 		expect(off.basemap.attribution).not.toContain(ATTRIBUTION)
 		expect(off.basemap.nonCommercialShareAlike).toBeUndefined()
+	})
+})
+
+const noopMerit = { onTileLoad: () => undefined, onViewportLoad: () => undefined, onTileError: () => undefined }
+
+describe("stale tiles: the MERIT layer refetches when its archives change", () => {
+	it("getTileData is an update trigger on the MeritTiles object", () => {
+		const a = new MeritTiles([])
+		const b = new MeritTiles([])
+		const mk = (tiles: MeritTiles) =>
+			(
+				buildMeritLayer({ tiles, theme: "light", zoom: 5, retry: 0, ...noopMerit }) as {
+					props: { updateTriggers: Record<string, unknown[]> }
+				}
+			).props
+		expect(mk(a).updateTriggers.getTileData[0]).toBe(a)
+		expect(mk(b).updateTriggers.getTileData[0]).toBe(b)
+		expect(mk(a).updateTriggers.getTileData[0]).not.toBe(mk(b).updateTriggers.getTileData[0])
+	})
+})
+
+describe("export provenance", () => {
+	const offer = (verification: string) =>
+		({
+			id: "rivers72",
+			region: "72",
+			provenance: { attribution: ATTRIBUTION, tilesSha256: "b".repeat(64), sourceSha256: "a".repeat(64), verification },
+		}) as never
+	const run = (verification: string | null) => {
+		const spec = {
+			template: "report",
+			dpi: 150,
+			extentStrategy: "preserve-visible-extent",
+			elements: { attribution: true },
+		} as never
+		const snap = buildSnapshot(spec, {
+			currentBasemap: "muted-hydro",
+			meritArchives: verification ? [offer(verification)] : [],
+		} as never)
+		return { snap, codes: evaluateReadiness(spec, snap, null, []).warnings.map((w) => w.code) }
+	}
+	it("records every enabled archive with its hashes", () => {
+		expect(run("sha256-verified").snap.merit).toEqual([
+			{
+				id: "rivers72",
+				region: "72",
+				tiles_sha256: "b".repeat(64),
+				source_sha256: "a".repeat(64),
+				verification: "sha256-verified",
+			},
+		])
+		expect(run(null).snap.merit).toEqual([])
+	})
+	it("warns while an archive is only size-matched, and when its hash check failed to run, not when verified", () => {
+		expect(run("size-matched").codes).toContain("MERIT_TILES_NOT_HASH_VERIFIED")
+		expect(run("sha256-check-failed").codes).toContain("MERIT_SHA256_CHECK_FAILED")
+		expect(run("sha256-verified").codes).not.toContain("MERIT_TILES_NOT_HASH_VERIFIED")
+		expect(run("sha256-verified").codes).not.toContain("MERIT_SHA256_CHECK_FAILED")
+		expect(run(null).codes).not.toContain("MERIT_TILES_NOT_HASH_VERIFIED")
+	})
+})
+
+describe("seam rule: skip the streamed tier only in interior tiles; keep it faint beneath MERIT on seams", () => {
+	const seg = [
+		{
+			path: [
+				[0, 0],
+				[1, 1],
+			],
+			order: 5,
+			riverId: 1,
+		},
+	] as never
+	const reader = { getTile: async () => seg } as never
+	const build = (covers: boolean, interior: boolean) => {
+		let loaded = 0
+		const tiles = { covers: async () => covers, isInterior: async () => interior } as unknown as MeritTiles
+		const layers = buildRiverLayers({
+			theme: "light",
+			zoom: 5,
+			reader,
+			degraded: false,
+			retry: 0,
+			onTileLoad: () => loaded++,
+			onTileError: () => undefined,
+			merit: { tiles, coversView: true, ...noopMerit },
+		}) as Array<{ id: string; props: any }>
+		const streamed = layers.find((l) => l.id.startsWith("basemap-rivers"))
+		return { streamed: streamed as { props: any }, loaded: () => loaded }
+	}
+	const idx = { index: { x: 1, y: 1, z: 5 } }
+	it("no MERIT in the tile: the streamed tile is returned as is, at full opacity", async () => {
+		const { streamed, loaded } = build(false, false)
+		const data = await streamed.props.getTileData(idx)
+		expect(data).toBe(seg)
+		streamed.props.onTileLoad({ content: data })
+		expect(loaded()).toBe(1)
+		expect(streamed.props.renderSubLayers({ id: "t", data }).props.opacity).toBe(1)
+	})
+	it("interior tile (all 8 neighbours covered): the streamed tile is skipped and not reported loaded", async () => {
+		const { streamed, loaded } = build(true, true)
+		const data = await streamed.props.getTileData(idx)
+		expect(data).toEqual([])
+		streamed.props.onTileLoad({ content: data })
+		expect(loaded()).toBe(0)
+	})
+	it("seam tile (covered, a neighbour is not): the streamed tile is kept, drawn at reduced opacity", async () => {
+		const { streamed, loaded } = build(true, false)
+		const data = await streamed.props.getTileData(idx)
+		expect(data).toEqual(seg)
+		expect(data).not.toBe(seg)
+		streamed.props.onTileLoad({ content: data })
+		expect(loaded()).toBe(1)
+		const opacity = streamed.props.renderSubLayers({ id: "t", data }).props.opacity
+		expect(opacity).toBeLessThan(1)
+		expect(opacity).toBeGreaterThan(0)
+	})
+	it("MeritTiles.isInterior: needs MERIT in the tile and all 8 neighbours, and the world edge is never interior", async () => {
+		const tileBytes = encodeMvtLayer("rivers_z0", [
+			{
+				props: { comid: 1, uparea: 20000, sorder: 3, lengthkm: 1 },
+				lines: [
+					[
+						[100, 100],
+						[900, 900],
+					],
+				],
+			},
+		])
+		const tiles3x3 = new Map<string, Uint8Array>()
+		for (let x = 0; x <= 2; x++) for (let y = 0; y <= 2; y++) tiles3x3.set(`2/${x}/${y}`, tileBytes)
+		const bytes = buildPmtiles(tiles3x3, { minZoom: 0, maxZoom: 12, bounds: [-180, -85, 180, 85], gzip: false })
+		const offer = {
+			id: "rivers72",
+			region: "72",
+			minZoom: 0,
+			maxZoom: 12,
+			bounds: [-180, -85, 180, 85],
+			layers: [],
+			provenance: {},
+		} as never
+		const tiles = new MeritTiles([offer], {
+			decompress,
+			source: { getKey: () => "f", getBytes: async (o, l) => ({ data: bytes.slice(o, o + l).buffer as ArrayBuffer }) },
+		})
+		expect(await tiles.covers(2, 1, 1)).toBe(true)
+		expect(await tiles.isInterior(2, 1, 1)).toBe(true)
+		expect(await tiles.isInterior(2, 0, 1)).toBe(false) // x = -1 wraps to tile 3, which the archive lacks
+		expect(await tiles.isInterior(2, 2, 2)).toBe(false) // neighbour (3, 3) lacks MERIT
+		expect(await tiles.isInterior(2, 1, 0)).toBe(false) // north edge of the world
+	})
+})
+
+describe("with no MERIT archives the river layers are the 0.4.12 layers", () => {
+	const base = {
+		theme: "light" as const,
+		reader: new RiverTileReader("https://example.test/s.pmtiles", {
+			fetchImpl: async () => new Response("x", { status: 500 }),
+		}),
+		degraded: false,
+		retry: 0,
+		onTileLoad: () => undefined,
+		onTileError: () => undefined,
+	}
+	it("merit: null changes nothing, at every zoom and in the degraded state", () => {
+		for (const zoom of [1, 3, 5, 9, 13])
+			for (const degraded of [false, true]) {
+				const without = buildRiverLayers({ ...base, zoom, degraded }) as Array<{ id: string; props: any }>
+				const withNull = buildRiverLayers({ ...base, zoom, degraded, merit: null }) as Array<{ id: string; props: any }>
+				expect(withNull.map((l) => l.id)).toEqual(without.map((l) => l.id))
+				expect(withNull.map((l) => l.props.updateTriggers)).toEqual(without.map((l) => l.props.updateTriggers))
+				expect(withNull.some((l) => l.id.startsWith("merit-rivers-"))).toBe(false)
+			}
+		const streamed = (buildRiverLayers({ ...base, zoom: 5, merit: null }) as Array<{ id: string; props: any }>).find((l) =>
+			l.id.startsWith("basemap-rivers"),
+		)
+		expect(Object.keys(streamed?.props.updateTriggers)).toEqual(["renderSubLayers"])
 	})
 })

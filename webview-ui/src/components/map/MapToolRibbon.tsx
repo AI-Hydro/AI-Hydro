@@ -541,6 +541,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 				layerOpacities={layerOpacities}
 				layers={layers}
 				mapStyle={mapStyle}
+				meritArchives={merit?.enabled ? merit.archives : []}
 				meritCredits={meritExportCredits(merit)}
 				onClose={() => closePanel(true)}
 				rasterRevision={rasterRevision}

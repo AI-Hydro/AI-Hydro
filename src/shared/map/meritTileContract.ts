@@ -68,7 +68,33 @@ export const MERIT_SHA256_ORIGINS = [
 	"computed_no_sidecar",
 ] as const
 
-export type MeritVerification = "size-matched" | "sha256-verified"
+/**
+ * What the host checked. "size-matched": the sidecar parsed and the size matches, the sha256 check has not finished.
+ * "sha256-check-failed": the check could not run (the file was unreadable); it is NOT a mismatch, which withdraws the archive.
+ * The sidecar's sha256 proves consistency between the sidecar and the file, not authenticity: the sidecar is unsigned.
+ */
+export type MeritVerification = "size-matched" | "sha256-verified" | "sha256-check-failed"
+
+/** One archive in an export manifest (`merit`). */
+export interface MeritExportRecord {
+	id: string
+	region: string
+	tiles_sha256: string
+	source_sha256: string
+	verification: MeritVerification
+}
+
+export function meritExportRecords(
+	archives: ReadonlyArray<Pick<MeritArchiveOffer, "id" | "region" | "provenance">>,
+): MeritExportRecord[] {
+	return archives.map((a) => ({
+		id: a.id,
+		region: a.region,
+		tiles_sha256: a.provenance.tilesSha256,
+		source_sha256: a.provenance.sourceSha256,
+		verification: a.provenance.verification,
+	}))
+}
 
 /** What the host checked about an archive before offering it. The webview never reads the sidecar itself. */
 export interface MeritProvenance {

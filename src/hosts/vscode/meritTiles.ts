@@ -72,6 +72,8 @@ export interface MeritRegistryOptions {
 	onChange?: () => void
 	/** Injectable for tests; the default streams the file through sha256. */
 	hashFile?: (file: string) => Promise<string>
+	/** Test hook: awaited after the read loop, before the final re-stat. */
+	afterReadLoop?: () => Promise<void>
 }
 
 export function sha256OfFile(file: string): Promise<string> {
@@ -196,7 +198,11 @@ export class MeritArchiveRegistry {
 						maxZoom: header.maxZoom,
 						bounds: header.bounds,
 						layers: [...MERIT_LAYER_NAMES],
-						provenance: { ...checked.provenance, verification: state === "ok" ? "sha256-verified" : "size-matched" },
+						provenance: {
+							...checked.provenance,
+							verification:
+								state === "ok" ? "sha256-verified" : state === "error" ? "sha256-check-failed" : "size-matched",
+						},
 					},
 				})
 			} catch (err) {
@@ -216,12 +222,12 @@ export class MeritArchiveRegistry {
 				this.hashes.set(key, digest === expected ? "ok" : "mismatch")
 			})
 			.catch(() => {
-				// Unreadable: it stays "size-matched" and is not hashed again until the file changes.
+				// The check could not run: the offer says so ("sha256-check-failed") and it is not hashed again until the file changes.
 				this.hashes.set(key, "error")
 			})
 			.then(async () => {
 				const state = this.hashes.get(key)
-				if (state === "pending" || state === "error") return
+				if (state === "pending") return
 				await this.scan()
 				this.options.onChange?.()
 			})
@@ -265,10 +271,30 @@ export class MeritArchiveRegistry {
 				if (bytesRead === 0) throw new Error("The MERIT tile archive ended early.")
 				done += bytesRead
 			}
+			await this.options.afterReadLoop?.()
+			// The file may have been replaced while it was read: re-stat the handle and refuse bytes that may be a mix.
+			const after = await handle.stat()
+			if (after.size !== entry.size || after.mtimeMs !== entry.mtimeMs)
+				throw new Error("The MERIT tile archive changed on disk. Reopen the map to reload it.")
 			return { data: bytes.buffer as ArrayBuffer, etag: `${entry.size}-${entry.mtimeMs}` }
 		} finally {
 			await handle.close()
 		}
+	}
+}
+
+/** The nearest existing ancestor directory of `dir` (itself when it exists): where to watch for it to appear. */
+export function nearestExistingDir(dir: string): string {
+	let current = dir
+	for (;;) {
+		try {
+			if (fs.statSync(current).isDirectory()) return current
+		} catch {
+			// not there yet
+		}
+		const parent = path.dirname(current)
+		if (parent === current) return current
+		current = parent
 	}
 }
 

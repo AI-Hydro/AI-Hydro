@@ -22,6 +22,7 @@ const orNotRecorded = (value: number | null, unit = ""): string => (value === nu
 const VERIFICATION_TEXT: Record<string, string> = {
 	"sha256-verified": "sha256-verified (the tile file's sha256 matches its record)",
 	"size-matched": "size-matched (sha256 check pending)",
+	"sha256-check-failed": "sha256 check failed to run (size matched only)",
 }
 
 export interface MeritReachFeature {

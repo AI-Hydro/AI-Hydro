@@ -25,7 +25,7 @@ import { geeCommandSchema, geePreviewChirpsPayloadSchema, geeStatusPayloadSchema
 import type { GeeProjectInfo, GeeStatusResult } from "@/services/gee/types"
 import { handleHydroMapCommand } from "@/services/hydrology/handleHydroMapCommand"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
-import { MeritArchiveRegistry, meritTilesDir } from "./meritTiles"
+import { MeritArchiveRegistry, meritTilesDir, nearestExistingDir } from "./meritTiles"
 import { validReplayIds } from "./replayIds"
 
 /** The file a layer's path names. A project path is never answered with a cache copy (see `resolveMapFilePath`). */
@@ -297,21 +297,31 @@ export class VscodeMapPanelProvider {
 		VscodeMapPanelProvider.postMeritArchives()
 	}
 
-	/** Watches the tiles directory (non-recursive) so a rebuilt archive is picked up while the map is open. */
+	private static meritWatchedDir: string | undefined
+
+	/**
+	 * Watches the tiles directory, or its nearest existing ancestor while it does not exist yet, so building the first archive
+	 * is noticed. Non-recursive. Every event re-evaluates, so the watch moves down as the directories appear.
+	 */
 	private static watchMeritTiles(): void {
-		if (VscodeMapPanelProvider.meritWatcher) return
+		const target = nearestExistingDir(meritTilesDir())
+		if (VscodeMapPanelProvider.meritWatcher && VscodeMapPanelProvider.meritWatchedDir === target) return
+		VscodeMapPanelProvider.meritWatcher?.dispose()
+		VscodeMapPanelProvider.meritWatcher = undefined
 		try {
-			const watcher = vscode.workspace.createFileSystemWatcher(
-				new vscode.RelativePattern(vscode.Uri.file(meritTilesDir()), "*"),
-			)
+			const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(target), "*"))
 			const rescan = () => {
 				clearTimeout(VscodeMapPanelProvider.meritRescan)
-				VscodeMapPanelProvider.meritRescan = setTimeout(() => void VscodeMapPanelProvider.scanAndPostMeritArchives(), 500)
+				VscodeMapPanelProvider.meritRescan = setTimeout(() => {
+					void VscodeMapPanelProvider.scanAndPostMeritArchives()
+					VscodeMapPanelProvider.watchMeritTiles()
+				}, 500)
 			}
 			watcher.onDidCreate(rescan)
 			watcher.onDidChange(rescan)
 			watcher.onDidDelete(rescan)
 			VscodeMapPanelProvider.meritWatcher = watcher
+			VscodeMapPanelProvider.meritWatchedDir = target
 		} catch (err) {
 			console.warn("[VscodeMapPanelProvider] Could not watch the MERIT tiles directory:", err)
 		}
@@ -1024,6 +1034,7 @@ export class VscodeMapPanelProvider {
 				clearTimeout(VscodeMapPanelProvider.meritRescan)
 				VscodeMapPanelProvider.meritWatcher?.dispose()
 				VscodeMapPanelProvider.meritWatcher = undefined
+				VscodeMapPanelProvider.meritWatchedDir = undefined
 				// Clean up disposables
 				while (VscodeMapPanelProvider.disposables.length) {
 					const x = VscodeMapPanelProvider.disposables.pop()

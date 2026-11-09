@@ -1,5 +1,6 @@
 import type { MapViewState } from "@deck.gl/core"
 import { pathForExport } from "@shared/map/layerIdentity"
+import { type MeritArchiveOffer, type MeritExportRecord, meritExportRecords } from "@shared/map/meritTileContract"
 import { layerRunId } from "@shared/map/provenanceEnvelope"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { MapExportArtifact, PrepareMapExportRequest, SaveMapExportRequest } from "@shared/proto/cline/map"
@@ -45,6 +46,8 @@ interface MapExportProps {
 	currentBasemap?: string
 	/** Credit lines of the local MERIT-Basins archives, when that layer is enabled (the export may span their coverage). */
 	meritCredits?: string[]
+	/** Archives drawn or enabled for this export: recorded in the manifest as `merit`. */
+	meritArchives?: MeritArchiveOffer[]
 }
 
 type TextAlign = "left" | "center" | "right"
@@ -132,6 +135,8 @@ interface MapSceneSnapshot {
 	}>
 	citations: Array<{ id: string; label: string; text: string }>
 	renderWarnings: ExportWarning[]
+	/** Local MERIT archives enabled for this export, with the hashes of the files the rivers came from. */
+	merit: MeritExportRecord[]
 }
 
 interface ExportReadinessReport {
@@ -632,6 +637,7 @@ export function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSce
 		})),
 		citations,
 		renderWarnings: [],
+		merit: meritExportRecords(props.meritArchives ?? []),
 	}
 }
 
@@ -665,6 +671,21 @@ export function evaluateReadiness(
 		warnings.push({
 			code: "HIGH_PIXEL_COUNT",
 			message: "Large exports can use substantial temporary memory.",
+			severity: "warning",
+		})
+	}
+	if ((snapshot.merit ?? []).some((a) => a.verification === "size-matched")) {
+		warnings.push({
+			code: "MERIT_TILES_NOT_HASH_VERIFIED",
+			message:
+				"A local MERIT tile archive was matched by size only: its sha256 has not been checked against its record yet.",
+			severity: "warning",
+		})
+	}
+	if ((snapshot.merit ?? []).some((a) => a.verification === "sha256-check-failed")) {
+		warnings.push({
+			code: "MERIT_SHA256_CHECK_FAILED",
+			message: "The sha256 check of a local MERIT tile archive failed to run; the archive is matched by size only.",
 			severity: "warning",
 		})
 	}

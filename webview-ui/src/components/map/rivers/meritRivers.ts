@@ -72,6 +72,8 @@ export class MeritTileReader {
 	readonly stats: RangeStats
 	private readonly archive: PMTiles
 	private readonly decoded = new Map<string, MeritSegment[]>()
+	/** Reads in progress, so the layer and the coverage checks of its neighbours share one read per tile. */
+	private readonly inflight = new Map<string, Promise<MeritSegment[]>>()
 	constructor(
 		readonly offer: MeritArchiveOffer,
 		options: MeritReaderOptions = {},
@@ -94,7 +96,17 @@ export class MeritTileReader {
 			this.decoded.set(key, hit)
 			return hit
 		}
-		const response = await this.archive.getZxy(z, x, y, signal)
+		let pending = this.inflight.get(key)
+		if (!pending) {
+			// The shared read is not tied to one caller's signal; each caller still rejects at once when its own signal aborts.
+			pending = this.load(z, x, y, key).finally(() => this.inflight.delete(key))
+			this.inflight.set(key, pending)
+		}
+		return signal ? raceAbort(pending, signal) : pending
+	}
+
+	private async load(z: number, x: number, y: number, key: string): Promise<MeritSegment[]> {
+		const response = await this.archive.getZxy(z, x, y)
 		const segments = response
 			? meritSegmentsFromFeatures(
 					await decodeMvtFeatures(response.data, { x, y, z }, MERIT_LAYER_NAMES, "layerName"),
@@ -105,6 +117,18 @@ export class MeritTileReader {
 		if (this.decoded.size > DECODED_TILE_LIMIT) this.decoded.delete(this.decoded.keys().next().value as string)
 		return segments
 	}
+}
+
+function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+	if (signal.aborted) return Promise.reject(new DOMException("aborted", "AbortError"))
+	return new Promise<T>((resolve, reject) => {
+		const onAbort = () => reject(new DOMException("aborted", "AbortError"))
+		signal.addEventListener("abort", onAbort, { once: true })
+		promise.then(
+			(v) => (signal.removeEventListener("abort", onAbort), resolve(v)),
+			(e) => (signal.removeEventListener("abort", onAbort), reject(e)),
+		)
+	})
 }
 
 /** Lon/lat bounds [west, south, east, north] of tile (z, x, y). */
@@ -151,6 +175,24 @@ export class MeritTiles {
 		}
 	}
 
+	/**
+	 * True when the tile and all 8 neighbours at the same zoom have MERIT features: the streamed tier can be left out of it
+	 * with no river gap. A neighbour outside every archive's bounds is not read (it is simply not covered). Neighbours are
+	 * read through the same decoded-tile cache the MERIT layer uses, so tiles in view cost no extra read; only the ring just
+	 * outside the view does. A failed read counts as not covered (the tile then keeps a faint streamed layer beneath).
+	 */
+	async isInterior(z: number, x: number, y: number, signal?: AbortSignal): Promise<boolean> {
+		const n = 2 ** z
+		const checks: Promise<boolean>[] = []
+		for (let dx = -1; dx <= 1; dx++)
+			for (let dy = -1; dy <= 1; dy++) {
+				const ny = y + dy
+				if (ny < 0 || ny >= n) return false // the world's edge: nothing beyond it is covered
+				checks.push(this.covers(z, (((x + dx) % n) + n) % n, ny, signal))
+			}
+		return (await Promise.all(checks)).every(Boolean)
+	}
+
 	offerById(id: string): MeritArchiveOffer | undefined {
 		return this.offers.find((offer) => offer.id === id)
 	}
@@ -190,7 +232,8 @@ export function buildMeritLayer(input: MeritLayerInputs): unknown {
 		onTileLoad: input.onTileLoad,
 		onViewportLoad: input.onViewportLoad,
 		onTileError: input.onTileError,
-		updateTriggers: { renderSubLayers: [theme, rounded] },
+		// A rebuilt or withdrawn archive makes a new MeritTiles: refetch, so no stale tile stays on screen or in an export.
+		updateTriggers: { renderSubLayers: [theme, rounded], getTileData: [tiles] },
 		renderSubLayers: (props: { id: string; data?: MeritSegment[] | null }) => {
 			const segments = props.data
 			if (!segments || segments.length === 0) return null
