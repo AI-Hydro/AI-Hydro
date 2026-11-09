@@ -12,7 +12,7 @@ The bundled lists are built from the bundler's own record of what it emitted (es
 `bytesInOutput > 0`; rollup chunk modules with `renderedLength > 0`, CSS modules, and the source files of
 copied assets such as fonts), so they follow every dependency change without a committed copy to keep in
 sync. Tailwind v4 writes CSS outside rollup's module graph and is named explicitly (`extraPackages` in
-`webview-ui/vite.config.ts`); a font asset without a recorded source fails the build.
+`webview-ui/vite.config.ts`); a font asset without a recorded source fails the build. Any other package whose output reaches the build only through a plugin (as Tailwind's does) must be added to `extraPackages` by hand: nothing detects it.
 
 Override texts are the licence file on the upstream repository's default branch when fetched (URL and git
 blob SHA recorded), not the file at the pinned version's tag; for old releases the copyright line may differ,
