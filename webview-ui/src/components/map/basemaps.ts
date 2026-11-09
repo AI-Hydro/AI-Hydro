@@ -45,6 +45,7 @@
  *   Carto and HOT are slippy-map CDNs with a level-19 convention and were not part of this check.
  */
 
+import { MERIT_SOURCE_ID } from "@shared/map/meritTileContract"
 import {
 	GEOGLOWS_ATTRIBUTION,
 	GEOGLOWS_MAX_ZOOM,
@@ -406,12 +407,15 @@ export function overlayCovers(overlay: BaseMapOverlay, lon: number, lat: number)
  * Attribution for what is actually drawn: the base, plus each overlay whose coverage includes the view centre
  * (an overlay that draws nothing here is not credited). When `loadedOverlayIds` is given, an overlay is also
  * credited only once at least one of its tiles has actually loaded. The river tier is credited under the ids
- * "rivers" (GEOGLOWS tiles loaded) and "natural-earth" (the bundled tier is on screen).
+ * "rivers" (GEOGLOWS tiles loaded) and "natural-earth" (the bundled tier is on screen). The local MERIT-Basins tier is
+ * credited under "merit-rivers" with `meritCredits` (the archives' own attribution lines, CC BY-NC-SA): only while that id
+ * is in the set, so the share-alike credit shows exactly while MERIT features are drawn in view.
  */
 export function attributionFor(
 	resolved: ResolvedBaseMap,
 	center?: { lon: number; lat: number },
 	loadedOverlayIds?: ReadonlySet<string>,
+	meritCredits: readonly string[] = [],
 ): string {
 	const parts = resolved.attribution ? [resolved.attribution] : []
 	for (const overlay of resolved.overlays) {
@@ -426,15 +430,20 @@ export function attributionFor(
 		if (!loadedOverlayIds || loadedOverlayIds.has(RIVER_SOURCE_ID)) parts.push(resolved.rivers.attribution)
 		if (!loadedOverlayIds || loadedOverlayIds.has(NATURAL_EARTH_SOURCE_ID)) parts.push(resolved.rivers.bundledAttribution)
 	}
+	if (loadedOverlayIds?.has(MERIT_SOURCE_ID)) parts.push(...meritCredits)
 	return parts.join(" · ")
 }
 
-/** Attribution strings for an export manifest: base and every overlay (the export may span coverage). */
-export function attributionList(resolved: ResolvedBaseMap): string[] {
+/**
+ * Attribution strings for an export manifest: base and every overlay (the export may span coverage). `meritCredits` are
+ * the local MERIT archives' credit lines; the caller passes them whenever that layer is enabled.
+ */
+export function attributionList(resolved: ResolvedBaseMap, meritCredits: readonly string[] = []): string[] {
 	return [
 		...(resolved.attribution ? [resolved.attribution] : []),
 		...resolved.overlays.map((overlay) => overlay.attribution),
 		...(resolved.rivers ? [resolved.rivers.attribution, resolved.rivers.bundledAttribution] : []),
+		...meritCredits,
 	]
 }
 

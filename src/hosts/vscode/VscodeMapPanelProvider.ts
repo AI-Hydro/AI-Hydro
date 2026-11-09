@@ -14,6 +14,7 @@ import { checkSaveTarget, loadPinsForProject, NO_FOLDER_KEY, quarantinePins, sav
 import { dirProjectKey, getProjectKey, type ProjectKey, type ProjectKeyHub } from "@core/project/projectIdentity"
 import { aihydroPath } from "@shared/aihydro/aihydroHome"
 import { resolvedSourcePath } from "@shared/map/layerIdentity"
+import { MERIT_MSG } from "@shared/map/meritTileContract"
 import axios from "axios"
 import * as vscode from "vscode"
 import { AiHydroEnv } from "@/config"
@@ -24,6 +25,7 @@ import { geeCommandSchema, geePreviewChirpsPayloadSchema, geeStatusPayloadSchema
 import type { GeeProjectInfo, GeeStatusResult } from "@/services/gee/types"
 import { handleHydroMapCommand } from "@/services/hydrology/handleHydroMapCommand"
 import { MarketplaceRecognitionService } from "@/services/recognition/MarketplaceRecognitionService"
+import { MeritArchiveRegistry, meritTilesDir, nearestExistingDir } from "./meritTiles"
 import { validReplayIds } from "./replayIds"
 
 /** The file a layer's path names. A project path is never answered with a cache copy (see `resolveMapFilePath`). */
@@ -274,6 +276,57 @@ export class VscodeMapPanelProvider {
 	}
 
 	private static fileWatch: MapFileWatch | undefined
+	/**
+	 * The local MERIT river tile archives the map may read (basemap slice B2). The webview names an archive by id and asks for
+	 * byte ranges; it never sends a path. Rebuilt from the tiles directory on request and when the directory changes.
+	 */
+	private static meritRegistry = new MeritArchiveRegistry({
+		tilesDir: () => meritTilesDir(),
+		onChange: () => VscodeMapPanelProvider.postMeritArchives(),
+	})
+	private static meritWatcher: vscode.FileSystemWatcher | undefined
+	private static meritRescan: ReturnType<typeof setTimeout> | undefined
+
+	private static postMeritArchives(): void {
+		const panel = VscodeMapPanelProvider.currentPanel
+		if (panel) void panel.webview.postMessage(VscodeMapPanelProvider.meritRegistry.snapshot())
+	}
+
+	private static async scanAndPostMeritArchives(): Promise<void> {
+		await VscodeMapPanelProvider.meritRegistry.scan()
+		VscodeMapPanelProvider.postMeritArchives()
+	}
+
+	private static meritWatchedDir: string | undefined
+
+	/**
+	 * Watches the tiles directory, or its nearest existing ancestor while it does not exist yet, so building the first archive
+	 * is noticed. Non-recursive. Every event re-evaluates, so the watch moves down as the directories appear.
+	 */
+	private static watchMeritTiles(): void {
+		const target = nearestExistingDir(meritTilesDir())
+		if (VscodeMapPanelProvider.meritWatcher && VscodeMapPanelProvider.meritWatchedDir === target) return
+		VscodeMapPanelProvider.meritWatcher?.dispose()
+		VscodeMapPanelProvider.meritWatcher = undefined
+		try {
+			const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(target), "*"))
+			const rescan = () => {
+				clearTimeout(VscodeMapPanelProvider.meritRescan)
+				VscodeMapPanelProvider.meritRescan = setTimeout(() => {
+					void VscodeMapPanelProvider.scanAndPostMeritArchives()
+					VscodeMapPanelProvider.watchMeritTiles()
+				}, 500)
+			}
+			watcher.onDidCreate(rescan)
+			watcher.onDidChange(rescan)
+			watcher.onDidDelete(rescan)
+			VscodeMapPanelProvider.meritWatcher = watcher
+			VscodeMapPanelProvider.meritWatchedDir = target
+		} catch (err) {
+			console.warn("[VscodeMapPanelProvider] Could not watch the MERIT tiles directory:", err)
+		}
+	}
+
 	/** True once the current panel's page has said it is listening (`aihydro-map-panel-ready`). */
 	private static pageReady = false
 	private static fileWatchSync: ReturnType<typeof setTimeout> | undefined
@@ -978,6 +1031,10 @@ export class VscodeMapPanelProvider {
 				VscodeMapPanelProvider.currentPanel = undefined
 				VscodeMapPanelProvider.pageReady = false
 				VscodeMapPanelProvider.fileWatch?.cancelRequests()
+				clearTimeout(VscodeMapPanelProvider.meritRescan)
+				VscodeMapPanelProvider.meritWatcher?.dispose()
+				VscodeMapPanelProvider.meritWatcher = undefined
+				VscodeMapPanelProvider.meritWatchedDir = undefined
 				// Clean up disposables
 				while (VscodeMapPanelProvider.disposables.length) {
 					const x = VscodeMapPanelProvider.disposables.pop()
@@ -1048,6 +1105,31 @@ export class VscodeMapPanelProvider {
 					case "grpc_request_cancel": {
 						if (message.grpc_request_cancel) {
 							await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
+						}
+						break
+					}
+					case MERIT_MSG.archivesRequest: {
+						VscodeMapPanelProvider.watchMeritTiles()
+						await VscodeMapPanelProvider.scanAndPostMeritArchives()
+						break
+					}
+					case MERIT_MSG.range: {
+						// The reply carries the requestId back; a bad id, offset or length is an error reply, never a read.
+						const requestId = typeof message.requestId === "string" ? message.requestId : ""
+						try {
+							const { data, etag } = await VscodeMapPanelProvider.meritRegistry.readRange(
+								message.archiveId,
+								message.offset,
+								message.length,
+							)
+							await panel.webview.postMessage({ type: MERIT_MSG.rangeResult, requestId, ok: true, data, etag })
+						} catch (err) {
+							await panel.webview.postMessage({
+								type: MERIT_MSG.rangeResult,
+								requestId,
+								ok: false,
+								error: err instanceof Error ? err.message : String(err),
+							})
 						}
 						break
 					}

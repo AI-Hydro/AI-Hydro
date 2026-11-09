@@ -11,6 +11,18 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Added
+
+- **Local MERIT-Basins rivers in the map (basemap slice B2, extension half).** When `$AIHYDRO_HOME/merit/tiles/rivers7X.pmtiles` exists (built by aihydro-watershed `tiles`), the map draws it above the streamed GEOGLOWS rivers from zoom 3. Width and colour come from upstream area (rule W1, S1/S2 ramps), all five area-band layers (`rivers_z0` to `rivers_z11`) are drawn, and a click on a reach shows COMID, upstream area (km2; "not recorded" when the tile has none, never 0), Strahler order, length, region, the source database name and sha256, the tile file name and sha256, the verification state, the licence line (plus the licence note when the sidecar has one) and the citation.
+  - **The host reads the bytes.** The webview names an archive by id and asks for byte ranges (`aihydro-tile-range`); the host maps ids to files it validated, never takes a path, caps a read at 8 MiB and replies with an `ArrayBuffer`. No webview resource root, CSP entry or network host was added.
+  - **An archive is offered only with a valid sidecar** (schema version 2, file name and size match, both sha256 values, a credit line containing "CC BY-NC-SA"), as a regular file (symlinks refused, real path inside the tiles directory). A background sha256 check upgrades it to "sha256-verified" or withdraws it with a note.
+  - **Credit and exports.** "Rivers: MERIT-Basins, Lin et al. 2019, CC BY-NC-SA 4.0" shows only while MERIT features are drawn in view. An export lists it whenever the layer is enabled and its manifest gains `licences` and `nonCommercialShareAlike`. The basemap panel has an on/off switch and shows why an archive was not offered.
+  - **Layer order:** MERIT is drawn where an archive has river features in a tile, GEOGLOWS elsewhere (a GEOGLOWS tile is skipped when a MERIT tile exists at the same z/x/y; a tile on an archive's edge shows MERIT only).
+- Review fixes: the MERIT layer refetches when its archives change (no stale tiles on screen or in exports); exports record each enabled archive and warn until its sha256 is verified; the streamed rivers are skipped only in interior MERIT tiles and drawn faintly beneath MERIT on seams; a read is refused if the file changes while it is read; a sha256 check that could not run is shown as such; a tiles directory created after the map opened is noticed.
+- The range-fetch source for the streamed tier refuses a 206 reply longer than the range asked for (an old VS Code answered with the whole file).
+
+Known limits: the extension host reads `AIHYDRO_MERIT_DIR` / `MERIT_DATA_DIR` / `AIHYDRO_HOME` from its own environment; if those are set only for the tools server, the map looks in another directory. The tile format may still change in review of aihydro-watershed#21; names live in `src/shared/map/meritTileContract.ts`. Not exercised in a real VS Code build (see DECISIONS.md).
+
 ## [0.4.12] - 2026-11-09
 
 ### Added

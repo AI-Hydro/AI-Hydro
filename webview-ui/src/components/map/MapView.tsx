@@ -2,6 +2,7 @@ import { LightingEffect, type MapViewState, WebMercatorViewport } from "@deck.gl
 import { TileLayer } from "@deck.gl/geo-layers"
 import { BitmapLayer, GeoJsonLayer, PathLayer, TextLayer } from "@deck.gl/layers"
 import DeckGL from "@deck.gl/react"
+import { MERIT_SOURCE_ID } from "@shared/map/meritTileContract"
 import { EmptyRequest } from "@shared/proto/cline/common"
 import type { MapLayer } from "@shared/proto/cline/map"
 import { AddMapLayerRequest, RemoveMapLayerRequest, SaveRoiToWorkspaceRequest } from "@shared/proto/cline/map"
@@ -130,10 +131,13 @@ import {
 import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGalleryPanel"
 import { answerRefreshRequest, isRefreshFileRequest } from "./refreshFile"
 import { resolveFileUri } from "./resolveFileUri"
+import { isMeritLayerId, meritReachFeature } from "./rivers/meritReach"
+import { type MeritSegment, MeritTiles, meritCreditVisible } from "./rivers/meritRivers"
 import { RiverTileReader } from "./rivers/pmtilesRivers"
 import { buildRiverLayers } from "./rivers/riverLayers"
 import { NATURAL_EARTH_SOURCE_ID, RIVER_SOURCE_ID, RIVER_TALLY_ID } from "./rivers/riverSources"
-import { lakesVisible, usesBundledRivers } from "./rivers/riverStyle"
+import { lakesVisible, usesBundledRivers, VECTOR_RIVER_MIN_ZOOM } from "./rivers/riverStyle"
+import { type MeritControl, meritExportCredits, useMeritArchives, useMeritEnabled } from "./rivers/useMeritArchives"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
 import { remapSceneIds } from "./sceneAliases"
@@ -913,16 +917,34 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 	const riverUrl = resolvedBaseMap.rivers?.url
 	// biome-ignore lint/correctness/useExhaustiveDependencies: a Retry builds a fresh reader (fresh header and directory cache)
 	const riverReader = useMemo(() => (riverUrl ? new RiverTileReader(riverUrl) : null), [riverUrl, resourceRetry])
+	// Local MERIT-Basins river tiles (slice B2): archives the host validated, drawn above the streamed tier.
+	const meritState = useMeritArchives(resourceRetry)
+	const [meritEnabled, setMeritEnabled] = useMeritEnabled()
+	const meritKey = meritState.archives.map((a) => `${a.id}:${a.provenance.tilesSha256}`).join("|")
+	// biome-ignore lint/correctness/useExhaustiveDependencies: rebuilt when the offered archives or a Retry change, not on every list push
+	const meritTiles = useMemo(
+		() => (meritEnabled && meritState.archives.length > 0 ? new MeritTiles(meritState.archives) : null),
+		[meritEnabled, meritKey, resourceRetry],
+	)
+	const meritArchivesRef = useRef(meritState.archives)
+	meritArchivesRef.current = meritState.archives
+	/** MERIT features are drawn in view (set from tile loads; the NC-SA credit follows it). */
+	const [meritDrawn, setMeritDrawn] = useState(false)
+	const meritControl = useMemo<MeritControl>(
+		() => ({ ...meritState, enabled: meritEnabled, onToggle: setMeritEnabled }),
+		[meritState, meritEnabled, setMeritEnabled],
+	)
 	// Ids "attributionFor" may credit: overlays with a loaded tile, plus the river tiers that are on screen.
 	const creditedSourceIds = useMemo(() => {
 		const ids = new Set(loadedOverlayIds)
+		if (meritTiles && meritDrawn && riverZoom >= VECTOR_RIVER_MIN_ZOOM) ids.add(MERIT_SOURCE_ID)
 		if (resolvedBaseMap.rivers) {
 			const bundled = usesBundledRivers(riverZoom, riversDegraded)
 			if (!bundled && loadedSources(tileTallies).has(RIVER_TALLY_ID)) ids.add(RIVER_SOURCE_ID)
 			if (bundled || lakesVisible(riverZoom, riversDegraded)) ids.add(NATURAL_EARTH_SOURCE_ID)
 		}
 		return ids
-	}, [loadedOverlayIds, resolvedBaseMap, riverZoom, riversDegraded, tileTallies])
+	}, [loadedOverlayIds, resolvedBaseMap, riverZoom, riversDegraded, tileTallies, meritTiles, meritDrawn])
 	const [visibleLayerIds, setVisibleLayerIds] = useState<Set<string>>(
 		new Set(persisted.visibleLayerIds ?? layers.filter((layer) => layer.visible !== false).map((layer) => layer.id)),
 	)
@@ -1830,6 +1852,20 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		)
 	}, [resolvedBaseMap, resourceRetry, reportTileLoaded, reportTileError, reportTileFingerprint, reportTileFromAncestor])
 
+	// An archive's bounds contain the view centre (only used to leave out the bundled rivers under MERIT when degraded).
+	const meritCoversCentre = useMemo(
+		() =>
+			!!meritTiles &&
+			meritTiles.offers.some(
+				(a) =>
+					viewState.longitude >= a.bounds[0] &&
+					viewState.longitude <= a.bounds[2] &&
+					viewState.latitude >= a.bounds[1] &&
+					viewState.latitude <= a.bounds[3],
+			),
+		[meritTiles, viewState.longitude, viewState.latitude],
+	)
+
 	// Vector river layers (see rivers/riverLayers.ts): streamed tiles report into tile health like any other source.
 	const riverLayers = useMemo(() => {
 		if (!resolvedBaseMap.rivers) return []
@@ -1843,8 +1879,22 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			retry: resourceRetry,
 			onTileLoad: () => reportTileLoaded(RIVER_TALLY_ID, source, generation),
 			onTileError: (error) => reportTileError(RIVER_TALLY_ID, source, generation, error),
+			merit: meritTiles
+				? {
+						tiles: meritTiles,
+						coversView: meritCoversCentre && meritDrawn,
+						onTileLoad: (tile) => {
+							if (meritCreditVisible([tile])) setMeritDrawn(true)
+						},
+						onViewportLoad: (tiles) => setMeritDrawn(meritCreditVisible(tiles)),
+						onTileError: (error) => reportTileError(RIVER_TALLY_ID, source, generation, error),
+					}
+				: null,
 		})
 	}, [
+		meritTiles,
+		meritCoversCentre,
+		meritDrawn,
 		resolvedBaseMap.rivers,
 		mapTheme,
 		riverZoom,
@@ -2454,6 +2504,14 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			}
 
 			const clicked: ClickedFeature[] = []
+
+			// A local MERIT-Basins reach: its attributes and the provenance of the tile file it came from. The pick is on the
+			// composite tile layer or its sublayer; both ids start with the MERIT prefix.
+			if ((isMeritLayerId(info.layer?.id) || isMeritLayerId(info.sourceLayer?.id)) && info.object) {
+				const segment = info.object as MeritSegment
+				const offer = meritArchivesRef.current.find((a) => a.id === segment.archiveId)
+				clicked.push(meritReachFeature(segment, offer))
+			}
 
 			// Prefer deck.gl pick (matches rendered geometry).
 			if (info.layer?.id && info.object) {
@@ -4286,6 +4344,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 						resolvedBaseMap,
 						{ lon: viewState.longitude, lat: viewState.latitude },
 						creditedSourceIds,
+						meritExportCredits({ archives: meritState.archives, enabled: true }),
 					)}
 					bearing={viewState.bearing ?? 0}
 					cursorCoord={cursorCoord}
@@ -4541,6 +4600,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 				layers={sortedLayers}
 				mapStyle={mapStyle === "dark" ? "dark" : "light"}
 				measureMode={measureMode}
+				merit={meritControl}
 				onActiveToolChange={setActiveTool}
 				onBasemapChange={(id) => selectBaseMap(id, true)}
 				onBasemapReset={resetBaseMap}

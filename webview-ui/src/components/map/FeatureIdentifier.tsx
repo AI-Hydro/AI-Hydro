@@ -11,6 +11,7 @@ import type { TraceDirection, TraceLayerInfo, TraceRequest } from "./networkTrac
 import { type OverflowItem, OverflowMenu } from "./OverflowMenu"
 import { PhotoStrip } from "./PhotoStrip"
 import { extractPhotoPaths } from "./photoPaths"
+import { isMeritLayerId } from "./rivers/meritReach"
 
 export interface ClickedFeature {
 	layerId: string
@@ -138,8 +139,10 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 	const clickedTrace = hasFeatures ? traces.find((t) => t.layerId === current.layerId) : undefined
 	const gaugeTraces = gauge ? traces.filter((t) => t.siteNo === gauge.siteNo) : []
 	const tracePalette = { fg, muted, accentText, border: bdClr, warn: isDark ? "#f2cc60" : "#7a5b00" }
-	const entries = showAll ? allEntries : allEntries.slice(0, PROPS_SHOWN)
-	const extra = allEntries.length - PROPS_SHOWN
+	// A MERIT reach card always lists every field (the provenance rows are part of the answer, not detail).
+	const shown = hasFeatures && isMeritLayerId(current.layerId) ? allEntries.length : PROPS_SHOWN
+	const entries = showAll ? allEntries : allEntries.slice(0, shown)
+	const extra = allEntries.length - shown
 
 	const coordLine =
 		inspectPoint &&
@@ -390,7 +393,8 @@ const FeatureIdentifier: React.FC<FeatureIdentifierProps> = ({
 									key={label}
 									style={{
 										display: "grid",
-										gridTemplateColumns: "72px 1fr",
+										gridTemplateColumns:
+											hasFeatures && isMeritLayerId(current.layerId) ? "96px 1fr" : "72px 1fr",
 										gap: "2px 8px",
 										marginBottom: 3,
 										fontSize: 11,

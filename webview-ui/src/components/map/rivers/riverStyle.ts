@@ -120,3 +120,35 @@ export function usesBundledRivers(zoom: number, degraded: boolean): boolean {
 export function lakesVisible(zoom: number, degraded: boolean): boolean {
 	return degraded || zoom < NATURAL_EARTH_LAKE_ZOOM_LIMIT
 }
+
+// ── Upstream-area styling for the local MERIT-Basins tier (design rule W1, S1/S2 ramps) ────────────────────────
+// The MERIT tiles carry `uparea` (km2), so width and colour use the physical variable instead of the Strahler proxy
+// above. One global scale for every view: a width means the same area everywhere.
+
+/** W1 clamps the area to this range. */
+export const UPAREA_MIN_KM2 = 25
+export const UPAREA_MAX_KM2 = 3e6
+/** The colour ramp spans 25 km2 to 10^6 km2 (the six stops of S1/S2); larger rivers keep the last stop. */
+const RAMP_TOP_KM2 = 1e6
+/** Dark theme: small reaches are half opaque, fully opaque from about 10^4 km2. */
+const OPAQUE_FROM_KM2 = 1e4
+
+/** A reach with no recorded area is styled as the smallest class; the card still says "not recorded". */
+function clampedUparea(uparea: number | null | undefined): number {
+	if (uparea === null || uparea === undefined || !Number.isFinite(uparea)) return UPAREA_MIN_KM2
+	return Math.min(UPAREA_MAX_KM2, Math.max(UPAREA_MIN_KM2, uparea))
+}
+
+/** W1: `w = 0.6 + 0.7 * log10(A / 25 km2)` CSS px (25 km2 -> 0.6, 1,000 -> 1.7, 10^4 -> 2.4, 10^5 -> 3.1, the Amazon -> 4.1). */
+export function riverWidthPxForUparea(uparea: number | null | undefined): number {
+	return 0.6 + 0.7 * Math.log10(clampedUparea(uparea) / UPAREA_MIN_KM2)
+}
+
+export function riverColorForUparea(uparea: number | null | undefined, theme: RiverTheme): Rgba {
+	const a = clampedUparea(uparea)
+	const position = Math.log10(a / UPAREA_MIN_KM2) / Math.log10(RAMP_TOP_KM2 / UPAREA_MIN_KM2)
+	const [r, g, b] = rampColor(position, theme)
+	if (theme === "light") return [r, g, b, 255]
+	const t = Math.min(1, Math.log10(a / UPAREA_MIN_KM2) / Math.log10(OPAQUE_FROM_KM2 / UPAREA_MIN_KM2))
+	return [r, g, b, Math.round(255 * (0.5 + 0.5 * t))]
+}
