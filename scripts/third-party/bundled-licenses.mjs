@@ -69,8 +69,10 @@ function declaredLicense(pkg) {
  * @param {string} baseDir
  */
 export function collectPackages(modulePaths, baseDir, overrides = loadOverrides(), unbundled = []) {
-	const unbundledRoots = new Set(unbundled.map((name) => path.join(baseDir, "node_modules", name)))
-	modulePaths = [...modulePaths, ...[...unbundledRoots].map((root) => path.join(root, "package.json"))]
+	// Compare in packageRootOf's normalised form (forward slashes), or Windows paths never match.
+	const unbundledFiles = unbundled.map((name) => path.join(baseDir, "node_modules", name, "package.json"))
+	const unbundledRoots = new Set(unbundledFiles.map((file) => packageRootOf(file)))
+	modulePaths = [...modulePaths, ...unbundledFiles]
 	const roots = new Set()
 	for (const p of modulePaths) {
 		const clean = p.replace(/^\0/, "").replace(/\?.*$/, "")
