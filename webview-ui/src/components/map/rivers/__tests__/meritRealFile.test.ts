@@ -30,6 +30,12 @@ describe.skipIf(!real)("real region-72 archive", () => {
 			await registry.whenVerified()
 			const offer = registry.snapshot().archives[0]
 			expect(offer.provenance.verification).toBe("sha256-verified")
+			// schema 2 sidecar: the attribution keeps the NC-SA words with the "exact variant unresolved" suffix, and the note shows
+			expect(offer.provenance.attribution).toContain("CC BY-NC-SA")
+			expect(offer.provenance.attribution).toContain("exact variant unresolved")
+			expect(offer.provenance.licenceNote).toContain("unresolved")
+			expect(typeof offer.provenance.reachesAbsent).toBe("number")
+			expect(offer.provenance.sourcePinned).toBe("true")
 			const file = fs.readFileSync(path.join(dir, "rivers72.pmtiles"))
 			expect(createHash("sha256").update(file).digest("hex")).toBe(offer.provenance.tilesSha256)
 

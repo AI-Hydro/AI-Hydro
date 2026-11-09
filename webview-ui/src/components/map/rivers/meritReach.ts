@@ -48,7 +48,10 @@ export function meritReachFeature(segment: MeritSegment, offer: MeritArchiveOffe
 		...(p?.licenceNote ? { "Licence note": p.licenceNote } : {}),
 		...(p?.sourcePinned ? { "Source pinned": p.sourcePinned } : {}),
 		...(p?.verifiedAt ? { "Source verified": p.verifiedAt } : {}),
-		...(p?.reachesDropped !== undefined ? { "Reaches dropped at z12": String(p.reachesDropped) } : {}),
+		...(p?.sourceSha256Origin ? { "Source sha256 origin": p.sourceSha256Origin } : {}),
+		...(p?.reachesAbsent !== undefined
+			? { "Reaches not drawn at max zoom (degenerate sub-pixel)": String(p.reachesAbsent) }
+			: {}),
 		Citation: p?.citationDetail || p?.citation || NOT_RECORDED,
 		_dataset: "MERIT-Basins",
 		_uparea_km2: segment.uparea,

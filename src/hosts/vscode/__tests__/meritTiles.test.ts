@@ -27,13 +27,20 @@ const sha = (b: Buffer) => createHash("sha256").update(b).digest("hex")
 
 function sidecar(name: string, file: Buffer, overrides: Record<string, unknown> = {}) {
 	return {
-		tile_schema_version: 1,
+		tile_schema_version: 2,
 		region: "72",
-		source: { name: "rivers72.db", sha256: "a".repeat(64), sha256_origin: "staging_provenance_sidecar" },
+		source: {
+			name: "rivers72.db",
+			sha256: "a".repeat(64),
+			sha256_origin: "computed_no_sidecar",
+			source_pinned: true,
+			verified_at: "2026-11-09T12:20:16+00:00",
+		},
 		output: { name, size_bytes: file.length, sha256: sha(file) },
 		licence: "CC BY-NC-SA 4.0",
 		citation: "Lin et al. 2019",
-		attribution: "Rivers: MERIT-Basins, Lin et al. 2019, CC BY-NC-SA 4.0",
+		attribution:
+			"Rivers: MERIT-Basins, Lin et al. 2019, CC BY-NC-SA 4.0 (attributed per mghydro.com; exact variant unresolved)",
 		...overrides,
 	}
 }
@@ -138,7 +145,7 @@ describe("MERIT tile archive registry (host)", () => {
 	it("offers an archive only with a valid sidecar, matching size and an NC-SA credit", async () => {
 		const cases: Array<[string, Record<string, unknown>]> = [
 			["attribution without NC-SA", { attribution: "Rivers: MERIT-Basins, CC BY 4.0" }],
-			["wrong schema", { tile_schema_version: 2 }],
+			["wrong schema", { tile_schema_version: 1 }],
 			["wrong size", { output: { name: "rivers72.pmtiles", size_bytes: 1, sha256: "b".repeat(64) } }],
 			["no source hash", { source: { name: "x.db" } }],
 		]
@@ -161,13 +168,15 @@ describe("MERIT tile archive registry (host)", () => {
 	it("reads optional sidecar keys when present and tolerates their absence", async () => {
 		write({
 			licence_note: "variant unresolved",
-			source_pinned: "true",
-			verified_at: "2026-11-09",
-			reaches_dropped_at_maxzoom: 7,
+			reaches_absent_at_max_zoom: 7,
+			reaches_absent_at_max_zoom_comids: [1, 2],
 		})
 		const p = (await registry().scan()).archives[0].provenance
 		expect(p.licenceNote).to.equal("variant unresolved")
-		expect(p.reachesDropped).to.equal(7)
+		expect(p.reachesAbsent).to.equal(7)
+		expect(p.reachesAbsentComids).to.deep.equal([1, 2])
+		expect(p.sourcePinned).to.equal("true")
+		expect(p.sourceSha256Origin).to.equal("computed_no_sidecar")
 		write()
 		expect((await registry().scan()).archives[0].provenance.licenceNote).to.equal(undefined)
 	})

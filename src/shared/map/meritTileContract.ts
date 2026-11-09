@@ -11,7 +11,7 @@
  */
 
 /** `tile_schema_version` of the sidecar this build understands. */
-export const MERIT_TILE_SCHEMA_VERSION = 1
+export const MERIT_TILE_SCHEMA_VERSION = 2
 
 /** The five MVT layers, finest-last. Each is one Z1 upstream-area band; a tile carries the layers its zoom reaches. */
 export const MERIT_LAYER_NAMES = ["rivers_z0", "rivers_z5", "rivers_z7", "rivers_z9", "rivers_z11"] as const
@@ -47,15 +47,26 @@ export const MERIT_MSG = {
 } as const
 
 /**
- * Optional sidecar keys added in builder review (all tolerated when absent). `licence_note` says the exact MERIT licence
- * variant is unresolved; `source_pinned` and `verified_at` describe the source pin. The builder's name for the count of
- * reaches dropped at max zoom is not final, so any top-level or `output` key containing "dropped" with a number is read.
+ * Sidecar keys of the merged builder (aihydro-watershed `tiles/merit_rivers.py`, schema 2). `licence_note` says the exact
+ * MERIT licence variant is unresolved. `source_pinned`, `verified_at` and `sha256_origin` sit under `source`.
+ * `reaches_absent_at_max_zoom` (an integer) counts reaches not drawn at max zoom (degenerate, sub-pixel);
+ * `reaches_absent_at_max_zoom_comids` lists them, capped at 100 (the count is exact). All are tolerated when absent.
  */
-export const MERIT_OPTIONAL_KEYS = {
+export const MERIT_SIDECAR_KEYS = {
 	licenceNote: "licence_note",
 	sourcePinned: "source_pinned",
 	verifiedAt: "verified_at",
+	sha256Origin: "sha256_origin",
+	reachesAbsent: "reaches_absent_at_max_zoom",
+	reachesAbsentComids: "reaches_absent_at_max_zoom_comids",
 } as const
+
+/** The three values of `source.sha256_origin` the builder writes. */
+export const MERIT_SHA256_ORIGINS = [
+	"staging_provenance_sidecar_verified_against_pin",
+	"staging_provenance_sidecar_unverified",
+	"computed_no_sidecar",
+] as const
 
 export type MeritVerification = "size-matched" | "sha256-verified"
 
@@ -78,8 +89,9 @@ export interface MeritProvenance {
 	licenceNote?: string
 	sourcePinned?: string
 	verifiedAt?: string
-	/** Reaches dropped at max zoom as degenerate (sub-pixel), when the sidecar counts them. */
-	reachesDropped?: number
+	/** Reaches not drawn at max zoom (degenerate, sub-pixel), when the sidecar counts them. */
+	reachesAbsent?: number
+	reachesAbsentComids?: number[]
 	verification: MeritVerification
 }
 
@@ -152,15 +164,11 @@ export function checkSidecar(raw: unknown, file: { name: string; sizeBytes: numb
 	if (!attribution.includes(MERIT_REQUIRED_LICENCE_WORDS))
 		return { ok: false, reason: `attribution lacks "${MERIT_REQUIRED_LICENCE_WORDS}"` }
 	const optional = (k: string): string | undefined => {
-		const v = raw[k] ?? source[k]
+		const v = source[k] ?? raw[k]
 		return typeof v === "string" ? v : typeof v === "boolean" || typeof v === "number" ? String(v) : undefined
 	}
-	let reachesDropped: number | undefined
-	for (const holder of [raw, output]) {
-		for (const [k, v] of Object.entries(holder)) {
-			if (/dropped/i.test(k) && typeof v === "number" && Number.isFinite(v)) reachesDropped = v
-		}
-	}
+	const absent = raw[MERIT_SIDECAR_KEYS.reachesAbsent]
+	const absentComids = raw[MERIT_SIDECAR_KEYS.reachesAbsentComids]
 	const region = str(raw.region)
 	if (!/^\d{1,2}$/.test(region)) return { ok: false, reason: "region missing" }
 	return {
@@ -170,7 +178,7 @@ export function checkSidecar(raw: unknown, file: { name: string; sizeBytes: numb
 			region,
 			sourceName: str(source.name),
 			sourceSha256: str(source.sha256),
-			sourceSha256Origin: str(source.sha256_origin),
+			sourceSha256Origin: str(source[MERIT_SIDECAR_KEYS.sha256Origin]),
 			tilesName: file.name,
 			tilesSha256: str(output.sha256),
 			tilesSizeBytes: file.sizeBytes,
@@ -179,10 +187,13 @@ export function checkSidecar(raw: unknown, file: { name: string; sizeBytes: numb
 			citation: str(raw.citation),
 			citationDetail: str(raw.citation_detail),
 			attribution,
-			licenceNote: optional(MERIT_OPTIONAL_KEYS.licenceNote),
-			sourcePinned: optional(MERIT_OPTIONAL_KEYS.sourcePinned),
-			verifiedAt: optional(MERIT_OPTIONAL_KEYS.verifiedAt),
-			reachesDropped,
+			licenceNote: optional(MERIT_SIDECAR_KEYS.licenceNote),
+			sourcePinned: optional(MERIT_SIDECAR_KEYS.sourcePinned),
+			verifiedAt: optional(MERIT_SIDECAR_KEYS.verifiedAt),
+			reachesAbsent: typeof absent === "number" && Number.isInteger(absent) ? absent : undefined,
+			reachesAbsentComids: Array.isArray(absentComids)
+				? absentComids.filter((c): c is number => typeof c === "number")
+				: undefined,
 		},
 	}
 }

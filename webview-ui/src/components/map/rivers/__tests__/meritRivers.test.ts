@@ -22,7 +22,8 @@ import { rangeFetch } from "./rangeServer"
 const decompress = async (buf: ArrayBuffer, compression: Compression) =>
 	compression === Compression.Gzip ? (Uint8Array.from(gunzipSync(Buffer.from(buf))).buffer as ArrayBuffer) : buf
 
-const ATTRIBUTION = "Rivers: MERIT-Basins, Lin et al. 2019, CC BY-NC-SA 4.0"
+const ATTRIBUTION =
+	"Rivers: MERIT-Basins, Lin et al. 2019, CC BY-NC-SA 4.0 (attributed per mghydro.com; exact variant unresolved)"
 
 /** One tile (z2 x1 y1) carrying all five MERIT layers; the rivers_z11 reach has no `uparea`. */
 function fiveLayerTile(z = 2, x = 1, y = 1): Uint8Array {
@@ -58,13 +59,15 @@ describe("MERIT tier over the host registry", () => {
 		fs.writeFileSync(
 			path.join(dir, "rivers72.pmtiles.provenance.json"),
 			JSON.stringify({
-				tile_schema_version: 1,
+				tile_schema_version: 2,
 				region: "72",
 				source: { name: "rivers72.db", sha256: "f".repeat(64), sha256_origin: "staging_provenance_sidecar" },
 				output: { name: "rivers72.pmtiles", size_bytes: archiveBytes.length, sha256: sha },
 				licence: "CC BY-NC-SA 4.0",
 				citation: "Lin et al. 2019",
 				attribution: ATTRIBUTION,
+				licence_note: "variant unresolved",
+				reaches_absent_at_max_zoom: 1,
 			}),
 		)
 		registry = new MeritArchiveRegistry({ tilesDir: () => dir })
