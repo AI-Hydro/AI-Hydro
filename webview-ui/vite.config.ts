@@ -41,7 +41,7 @@ console.log("Building webview for", platform)
 
 export default defineConfig({
 	base: "./",
-	plugins: [react(), tailwindcss(), writePortToFile(), bundledLicensesPlugin() as Plugin],
+	plugins: [react(), tailwindcss(), writePortToFile(), bundledLicensesPlugin({ extraPackages: ["tailwindcss"] }) as Plugin],
 	test: {
 		environment: "jsdom",
 		globals: true,

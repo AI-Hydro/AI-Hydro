@@ -26,7 +26,9 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const LICENSE_FILE = /^(licen[cs]e|copying|notice)([-_.].*)?$/i
-const COPYLEFT = /\b(A?GPL|LGPL|MPL|EPL|CDDL|EUPL|OSL|CC-BY-SA)\b/i
+const COPYLEFT = /\b(A?GPL|LGPL|MPL|EPL|CDDL|EUPL|OSL|CC-BY-SA)(?=v?\d|\b)/i
+// Licence-file text that marks copyleft, for packages whose declared licence is UNKNOWN or "SEE LICENSE IN".
+const COPYLEFT_TEXT = /GNU (LESSER |LIBRARY |AFFERO )?GENERAL PUBLIC LICENSE|Mozilla Public License|Eclipse Public License/i
 const OVERRIDES_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "licence-overrides.json")
 const normalize = (text) => text.replace(/\r\n/g, "\n").replace(/\s+$/u, "")
 
@@ -68,7 +70,7 @@ export function collectPackages(modulePaths, baseDir, overrides = loadOverrides(
 	}
 	const byKey = new Map()
 	for (const root of roots) {
-		// A sub-path package.json (e.g. "type": "module" markers) has no name; walk up to the real root.
+		// A root without name/version (none seen so far) cannot be identified and is skipped.
 		const pkgFile = path.join(root, "package.json")
 		if (!existsSync(pkgFile)) continue
 		const pkg = JSON.parse(readFileSync(pkgFile, "utf8"))
@@ -142,6 +144,9 @@ export function problemsOf(packages) {
 		if (p.files.length === 0 && !p.override) problems.push(`${p.name}@${p.version}: no licence file and no override (declared ${p.license})`)
 		if (onlyCopyleft(p.license)) problems.push(`${p.name}@${p.version}: copyleft licence ${p.license}`)
 		if (p.license === "UNKNOWN" && p.files.length === 0) problems.push(`${p.name}@${p.version}: no declared licence`)
+		if ((p.license === "UNKNOWN" || /^SEE LICEN[CS]E/i.test(p.license)) && p.files.some((f) => COPYLEFT_TEXT.test(f.text))) {
+			problems.push(`${p.name}@${p.version}: licence file text is copyleft (declared ${p.license})`)
+		}
 	}
 	return problems
 }
@@ -167,7 +172,11 @@ export function renderNotices(bundleLabel, packages) {
 				"",
 			)
 		} else if (p.override) {
-			out.push(`(The package ships no licence file; text below is the upstream licence from ${p.override.source}.)`, p.override.text, "")
+			out.push(
+				`(The package ships no licence file. Text below is the licence file of its upstream repository's default branch when fetched, ${p.override.source}; the copyright line of this older release may differ.)`,
+				p.override.text,
+				"",
+			)
 		} else {
 			out.push("(This package contains no licence file; its package.json declares the licence above. NEEDS HUMAN CHECK.)", "")
 		}
@@ -184,17 +193,36 @@ export function esbuildInputs(metafile, outfile) {
 		.map(([k]) => k)
 }
 
-/** Vite/rollup plugin: emits assets/THIRD_PARTY_LICENSES.txt next to the bundle. */
-export function bundledLicensesPlugin({ label = "AI-Hydro Studio webview bundle (webview-ui/build/assets/index.js)", fileName = "assets/THIRD_PARTY_LICENSES.txt" } = {}) {
+/**
+ * Vite/rollup plugin: emits assets/THIRD_PARTY_LICENSES.txt next to the bundle.
+ * `extraPackages` names packages whose output enters the bundle outside rollup's module graph (Tailwind v4's
+ * vite plugin reads tailwindcss's CSS itself and writes the result into index.css).
+ */
+export function bundledLicensesPlugin({
+	label = "AI-Hydro Studio webview bundle (webview-ui/build/assets)",
+	fileName = "assets/THIRD_PARTY_LICENSES.txt",
+	extraPackages = [],
+} = {}) {
 	return {
 		name: "aihydro-bundled-licenses",
 		apply: "build",
 		generateBundle(_options, bundle) {
 			const ids = []
-			for (const chunk of Object.values(bundle)) {
-				if (chunk.type !== "chunk") continue
-				for (const [id, info] of Object.entries(chunk.modules)) if (info.renderedLength > 0) ids.push(id)
+			for (const item of Object.values(bundle)) {
+				if (item.type === "chunk") {
+					for (const [id, info] of Object.entries(item.modules)) if (info.renderedLength > 0) ids.push(id)
+				} else {
+					// Fonts and images copied from packages (e.g. @fontsource, codicons) arrive as assets.
+					const sources = item.originalFileNames ?? []
+					if (sources.length === 0 && /\.(woff2?|ttf|otf|eot)$/i.test(item.fileName)) {
+						this.error(`licence: font ${item.fileName} has no recorded source, so its licence cannot be listed`)
+					}
+					ids.push(...sources)
+				}
 			}
+			// CSS (codicons, @fontsource, tailwindcss) is inlined into index.css and has no rendered JS length.
+			for (const id of this.getModuleIds()) if (/\.css($|\?)/.test(id)) ids.push(id)
+			for (const name of extraPackages) ids.push(path.join(process.cwd(), "node_modules", name, "package.json"))
 			const packages = collectPackages(ids, process.cwd())
 			const problems = problemsOf(packages)
 			const unexpected = unexpectedProblems(problems)

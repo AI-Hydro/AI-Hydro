@@ -9,8 +9,14 @@ The VSIX redistributes third-party code in two ways, and each has its own notice
 | npm packages compiled into `webview-ui/build/assets/index.js` (vite) | `webview-ui/build/assets/THIRD_PARTY_LICENSES.txt` | the `bundledLicensesPlugin` in `webview-ui/vite.config.ts` |
 
 The bundled lists are built from the bundler's own record of what it emitted (esbuild metafile inputs with
-`bytesInOutput > 0`, rollup chunk modules with `renderedLength > 0`), so they follow every dependency change
-without a committed copy to keep in sync.
+`bytesInOutput > 0`; rollup chunk modules with `renderedLength > 0`, CSS modules, and the source files of
+copied assets such as fonts), so they follow every dependency change without a committed copy to keep in
+sync. Tailwind v4 writes CSS outside rollup's module graph and is named explicitly (`extraPackages` in
+`webview-ui/vite.config.ts`); a font asset without a recorded source fails the build.
+
+Override texts are the licence file on the upstream repository's default branch when fetched (URL and git
+blob SHA recorded), not the file at the pinned version's tag; for old releases the copyright line may differ,
+and the notice says so.
 
 ## When a build fails with "bundled licence check failed"
 

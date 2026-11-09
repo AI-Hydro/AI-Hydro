@@ -27,6 +27,7 @@ function pkg(rel, json, files = {}) {
 pkg("node_modules/alpha", { name: "alpha", version: "1.0.0", license: "MIT" }, { LICENSE: "MIT text\r\n" })
 pkg("node_modules/@s/beta", { name: "@s/beta", version: "2.0.0", license: "BSD-3-Clause" })
 pkg("node_modules/alpha/node_modules/gamma", { name: "gamma", version: "0.1.0", license: "LGPL-2.1+" }, { COPYING: "lgpl" })
+pkg("node_modules/eps", { name: "eps", version: "1.0.0" }, { LICENSE: "GNU LESSER GENERAL PUBLIC LICENSE\nVersion 2.1" })
 pkg("node_modules/delta", { name: "delta", version: "1.0.0", license: "(MIT OR GPL-3.0-or-later)" }, { "LICENSE.md": "dual" })
 
 describe("bundled licences", () => {
@@ -62,6 +63,9 @@ describe("bundled licences", () => {
 		assert.equal(onlyCopyleft("(MIT OR GPL-3.0-or-later)"), false)
 		assert.equal(onlyCopyleft("(Apache-2.0 AND BSD-3-Clause)"), false)
 		assert.equal(onlyCopyleft("LGPL-2.1+"), true)
+		assert.equal(onlyCopyleft("LGPLv3"), true)
+		assert.equal(onlyCopyleft("GPLv2"), true)
+		assert.equal(onlyCopyleft("(GPL-2.0 OR MIT) AND LGPL-3.0"), true)
 		const packages = collectPackages(["node_modules/@s/beta/i.js", "node_modules/alpha/node_modules/gamma/i.js"], tmp, {})
 		const problems = problemsOf(packages)
 		assert.deepEqual(problems, [
@@ -69,6 +73,11 @@ describe("bundled licences", () => {
 			"gamma@0.1.0: copyleft licence LGPL-2.1+",
 		])
 		assert.deepEqual(unexpectedProblems(problems, [{ problem: problems[1], decision: "x" }]), [problems[0]])
+	})
+
+	it("flags copyleft licence text when the declared licence is missing", () => {
+		const packages = collectPackages(["node_modules/eps/i.js"], tmp, {})
+		assert.deepEqual(problemsOf(packages), ["eps@1.0.0: licence file text is copyleft (declared UNKNOWN)"])
 	})
 
 	it("renders deterministically and states when no upstream text exists", () => {
