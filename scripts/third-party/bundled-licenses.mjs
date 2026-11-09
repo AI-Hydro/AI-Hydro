@@ -30,6 +30,13 @@ const COPYLEFT = /\b(A?GPL|LGPL|MPL|EPL|CDDL|EUPL|OSL|CC-BY-SA)(?=v?\d|\b)/i
 // Licence-file text that marks copyleft, for packages whose declared licence is UNKNOWN or "SEE LICENSE IN".
 const COPYLEFT_TEXT = /GNU (LESSER |LIBRARY |AFFERO )?GENERAL PUBLIC LICENSE|Mozilla Public License|Eclipse Public License/i
 const OVERRIDES_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "licence-overrides.json")
+/**
+ * Packages the extension host loads at runtime from node_modules instead of compiling them in (esbuild
+ * `external`), so users can replace them as LGPL requires. They ship whole in the VSIX (see .vscodeignore)
+ * and are listed in the host notice as shipped separately.
+ */
+export const UNBUNDLED_MODULES = ["jschardet"]
+
 const normalize = (text) => text.replace(/\r\n/g, "\n").replace(/\s+$/u, "")
 
 /** Package root for a path inside node_modules (handles scopes and nesting); null for first-party code. */
@@ -61,7 +68,11 @@ function declaredLicense(pkg) {
  * @param {string[]} modulePaths absolute, or relative to `baseDir`
  * @param {string} baseDir
  */
-export function collectPackages(modulePaths, baseDir, overrides = loadOverrides()) {
+export function collectPackages(modulePaths, baseDir, overrides = loadOverrides(), unbundled = []) {
+	// Compare in packageRootOf's normalised form (forward slashes), or Windows paths never match.
+	const unbundledFiles = unbundled.map((name) => path.join(baseDir, "node_modules", name, "package.json"))
+	const unbundledRoots = new Set(unbundledFiles.map((file) => packageRootOf(file)))
+	modulePaths = [...modulePaths, ...unbundledFiles]
 	const roots = new Set()
 	for (const p of modulePaths) {
 		const clean = p.replace(/^\0/, "").replace(/\?.*$/, "")
@@ -83,6 +94,7 @@ export function collectPackages(modulePaths, baseDir, overrides = loadOverrides(
 			.map((f) => ({ file: f, text: normalize(readFileSync(path.join(root, f), "utf8")) }))
 		const override = files.length === 0 ? overrides[key] : undefined
 		byKey.set(key, {
+			unbundled: unbundledRoots.has(root),
 			name: pkg.name,
 			version: pkg.version,
 			license: declaredLicense(pkg),
@@ -127,8 +139,8 @@ export function loadKnownProblems(file = OVERRIDES_PATH) {
 }
 
 /** Generate the notices for an esbuild output and fail on unexpected problems. */
-export function writeBundledLicenses({ metafile, output, out, label }) {
-	const packages = collectPackages(esbuildInputs(metafile, output), process.cwd())
+export function writeBundledLicenses({ metafile, output, out, label, unbundled = [] }) {
+	const packages = collectPackages(esbuildInputs(metafile, output), process.cwd(), loadOverrides(), unbundled)
 	writeFileSync(out, renderNotices(label, packages))
 	const unexpected = unexpectedProblems(problemsOf(packages))
 	if (unexpected.length) {
@@ -142,7 +154,7 @@ export function problemsOf(packages) {
 	const problems = []
 	for (const p of packages) {
 		if (p.files.length === 0 && !p.override) problems.push(`${p.name}@${p.version}: no licence file and no override (declared ${p.license})`)
-		if (onlyCopyleft(p.license)) problems.push(`${p.name}@${p.version}: copyleft licence ${p.license}`)
+		if (onlyCopyleft(p.license) && !p.unbundled) problems.push(`${p.name}@${p.version}: copyleft licence ${p.license}`)
 		if (p.license === "UNKNOWN" && p.files.length === 0) problems.push(`${p.name}@${p.version}: no declared licence`)
 		if ((p.license === "UNKNOWN" || /^SEE LICEN[CS]E/i.test(p.license)) && p.files.some((f) => COPYLEFT_TEXT.test(f.text))) {
 			problems.push(`${p.name}@${p.version}: licence file text is copyleft (declared ${p.license})`)
@@ -164,6 +176,12 @@ export function renderNotices(bundleLabel, packages) {
 	]
 	for (const p of packages) {
 		out.push(rule, `${p.name} ${p.version}`, `License: ${p.license}`, rule, "")
+		if (p.unbundled) {
+			out.push(
+				`(Not compiled into the bundle: shipped as a separate, replaceable module in node_modules/${p.name}, with its source, and loaded at runtime. To use a modified version, replace that directory.)`,
+				"",
+			)
+		}
 		if (p.files.length) {
 			for (const f of p.files) out.push(`[${f.file}]`, f.text, "")
 		} else if (p.override?.noUpstreamText) {

@@ -34,3 +34,11 @@ A newly bundled package has one of these problems:
    problem string and decision under `knownProblems`.
 
 `node --test scripts/third-party/bundled-licenses.test.mjs` (`npm run test:licences`) tests the generator.
+
+## Modules shipped unbundled
+
+`UNBUNDLED_MODULES` in `bundled-licenses.mjs` (currently `jschardet`, LGPL-2.1+) are esbuild `external`s that ship
+whole in the VSIX (`.vscodeignore` whitelist, `ALLOWED_PREFIXES` in `verify-development-vsix.mjs`) so users can
+replace them. They appear in the host notice marked as shipped separately, and `verify-extension-bundle.mjs`
+fails if one is compiled into `dist/extension.js` again. An unbundled module must have no runtime dependencies,
+or those must be shipped too.

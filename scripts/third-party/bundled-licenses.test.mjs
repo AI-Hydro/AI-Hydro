@@ -75,6 +75,14 @@ describe("bundled licences", () => {
 		assert.deepEqual(unexpectedProblems(problems, [{ problem: problems[1], decision: "x" }]), [problems[0]])
 	})
 
+	it("lists unbundled modules as replaceable and does not count their copyleft licence as a problem", () => {
+		const packages = collectPackages([], tmp, {}, ["alpha/node_modules/gamma"])
+		assert.equal(packages.length, 1)
+		assert.equal(packages[0].unbundled, true)
+		assert.deepEqual(problemsOf(packages), [])
+		assert.match(renderNotices("t", packages), /shipped as a separate, replaceable module/)
+	})
+
 	it("flags copyleft licence text when the declared licence is missing", () => {
 		const packages = collectPackages(["node_modules/eps/i.js"], tmp, {})
 		assert.deepEqual(problemsOf(packages), ["eps@1.0.0: licence file text is copyleft (declared UNKNOWN)"])

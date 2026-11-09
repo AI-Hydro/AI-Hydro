@@ -113,6 +113,9 @@ old_docs/**
 !node_modules/@vscode/codicons/dist/codicon.css
 !node_modules/@vscode/codicons/dist/codicon.ttf
 
+# LGPL-2.1+ encoding detector shipped as a replaceable module, not compiled into dist/extension.js (DECISIONS.md)
+!node_modules/jschardet/**
+
 # Include default themes JSON files used in getTheme
 !src/integrations/theme/default-themes/**
 
