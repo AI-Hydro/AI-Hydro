@@ -15,6 +15,8 @@ on:
       - "scripts/verify-development-vsix.mjs"
       - "src/test/e2e/learning-pack-*.test.ts"
       - "src/test/e2e/studio-large-course.test.ts"
+      - "src/test/e2e/studio-course-contract.test.ts"
+      - "src/test/fixtures/**"
       - "src/hosts/vscode/**"
       - "src/core/controller/htmlPreview/**"
       - "src/test/e2e/utils/**"
@@ -102,6 +104,21 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # The course-contract specs run Python cells through the installed pack's kernel, so they need the
+      # same deterministic interpreter as html-preview-runtime.yml. It is passed to that step only, so the
+      # other specs run exactly as before.
+      - name: Configure deterministic Python runtime
+        id: python
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check matplotlib
+          python -c 'import sys; print("path=" + sys.executable)' >> "$GITHUB_OUTPUT"
+
       - name: Install test dependencies
         shell: bash
         run: npm ci
@@ -152,6 +169,36 @@ jobs:
           src/test/e2e/learning-pack-install.test.ts src/test/e2e/learning-pack-charts.test.ts
           src/test/e2e/studio-large-course.test.ts
           --grep '@phase1-(pack|charts|large-course)'
+
+      # Prerequisites and progress over the book's course graph, executable cells (computation, figure,
+      # error, kernel restart, interruption) and ordinary non-course documents, in the real panel.
+      - name: Run installed-VSIX course-contract specs (Ubuntu)
+        if: matrix.runner == 'ubuntu'
+        shell: bash
+        env:
+          REPEAT: ${{ inputs.repeat || '1' }}
+          RUNNER_LABEL: ${{ matrix.runner }}
+          AIHYDRO_E2E_PYTHON: ${{ steps.python.outputs.path }}
+          AIHYDRO_CONTRACT_REQUIRED: "1"
+        run: >-
+          xvfb-run -a node scripts/e2e-repeat.mjs
+          --runs "$REPEAT" --label "$RUNNER_LABEL-contract" --
+          src/test/e2e/studio-course-contract.test.ts
+          --grep '@phase1-contract'
+
+      - name: Run installed-VSIX course-contract specs
+        if: matrix.runner != 'ubuntu'
+        shell: bash
+        env:
+          REPEAT: ${{ inputs.repeat || '1' }}
+          RUNNER_LABEL: ${{ matrix.runner }}
+          AIHYDRO_E2E_PYTHON: ${{ steps.python.outputs.path }}
+          AIHYDRO_CONTRACT_REQUIRED: "1"
+        run: >-
+          node scripts/e2e-repeat.mjs
+          --runs "$REPEAT" --label "$RUNNER_LABEL-contract" --
+          src/test/e2e/studio-course-contract.test.ts
+          --grep '@phase1-contract'
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

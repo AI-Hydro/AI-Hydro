@@ -37,6 +37,10 @@ export function createValidLearningPackFiles(options?: {
 	 */
 	moduleIds?: readonly string[]
 	moduleBytes?: (id: string, index: number) => Uint8Array
+	/** Titles shown in course.json for `moduleIds` (default: the id). */
+	moduleTitles?: Readonly<Record<string, string>>
+	/** Prerequisite module IDs per module in course.json (default: none). */
+	modulePrerequisites?: Readonly<Record<string, readonly string[]>>
 }): {
 	files: Map<string, Uint8Array>
 	fingerprint: string
@@ -65,7 +69,12 @@ export function createValidLearningPackFiles(options?: {
 	const course = {
 		courseId: options?.courseId ?? "hmfp",
 		title: "Synthetic Course",
-		modules: moduleIds.map((id) => ({ id, path: `modules/${id}/module.html`, title: id })),
+		modules: moduleIds.map((id) => ({
+			id,
+			path: `modules/${id}/module.html`,
+			title: options?.moduleTitles?.[id] ?? id,
+			...(options?.modulePrerequisites?.[id] ? { prerequisites: [...options.modulePrerequisites[id]] } : {}),
+		})),
 	}
 	const payload = new Map<string, Uint8Array>([
 		["pack.json", canonicalJsonBytes(manifest)],
