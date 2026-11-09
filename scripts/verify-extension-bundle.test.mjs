@@ -49,3 +49,11 @@ describe("verify-extension-bundle: Learning Pack authoring stays out of extensio
 		})
 	}
 })
+
+describe("verify-extension-bundle: LGPL jschardet stays external", () => {
+	it("fails when jschardet is compiled into extension.js", () => {
+		const result = verify(["node_modules/jschardet/src/index.js"])
+		assert.notEqual(result.status, 0)
+		assert.match(result.stderr, /LGPL module compiled into extension\.js/)
+	})
+})

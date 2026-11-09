@@ -149,6 +149,24 @@ test("rejects undeclared source, private workspace, or asset content", async (co
 	await assert.rejects(() => verifyDevelopmentVsix(opaqueAsset), /undeclared archive entry/)
 })
 
+test("allows files of the unbundled jschardet module but no other node_modules package", async (context) => {
+	const allowed = temporaryVsix(context, "jschardet-src.vsix")
+	await writeVsix(allowed, {
+		extraEntries: [{ content: "module.exports = {}", name: "extension/node_modules/jschardet/src/index.js" }],
+	})
+	await verifyDevelopmentVsix(allowed)
+
+	const other = temporaryVsix(context, "other-module.vsix")
+	await writeVsix(other, {
+		extraEntries: [{ content: "module.exports = {}", name: "extension/node_modules/left-pad/index.js" }],
+	})
+	await assert.rejects(() => verifyDevelopmentVsix(other), /undeclared archive entry/)
+
+	const noLicence = temporaryVsix(context, "jschardet-no-licence.vsix")
+	await writeVsix(noLicence, { omittedEntries: ["extension/node_modules/jschardet/LICENSE"] })
+	await assert.rejects(() => verifyDevelopmentVsix(noLicence), /missing required entry/)
+})
+
 test("rejects the Learning Pack authoring CLI inside the VSIX (the signer never ships)", async (context) => {
 	const vsix = temporaryVsix(context, "signer.vsix")
 	await writeVsix(vsix, { extraEntries: [{ content: "#!/usr/bin/env node", name: "extension/dist/aihydro-pack.cjs" }] })
