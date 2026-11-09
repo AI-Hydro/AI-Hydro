@@ -564,9 +564,15 @@ function captureLayerMetadata(layer: MapLayer): Record<string, string> {
 }
 
 export function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSceneSnapshot {
-	// Attribution is theme-independent; the resolved entry also lists overlays (hydrography) drawn above the base.
+	// Overlays can be theme-specific, and the export does not know which theme the map was drawn in: credit the
+	// base and every overlay either theme can draw.
 	const basemap = resolveBaseMap(props.currentBasemap, "dark")
-	const basemapAttribution = attributionList(basemap)
+	const basemapAttribution = [
+		...new Set([
+			...attributionList(resolveBaseMap(props.currentBasemap, "light")),
+			...attributionList(resolveBaseMap(props.currentBasemap, "dark")),
+		]),
+	]
 	const visible = visibleLayers(props.layers ?? [], props.visibleLayerIds)
 	const citations = [
 		{

@@ -14,6 +14,7 @@ import {
 	resolveBaseMap,
 	US_EXTENT,
 	US_EXTENTS,
+	USGS_HYDRO_OVERLAY,
 } from "../basemaps"
 
 describe("basemap catalogue", () => {
@@ -160,6 +161,20 @@ describe("resolveBaseMap", () => {
 		expect(light.overlays[0].extent).toEqual(US_EXTENT)
 	})
 
+	it("the USGS hydrography overlay is light-theme only: no pale halos or opaque sea on the dark base", () => {
+		expect(resolveBaseMap(DEFAULT_BASEMAP_ID, "dark").overlays).toEqual([])
+		expect(USGS_HYDRO_OVERLAY.themes).toEqual(["light"])
+	})
+
+	it("the USGS overlay starts at z8, where the Esri base has stopped drawing country and state names", () => {
+		// Both rasters bake their labels in (probed 2026-11-08): Esri names to z7, USGS country names to z5 and state names at z7.
+		expect(resolveBaseMap(DEFAULT_BASEMAP_ID, "light").overlays[0].minZoom).toBe(8)
+	})
+
+	it("the USGS overlay draws a parent tile over a 404 inside its coverage", () => {
+		expect(USGS_HYDRO_OVERLAY.parentFallback).toBe(true)
+	})
+
 	it("themeless entries are the same in both themes", () => {
 		expect(resolveBaseMap("esri-topo", "light").url).toBe(resolveBaseMap("esri-topo", "dark").url)
 	})
@@ -174,7 +189,8 @@ describe("resolveBaseMap", () => {
 })
 
 describe("attribution reflects what is drawn", () => {
-	const resolved = resolveBaseMap(DEFAULT_BASEMAP_ID, "dark")
+	// The hydrography overlay is drawn in the light theme only.
+	const resolved = resolveBaseMap(DEFAULT_BASEMAP_ID, "light")
 	it("credits the hydrography overlay only where it covers the view", () => {
 		expect(attributionFor(resolved, { lon: -90, lat: 39 })).toBe(
 			`${resolved.attribution} · Hydrography: USGS The National Map`,

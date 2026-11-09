@@ -10,6 +10,74 @@
 		}
 	},
 	"screens": {
+		"map-basemap-hydro-border": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"map-basemap-hydro-border-wide": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"map-basemap-hydro-gap": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
+		"map-basemap-hydro-z13-hole": {
+			"ref": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"matrixTotal": {
+				"noName": 0,
+				"smallTarget": 0,
+				"smallText": 0,
+				"contrast": 0,
+				"contrastIndeterminate": 0
+			},
+			"cells": 40
+		},
 		"map-layers-file-changed-manual": {
 			"ref": {
 				"noName": 0,
@@ -5337,6 +5405,46 @@
 					"cells": 6
 				},
 				"map-layers-run-drawer": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-basemap-hydro-border": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-basemap-hydro-border-wide": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-basemap-hydro-gap": {
+					"matrixTotal": {
+						"noName": 0,
+						"smallTarget": 0,
+						"smallText": 0,
+						"contrast": 0,
+						"contrastIndeterminate": 0
+					},
+					"cells": 6
+				},
+				"map-basemap-hydro-z13-hole": {
 					"matrixTotal": {
 						"noName": 0,
 						"smallTarget": 0,

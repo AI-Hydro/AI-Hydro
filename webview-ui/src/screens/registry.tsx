@@ -1291,7 +1291,7 @@ export const screens: ScreenDef[] = [
 		storage: { [MAP_STORAGE_KEY]: framedWorkspace("esri-topo") },
 	}),
 	mapScreen("map-empty-default", "Map empty state, default basemap"),
-	// Hydrology default basemap: muted base, USGS hydrography overlay, no labels (light and dark come from the theme).
+	// Hydrology default basemap: muted base; the USGS hydrography overlay is drawn in the light theme only, from z8 (light and dark come from the theme).
 	mapScreen("map-basemap-muted-default", "Map on the muted hydrology default basemap", { layers: [basinPolygon, gaugePoint] }),
 	// Basemap notices: US-only basemap over India, a saved removed (CARTO) basemap migrated, and a provider that
 	// answers every tile with one identical image.
@@ -1304,6 +1304,31 @@ export const screens: ScreenDef[] = [
 	mapScreen("map-basemap-placeholder", "Basemap returning one identical tile for every request (unavailable notice)", {
 		layers: [basinPolygon],
 	}),
+	// USGS hydrography cache hole at tile zoom 13 = map zoom 12, as deck draws 256 px tiles one level deeper (central Massachusetts): the overlay is filled from the parent tile, so no
+	// "tiles unavailable" note appears. In the dark theme the overlay is not drawn at all. Light and dark come from the theme.
+	mapScreen("map-basemap-hydro-z13-hole", "Hydrology default at z13 over a USGS cache hole: parent tile fills it, no note", {
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-72.0, 42.4], 12) },
+		expectAbsent: ["text=River overlay (USGS hydrography)", "text=not available from the provider"],
+	}),
+	// Same cache, but no ancestor exists either: the quiet note stays, and it does not claim "no coverage".
+	mapScreen("map-basemap-hydro-gap", "Hydrology default where the USGS cache has no tile at any nearby zoom (quiet note)", {
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-72.0, 42.4], 12) },
+		expectAbsent: ["text=no coverage"],
+	}),
+	// A view straddling the US-Canada border (47.9N 96.2W region, at the overlay's first tile zoom, 8 = map zoom 7): the overlay stops at
+	// the 50N coverage edge. Dark: no overlay at all. Light: the edge fades out instead of cutting lakes in a straight line.
+	mapScreen("map-basemap-hydro-border", "Hydrology default across the US-Canada border: no seam, no dark-theme overlay", {
+		storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-96.2, 49.6], 7) },
+		expectAbsent: ["text=River overlay (USGS hydrography)"],
+	}),
+	mapScreen(
+		"map-basemap-hydro-border-wide",
+		"Hydrology default zoomed out over Minnesota and Manitoba: base only, no USGS overlay",
+		{
+			storage: { [MAP_STORAGE_KEY]: framedWorkspace(undefined, false, [-96.2, 47.9], 6) },
+			expectAbsent: ["text=River overlay (USGS hydrography)"],
+		},
+	),
 	mapScreen("map-basemap-panel", "Basemap panel with Reset to hydrology default", {
 		layers: [basinPolygon],
 		steps: [...openTool("Layer manager"), { click: "#map-chrome-tab-basemap" }, { wait: 500 }],

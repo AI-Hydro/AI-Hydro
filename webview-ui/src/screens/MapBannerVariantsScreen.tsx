@@ -43,7 +43,7 @@ export function MapBannerVariantsScreen() {
 				<MapResourceStatus
 					{...common}
 					tileErrors={{}}
-					tileNotes={{ basemap: "2 tiles unavailable (2 with no coverage at that location)" }}
+					tileNotes={{ basemap: "2 tiles are not available from the provider here" }}
 				/>
 			</Variant>
 		</div>
