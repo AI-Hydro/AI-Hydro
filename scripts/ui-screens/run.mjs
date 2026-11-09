@@ -20,6 +20,7 @@ import { chromium } from "playwright"
 import { assertAbsent } from "./assertions.mjs"
 import { pageChecker } from "./checker.mjs"
 import { measureChromeCoverage } from "./coverage.mjs"
+import { isRiverArchiveRequest, riverArchiveResponse } from "./riverArchive.mjs"
 import { startServer, THEMES } from "./server.mjs"
 import { parseShard, shardScreens } from "./shard.mjs"
 import { basemapIdForUrl, isPlaceholderScreen, tileFaultStatus, tilePng } from "./tiles.mjs"
@@ -137,6 +138,27 @@ async function newContext() {
 			const url = request.url()
 			const host = new URL(url).host
 			externalHosts.set(host, (externalHosts.get(host) ?? 0) + 1)
+			// The GEOGLOWS river archive: byte ranges of a SYNTHETIC fixture archive (see riverArchive.mjs), never the real file.
+			if (isRiverArchiveRequest(url)) {
+				let screenId = ""
+				try {
+					screenId = new URL(request.frame()?.page()?.url() ?? "about:blank").pathname.replace(/^.*\/screen\//, "")
+				} catch {
+					screenId = ""
+				}
+				const reply = riverArchiveResponse(decodeURIComponent(screenId), request.headers().range)
+				return route.fulfill({
+					status: reply.status,
+					contentType: "application/octet-stream",
+					headers: {
+						"Access-Control-Allow-Origin": "*",
+						"Access-Control-Expose-Headers": "*",
+						[FIXTURE_HEADER]: "1",
+						...reply.headers,
+					},
+					body: reply.body,
+				})
+			}
 			const looksLikeTile = isTileRequest(request)
 			if (looksLikeTile) {
 				// Error screens inject tile failures keyed by screen id (still a harness-answered response).

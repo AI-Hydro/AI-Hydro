@@ -39,6 +39,26 @@ export function isSparseSource(id: string): boolean {
 	return id.startsWith("basemap-")
 }
 
+/** Tile-health id of the streamed vector river tier (see rivers/riverSources.ts). */
+const RIVER_TIER_ID = "basemap-rivers"
+
+/**
+ * The streamed river tier is unreachable: nothing loaded after a few tries, or at least half of a larger sample
+ * failed. The map then draws the bundled Natural Earth rivers and stops requesting river tiles (so this stays true
+ * until Retry clears the tally). A tile the archive simply does not contain is an empty tile, not a failure;
+ * a missing archive file is reported as "status 404" (not "HTTP 404"), so it counts as a failure here.
+ */
+export function riverTierDegraded(tally: TileTally | undefined): boolean {
+	if (!tally || tally.failed === 0) return false
+	if (tally.loaded === 0) return tally.failed >= 3
+	return tally.failed >= MIN_OVERLAY_SAMPLE && tally.failed / (tally.failed + tally.loaded) >= 0.5
+}
+
+export function riverFallbackMessage(tally: TileTally): string {
+	const cause = tally.lastError ? ` (${tally.lastError})` : ""
+	return `River tiles could not be loaded${cause}. Showing the coarse bundled Natural Earth rivers instead.`
+}
+
 export interface ClassifyOptions {
 	/** Sparse cache: 404s are excluded from the failure ratio and a minimum sample is required. */
 	sparse?: boolean
@@ -112,7 +132,8 @@ export function clearTally(previous: TileTallies, id: string): TileTallies {
 export function tileErrorsFrom(tallies: TileTallies): Record<string, string> {
 	const errors: Record<string, string> = {}
 	for (const [id, tally] of Object.entries(tallies)) {
-		if (classifyTileHealth(tally, { sparse: isSparseSource(id) }) === "failed")
+		if (id === RIVER_TIER_ID && riverTierDegraded(tally)) errors[id] = riverFallbackMessage(tally)
+		else if (classifyTileHealth(tally, { sparse: isSparseSource(id) }) === "failed")
 			errors[id] = tally.lastError ?? "Tile request failed"
 	}
 	return errors
@@ -122,6 +143,7 @@ export function tileErrorsFrom(tallies: TileTallies): Record<string, string> {
 export function tileNotesFrom(tallies: TileTallies): Record<string, string> {
 	const notes: Record<string, string> = {}
 	for (const [id, tally] of Object.entries(tallies)) {
+		if (id === RIVER_TIER_ID && riverTierDegraded(tally)) continue // shown as an alert with Retry (tileErrorsFrom)
 		if (classifyTileHealth(tally, { sparse: isSparseSource(id) }) !== "partial") continue
 		// A 404 is a tile the provider does not have here (a hole in its cache, not an outage).
 		const missing = tally.notFound

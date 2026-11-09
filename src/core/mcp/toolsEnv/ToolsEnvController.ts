@@ -248,13 +248,13 @@ export class ToolsEnvController {
 	}
 
 	private async adopt(version: string, cls: LauncherClass | undefined): Promise<void> {
-		// Below the pinned floor: report it; the upgrade within ~=2.8.2 is the user's Repair, not automatic.
+		// Below the pinned floor: report it; the upgrade within >=2.8.2,<3 is the user's Repair, not automatic.
 		if (!versionMeetsFloor(version)) {
 			this.setStatus({
 				phase: "unhealthy",
 				healthy: false,
 				version,
-				message: `aihydro-tools ${version} is older than the pinned 2.8.2. Choose Repair to upgrade within ~=2.8.2.`,
+				message: `aihydro-tools ${version} is older than the required 2.8.2. Choose Repair to upgrade within 2.x (2.8.2 or newer).`,
 			})
 			await this.refreshTrust()
 			return

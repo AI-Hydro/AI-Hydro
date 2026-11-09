@@ -1,8 +1,10 @@
 /**
  * Basemap catalogue and resolution (pure data and functions; no React, no deck.gl).
  *
- * Every entry is a raster tile pyramid drawn by deck.gl's TileLayer. Entries carry the facts the renderer and
- * the error UI need so they are never guessed at draw time:
+ * Every entry is a raster tile pyramid drawn by deck.gl's TileLayer, except that the Hydrology default also carries
+ * a vector river tier (`rivers`: GEOGLOWS PMTiles streamed over range requests, plus bundled Natural Earth for low
+ * zoom and offline; see rivers/). Entries carry the facts the renderer and the error UI need so they are never
+ * guessed at draw time:
  *   - maxNativeZoom: the deepest level the source actually serves. TileLayer.maxZoom is set to it, so deck
  *     overzooms that level instead of requesting levels that do not exist (404).
  *   - extent: lon/lat bounds of the source. Tiles outside it are not requested (USGS caches are US only).
@@ -42,6 +44,15 @@
  *       https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer?f=json
  *   Carto and HOT are slippy-map CDNs with a level-19 convention and were not part of this check.
  */
+
+import {
+	GEOGLOWS_ATTRIBUTION,
+	GEOGLOWS_MAX_ZOOM,
+	GEOGLOWS_STREAMS_URL,
+	NATURAL_EARTH_ATTRIBUTION,
+	NATURAL_EARTH_SOURCE_ID,
+	RIVER_SOURCE_ID,
+} from "./rivers/riverSources"
 
 export type BaseMapTheme = "light" | "dark"
 export type Extent = [west: number, south: number, east: number, north: number]
@@ -88,6 +99,19 @@ export interface BaseMapOverlay {
 	featherCoverageEdge?: boolean
 }
 
+/**
+ * The vector river tier of a basemap. Streamed GEOGLOWS tiles (CC BY 4.0) draw from `minZoom`; below it, and
+ * whenever the stream is unreachable, the bundled Natural Earth rivers and lakes (public domain) draw instead.
+ */
+export interface BaseMapRivers {
+	/** PMTiles archive, read with HTTP range requests. */
+	url: string
+	maxNativeZoom: number
+	attribution: string
+	/** Credit for the bundled low-zoom and offline tier. */
+	bundledAttribution: string
+}
+
 /** `global` sources serve the whole world; `us` sources serve the United States only (USGS National Map). */
 export type BasemapCoverage = "global" | "us"
 
@@ -109,6 +133,8 @@ export interface BaseMapStyle {
 	extent?: Extent
 	/** Drawn above the base, below data layers. */
 	overlays?: BaseMapOverlay[]
+	/** Vector river tier, drawn above the base and below data layers. */
+	rivers?: BaseMapRivers
 	/** One-line note shown in the Basemap panel. */
 	note?: string
 }
@@ -142,7 +168,8 @@ export const REMOVED_BASEMAPS: Record<string, string> = {
  *     side only), so tiles that straddle the boundary are faded out over its last 48 px (`featherCoverageEdge`);
  *   - the cache has holes inside its declared coverage (z13 returns 404 across much of the northern US), so a
  *     404 is filled from the parent tile (`parentFallback`).
- * Vector rivers (design study `findings/hydrology-basemap-2026-11-08.md`, slice B1) replace this overlay.
+ * Vector rivers (design study `findings/hydrology-basemap-2026-11-08.md`, slice B1) replaced this overlay in the
+ * Hydrology default; it stays as the optional "Gray + USGS rivers" basemap (light theme, United States).
  */
 export const USGS_HYDRO_OVERLAY: BaseMapOverlay = {
 	id: "usgs-hydro",
@@ -158,16 +185,26 @@ export const USGS_HYDRO_OVERLAY: BaseMapOverlay = {
 	featherCoverageEdge: true,
 }
 
+export const GEOGLOWS_RIVERS: BaseMapRivers = {
+	url: GEOGLOWS_STREAMS_URL,
+	maxNativeZoom: GEOGLOWS_MAX_ZOOM,
+	attribution: GEOGLOWS_ATTRIBUTION,
+	bundledAttribution: NATURAL_EARTH_ATTRIBUTION,
+}
+
 export const DEFAULT_BASEMAP_ID = "muted-hydro"
 
 const ESRI_CANVAS_ATTRIBUTION = "Sources: Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS User Community"
 const ESRI_TERMS =
 	"Esri ArcGIS Online tile service. Tiles are served without a key (verified by request, 2026-10-20). Esri's item pages say the content is licensed under the Esri Master License Agreement; whether the agreement permits keyless use in this application was NOT verified (Product-Specific Terms E300 do not address keyless tile services). Attribution is shown. World Light/Dark Gray Base are in mature support, retiring December 2029."
+const GEOGLOWS_TERMS =
+	"GEOGLOWS v2 stream network (streams.pmtiles on the public GEOGLOWS S3 bucket), CC BY 4.0, credit required: https://geoglows.ecmwf.int/license. Only tile byte-range requests are sent; no user data. Natural Earth is public domain."
 const USGS_TERMS =
 	"USGS The National Map: public-domain data, no key; credit USGS. Detailed tiles exist for the United States only."
 
 export const BASE_MAP_STYLES: BaseMapStyle[] = [
 	// ── Hydrology default: muted gray base (carries its own baked-in place names) so rivers and data layers carry the colour ────────────────
+	// Rivers are vectors drawn by us (no baked-in labels, themed per light/dark), so the base's labels are the only ones.
 	{
 		id: DEFAULT_BASEMAP_ID,
 		name: "Hydrology default (muted)",
@@ -176,9 +213,21 @@ export const BASE_MAP_STYLES: BaseMapStyle[] = [
 		darkUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
 		attribution: ESRI_CANVAS_ATTRIBUTION,
 		maxNativeZoom: 16,
+		rivers: GEOGLOWS_RIVERS,
+		terms: `${ESRI_TERMS} Rivers: ${GEOGLOWS_TERMS}`,
+		note: "Esri Light/Dark Gray Canvas (global, muted) with vector rivers in both themes. Rivers stream from GEOGLOWS (global; width and colour show Strahler order, not upstream area) and fall back to coarse bundled Natural Earth rivers when offline. The base map carries the only place and water names.",
+	},
+	{
+		id: "muted-hydro-usgs",
+		name: "Gray + USGS rivers (US, light theme)",
+		coverage: "global",
+		url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+		darkUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+		attribution: ESRI_CANVAS_ATTRIBUTION,
+		maxNativeZoom: 16,
 		overlays: [USGS_HYDRO_OVERLAY],
 		terms: ESRI_TERMS,
-		note: "Esri Light/Dark Gray Canvas (global, muted). In the light theme, USGS hydrography emphasises rivers from zoom 8 in the United States; the dark theme has no river overlay yet.",
+		note: "Esri Gray Canvas with USGS National Map hydrography from zoom 8 in the United States, light theme only (raster tiles with their own river names). The dark theme shows the base alone; choose the Hydrology default for vector rivers everywhere.",
 	},
 
 	// ── Hydrology / Earth-science alternatives (US coverage) ───────────────────────────────────────────────
@@ -268,6 +317,8 @@ export interface ResolvedBaseMap {
 	extents?: Extent[]
 	coverage: BasemapCoverage
 	overlays: BaseMapOverlay[]
+	/** Vector river tier, when the basemap has one (not theme-specific; the layer themes itself). */
+	rivers?: BaseMapRivers
 	/** Base attribution only; use `attributionFor` for what is drawn at a given view. */
 	attribution: string
 }
@@ -296,6 +347,7 @@ export function resolveBaseMap(id: string | undefined, theme: BaseMapTheme): Res
 		extents: style.extents,
 		coverage: style.coverage,
 		overlays: (style.overlays ?? []).filter((overlay) => !overlay.themes || overlay.themes.includes(theme)),
+		rivers: style.rivers,
 		attribution: style.attribution ?? "",
 	}
 }
@@ -353,7 +405,8 @@ export function overlayCovers(overlay: BaseMapOverlay, lon: number, lat: number)
 /**
  * Attribution for what is actually drawn: the base, plus each overlay whose coverage includes the view centre
  * (an overlay that draws nothing here is not credited). When `loadedOverlayIds` is given, an overlay is also
- * credited only once at least one of its tiles has actually loaded.
+ * credited only once at least one of its tiles has actually loaded. The river tier is credited under the ids
+ * "rivers" (GEOGLOWS tiles loaded) and "natural-earth" (the bundled tier is on screen).
  */
 export function attributionFor(
 	resolved: ResolvedBaseMap,
@@ -368,12 +421,21 @@ export function attributionFor(
 			parts.push(overlay.attribution)
 		}
 	}
+	if (resolved.rivers) {
+		// Streamed rivers are credited once a tile has come back; the bundled tier when it is what is drawn.
+		if (!loadedOverlayIds || loadedOverlayIds.has(RIVER_SOURCE_ID)) parts.push(resolved.rivers.attribution)
+		if (!loadedOverlayIds || loadedOverlayIds.has(NATURAL_EARTH_SOURCE_ID)) parts.push(resolved.rivers.bundledAttribution)
+	}
 	return parts.join(" · ")
 }
 
 /** Attribution strings for an export manifest: base and every overlay (the export may span coverage). */
 export function attributionList(resolved: ResolvedBaseMap): string[] {
-	return [...(resolved.attribution ? [resolved.attribution] : []), ...resolved.overlays.map((overlay) => overlay.attribution)]
+	return [
+		...(resolved.attribution ? [resolved.attribution] : []),
+		...resolved.overlays.map((overlay) => overlay.attribution),
+		...(resolved.rivers ? [resolved.rivers.attribution, resolved.rivers.bundledAttribution] : []),
+	]
 }
 
 /** VS Code body classes -> map theme. Dark and every high-contrast theme use the dark base. */

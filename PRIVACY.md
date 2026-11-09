@@ -40,6 +40,20 @@ self-hosted/enterprise deployments that want to route telemetry to their own
 OTLP collector instead of (or alongside) PostHog. See
 `src/shared/services/config/otel-config.ts`.
 
+## Map tile providers
+
+The map panel requests basemap and river tiles directly from these hosts. Each sees an ordinary web request: the tile
+coordinates (or byte ranges) asked for, your IP address and the webview's user agent. No workspace content, file
+names, layer data or account information is sent. Where you pan reveals roughly where you are looking.
+
+| Host | What it serves | What is asked for |
+|---|---|---|
+| `server.arcgisonline.com`, `services.arcgisonline.com` (Esri) | Gray Canvas default basemap, imagery, topo, hillshade, ocean | Tile `{z}/{y}/{x}` addresses in view |
+| `basemap.nationalmap.gov` (USGS) | USGS Topo, Imagery, Shaded Relief, and the hydrography cache of the optional "Gray + USGS rivers" basemap | Tile addresses in view (United States only) |
+| `geoglows-v2.s3.us-west-2.amazonaws.com` (GEOGLOWS, on AWS S3) | Vector rivers of the default basemap (`streams.pmtiles`, CC BY 4.0) | HTTP byte ranges of the archive for the tiles in view; never the whole 2.4 GB file |
+
+Natural Earth rivers and lakes are bundled and make no request.
+
 ## What isn't telemetry, despite living near telemetry code
 
 **Account sign-in.** AI-Hydro has no account sign-in. The inherited Firebase

@@ -130,6 +130,10 @@ import {
 import ResearchGalleryPanel, { type GalleryImportCallbacks } from "./ResearchGalleryPanel"
 import { answerRefreshRequest, isRefreshFileRequest } from "./refreshFile"
 import { resolveFileUri } from "./resolveFileUri"
+import { RiverTileReader } from "./rivers/pmtilesRivers"
+import { buildRiverLayers } from "./rivers/riverLayers"
+import { NATURAL_EARTH_SOURCE_ID, RIVER_SOURCE_ID, RIVER_TALLY_ID } from "./rivers/riverSources"
+import { lakesVisible, usesBundledRivers } from "./rivers/riverStyle"
 import SearchBar from "./SearchBar"
 import SwipePanel from "./SwipePanel"
 import { remapSceneIds } from "./sceneAliases"
@@ -142,6 +146,7 @@ import {
 	clearTally,
 	controlTileUrl,
 	loadedSources,
+	riverTierDegraded,
 	runControlCheck,
 	type TileOutcome,
 	TilePlaceholderTracker,
@@ -171,6 +176,7 @@ const QUICK_DELINEATE_MAX_MERIT_UPAREA_KM2 = 50_000
 const TILE_SOURCE_LABELS: Record<string, string> = {
 	basemap: "Basemap",
 	"basemap-usgs-hydro": "River overlay (USGS hydrography)",
+	"basemap-rivers": "Vector rivers (GEOGLOWS)",
 }
 
 /** Remote-tile layers are rendered under `${id}-tiles-${retry}` so a retry remounts them; match both forms. */
@@ -900,6 +906,23 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		)
 	}, [tileTallies, resolvedBaseMap])
 	const [viewState, setViewState] = useState<MapViewState>(sanitizeViewState(persisted.viewState))
+	// Vector river tier (GEOGLOWS tiles streamed from a PMTiles archive; bundled Natural Earth at low zoom and offline).
+	// The layers depend on the whole zoom only, so they are not rebuilt on every zoom tick.
+	const riverZoom = Math.floor(viewState.zoom)
+	const riversDegraded = useMemo(() => riverTierDegraded(tileTallies[RIVER_TALLY_ID]), [tileTallies])
+	const riverUrl = resolvedBaseMap.rivers?.url
+	// biome-ignore lint/correctness/useExhaustiveDependencies: a Retry builds a fresh reader (fresh header and directory cache)
+	const riverReader = useMemo(() => (riverUrl ? new RiverTileReader(riverUrl) : null), [riverUrl, resourceRetry])
+	// Ids "attributionFor" may credit: overlays with a loaded tile, plus the river tiers that are on screen.
+	const creditedSourceIds = useMemo(() => {
+		const ids = new Set(loadedOverlayIds)
+		if (resolvedBaseMap.rivers) {
+			const bundled = usesBundledRivers(riverZoom, riversDegraded)
+			if (!bundled && loadedSources(tileTallies).has(RIVER_TALLY_ID)) ids.add(RIVER_SOURCE_ID)
+			if (bundled || lakesVisible(riverZoom, riversDegraded)) ids.add(NATURAL_EARTH_SOURCE_ID)
+		}
+		return ids
+	}, [loadedOverlayIds, resolvedBaseMap, riverZoom, riversDegraded, tileTallies])
 	const [visibleLayerIds, setVisibleLayerIds] = useState<Set<string>>(
 		new Set(persisted.visibleLayerIds ?? layers.filter((layer) => layer.visible !== false).map((layer) => layer.id)),
 	)
@@ -1807,11 +1830,37 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		)
 	}, [resolvedBaseMap, resourceRetry, reportTileLoaded, reportTileError, reportTileFingerprint, reportTileFromAncestor])
 
+	// Vector river layers (see rivers/riverLayers.ts): streamed tiles report into tile health like any other source.
+	const riverLayers = useMemo(() => {
+		if (!resolvedBaseMap.rivers) return []
+		const generation = resourceGeneration.current
+		const source = resolvedBaseMap.rivers.url
+		return buildRiverLayers({
+			theme: mapTheme,
+			zoom: riverZoom,
+			reader: riverReader,
+			degraded: riversDegraded,
+			retry: resourceRetry,
+			onTileLoad: () => reportTileLoaded(RIVER_TALLY_ID, source, generation),
+			onTileError: (error) => reportTileError(RIVER_TALLY_ID, source, generation, error),
+		})
+	}, [
+		resolvedBaseMap.rivers,
+		mapTheme,
+		riverZoom,
+		riverReader,
+		riversDegraded,
+		resourceRetry,
+		reportTileLoaded,
+		reportTileError,
+	])
+
 	// Record which source URLs this render draws (late tile callbacks for an earlier basemap are ignored) and
 	// forget the previous basemap's tile health when the basemap changes, so its errors never linger.
 	currentSourcesRef.current = {
 		basemap: resolvedBaseMap.url,
 		...Object.fromEntries(resolvedBaseMap.overlays.map((overlay) => [`basemap-${overlay.id}`, overlay.url])),
+		...(resolvedBaseMap.rivers ? { [RIVER_TALLY_ID]: resolvedBaseMap.rivers.url } : {}),
 	}
 	useEffect(() => {
 		for (const id of Object.keys(talliesRef.current)) {
@@ -3292,6 +3341,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		() =>
 			[
 				...basemapLayers,
+				...riverLayers,
 				flood3dTerrainLayer,
 				flood3dDeckLayer,
 				inspectHighlightLayer,
@@ -3306,6 +3356,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			].filter(Boolean) as any[],
 		[
 			basemapLayers,
+			riverLayers,
 			flood3dTerrainLayer,
 			flood3dDeckLayer,
 			inspectHighlightLayer,
@@ -3324,6 +3375,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 		() =>
 			[
 				...basemapLayers,
+				...riverLayers,
 				...dataLayers,
 				flood3dTerrainLayer,
 				flood3dDeckLayer,
@@ -3339,6 +3391,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 			].filter(Boolean) as any[],
 		[
 			basemapLayers,
+			riverLayers,
 			dataLayers,
 			flood3dTerrainLayer,
 			flood3dDeckLayer,
@@ -4232,7 +4285,7 @@ export const MapView: React.FC<MapViewProps> = ({ mapStyle = "dark" }) => {
 					attribution={attributionFor(
 						resolvedBaseMap,
 						{ lon: viewState.longitude, lat: viewState.latitude },
-						loadedOverlayIds,
+						creditedSourceIds,
 					)}
 					bearing={viewState.bearing ?? 0}
 					cursorCoord={cursorCoord}

@@ -10,7 +10,19 @@ if (!existsSync(assets)) {
 	console.error(`No build output at ${assets}; run npm run build:webview first.`)
 	process.exit(2)
 }
-const needles = ["FIXTURE", "fx-session-001", "screens/registry", "synthetic data, not a result", "recorded output, replayed offline", "spliced recorded fields", "recorded tool call, synthetic chat", "fx-run-0101", "e2e-fixture"]
+const needles = [
+	"FIXTURE",
+	"fx-session-001",
+	"screens/registry",
+	"synthetic data, not a result",
+	"recorded output, replayed offline",
+	"spliced recorded fields",
+	"recorded tool call, synthetic chat",
+	"fx-run-0101",
+	"e2e-fixture",
+	"river fixture (synthetic)",
+	"tilesFromSegments",
+]
 const hits = []
 for (const file of readdirSync(assets)) {
 	if (!/\.(js|css|html|map)$/.test(file)) continue
