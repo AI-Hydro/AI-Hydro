@@ -9,11 +9,11 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [Unreleased]
+## [0.4.13] - 2026-11-09
 
 ### Added
 
-- **Local MERIT-Basins rivers in the map (basemap slice B2, extension half).** When `$AIHYDRO_HOME/merit/tiles/rivers7X.pmtiles` exists (built by aihydro-watershed `tiles`), the map draws it above the streamed GEOGLOWS rivers from zoom 3. Width and colour come from upstream area (rule W1, S1/S2 ramps), all five area-band layers (`rivers_z0` to `rivers_z11`) are drawn, and a click on a reach shows COMID, upstream area (km2; "not recorded" when the tile has none, never 0), Strahler order, length, region, the source database name and sha256, the tile file name and sha256, the verification state, the licence line (plus the licence note when the sidecar has one) and the citation.
+- **Local MERIT-Basins rivers in the map (basemap slice B2, extension half).** When `$AIHYDRO_HOME/merit/tiles/rivers7X.pmtiles` exists (built with aihydro-watershed's `build_merit_river_tiles`; that builder is on watershed main at 2fcd886 and is not yet released to PyPI, so a released aihydro-watershed cannot produce these archives yet), the map draws it above the streamed GEOGLOWS rivers from zoom 3. Width and colour come from upstream area (rule W1, S1/S2 ramps), all five area-band layers (`rivers_z0` to `rivers_z11`) are drawn, and a click on a reach shows COMID, upstream area (km2; "not recorded" when the tile has none, never 0), Strahler order, length, region, the source database name and sha256, the tile file name and sha256, the verification state, the licence line (plus the licence note when the sidecar has one) and the citation.
   - **The host reads the bytes.** The webview names an archive by id and asks for byte ranges (`aihydro-tile-range`); the host maps ids to files it validated, never takes a path, caps a read at 8 MiB and replies with an `ArrayBuffer`. No webview resource root, CSP entry or network host was added.
   - **An archive is offered only with a valid sidecar** (schema version 2, file name and size match, both sha256 values, a credit line containing "CC BY-NC-SA"), as a regular file (symlinks refused, real path inside the tiles directory). A background sha256 check upgrades it to "sha256-verified" or withdraws it with a note.
   - **Credit and exports.** "Rivers: MERIT-Basins, Lin et al. 2019, CC BY-NC-SA 4.0" shows only while MERIT features are drawn in view. An export lists it whenever the layer is enabled and its manifest gains `licences` and `nonCommercialShareAlike`. The basemap panel has an on/off switch and shows why an archive was not offered.
@@ -21,7 +21,11 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 - Review fixes: the MERIT layer refetches when its archives change (no stale tiles on screen or in exports); exports record each enabled archive and warn until its sha256 is verified; the streamed rivers are skipped only in interior MERIT tiles and drawn faintly beneath MERIT on seams; a read is refused if the file changes while it is read; a sha256 check that could not run is shown as such; a tiles directory created after the map opened is noticed.
 - The range-fetch source for the streamed tier refuses a 206 reply longer than the range asked for (an old VS Code answered with the whole file).
 
-Known limits: the extension host reads `AIHYDRO_MERIT_DIR` / `MERIT_DATA_DIR` / `AIHYDRO_HOME` from its own environment; if those are set only for the tools server, the map looks in another directory. The tile format may still change in review of aihydro-watershed#21; names live in `src/shared/map/meritTileContract.ts`. Not exercised in a real VS Code build (see DECISIONS.md).
+### Tests
+
+- **Studio contract end-to-end spec (G12), test-only.** `src/test/e2e/studio-course-contract.test.ts` drives the installed Studio through the real panel over the Hydrologic Modeling book's prerequisite graph (module IDs, titles and prerequisites copied into `src/test/fixtures/learning-pack/hmfp-course-graph.json`; module bodies are placeholders, not book text), executable cells, interruption and ordinary documents. It runs against the development host and, in the Studio VSIX End-to-End workflow, against the packaged VSIX on Ubuntu, macOS and Windows (skipped where no interpreter is configured; the VSIX job requires it). No shipped code changed. The 20-run repeat per OS is workflow run 42619911445.
+
+Known limits: the extension host reads `AIHYDRO_MERIT_DIR` / `MERIT_DATA_DIR` / `AIHYDRO_HOME` from its own environment; if those are set only for the tools server, the map looks in another directory. The tile format may still change in review of aihydro-watershed#21; names live in `src/shared/map/meritTileContract.ts`. Not exercised in a real VS Code build (see DECISIONS.md): B2's host byte-range transport has not been run in a real VS Code session with a MERIT archive; the CI installed-VSIX jobs do not load one, so it is covered by unit and component tests (including a real-file test) only. B2 reads local files and needs nothing from the tools server API, so the tools requirement stays `aihydro-tools >=2.8.2,<3`; G12 changes no shipped code.
 
 ## [0.4.12] - 2026-11-09
 
