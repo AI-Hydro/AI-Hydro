@@ -19,8 +19,6 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 - `jschardet` (LGPL-2.1+, character-encoding detection) is no longer compiled into `dist/extension.js`; it ships as a separate, replaceable module in `node_modules/jschardet` with its source and licence, as LGPL expects.
 
-### Changed
-
 - **Tools requirement widened to `aihydro-tools >=2.8.2,<3`** (was `~=2.8.2`), so the managed environment accepts the released tools 2.9. The floor stays 2.8.2, the managed environment directory stays `venvs/tools-2.8` (an existing healthy one is adopted; Repair upgrades it within 2.x).
 
 ### Fixed
