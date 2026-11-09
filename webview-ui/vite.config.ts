@@ -5,6 +5,8 @@ import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react-swc"
 import { resolve } from "path"
 import { defineConfig, type Plugin, ViteDevServer } from "vite"
+// @ts-expect-error -- plain ESM build script without type declarations
+import { bundledLicensesPlugin } from "../scripts/third-party/bundled-licenses.mjs"
 
 // Custom plugin to write the server port to a file
 const writePortToFile = (): Plugin => {
@@ -39,7 +41,7 @@ console.log("Building webview for", platform)
 
 export default defineConfig({
 	base: "./",
-	plugins: [react(), tailwindcss(), writePortToFile()],
+	plugins: [react(), tailwindcss(), writePortToFile(), bundledLicensesPlugin() as Plugin],
 	test: {
 		environment: "jsdom",
 		globals: true,
