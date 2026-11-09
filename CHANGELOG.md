@@ -11,6 +11,10 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ## [Unreleased]
 
+### Added
+
+- Licence notices for every npm package compiled into the extension and webview bundles, generated at build time from the bundlers' records: `dist/THIRD_PARTY_LICENSES.txt` and `webview-ui/build/assets/THIRD_PARTY_LICENSES.txt`. Covers JS modules, CSS and copied fonts (codicons, Azeret Mono under OFL-1.1, Tailwind). Previously only the verbatim vendored Plotly and three.js files were covered. Packages that ship no licence file carry upstream text fetched with its source URL, or a statement that upstream publishes none. A build fails when a newly bundled package has no licence text or a copyleft-only licence that has not been decided. The VSIX check now requires both files. See `scripts/third-party/README.md`.
+
 ### Changed
 
 - **Tools requirement widened to `aihydro-tools >=2.8.2,<3`** (was `~=2.8.2`), so the managed environment accepts the released tools 2.9. The floor stays 2.8.2, the managed environment directory stays `venvs/tools-2.8` (an existing healthy one is adopted; Repair upgrades it within 2.x).

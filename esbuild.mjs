@@ -2,6 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import * as esbuild from "esbuild"
+import { writeBundledLicenses } from "./scripts/third-party/bundled-licenses.mjs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -164,7 +165,8 @@ if (process.env.OTEL_METRIC_EXPORT_INTERVAL) {
 // Base configuration shared between extension and standalone builds
 const baseConfig = {
 	bundle: true,
-	metafile: Boolean(metafilePath),
+	// Production builds always record what was bundled: the licence list is generated from it.
+	metafile: Boolean(metafilePath) || production,
 	minify: production,
 	sourcemap: !production,
 	logLevel: "silent",
@@ -234,6 +236,14 @@ async function main() {
 		await extensionCtx.watch()
 	} else {
 		const result = await extensionCtx.rebuild()
+		if (production && config === extensionConfig) {
+			writeBundledLicenses({
+				metafile: result.metafile,
+				output: config.outfile,
+				out: `${destDir}/THIRD_PARTY_LICENSES.txt`,
+				label: "AI-Hydro Studio extension host bundle (dist/extension.js)",
+			})
+		}
 		if (metafilePath) {
 			const resolvedMetafilePath = path.resolve(__dirname, metafilePath)
 			fs.mkdirSync(path.dirname(resolvedMetafilePath), { recursive: true })
