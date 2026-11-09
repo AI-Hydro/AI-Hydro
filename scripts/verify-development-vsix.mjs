@@ -34,6 +34,10 @@ export const REQUIRED_RUNTIME_ENTRIES = Object.freeze([
 	"extension/dist/services/artifact-preview/artifact_kernel_runner.py",
 	"extension/node_modules/@vscode/codicons/dist/codicon.css",
 	"extension/node_modules/@vscode/codicons/dist/codicon.ttf",
+	// LGPL-2.1+ module shipped unbundled and replaceable (external in esbuild.mjs); licence and source travel with it.
+	"extension/node_modules/jschardet/LICENSE",
+	"extension/node_modules/jschardet/index.js",
+	"extension/node_modules/jschardet/package.json",
 	"extension/changelog.md",
 	"extension/package.json",
 	"extension/readme.md",
@@ -92,8 +96,11 @@ function sha256(buffer) {
 	return crypto.createHash("sha256").update(buffer).digest("hex")
 }
 
+// Whole directories shipped as runtime modules (see UNBUNDLED_MODULES in scripts/third-party/bundled-licenses.mjs).
+const ALLOWED_PREFIXES = Object.freeze(["extension/node_modules/jschardet/"])
+
 function isAllowedEntry(name) {
-	return ALLOWED_EXACT_FILES.has(name) || ALLOWED_ROOT_FILES.has(name)
+	return ALLOWED_EXACT_FILES.has(name) || ALLOWED_ROOT_FILES.has(name) || ALLOWED_PREFIXES.some((p) => name.startsWith(p))
 }
 
 function shouldReadEntry(name) {

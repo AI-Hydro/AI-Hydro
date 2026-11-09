@@ -43,6 +43,13 @@ if (forbiddenInputs.length > 0) {
 	throw new Error(`Forbidden build/archive inputs found in the extension bundle:\n${forbiddenInputs.sort().join("\n")}`)
 }
 
+// LGPL-2.1+ modules must stay external (shipped unbundled in node_modules) so users can replace them.
+const mustStayExternal = ["/node_modules/jschardet/"]
+const bundledLgpl = normalizedInputs.filter((input) => mustStayExternal.some((segment) => `/${input}`.includes(segment)))
+if (bundledLgpl.length > 0) {
+	throw new Error(`LGPL module compiled into extension.js; keep it external (esbuild.mjs):\n${bundledLgpl.sort().join("\n")}`)
+}
+
 // Learning Pack authoring (build, sign, key handling) is a separate CLI bundle (dist/aihydro-pack.cjs). It must never
 // be reachable from extension.js: the signer inside the extension would put the publisher-key path one import away
 // from any agent-facing code. The installed verifier may import only files outside `learning-pack/authoring/`.
@@ -57,5 +64,5 @@ if (authoringInputs.length > 0) {
 }
 
 console.log(
-	`Verified extension bundle inputs: ExcelJS document reader present; ${forbiddenPackageSegments.length} unused package paths absent; no Learning Pack authoring code.`,
+	`Verified extension bundle inputs: ExcelJS document reader present; ${forbiddenPackageSegments.length} unused package paths absent; no Learning Pack authoring code; jschardet external.`,
 )

@@ -2,7 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import * as esbuild from "esbuild"
-import { writeBundledLicenses } from "./scripts/third-party/bundled-licenses.mjs"
+import { UNBUNDLED_MODULES, writeBundledLicenses } from "./scripts/third-party/bundled-licenses.mjs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -192,7 +192,9 @@ const extensionConfig = {
 	...baseConfig,
 	entryPoints: ["src/extension.ts"],
 	outfile: `${destDir}/extension.js`,
-	external: ["vscode"],
+	// jschardet is LGPL-2.1+: it ships as a separate, replaceable module in node_modules/jschardet (with its source
+	// and licence) instead of being compiled into extension.js. See DECISIONS.md and scripts/third-party/README.md.
+	external: ["vscode", ...UNBUNDLED_MODULES],
 }
 
 // Standalone-specific configuration
@@ -242,6 +244,7 @@ async function main() {
 				output: config.outfile,
 				out: `${destDir}/THIRD_PARTY_LICENSES.txt`,
 				label: "AI-Hydro Studio extension host bundle (dist/extension.js)",
+				unbundled: UNBUNDLED_MODULES,
 			})
 		}
 		if (metafilePath) {

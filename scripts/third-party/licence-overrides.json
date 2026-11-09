@@ -1,11 +1,6 @@
 {
 	"description": "Verbatim upstream licence text for bundled packages that ship no licence file. Written by fetch-licence-overrides.mjs; reviewed by hand.",
-	"knownProblems": [
-		{
-			"problem": "jschardet@3.1.4: copyleft licence LGPL-2.1+",
-			"decision": "OPEN, owner decision pending (2026-11-09). jschardet (character-encoding detection in src/integrations/misc/extract-text.ts, inherited from Cline) is LGPL-2.1+ and is compiled into the minified dist/extension.js. LGPL asks that users can replace the library; the usual remedies are shipping it as a separate unbundled module (esbuild external + node_modules/jschardet in the VSIX) or replacing it with a permissively licensed detector. Its licence text is included in dist/THIRD_PARTY_LICENSES.txt meanwhile."
-		}
-	],
+	"knownProblems": [],
 	"packages": {
 		"@aws-sdk/credential-provider-http@3.972.59": {
 			"source": "https://github.com/aws/aws-sdk-js-v3/blob/main/LICENSE",
