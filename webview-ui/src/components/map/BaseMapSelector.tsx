@@ -1,6 +1,7 @@
 import React from "react"
 import { BASE_MAP_STYLES, type BaseMapStyle, DEFAULT_BASEMAP_ID } from "./basemaps"
 import { MAP_Z } from "./mapZ"
+import type { MeritControl } from "./rivers/useMeritArchives"
 
 // The catalogue lives in basemaps.ts (pure data: zoom limits, extents, attribution). Re-exported so existing
 // importers keep working.
@@ -14,6 +15,8 @@ interface BaseMapSelectorProps {
 	explicit?: boolean
 	/** Clears the user's choice and returns to the hydrology default. */
 	onResetToDefault?: () => void
+	/** Local MERIT-Basins river tiles, when the host offers any (or says why one was not offered). */
+	merit?: MeritControl
 }
 
 /**
@@ -27,6 +30,7 @@ export const BasemapList: React.FC<BaseMapSelectorProps> = ({
 	mapStyle = "dark",
 	explicit = false,
 	onResetToDefault,
+	merit,
 }) => {
 	const availableStyles = BASE_MAP_STYLES
 	const selectedStyle = availableStyles.find((s) => s.id === currentStyle)
@@ -88,6 +92,41 @@ export const BasemapList: React.FC<BaseMapSelectorProps> = ({
 					}}>
 					{selectedStyle?.note && <div style={{ marginBottom: 4 }}>{selectedStyle.note}</div>}
 					{selectedStyle?.attribution}
+				</div>
+			)}
+
+			{merit && (merit.archives.length > 0 || merit.notes.length > 0) && (
+				<div
+					style={{
+						padding: "8px 8px 4px",
+						marginTop: 6,
+						borderTop: `1px solid ${subtle}`,
+						fontSize: 11,
+						lineHeight: 1.4,
+					}}>
+					{merit.archives.length > 0 && (
+						<label style={{ display: "flex", gap: 6, alignItems: "flex-start", cursor: "pointer", color: fg }}>
+							<input
+								checked={merit.enabled}
+								onChange={(e) => merit.onToggle(e.target.checked)}
+								style={{ marginTop: 2 }}
+								type="checkbox"
+							/>
+							<span>
+								Local MERIT-Basins rivers (region{merit.archives.length > 1 ? "s" : ""}{" "}
+								{merit.archives.map((a) => a.region).join(", ")})
+								<span style={{ display: "block", opacity: 0.75 }}>
+									Drawn from zoom 3 where a local archive covers the view.{" "}
+									{merit.archives[0].provenance.attribution}
+								</span>
+							</span>
+						</label>
+					)}
+					{merit.notes.map((note) => (
+						<div key={note} style={{ opacity: 0.85, marginTop: 4 }}>
+							{note}
+						</div>
+					))}
 				</div>
 			)}
 

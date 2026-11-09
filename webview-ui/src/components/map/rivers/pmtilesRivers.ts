@@ -75,7 +75,20 @@ export class RangeFetchSource implements Source {
 			this.stats.failures += 1
 			throw new Error(`River tile request failed (status ${response.status})`)
 		}
+		if (response.status === 206 && declared > length) {
+			// A "206" longer than the range asked for is a server (or an old VS Code, before 1.118) answering with the
+			// whole file; refuse it before reading the body.
+			void response.body?.cancel().catch(() => undefined)
+			this.stats.failures += 1
+			throw new Error(
+				"River tile server answered a byte range with more bytes than asked for (status 206), so it is refused.",
+			)
+		}
 		const data = await response.arrayBuffer()
+		if (data.byteLength > length) {
+			this.stats.failures += 1
+			throw new Error("River tile server answered a byte range with more bytes than asked for, so it is refused.")
+		}
 		this.stats.bytes += data.byteLength
 		const etag = response.headers.get("etag") ?? undefined
 		if (etag) {
@@ -100,7 +113,7 @@ export interface RiverSegment {
 /** Segments of one tile, sorted by ascending order so larger rivers are drawn last (on top at confluences). */
 export type RiverTileSegments = RiverSegment[]
 
-interface GeoJsonLikeFeature {
+export interface GeoJsonLikeFeature {
 	geometry: { type: string; coordinates: unknown } | null
 	properties?: Record<string, unknown>
 }
@@ -129,14 +142,36 @@ export async function decodeRiverTile(
 	bytes: ArrayBuffer,
 	index: { x: number; y: number; z: number },
 ): Promise<RiverTileSegments> {
-	const parsed = (await MVTLoader.parse(bytes, {
-		mvt: { shape: "geojson", coordinates: "wgs84", tileIndex: index, layers: [STREAMS_LAYER] },
+	return segmentsFromFeatures(await decodeMvtFeatures(bytes, index, [STREAMS_LAYER]))
+}
+
+/**
+ * Decodes MVT bytes into GeoJSON-like features in lon/lat for the named layers. `layerProperty` stamps each
+ * feature's layer name into `properties.layerName` (the MERIT tier keeps the area band).
+ */
+export async function decodeMvtFeatures(
+	bytes: ArrayBuffer,
+	index: { x: number; y: number; z: number },
+	layers: readonly string[],
+	layerProperty?: string,
+): Promise<GeoJsonLikeFeature[]> {
+	return (await MVTLoader.parse(bytes, {
+		mvt: {
+			shape: "geojson",
+			coordinates: "wgs84",
+			tileIndex: index,
+			layers: [...layers],
+			...(layerProperty ? { layerProperty } : {}),
+		},
 	} as never)) as unknown as GeoJsonLikeFeature[]
-	return segmentsFromFeatures(parsed)
 }
 
 export interface RiverTileReaderOptions {
 	fetchImpl?: FetchLike
+	/** A different byte source than `fetch` over `url` (the host-mediated source for local archives). */
+	source?: Source
+	/** MVT layers decoded; the default is the GEOGLOWS `streams` layer. */
+	layers?: readonly string[]
 	/** Replaces the library's DecompressionStream-based decompression (tests; very old webviews). */
 	decompress?: (buf: ArrayBuffer, compression: Compression) => Promise<ArrayBuffer>
 }
@@ -147,14 +182,16 @@ export const DECODED_TILE_LIMIT = 128
 export class RiverTileReader {
 	readonly stats: RangeStats
 	private readonly archive: PMTiles
+	private readonly layers: readonly string[]
 	private readonly decoded = new Map<string, RiverTileSegments>()
 	constructor(
 		readonly url: string,
 		options: RiverTileReaderOptions = {},
 	) {
-		const source = new RangeFetchSource(url, options.fetchImpl)
-		this.stats = source.stats
-		this.archive = new PMTiles(source, undefined, options.decompress)
+		const fetched = options.source ? undefined : new RangeFetchSource(url, options.fetchImpl)
+		this.stats = fetched?.stats ?? newRangeStats()
+		this.layers = options.layers ?? [STREAMS_LAYER]
+		this.archive = new PMTiles((options.source ?? fetched) as Source, undefined, options.decompress)
 	}
 
 	/** Archive header: zoom range and bounds. Rejects (and keeps rejecting) when the archive cannot be reached. */
@@ -176,7 +213,7 @@ export class RiverTileReader {
 			return hit
 		}
 		const response = await this.archive.getZxy(z, x, y, signal)
-		const segments = response ? await decodeRiverTile(response.data, { x, y, z }) : []
+		const segments = response ? segmentsFromFeatures(await decodeMvtFeatures(response.data, { x, y, z }, this.layers)) : []
 		this.decoded.set(key, segments)
 		if (this.decoded.size > DECODED_TILE_LIMIT) this.decoded.delete(this.decoded.keys().next().value as string)
 		return segments

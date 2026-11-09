@@ -25,6 +25,7 @@ import { COLLAPSED_SIZE, EDGE_TAB_WIDTH, type MapChromeController, toolDisabledR
 import { MAP_Z } from "./mapZ"
 import { PanelResizer } from "./PanelResizer"
 import ResearchGalleryPanel from "./ResearchGalleryPanel"
+import { type MeritControl, meritExportCredits } from "./rivers/useMeritArchives"
 
 export type RibbonTool =
 	| "basemap"
@@ -101,6 +102,8 @@ interface MapToolRibbonProps {
 	onBasemapChange: (id: string) => void
 	/** True when the current basemap was chosen by the user (not the hydrology default). */
 	basemapExplicit?: boolean
+	/** Local MERIT-Basins river tiles: what the host offers, and the on/off switch (also lists the credit in exports). */
+	merit?: MeritControl
 	/** Clear the user's basemap choice and return to the hydrology default. */
 	onBasemapReset?: () => void
 	/**
@@ -300,6 +303,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 	currentBasemap,
 	onBasemapChange,
 	basemapExplicit,
+	merit,
 	onBasemapReset,
 	activeTool,
 	onActiveToolChange,
@@ -537,6 +541,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 				layerOpacities={layerOpacities}
 				layers={layers}
 				mapStyle={mapStyle}
+				meritCredits={meritExportCredits(merit)}
 				onClose={() => closePanel(true)}
 				rasterRevision={rasterRevision}
 				renderIssues={renderIssues}
@@ -583,6 +588,7 @@ export const MapToolRibbon: React.FC<MapToolRibbonProps> = ({
 								currentStyle={currentBasemap}
 								explicit={basemapExplicit}
 								mapStyle={mapStyle}
+								merit={merit}
 								onResetToDefault={onBasemapReset}
 								onStyleChange={onBasemapChange}
 							/>

@@ -293,3 +293,12 @@ Pin all direct deck.gl modules to 9.3.11 and retain the resolved luma.gl 9.3.6 l
 ## 2026-10-19 — Approval AP1: the host classifies, the model never attests
 
 `execute_command` auto-runs only when a host-side allowlist says read-only; `requires_approval` can only tighten. Claim approval commands are hard-denied by text match (best effort, indirection documented), subagents never start in YOLO, protected state (MCP settings, extension storage, approval/trust/registry, ~/.ssh) always asks, settings-file edits that loosen policy need UI confirmation, and a single `isServerTrusted` (name plus recorded launcher) replaces three name-based trust checks. Every layer is a speed bump against a same-user process; the boundary is a touch-required signature. Not done in AP1 (AP2): annotation-driven MCP auto-run, the inline prompt UI, the consecutive-read ceiling (M6, nothing auto-runs reads yet). Plan and limits: plans/approval-redesign-ap1-2026-10-19.md.
+
+
+## 2026-11-09 — B2 local MERIT tiles: the host reads the bytes; MERIT over GEOGLOWS by tile
+
+**Transport.** The webview gets local PMTiles bytes by message to the extension host (option (b) of `findings/b2-local-pmtiles-serving-2026-11-09.md`), not through `asWebviewUri`. VS Code honoured `Range` for webview resources only from 1.118 while our engine floor is 1.84, and a host handler is unit-testable with no VS Code. Confinement is by construction: ids, not paths; files the host validated; reads capped. Deviation from the design: the host opens the file for each read and closes it (instead of one handle per archive), so a rebuild can replace the file on Windows; a changed size or mtime is refused.
+
+**Layer order.** Bottom to top: Natural Earth lakes, Natural Earth rivers (below zoom 3, or when the streamed tier is degraded and no archive covers the view centre), GEOGLOWS tiles, MERIT tiles. Rule: MERIT where an archive has river features in a tile, GEOGLOWS elsewhere; a GEOGLOWS tile is not fetched when a MERIT tile exists at the same z/x/y, so two generalisations of one river are never drawn together. Cost: a GEOGLOWS river outside an archive's coverage but inside an edge tile is not drawn. No blending (both opaque, never overlapping). MERIT starts at zoom 3 like the streamed tier.
+
+**Licence gate.** Credit text is the sidecar's `attribution`; an archive whose attribution lacks "CC BY-NC-SA" is not offered. The licence variant is flagged unresolved upstream; the card shows the sidecar's `licence_note` when present.

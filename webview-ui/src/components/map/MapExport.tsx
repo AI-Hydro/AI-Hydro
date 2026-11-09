@@ -43,6 +43,8 @@ interface MapExportProps {
 	visibleLayerIds?: Set<string>
 	viewState?: MapViewState
 	currentBasemap?: string
+	/** Credit lines of the local MERIT-Basins archives, when that layer is enabled (the export may span their coverage). */
+	meritCredits?: string[]
 }
 
 type TextAlign = "left" | "center" | "right"
@@ -112,6 +114,8 @@ interface MapSceneSnapshot {
 		label: string
 		attribution: string[]
 		requiresVisibleAttribution: boolean
+		licences?: string[]
+		nonCommercialShareAlike?: boolean
 	}
 	layers: Array<{
 		id: string
@@ -567,10 +571,11 @@ export function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSce
 	// Overlays can be theme-specific, and the export does not know which theme the map was drawn in: credit the
 	// base and every overlay either theme can draw.
 	const basemap = resolveBaseMap(props.currentBasemap, "dark")
+	const meritCredits = props.meritCredits ?? []
 	const basemapAttribution = [
 		...new Set([
-			...attributionList(resolveBaseMap(props.currentBasemap, "light")),
-			...attributionList(resolveBaseMap(props.currentBasemap, "dark")),
+			...attributionList(resolveBaseMap(props.currentBasemap, "light"), meritCredits),
+			...attributionList(resolveBaseMap(props.currentBasemap, "dark"), meritCredits),
 		]),
 	]
 	const visible = visibleLayers(props.layers ?? [], props.visibleLayerIds)
@@ -602,6 +607,8 @@ export function buildSnapshot(spec: MapPlateSpec, props: MapExportProps): MapSce
 			label: basemap.name,
 			attribution: basemapAttribution,
 			requiresVisibleAttribution: basemapAttribution.length > 0,
+			// CC BY-NC-SA is non-commercial and share-alike: a capsule consumer must see the obligation in the manifest.
+			...(meritCredits.length > 0 ? { licences: ["CC BY-NC-SA 4.0"], nonCommercialShareAlike: true } : {}),
 		},
 		layers: visible.map((layer) => ({
 			id: layer.id,
