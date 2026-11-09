@@ -1,0 +1,96 @@
+{
+	"_provenance": "Module IDs, titles and prerequisite lists copied from course.yml of AI-Hydro/hydrologic-modeling-first-principles at commit 4475a9e (private repo). Graph metadata only: no chapter text, code or data.",
+	"courseId": "hmfp",
+	"title": "Hydrologic Modeling from First Principles",
+	"modules": [
+		{
+			"id": "hmfp.orientation.00",
+			"title": "How to Learn Hydrologic Modeling from First Principles",
+			"prerequisites": []
+		},
+		{
+			"id": "hmfp.water-balance.01",
+			"title": "Close a Watershed Water Balance",
+			"prerequisites": [
+				"hmfp.orientation.00"
+			]
+		},
+		{
+			"id": "hmfp.depth-volume-discharge.02",
+			"title": "Convert Depth, Volume, and Discharge",
+			"prerequisites": [
+				"hmfp.water-balance.01"
+			]
+		},
+		{
+			"id": "hmfp.unit-hydrograph-convolution.03",
+			"title": "Build and Convolve a Unit Hydrograph",
+			"prerequisites": [
+				"hmfp.depth-volume-discharge.02"
+			]
+		},
+		{
+			"id": "hmfp.routing-method-comparison.04",
+			"title": "Compare Snyder, SCS, Clark, and ModClark Routing",
+			"prerequisites": [
+				"hmfp.unit-hydrograph-convolution.03"
+			]
+		},
+		{
+			"id": "hmfp.curve-number-runoff.05",
+			"title": "Explore NRCS Curve Number Event Runoff",
+			"prerequisites": [
+				"hmfp.routing-method-comparison.04"
+			]
+		},
+		{
+			"id": "hmfp.hbv-style-stores.06",
+			"title": "Build an HBV-Style Store-and-Flux Model",
+			"prerequisites": [
+				"hmfp.curve-number-runoff.05"
+			]
+		},
+		{
+			"id": "hmfp.norms-losses-gradients.07",
+			"title": "Understand Norms, Losses, and Gradients",
+			"prerequisites": [
+				"hmfp.hbv-style-stores.06"
+			]
+		},
+		{
+			"id": "hmfp.event-regime-residuals.08",
+			"title": "Diagnose Event, Regime, and Residual Patterns",
+			"prerequisites": [
+				"hmfp.norms-losses-gradients.07"
+			]
+		},
+		{
+			"id": "hmfp.basin-specific-lstm.09",
+			"title": "Build a Basin-Specific LSTM Without Future Leakage",
+			"prerequisites": [
+				"hmfp.event-regime-residuals.08"
+			]
+		},
+		{
+			"id": "hmfp.differentiable-state-space.10",
+			"title": "Differentiate a Mass-Closing State-Space Reservoir",
+			"prerequisites": [
+				"hmfp.basin-specific-lstm.09"
+			]
+		},
+		{
+			"id": "hmfp.metrics-fdc-signatures-uncertainty.11",
+			"title": "Evaluate Metrics, Flow-Duration Curves, Signatures, and Spread",
+			"prerequisites": [
+				"hmfp.differentiable-state-space.10"
+			]
+		},
+		{
+			"id": "hmfp.hydro-atoms-interpretation-audit.12",
+			"title": "Interpret and Audit Static HYDRO-ATOMS Behavior",
+			"prerequisites": [
+				"hmfp.metrics-fdc-signatures-uncertainty.11"
+			]
+		}
+	]
+}
