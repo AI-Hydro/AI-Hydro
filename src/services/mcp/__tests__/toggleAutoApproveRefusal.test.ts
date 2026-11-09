@@ -71,25 +71,39 @@ describe("McpHub.toggleToolAutoApproveRPC refuses Always for ineligible tools (W
 			}),
 		)
 		const { McpHub } = await import("../McpHub")
-		hub = new McpHub(
-			async () => dir,
-			async () => dir,
-			"0.0.0",
-			{} as any,
-		)
-		for (
-			let i = 0;
-			i < 400 &&
-			!(
-				hub.policyGate.baselineSet &&
-				hub.connections[0]?.server.status === "connected" &&
-				hub.connections[0].server.tools?.length
-			);
-			i++
-		) {
-			await new Promise((r) => setTimeout(r, 25))
+		// McpHub connects in a fire-and-forget initialiser and never retries a failed first connect (a spawn or a settings
+		// read that fails once, which is what a loaded Windows runner does now and then, leaves no connection at all, and
+		// waiting longer cannot change that). So wait on the hub's own state until startup has SETTLED (baseline taken, no
+		// connect in flight) rather than for a fixed time, and if it settled without a live connection, rebuild the hub:
+		// the settings file on disk is the unchanged input, and every later assertion still runs against a real connection.
+		const settled = (h: any) =>
+			h.policyGate.baselineSet &&
+			!h.isConnecting &&
+			h.connections.length > 0 &&
+			h.connections.every((c: any) => c.server.status !== "connecting")
+		const isUp = (h: any) => h.connections[0]?.server.status === "connected" && h.connections[0].server.tools?.length
+		const attempts: string[] = []
+		for (let attempt = 1; attempt <= 3; attempt++) {
+			hub = new McpHub(
+				async () => dir,
+				async () => dir,
+				"0.0.0",
+				{} as any,
+			)
+			const deadline = Date.now() + 12_000
+			while (Date.now() < deadline && !isUp(hub) && !settled(hub)) {
+				await new Promise((r) => setTimeout(r, 25))
+			}
+			if (isUp(hub)) {
+				break
+			}
+			attempts.push(
+				`attempt ${attempt}: baselineSet=${hub.policyGate.baselineSet} isConnecting=${hub.isConnecting} ` +
+					`connections=${JSON.stringify(hub.connections.map((c: any) => ({ s: c.server.status, e: c.server.error })))}`,
+			)
+			await hub.dispose()
 		}
-		expect(hub.connections[0]?.server.status).to.equal("connected")
+		expect(hub.connections[0]?.server.status, attempts.join("; ")).to.equal("connected")
 		expect(hub.connections[0].server.tools.map((t: any) => t.name)).to.deep.equal(TOOLS.map((t) => t.name))
 	}
 

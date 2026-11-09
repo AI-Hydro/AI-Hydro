@@ -1,31 +1,48 @@
 import { expect } from "chai"
 import * as fs from "fs/promises"
-import { after, before, beforeEach, describe, it } from "mocha"
+import { after, afterEach, before, beforeEach, describe, it } from "mocha"
 import * as os from "os"
 import * as path from "path"
 import * as vscode from "vscode"
 import { saveOpenDocumentIfDirty } from "@/hosts/vscode/hostbridge/workspace/saveOpenDocumentIfDirty"
 import { SaveOpenDocumentIfDirtyRequest } from "@/shared/proto/index.host"
 
+/**
+ * On Windows, VS Code (its file watcher, the text-file model, antivirus) can still hold a file for a moment after the
+ * editor that showed it is closed, so a write or delete straight after fails with EBUSY/EPERM/EACCES. Retry only those,
+ * with a bounded backoff (about 3s in all); any other error, and the last one, is thrown.
+ */
+const RETRYABLE = new Set(["EBUSY", "EPERM", "EACCES"])
+async function withFsRetry<T>(op: () => Promise<T>): Promise<T> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await op()
+		} catch (error) {
+			if (attempt >= 8 || !RETRYABLE.has((error as NodeJS.ErrnoException).code ?? "")) {
+				throw error
+			}
+			await new Promise((resolve) => setTimeout(resolve, Math.min(50 * 2 ** attempt, 800)))
+		}
+	}
+}
+const writeFileRetry = (file: string, data: string) => withFsRetry(() => fs.writeFile(file, data))
+
 describe("saveOpenDocumentIfDirty Integration Test", () => {
 	let testWorkspaceRoot: string
 	let testFilePath: string
 	let testFileUri: vscode.Uri
+	let testCounter = 0
 
 	before(async () => {
 		// Use a temporary directory for tests
 		testWorkspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "aihydro-test-"))
-
-		// Create a test file path
-		testFilePath = path.join(testWorkspaceRoot, "test-save-document.txt")
-		testFileUri = vscode.Uri.file(testFilePath)
 	})
 
 	after(async () => {
 		// Clean up: close all editors and delete test directory
 		await vscode.commands.executeCommand("workbench.action.closeAllEditors")
 		try {
-			await fs.rm(testWorkspaceRoot, { recursive: true, force: true })
+			await fs.rm(testWorkspaceRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 		} catch (_error) {
 			// Directory might not exist, ignore
 		}
@@ -34,11 +51,19 @@ describe("saveOpenDocumentIfDirty Integration Test", () => {
 	beforeEach(async () => {
 		// Close all editors before each test
 		await vscode.commands.executeCommand("workbench.action.closeAllEditors")
+		// A fresh path per test: a file an earlier test saved and VS Code may still hold is never rewritten.
+		testFilePath = path.join(testWorkspaceRoot, `test-save-document-${++testCounter}.txt`)
+		testFileUri = vscode.Uri.file(testFilePath)
+	})
+
+	afterEach(async () => {
+		// Release the document before the next test (and the final cleanup) touches the directory.
+		await vscode.commands.executeCommand("workbench.action.closeAllEditors")
 	})
 
 	it("should save a dirty document and return wasSaved: true", async () => {
 		// Create a test file with initial content
-		await fs.writeFile(testFilePath, "Initial content")
+		await writeFileRetry(testFilePath, "Initial content")
 
 		// Open the document in VSCode
 		const document = await vscode.workspace.openTextDocument(testFileUri)
@@ -71,7 +96,7 @@ describe("saveOpenDocumentIfDirty Integration Test", () => {
 
 	it("should not save a clean document and return empty response", async () => {
 		// Create a test file
-		await fs.writeFile(testFilePath, "Clean content")
+		await writeFileRetry(testFilePath, "Clean content")
 
 		// Open the document in VSCode
 		const document = await vscode.workspace.openTextDocument(testFileUri)
@@ -113,9 +138,9 @@ describe("saveOpenDocumentIfDirty Integration Test", () => {
 		const testFile2 = path.join(testWorkspaceRoot, "test-file-2.txt")
 		const testFile3 = path.join(testWorkspaceRoot, "test-file-3.txt")
 
-		await fs.writeFile(testFile1, "File 1 content")
-		await fs.writeFile(testFile2, "File 2 content")
-		await fs.writeFile(testFile3, "File 3 content")
+		await writeFileRetry(testFile1, "File 1 content")
+		await writeFileRetry(testFile2, "File 2 content")
+		await writeFileRetry(testFile3, "File 3 content")
 
 		try {
 			// Open all documents
@@ -163,9 +188,10 @@ describe("saveOpenDocumentIfDirty Integration Test", () => {
 			expect(savedContent).to.equal("Modified File 2 content")
 		} finally {
 			// Clean up
-			await fs.unlink(testFile1).catch(() => {})
-			await fs.unlink(testFile2).catch(() => {})
-			await fs.unlink(testFile3).catch(() => {})
+			await vscode.commands.executeCommand("workbench.action.closeAllEditors")
+			for (const file of [testFile1, testFile2, testFile3]) {
+				await withFsRetry(() => fs.unlink(file)).catch(() => {})
+			}
 		}
 	})
 
