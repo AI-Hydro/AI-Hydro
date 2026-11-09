@@ -179,6 +179,7 @@ jobs:
           REPEAT: ${{ inputs.repeat || '1' }}
           RUNNER_LABEL: ${{ matrix.runner }}
           AIHYDRO_E2E_PYTHON: ${{ steps.python.outputs.path }}
+          AIHYDRO_CONTRACT_REQUIRED: "1"
         run: >-
           xvfb-run -a node scripts/e2e-repeat.mjs
           --runs "$REPEAT" --label "$RUNNER_LABEL-contract" --
@@ -192,6 +193,7 @@ jobs:
           REPEAT: ${{ inputs.repeat || '1' }}
           RUNNER_LABEL: ${{ matrix.runner }}
           AIHYDRO_E2E_PYTHON: ${{ steps.python.outputs.path }}
+          AIHYDRO_CONTRACT_REQUIRED: "1"
         run: >-
           node scripts/e2e-repeat.mjs
           --runs "$REPEAT" --label "$RUNNER_LABEL-contract" --

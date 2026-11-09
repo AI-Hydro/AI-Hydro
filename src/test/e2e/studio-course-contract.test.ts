@@ -127,13 +127,17 @@ const contractE2E = e2e
 	.extend<{ lifecycle: LifecycleSession }>(lifecycleFixture)
 contractE2E.setTimeout(240_000)
 
-/** The executable specs need the deterministic interpreter. CI sets it, so a missing one fails there instead of skipping. */
+/**
+ * The executable spec needs the deterministic interpreter. Where it is not provided (the general e2e job) the spec
+ * skips, like the other Python-backed specs; studio-vsix-e2e.yml sets AIHYDRO_CONTRACT_REQUIRED=1 so there a missing
+ * interpreter fails the run instead of skipping it.
+ */
 function requirePython(): void {
-	if (process.env.CI && !process.env.AIHYDRO_E2E_PYTHON) {
-		throw new Error("AIHYDRO_E2E_PYTHON must be set in CI so the executable course specs are asserted, not skipped")
+	if (process.env.AIHYDRO_CONTRACT_REQUIRED && !process.env.AIHYDRO_E2E_PYTHON) {
+		throw new Error("AIHYDRO_E2E_PYTHON must be set when AIHYDRO_CONTRACT_REQUIRED is set")
 	}
 }
-const pythonSkip = !process.env.AIHYDRO_E2E_PYTHON && !process.env.CI
+const pythonSkip = !process.env.AIHYDRO_E2E_PYTHON && !process.env.AIHYDRO_CONTRACT_REQUIRED
 
 async function findFrame(page: Page, predicate: (frame: Frame) => Promise<boolean>, timeout = 60_000): Promise<Frame> {
 	let result: Frame | undefined
@@ -315,7 +319,7 @@ async function runCell(frame: Frame, cellId: string): Promise<void> {
 const cellOutput = (frame: Frame, cellId: string) => frame.locator(`[data-aihydro-cell-id="${cellId}"] .aihydro-output`)
 
 contractE2E.describe("executable cells in an installed pack", () => {
-	contractE2E.skip(pythonSkip, "needs AIHYDRO_E2E_PYTHON (always set in CI)")
+	contractE2E.skip(pythonSkip, "needs AIHYDRO_E2E_PYTHON")
 
 	contractE2E(
 		"computes, plots, reports an error, recovers after a kernel restart, completes a module to unlock the next and interrupts a busy cell @phase1-contract",
