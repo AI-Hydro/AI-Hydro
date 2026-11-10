@@ -1,7 +1,7 @@
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { expect, type Frame, type Page } from "@playwright/test"
+import { expect, type Frame, type Locator, type Page } from "@playwright/test"
 import {
 	createLearningPackTestArchive,
 	createValidLearningPackFiles,
@@ -19,7 +19,7 @@ import { type LifecycleSession, lifecycleFixture } from "./utils/lifecycle"
  *    the Hydrologic Modeling book's course.yml (src/test/fixtures/learning-pack/hmfp-course-graph.json).
  *    The book repository is private, so the module bodies here are placeholders, not book text. The
  *    cross-repo spec over the real book pack (learning-pack-artifact-integration.test.ts, Ubuntu only,
- *    where the pinned book artifact exists) does not assert locks: it asserts completion and Next only.
+ *    where the pinned book artifact exists) does not assert locks: it asserts completion and Next being enabled.
  *  - The executable modules are the repository's golden-course and interrupt fixtures, packed as signed
  *    Learning Pack modules, so computation, figures, errors, recovery, kernel restart and interruption
  *    are exercised through an installed pack rather than a trusted workspace path.
@@ -293,6 +293,25 @@ async function framesWith(page: Page, selector: string): Promise<number> {
 	return count
 }
 
+/** How long to let an activation take effect before looking at the panel; the same wait for locked rows and the control. */
+const ACTIVATION_SETTLE_MS = 1_500
+
+/**
+ * Activate a navigator row and wait the fixed settle time. "click" is the ordinary activation used by the positive
+ * control. "locked" throws every event the page can receive at a disabled row: a DOM click(), a Playwright click
+ * with force (real mouse events, no actionability checks) and a dispatched click event. What this proves is that
+ * the row is disabled and inert to those events; it does not guard against a handler that ignores `disabled`,
+ * because the browser and React already drop the events before any handler runs.
+ */
+async function activateRow(page: Page, row: Locator, how: "click" | "locked"): Promise<void> {
+	await row.evaluate((element: HTMLElement) => element.click())
+	if (how === "locked") {
+		await row.click({ force: true, timeout: 5_000 })
+		await row.dispatchEvent("click")
+	}
+	await page.waitForTimeout(ACTIVATION_SETTLE_MS)
+}
+
 contractE2E(
 	"locks a module until its prerequisite is completed, unlocks it after completion and keeps progress across a restart, on the book's course graph @phase1-contract",
 	async ({ lifecycle, workspaceDir, homeDir }) => {
@@ -322,18 +341,28 @@ contractE2E(
 		await expect(shell.getByTitle(`Previous: ${TITLES[MODULE_IDS[0]]}`)).toBeEnabled({ timeout: 15_000 })
 
 		// The navigator agrees: module 3 and everything behind it are locked rows that name the missing module,
-		// and activating the locked row neither opens that module nor moves the current-module record.
+		// and activating the locked row neither opens that module nor moves the current-module record
+		// (the positive control below shows that an unlocked row does).
 		const locks = await expectNavigatorLocks(shell, new Set([MODULE_IDS[0]]))
 		const blocked = `Locked — complete first: ${TITLES[MODULE_IDS[1]]}`
 		expect(locks.get(blocked)).toBeGreaterThanOrEqual(1)
-		await shell
-			.getByTitle(blocked, { exact: true })
-			.first()
-			.evaluate((element: HTMLElement) => element.click())
-		await page.waitForTimeout(1_500)
+		await activateRow(page, shell.getByTitle(blocked, { exact: true }).first(), "locked")
 		expect(await framesWith(page, 'body[data-contract-module="2"]')).toBe(0)
 		expect(readProgress(homeDir)?.currentModuleId).toBe(MODULE_IDS[1])
 		await placeholderFrame(page, 1)
+
+		// Positive control, same activation and same wait: an unlocked row (the completed first module) does open
+		// within that wait and does move the current-module record. Without this, "nothing opened" above could
+		// also mean "the activation path or the wait was too short to show anything".
+		await activateRow(page, shell.getByTitle(`${TITLES[MODULE_IDS[0]]} — completed`, { exact: true }), "click")
+		expect(await framesWith(page, 'body[data-contract-module="0"]')).toBeGreaterThanOrEqual(1)
+		expect(readProgress(homeDir)?.currentModuleId).toBe(MODULE_IDS[0])
+		// Return to the second module through the header (the established path) so the walk continues from it.
+		shell = await courseShell(page)
+		await shell.getByTitle(`Next: ${TITLES[MODULE_IDS[1]]}`).evaluate((element: HTMLElement) => element.click())
+		await placeholderFrame(page, 1)
+		await expect.poll(() => readProgress(homeDir)?.currentModuleId, { timeout: 30_000 }).toBe(MODULE_IDS[1])
+		shell = await courseShell(page)
 
 		shell = await completeAndOpenNext(page, 1, 2, total)
 		await expect(shell.getByTitle(lockedTitle(TITLES[MODULE_IDS[2]]))).toBeDisabled({ timeout: 15_000 })
@@ -394,8 +423,7 @@ contractE2E.describe("executable cells in an installed pack", () => {
 			// The navigator row for it is locked too, and activating it opens nothing: no cell of that module appears.
 			const lockedRow = shell.getByTitle("Locked — complete first: Compute and plot", { exact: true })
 			await expect(lockedRow).toBeDisabled({ timeout: 15_000 })
-			await lockedRow.evaluate((element: HTMLElement) => element.click())
-			await page.waitForTimeout(1_500)
+			await activateRow(page, lockedRow, "locked")
 			expect(await framesWith(page, '[data-aihydro-cell-id="interrupt-ready"]')).toBe(0)
 
 			// Computation.
