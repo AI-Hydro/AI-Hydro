@@ -17,9 +17,9 @@ import { type LifecycleSession, lifecycleFixture } from "./utils/lifecycle"
  * Content, stated exactly:
  *  - The prerequisite graph is the real book's: module IDs, titles and prerequisite lists copied from
  *    the Hydrologic Modeling book's course.yml (src/test/fixtures/learning-pack/hmfp-course-graph.json).
- *    The book repository is private, so the module bodies here are placeholders, not book text. The same
- *    assertion over the real book pack lives in learning-pack-artifact-integration.test.ts, which runs
- *    where the pinned book artifact exists.
+ *    The book repository is private, so the module bodies here are placeholders, not book text. The
+ *    cross-repo spec over the real book pack (learning-pack-artifact-integration.test.ts, Ubuntu only,
+ *    where the pinned book artifact exists) does not assert locks: it asserts completion and Next only.
  *  - The executable modules are the repository's golden-course and interrupt fixtures, packed as signed
  *    Learning Pack modules, so computation, figures, errors, recovery, kernel restart and interruption
  *    are exercised through an installed pack rather than a trusted workspace path.
@@ -253,6 +253,46 @@ async function completeAndOpenNext(page: Page, index: number, completedAfter: nu
 const lockedTitle = (prerequisiteTitle: string) =>
 	new RegExp(`^Locked — complete prerequisites? first: ${prerequisiteTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)
 
+/**
+ * The course navigator lists every module; a row whose prerequisites are not all completed is a disabled button
+ * titled "Locked — complete first: <missing titles>" (the header's Next button uses a different wording). Check
+ * that exactly the modules with an incomplete prerequisite are locked, each with the right reason, from the
+ * graph and the set of completed modules.
+ */
+async function expectNavigatorLocks(shell: Frame, completed: ReadonlySet<string>): Promise<Map<string, number>> {
+	const expected = new Map<string, number>()
+	for (const id of MODULE_IDS) {
+		const missing = PREREQUISITES[id].filter((prerequisite) => !completed.has(prerequisite))
+		if (missing.length === 0) continue
+		const title = `Locked — complete first: ${missing.map((m) => TITLES[m]).join(", ")}`
+		expected.set(title, (expected.get(title) ?? 0) + 1)
+	}
+	const total = [...expected.values()].reduce((sum, count) => sum + count, 0)
+	await expect(shell.getByTitle(/^Locked — complete first:/)).toHaveCount(total, { timeout: 15_000 })
+	for (const [title, count] of expected) {
+		const rows = shell.getByTitle(title, { exact: true })
+		await expect(rows).toHaveCount(count, { timeout: 15_000 })
+		expect(await rows.evaluateAll((elements) => elements.every((element) => (element as HTMLButtonElement).disabled))).toBe(
+			true,
+		)
+	}
+	return expected
+}
+
+/** Frames of the page that currently contain the selector (a module that is open has its document in a frame). */
+async function framesWith(page: Page, selector: string): Promise<number> {
+	let count = 0
+	for (const frame of page.frames()) {
+		if (frame.isDetached()) continue
+		try {
+			count += await frame.locator(selector).count()
+		} catch {
+			// Panel frames are replaced while documents switch.
+		}
+	}
+	return count
+}
+
 contractE2E(
 	"locks a module until its prerequisite is completed, unlocks it after completion and keeps progress across a restart, on the book's course graph @phase1-contract",
 	async ({ lifecycle, workspaceDir, homeDir }) => {
@@ -281,8 +321,25 @@ contractE2E(
 		await expect(lockedAgain).toBeDisabled({ timeout: 15_000 })
 		await expect(shell.getByTitle(`Previous: ${TITLES[MODULE_IDS[0]]}`)).toBeEnabled({ timeout: 15_000 })
 
+		// The navigator agrees: module 3 and everything behind it are locked rows that name the missing module,
+		// and activating the locked row neither opens that module nor moves the current-module record.
+		const locks = await expectNavigatorLocks(shell, new Set([MODULE_IDS[0]]))
+		const blocked = `Locked — complete first: ${TITLES[MODULE_IDS[1]]}`
+		expect(locks.get(blocked)).toBeGreaterThanOrEqual(1)
+		await shell
+			.getByTitle(blocked, { exact: true })
+			.first()
+			.evaluate((element: HTMLElement) => element.click())
+		await page.waitForTimeout(1_500)
+		expect(await framesWith(page, 'body[data-contract-module="2"]')).toBe(0)
+		expect(readProgress(homeDir)?.currentModuleId).toBe(MODULE_IDS[1])
+		await placeholderFrame(page, 1)
+
 		shell = await completeAndOpenNext(page, 1, 2, total)
 		await expect(shell.getByTitle(lockedTitle(TITLES[MODULE_IDS[2]]))).toBeDisabled({ timeout: 15_000 })
+		// Completing the second module released the row that was waiting on it: the locked set now follows the new tally.
+		const after = await expectNavigatorLocks(shell, new Set([MODULE_IDS[0], MODULE_IDS[1]]))
+		expect(after.has(blocked)).toBe(false)
 		const expected = [MODULE_IDS[0], MODULE_IDS[1]].sort()
 		await expect.poll(() => completedIds(homeDir), { timeout: 30_000 }).toEqual(expected)
 		await expect.poll(() => readProgress(homeDir)?.currentModuleId, { timeout: 30_000 }).toBe(MODULE_IDS[2])
@@ -334,6 +391,12 @@ contractE2E.describe("executable cells in an installed pack", () => {
 			let shell = await courseShell(page)
 			// The second module requires this one, so its Next button is locked until the first is completed.
 			await expect(shell.getByTitle(lockedTitle("Compute and plot"))).toBeDisabled({ timeout: 15_000 })
+			// The navigator row for it is locked too, and activating it opens nothing: no cell of that module appears.
+			const lockedRow = shell.getByTitle("Locked — complete first: Compute and plot", { exact: true })
+			await expect(lockedRow).toBeDisabled({ timeout: 15_000 })
+			await lockedRow.evaluate((element: HTMLElement) => element.click())
+			await page.waitForTimeout(1_500)
+			expect(await framesWith(page, '[data-aihydro-cell-id="interrupt-ready"]')).toBe(0)
 
 			// Computation.
 			await runCell(artifact, "fixture-state-create")
