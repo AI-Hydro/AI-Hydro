@@ -388,6 +388,9 @@ describe("HtmlPreviewView", () => {
 			render(<HtmlPreviewView item={inlineItem} />)
 			const srcdoc = (screen.getByTitle("Test Preview") as HTMLIFrameElement).getAttribute("srcdoc") ?? ""
 			expect(srcdoc).not.to.contain("artifact/runCode")
+			// 3D is never offered to untrusted content: no helper, only the explicit unavailable notice.
+			expect(srcdoc).not.to.contain("window.aihydro = api")
+			expect(srcdoc).to.contain("3D view unavailable: this document is untrusted")
 			expect(screen.getByTestId("artifact-trust-badge")).toHaveTextContent("Static document")
 			expect(screen.getByText(/This is a static document\./)).toBeInTheDocument()
 		})
