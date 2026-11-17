@@ -1605,6 +1605,7 @@ ${SCENE3D_FALLBACK_JS}
      *     shows in untrusted (static) mode; it is hidden after the first drawn frame.
      *   - Renderer, geometries, materials and textures are disposed when the canvas leaves the page, on pagehide,
      *     or on ctx.dispose(). Calling scene3d again on the same canvas replaces the earlier scene.
+     *   - A call superseded by a later call on the same canvas resolves null.
      *   - After a context loss, or a repeated call, the canvas element may be REPLACED by a clone. Always use
      *     ctx.canvas, never an element reference you kept from before.
      */
@@ -1656,6 +1657,15 @@ ${SCENE3D_FALLBACK_JS}
       var UNAVAILABLE = "3D view unavailable: WebGL could not be started in this panel.";
       return ensureThree().then(function() {
         if (superseded) return null;
+        // The earlier scene on this canvas was released while its context was lost and never rebuilt. A lost
+        // context stays attached to its canvas, so continue on a fresh clone (as recover() does).
+        if (canvas.__aihydroScene3dLost) {
+          var stale = canvas, clone = stale.cloneNode(false);
+          if (stale.parentNode) stale.parentNode.replaceChild(clone, stale);
+          delete stale.__aihydroScene3d; delete stale.__aihydroScene3dLost;
+          canvas = clone;
+          canvas.__aihydroScene3d = handle;
+        }
         var THREE = window.THREE;
         var ctx = { THREE: THREE, scene: null, camera: null, renderer: null, controls: null, canvas: canvas,
           dem: opts.dem, pixelRatio: 1, rebuilds: 0 };
@@ -1688,11 +1698,17 @@ ${SCENE3D_FALLBACK_JS}
           var key = new THREE.DirectionalLight(0x00ddff, 0.8);
           key.position.set(5, 10, 7);
           scene.add(key);
-          var controls = THREE.OrbitControls ? new THREE.OrbitControls(camera, renderer.domElement) : null;
-          if (controls) {
-            controls.enableDamping = true; controls.dampingFactor = 0.08;
-            if (opts.autoRotate && !reduce) controls.autoRotate = true;
-            if (controls.addEventListener) controls.addEventListener("change", schedule);
+          var controls = null;
+          try {
+            controls = THREE.OrbitControls ? new THREE.OrbitControls(camera, renderer.domElement) : null;
+            if (controls) {
+              controls.enableDamping = true; controls.dampingFactor = 0.08;
+              if (opts.autoRotate && !reduce) controls.autoRotate = true;
+              if (controls.addEventListener) controls.addEventListener("change", schedule);
+            }
+          } catch (e) {
+            try { renderer.dispose(); } catch(_){}
+            throw e;
           }
           ctx.scene = scene; ctx.camera = camera; ctx.renderer = renderer; ctx.controls = controls; ctx.canvas = canvas;
           canvas.addEventListener("webglcontextlost", onLost, false);
@@ -1748,7 +1764,7 @@ ${SCENE3D_FALLBACK_JS}
         }
         function fail(message) {
           var c = canvas;
-          teardownGraphics(false);
+          dispose(false); // also detaches the visibility/pagehide listeners and the observers
           s3dShowFallback(c, opts.fallback, message);
         }
         // Hidden webviews often never fire webglcontextrestored (same lesson as MapView.tsx), so a lost
@@ -1801,7 +1817,12 @@ ${SCENE3D_FALLBACK_JS}
         document.addEventListener("visibilitychange", onVisibility);
         window.addEventListener("pagehide", onPageHide);
         watchParent();
-        releaseNow = function() { dispose(false); };
+        releaseNow = function() {
+          // Remember an unrecovered loss so the superseding call starts on a fresh canvas.
+          var wasLost = contextIsLost(), c = canvas;
+          dispose(false);
+          if (wasLost) c.__aihydroScene3dLost = true;
+        };
         ctx.invalidate = schedule;
         ctx.stop = function() { animating = false; cancel(); };
         ctx.dispose = function() { dispose(true); };

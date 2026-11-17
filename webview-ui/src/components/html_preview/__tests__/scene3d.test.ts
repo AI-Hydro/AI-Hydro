@@ -13,7 +13,7 @@ type Scene3dApi = {
 }
 
 /** A minimal three.js double that records pixel ratio, renders and disposals. */
-function installFakeThree(opts: { throwOnRenderer?: boolean } = {}) {
+function installFakeThree(opts: { throwOnRenderer?: boolean; throwOnControls?: boolean } = {}) {
 	// One WebGL context per canvas, as in a browser: once lost it stays lost for that canvas.
 	const contexts = new WeakMap<HTMLCanvasElement, { lost: boolean; isContextLost: () => boolean }>()
 	const log = {
@@ -27,6 +27,10 @@ function installFakeThree(opts: { throwOnRenderer?: boolean } = {}) {
 		controlUpdateResult: false,
 		renderers: 0,
 		forcedLoss: 0,
+		lose: (c: HTMLCanvasElement) => {
+			const ctxOfCanvas = contexts.get(c)
+			if (ctxOfCanvas) ctxOfCanvas.lost = true
+		},
 	}
 	class Scene {
 		background: unknown = null
@@ -84,6 +88,9 @@ function installFakeThree(opts: { throwOnRenderer?: boolean } = {}) {
 	// Always present: without it the helper would try the CDN, which never answers in jsdom.
 	{
 		T.OrbitControls = class {
+			constructor() {
+				if (opts.throwOnControls) throw new Error("controls failed")
+			}
 			enableDamping = false
 			dampingFactor = 0
 			addEventListener(_: string, fn: () => void) {
@@ -501,5 +508,33 @@ describe("scene3d lifecycle events", () => {
 		expect(ctx!.rebuilds).toBe(1)
 		expect(log.renderers).toBe(2)
 		ctx!.dispose()
+	})
+})
+
+describe("scene3d edge cases", () => {
+	it("re-running on a canvas whose lost context was never rebuilt continues on a fresh canvas", async () => {
+		installManualRaf()
+		const { log } = installFakeThree({})
+		const old = canvasInDom()
+		const api = loadBridge()
+		await api.scene3d({ canvas: "#c" })
+		old.dispatchEvent(new Event("webglcontextlost", { cancelable: true })) // hidden panel: no rebuild
+		log.lose(old) // the browser really did lose it: reusing this canvas would fail
+		const second = await api.scene3d({ canvas: "#c" })
+		expect(second).not.toBeNull()
+		expect(document.getElementById("c")).not.toBe(old)
+		expect(second!.canvas).toBe(document.getElementById("c"))
+		expect(document.querySelector("[data-aihydro-scene3d-message]")).toBeNull()
+		expect(log.renderers).toBe(2)
+		second!.dispose()
+	})
+
+	it("disposes the renderer when OrbitControls construction throws, and falls back", async () => {
+		const { log } = installFakeThree({ throwOnControls: true })
+		canvasInDom()
+		const result = await loadBridge().scene3d({ canvas: "#c" })
+		expect(result).toBeNull()
+		expect(log.rendererDisposed).toBe(1)
+		expect(document.querySelector("[data-aihydro-scene3d-message]")).not.toBeNull()
 	})
 })
