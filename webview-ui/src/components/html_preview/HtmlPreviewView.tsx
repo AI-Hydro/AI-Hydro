@@ -549,7 +549,8 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		const artifactContext = buildArtifactContextScript(item)
 		// The kernel bridge (Run buttons, runCode/paramChanged posts) is injected
 		// only for a trusted document the user has allowed. A static document gets
-		// no bridge at all, so the "static" badge describes what is enforced.
+		// no helper bridge (only the 3D-unavailable notice below), so the "static"
+		// badge describes what is enforced.
 		// The 3D helper is part of that bridge, so untrusted content never gets it; its 3D
 		// canvases get a poster (if the page declares one) and an explicit message instead.
 		const cellBridge = canExecute ? CELL_BRIDGE_SCRIPT : STATIC_SCENE3D_NOTICE_SCRIPT

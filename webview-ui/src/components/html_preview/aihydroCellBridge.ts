@@ -1604,7 +1604,9 @@ ${SCENE3D_FALLBACK_JS}
      *     canvas marked data-aihydro-scene3d-fallback, or data-poster="url". Declare it in markup so it also
      *     shows in untrusted (static) mode; it is hidden after the first drawn frame.
      *   - Renderer, geometries, materials and textures are disposed when the canvas leaves the page, on pagehide,
-     *     or on ctx.dispose().
+     *     or on ctx.dispose(). Calling scene3d again on the same canvas replaces the earlier scene.
+     *   - After a context loss, or a repeated call, the canvas element may be REPLACED by a clone. Always use
+     *     ctx.canvas, never an element reference you kept from before.
      */
     scene3d: function(opts) {
       opts = opts || {};
@@ -1612,7 +1614,14 @@ ${SCENE3D_FALLBACK_JS}
         ? document.querySelector(opts.canvas)
         : (opts.canvas || document.querySelector("canvas[data-aihydro-scene3d]"));
       if (!canvas) return Promise.resolve(null);
-      if (canvas.__aihydroScene3d) { try { canvas.__aihydroScene3d.dispose(); } catch(_){} }
+      // A second call on the same canvas (a cell re-run, or two calls in quick succession) supersedes the
+      // first. The handle is set synchronously, before the async library load, so the later call always wins.
+      // The earlier instance is released WITHOUT forcing context loss: a lost context stays attached to its
+      // canvas and the new renderer would find it dead.
+      var superseded = false, releaseNow = null;
+      var handle = { release: function() { superseded = true; if (releaseNow) releaseNow(); } };
+      if (canvas.__aihydroScene3d) { try { canvas.__aihydroScene3d.release(); } catch(_){} }
+      canvas.__aihydroScene3d = handle;
       var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       // Reduced motion stops auto-rotation and animation only; user drags still redraw.
       var animating = !!(opts.onFrame || opts.autoRotate) && !reduce;
@@ -1646,11 +1655,13 @@ ${SCENE3D_FALLBACK_JS}
       }
       var UNAVAILABLE = "3D view unavailable: WebGL could not be started in this panel.";
       return ensureThree().then(function() {
+        if (superseded) return null;
         var THREE = window.THREE;
         var ctx = { THREE: THREE, scene: null, camera: null, renderer: null, controls: null, canvas: canvas,
           dem: opts.dem, pixelRatio: 1, rebuilds: 0 };
         var disposed = false, lost = false, raf = null, onScreen = true, shown = false;
         var ro = null, io = null, mo = null;
+        function onPageHide() { dispose(true); }
         // Never above 2: a 3x display would draw 9 pixels per CSS pixel for no visible gain.
         function pixelRatio() { return Math.min(window.devicePixelRatio || 1, 2); }
         function canvasSize() { return { w: canvas.clientWidth || 480, h: canvas.clientHeight || 320 }; }
@@ -1686,7 +1697,6 @@ ${SCENE3D_FALLBACK_JS}
           ctx.scene = scene; ctx.camera = camera; ctx.renderer = renderer; ctx.controls = controls; ctx.canvas = canvas;
           canvas.addEventListener("webglcontextlost", onLost, false);
           canvas.addEventListener("webglcontextrestored", onRestored, false);
-          canvas.__aihydroScene3d = ctx;
           if (opts.setup) try { opts.setup(ctx); } catch(_){}
         }
         // Frees GPU resources. forceLoss is for the final teardown only: a rebuild after a lost context
@@ -1703,7 +1713,7 @@ ${SCENE3D_FALLBACK_JS}
         function frame() {
           raf = null;
           if (disposed || lost || !ctx.renderer) return;
-          if (!canvas.isConnected) { dispose(); return; }
+          if (!canvas.isConnected) { dispose(true); return; }
           if (!onScreen || document.hidden) return;
           var moving = false;
           if (ctx.controls) { try { moving = ctx.controls.update() === true; } catch(_){} }
@@ -1715,6 +1725,7 @@ ${SCENE3D_FALLBACK_JS}
         }
         function onResize() {
           if (disposed || !ctx.renderer) return;
+          if (!canvas.isConnected) { dispose(true); return; }
           var sz = canvasSize();
           ctx.pixelRatio = pixelRatio();
           ctx.renderer.setPixelRatio(ctx.pixelRatio);
@@ -1749,9 +1760,10 @@ ${SCENE3D_FALLBACK_JS}
           if (old.parentNode) old.parentNode.replaceChild(fresh, old);
           delete old.__aihydroScene3d;
           canvas = fresh;
+          canvas.__aihydroScene3d = handle;
           lost = false;
           ctx.rebuilds += 1;
-          try { build(); observe(); schedule(); } catch(_) { fail(UNAVAILABLE); }
+          try { build(); observe(); watchParent(); schedule(); } catch(_) { fail(UNAVAILABLE); }
         }
         function contextIsLost() {
           if (lost) return true;
@@ -1759,34 +1771,45 @@ ${SCENE3D_FALLBACK_JS}
         }
         function onVisibility() {
           if (disposed || document.hidden) return;
+          if (!canvas.isConnected) { dispose(true); return; }
           if (contextIsLost()) recover(); else schedule();
         }
-        function dispose() {
+        // Final teardown. forceLoss frees the GPU context (detach, pagehide, explicit ctx.dispose()); a
+        // re-init on the same canvas passes false so the canvas keeps a usable context.
+        function dispose(forceLoss) {
           if (disposed) return;
           disposed = true;
           document.removeEventListener("visibilitychange", onVisibility);
-          window.removeEventListener("pagehide", dispose);
+          window.removeEventListener("pagehide", onPageHide);
           if (ro) ro.disconnect();
           if (io) io.disconnect();
           if (mo) mo.disconnect();
-          teardownGraphics(true);
-          try { delete canvas.__aihydroScene3d; } catch(_){}
+          teardownGraphics(forceLoss === true);
+          try { if (canvas.__aihydroScene3d === handle) delete canvas.__aihydroScene3d; } catch(_){}
+        }
+        // A re-rendered cell removes the canvas without telling us. Watching only the canvas's parent
+        // (direct children, no subtree) keeps this cheap on busy pages; removal of an ancestor is caught by
+        // the isConnected checks in frame(), onResize() and onVisibility().
+        function watchParent() {
+          if (typeof MutationObserver === "undefined" || !canvas.parentNode) return;
+          if (mo) mo.disconnect();
+          mo = mo || new MutationObserver(function() { if (!canvas.isConnected) dispose(true); });
+          mo.observe(canvas.parentNode, { childList: true });
         }
         build();
         observe();
         document.addEventListener("visibilitychange", onVisibility);
-        window.addEventListener("pagehide", dispose);
-        // A re-rendered cell removes the canvas without telling us; release the GPU resources then.
-        if (typeof MutationObserver !== "undefined") {
-          mo = new MutationObserver(function() { if (!canvas.isConnected) dispose(); });
-          mo.observe(document.documentElement, { childList: true, subtree: true });
-        }
+        window.addEventListener("pagehide", onPageHide);
+        watchParent();
+        releaseNow = function() { dispose(false); };
         ctx.invalidate = schedule;
         ctx.stop = function() { animating = false; cancel(); };
-        ctx.dispose = dispose;
+        ctx.dispose = function() { dispose(true); };
         schedule();
         return ctx;
       }).catch(function() {
+        if (canvas.__aihydroScene3d === handle) delete canvas.__aihydroScene3d;
+        if (superseded) return null;
         s3dShowFallback(canvas, opts.fallback, UNAVAILABLE);
         return null;
       });

@@ -14,6 +14,8 @@ type Scene3dApi = {
 
 /** A minimal three.js double that records pixel ratio, renders and disposals. */
 function installFakeThree(opts: { throwOnRenderer?: boolean } = {}) {
+	// One WebGL context per canvas, as in a browser: once lost it stays lost for that canvas.
+	const contexts = new WeakMap<HTMLCanvasElement, { lost: boolean; isContextLost: () => boolean }>()
 	const log = {
 		pixelRatios: [] as number[],
 		renders: 0,
@@ -24,6 +26,7 @@ function installFakeThree(opts: { throwOnRenderer?: boolean } = {}) {
 		controlChange: null as null | (() => void),
 		controlUpdateResult: false,
 		renderers: 0,
+		forcedLoss: 0,
 	}
 	class Scene {
 		background: unknown = null
@@ -53,10 +56,14 @@ function installFakeThree(opts: { throwOnRenderer?: boolean } = {}) {
 			constructor(o: { canvas: HTMLCanvasElement }) {
 				if (opts.throwOnRenderer) throw new Error("Error creating WebGL context.")
 				this.domElement = o.canvas
+				if (!contexts.has(o.canvas)) {
+					const c = { lost: false, isContextLost: () => c.lost }
+					contexts.set(o.canvas, c)
+				}
 				log.renderers++
 			}
 			getContext() {
-				return { isContextLost: () => false }
+				return contexts.get(this.domElement)
 			}
 			setPixelRatio(r: number) {
 				log.pixelRatios.push(r)
@@ -68,7 +75,10 @@ function installFakeThree(opts: { throwOnRenderer?: boolean } = {}) {
 			dispose() {
 				log.rendererDisposed++
 			}
-			forceContextLoss() {}
+			forceContextLoss() {
+				log.forcedLoss++
+				contexts.get(this.domElement)!.lost = true
+			}
 		},
 	}
 	// Always present: without it the helper would try the CDN, which never answers in jsdom.
@@ -92,20 +102,26 @@ function installFakeThree(opts: { throwOnRenderer?: boolean } = {}) {
 	return { T, log }
 }
 
-/** requestAnimationFrame as an explicit queue so tests control exactly when frames run. */
+/** requestAnimationFrame as an explicit queue so tests control exactly when frames run. Cancel removes only its own id. */
 function installManualRaf() {
-	const queue: FrameRequestCallback[] = []
+	const pending = new Map<number, FrameRequestCallback>()
+	let nextId = 1
 	vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
-		queue.push(cb)
-		return queue.length
+		pending.set(nextId, cb)
+		return nextId++
 	})
-	vi.stubGlobal("cancelAnimationFrame", () => {
-		queue.length = 0
+	vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+		pending.delete(id)
 	})
 	return {
-		queue,
+		queue: {
+			get length() {
+				return pending.size
+			},
+		},
 		flush() {
-			const run = queue.splice(0)
+			const run = [...pending.values()]
+			pending.clear()
 			for (const cb of run) cb(0)
 		},
 	}
@@ -124,9 +140,34 @@ function loadBridge(): Scene3dApi {
 
 /** Recording MutationObserver: real ones would outlive the test and fire into a torn-down document. */
 const mutationCallbacks: MutationCallback[] = []
+const observerState = { roDisconnects: 0, ioDisconnects: 0, ioCallbacks: [] as IntersectionObserverCallback[] }
 
 beforeEach(() => {
 	mutationCallbacks.length = 0
+	observerState.roDisconnects = 0
+	observerState.ioDisconnects = 0
+	observerState.ioCallbacks = []
+	vi.stubGlobal(
+		"ResizeObserver",
+		class {
+			observe() {}
+			disconnect() {
+				observerState.roDisconnects++
+			}
+		},
+	)
+	vi.stubGlobal(
+		"IntersectionObserver",
+		class {
+			constructor(cb: IntersectionObserverCallback) {
+				observerState.ioCallbacks.push(cb)
+			}
+			observe() {}
+			disconnect() {
+				observerState.ioDisconnects++
+			}
+		},
+	)
 	vi.stubGlobal(
 		"MutationObserver",
 		class {
@@ -357,6 +398,108 @@ describe("scene3d teardown and recovery", () => {
 		expect(log.rendererDisposed).toBe(1)
 		raf.flush()
 		expect(log.renders).toBe(2)
+		ctx!.dispose()
+	})
+})
+
+describe("scene3d re-init and races", () => {
+	it("a second call on the same canvas replaces the first without killing the canvas's context", async () => {
+		installManualRaf()
+		const { log } = installFakeThree({})
+		canvasInDom()
+		const first = await loadBridge().scene3d({ canvas: "#c" })
+		const second = await (window as any).aihydro.scene3d({ canvas: "#c" })
+		expect(first).not.toBeNull()
+		expect(second).not.toBeNull() // not the "unavailable" fallback
+		expect(log.forcedLoss).toBe(0)
+		expect(log.rendererDisposed).toBe(1)
+		expect(document.querySelector("[data-aihydro-scene3d-message]")).toBeNull()
+		expect(document.getElementById("c")!.style.display).not.toBe("none")
+		second!.dispose()
+		expect(log.forcedLoss).toBe(1) // explicit dispose does free the context
+	})
+
+	it("of two near-simultaneous calls the later one wins and the earlier one is abandoned", async () => {
+		installManualRaf()
+		const { log } = installFakeThree({})
+		canvasInDom()
+		const api = loadBridge()
+		const setupA = vi.fn()
+		const setupB = vi.fn()
+		const [a, b] = await Promise.all([
+			api.scene3d({ canvas: "#c", setup: setupA }),
+			api.scene3d({ canvas: "#c", setup: setupB }),
+		])
+		expect(a).toBeNull()
+		expect(b).not.toBeNull()
+		expect(setupA).not.toHaveBeenCalled()
+		expect(setupB).toHaveBeenCalledTimes(1)
+		expect(log.renderers).toBe(1)
+		expect(document.querySelector("[data-aihydro-scene3d-message]")).toBeNull()
+		b!.dispose()
+	})
+})
+
+describe("scene3d lifecycle events", () => {
+	it("pagehide disposes and frees the context", async () => {
+		installManualRaf()
+		const { log } = installFakeThree({})
+		canvasInDom()
+		await loadBridge().scene3d({ canvas: "#c" })
+		window.dispatchEvent(new Event("pagehide"))
+		expect(log.rendererDisposed).toBe(1)
+		expect(log.forcedLoss).toBe(1)
+	})
+
+	it("disconnects the resize and intersection observers on dispose", async () => {
+		installManualRaf()
+		installFakeThree({})
+		canvasInDom()
+		const ctx = await loadBridge().scene3d({ canvas: "#c" })
+		const ro = observerState.roDisconnects
+		const io = observerState.ioDisconnects
+		ctx!.dispose()
+		expect(observerState.roDisconnects).toBeGreaterThan(ro)
+		expect(observerState.ioDisconnects).toBeGreaterThan(io)
+	})
+
+	it("a visibilitychange storm on a healthy context neither rebuilds nor queues more than one frame", async () => {
+		const raf = installManualRaf()
+		const { log } = installFakeThree({})
+		canvasInDom()
+		const ctx = await loadBridge().scene3d({ canvas: "#c" })
+		raf.flush()
+		for (let i = 0; i < 50; i++) document.dispatchEvent(new Event("visibilitychange"))
+		expect(log.renderers).toBe(1)
+		expect(raf.queue.length).toBe(1)
+		ctx!.dispose()
+	})
+
+	it("a visibilitychange storm after a loss rebuilds exactly once", async () => {
+		installManualRaf()
+		const { log } = installFakeThree({})
+		const canvas = canvasInDom()
+		const ctx = await loadBridge().scene3d({ canvas: "#c" })
+		canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }))
+		for (let i = 0; i < 50; i++) document.dispatchEvent(new Event("visibilitychange"))
+		expect(ctx!.rebuilds).toBe(1)
+		expect(log.renderers).toBe(2)
+		ctx!.dispose()
+	})
+
+	it("rebuilds from webglcontextrestored when the panel is visible, but waits while hidden", async () => {
+		installManualRaf()
+		const { log } = installFakeThree({})
+		const canvas = canvasInDom()
+		const ctx = await loadBridge().scene3d({ canvas: "#c" })
+		canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }))
+		const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true)
+		canvas.dispatchEvent(new Event("webglcontextrestored"))
+		expect(ctx!.rebuilds).toBe(0)
+		hidden.mockReturnValue(false)
+		canvas.dispatchEvent(new Event("webglcontextrestored"))
+		expect(ctx!.rebuilds).toBe(1)
+		expect(log.renderers).toBe(2)
 		ctx!.dispose()
 	})
 })
