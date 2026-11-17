@@ -212,7 +212,7 @@ Every module gets a `window.aihydro` helper API injected by the cell bridge. All
 | `aihydro.compare(selector)` | Before/after wipe between two figures or maps |
 | `aihydro.sim({ canvas, step, params })` | rAF loop over a `<canvas data-aihydro-sim>` |
 | `aihydro.plot({ mount, data, layout })` | Branded Plotly chart (lazy-loads from CDN) |
-| `aihydro.scene3d({ canvas, dem, setup, onFrame })` | 3D terrain / watershed flythrough via three.js |
+| `aihydro.scene3d({ canvas, dem, setup, onFrame, fallback })` | 3D terrain / watershed flythrough via three.js |
 | `aihydro.quiz(opts)` | Programmatic quiz (thin alias for `.aihydro-quiz` markup) |
 | `aihydro.reveal(el)` | Unhide a block (for step-gated reveals) |
 | `aihydro.scrolly(config)` | Scroll-triggered section activation |
@@ -223,6 +223,13 @@ Full markup contracts and copy-paste recipes are in [Interactive Module Cell For
 ### three.js / scene3d version note
 
 `aihydro.scene3d` pins **three.js r128** (the last UMD release with a synchronous `examples/js/` module). **Do not** add your own `<script src="…three…">` tag — the bridge handles loading. `examples/jsm/` (ESM-only, r134+) is blocked by the `AI-Hydro: Validate Module` linter.
+
+**Behaviour contract for `scene3d`:**
+
+- **Fallback.** Declare a poster in markup: an element after the canvas with `data-aihydro-scene3d-fallback` (for example an `<img alt="…">`), a `data-fallback="#id"` on the canvas, or `data-poster="url"` (the helper builds the `<img>`). It is shown if WebGL or three.js is unavailable, and in untrusted (static) documents, where `aihydro.scene3d` does not exist and an explicit "3D view unavailable" message is shown. With no declared fallback the message alone is shown. It is hidden after the first drawn frame.
+- **Render on demand.** The scene is redrawn on control changes, resize and `ctx.invalidate()`, not every frame; call `ctx.invalidate()` after changing the scene. `onFrame` or `autoRotate` give continuous animation, which stops under `prefers-reduced-motion` (dragging still redraws). The pixel ratio is capped at 2.
+- **Recovery.** After a lost WebGL context (including hidden panels that never fire "restored"), the helper builds a new renderer on a fresh canvas when the panel is visible again and runs `setup(ctx)` again, so `setup` must build the scene only from the payload.
+- **Disposal.** Renderer, controls, geometries, materials and textures are released when the canvas leaves the page, on `pagehide`, or on `ctx.dispose()`.
 
 ---
 

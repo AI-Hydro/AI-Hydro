@@ -660,6 +660,81 @@ canvas[data-aihydro-scene3d] { width: 100%; min-height: 320px; cursor: grab; }
 canvas[data-aihydro-scene3d]:active { cursor: grabbing; }
 </style>`
 
+/**
+ * Shared by the trusted bridge and the static (untrusted) notice script: how a
+ * <canvas data-aihydro-scene3d> degrades when 3D cannot run. A page declares its own fallback in markup, so
+ * it also works with no bridge at all:
+ *   - an element (usually an <img> poster with alt text) given by the `fallback` option, by the canvas's
+ *     `data-fallback="#selector"`, or placed right after the canvas with `data-aihydro-scene3d-fallback`;
+ *   - or `data-poster="<url>"` on the canvas, from which an <img> is created;
+ *   - always a visible text message, so the reason is never a blank canvas.
+ * Plain function declarations: this text is pasted into an IIFE in each script.
+ */
+const SCENE3D_FALLBACK_JS = `
+  function s3dFallbackFor(canvas, sel) {
+    var el = null;
+    try {
+      if (sel && typeof sel !== "string") el = sel;
+      else if (sel) el = document.querySelector(sel);
+      if (!el) { var attr = canvas.getAttribute("data-fallback"); if (attr) el = document.querySelector(attr); }
+      if (!el) { var sib = canvas.nextElementSibling; if (sib && sib.hasAttribute("data-aihydro-scene3d-fallback")) el = sib; }
+    } catch (_) {}
+    return el;
+  }
+  function s3dShowFallback(canvas, sel, message) {
+    try {
+      var el = s3dFallbackFor(canvas, sel);
+      var poster = canvas.getAttribute("data-poster");
+      if (!el && poster) {
+        el = document.createElement("img");
+        el.setAttribute("data-aihydro-scene3d-fallback", "");
+        el.src = poster;
+        el.alt = canvas.getAttribute("aria-label") || canvas.getAttribute("data-alt") || message;
+        el.style.maxWidth = "100%";
+        canvas.parentNode.insertBefore(el, canvas.nextSibling);
+      }
+      if (el) {
+        el.removeAttribute("hidden");
+        el.style.display = "";
+        if (window.getComputedStyle(el).display === "none") el.style.display = "block";
+      }
+      var msg = canvas.__s3dMessage;
+      if (!msg) {
+        msg = document.createElement("p");
+        msg.setAttribute("data-aihydro-scene3d-message", "");
+        msg.setAttribute("role", "status");
+        msg.style.cssText = "margin:6px 0;font-size:13px;opacity:0.8";
+        canvas.parentNode.insertBefore(msg, el && el.parentNode === canvas.parentNode ? el.nextSibling : canvas.nextSibling);
+        canvas.__s3dMessage = msg;
+      }
+      msg.textContent = message;
+      canvas.style.display = "none";
+    } catch (_) {}
+  }
+  function s3dHideFallback(canvas, sel) {
+    try {
+      var el = s3dFallbackFor(canvas, sel);
+      if (el) { el.setAttribute("hidden", ""); el.style.display = "none"; }
+      if (canvas.__s3dMessage) { canvas.__s3dMessage.remove(); canvas.__s3dMessage = null; }
+    } catch (_) {}
+  }
+`
+
+/**
+ * Injected in place of CELL_BRIDGE_SCRIPT when the document is not allowed to execute. The 3D helper is
+ * deliberately NOT offered to untrusted content (window.aihydro does not exist); this only replaces each
+ * 3D canvas with the page's own poster, if any, and an explicit message.
+ */
+export const STATIC_SCENE3D_NOTICE_SCRIPT = `<script>(function(){${SCENE3D_FALLBACK_JS}
+  function run() {
+    var list = document.querySelectorAll("canvas[data-aihydro-scene3d]");
+    for (var i = 0; i < list.length; i++) {
+      s3dShowFallback(list[i], null, "3D view unavailable: this document is untrusted, so interactive 3D is disabled. Allow execution to enable it.");
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run); else run();
+})();</script>`
+
 export const CELL_BRIDGE_SCRIPT = `<script>(function(){
   var registry = { cellIds: [], pythonCount: 0 };
   var focusedCellId = "";
@@ -668,7 +743,7 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
   var isStandalone = (function(){
     try { return window.parent === window; } catch(_) { return true; }
   })();
-
+${SCENE3D_FALLBACK_JS}
   // ── Module-state persistence (Phase 1c) ──────────────────────────────
   // Tracks every bindParam-bound input so its value can be saved to the host
   // (debounced) and restored on reload. Keyed by "<cellId>::<paramName>".
@@ -1513,10 +1588,23 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
      * branded scene/camera/renderer with OrbitControls so terrain, DEM/TWI
      * surfaces and watershed flythroughs are draggable.
      *
-     *   aihydro.scene3d({ canvas: '#terrain', dem: grid2d, setup: function(ctx){ ... } });
+     *   aihydro.scene3d({ canvas: '#terrain', dem: grid2d, fallback: '#terrain-poster', setup: function(ctx){ ... } });
      *
-     * ctx = { THREE, scene, camera, renderer, controls, canvas, dem }.
-     * Returns a promise resolving to that ctx (or null if no canvas).
+     * ctx = { THREE, scene, camera, renderer, controls, canvas, dem, pixelRatio, invalidate, stop, dispose }.
+     * Returns a promise resolving to that ctx (or null if there is no canvas or WebGL/three.js is unavailable;
+     * the page's fallback poster/message is then shown instead of a blank canvas).
+     *
+     * Contract for authors:
+     *   - The canvas is drawn ON DEMAND (controls change, resize, ctx.invalidate()), not every frame. Call
+     *     ctx.invalidate() after changing the scene. Pass onFrame or autoRotate for continuous animation;
+     *     under prefers-reduced-motion those stop, but dragging still redraws.
+     *   - setup(ctx) must build the scene purely from the payload (opts.dem and the like). After a lost WebGL
+     *     context the helper builds a fresh renderer on a fresh canvas and runs setup again.
+     *   - Fallback: opts.fallback (selector or element), the canvas's data-fallback="#id", an element after the
+     *     canvas marked data-aihydro-scene3d-fallback, or data-poster="url". Declare it in markup so it also
+     *     shows in untrusted (static) mode; it is hidden after the first drawn frame.
+     *   - Renderer, geometries, materials and textures are disposed when the canvas leaves the page, on pagehide,
+     *     or on ctx.dispose().
      */
     scene3d: function(opts) {
       opts = opts || {};
@@ -1524,7 +1612,10 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
         ? document.querySelector(opts.canvas)
         : (opts.canvas || document.querySelector("canvas[data-aihydro-scene3d]"));
       if (!canvas) return Promise.resolve(null);
+      if (canvas.__aihydroScene3d) { try { canvas.__aihydroScene3d.dispose(); } catch(_){} }
       var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      // Reduced motion stops auto-rotation and animation only; user drags still redraw.
+      var animating = !!(opts.onFrame || opts.autoRotate) && !reduce;
       // r128 is the last three.js release that ships the legacy UMD
       // examples/js/controls/OrbitControls.js alongside build/three.min.js.
       // Later releases moved OrbitControls to ESM-only (examples/jsm/).
@@ -1540,35 +1631,165 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
           return loadVendorLibrary("three-orbit", ORBIT_URL).catch(function() {});
         });
       }
+      function disposeMaterial(m) {
+        for (var k in m) { var v = m[k]; if (v && v.isTexture && v.dispose) v.dispose(); }
+        if (m.dispose) m.dispose();
+      }
+      function disposeScene(root) {
+        if (!root) return;
+        if (root.background && root.background.isTexture) root.background.dispose();
+        root.traverse(function(o) {
+          if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+          var m = o.material;
+          if (m) (Array.isArray(m) ? m : [m]).forEach(disposeMaterial);
+        });
+      }
+      var UNAVAILABLE = "3D view unavailable: WebGL could not be started in this panel.";
       return ensureThree().then(function() {
         var THREE = window.THREE;
-        var w = canvas.clientWidth || 480, h = canvas.clientHeight || 320;
-        var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-        renderer.setPixelRatio(window.devicePixelRatio || 1);
-        renderer.setSize(w, h, false);
-        var scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a1622);
-        var camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1000);
-        camera.position.set(3, 3, 5);
-        scene.add(new THREE.AmbientLight(0x88bbff, 0.6));
-        var key = new THREE.DirectionalLight(0x00ddff, 0.8);
-        key.position.set(5, 10, 7);
-        scene.add(key);
-        var controls = window.THREE.OrbitControls ? new THREE.OrbitControls(camera, renderer.domElement) : null;
-        if (controls) { controls.enableDamping = true; controls.dampingFactor = 0.08; }
-        var ctx = { THREE: THREE, scene: scene, camera: camera, renderer: renderer, controls: controls, canvas: canvas, dem: opts.dem };
-        if (opts.setup) try { opts.setup(ctx); } catch(_){}
-        var raf = null;
-        function loop() {
-          if (controls) controls.update();
-          if (opts.onFrame) try { opts.onFrame(ctx); } catch(_){}
-          renderer.render(scene, camera);
-          raf = requestAnimationFrame(loop);
+        var ctx = { THREE: THREE, scene: null, camera: null, renderer: null, controls: null, canvas: canvas,
+          dem: opts.dem, pixelRatio: 1, rebuilds: 0 };
+        var disposed = false, lost = false, raf = null, onScreen = true, shown = false;
+        var ro = null, io = null, mo = null;
+        // Never above 2: a 3x display would draw 9 pixels per CSS pixel for no visible gain.
+        function pixelRatio() { return Math.min(window.devicePixelRatio || 1, 2); }
+        function canvasSize() { return { w: canvas.clientWidth || 480, h: canvas.clientHeight || 320 }; }
+        function schedule() { if (raf === null && !disposed && !lost) raf = requestAnimationFrame(frame); }
+        function cancel() { if (raf !== null) { cancelAnimationFrame(raf); raf = null; } }
+        function onLost(e) { e.preventDefault(); lost = true; cancel(); }
+        function onRestored() { if (lost && !document.hidden) recover(); }
+        function build() {
+          var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+          var gl = renderer.getContext && renderer.getContext();
+          if (!gl || (gl.isContextLost && gl.isContextLost())) {
+            try { renderer.dispose(); } catch(_){}
+            throw new Error("no webgl context");
+          }
+          ctx.pixelRatio = pixelRatio();
+          renderer.setPixelRatio(ctx.pixelRatio);
+          var sz = canvasSize();
+          renderer.setSize(sz.w, sz.h, false);
+          var scene = new THREE.Scene();
+          scene.background = new THREE.Color(0x0a1622);
+          var camera = new THREE.PerspectiveCamera(55, sz.w / sz.h, 0.1, 1000);
+          camera.position.set(3, 3, 5);
+          scene.add(new THREE.AmbientLight(0x88bbff, 0.6));
+          var key = new THREE.DirectionalLight(0x00ddff, 0.8);
+          key.position.set(5, 10, 7);
+          scene.add(key);
+          var controls = THREE.OrbitControls ? new THREE.OrbitControls(camera, renderer.domElement) : null;
+          if (controls) {
+            controls.enableDamping = true; controls.dampingFactor = 0.08;
+            if (opts.autoRotate && !reduce) controls.autoRotate = true;
+            if (controls.addEventListener) controls.addEventListener("change", schedule);
+          }
+          ctx.scene = scene; ctx.camera = camera; ctx.renderer = renderer; ctx.controls = controls; ctx.canvas = canvas;
+          canvas.addEventListener("webglcontextlost", onLost, false);
+          canvas.addEventListener("webglcontextrestored", onRestored, false);
+          canvas.__aihydroScene3d = ctx;
+          if (opts.setup) try { opts.setup(ctx); } catch(_){}
         }
-        if (reduce) { renderer.render(scene, camera); } else { raf = requestAnimationFrame(loop); }
-        ctx.stop = function(){ if (raf) { cancelAnimationFrame(raf); raf = null; } };
+        // Frees GPU resources. forceLoss is for the final teardown only: a rebuild after a lost context
+        // swaps in a fresh canvas instead, because a lost context stays attached to its canvas.
+        function teardownGraphics(forceLoss) {
+          cancel();
+          canvas.removeEventListener("webglcontextlost", onLost, false);
+          canvas.removeEventListener("webglcontextrestored", onRestored, false);
+          try { if (ctx.controls) { if (ctx.controls.removeEventListener) ctx.controls.removeEventListener("change", schedule); ctx.controls.dispose(); } } catch(_){}
+          try { disposeScene(ctx.scene); } catch(_){}
+          try { if (ctx.renderer) { ctx.renderer.dispose(); if (forceLoss && ctx.renderer.forceContextLoss) ctx.renderer.forceContextLoss(); } } catch(_){}
+          ctx.scene = ctx.camera = ctx.renderer = ctx.controls = null;
+        }
+        function frame() {
+          raf = null;
+          if (disposed || lost || !ctx.renderer) return;
+          if (!canvas.isConnected) { dispose(); return; }
+          if (!onScreen || document.hidden) return;
+          var moving = false;
+          if (ctx.controls) { try { moving = ctx.controls.update() === true; } catch(_){} }
+          if (animating && opts.onFrame) try { opts.onFrame(ctx); } catch(_){}
+          try { ctx.renderer.render(ctx.scene, ctx.camera); } catch(_){ return; }
+          if (!shown) { shown = true; s3dHideFallback(canvas, opts.fallback); }
+          // Damping keeps moving after release, so keep drawing until update() reports no change.
+          if (animating || moving) schedule();
+        }
+        function onResize() {
+          if (disposed || !ctx.renderer) return;
+          var sz = canvasSize();
+          ctx.pixelRatio = pixelRatio();
+          ctx.renderer.setPixelRatio(ctx.pixelRatio);
+          ctx.renderer.setSize(sz.w, sz.h, false);
+          ctx.camera.aspect = sz.w / sz.h;
+          ctx.camera.updateProjectionMatrix();
+          schedule();
+        }
+        function observe() {
+          if (ro) ro.disconnect();
+          if (io) io.disconnect();
+          if (typeof ResizeObserver !== "undefined") { ro = ro || new ResizeObserver(onResize); ro.observe(canvas); }
+          if (typeof IntersectionObserver !== "undefined") {
+            io = io || new IntersectionObserver(function(entries) {
+              onScreen = entries[entries.length - 1].isIntersecting;
+              if (onScreen) schedule();
+            });
+            io.observe(canvas);
+          }
+        }
+        function fail(message) {
+          var c = canvas;
+          teardownGraphics(false);
+          s3dShowFallback(c, opts.fallback, message);
+        }
+        // Hidden webviews often never fire webglcontextrestored (same lesson as MapView.tsx), so a lost
+        // context is also rebuilt when the panel becomes visible again.
+        function recover() {
+          if (disposed) return;
+          teardownGraphics(false);
+          var old = canvas, fresh = old.cloneNode(false);
+          if (old.parentNode) old.parentNode.replaceChild(fresh, old);
+          delete old.__aihydroScene3d;
+          canvas = fresh;
+          lost = false;
+          ctx.rebuilds += 1;
+          try { build(); observe(); schedule(); } catch(_) { fail(UNAVAILABLE); }
+        }
+        function contextIsLost() {
+          if (lost) return true;
+          try { var gl = ctx.renderer && ctx.renderer.getContext(); return !!(gl && gl.isContextLost && gl.isContextLost()); } catch(_) { return false; }
+        }
+        function onVisibility() {
+          if (disposed || document.hidden) return;
+          if (contextIsLost()) recover(); else schedule();
+        }
+        function dispose() {
+          if (disposed) return;
+          disposed = true;
+          document.removeEventListener("visibilitychange", onVisibility);
+          window.removeEventListener("pagehide", dispose);
+          if (ro) ro.disconnect();
+          if (io) io.disconnect();
+          if (mo) mo.disconnect();
+          teardownGraphics(true);
+          try { delete canvas.__aihydroScene3d; } catch(_){}
+        }
+        build();
+        observe();
+        document.addEventListener("visibilitychange", onVisibility);
+        window.addEventListener("pagehide", dispose);
+        // A re-rendered cell removes the canvas without telling us; release the GPU resources then.
+        if (typeof MutationObserver !== "undefined") {
+          mo = new MutationObserver(function() { if (!canvas.isConnected) dispose(); });
+          mo.observe(document.documentElement, { childList: true, subtree: true });
+        }
+        ctx.invalidate = schedule;
+        ctx.stop = function() { animating = false; cancel(); };
+        ctx.dispose = dispose;
+        schedule();
         return ctx;
-      }).catch(function(){ return null; });
+      }).catch(function() {
+        s3dShowFallback(canvas, opts.fallback, UNAVAILABLE);
+        return null;
+      });
     },
 
     /**
