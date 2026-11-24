@@ -1,10 +1,10 @@
 ---
-description: How AI-Hydro keeps 113 MCP tools reliable without bloating the agent's context — tiered progressive disclosure, hot tools with full schemas, on-demand schema fetch via describe_tool, and self-correcting error responses.
+description: How AI-Hydro keeps 184 MCP tools reliable without bloating the agent's context — tiered progressive disclosure, hot tools with full schemas, on-demand schema fetch via describe_tool, and self-correcting error responses.
 ---
 
 # Tool Discovery & Context Injection
 
-AI-Hydro ships **113 MCP tools**. Dumping every tool's full parameter schema into the agent's prompt would swamp the context window and, paradoxically, make a smaller driving model *less* reliable. AI-Hydro solves this with **tiered progressive disclosure**: the tools you use constantly are always fully visible, every other tool is always *listed*, and full schemas for the long tail are fetched on demand.
+AI-Hydro ships **184 MCP tools** (aihydro-tools 2.12.0). Dumping every tool's full parameter schema into the agent's prompt would swamp the context window and, paradoxically, make a smaller driving model *less* reliable. AI-Hydro solves this with **tiered progressive disclosure**: the tools you use constantly are always fully visible, every other tool is always *listed*, and full schemas for the long tail are fetched on demand.
 
 Nothing is ever hidden. The agent can always see that a tool exists; it just fetches the details when it needs them.
 
@@ -16,8 +16,8 @@ The Python server is the single source of truth — each tool is tagged with `_m
 
 | Level | What's injected | Which tools | Cost |
 |-------|-----------------|-------------|------|
-| **Full schema** | name + description + complete input schema | the **26 hot** tools (all Tier-1 core + a curated set of high-frequency Tier-2) | bounded — common workflows are zero-round-trip |
-| **Summary line** | `name — one-line summary (domain)` | the remaining ~87 tools, grouped by domain | ~1 line per tool — every tool is always visible |
+| **Full schema** | name + description + complete input schema | the **45 hot** tools (all Tier-1 core + a curated set of high-frequency Tier-2) | bounded — common workflows are zero-round-trip |
+| **Summary line** | `name — one-line summary (domain)` | the remaining ~139 tools, grouped by domain | ~1 line per tool — every tool is always visible |
 | **On demand** | full schema + a worked example | any summary-level tool | one round-trip via `describe_tool(name)` |
 
 This keeps the prompt lean **and** keeps a weak driving model reliable: it gets full schemas for the hot path, and a dead-simple, reliable way to fetch a schema for anything else.

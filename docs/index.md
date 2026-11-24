@@ -47,6 +47,15 @@ hide:
 
 ---
 
+!!! info "Coming from AGU26?"
+    Welcome. AI-Hydro is a research environment inside VS Code where LLM-based agents call validated hydrology tools and every result is saved with its data source, parameters and provenance. Three steps get you running:
+
+    1. **[Install](getting-started/installation.md)** — the VS Code extension sets up its own Python environment for the tools; you need VS Code, Python 3.10 or newer and an API key for a model provider.
+    2. **[Quickstart](getting-started/quickstart.md)** — delineate a watershed, fetch streamflow and extract signatures for one USGS gauge in a single conversation.
+    3. **[AI-Hydro Studio guide](guide/html-preview.md)** — the in-editor panel for interactive learning modules and data dashboards, with a built-in Module Marketplace.
+
+    Looking up a specific tool? See the [Tool Reference](tools/index.md). Stuck? Try [Troubleshooting](troubleshooting.md) or the [FAQ](faq.md).
+
 !!! tip "Project Status"
     AI-Hydro is in active **beta**. The platform is already useful for real research workflows, but it is still evolving quickly. Pin versions for serious projects and expect new tools, better outputs, and broader data/model support over time.
 
@@ -174,6 +183,17 @@ The platform stores your stated expertise, preferred methods, active projects, a
 </div>
 
 <div class="feature-card" markdown>
+<div class="icon">🎓</div>
+
+### AI-Hydro Studio
+
+Run interactive hydrology modules with executable Python cells inside VS Code and install more from the Module Marketplace. The catalog includes "The Watershed: Where Rain Becomes Runoff", which has a real-basin 3-D scene of the Fish River, Maine.
+
+[→ Studio guide](guide/html-preview.md)
+
+</div>
+
+<div class="feature-card" markdown>
 <div class="icon">🔌</div>
 
 ### Community Plugins
@@ -265,14 +285,14 @@ If you want to help build it:
 
 === "VS Code Extension"
 
-    Install the extension from the[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=aihydro.ai-hydro) and connect your preferred AI provider.
+    Install the extension from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=aihydro.ai-hydro) and connect your preferred AI provider.
 
-    The extension auto-detects`aihydro-mcp` on startup, so the hydrology tool server becomes available without manual JSON configuration.
+    The extension sets up and registers its own `aihydro-mcp` environment, so the hydrology tool server becomes available without manual JSON configuration. See [Installation](getting-started/installation.md) for details.
 
 === "Python Package"
 
     ```bash
-    pip install aihydro-tools[all]
+    pip install "aihydro-tools[all]"
     aihydro-mcp --diagnose
     ```
 
@@ -303,6 +323,7 @@ If you use AI-Hydro in your research, see [Citing AI-Hydro](citing.md) for platf
 
 - [Installation](getting-started/installation.md)
 - [Quickstart](getting-started/quickstart.md)
+- [AI-Hydro Studio guide](guide/html-preview.md)
 - [Architecture](architecture.md)
 - [Tool Reference](tools/index.md)
 - [Plugin Overview](plugins/overview.md)

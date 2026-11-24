@@ -147,7 +147,7 @@ For contributions to the built-in tools or the extension itself:
 ### Running tests
 
 ```bash
-pip install aihydro-tools[dev]
+pip install "aihydro-tools[dev]"
 pytest tests/ -m "not live" -v
 ```
 
