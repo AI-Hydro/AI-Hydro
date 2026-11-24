@@ -1,15 +1,11 @@
 # AI-Hydro
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/docs/aihydro-hero-animated.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/docs/aihydro-hero-animated.svg" />
-    <img src="./assets/docs/aihydro-hero-static.png" alt="AI-Hydro — Intelligent Hydrological Computing" width="100%" />
-  </picture>
+  <img src="https://raw.githubusercontent.com/AI-Hydro/AI-Hydro/main/assets/docs/aihydro-hero-static.png" alt="AI-Hydro — Intelligent Hydrological Computing" width="100%" />
 </p>
 
 <p align="center">
-  <em>An open platform for autonomous hydrological and earth science research.</em>
+  <em>An open platform for LLM-agent-assisted hydrological and earth science research.</em>
 </p>
 
 <p align="center">
@@ -17,7 +13,7 @@
   <a href="https://pypi.org/project/aihydro-tools/"><img src="https://img.shields.io/pypi/v/aihydro-tools?color=3775a9" alt="PyPI" /></a>
   <a href="https://github.com/AI-Hydro/AI-Hydro/releases"><img src="https://img.shields.io/github/v/release/AI-Hydro/AI-Hydro?label=release&color=blue" alt="Release" /></a>
   <a href="https://doi.org/10.5281/zenodo.19597664"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.19597664-blue" alt="DOI" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" /></a>
+  <a href="https://github.com/AI-Hydro/AI-Hydro/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" /></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python" /></a>
 </p>
 
@@ -34,7 +30,7 @@
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=8YEQmEkid90">
-    ▶&nbsp;&nbsp;<strong>Watch the intro — What if an AI Agent Could Run Your Entire Hydrology Study?</strong>
+    ▶&nbsp;&nbsp;<strong>Watch the intro video</strong>
   </a>
 </p>
 
@@ -46,11 +42,11 @@
 
 ## The Vision
 
-Hydrological research today involves a fragmented cycle: downloading data from scattered federal APIs, wrangling formats, writing processing scripts, calibrating models, and documenting provenance — often spending more time on plumbing than on science. As foundation models become increasingly capable at reasoning over scientific problems, there is an opportunity to fundamentally change how computational hydrology is done.
+Hydrological research today involves a fragmented cycle: downloading data from scattered federal APIs, wrangling formats, writing processing scripts, calibrating models, and documenting provenance — often spending more time on plumbing than on science. As LLM-based agents become increasingly capable at reasoning over scientific problems, there is an opportunity to fundamentally change how computational hydrology is done.
 
-**AI-Hydro** is a platform that bridges this gap. It puts foundation models (Claude, GPT-4, Gemini, and others) at the centre of the research workflow and gives them direct access to production-quality hydrological and geospatial tools — not as a chatbot that generates code you then debug, but as an intelligent agent that orchestrates real computations, remembers context across sessions, and adapts its approach when built-in tools fall short by writing standalone scripts leveraging the latest scientific Python ecosystem.
+**AI-Hydro** is a platform that bridges this gap. It puts LLM-based agents at the centre of the research workflow and gives them direct access to production-quality hydrological and geospatial tools — not as a chatbot that generates code you then debug, but as an intelligent agent that orchestrates real computations, remembers context across sessions, and adapts its approach when built-in tools fall short by writing standalone scripts leveraging the latest scientific Python ecosystem.
 
-The platform ships with a growing set of **built-in tools** — from USGS watershed delineation to differentiable HBV-light calibration — but the long-term vision is much larger: **a community-driven ecosystem** where researchers contribute domain-specific tools (flood frequency analysis, sediment transport, groundwater modelling, remote sensing workflows) that any AI agent can discover and compose into novel research pipelines. Through a simple plugin system, any Python package can register tools that become immediately available to every AI-Hydro user.
+The platform ships with **184 built-in tools** (aihydro-tools 2.12.0) — from USGS watershed delineation to differentiable HBV-light calibration — but the long-term vision is much larger: **a community-driven ecosystem** where researchers contribute domain-specific tools (flood frequency analysis, sediment transport, groundwater modelling, remote sensing workflows) that any AI agent can discover and compose into novel research pipelines. Through a simple plugin system, any Python package can register tools that become immediately available to every AI-Hydro user.
 
 This is what the future of computational hydrology and geospatial sciences looks like: researchers describe their intent, and intelligent agents assemble the right data, methods, and models to get it done.
 
@@ -60,9 +56,11 @@ This is what the future of computational hydrology and geospatial sciences looks
 
 ### 1. Automated Research via Built-in Tools
 
-When a tool exists for the task, the AI calls it directly — no code generation, no copy-paste, no debugging. Results come back structured and cached.
+When a tool exists for the task, the agent calls it directly — no code generation, no copy-paste, no debugging. Results come back structured and cached.
 
 ```
+(Illustrative session; numbers shown are examples, not benchmark results.)
+
 You: "Delineate the watershed for USGS gauge 01031500, fetch 10 years of
      GridMET forcing, and calibrate a differentiable HBV model."
 
@@ -75,7 +73,7 @@ The AI chains multiple tools in a single conversation — delineation, data retr
 
 ### 2. Standalone Script Generation When Tools Don't Exist
 
-AI-Hydro isn't limited to its built-in tools. When the task requires something outside the current toolkit — a custom statistical analysis, a novel visualisation, a niche data format conversion — the AI writes and executes standalone Python scripts, leveraging the full scientific Python ecosystem (NumPy, SciPy, xarray, rasterio, PyTorch, and beyond).
+AI-Hydro isn't limited to its built-in tools. When the task requires something outside the current toolkit — a custom statistical analysis, a novel visualisation, a niche data format conversion — the agent writes and executes standalone Python scripts, leveraging the full scientific Python ecosystem (NumPy, SciPy, xarray, rasterio, PyTorch, and beyond).
 
 ```
 You: "Run a Mann-Kendall trend test on the annual peak flows and plot the
@@ -99,7 +97,7 @@ flood_frequency = "my_package.tools:flood_freq_tool"
 sediment_yield  = "my_package.tools:sediment_tool"
 ```
 
-Install the package, restart the server, and those tools are immediately available to every AI model connected to AI-Hydro. We envision a growing ecosystem of community-contributed tools spanning:
+Install the package, restart the server, and those tools are immediately available to every LLM-based agent connected to AI-Hydro. We envision a growing ecosystem of community-contributed tools spanning:
 
 - Flood frequency and extreme event analysis
 - Groundwater modelling and well analysis
@@ -113,6 +111,8 @@ See the [Plugin Guide](https://ai-hydro.github.io/AI-Hydro/plugins/overview/) to
 ---
 
 ## Built-in Tools
+
+A selection of the 184 tools in aihydro-tools 2.12.0, by category:
 
 | Category | Tools |
 |---|---|
@@ -137,7 +137,7 @@ See the [Plugin Guide](https://ai-hydro.github.io/AI-Hydro/plugins/overview/) to
 | **Literature** | `index_literature`, `search_literature`, `add_journal_entry`, `log_researcher_observation` |
 | **Discovery** | `list_available_tools`, `get_variable_definition`, `get_metric_definition`, `get_library_reference` |
 
-**50+ built-in tools.** Call `list_available_tools()` for the live count on your installation. See the [Tools Reference](https://ai-hydro.github.io/AI-Hydro/tools/) for full parameters, examples, and return schemas.
+**184 built-in tools in aihydro-tools 2.12.0.** Call `list_available_tools()` for the live count on your installation (community plugins add more). See the [Tools Reference](https://ai-hydro.github.io/AI-Hydro/tools/) for full parameters, examples, and return schemas.
 
 ---
 
@@ -148,7 +148,7 @@ See the [Plugin Guide](https://ai-hydro.github.io/AI-Hydro/plugins/overview/) to
 Every tool result is cached in a **HydroSession** (JSON per gauge). Expensive computations — watershed delineation (~10s), multi-year streamflow downloads (~5s) — are done once and reused across conversations, days, or weeks. The session tracks provenance so you can export a methods paragraph for your paper.
 
 ```
-Session 01031500  [updated 2026-03-06]
+Session 01031500  (illustrative)
   Computed (7): watershed, streamflow, signatures, geomorphic, camels, forcing, model
   Pending  (1): twi
 
@@ -165,7 +165,7 @@ A pure-PyTorch differentiable HBV-light is built in:
 - 12 physically-meaningful calibrated parameters
 - Multi-restart Adam optimiser with cosine annealing
 - Automatic CAMELS streamflow via `pygeohydro` for 671 CONUS gauges
-- Typical performance: NSE 0.55-0.80
+- Skill varies by basin: read the NSE/KGE the tool returns (`get_model_results`) rather than assuming a typical value
 
 ### Interactive Map Panel
 
@@ -205,7 +205,7 @@ existing Studio runtime.
 
 Learning Packs are local signed archives, not sandboxed applications. Package
 approval does not override VS Code workspace trust or Python execution
-permission. See the [Learning Pack v1 contract and lifecycle](docs/learning-pack-v1.md)
+permission. See the [Learning Pack v1 contract and lifecycle](https://github.com/AI-Hydro/AI-Hydro/blob/main/docs/learning-pack-v1.md)
 for integrity, trust, rollback, removal, CSP, and nonclaim details.
 
 ### Skills — Workflow Playbooks
@@ -229,51 +229,65 @@ Authenticated links to external data services, managed through the VS Code Conne
 
 ### Model Context Protocol (MCP)
 
-All tools communicate via the [Model Context Protocol](https://modelcontextprotocol.io/) — an open standard for connecting AI models to external capabilities. This means AI-Hydro tools work with any MCP-compatible client, not just the bundled extension.
+All tools communicate via the [Model Context Protocol](https://modelcontextprotocol.io/) — an open standard for connecting LLM-based agents to external capabilities. This means AI-Hydro tools work with any MCP-compatible client, not just the bundled extension.
 
-### Works with Any AI Provider
+### Works with Many LLM Providers
 
-| Provider           | Recommended model            |
-| ------------------ | ---------------------------- |
-| Anthropic          | Claude Sonnet 4.6 / Opus 4.6 |
-| OpenAI             | GPT-5.4                      |
-| Google             | Gemini 3.1 Pro / 2.5 Flash   |
-| AWS Bedrock        | Claude on Bedrock            |
-| Ollama / LM Studio | Local models                 |
+Bring your own API key (or a local model). Supported providers include Anthropic, OpenAI, Google, AWS Bedrock, and
+local runtimes such as Ollama and LM Studio. Pick a current, tool-capable model from your provider; see
+[Models & Providers](https://ai-hydro.github.io/AI-Hydro/guide/providers/).
 
 ---
 
 ## Installation
+
+### Step 1 — Install the VS Code Extension
+
+Search for **"AI-Hydro"** in VS Code Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`), install from the
+[Marketplace page](https://marketplace.visualstudio.com/items?itemName=aihydro.ai-hydro), or run:
+
 ```bash
-pip install aihydro-tools[all]
+code --install-extension aihydro.ai-hydro
 ```
 
-This installs all hydrological tools and the `aihydro-mcp` server command. The extension auto-detects it on startup.
+Requires VS Code 1.84 or later and Python 3.10 or later (3.11+ recommended).
+
+### Step 2 — Let the extension manage the Python tools (default)
+
+The extension keeps its own Python environment for `aihydro-tools` and needs no terminal. On first start it creates
+`~/.aihydro/venvs/tools-2.8` (or `$AIHYDRO_HOME/venvs/tools-2.8`), installs `aihydro-tools` from PyPI into it after you
+agree once in a prompt that names PyPI, the download size and the directory, checks that the server answers, and
+registers its `aihydro-mcp` server. It never installs into your system or base interpreter. The Welcome view shows the
+status with **Install**, **Repair**, **Retry** and **Show log**. See the
+[installation guide](https://ai-hydro.github.io/AI-Hydro/getting-started/installation/) for details.
 
 <details>
-<summary>Optional extras (install only what you need)</summary>
+<summary>Install the tools yourself instead (optional)</summary>
 
 ```bash
-pip install aihydro-tools[data]       # streamflow, forcing, land cover, soil, CAMELS
-pip install aihydro-tools[analysis]   # watershed, signatures, TWI, geomorphic, CN
-pip install aihydro-tools[modelling]  # PyTorch HBV-light, NeuralHydrology LSTM
-pip install aihydro-tools[viz]        # matplotlib, plotly, folium
+pip install "aihydro-tools[all]"
+```
+
+This installs all hydrological tools and the `aihydro-mcp` server command; the extension detects it on startup.
+Quote the extras so shells such as zsh do not expand the brackets. To install only what you need:
+
+```bash
+pip install "aihydro-tools[data]"       # streamflow, forcing, land cover, soil, CAMELS
+pip install "aihydro-tools[analysis]"   # watershed, signatures, TWI, geomorphic, CN
+pip install "aihydro-tools[modelling]"  # PyTorch HBV-light, NeuralHydrology LSTM
+pip install "aihydro-tools[viz]"        # matplotlib, plotly, folium
 ```
 
 </details>
 
-### Step 2 — Install the VS Code Extension
+<details>
+<summary>Other ways to install the extension</summary>
 
-**Option A — VS Code Marketplace**
+**From a `.vsix`:** download one from [Releases](https://github.com/AI-Hydro/AI-Hydro/releases), then in VS Code run
+`Extensions` > `...` > `Install from VSIX...` (or `code --install-extension ai-hydro-<version>.vsix`). Release assets
+may lag the Marketplace.
 
-Search for **"AI-Hydro"** in VS Code Extensions, or install from the [Marketplace page](https://marketplace.visualstudio.com/items?itemName=aihydro.ai-hydro).
-
-**Option B — Install from `.vsix`**
-
-1. Download a compatible `.vsix` from [Releases](https://github.com/AI-Hydro/AI-Hydro/releases). Release assets may lag the Marketplace, so verify the extension version required by any Learning Pack before installation.
-2. In VS Code: `Extensions` > `...` > `Install from VSIX...`
-
-**Option C — Build from source**
+**Build from source:**
 
 ```bash
 git clone https://github.com/AI-Hydro/AI-Hydro.git
@@ -290,10 +304,12 @@ is independently checked for common key formats and an explicit runtime-file inv
 
 This is a development build, and CI copies have finite retention. It is not a Marketplace release, durable
 distribution, publisher-identity attestation, functional extension-host test, or byte-reproducible-build proof. Its
-version may also be lower than the Marketplace version; use it only in the isolated profile/workspace specified by
-the controlled Learning Pack handoff, not as a general-user upgrade. `SHA256SUMS` covers the raw VSIX bytes only.
+version may also be lower than the Marketplace version. `SHA256SUMS` covers the raw VSIX bytes only. For Learning
+Packs, use the exact pack-capable runtime named by the pack's handoff.
 
-### Step 3 — Configure Your AI Provider
+</details>
+
+### Step 3 — Configure Your LLM Provider
 
 1. Click the **AI-Hydro icon** in the VS Code sidebar
 2. Open **Settings** (gear icon)
@@ -302,16 +318,15 @@ the controlled Learning Pack handoff, not as a general-user upgrade. `SHA256SUMS
 
 ### Step 4 — Verify
 
-```bash
-aihydro-mcp  # should start and list all registered tools
-```
-
-The extension auto-registers the MCP server on startup. If you need manual registration:
+Open the AI-Hydro sidebar: the tools status should read installed and trusted. From a terminal (if you installed the
+tools yourself, or using the managed environment's `bin/aihydro-mcp`):
 
 ```bash
-python setup_mcp.py --ide vscode
-python setup_mcp.py --ide claude-code   # for Claude Code CLI
+aihydro-mcp --diagnose   # checks modules, tools and PATH
 ```
+
+If `aihydro-mcp` is not found, `python -m ai_hydro.mcp` works regardless of PATH. See the
+[PATH troubleshooting notes](https://ai-hydro.github.io/AI-Hydro/getting-started/installation/#path-troubleshooting).
 
 ---
 

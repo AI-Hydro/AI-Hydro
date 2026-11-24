@@ -27,6 +27,15 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.14] - 2026-11-24
+
+First Marketplace release since 0.3.0 (the Marketplace listing is 0.3.0; 0.4.1 to 0.4.13 were never published there). Everything in 0.4.1 to 0.4.13 below ships with this version.
+
+### Changed
+
+- **Browser tool dependencies upgraded** (`puppeteer-core` 25, `puppeteer-chromium-resolver` 25, `@puppeteer/browsers` 3): clears every high production advisory, so the production-bundle audit baseline is now empty. A live headless-browser launch with puppeteer 25 is not covered by automated tests.
+- **Marketplace listing and README:** categories now describe the extension (AI, Chat, Data Science, Machine Learning, Visualization, Education); `bugs` link added; README installation section leads with the Marketplace and the managed tools environment, quotes pip extras (`pip install "aihydro-tools[all]"`), reports the current tool count (184 in aihydro-tools 2.12.0), drops the removed `setup_mcp.py` step and the model-version table, and labels example sessions as illustrative.
+
 ## [0.4.13] - 2026-11-09
 
 ### Added

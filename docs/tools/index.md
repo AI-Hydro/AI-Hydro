@@ -1,5 +1,5 @@
 ---
-description: AI-Hydro built-in MCP tools — 110+ hydrology tools for analysis, modelling, provenance, map, skills, GEE, and session management, all returning provenance-tracked HydroResult objects.
+description: AI-Hydro built-in MCP tools — 180+ hydrology tools for analysis, modelling, provenance, map, skills, GEE, and session management, all returning provenance-tracked HydroResult objects.
 ---
 
 # Tool Reference
@@ -23,7 +23,7 @@ All tools are exposed via the [Model Context Protocol (MCP)](https://modelcontex
 | **Provenance** | `add_claim`, `add_assumption`, `check_water_balance_consistency`, `check_temporal_alignment` | Scientific claim tracking and consistency validation |
 | **Discovery** | `list_available_tools`, `get_variable_definition`, `get_metric_definition`, `get_library_reference` | In-context reference lookups |
 
-**Total: 113 built-in tools** (16 Tier-1 core, 36 Tier-2 extended, 61 Tier-3 specialist). See the **[Complete Reference](reference.md)** for every tool with its parameters and a worked example, auto-generated from the live server. Call `list_available_tools()` at runtime for the live count on your installation — community plugins add more.
+**Total: 184 built-in tools** in aihydro-tools 2.12.0 (35 Tier-1 core, 66 Tier-2 extended, 83 Tier-3 specialist). See the **[Complete Reference](reference.md)** for every tool with its parameters and a worked example, auto-generated from the live server. Call `list_available_tools()` at runtime for the live count on your installation — community plugins add more.
 
 ---
 
