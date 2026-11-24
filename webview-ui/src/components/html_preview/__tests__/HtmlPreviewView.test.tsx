@@ -579,3 +579,73 @@ describe("frame diagnostics over postMessage", () => {
 		expect(sanitizeFrameDiag(null).errors[0]).to.match(/malformed/)
 	})
 })
+
+describe("lesson theme signal", () => {
+	const themedHtml =
+		'<!doctype html><html><head><title>t</title></head><body class="aihydro-module"><h1>lesson</h1></body></html>'
+	const lesson: HtmlPreviewItem = { ...inlineItem, id: "html_theme", htmlContent: themedHtml }
+	const srcdocOf = () => (screen.getByTitle("Test Preview") as HTMLIFrameElement).getAttribute("srcdoc") ?? ""
+
+	function setBodyTheme(cls: string) {
+		document.body.className = cls
+	}
+
+	it("injects the theme script into a static document (no execution bridge) before author scripts", () => {
+		setBodyTheme("vscode-light")
+		render(<HtmlPreviewView item={lesson} />)
+		const srcdoc = srcdocOf()
+		expect(srcdoc).to.contain("data-aihydro-theme")
+		expect(srcdoc).not.to.contain("artifact/runCode")
+		// baked initial kind, placed right after <head> and ahead of the diagnostic hook
+		expect(srcdoc).to.contain('apply("light")')
+		expect(srcdoc.indexOf("data-aihydro-theme")).to.be.lessThan(srcdoc.indexOf("__aihydroDiag"))
+	})
+
+	it("injects it into an installed pack, and the host CSP is still emitted ahead of it", () => {
+		setBodyTheme("vscode-dark")
+		render(<HtmlPreviewView item={{ ...lesson, metadata: { ...lesson.metadata, artifactKind: "learning-pack-v1" } }} />)
+		const srcdoc = srcdocOf()
+		expect(srcdoc).to.contain("script-src 'unsafe-inline'")
+		expect(srcdoc).to.contain('apply("dark")')
+		expect(srcdoc.indexOf("Content-Security-Policy")).to.be.lessThan(srcdoc.indexOf("data-aihydro-theme"))
+	})
+
+	it("bakes the high-contrast kinds", () => {
+		setBodyTheme("vscode-high-contrast-light")
+		const { unmount } = render(<HtmlPreviewView item={lesson} />)
+		expect(srcdocOf()).to.contain('apply("hc-light")')
+		unmount()
+		setBodyTheme("vscode-high-contrast")
+		render(<HtmlPreviewView item={lesson} />)
+		expect(srcdocOf()).to.contain('apply("hc-dark")')
+	})
+
+	it("pushes a theme change into the open lesson without reloading it, and answers a late request", async () => {
+		setBodyTheme("vscode-light")
+		render(<HtmlPreviewView item={lesson} />)
+		const iframe = screen.getByTitle("Test Preview") as HTMLIFrameElement
+		const before = iframe.getAttribute("srcdoc")
+		const postMessage = vi.fn()
+		Object.defineProperty(iframe, "contentWindow", { value: { postMessage }, configurable: true })
+
+		await act(async () => {
+			setBodyTheme("vscode-dark")
+			await Promise.resolve()
+		})
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-theme", kind: "dark" }, "*")
+		// same document: the iframe is not re-created or re-rendered with a new srcdoc
+		expect((screen.getByTitle("Test Preview") as HTMLIFrameElement).getAttribute("srcdoc")).to.equal(before)
+
+		postMessage.mockClear()
+		const event = new MessageEvent("message", { data: { type: "aihydro-theme-request" } })
+		Object.defineProperty(event, "source", { value: iframe.contentWindow, configurable: true })
+		window.dispatchEvent(event)
+		expect(postMessage).toHaveBeenCalledWith({ type: "aihydro-theme", kind: "dark" }, "*")
+
+		// a message from some other window is ignored
+		postMessage.mockClear()
+		window.dispatchEvent(new MessageEvent("message", { data: { type: "aihydro-theme-request" } }))
+		expect(postMessage).not.toHaveBeenCalled()
+		setBodyTheme("")
+	})
+})

@@ -1,4 +1,5 @@
 import { MODULE_MANIFEST_MARKER } from "./artifactIdentity"
+import { bridgePaletteJson, buildThemeTokenCss } from "./themeSignal"
 
 /**
  * Injected into HTML artifact srcdoc:
@@ -37,21 +38,28 @@ export function usesAihydroDesignSystem(html: string): boolean {
 
 export const AIHYDRO_PREVIEW_STYLE = `
 <style id="aihydro-preview-style">
+/* Theme tokens (--hy-*) follow the host: <html data-aihydro-theme> is set by the
+   injected theme script (themeSignal.ts). All fallbacks are zero-specificity so a
+   lesson's own tokens win. The legacy --aihydro-* names below are re-pointed at
+   them, so the component classes follow the theme with no per-class overrides. */
+${buildThemeTokenCss()}
 :root {
-  --aihydro-blue: #00A3FF;
-  --aihydro-cyan: #00DDFF;
-  --aihydro-hero-cyan: #00D4FF;
-  --aihydro-bright-cyan: #00FFFF;
-  --aihydro-bg-deep: #0a0a15;
-  --aihydro-bg-navy: #1a1a2e;
-  --aihydro-bg-mid: #0f0f1e;
-  --aihydro-text: #FFFFFF;
-  --aihydro-text-accent: #7dd3fc;
-  --aihydro-text-muted: #94a3b8;
-  --aihydro-border: rgba(125, 211, 252, 0.18);
-  --aihydro-border-strong: rgba(0, 221, 255, 0.45);
-  --aihydro-gradient-primary: linear-gradient(135deg, #00A3FF 0%, #00DDFF 100%);
-  --aihydro-gradient-hero: linear-gradient(135deg, #00D4FF 0%, #00FFFF 100%);
+  --aihydro-blue: var(--hy-link);
+  --aihydro-cyan: var(--hy-accent);
+  --aihydro-hero-cyan: var(--hy-accent);
+  --aihydro-bright-cyan: var(--hy-accent);
+  --aihydro-bg-deep: var(--hy-bg);
+  --aihydro-bg-navy: var(--hy-surface);
+  --aihydro-bg-mid: var(--hy-surface);
+  --aihydro-text: var(--hy-fg);
+  --aihydro-text-accent: var(--hy-fg);
+  --aihydro-text-muted: var(--hy-fg-muted);
+  --aihydro-border: var(--hy-border);
+  --aihydro-border-strong: color-mix(in srgb, var(--hy-accent) 55%, transparent);
+  --aihydro-tint: color-mix(in srgb, var(--hy-accent) 8%, transparent);
+  --aihydro-tint-strong: color-mix(in srgb, var(--hy-accent) 14%, transparent);
+  --aihydro-gradient-primary: linear-gradient(135deg, var(--hy-link) 0%, var(--hy-accent) 100%);
+  --aihydro-gradient-hero: linear-gradient(135deg, var(--hy-link) 0%, var(--hy-accent) 100%);
   --aihydro-font-display: 'Quicksand', system-ui, sans-serif;
   --aihydro-font-heading: 'Poppins', 'Nunito', system-ui, sans-serif;
   --aihydro-font-body: 'Nunito', system-ui, sans-serif;
@@ -60,8 +68,10 @@ export const AIHYDRO_PREVIEW_STYLE = `
 }
 
 /* ---- Module shell -------------------------------------------------- */
-body.aihydro-module, .aihydro-module {
-  background: linear-gradient(180deg, var(--aihydro-bg-deep) 0%, var(--aihydro-bg-navy) 100%);
+/* Zero specificity (:where): a lesson that styles its own body keeps its look; one that
+   does not follows the host theme. The preview no longer paints dark over a light host. */
+:where(body.aihydro-module, .aihydro-module) {
+  background: var(--aihydro-bg-deep);
   color: var(--aihydro-text-accent);
   font-family: var(--aihydro-font-body);
   font-size: 16px;
@@ -95,7 +105,7 @@ body.aihydro-module, .aihydro-module {
   align-items: center;
   gap: 16px;
   padding: 20px 24px;
-  background: linear-gradient(135deg, rgba(0,163,255,0.10) 0%, rgba(0,221,255,0.04) 100%);
+  background: var(--aihydro-tint);
   border-bottom: 1px solid var(--aihydro-border);
 }
 .aihydro-module-header .aihydro-brand-mark {
@@ -133,7 +143,7 @@ body.aihydro-module, .aihydro-module {
   border-radius: 999px;
   border: 1px solid var(--aihydro-border);
   color: var(--aihydro-text-accent);
-  background: rgba(125,211,252,0.06);
+  background: var(--aihydro-tint);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -155,13 +165,13 @@ body.aihydro-module, .aihydro-module {
 .aihydro-step {
   margin: 28px 0;
   padding: 20px 22px;
-  background: rgba(15,15,30,0.55);
+  background: var(--aihydro-bg-navy);
   border: 1px solid var(--aihydro-border);
   border-radius: 14px;
   position: relative;
 }
 .aihydro-step[data-aihydro-status="done"]   { border-color: var(--aihydro-border-strong); }
-.aihydro-step[data-aihydro-status="active"] { box-shadow: 0 0 0 1px var(--aihydro-cyan), 0 10px 30px rgba(0,221,255,0.10); }
+.aihydro-step[data-aihydro-status="active"] { box-shadow: 0 0 0 1px var(--aihydro-cyan), 0 10px 30px var(--aihydro-tint-strong); }
 .aihydro-step > .aihydro-step-index {
   position: absolute; top: -14px; left: 18px;
   background: var(--aihydro-gradient-primary);
@@ -174,7 +184,7 @@ body.aihydro-module, .aihydro-module {
 /* ---- Callouts ------------------------------------------------------ */
 .aihydro-callout {
   border-left: 3px solid var(--aihydro-cyan);
-  background: rgba(0,221,255,0.06);
+  background: var(--aihydro-tint);
   padding: 12px 14px;
   border-radius: 0 10px 10px 0;
   margin: 16px 0;
@@ -191,14 +201,14 @@ body.aihydro-module, .aihydro-module {
   letter-spacing: 0.06em;
 }
 .aihydro-callout.is-note    { border-color: var(--aihydro-cyan); }
-.aihydro-callout.is-warning { border-color: #facc15; background: rgba(250,204,21,0.07); }
-.aihydro-callout.is-tip     { border-color: #34d399; background: rgba(52,211,153,0.07); }
+.aihydro-callout.is-warning { border-color: var(--hy-warn); background: color-mix(in srgb, var(--hy-warn) 9%, transparent); }
+.aihydro-callout.is-tip     { border-color: var(--hy-ok); background: color-mix(in srgb, var(--hy-ok) 9%, transparent); }
 .aihydro-callout.is-agent   {
   border-color: var(--aihydro-blue);
-  background: linear-gradient(135deg, rgba(0,163,255,0.10), rgba(0,221,255,0.04));
+  background: var(--aihydro-tint);
 }
-.aihydro-callout.is-warning .aihydro-callout-title { color: #facc15; }
-.aihydro-callout.is-tip .aihydro-callout-title     { color: #34d399; }
+.aihydro-callout.is-warning .aihydro-callout-title { color: var(--hy-warn); }
+.aihydro-callout.is-tip .aihydro-callout-title     { color: var(--hy-ok); }
 
 /* ---- Figures ------------------------------------------------------- */
 .aihydro-figure {
@@ -227,7 +237,7 @@ body.aihydro-module, .aihydro-module {
   gap: 14px;
   margin: 16px 0;
   padding: 14px 16px;
-  background: rgba(0,163,255,0.05);
+  background: var(--aihydro-tint);
   border: 1px dashed var(--aihydro-border-strong);
   border-radius: 10px;
 }
@@ -277,7 +287,7 @@ body.aihydro-module, .aihydro-module {
   transition: transform 0.1s ease, box-shadow 0.2s ease;
 }
 .aihydro-button:hover,
-.aihydro-run:hover { box-shadow: 0 6px 18px rgba(0,221,255,0.30); transform: translateY(-1px); }
+.aihydro-run:hover { box-shadow: 0 6px 18px var(--aihydro-border-strong); transform: translateY(-1px); }
 .aihydro-button:disabled,
 .aihydro-run:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
 .aihydro-button.is-ghost {
@@ -304,10 +314,10 @@ body.aihydro-module, .aihydro-module {
   box-shadow: inset 3px 0 0 var(--aihydro-cyan);
 }
 .aihydro-cell[data-aihydro-cell-status="done"] {
-  box-shadow: inset 3px 0 0 rgba(74,222,128,0.85);
+  box-shadow: inset 3px 0 0 var(--hy-ok);
 }
 .aihydro-cell[data-aihydro-cell-status="error"] {
-  box-shadow: inset 3px 0 0 rgba(248,113,113,0.9);
+  box-shadow: inset 3px 0 0 var(--hy-err);
 }
 /* Status pill appended to the cell header, label driven by the attribute. */
 .aihydro-cell[data-aihydro-cell-status] .aihydro-cell-header::after {
@@ -316,18 +326,18 @@ body.aihydro-module, .aihydro-module {
   padding: 2px 7px; border-radius: 999px; margin-left: auto;
 }
 .aihydro-cell[data-aihydro-cell-status="warming"] .aihydro-cell-header::after {
-  content: "Warming"; color: var(--aihydro-cyan); background: rgba(0,221,255,0.12);
+  content: "Warming"; color: var(--aihydro-cyan); background: var(--aihydro-tint-strong);
   animation: aihydroPulse 1.2s ease-in-out infinite;
 }
 .aihydro-cell[data-aihydro-cell-status="running"] .aihydro-cell-header::after {
-  content: "Running"; color: var(--aihydro-cyan); background: rgba(0,221,255,0.12);
+  content: "Running"; color: var(--aihydro-cyan); background: var(--aihydro-tint-strong);
   animation: aihydroPulse 1.2s ease-in-out infinite;
 }
 .aihydro-cell[data-aihydro-cell-status="done"] .aihydro-cell-header::after {
-  content: "Done"; color: rgba(74,222,128,0.95); background: rgba(74,222,128,0.12);
+  content: "Done"; color: var(--hy-ok); background: color-mix(in srgb, var(--hy-ok) 14%, transparent);
 }
 .aihydro-cell[data-aihydro-cell-status="error"] .aihydro-cell-header::after {
-  content: "Error"; color: rgba(248,113,113,0.95); background: rgba(248,113,113,0.12);
+  content: "Error"; color: var(--hy-err); background: color-mix(in srgb, var(--hy-err) 14%, transparent);
 }
 @keyframes aihydroPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) {
@@ -341,7 +351,7 @@ body.aihydro-module, .aihydro-module {
   margin-bottom: 8px;
 }
 .aihydro-cell .aihydro-cell-header .aihydro-cell-lang {
-  background: rgba(0,221,255,0.10);
+  background: var(--aihydro-tint-strong);
   color: var(--aihydro-cyan);
   padding: 2px 8px; border-radius: 4px;
   text-transform: uppercase; letter-spacing: 0.08em;
@@ -361,11 +371,11 @@ body.aihydro-module, .aihydro-module {
   color: var(--aihydro-text);
   transition: max-height 0.2s ease, opacity 0.15s ease;
   scrollbar-width: thin;
-  scrollbar-color: rgba(125,211,252,0.25) transparent;
+  scrollbar-color: var(--aihydro-border) transparent;
 }
 .aihydro-source::-webkit-scrollbar { width: 6px; height: 6px; }
 .aihydro-source::-webkit-scrollbar-track { background: transparent; }
-.aihydro-source::-webkit-scrollbar-thumb { background: rgba(125,211,252,0.25); border-radius: 3px; }
+.aihydro-source::-webkit-scrollbar-thumb { background: var(--aihydro-border); border-radius: 3px; }
 .aihydro-source.is-collapsed {
   max-height: 3.2em;
   overflow: hidden;
@@ -392,7 +402,7 @@ body.aihydro-module, .aihydro-module {
 .aihydro-toggle-source:hover {
   color: var(--aihydro-cyan);
   border-color: var(--aihydro-border-strong);
-  background: rgba(0,221,255,0.06);
+  background: var(--aihydro-tint);
 }
 .aihydro-copy {
   font-family: var(--aihydro-font-ui);
@@ -408,8 +418,8 @@ body.aihydro-module, .aihydro-module {
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   margin-left: auto;
 }
-.aihydro-copy:hover { color: var(--aihydro-cyan); border-color: var(--aihydro-border-strong); background: rgba(0,221,255,0.06); }
-.aihydro-copy.copied { color: #34d399; border-color: #34d399; }
+.aihydro-copy:hover { color: var(--aihydro-cyan); border-color: var(--aihydro-border-strong); background: var(--aihydro-tint); }
+.aihydro-copy.copied { color: var(--hy-ok); border-color: var(--hy-ok); }
 .aihydro-output-wrap {
   position: relative;
 }
@@ -421,7 +431,7 @@ body.aihydro-module, .aihydro-module {
   padding: 2px 7px;
   border-radius: 999px;
   border: 1px solid var(--aihydro-border);
-  background: rgba(10,10,21,0.75);
+  background: color-mix(in srgb, var(--hy-bg) 80%, transparent);
   color: var(--aihydro-text-muted);
   cursor: pointer;
   opacity: 0;
@@ -431,7 +441,7 @@ body.aihydro-module, .aihydro-module {
 }
 .aihydro-output-wrap:hover .aihydro-copy-output { opacity: 1; }
 .aihydro-copy-output:hover { color: var(--aihydro-cyan); border-color: var(--aihydro-border-strong); }
-.aihydro-copy-output.copied { color: #34d399; border-color: #34d399; }
+.aihydro-copy-output.copied { color: var(--hy-ok); border-color: var(--hy-ok); }
 .aihydro-output {
   font-family: var(--aihydro-font-mono);
   font-size: 13px;
@@ -439,24 +449,24 @@ body.aihydro-module, .aihydro-module {
   min-height: 1.2em;
   margin: 0;
   padding: 10px;
-  background: rgba(0,0,0,0.30);
+  background: var(--aihydro-bg-mid);
   border-radius: 6px;
   max-height: 320px;
   overflow: auto;
   color: var(--aihydro-text-accent);
   scrollbar-width: thin;
-  scrollbar-color: rgba(125,211,252,0.20) transparent;
+  scrollbar-color: var(--aihydro-border) transparent;
 }
 .aihydro-output::-webkit-scrollbar { width: 6px; height: 6px; }
 .aihydro-output::-webkit-scrollbar-track { background: transparent; }
-.aihydro-output::-webkit-scrollbar-thumb { background: rgba(125,211,252,0.20); border-radius: 3px; }
+.aihydro-output::-webkit-scrollbar-thumb { background: var(--aihydro-border); border-radius: 3px; }
 .aihydro-output:empty::before {
   content: "(no output yet)";
   color: var(--aihydro-text-muted); font-style: italic;
 }
-.aihydro-stderr { color: #f48771; }
+.aihydro-stderr { color: var(--hy-err); }
 .aihydro-stdout { color: var(--aihydro-text-accent); }
-.aihydro-error  { color: #f87171; }
+.aihydro-error  { color: var(--hy-err); }
 .aihydro-practice-label { margin-top: 6px; font-size: 11px; opacity: 0.6; font-style: italic; }
 .aihydro-output-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .aihydro-output-images img { max-width: 100%; height: auto; border-radius: 4px; }
@@ -472,7 +482,7 @@ body.aihydro-module, .aihydro-module {
   padding: 7px 14px;
   border-radius: 999px;
   border: 1px dashed var(--aihydro-border);
-  background: rgba(125,211,252,0.05);
+  background: var(--aihydro-tint);
   cursor: not-allowed;
   display: inline-flex; align-items: center; gap: 6px;
 }
@@ -484,7 +494,7 @@ body.aihydro-module, .aihydro-module {
 .aihydro-question {
   margin: 16px 0;
   padding: 16px 18px;
-  background: rgba(0,163,255,0.06);
+  background: var(--aihydro-tint);
   border: 1px solid var(--aihydro-border);
   border-radius: 10px;
 }
@@ -509,8 +519,8 @@ body.aihydro-module, .aihydro-module {
   text-align: left;
 }
 .aihydro-choice:hover { border-color: var(--aihydro-cyan); color: var(--aihydro-cyan); }
-.aihydro-choice[data-aihydro-state="correct"]   { background: rgba(52,211,153,0.18); border-color: #34d399; color: #d1fae5; }
-.aihydro-choice[data-aihydro-state="incorrect"] { background: rgba(248,113,113,0.15); border-color: #f87171; color: #fee2e2; }
+.aihydro-choice[data-aihydro-state="correct"]   { background: color-mix(in srgb, var(--hy-ok) 16%, transparent); border-color: var(--hy-ok); color: var(--aihydro-text); }
+.aihydro-choice[data-aihydro-state="incorrect"] { background: color-mix(in srgb, var(--hy-err) 14%, transparent); border-color: var(--hy-err); color: var(--aihydro-text); }
 .aihydro-feedback {
   margin-top: 10px;
   font-size: 14px;
@@ -547,7 +557,7 @@ body.aihydro-module, .aihydro-module {
   margin: 32px 0 0;
   padding: 18px 20px;
   border-top: 1px solid var(--aihydro-border);
-  background: rgba(15,15,30,0.50);
+  background: var(--aihydro-bg-navy);
   font-family: var(--aihydro-font-ui);
   font-size: 12px;
   color: var(--aihydro-text-muted);
@@ -573,16 +583,16 @@ body.aihydro-module, .aihydro-module {
   padding: 14px 16px;
   border: 1px solid var(--aihydro-border);
   border-radius: 8px;
-  background: rgba(0,163,255,0.04);
+  background: var(--aihydro-tint);
   transition: border-color 0.2s, background 0.2s;
 }
 .aihydro-quiz-question.aq-correct {
-  border-color: rgba(52,211,153,0.40);
-  background: rgba(52,211,153,0.06);
+  border-color: var(--hy-ok);
+  background: color-mix(in srgb, var(--hy-ok) 8%, transparent);
 }
 .aihydro-quiz-question.aq-incorrect {
-  border-color: rgba(248,113,113,0.35);
-  background: rgba(248,113,113,0.05);
+  border-color: var(--hy-err);
+  background: color-mix(in srgb, var(--hy-err) 8%, transparent);
 }
 .aihydro-quiz-question .q-text {
   font-family: var(--aihydro-font-heading);
@@ -601,7 +611,7 @@ body.aihydro-module, .aihydro-module {
 .aihydro-quiz-feedback {
   margin-top: 10px; padding: 8px 12px;
   border-left: 2px solid var(--aihydro-border);
-  background: rgba(148,163,184,0.07);
+  background: var(--aihydro-tint);
   font-size: 13px; color: var(--aihydro-text-accent);
   border-radius: 0 4px 4px 0;
   display: none;
@@ -619,7 +629,7 @@ body.aihydro-module, .aihydro-module {
   cursor: pointer;
   transition: background 0.15s;
 }
-.aihydro-quiz-submit:hover { background: rgba(0,221,255,0.10); }
+.aihydro-quiz-submit:hover { background: var(--aihydro-tint-strong); }
 #quizScore { font-size: 14px; color: var(--aihydro-text-accent); margin-left: 14px; }
 .aihydro-sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -636,17 +646,17 @@ body.aihydro-module, .aihydro-module {
 .aihydro-tl-btn {
   width: 28px; height: 28px; flex-shrink: 0;
   border: 1px solid var(--aihydro-border); border-radius: 6px;
-  background: rgba(0,221,255,0.08); color: var(--aihydro-cyan);
+  background: var(--aihydro-tint); color: var(--aihydro-cyan);
   cursor: pointer; font-size: 13px; line-height: 1;
 }
-.aihydro-tl-btn:hover { background: rgba(0,221,255,0.16); }
+.aihydro-tl-btn:hover { background: var(--aihydro-tint-strong); }
 .aihydro-tl-scrub { flex: 1; accent-color: var(--aihydro-cyan); }
 .aihydro-compare { overflow: hidden; border-radius: 8px; }
 .aihydro-compare > * { display: block; max-width: 100%; }
 .aihydro-compare-handle {
   position: absolute; top: 0; bottom: 0; width: 2px;
   background: var(--aihydro-cyan); transform: translateX(-1px);
-  pointer-events: none; box-shadow: 0 0 8px rgba(0,221,255,0.5);
+  pointer-events: none; box-shadow: 0 0 8px var(--aihydro-border-strong);
 }
 .aihydro-compare-range {
   position: absolute; left: 0; right: 0; bottom: 8px; width: 100%;
@@ -703,6 +713,41 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
   function postToParent(payload) {
     if (isStandalone) return;
     try { window.parent.postMessage(payload, "*"); } catch(_) {}
+  }
+
+  // ── Theme helpers ────────────────────────────────────────────────────
+  // The host sets <html data-aihydro-theme> (see themeSignal.ts). Colours are read from the
+  // computed --hy-* tokens so a lesson's own tokens win; the embedded palettes are the fallback
+  // for a document that declares none. Outside the host the kind follows prefers-color-scheme.
+  var HY_PALETTES = ${bridgePaletteJson()};
+  function themeKind() {
+    var k = window.__aihydroThemeKind || document.documentElement.getAttribute("data-aihydro-theme");
+    if (!k || !HY_PALETTES[k]) {
+      k = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+    }
+    return k;
+  }
+  function themeColor(name) {
+    var v = "";
+    try { v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); } catch(_) {}
+    return v || HY_PALETTES[themeKind()][name] || "";
+  }
+  function themeSeries() {
+    return [1, 2, 3, 4, 5].map(function(i) { return themeColor("--hy-series-" + i); });
+  }
+  var themeListeners = [];
+  function onThemeChange(cb) { if (typeof cb === "function") themeListeners.push(cb); }
+  document.addEventListener("aihydro-theme-change", function() {
+    themeListeners.slice().forEach(function(cb) { try { cb(themeKind()); } catch(_) {} });
+  });
+  if (window.matchMedia) {
+    try {
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function() {
+        if (!document.documentElement.getAttribute("data-aihydro-theme")) {
+          themeListeners.slice().forEach(function(cb) { try { cb(themeKind()); } catch(_) {} });
+        }
+      });
+    } catch(_) {}
   }
 
   // ── Vendored chart libraries ─────────────────────────────────────────
@@ -1488,21 +1533,62 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
      * Branded Plotly wrapper. Lazy-loads the Plotly build vendored with the extension (see
      * loadVendorLibrary); a CDN is only a fallback for documents opened outside the host.
      *   aihydro.plot({ mount: '#chart', data: [...], layout: {...} });
-     * Applies the AI-Hydro dark palette unless overridden in layout.
+     * Applies the theme palette (CVD-checked series, token-driven axes/fonts) unless overridden in layout; re-themes on host theme change.
      */
     plot: function(spec) {
       spec = spec || {};
       var mount = typeof spec.mount === "string" ? document.querySelector(spec.mount) : spec.mount;
       if (!mount) return;
+      var authorLayout = spec.layout || {};
+      function themePatch() {
+        var axis = themeColor("--hy-axis");
+        var patch = {
+          "font.color": themeColor("--hy-fg"),
+          colorway: themeSeries()
+        };
+        ["xaxis", "yaxis"].forEach(function(ax) {
+          patch[ax + ".gridcolor"] = axis;
+          patch[ax + ".linecolor"] = axis;
+          patch[ax + ".tickcolor"] = axis;
+          patch[ax + ".zerolinecolor"] = axis;
+        });
+        return patch;
+      }
+      function authorSets(path) {
+        var o = authorLayout, parts = path.split(".");
+        for (var i = 0; i < parts.length; i++) {
+          if (!o || typeof o !== "object" || !(parts[i] in o)) return false;
+          o = o[parts[i]];
+        }
+        return true;
+      }
+      function unsetThemeKeys() {
+        var patch = themePatch(), out = {};
+        Object.keys(patch).forEach(function(k) { if (!authorSets(k)) out[k] = patch[k]; });
+        return out;
+      }
+      var base = unsetThemeKeys();
       var brandLayout = {
         paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-        font: { color: "#cfe8ff", family: "Nunito, system-ui, sans-serif" },
-        colorway: ["#00DDFF", "#00A3FF", "#7DD3FC", "#34d399", "#a78bfa"],
+        font: { color: base["font.color"], family: "Nunito, system-ui, sans-serif" },
+        colorway: base.colorway,
+        xaxis: { gridcolor: base["xaxis.gridcolor"], gridwidth: 0.5, linecolor: base["xaxis.linecolor"], tickcolor: base["xaxis.tickcolor"], zerolinecolor: base["xaxis.zerolinecolor"] },
+        yaxis: { gridcolor: base["yaxis.gridcolor"], gridwidth: 0.5, linecolor: base["yaxis.linecolor"], tickcolor: base["yaxis.tickcolor"], zerolinecolor: base["yaxis.zerolinecolor"] },
         margin: { t: 36, r: 16, b: 40, l: 48 }
       };
-      var layout = Object.assign({}, brandLayout, spec.layout || {});
+      var layout = Object.assign({}, brandLayout, authorLayout);
+      // Merge one level so an author's xaxis/yaxis/font keeps its own keys and still gets ours.
+      ["font", "xaxis", "yaxis"].forEach(function(k) {
+        if (authorLayout[k] && typeof authorLayout[k] === "object") layout[k] = Object.assign({}, brandLayout[k], authorLayout[k]);
+      });
       var config = Object.assign({ displayModeBar: false, responsive: true }, spec.config || {});
-      function draw() { window.Plotly.newPlot(mount, spec.data || [], layout, config); }
+      function draw() {
+        window.Plotly.newPlot(mount, spec.data || [], layout, config);
+        // Re-theme in place when the host theme changes (no replot, no data loss).
+        onThemeChange(function() {
+          try { window.Plotly.relayout(mount, unsetThemeKeys()); } catch(_) {}
+        });
+      }
       if (window.Plotly) { draw(); return; }
       loadVendorLibrary("plotly", "https://cdn.plot.ly/plotly-2.35.2.min.js").then(draw, function() {});
     },
@@ -1547,17 +1633,24 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
         renderer.setPixelRatio(window.devicePixelRatio || 1);
         renderer.setSize(w, h, false);
         var scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a1622);
+        scene.background = new THREE.Color(themeColor("--hy-stage"));
         var camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1000);
         camera.position.set(3, 3, 5);
-        scene.add(new THREE.AmbientLight(0x88bbff, 0.6));
-        var key = new THREE.DirectionalLight(0x00ddff, 0.8);
+        // White lights: coloured lights tint the colour map and misreport the data.
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        var key = new THREE.DirectionalLight(0xffffff, 0.8);
         key.position.set(5, 10, 7);
         scene.add(key);
         var controls = window.THREE.OrbitControls ? new THREE.OrbitControls(camera, renderer.domElement) : null;
         if (controls) { controls.enableDamping = true; controls.dampingFactor = 0.08; }
         var ctx = { THREE: THREE, scene: scene, camera: camera, renderer: renderer, controls: controls, canvas: canvas, dem: opts.dem };
         if (opts.setup) try { opts.setup(ctx); } catch(_){}
+        // Stage follows the host theme; authors that draw their own lines get opts.onThemeChange(ctx, kind).
+        onThemeChange(function(kind) {
+          if (!opts.keepBackground) scene.background = new THREE.Color(themeColor("--hy-stage"));
+          if (opts.onThemeChange) try { opts.onThemeChange(ctx, kind); } catch(_){}
+          if (!raf) renderer.render(scene, camera);
+        });
         var raf = null;
         function loop() {
           if (controls) controls.update();
@@ -1592,6 +1685,12 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
         cell.__aihydroAutorun = setTimeout(function() { runCellById(cellId); }, 250);
       }
     },
+
+    /**
+     * Host theme for charts and scenes: aihydro.theme.kind() is light|dark|hc-dark|hc-light,
+     * color("--hy-axis") reads the computed token, onChange(cb) calls cb(kind) on a theme change.
+     */
+    theme: { kind: themeKind, color: themeColor, series: themeSeries, onChange: onThemeChange },
 
     /** Programmatic cell control for advanced authors. */
     runCell: function(id) { runCellById(id); },

@@ -44,8 +44,10 @@ import {
 } from "./installedPackCsp"
 import { LEAFLET_NORMALIZER_SCRIPT, LEAFLET_NORMALIZER_STYLE } from "./leafletNormalizer"
 import { reportPreviewEvent, requestSaveDocument, startPreviewAgentTask } from "./previewBridge"
+import { buildThemeScript, THEME_MESSAGE_TYPE, THEME_REQUEST_TYPE } from "./themeSignal"
 import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
+import { useHostThemeKind } from "./useHostThemeKind"
 import { isVendorLibraryId, loadVendorLibrarySource } from "./vendorLibraries"
 
 /**
@@ -528,6 +530,15 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		[item?.id, item?.contentHash, item?.htmlContent?.length, item?.webviewUri],
 	)
 
+	// Host theme (VS Code light/dark/high-contrast), forwarded into the lesson document. The
+	// document is a separate, sandboxed frame, so it never sees our body classes or --vscode-*
+	// variables: the injected theme script (themeSignal.ts) sets <html data-aihydro-theme> from
+	// the initial kind below and from later postMessages. A ref keeps the srcdoc stable, so a
+	// theme change updates the open lesson in place instead of reloading it.
+	const hostThemeKind = useHostThemeKind()
+	const hostThemeKindRef = useRef(hostThemeKind)
+	hostThemeKindRef.current = hostThemeKind
+
 	// Pre-pend a tiny error/console forwarder so we can introspect what
 	// actually happens inside the iframe at load time. The forwarder is
 	// only useful for the `srcdoc` path; for the `src` fallback the iframe
@@ -546,6 +557,9 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 				? applyInstalledPackCsp(injectedHtml, item.dirUri)
 				: applyArtifactBaseHref(injectedHtml, item.dirUri)
 		const artifactContext = buildArtifactContextScript(item)
+		// Unconditional (static documents and installed packs included): theme is presentation,
+		// not execution. Inline, no network, so the installed-pack CSP allows it.
+		const themeScript = buildThemeScript(hostThemeKindRef.current)
 		// The kernel bridge (Run buttons, runCode/paramChanged posts) is injected
 		// only for a trusted document the user has allowed. A static document gets
 		// no bridge at all, so the "static" badge describes what is enforced.
@@ -575,6 +589,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		// end of <body> so Folium's own map variables already exist before we
 		// call invalidateSize().
 		// Injection order in <head> open tag:
+		//   themeScript (sets <html data-aihydro-theme>; first so author scripts see the theme)
 		//   artifactContext (sets window.__aihydroArtifact)
 		//   DIAG_SCRIPT (global error hook)
 		//   FRAGMENT_NAV_GUARD_SCRIPT (keeps #fragment links in-document under <base>)
@@ -590,6 +605,7 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 			const closeIdx = html.indexOf(">", headIdx)
 			const withDiag =
 				withHeadAssets.slice(0, closeIdx + 1) +
+				themeScript +
 				artifactContext +
 				DIAG_SCRIPT +
 				FRAGMENT_NAV_GUARD_SCRIPT +
@@ -611,7 +627,8 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 			return finalize(withDiag + LEAFLET_NORMALIZER_SCRIPT)
 		}
 		return finalize(
-			artifactContext +
+			themeScript +
+				artifactContext +
 				DIAG_SCRIPT +
 				FRAGMENT_NAV_GUARD_SCRIPT +
 				AIHYDRO_BRIDGE_CORE_SCRIPT +
@@ -756,6 +773,23 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		if (win) {
 			win.postMessage(payload, "*")
 		}
+	}, [])
+
+	// Tell the lesson the theme kind whenever it changes, and when it asks (it announces itself
+	// on start, so a document that loaded after the last change still gets the current value).
+	useEffect(() => {
+		iframeRef.current?.contentWindow?.postMessage({ type: THEME_MESSAGE_TYPE, kind: hostThemeKind }, "*")
+	}, [hostThemeKind])
+	useEffect(() => {
+		const onMessage = (event: MessageEvent) => {
+			const win = iframeRef.current?.contentWindow
+			if (!win || event.source !== win || event.data?.type !== THEME_REQUEST_TYPE) {
+				return
+			}
+			win.postMessage({ type: THEME_MESSAGE_TYPE, kind: hostThemeKindRef.current }, "*")
+		}
+		window.addEventListener("message", onMessage)
+		return () => window.removeEventListener("message", onMessage)
 	}, [])
 
 	const postCommandToIframe = useCallback(
