@@ -1,15 +1,11 @@
 # AI-Hydro
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/docs/aihydro-hero-animated.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/docs/aihydro-hero-animated.svg" />
-    <img src="./assets/docs/aihydro-hero-static.png" alt="AI-Hydro — Intelligent Hydrological Computing" width="100%" />
-  </picture>
+  <img src="https://raw.githubusercontent.com/AI-Hydro/AI-Hydro/main/assets/docs/aihydro-hero-static.png" alt="AI-Hydro — Intelligent Hydrological Computing" width="100%" />
 </p>
 
 <p align="center">
-  <em>An open platform for autonomous hydrological and earth science research.</em>
+  <em>An open platform for LLM-agent-assisted hydrological and earth science research.</em>
 </p>
 
 <p align="center">
@@ -17,7 +13,7 @@
   <a href="https://pypi.org/project/aihydro-tools/"><img src="https://img.shields.io/pypi/v/aihydro-tools?color=3775a9" alt="PyPI" /></a>
   <a href="https://github.com/AI-Hydro/AI-Hydro/releases"><img src="https://img.shields.io/github/v/release/AI-Hydro/AI-Hydro?label=release&color=blue" alt="Release" /></a>
   <a href="https://doi.org/10.5281/zenodo.19597664"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.19597664-blue" alt="DOI" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" /></a>
+  <a href="https://github.com/AI-Hydro/AI-Hydro/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License" /></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python" /></a>
 </p>
 
@@ -34,7 +30,7 @@
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=8YEQmEkid90">
-    ▶&nbsp;&nbsp;<strong>Watch the intro — What if an AI Agent Could Run Your Entire Hydrology Study?</strong>
+    ▶&nbsp;&nbsp;<strong>Watch the intro video</strong>
   </a>
 </p>
 
