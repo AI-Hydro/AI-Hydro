@@ -294,6 +294,11 @@ describe("CELL_BRIDGE_SCRIPT theming (P0 defects)", () => {
 		expect(CELL_BRIDGE_SCRIPT).toContain("new THREE.DirectionalLight(0xffffff")
 		expect(CELL_BRIDGE_SCRIPT).toContain('themeColor("--hy-stage")')
 	})
+	it("repaints the stage only while the bridge still owns scene.background (no race with a lesson's fixed plate)", () => {
+		expect(CELL_BRIDGE_SCRIPT).toContain("var bridgeBg = new THREE.Color(")
+		expect(CELL_BRIDGE_SCRIPT).toContain("scene.background === bridgeBg")
+		expect(CELL_BRIDGE_SCRIPT).not.toMatch(/scene\.background = new THREE\.Color\(themeColor/)
+	})
 	it("still parses as JavaScript after the theme helpers were added", () => {
 		const body = CELL_BRIDGE_SCRIPT.replace(/^<script>/, "").replace(/<\/script>$/, "")
 		expect(() => new Function(body)).not.toThrow()

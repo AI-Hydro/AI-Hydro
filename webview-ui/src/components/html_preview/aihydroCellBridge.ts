@@ -1633,7 +1633,11 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
         renderer.setPixelRatio(window.devicePixelRatio || 1);
         renderer.setSize(w, h, false);
         var scene = new THREE.Scene();
-        scene.background = new THREE.Color(themeColor("--hy-stage"));
+        // The bridge owns scene.background only while it is the object set here. If a lesson's
+        // setup (or later code) assigns its own, the bridge leaves it alone on theme changes, so
+        // a fixed plate cannot race the bridge's repaint.
+        var bridgeBg = new THREE.Color(themeColor("--hy-stage"));
+        scene.background = bridgeBg;
         var camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1000);
         camera.position.set(3, 3, 5);
         // White lights: coloured lights tint the colour map and misreport the data.
@@ -1647,7 +1651,7 @@ export const CELL_BRIDGE_SCRIPT = `<script>(function(){
         if (opts.setup) try { opts.setup(ctx); } catch(_){}
         // Stage follows the host theme; authors that draw their own lines get opts.onThemeChange(ctx, kind).
         onThemeChange(function(kind) {
-          if (!opts.keepBackground) scene.background = new THREE.Color(themeColor("--hy-stage"));
+          if (!opts.keepBackground && scene.background === bridgeBg) bridgeBg.set(themeColor("--hy-stage"));
           if (opts.onThemeChange) try { opts.onThemeChange(ctx, kind); } catch(_){}
           if (!raf) renderer.render(scene, camera);
         });
