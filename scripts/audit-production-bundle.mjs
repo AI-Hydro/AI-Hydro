@@ -4,93 +4,20 @@ import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 
 const EXPECTED_EXCELJS_VERSION = "4.4.0"
-// Baseline accepted by the owner on 2026-10-19, WITHOUT individual reachability review:
-// - These are the 16 high production advisories `npm audit --omit=dev` reports after the
-//   simple-git 4.0.2 / proxy-addr 2.0.8 upgrade and an in-range `npm audit fix`. They were hidden
-//   until now because the expired review date and the critical check failed first.
-// - A reachability review of each entry (is it in dist/extension.js, and can untrusted input reach
-//   the vulnerable path?) is the follow-up due before BASELINE_REVIEW_BY. Entries found reachable
-//   are to be upgraded or replaced, not kept here.
-// - The earlier entries (archiver, archiver-utils, brace-expansion, exceljs, glob, minimatch,
-//   readdir-glob, rimraf, zip-stream) no longer report as high and are removed. exceljs is now
-//   moderate; its only flagged dependency path is uuid, which exceljs calls as v4() without a
-//   buffer, so the vulnerable v3/v5/v6-with-buffer path is unreachable.
-// - The exact range/node/source checks below still fail on any new advisory or changed entry.
+// Production audit policy: zero high or critical advisories are accepted.
+// - History: a 16-entry high baseline (owner-accepted 2026-10-19, extended to 2026-12-31) covered
+//   the browser-tool dependency chain puppeteer-core 23 -> @puppeteer/browsers 2.6 -> extract-zip /
+//   proxy-agent / pac-proxy-agent / get-uri / basic-ftp, plus braces/micromatch/fast-glob/globby.
+//   Upstream then widened several advisory ranges (e.g. @puppeteer/browsers "*" -> "<=2.13.2"),
+//   which tripped the exact-range check on 2026-11-24.
+// - Resolution: puppeteer-core and puppeteer-chromium-resolver were upgraded to 25.x
+//   (@puppeteer/browsers 3.x), which clears every one of those advisories; the braces/glob family no
+//   longer reports as high either. HIGH_BASELINE is therefore empty and any new high advisory fails.
+// - To accept a future high advisory deliberately, add an entry (exact isDirect/range/nodes/
+//   advisorySources) with a justification comment AND set BASELINE_REVIEW_BY; the expiry check only
+//   applies while HIGH_BASELINE is non-empty.
 const BASELINE_REVIEW_BY = "2026-12-31"
-const HIGH_BASELINE = {
-	"@puppeteer/browsers": {
-		isDirect: false,
-		range: "*",
-		nodes: ["node_modules/@puppeteer/browsers"],
-		advisorySources: [1139346, 1193685, 1240853],
-	},
-	"basic-ftp": {
-		isDirect: false,
-		range: "<=6.2.0",
-		nodes: ["node_modules/basic-ftp"],
-		advisorySources: [1240853],
-	},
-	braces: {
-		isDirect: false,
-		range: "*",
-		nodes: ["node_modules/braces"],
-		advisorySources: [1240992],
-	},
-	"extract-zip": {
-		isDirect: false,
-		range: "*",
-		nodes: ["node_modules/extract-zip"],
-		advisorySources: [1139346, 1193685],
-	},
-	"fast-glob": {
-		isDirect: false,
-		range: "*",
-		nodes: ["node_modules/fast-glob"],
-		advisorySources: [1240992],
-	},
-	"get-uri": {
-		isDirect: false,
-		range: ">=5.0.0",
-		nodes: ["node_modules/get-uri"],
-		advisorySources: [1240853],
-	},
-	globby: {
-		isDirect: true,
-		range: ">=8.0.0",
-		nodes: ["node_modules/globby"],
-		advisorySources: [1240992],
-	},
-	micromatch: {
-		isDirect: false,
-		range: ">=0.2.0",
-		nodes: ["node_modules/micromatch"],
-		advisorySources: [1240992],
-	},
-	"pac-proxy-agent": {
-		isDirect: false,
-		range: ">=6.0.0",
-		nodes: ["node_modules/pac-proxy-agent"],
-		advisorySources: [1240853],
-	},
-	"proxy-agent": {
-		isDirect: false,
-		range: ">=6.0.0",
-		nodes: ["node_modules/proxy-agent"],
-		advisorySources: [1240853],
-	},
-	"puppeteer-chromium-resolver": {
-		isDirect: true,
-		range: "20.0.0 - 24.0.3",
-		nodes: ["node_modules/puppeteer-chromium-resolver"],
-		advisorySources: [1139346, 1193685, 1240853],
-	},
-	"puppeteer-core": {
-		isDirect: true,
-		range: "19.8.4 - 24.43.1",
-		nodes: ["node_modules/puppeteer-core"],
-		advisorySources: [1139346, 1193685, 1240853],
-	},
-}
+const HIGH_BASELINE = {}
 
 const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"))
 const packageLock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"))
@@ -146,7 +73,29 @@ function collectAdvisorySources(vulnerabilities, name, visited = new Set()) {
 	return sources
 }
 
-const SYNTHETIC_TARGET = "basic-ftp"
+const SYNTHETIC_TARGET = "synthetic-package"
+// Fixture used only by the self-test below, so the guard mechanics stay exercised while the real
+// baseline is empty.
+const SYNTHETIC_BASELINE = {
+	[SYNTHETIC_TARGET]: {
+		isDirect: false,
+		range: "<=1.0.0",
+		nodes: [`node_modules/${SYNTHETIC_TARGET}`],
+		advisorySources: [1],
+	},
+}
+const SYNTHETIC_AUDIT = {
+	vulnerabilities: {
+		[SYNTHETIC_TARGET]: {
+			name: SYNTHETIC_TARGET,
+			severity: "high",
+			isDirect: false,
+			range: "<=1.0.0",
+			nodes: [`node_modules/${SYNTHETIC_TARGET}`],
+			via: [{ source: 1, name: SYNTHETIC_TARGET, severity: "high", range: "<=1.0.0" }],
+		},
+	},
+}
 
 function assertExactArray(label, actual, expected) {
 	const sortedActual = [...actual].sort()
@@ -156,9 +105,9 @@ function assertExactArray(label, actual, expected) {
 	}
 }
 
-function validateAuditBaseline(candidateAudit, now = new Date()) {
+function validateAuditBaseline(candidateAudit, now = new Date(), baseline = HIGH_BASELINE) {
 	const expiry = new Date(`${BASELINE_REVIEW_BY}T23:59:59.999Z`)
-	if (now > expiry) {
+	if (Object.keys(baseline).length > 0 && now > expiry) {
 		throw new Error(`Production audit baseline expired on ${BASELINE_REVIEW_BY}; review or remove it.`)
 	}
 
@@ -175,7 +124,7 @@ function validateAuditBaseline(candidateAudit, now = new Date()) {
 		.filter(([, vulnerability]) => vulnerability.severity === "high")
 		.sort(([left], [right]) => left.localeCompare(right))
 	for (const [name, vulnerability] of highEntries) {
-		const expected = HIGH_BASELINE[name]
+		const expected = baseline[name]
 		if (!expected) {
 			throw new Error(`New high production advisory requires review: ${name}`)
 		}
@@ -200,17 +149,21 @@ function validateAuditBaseline(candidateAudit, now = new Date()) {
 
 const highNames = validateAuditBaseline(audit)
 
-function expectSyntheticRejection(label, mutate) {
-	const candidate = structuredClone(audit)
+function expectSyntheticRejection(label, mutate, baseline = SYNTHETIC_BASELINE) {
+	const candidate = structuredClone(SYNTHETIC_AUDIT)
 	mutate(candidate)
 	try {
-		validateAuditBaseline(candidate)
+		validateAuditBaseline(candidate, new Date(), baseline)
 	} catch {
 		return
 	}
 	throw new Error(`Synthetic audit regression was not rejected: ${label}`)
 }
 
+// Sanity: the unmodified fixture is accepted against its fixture baseline.
+validateAuditBaseline(structuredClone(SYNTHETIC_AUDIT), new Date(`${BASELINE_REVIEW_BY}T00:00:00.000Z`), SYNTHETIC_BASELINE)
+
+expectSyntheticRejection("any high advisory against the real (empty) baseline", () => {}, HIGH_BASELINE)
 expectSyntheticRejection("new production node for an existing advisory", (candidate) => {
 	candidate.vulnerabilities[SYNTHETIC_TARGET].nodes.push(`node_modules/new-runtime/node_modules/${SYNTHETIC_TARGET}`)
 })
@@ -228,9 +181,16 @@ expectSyntheticRejection("new advisory source on an allowlisted package", (candi
 		range: "*",
 	})
 })
+expectSyntheticRejection("critical advisory", (candidate) => {
+	candidate.vulnerabilities[SYNTHETIC_TARGET].severity = "critical"
+})
 try {
 	// One day after the review date, so the self-test follows BASELINE_REVIEW_BY when it moves.
-	validateAuditBaseline(audit, new Date(Date.parse(`${BASELINE_REVIEW_BY}T23:59:59.999Z`) + 24 * 60 * 60 * 1000))
+	validateAuditBaseline(
+		SYNTHETIC_AUDIT,
+		new Date(Date.parse(`${BASELINE_REVIEW_BY}T23:59:59.999Z`) + 24 * 60 * 60 * 1000),
+		SYNTHETIC_BASELINE,
+	)
 	throw new Error("Synthetic expired audit baseline was not rejected.")
 } catch (error) {
 	if (!String(error).includes("baseline expired")) {
@@ -239,7 +199,7 @@ try {
 }
 
 console.log(
-	`Production audit baseline accepted through ${BASELINE_REVIEW_BY} after bundle verification: ${highNames.length} exact high metadata findings, 0 critical.`,
+	`Production audit passed after bundle verification: ${highNames.length} high (baseline entries: ${Object.keys(HIGH_BASELINE).length}), 0 critical.`,
 )
 console.log(`Residual high packages: ${highNames.join(", ") || "none"}`)
 console.log("Synthetic audit regressions rejected: added path, directness/range changes, new source, and expiry.")

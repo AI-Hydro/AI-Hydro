@@ -409,8 +409,8 @@ export class BrowserSession {
 			lastLogTs = Date.now()
 		}
 
-		const errorListener = (err: Error) => {
-			logs.push(`[Page Error] ${err.toString()}`)
+		const errorListener = (err: unknown) => {
+			logs.push(`[Page Error] ${String(err)}`)
 			lastLogTs = Date.now()
 		}
 
