@@ -205,7 +205,7 @@ existing Studio runtime.
 
 Learning Packs are local signed archives, not sandboxed applications. Package
 approval does not override VS Code workspace trust or Python execution
-permission. See the [Learning Pack v1 contract and lifecycle](docs/learning-pack-v1.md)
+permission. See the [Learning Pack v1 contract and lifecycle](https://github.com/AI-Hydro/AI-Hydro/blob/main/docs/learning-pack-v1.md)
 for integrity, trust, rollback, removal, CSP, and nonclaim details.
 
 ### Skills — Workflow Playbooks
