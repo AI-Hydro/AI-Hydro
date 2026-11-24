@@ -1,8 +1,8 @@
 {
 	"name": "ai-hydro",
 	"displayName": "AI-Hydro",
-	"description": "An open platform for AI-driven hydrological research. Describe your intent — the agent delineates watersheds, retrieves streamflow, calibrates models, and builds reproducible provenance. Community-extensible via MCP.",
-	"version": "0.4.13",
+	"description": "An open platform for LLM-agent-driven hydrological research. Describe your intent — the agent delineates watersheds, retrieves streamflow, calibrates models, and records reproducible provenance. Community-extensible via MCP.",
+	"version": "0.4.14",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0",
@@ -18,6 +18,9 @@
 		"url": "https://github.com/AI-Hydro/AI-Hydro"
 	},
 	"homepage": "https://github.com/AI-Hydro/AI-Hydro",
+	"bugs": {
+		"url": "https://github.com/AI-Hydro/AI-Hydro/issues"
+	},
 	"galleryBanner": {
 		"color": "#0a0a15",
 		"theme": "dark"
@@ -25,10 +28,10 @@
 	"categories": [
 		"AI",
 		"Chat",
-		"Programming Languages",
-		"Education",
-		"Snippets",
-		"Testing"
+		"Data Science",
+		"Machine Learning",
+		"Visualization",
+		"Education"
 	],
 	"keywords": [
 		"hydrology",
