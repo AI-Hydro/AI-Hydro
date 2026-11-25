@@ -9,7 +9,9 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
-## [Unreleased]
+## [0.4.15] - 2026-11-24
+
+Lessons follow the VS Code theme (light, dark and both high-contrast themes) instead of being forced dark. Pairs with the Modules catalog update that moved reading-a-hydrograph and watershed-runoff to 0.5.0 on shared theme tokens and raised the evapotranspiration-budyko 0.1.1 axis contrast to 3:1; other modules keep their own styling.
 
 ### Changed
 

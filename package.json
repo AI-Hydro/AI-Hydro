@@ -2,7 +2,7 @@
 	"name": "ai-hydro",
 	"displayName": "AI-Hydro",
 	"description": "An open platform for LLM-agent-driven hydrological research. Describe your intent — the agent delineates watersheds, retrieves streamflow, calibrates models, and records reproducible provenance. Community-extensible via MCP.",
-	"version": "0.4.14",
+	"version": "0.4.15",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0",
