@@ -15,6 +15,7 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 - **`aihydro.scene3d` hardening (Studio / HTML Preview).** A page-declared poster or a visible message replaces a blank canvas when WebGL or three.js is unavailable; untrusted documents get an explicit "3D unavailable" message and still no helper. The scene is redrawn on demand instead of every frame (dragging works under reduced motion), the pixel ratio is capped at 2, a lost WebGL context is rebuilt when the panel is shown again, and renderer, geometries, materials and textures are disposed on teardown. Repeated calls on one canvas supersede the earlier scene.
   - **Behaviour change:** `ctx.stop()` now stops animation only (on-demand redraws still work); use `ctx.dispose()` to release the scene. After context recovery or a repeated call the canvas element may be replaced, so use `ctx.canvas`.
+  - **Theme interaction:** the stage colour follows the theme only while `scene.background` is still the bridge's own object (a background set in `setup` is left alone; `keepBackground: true` opts out), `onThemeChange(ctx, kind)` runs on each change and a change redraws the on-demand canvas, and `aihydro.theme.onChange` now returns an unsubscribe function. Bind canvas listeners through `ctx.canvas` inside `setup`: recovery replaces the canvas with a `cloneNode(false)` clone.
 
 ---
 

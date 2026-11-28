@@ -361,6 +361,7 @@ describe("scene3d theme handling under render-on-demand", () => {
 	}
 	afterEach(() => {
 		delete (window as any).__aihydroThemeKind
+		vi.restoreAllMocks()
 	})
 
 	it("repaints the bridge-owned background on a theme change by scheduling one redraw", async () => {
@@ -420,6 +421,46 @@ describe("scene3d theme handling under render-on-demand", () => {
 		themeChange("light")
 		expect(seen).toEqual(["hc-dark"])
 		expect(raf.queue.length).toBe(0)
+	})
+
+	it("a replaced scene no longer reacts to theme changes; exactly one redraw is queued for the new one", async () => {
+		const raf = installManualRaf()
+		installFakeThree({})
+		canvasInDom()
+		const api = loadBridge()
+		const oldSeen: string[] = []
+		const newSeen: string[] = []
+		await api.scene3d({ canvas: "#c", onThemeChange: (_c: any, k: string) => oldSeen.push(k) })
+		const second = await api.scene3d({ canvas: "#c", onThemeChange: (_c: any, k: string) => newSeen.push(k) })
+		raf.flush()
+		themeChange("light")
+		expect(oldSeen).toEqual([])
+		expect(newSeen).toEqual(["light"])
+		expect(raf.queue.length).toBe(1)
+		second!.dispose()
+	})
+
+	it("a theme change while hidden repaints when the panel becomes visible again", async () => {
+		const raf = installManualRaf()
+		const { log } = installFakeThree({})
+		canvasInDom()
+		;(window as any).__aihydroThemeKind = "dark"
+		const ctx = await loadBridge().scene3d({ canvas: "#c" })
+		raf.flush()
+		const bg = ctx!.scene.background
+		const before = bg.v
+		const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true)
+		themeChange("light")
+		raf.flush()
+		expect(bg.v).not.toBe(before)
+		const n = log.renders
+		expect(n).toBe(1) // nothing drawn while hidden
+		hidden.mockReturnValue(false)
+		document.dispatchEvent(new Event("visibilitychange"))
+		raf.flush()
+		expect(log.renders).toBe(n + 1)
+		hidden.mockRestore()
+		ctx!.dispose()
 	})
 
 	it("keeps repainting after a context-loss rebuild", async () => {

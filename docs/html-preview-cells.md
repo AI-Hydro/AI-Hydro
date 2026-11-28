@@ -130,6 +130,11 @@ Pure-DOM author helpers (no kernel dependency); all respect `prefers-reduced-mot
   (`null` if 3D could not start) with `invalidate()`, `stop()` (stops animation only) and
   `dispose()`. After a lost context or a repeated call the canvas element may be replaced by a
   clone: use `ctx.canvas`.
+  The stage colour follows the theme only while `scene.background` is still the bridge's own object
+  (a background set in `setup` is left alone); `keepBackground: true` opts out;
+  `onThemeChange(ctx, kind)` is called on each change and a change redraws the canvas;
+  `aihydro.theme.onChange` returns an unsubscribe function. Bind canvas listeners through `ctx.canvas`
+  inside `setup`, because recovery replaces the canvas with a `cloneNode(false)` clone.
 
 ### Vendored chart libraries
 

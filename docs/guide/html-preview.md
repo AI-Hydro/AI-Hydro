@@ -240,6 +240,7 @@ Full markup contracts and copy-paste recipes are in [Interactive Module Cell For
 - **Disposal.** Renderer, controls, geometries, materials and textures are released when the canvas leaves the page, on `pagehide`, or on `ctx.dispose()`. Calling `scene3d` again on the same canvas replaces the earlier scene. A call superseded by a later call on the same canvas resolves `null`.
 - **`ctx.stop()` changed.** It now stops animation (`onFrame` / `autoRotate`) only; the scene can still be redrawn on demand and must be released with `ctx.dispose()`. It used to cancel the whole render loop.
 - **The canvas element can be replaced.** Context recovery and a repeated call swap in a clone of the canvas. Always use `ctx.canvas`, never an element reference you kept.
+- **Theme and background.** The stage colour follows the VS Code theme only while `scene.background` is still the object the bridge created; a background you assign in `setup` is left alone. `opts.keepBackground: true` opts out. `opts.onThemeChange(ctx, kind)` is called on each theme change (before the redraw, so you can recolour your own materials), and a change always triggers a redraw. `aihydro.theme.onChange(cb)` now returns an unsubscribe function. Bind canvas listeners through `ctx.canvas` inside `setup`: recovery replaces the canvas with a `cloneNode(false)` clone, and `setup` runs again on it.
 
 ---
 
