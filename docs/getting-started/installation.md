@@ -26,6 +26,9 @@ The Welcome view and the chat home show one status row (installed version, healt
 
 Skip Steps 1 and 2 unless you want to run the tools from your own environment.
 
+!!! note "Which extension version?"
+    The managed environment above ships with the 0.4.x line of the extension. Check **Settings > About** for the version you have installed and the [Changelog](../changelog.md) for what each release added. If your installed build is older and does not show the status row, install the tools yourself with Step 1 and the extension registers `aihydro-mcp` when it finds it.
+
 ---
 
 ## Step 1 — Install the Python Backend (optional, manual)
@@ -35,7 +38,7 @@ The Python package provides all hydrological tools via an MCP server.
 === "Full install (recommended)"
 
     ```bash
-    pip install aihydro-tools[all]
+    pip install "aihydro-tools[all]"
     ```
 
     Installs all tool categories: data retrieval, analysis, modelling, and visualisation.
@@ -53,7 +56,7 @@ The Python package provides all hydrological tools via an MCP server.
     | `[all]` | Everything |
 
     ```bash
-    pip install aihydro-tools[data,analysis]
+    pip install "aihydro-tools[data,analysis]"
     ```
 
 === "Conda / Mamba"
@@ -61,7 +64,7 @@ The Python package provides all hydrological tools via an MCP server.
     ```bash
     conda create -n aihydro python=3.11
     conda activate aihydro
-    pip install aihydro-tools[all]
+    pip install "aihydro-tools[all]"
     ```
 
 ---
@@ -89,7 +92,7 @@ On first activation, the extension automatically detects `aihydro-mcp` on your P
 !!! tip "Manual VSIX install"
     If you downloaded a `.vsix` release file:
     ```bash
-    code --install-extension ai-hydro-0.1.4.vsix
+    code --install-extension ai-hydro-<version>.vsix
     ```
 
 ---
@@ -102,7 +105,7 @@ Open the AI-Hydro sidebar in VS Code and enter your API key for any supported pr
 - **OpenAI** — Get a key at [platform.openai.com](https://platform.openai.com)
 - **Google** — Get a key at [aistudio.google.com](https://aistudio.google.com)
 
-Recommended starting model: **Claude Sonnet 4.6** (best balance of speed and reasoning for hydrological workflows).
+Pick a current, tool-capable model from your provider. Mid-tier models are a good balance of speed and reasoning for most hydrological workflows; see [Models & Providers](../guide/providers.md).
 
 ---
 

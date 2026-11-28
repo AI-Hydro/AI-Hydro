@@ -24,6 +24,14 @@ When the agent creates any of these using the `interactive-module-builder` skill
 
 ---
 
+## Learning Modules and the Module Marketplace
+
+Studio can install ready-made interactive modules. Click **Open Module Marketplace** in the panel to browse the community catalog (published from the [AI-Hydro Modules repository](https://github.com/AI-Hydro/Modules)), then install a module into Studio. Modules run their Python cells in the built-in kernel, and some are grouped into guided courses with prerequisites.
+
+One example in the catalog is *The Watershed: Where Rain Becomes Runoff*, which includes a 3-D scene of a real basin, the Fish River in Maine, built from the Copernicus GLO-30 DEM, that you can orbit and drop rain on. The catalog is a live listing and changes as modules are added, so browse it in the panel for the current set.
+
+---
+
 ## Opening the Panel
 
 **Automatic:** Any HTML file containing the AI-Hydro module manifest block (`<script type="application/vnd.aihydro.module+json">`) opens in the panel automatically when the agent writes or saves it.

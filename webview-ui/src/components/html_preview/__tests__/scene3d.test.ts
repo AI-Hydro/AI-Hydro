@@ -45,7 +45,12 @@ function installFakeThree(opts: { throwOnRenderer?: boolean; throwOnControls?: b
 	}
 	const T: Record<string, unknown> = {
 		Scene,
-		Color: class {},
+		Color: class {
+			constructor(public v?: unknown) {}
+			set(v: unknown) {
+				this.v = v
+			}
+		},
 		PerspectiveCamera: class {
 			position = { set() {} }
 			aspect = 1
@@ -345,6 +350,94 @@ describe("scene3d render scheduling", () => {
 		log.controlChange!() // the user drags
 		raf.flush()
 		expect(log.renders).toBe(2)
+		ctx!.dispose()
+	})
+})
+
+describe("scene3d theme handling under render-on-demand", () => {
+	const themeChange = (kind: string) => {
+		;(window as any).__aihydroThemeKind = kind
+		document.dispatchEvent(new Event("aihydro-theme-change"))
+	}
+	afterEach(() => {
+		delete (window as any).__aihydroThemeKind
+	})
+
+	it("repaints the bridge-owned background on a theme change by scheduling one redraw", async () => {
+		const raf = installManualRaf()
+		const { log } = installFakeThree({})
+		canvasInDom()
+		;(window as any).__aihydroThemeKind = "dark"
+		const ctx = await loadBridge().scene3d({ canvas: "#c" })
+		raf.flush()
+		const bg = ctx!.scene.background
+		const dark = bg.v
+		expect(log.renders).toBe(1)
+		expect(raf.queue.length).toBe(0)
+		themeChange("light")
+		expect(ctx!.scene.background).toBe(bg) // mutated in place, not replaced
+		expect(bg.v).not.toBe(dark)
+		expect(raf.queue.length).toBe(1) // without this the new colour would never paint
+		raf.flush()
+		expect(log.renders).toBe(2)
+		ctx!.dispose()
+	})
+
+	it("leaves a background assigned by setup alone, and keepBackground opts out", async () => {
+		const raf = installManualRaf()
+		installFakeThree({})
+		canvasInDom()
+		const own = { v: 0x0a1622 }
+		const ctx = await loadBridge().scene3d({
+			canvas: "#c",
+			setup: (c: any) => {
+				c.scene.background = own
+			},
+		})
+		themeChange("light")
+		expect(ctx!.scene.background).toBe(own)
+		expect(own.v).toBe(0x0a1622)
+		ctx!.dispose()
+		canvasInDom()
+		const kept = await loadBridge().scene3d({ canvas: "#c", keepBackground: true })
+		const before = kept!.scene.background.v
+		themeChange("dark")
+		expect(kept!.scene.background.v).toBe(before)
+		raf.flush()
+		kept!.dispose()
+	})
+
+	it("calls onThemeChange(ctx, kind), and stops listening after dispose", async () => {
+		const raf = installManualRaf()
+		installFakeThree({})
+		canvasInDom()
+		const seen: string[] = []
+		const ctx = await loadBridge().scene3d({ canvas: "#c", onThemeChange: (_c: any, k: string) => seen.push(k) })
+		themeChange("hc-dark")
+		expect(seen).toEqual(["hc-dark"])
+		ctx!.dispose()
+		raf.flush()
+		themeChange("light")
+		expect(seen).toEqual(["hc-dark"])
+		expect(raf.queue.length).toBe(0)
+	})
+
+	it("keeps repainting after a context-loss rebuild", async () => {
+		const raf = installManualRaf()
+		const { log } = installFakeThree({})
+		canvasInDom()
+		const ctx = await loadBridge().scene3d({ canvas: "#c" })
+		raf.flush()
+		log.lose(ctx!.canvas)
+		document.dispatchEvent(new Event("visibilitychange"))
+		raf.flush()
+		const bg = ctx!.scene.background
+		const before = bg.v
+		themeChange("hc-light")
+		expect(bg.v).not.toBe(before)
+		const n = log.renders
+		raf.flush()
+		expect(log.renders).toBe(n + 1)
 		ctx!.dispose()
 	})
 })

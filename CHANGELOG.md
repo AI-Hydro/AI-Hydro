@@ -18,6 +18,35 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [0.4.15] - 2026-11-24
+
+Lessons follow the VS Code theme (light, dark and both high-contrast themes) instead of being forced dark. Pairs with the Modules catalog update that moved reading-a-hydrograph and watershed-runoff to 0.5.0 on shared theme tokens and raised the evapotranspiration-budyko 0.1.1 axis contrast to 3:1; other modules keep their own styling.
+
+### Changed
+
+- **Lessons follow the VS Code theme instead of being forced dark.** The Studio preview used to paint every `.aihydro-module` page with a dark gradient whatever the VS Code theme. It now tells the lesson which theme is active: an inline script injected right after `<head>` of every lesson document (static documents, trusted documents and installed signed packs; no network, allowed by the installed-pack CSP) sets `data-aihydro-theme="light|dark|hc-dark|hc-light"` on `<html>`, derived from the webview body classes, and updates it live (postMessage, no reload) when the theme changes. Documents opened outside Studio carry no attribute and should fall back to `prefers-color-scheme`. Contract: `docs/vision-2040/findings/theme-contract-2026-11-24.md` in the platform workspace.
+  - **Shell colours are zero-specificity and token-driven** (`--hy-*` fallbacks per kind, `:where()`), so a lesson that styles its own body keeps its own look (all current modules, which remain dark until they are migrated) and one that does not follows the host theme. The `.aihydro-*` component classes (steps, callouts, cells, quiz, buttons, status colours) use the same tokens; hard-coded dark tints and bright status colours were replaced.
+  - **Token set** from the module theme study: light, dark, high-contrast dark and high-contrast light. Unit tests measure WCAG contrast (text 4.5:1, body 7:1, axes/outlines/series 3:1) and colour-vision-deficiency separation (Machado 2009 simulation, CIE L*a*b* delta E >= 10 for the light and dark series).
+- **Bridge defaults fixed (`window.aihydro`).**
+  - `aihydro.plot` no longer defaults to three near-identical cyans (delta E 2.7 under deuteranopia, below the 10 floor). It uses the CVD-checked series for the current theme, token-driven font, grid and axis colours (the old light-blue font was 1.26:1 on white), merges an author's partial `font`/`xaxis`/`yaxis`, and re-themes in place with `Plotly.relayout` on a theme change.
+  - `aihydro.scene3d` uses white, untinted lights (the cyan lights tinted colour maps) and a stage colour from the theme; the background updates on a theme change and authors get `onThemeChange(ctx, kind)`.
+  - New `aihydro.theme` (`kind()`, `color(name)`, `series()`, `onChange(cb)`) for lessons that draw their own canvases and SVG.
+
+### Tests
+
+- `themeSignal.test.ts` (signal mapping, injected script behaviour and CSP compatibility, token contrast, CVD separation, no forced-dark regression), `HtmlPreviewView.test.tsx` (script present for static documents and installed packs, live push without reload, late request), and an e2e check (`@theme`, runs with the Phase 0 runtime suite) that the standalone module renders light under Light Modern and dark under Dark Modern.
+
+---
+
+## [0.4.14] - 2026-11-24
+
+First Marketplace release since 0.3.0 (the Marketplace listing is 0.3.0; 0.4.1 to 0.4.13 were never published there). Everything in 0.4.1 to 0.4.13 below ships with this version.
+
+### Changed
+
+- **Browser tool dependencies upgraded** (`puppeteer-core` 25, `puppeteer-chromium-resolver` 25, `@puppeteer/browsers` 3): clears every high production advisory, so the production-bundle audit baseline is now empty. A live headless-browser launch with puppeteer 25 is not covered by automated tests.
+- **Marketplace listing and README:** categories now describe the extension (AI, Chat, Data Science, Machine Learning, Visualization, Education); `bugs` link added; README installation section leads with the Marketplace and the managed tools environment, quotes pip extras (`pip install "aihydro-tools[all]"`), reports the current tool count (184 in aihydro-tools 2.12.0), drops the removed `setup_mcp.py` step and the model-version table, and labels example sessions as illustrative.
+
 ## [0.4.13] - 2026-11-09
 
 ### Added

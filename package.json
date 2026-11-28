@@ -1,8 +1,8 @@
 {
 	"name": "ai-hydro",
 	"displayName": "AI-Hydro",
-	"description": "An open platform for AI-driven hydrological research. Describe your intent — the agent delineates watersheds, retrieves streamflow, calibrates models, and builds reproducible provenance. Community-extensible via MCP.",
-	"version": "0.4.13",
+	"description": "An open platform for LLM-agent-driven hydrological research. Describe your intent — the agent delineates watersheds, retrieves streamflow, calibrates models, and records reproducible provenance. Community-extensible via MCP.",
+	"version": "0.4.15",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0",
@@ -18,6 +18,9 @@
 		"url": "https://github.com/AI-Hydro/AI-Hydro"
 	},
 	"homepage": "https://github.com/AI-Hydro/AI-Hydro",
+	"bugs": {
+		"url": "https://github.com/AI-Hydro/AI-Hydro/issues"
+	},
 	"galleryBanner": {
 		"color": "#0a0a15",
 		"theme": "dark"
@@ -25,10 +28,10 @@
 	"categories": [
 		"AI",
 		"Chat",
-		"Programming Languages",
-		"Education",
-		"Snippets",
-		"Testing"
+		"Data Science",
+		"Machine Learning",
+		"Visualization",
+		"Education"
 	],
 	"keywords": [
 		"hydrology",
@@ -912,8 +915,8 @@
 		"p-wait-for": "^5.0.2",
 		"pdf-parse": "^1.1.1",
 		"posthog-node": "^5.8.0",
-		"puppeteer-chromium-resolver": "^23.0.0",
-		"puppeteer-core": "^23.4.0",
+		"puppeteer-chromium-resolver": "^25.0.0",
+		"puppeteer-core": "^25.18.1",
 		"reconnecting-eventsource": "^1.6.4",
 		"semver": "^7.7.2",
 		"serialize-error": "^11.0.3",

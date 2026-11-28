@@ -406,6 +406,56 @@ runtimeE2E("HTML Preview starts and executes a standalone module @phase0-smoke",
 	await expect(output).toContainText("42")
 })
 
+runtimeE2E(
+	"A lesson follows the VS Code theme live: light under Light Modern, dark under Dark Modern @phase0-smoke @theme",
+	async ({ page, userDataDir }) => {
+		const kernelSettings = {
+			"aihydro.htmlPreview.pythonExecution": "always",
+			"aihydro.htmlPreview.pythonInterpreter": process.env.AIHYDRO_E2E_PYTHON,
+			"aihydro.htmlPreview.pythonTimeoutSeconds": 60,
+		}
+		// The standalone fixture sets no colours of its own, so what it shows is what the preview gives it.
+		await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, (route) => route.abort())
+		// The profile's settings watcher can miss a write made right after launch (seen once in 3 runs), so
+		// the theme is (re)written while polling for the effect instead of once.
+		const useTheme = async (name: string, expected: "light" | "dark") => {
+			let polls = 0
+			await expect
+				.poll(
+					async () => {
+						if (polls++ % 20 === 0) {
+							writeUserSettings(userDataDir, { ...kernelSettings, "workbench.colorTheme": name })
+						}
+						return (await read()).theme
+					},
+					{ timeout: 60_000, intervals: [250] },
+				)
+				.toBe(expected)
+		}
+		await openWorkspaceFile(page, "phase0/standalone-module.html")
+		await waitForShellWithSrcdoc(page, "standalone-runtime-fixture")
+		const lesson = await waitForFrame(page, async (frame) => (await frame.locator("body.aihydro-module").count()) > 0)
+		const read = () =>
+			lesson.evaluate(() => {
+				const m = /rgb\((\d+), (\d+), (\d+)/.exec(getComputedStyle(document.body).backgroundColor)
+				return {
+					theme: document.documentElement.getAttribute("data-aihydro-theme"),
+					// perceived lightness 0..255 of the page the reader sees
+					lightness: m ? (Number(m[1]) * 299 + Number(m[2]) * 587 + Number(m[3]) * 114) / 1000 : -1,
+					prefersDark: matchMedia("(prefers-color-scheme: dark)").matches,
+				}
+			})
+		await useTheme("Default Light Modern", "light")
+		expect((await read()).lightness).toBeGreaterThan(200)
+
+		// Switch the theme with the lesson open: it must follow without a reload.
+		await useTheme("Default Dark Modern", "dark")
+		expect((await read()).lightness).toBeLessThan(60)
+		// Recorded for T5: whether prefers-color-scheme inside the preview follows the OS or VS Code.
+		test.info().annotations.push({ type: "prefers-color-scheme-in-preview", description: String((await read()).prefersDark) })
+	},
+)
+
 runtimeE2E("AI-Hydro: Show Studio opens the panel with the Studio tab label @phase0-smoke", async ({ page }) => {
 	await page.waitForLoadState("domcontentloaded")
 	await page.locator(".monaco-workbench").waitFor({ state: "visible", timeout: 20_000 })

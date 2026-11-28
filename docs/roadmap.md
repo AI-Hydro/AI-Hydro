@@ -4,20 +4,22 @@ description: AI-Hydro project roadmap — current status, shipped features, and 
 
 # Roadmap
 
-!!! tip "Project Status: Beta (v0.2.8)"
+!!! tip "Project Status: Beta"
     The extension and Python backend are stable for interactive research and learning.
     New capabilities are added incrementally; breaking changes before v1.0 will be
     documented in the [Changelog](changelog.md).
 
 ---
 
-## Current Version — v0.2.8
+## Current Version
 
-**Extension:** v0.2.8 · **Python backend:** aihydro-tools v1.7.0+
+**Extension:** 0.4.x (see the [Changelog](changelog.md) for the exact release) · **Python backend:** aihydro-tools 2.12.0 (aihydro-watershed 0.4.7, aihydro-data 0.2.10)
+
+The lists below were last curated at extension v0.2.8; the Changelog is the authoritative record of what has shipped since.
 
 ### What's stable
 
-- All 28 built-in MCP tools (analysis, modelling, session, project, literature, persona)
+- All 184 built-in MCP tools in aihydro-tools 2.12.0 (analysis, modelling, session, project, literature, persona, map, provenance and more; see the [Complete Reference](tools/reference.md))
 - AI-Hydro Studio with full interactive-module execution environment
 - Course mode: guided learning paths with prerequisites and progress tracking
 - `window.aihydro` interactivity primitives (timeline, compare, sim, plot, scene3d, bindParam)
