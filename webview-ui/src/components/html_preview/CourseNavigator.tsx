@@ -9,6 +9,7 @@
 import React, { useState } from "react"
 import type { CourseManifest, CourseModuleEntry } from "./useCourse"
 import type { CourseProgressHook } from "./useCourseProgress"
+import { chrome, ensureChromeThemeStyle } from "./chromeTheme"
 
 interface CourseNavigatorProps {
 	course: CourseManifest
@@ -17,11 +18,12 @@ interface CourseNavigatorProps {
 	onNavigate: (moduleId: string) => void
 }
 
-const ACCENT = "#00DDFF"
-const GREEN = "#4ade80"
+const ACCENT = chrome.accent
+const GREEN = chrome.ok
 const MUTED = "var(--vscode-descriptionForeground, #999)"
 
 export const CourseNavigator: React.FC<CourseNavigatorProps> = ({ course, currentModuleId, progress, onNavigate }) => {
+	ensureChromeThemeStyle()
 	// Count only IDs that actually exist in this course — stale entries must not inflate the tally.
 	const completedCount = course.modules.filter((m) => !!progress.progress.completed[m.id]).length
 	const total = course.modules.length
@@ -33,7 +35,7 @@ export const CourseNavigator: React.FC<CourseNavigatorProps> = ({ course, curren
 			<div
 				style={{
 					padding: "6px 10px 4px",
-					borderBottom: "1px solid var(--vscode-panel-border, rgba(125,211,252,0.18))",
+					borderBottom: `1px solid var(--vscode-panel-border, ${chrome.line})`,
 					marginBottom: 4,
 				}}>
 				<div
@@ -54,7 +56,7 @@ export const CourseNavigator: React.FC<CourseNavigatorProps> = ({ course, curren
 				<div
 					style={{
 						height: 3,
-						background: "rgba(125,211,252,0.10)",
+						background: chrome.track,
 						borderRadius: 2,
 						position: "relative",
 						overflow: "hidden",
@@ -68,8 +70,8 @@ export const CourseNavigator: React.FC<CourseNavigatorProps> = ({ course, curren
 							width: `${completionPct}%`,
 							background:
 								completionPct === 100
-									? `linear-gradient(90deg, ${GREEN}, #22c55e)`
-									: `linear-gradient(90deg, #00A3FF, ${ACCENT})`,
+									? `linear-gradient(90deg, ${GREEN}, ${chrome.ok2})`
+									: `linear-gradient(90deg, ${chrome.accent2}, ${ACCENT})`,
 							transition: "width 0.3s ease",
 						}}
 					/>
@@ -102,7 +104,7 @@ export const CourseNavigator: React.FC<CourseNavigatorProps> = ({ course, curren
 					style={{
 						marginTop: 8,
 						padding: "6px 10px",
-						borderTop: "1px solid var(--vscode-panel-border, rgba(125,211,252,0.18))",
+						borderTop: `1px solid var(--vscode-panel-border, ${chrome.line})`,
 						fontSize: 10,
 						color: MUTED,
 						fontStyle: "italic",
@@ -158,11 +160,11 @@ const ModuleRow: React.FC<{
 				gap: 8,
 				padding: "5px 10px 5px 8px",
 				background: isCurrent
-					? "rgba(0,221,255,0.10)"
+					? chrome.accentTint
 					: isCompleted
-						? "rgba(74,222,128,0.06)"
+						? chrome.okTint
 						: hovered
-							? "rgba(255,255,255,0.04)"
+							? chrome.hover
 							: "transparent",
 				border: "none",
 				borderLeft: `2px solid ${isCurrent ? ACCENT : isCompleted ? GREEN : "transparent"}`,
@@ -188,13 +190,13 @@ const ModuleRow: React.FC<{
 					height: 18,
 					borderRadius: 9,
 					background: isLocked
-						? "rgba(125,211,252,0.06)"
+						? chrome.badge
 						: isCompleted
 							? GREEN
 							: isCurrent
 								? ACCENT
-								: "rgba(125,211,252,0.12)",
-					color: isCompleted || isCurrent ? "#0a0a15" : isLocked ? MUTED : MUTED,
+								: chrome.badge,
+					color: isCompleted ? chrome.onOk : isCurrent ? chrome.onAccent : isLocked ? MUTED : MUTED,
 					fontSize: 9,
 					fontWeight: 700,
 					flexShrink: 0,

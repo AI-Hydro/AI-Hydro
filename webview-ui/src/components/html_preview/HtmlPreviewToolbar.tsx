@@ -4,6 +4,7 @@ import { KebabMenu, type KebabMenuItem } from "@/components/common/KebabMenu"
 import { CollapseToggleButton } from "./CollapseToggleButton"
 import { KernelStatusChip } from "./KernelStatusChip"
 import { usePersistedExpanded } from "./usePersistedExpanded"
+import { chrome, ensureChromeThemeStyle } from "./chromeTheme"
 
 export const ARTIFACT_TOOLBAR_EXPANDED_KEY = "aihydro.htmlPreview.artifactToolbarExpanded"
 
@@ -48,11 +49,12 @@ export interface HtmlPreviewToolbarProps {
 
 // ─── Shared design tokens ────────────────────────────────────────────────────
 const FG = "var(--vscode-foreground, #ddd)"
-const BORDER = "var(--vscode-panel-border, rgba(255,255,255,0.12))"
-const HOVER_BG = "rgba(255,255,255,0.06)"
-const ACTIVE_BG = "rgba(0,163,255,0.10)"
-const ACTIVE_BORDER = "rgba(0,163,255,0.35)"
-const EDIT_ACTIVE_BG = "linear-gradient(135deg, rgba(0,163,255,0.22), rgba(0,221,255,0.18))"
+const BORDER = `var(--vscode-panel-border, ${chrome.line})`
+const HOVER_BG = chrome.hover
+const HOVER_BORDER = chrome.hoverBorder
+const ACTIVE_BG = chrome.activeBg
+const ACTIVE_BORDER = chrome.activeBorder
+const EDIT_ACTIVE_BG = chrome.editActiveBg
 const DISABLED_FG = "var(--vscode-disabledForeground, #555)"
 
 // ─── IconBtn primitive ───────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ const IconBtn: React.FC<IconBtnProps> = ({ onClick, title, disabled, danger, act
 	const bg = active ? ACTIVE_BG : hovered && !disabled ? HOVER_BG : "transparent"
 	const border = active
 		? `1px solid ${ACTIVE_BORDER}`
-		: `1px solid ${hovered && !disabled ? "rgba(255,255,255,0.22)" : "transparent"}`
+		: `1px solid ${hovered && !disabled ? HOVER_BORDER : "transparent"}`
 
 	return (
 		<button
@@ -114,7 +116,7 @@ const RunGroup: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 			alignItems: "center",
 			gap: 1,
 			padding: "0 2px",
-			background: "rgba(255,255,255,0.03)",
+			background: chrome.surface,
 			border: `1px solid ${BORDER}`,
 			borderRadius: 5,
 		}}>
@@ -142,9 +144,9 @@ const EditModeButton: React.FC<{
 				height: 24,
 				padding: "0 10px",
 				background: active ? EDIT_ACTIVE_BG : hovered ? HOVER_BG : "transparent",
-				border: `1px solid ${active ? "rgba(0,221,255,0.55)" : BORDER}`,
+				border: `1px solid ${active ? chrome.editActiveBorder : BORDER}`,
 				borderRadius: 12,
-				color: active ? "#00DDFF" : FG,
+				color: active ? chrome.accent : FG,
 				fontFamily: "var(--vscode-font-family, system-ui)",
 				fontSize: 11,
 				fontWeight: active ? 600 : 500,
@@ -159,8 +161,8 @@ const EditModeButton: React.FC<{
 			{active && pendingCount > 0 && (
 				<span
 					style={{
-						background: "rgba(0,221,255,0.25)",
-						color: "#00DDFF",
+						background: chrome.accentTintStrong,
+						color: chrome.accent,
 						borderRadius: 8,
 						padding: "0 5px",
 						fontSize: 10,
@@ -190,7 +192,7 @@ const SidePanelToggle: React.FC<{ open: boolean; onClick: () => void }> = ({ ope
 				justifyContent: "center",
 				padding: 0,
 				background: open ? ACTIVE_BG : hovered ? HOVER_BG : "transparent",
-				border: `1px solid ${open ? ACTIVE_BORDER : hovered ? "rgba(255,255,255,0.22)" : "transparent"}`,
+				border: `1px solid ${open ? ACTIVE_BORDER : hovered ? HOVER_BORDER : "transparent"}`,
 				borderRadius: 4,
 				color: FG,
 				cursor: "pointer",
@@ -208,6 +210,7 @@ const SidePanelToggle: React.FC<{ open: boolean; onClick: () => void }> = ({ ope
 
 // ─── Main toolbar ────────────────────────────────────────────────────────────
 export const HtmlPreviewToolbar: React.FC<HtmlPreviewToolbarProps> = (props) => {
+	ensureChromeThemeStyle()
 	const {
 		item,
 		diagnosticsOpen,
@@ -314,9 +317,9 @@ export const HtmlPreviewToolbar: React.FC<HtmlPreviewToolbarProps> = (props) => 
 			style={{
 				padding: "5px 10px",
 				fontSize: 11,
-				background: "rgba(204,160,0,0.10)",
+				background: chrome.warnBg,
 				borderBottom: `1px solid ${BORDER}`,
-				color: "var(--vscode-editorWarning-foreground, #cca700)",
+				color: chrome.warn,
 			}}>
 			Workspace is not trusted — Python execution is disabled.
 		</div>

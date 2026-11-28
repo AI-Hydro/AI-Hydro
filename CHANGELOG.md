@@ -9,6 +9,14 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Studio shell chrome follows the VS Code theme.** The course header, course navigator, kernel chip and cell toolbar used a dark-only palette (`#00DDFF` course title 1.64:1, `#4ade80` completed marker 1.74:1, kernel "Ready" 1.86:1 on a white editor). Their colours are now per-theme-kind tokens (`--aihydro-chrome-*`, light, dark, high-contrast dark and high-contrast light) published from the webview body theme class, so a theme switch needs no re-render; the dark values are the previous ones except two small lifts that were below the threshold (kernel busy dot 2.9:1, idle label 3.9:1). The destructive "Reset" button text and the workspace-not-trusted banner now use theme-specific colours as well. Lesson documents are unchanged (lessons own their body). Tests: `chromeTheme.test.ts` asserts >= 4.5:1 for text and >= 3:1 for indicators under representative Light Modern, Dark Modern, Dark HC and Light HC values.
+
+---
+
 ## [0.4.15] - 2026-11-24
 
 Lessons follow the VS Code theme (light, dark and both high-contrast themes) instead of being forced dark. Pairs with the Modules catalog update that moved reading-a-hydrograph and watershed-runoff to 0.5.0 on shared theme tokens and raised the evapotranspiration-budyko 0.1.1 axis contrast to 3:1; other modules keep their own styling.
