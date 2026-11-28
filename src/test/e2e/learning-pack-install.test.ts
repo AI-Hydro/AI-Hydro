@@ -168,6 +168,13 @@ installedPackE2E(
 )
 
 async function runInstallCommand(workspaceDir: string): Promise<string | undefined> {
+	return runPackCommand("aihydro.learningPacks.install", {
+		archivePath: path.join(workspaceDir, "synthetic.aihydropack"),
+		approval: "install-once",
+	})
+}
+
+async function runPackCommand(command: string, options: Record<string, unknown>): Promise<string | undefined> {
 	let response: Response | undefined
 	await expect
 		.poll(
@@ -176,10 +183,7 @@ async function runInstallCommand(workspaceDir: string): Promise<string | undefin
 					response = await fetch("http://127.0.0.1:9876/learning-pack-command", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							command: "aihydro.learningPacks.install",
-							options: { archivePath: path.join(workspaceDir, "synthetic.aihydropack"), approval: "install-once" },
-						}),
+						body: JSON.stringify({ command, options }),
 					})
 					return response.status
 				} catch {
@@ -207,14 +211,13 @@ async function courseShell(page: Page): Promise<Frame | undefined> {
 
 /**
  * What this covers, exactly: the installed pack survives a real application restart (the Electron process
- * is closed and a new one started on the same profile, extensions and HOME) and Studio shows it again when
- * the install command is issued for the same archive, which reports `noop` because the store already holds
- * that version. What it does not cover: Studio reopening the course on its own. It does not today (probed:
- * no course shell appears after a restart until a command opens one) and there is no "my installed
- * courses" list, so the reinstall-and-expect-noop path is the only reopen route a test can drive.
+ * is closed and a new one started on the same profile, extensions and HOME) and Studio shows it again through
+ * `aihydro.learningPacks.open`, with no reinstall. What it does not cover: Studio reopening the course with no
+ * command at all (it does not), the QuickPick shown when several packs are installed (unit tested), and a
+ * click on the empty-state button (webview unit tested). The open command is driven through the test endpoint.
  */
 restartPackE2E(
-	"keeps an installed pack across a real restart and reopens it through the install command @phase1-pack",
+	"keeps an installed pack across a real restart and reopens it through the open command @phase1-pack",
 	async ({ lifecycle, workspaceDir }) => {
 		let { page } = await lifecycle.launch()
 		await E2ETestHelper.openAiHydroSidebar(page)
@@ -228,7 +231,7 @@ restartPackE2E(
 		expect(relaunched.app.process().pid).not.toBe(firstPid)
 		await E2ETestHelper.openAiHydroSidebar(page)
 
-		expect(await runInstallCommand(workspaceDir)).toBe("noop")
+		expect(await runPackCommand("aihydro.learningPacks.open", {})).toBe("opened")
 		await expect.poll(async () => Boolean(await courseShell(page)), { timeout: 30_000 }).toBe(true)
 		const shell = (await courseShell(page)) as Frame
 		await expect(shell.locator("iframe").first()).toHaveAttribute("srcdoc", /data-phase1-installed-pack="true"/, {

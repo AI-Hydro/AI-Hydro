@@ -8,6 +8,7 @@ import yauzl from "yauzl"
 export const REQUIRED_LEARNING_PACK_COMMANDS = Object.freeze([
 	"aihydro.learningPacks.install",
 	"aihydro.learningPacks.manageTrustedPublishers",
+	"aihydro.learningPacks.open",
 	"aihydro.learningPacks.remove",
 	"aihydro.learningPacks.rollback",
 ])

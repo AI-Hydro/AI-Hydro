@@ -238,6 +238,7 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 				if (commandEndpoint) {
 					const allowedCommands = new Set([
 						ExtensionRegistryInfo.commands.LearningPacksInstall,
+						ExtensionRegistryInfo.commands.LearningPacksOpen,
 						ExtensionRegistryInfo.commands.LearningPacksRollback,
 						ExtensionRegistryInfo.commands.LearningPacksRemove,
 					])

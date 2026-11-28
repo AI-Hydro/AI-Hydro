@@ -19,6 +19,12 @@ vi.mock("../../../context/ExtensionStateContext", () => ({
 	useExtensionState: () => ({ workspaceHtmlFiles: [] }),
 	ExtensionStateContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
+const openInstalledLearningPackMock = vi.fn().mockResolvedValue({})
+vi.mock("@/services/grpc-client", () => ({
+	HtmlPreviewServiceClient: {
+		openInstalledLearningPack: (...args: unknown[]) => openInstalledLearningPackMock(...args),
+	},
+}))
 vi.mock("../marketplace/ModulesMarketplaceView", () => ({ default: () => <div>marketplace-stub</div> }))
 
 describe("Studio empty state and sidebar honesty", () => {
@@ -31,6 +37,24 @@ describe("Studio empty state and sidebar honesty", () => {
 		expect(empty).toHaveTextContent("Install Learning Pack")
 		expect(empty).toHaveTextContent("ask the AI-Hydro agent")
 		expect(empty.textContent).not.toMatch(/How to add files|HTML [Pp]review|preview_html/)
+	})
+
+	it("Open an installed course asks the host to reopen a pack, without installing anything", async () => {
+		openInstalledLearningPackMock.mockClear()
+		render(<HtmlPreviewPanel />)
+		fireEvent.click(screen.getByTestId("studio-open-installed-course"))
+		await vi.waitFor(() => expect(openInstalledLearningPackMock).toHaveBeenCalledTimes(1))
+		expect(screen.getByTestId("studio-open-installed-course")).toHaveTextContent("Open an installed course")
+	})
+
+	it("survives a host failure on the Open an installed course click", async () => {
+		openInstalledLearningPackMock.mockRejectedValueOnce(new Error("host down"))
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {})
+		render(<HtmlPreviewPanel />)
+		fireEvent.click(screen.getByTestId("studio-open-installed-course"))
+		await vi.waitFor(() => expect(errors).toHaveBeenCalled())
+		expect(screen.getByTestId("studio-empty-state")).toBeInTheDocument()
+		errors.mockRestore()
 	})
 
 	it("Browse courses opens the catalogue", () => {

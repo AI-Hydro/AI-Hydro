@@ -1,5 +1,7 @@
+import { EmptyRequest } from "@shared/proto/cline/common"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AccordionSection } from "@/components/common/AccordionSection"
+import { HtmlPreviewServiceClient } from "@/services/grpc-client"
 import { PLATFORM_CONFIG } from "../../config/platform.config"
 import { useExtensionState } from "../../context/ExtensionStateContext"
 import { useHtmlPreviewContext } from "../../context/HtmlPreviewContext"
@@ -751,6 +753,14 @@ const EmptyState: React.FC<{
 	isDragOver: boolean
 	workspaceCount: number
 }> = ({ onAddFile, onBrowseCourses, isDragOver, workspaceCount }) => {
+	// Reopens an already-installed course at its saved module; the host never installs from this button.
+	const onOpenInstalledCourse = useCallback(async () => {
+		try {
+			await HtmlPreviewServiceClient.openInstalledLearningPack(EmptyRequest.create())
+		} catch (err) {
+			console.error("[HtmlPreviewPanel] Failed to open an installed course:", err)
+		}
+	}, [])
 	const fg = "var(--vscode-foreground, #ddd)"
 	const border = "var(--vscode-panel-border, rgba(255,255,255,0.12))"
 	const primary: React.CSSProperties = {
@@ -799,6 +809,14 @@ const EmptyState: React.FC<{
 						<span className="codicon codicon-library" />
 						<span>Browse courses</span>
 					</button>
+					<button
+						data-testid="studio-open-installed-course"
+						onClick={() => void onOpenInstalledCourse()}
+						style={secondary}
+						type="button">
+						<span className="codicon codicon-mortar-board" />
+						<span>Open an installed course</span>
+					</button>
 					<button onClick={onAddFile} style={secondary} type="button">
 						<span className="codicon codicon-add" />
 						<span>Add a document</span>
@@ -816,8 +834,9 @@ const EmptyState: React.FC<{
 						color: fg,
 					}}>
 					<li>
-						<strong>Open a Learning Pack:</strong> run <em>AI-Hydro: Install Learning Pack</em> from the Command
-						Palette, or right-click a <code>.aihydropack</code> file in the Explorer.
+						<strong>Open a Learning Pack:</strong> use <em>Open an installed course</em> if it is already installed.
+						Otherwise run <em>AI-Hydro: Install Learning Pack</em> from the Command Palette, or right-click a{" "}
+						<code>.aihydropack</code> file in the Explorer.
 					</li>
 					<li>
 						<strong>Make a report:</strong> ask the AI-Hydro agent in the chat for a report or dashboard. It opens

@@ -268,6 +268,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const { commands } = ExtensionRegistryInfo
 	registerLearningPackCommands(context, webview.controller, {
 		install: commands.LearningPacksInstall,
+		open: commands.LearningPacksOpen,
 		rollback: commands.LearningPacksRollback,
 		remove: commands.LearningPacksRemove,
 		manageTrustedPublishers: commands.LearningPacksManageTrustedPublishers,

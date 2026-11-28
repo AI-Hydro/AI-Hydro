@@ -47,6 +47,7 @@ untouched.
 AI-Hydro exposes these command-palette actions:
 
 - **AI-Hydro: Install Learning Pack**
+- **AI-Hydro: Open Installed Course**
 - **AI-Hydro: Roll Back Learning Pack**
 - **AI-Hydro: Remove Learning Pack**
 - **AI-Hydro: Manage Trusted Learning Pack Publishers**
@@ -64,6 +65,14 @@ Install** to store the verified key fingerprint for future decisions. Publisher
 names are informational. Instructor packs receive a separate warning because
 their inspectable solutions are not role-protected. Prerelease versions require
 an additional confirmation.
+
+To return to a pack that is already installed (for example after restarting VS
+Code), run **AI-Hydro: Open Installed Course** or press **Open an installed
+course** on the Studio start page. One installed pack opens directly, several
+show a picker, and none shows a message that offers **Install Learning Pack**.
+The pack opens at the module recorded in its existing course progress; nothing
+is reinstalled, and a progress record that names a module the pack no longer
+has falls back to the authored entry module.
 
 After a successful install, AI-Hydro opens the active course module through the
 existing Studio, course, progress, and Python infrastructure. Installed-pack

@@ -9,6 +9,12 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Open an installed Learning Pack without reinstalling it.** After VS Code restarts, the only way back into an installed course was to run Install again and get a no-op. New command **AI-Hydro: Open Installed Course** (`aihydro.learningPacks.open`) opens the pack straight away when one is installed, shows a picker when several are, and says so and offers **Install Learning Pack** when none is. The Studio empty state has a matching **Open an installed course** button. It reuses the existing registry, the existing course-progress store and the single Studio panel, so the course reopens at the module you left off; nothing new is stored or installed. The button calls a new argument-free host action, `openInstalledLearningPack`, which takes no path or pack id.
+
 ## [0.4.15] - 2026-11-24
 
 Lessons follow the VS Code theme (light, dark and both high-contrast themes) instead of being forced dark. Pairs with the Modules catalog update that moved reading-a-hydrograph and watershed-runoff to 0.5.0 on shared theme tokens and raised the evapotranspiration-budyko 0.1.1 axis contrast to 3:1; other modules keep their own styling.
