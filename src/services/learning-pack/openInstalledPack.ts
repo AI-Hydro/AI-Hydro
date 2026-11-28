@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises"
 import { type CourseProgress, loadProgress as loadCourseProgress } from "@/services/htmlPreview/courseProgressStore"
 import { learningPackProgressKey, resolveActiveLearningPackEntry, resolveActiveLearningPackLaunch } from "./runtimeIntegration"
 
@@ -9,7 +10,14 @@ export async function resolveResumeLaunch(
 ) {
 	const entry = await resolveActiveLearningPackEntry(root, packId)
 	const progress = await loadProgress(learningPackProgressKey(entry.scope))
-	return resolveActiveLearningPackLaunch(root, packId, progress.currentModuleId)
+	const launch = await resolveActiveLearningPackLaunch(root, packId, progress.currentModuleId)
+	// Opening a missing file would show an empty Studio panel and report success.
+	try {
+		await fs.access(launch.filePath)
+	} catch {
+		throw new Error(`The module "${launch.title}" of ${packId} is missing from the installed pack. Reinstall the pack.`)
+	}
+	return launch
 }
 
 export interface InstalledPackChoice {
@@ -25,16 +33,17 @@ export interface OpenInstalledPackDeps {
 	pick(choices: readonly InstalledPackChoice[]): Promise<string | undefined>
 	/** Open the pack at its persisted module in the existing Studio panel. */
 	open(packId: string): Promise<void>
-	/** Tell the user nothing is installed; true when they chose to install. */
-	offerInstall(): Promise<boolean>
-	/** Run the existing install command. */
-	install(): PromiseLike<unknown>
+	/**
+	 * Tell the user nothing is installed and offer Install. Fire-and-forget: it must return at once (the
+	 * notification is non-modal), so a pending toast never holds the command, or the host debounce, open.
+	 */
+	offerInstall(): void
 }
 
 export type OpenInstalledPackResult =
 	| { readonly status: "opened"; readonly packId: string }
 	| { readonly status: "cancelled" }
-	| { readonly status: "none-installed"; readonly installOffered: boolean }
+	| { readonly status: "none-installed" }
 
 /**
  * Open an already-installed Learning Pack without reinstalling it: zero installed packs explains and offers Install,
@@ -43,9 +52,8 @@ export type OpenInstalledPackResult =
 export async function runOpenInstalledPack(deps: OpenInstalledPackDeps, packId?: string): Promise<OpenInstalledPackResult> {
 	const installed = await deps.listInstalled()
 	if (installed.length === 0) {
-		const wantsInstall = await deps.offerInstall()
-		if (wantsInstall) await deps.install()
-		return { status: "none-installed", installOffered: wantsInstall }
+		deps.offerInstall()
+		return { status: "none-installed" }
 	}
 	let chosen = packId
 	if (chosen === undefined) chosen = installed.length === 1 ? installed[0].packId : await deps.pick(installed)

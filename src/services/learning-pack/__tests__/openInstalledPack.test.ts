@@ -19,8 +19,8 @@ afterEach(async () => {
 	await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
 })
 
-function harness(installed: InstalledPackChoice[], pickAnswer?: string, installOffer = false) {
-	const calls = { opened: [] as string[], picked: 0, offered: 0, installed: 0 }
+function harness(installed: InstalledPackChoice[], pickAnswer?: string) {
+	const calls = { opened: [] as string[], picked: 0, offered: 0 }
 	const deps: OpenInstalledPackDeps = {
 		listInstalled: async () => installed,
 		pick: async () => {
@@ -30,12 +30,8 @@ function harness(installed: InstalledPackChoice[], pickAnswer?: string, installO
 		open: async (packId) => {
 			calls.opened.push(packId)
 		},
-		offerInstall: async () => {
+		offerInstall: () => {
 			calls.offered++
-			return installOffer
-		},
-		install: async () => {
-			calls.installed++
 		},
 	}
 	return { deps, calls }
@@ -48,7 +44,7 @@ describe("Open installed Learning Pack command", () => {
 	it("opens a single installed pack directly, with no picker and no install", async () => {
 		const { deps, calls } = harness([hmfp])
 		assert.deepEqual(await runOpenInstalledPack(deps), { status: "opened", packId: "hmfp" })
-		assert.deepEqual(calls, { opened: ["hmfp"], picked: 0, offered: 0, installed: 0 })
+		assert.deepEqual(calls, { opened: ["hmfp"], picked: 0, offered: 0 })
 	})
 
 	it("shows a picker for several packs and opens the chosen one", async () => {
@@ -64,14 +60,29 @@ describe("Open installed Learning Pack command", () => {
 		assert.deepEqual(calls.opened, [])
 	})
 
-	it("with none installed, says so and offers Install, running it only when accepted", async () => {
-		const declined = harness([], undefined, false)
-		assert.deepEqual(await runOpenInstalledPack(declined.deps), { status: "none-installed", installOffered: false })
-		assert.deepEqual(declined.calls, { opened: [], picked: 0, offered: 1, installed: 0 })
+	it("with none installed, offers Install and returns without waiting for the notification", async () => {
+		const { deps, calls } = harness([])
+		assert.deepEqual(await runOpenInstalledPack(deps), { status: "none-installed" })
+		assert.deepEqual(calls, { opened: [], picked: 0, offered: 1 })
+	})
 
-		const accepted = harness([], undefined, true)
-		assert.deepEqual(await runOpenInstalledPack(accepted.deps), { status: "none-installed", installOffered: true })
-		assert.deepEqual(accepted.calls, { opened: [], picked: 0, offered: 1, installed: 1 })
+	it("is not held open by a notification that is never dismissed, so a second call still runs", async () => {
+		let pending = 0
+		const deps: OpenInstalledPackDeps = {
+			listInstalled: async () => [],
+			pick: async () => undefined,
+			open: async () => {},
+			// A toast that never resolves: nothing here may be awaited by the command.
+			offerInstall: () => {
+				pending++
+				void new Promise(() => {})
+			},
+		}
+		const first = await Promise.race([runOpenInstalledPack(deps), new Promise((r) => setTimeout(() => r("wedged"), 500))])
+		assert.deepEqual(first, { status: "none-installed" })
+		const second = await Promise.race([runOpenInstalledPack(deps), new Promise((r) => setTimeout(() => r("wedged"), 500))])
+		assert.deepEqual(second, { status: "none-installed" })
+		assert.equal(pending, 2)
 	})
 
 	it("honours an explicit pack id without asking", async () => {
@@ -134,6 +145,29 @@ describe("Installed Learning Pack resume", () => {
 		assert.equal(launch.filePath, second)
 		assert.equal(launch.scope.moduleId, "routing")
 		assert.deepEqual(keys, [learningPackProgressKey({ packId: "hmfp", courseId: "hydrologic-modeling", edition: "student" })])
+	})
+
+	it("refuses, rather than opening an empty panel, when the resumed module file is missing", async () => {
+		const { root, second } = await installedPack()
+		await fs.rm(second)
+		await assert.rejects(
+			resolveResumeLaunch(root, "hmfp", async () => ({ currentModuleId: "routing" })),
+			/missing from the installed pack/,
+		)
+	})
+
+	it("propagates that failure from the open command so the host can report it", async () => {
+		const { root } = await installedPack()
+		await fs.rm(path.join(root, "packs", "hmfp", "versions", "archive-sha", "modules", "routing"), { recursive: true })
+		const deps: OpenInstalledPackDeps = {
+			listInstalled: async () => [hmfp],
+			pick: async () => undefined,
+			open: async (packId) => {
+				await resolveResumeLaunch(root, packId, async () => ({ currentModuleId: "routing" }))
+			},
+			offerInstall: () => {},
+		}
+		await assert.rejects(runOpenInstalledPack(deps), /missing from the installed pack/)
 	})
 
 	it("falls back to the authored entry when nothing, or a stale module, is saved", async () => {

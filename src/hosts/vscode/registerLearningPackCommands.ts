@@ -204,10 +204,13 @@ export function registerLearningPackCommands(
 								)
 							)?.packId,
 						open: (packId) => openActiveModule(controller, root, packId),
-						offerInstall: async () =>
-							(await vscode.window.showInformationMessage("No Learning Packs are installed.", INSTALL_BUTTON)) ===
-							INSTALL_BUTTON,
-						install: () => vscode.commands.executeCommand(commands.install),
+						offerInstall: () => {
+							void Promise.resolve(
+								vscode.window.showInformationMessage("No Learning Packs are installed.", INSTALL_BUTTON),
+							).then((choice) => {
+								if (choice === INSTALL_BUTTON) void vscode.commands.executeCommand(commands.install)
+							})
+						},
 					},
 					injected?.packId,
 				)
