@@ -118,21 +118,17 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 					📚
 				</span>
 				<strong style={{ color: ACCENT, fontWeight: 700, letterSpacing: 0.2 }}>{course.title}</strong>
-				{authorsLine && (
-					<span style={{ opacity: 0.7, fontSize: 11 }}>
-						· <span style={{ color: "var(--vscode-descriptionForeground, #999)" }}>{authorsLine}</span>
-					</span>
-				)}
-				{course.version && <span style={{ opacity: 0.6, fontSize: 11 }}>· v{course.version}</span>}
+				{authorsLine && <span style={{ fontSize: 11, color: chrome.textDesc }}>· {authorsLine}</span>}
+				{course.version && <span style={{ fontSize: 11, color: chrome.textDesc }}>· v{course.version}</span>}
 				{course.estimatedHours !== undefined && (
-					<span style={{ opacity: 0.6, fontSize: 11 }}>· ⏱ {course.estimatedHours}h</span>
+					<span style={{ fontSize: 11, color: chrome.textDesc }}>· ⏱ {course.estimatedHours}h</span>
 				)}
 				<div style={{ flex: 1 }} />
 				{/* Progress count */}
 				<span
 					style={{
 						fontSize: 10,
-						color: completedCount > 0 ? GREEN : "var(--vscode-descriptionForeground, #888)",
+						color: completedCount > 0 ? GREEN : chrome.textDesc,
 						fontWeight: 600,
 					}}
 					title={`${completedCount} of ${total} modules completed`}>
@@ -149,7 +145,7 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 						width: 22,
 						height: 22,
 						borderRadius: 4,
-						background: menuOpen ? chrome.hover : "transparent",
+						background: menuOpen ? chrome.hoverMenu : "transparent",
 						border: "none",
 						color: "var(--vscode-foreground, #ddd)",
 						cursor: "pointer",
@@ -314,7 +310,7 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 							gap: 5,
 							padding: "3px 11px",
 							height: 22,
-							background: isCurrentCompleted ? chrome.okTintStrong : chrome.accentTint,
+							background: isCurrentCompleted ? chrome.okTintStrong : chrome.accentTintMid,
 							border: `1px solid ${isCurrentCompleted ? chrome.okBorder : ACCENT_DIM}`,
 							borderRadius: 4,
 							color: isCurrentCompleted ? GREEN : ACCENT,
@@ -402,7 +398,7 @@ const MenuItem: React.FC<{
 	)
 }
 
-const MenuDivider = () => <div style={{ height: 1, background: chrome.line, margin: "3px 4px" }} />
+const MenuDivider = () => <div style={{ height: 1, background: chrome.divider, margin: "3px 4px" }} />
 
 const NavBtn: React.FC<{
 	direction: "prev" | "next"

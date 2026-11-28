@@ -49,6 +49,7 @@ import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
 import { useHostThemeKind } from "./useHostThemeKind"
 import { isVendorLibraryId, loadVendorLibrarySource } from "./vendorLibraries"
+import { chrome } from "./chromeTheme"
 
 /**
  * HtmlPreviewView — single-iframe renderer for one HTML artifact.
@@ -1817,7 +1818,7 @@ const LoadingOverlay: React.FC = () => {
 				alignItems: "center",
 				justifyContent: "center",
 				gap: 12,
-				background: "rgba(20,20,28,0.72)",
+				background: chrome.scrim,
 				pointerEvents: "none",
 			}}>
 			{/* Spinning ring */}
@@ -1826,8 +1827,8 @@ const LoadingOverlay: React.FC = () => {
 					width: 28,
 					height: 28,
 					borderRadius: "50%",
-					border: "2.5px solid rgba(255,255,255,0.12)",
-					borderTopColor: "#00A3FF",
+					border: `2.5px solid ${chrome.ring}`,
+					borderTopColor: chrome.accent2,
 					animation: "aihydro-spin 0.75s linear infinite",
 				}}
 			/>
@@ -1889,7 +1890,7 @@ const ErrorOverlay: React.FC<{ message: string; onRetry: () => void }> = ({ mess
 				fontWeight: 500,
 				background: "transparent",
 				color: "var(--vscode-foreground, #ddd)",
-				border: "1px solid rgba(255,255,255,0.2)",
+				border: `1px solid ${chrome.menuLine}`,
 				borderRadius: 4,
 				cursor: "pointer",
 				transition: "background 0.12s",
@@ -1981,18 +1982,18 @@ const UnsavedChangesDialog: React.FC<{
 			display: "flex",
 			alignItems: "center",
 			justifyContent: "center",
-			background: "rgba(10,10,21,0.80)",
+			background: chrome.scrim,
 			backdropFilter: "blur(4px)",
 		}}>
 		<div
 			style={{
-				background: "rgba(20,20,36,0.98)",
-				border: "1px solid rgba(0,221,255,0.35)",
+				background: chrome.modalBg,
+				border: `1px solid ${chrome.accentBorder}`,
 				borderRadius: 14,
 				padding: "26px 30px",
 				maxWidth: 400,
 				width: "90%",
-				boxShadow: "0 24px 72px rgba(0,0,0,0.75)",
+				boxShadow: chrome.modalShadow,
 				fontFamily: "Poppins, system-ui, sans-serif",
 			}}>
 			{/* Icon + title */}
@@ -2004,14 +2005,14 @@ const UnsavedChangesDialog: React.FC<{
 					marginBottom: 12,
 				}}>
 				<span style={{ fontSize: 22 }}>💾</span>
-				<span style={{ fontSize: 15, fontWeight: 700, color: "#e2e8f0" }}>Unsaved prose edits</span>
+				<span style={{ fontSize: 15, fontWeight: 700, color: chrome.textStrong }}>Unsaved prose edits</span>
 			</div>
 			{/* Body */}
 			<p
 				style={{
 					margin: "0 0 22px",
 					fontSize: 12,
-					color: "#94a3b8",
+					color: chrome.textMuted,
 					lineHeight: 1.65,
 				}}>
 				You have unsaved text edits in this document. Would you like to write them to disk before leaving Edit Mode?
@@ -2026,7 +2027,7 @@ const UnsavedChangesDialog: React.FC<{
 						fontWeight: 600,
 						background: "transparent",
 						color: "var(--vscode-foreground, #ddd)",
-						border: "1px solid rgba(255,255,255,0.15)",
+						border: `1px solid ${chrome.menuLine}`,
 						borderRadius: 7,
 						cursor: "pointer",
 					}}
@@ -2039,9 +2040,9 @@ const UnsavedChangesDialog: React.FC<{
 						padding: "6px 14px",
 						fontSize: 12,
 						fontWeight: 600,
-						background: "rgba(255,80,80,0.12)",
-						color: "#f87171",
-						border: "1px solid rgba(255,80,80,0.25)",
+						background: chrome.dangerBg,
+						color: chrome.dangerFg,
+						border: `1px solid ${chrome.dangerBorder}`,
 						borderRadius: 7,
 						cursor: "pointer",
 					}}
@@ -2055,8 +2056,8 @@ const UnsavedChangesDialog: React.FC<{
 						padding: "6px 16px",
 						fontSize: 12,
 						fontWeight: 700,
-						background: isSaving ? "rgba(0,163,255,0.3)" : "linear-gradient(135deg, #00A3FF, #00DDFF)",
-						color: isSaving ? "#94a3b8" : "#0a0a15",
+						background: isSaving ? chrome.savingBg : chrome.btnGrad,
+						color: isSaving ? chrome.savingFg : chrome.onBtn,
 						border: "none",
 						borderRadius: 7,
 						cursor: isSaving ? "not-allowed" : "pointer",

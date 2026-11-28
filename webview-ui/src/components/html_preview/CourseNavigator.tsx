@@ -20,7 +20,7 @@ interface CourseNavigatorProps {
 
 const ACCENT = chrome.accent
 const GREEN = chrome.ok
-const MUTED = "var(--vscode-descriptionForeground, #999)"
+const MUTED = chrome.textDesc
 
 export const CourseNavigator: React.FC<CourseNavigatorProps> = ({ course, currentModuleId, progress, onNavigate }) => {
 	ensureChromeThemeStyle()
@@ -35,7 +35,7 @@ export const CourseNavigator: React.FC<CourseNavigatorProps> = ({ course, curren
 			<div
 				style={{
 					padding: "6px 10px 4px",
-					borderBottom: `1px solid var(--vscode-panel-border, ${chrome.line})`,
+					borderBottom: `1px solid var(--vscode-panel-border, ${chrome.lineSoft})`,
 					marginBottom: 4,
 				}}>
 				<div
@@ -104,7 +104,7 @@ export const CourseNavigator: React.FC<CourseNavigatorProps> = ({ course, curren
 					style={{
 						marginTop: 8,
 						padding: "6px 10px",
-						borderTop: `1px solid var(--vscode-panel-border, ${chrome.line})`,
+						borderTop: `1px solid var(--vscode-panel-border, ${chrome.lineSoft})`,
 						fontSize: 10,
 						color: MUTED,
 						fontStyle: "italic",
@@ -164,7 +164,7 @@ const ModuleRow: React.FC<{
 					: isCompleted
 						? chrome.okTint
 						: hovered
-							? chrome.hover
+							? chrome.hoverNav
 							: "transparent",
 				border: "none",
 				borderLeft: `2px solid ${isCurrent ? ACCENT : isCompleted ? GREEN : "transparent"}`,
@@ -189,13 +189,7 @@ const ModuleRow: React.FC<{
 					width: 18,
 					height: 18,
 					borderRadius: 9,
-					background: isLocked
-						? chrome.badge
-						: isCompleted
-							? GREEN
-							: isCurrent
-								? ACCENT
-								: chrome.badge,
+					background: isLocked ? chrome.badgeLocked : isCompleted ? GREEN : isCurrent ? ACCENT : chrome.badge,
 					color: isCompleted ? chrome.onOk : isCurrent ? chrome.onAccent : isLocked ? MUTED : MUTED,
 					fontSize: 9,
 					fontWeight: 700,
@@ -219,7 +213,6 @@ const ModuleRow: React.FC<{
 					style={{
 						fontSize: 9,
 						color: MUTED,
-						opacity: 0.7,
 						flexShrink: 0,
 					}}>
 					{module.estimatedMinutes}m

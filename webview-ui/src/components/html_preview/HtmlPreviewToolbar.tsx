@@ -71,9 +71,7 @@ const IconBtn: React.FC<IconBtnProps> = ({ onClick, title, disabled, danger, act
 	const [hovered, setHovered] = useState(false)
 	const fg = disabled ? DISABLED_FG : danger ? "var(--vscode-errorForeground, #f14c4c)" : FG
 	const bg = active ? ACTIVE_BG : hovered && !disabled ? HOVER_BG : "transparent"
-	const border = active
-		? `1px solid ${ACTIVE_BORDER}`
-		: `1px solid ${hovered && !disabled ? HOVER_BORDER : "transparent"}`
+	const border = active ? `1px solid ${ACTIVE_BORDER}` : `1px solid ${hovered && !disabled ? HOVER_BORDER : "transparent"}`
 
 	return (
 		<button
