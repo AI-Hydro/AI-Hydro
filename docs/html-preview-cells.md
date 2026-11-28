@@ -118,13 +118,23 @@ Pure-DOM author helpers (no kernel dependency); all respect `prefers-reduced-mot
   `{ play, stop, toggle }`.
 - **`aihydro.plot({ mount, data, layout, config })`** — branded Plotly wrapper; lazy-loads
   the Plotly 2.35.2 build that ships inside the extension and applies the AI-Hydro dark palette.
-- **`aihydro.scene3d({ canvas, dem, setup, onFrame })`** — three.js helper for 3D /
+- **`aihydro.scene3d({ canvas, dem, setup, onFrame, autoRotate, fallback })`** — three.js helper for 3D /
   manipulable scenes (terrain flythroughs, DEM/TWI surfaces, watershed views) over a
   `<canvas data-aihydro-scene3d>`. Lazy-loads the three.js r128 + OrbitControls builds that ship
   inside the extension and hands `setup(ctx)` a branded `{ THREE, scene, camera,
-  renderer, controls, canvas, dem }`; `onFrame(ctx)` runs per animation frame (skipped under
-  reduced-motion, which renders a single static frame). Returns a promise resolving to that
-  `ctx` (with a `stop()` method).
+  renderer, controls, canvas, dem, pixelRatio }`. The canvas is drawn on demand (control changes,
+  resize, `ctx.invalidate()`); `onFrame(ctx)` and `autoRotate` give continuous animation, which
+  stops under reduced motion (dragging still redraws). `fallback` (selector or element; or
+  `data-fallback`, `data-poster`, or a following `[data-aihydro-scene3d-fallback]` element) is shown
+  when WebGL is unavailable and in untrusted documents. Returns a promise resolving to `ctx`
+  (`null` if 3D could not start) with `invalidate()`, `stop()` (stops animation only) and
+  `dispose()`. After a lost context or a repeated call the canvas element may be replaced by a
+  clone: use `ctx.canvas`.
+  The stage colour follows the theme only while `scene.background` is still the bridge's own object
+  (a background set in `setup` is left alone); `keepBackground: true` opts out;
+  `onThemeChange(ctx, kind)` is called on each change and a change redraws the canvas;
+  `aihydro.theme.onChange` returns an unsubscribe function. Bind canvas listeners through `ctx.canvas`
+  inside `setup`, because recovery replaces the canvas with a `cloneNode(false)` clone.
 
 ### Vendored chart libraries
 

@@ -28,6 +28,7 @@ import {
 	AIHYDRO_DESIGN_SYSTEM_FONTS,
 	AIHYDRO_PREVIEW_STYLE,
 	CELL_BRIDGE_SCRIPT,
+	STATIC_SCENE3D_NOTICE_SCRIPT,
 	usesAihydroDesignSystem,
 } from "./aihydroCellBridge"
 import { applyArtifactBaseHref, FRAGMENT_NAV_GUARD_SCRIPT } from "./artifactBaseHref"
@@ -562,8 +563,11 @@ const HtmlPreviewView: React.FC<HtmlPreviewViewProps> = ({ item, sidePanelOpen =
 		const themeScript = buildThemeScript(hostThemeKindRef.current)
 		// The kernel bridge (Run buttons, runCode/paramChanged posts) is injected
 		// only for a trusted document the user has allowed. A static document gets
-		// no bridge at all, so the "static" badge describes what is enforced.
-		const cellBridge = canExecute ? CELL_BRIDGE_SCRIPT : ""
+		// no helper bridge (only the 3D-unavailable notice below), so the "static"
+		// badge describes what is enforced.
+		// The 3D helper is part of that bridge, so untrusted content never gets it; its 3D
+		// canvases get a poster (if the page declares one) and an explicit message instead.
+		const cellBridge = canExecute ? CELL_BRIDGE_SCRIPT : STATIC_SCENE3D_NOTICE_SCRIPT
 		// The Google Fonts <link>s are a real network request — only pay for it
 		// when the artifact actually uses the .aihydro-* design system (or is a
 		// module), and never for installed Learning Packs (offline-capable;
