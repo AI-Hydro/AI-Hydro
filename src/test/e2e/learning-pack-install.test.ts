@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { expect, type Frame, type Page } from "@playwright/test"
@@ -168,6 +168,13 @@ installedPackE2E(
 )
 
 async function runInstallCommand(workspaceDir: string): Promise<string | undefined> {
+	return runPackCommand("aihydro.learningPacks.install", {
+		archivePath: path.join(workspaceDir, "synthetic.aihydropack"),
+		approval: "install-once",
+	})
+}
+
+async function runPackCommand(command: string, options: Record<string, unknown>): Promise<string | undefined> {
 	let response: Response | undefined
 	await expect
 		.poll(
@@ -176,10 +183,7 @@ async function runInstallCommand(workspaceDir: string): Promise<string | undefin
 					response = await fetch("http://127.0.0.1:9876/learning-pack-command", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							command: "aihydro.learningPacks.install",
-							options: { archivePath: path.join(workspaceDir, "synthetic.aihydropack"), approval: "install-once" },
-						}),
+						body: JSON.stringify({ command, options }),
 					})
 					return response.status
 				} catch {
@@ -205,21 +209,55 @@ async function courseShell(page: Page): Promise<Frame | undefined> {
 	return undefined
 }
 
+interface PersistedProgress {
+	currentModuleId: string | null
+	completed: Record<string, unknown>
+}
+
+/** The host-written progress record (one course per profile in this test); read-only, never written by the test. */
+function readProgress(homeDir: string): PersistedProgress | undefined {
+	const directory = path.join(homeDir, ".aihydro", "course_progress")
+	if (!existsSync(directory)) return undefined
+	const files = readdirSync(directory).filter((entry) => entry.endsWith(".json"))
+	if (files.length !== 1) return undefined
+	try {
+		return JSON.parse(readFileSync(path.join(directory, files[0]), "utf8")) as PersistedProgress
+	} catch {
+		return undefined
+	}
+}
+
+const completedIds = (homeDir: string) => Object.keys(readProgress(homeDir)?.completed ?? {}).sort()
+
+// The second synthetic module's body is its own id (see createValidLearningPackFiles).
+const SECOND_MODULE_BODY = new RegExp(`${TEST_MODULE_IDS[1].replace(/\./g, "\\.")}</body>`)
+
 /**
  * What this covers, exactly: the installed pack survives a real application restart (the Electron process
- * is closed and a new one started on the same profile, extensions and HOME) and Studio shows it again when
- * the install command is issued for the same archive, which reports `noop` because the store already holds
- * that version. What it does not cover: Studio reopening the course on its own. It does not today (probed:
- * no course shell appears after a restart until a command opens one) and there is no "my installed
- * courses" list, so the reinstall-and-expect-noop path is the only reopen route a test can drive.
+ * is closed and a new one started on the same profile, extensions and HOME), and `aihydro.learningPacks.open`
+ * reopens it with no reinstall at the module saved before the restart (the second one, after the first is
+ * marked complete) with the completed tally unchanged. Re-running Install afterwards still reports `noop`
+ * and reopens the same module. What it does not cover: Studio reopening the course with no command at all
+ * (it does not), the QuickPick shown when several packs are installed (unit tested), and a click on the
+ * empty-state button (webview unit tested). The open command is driven through the test endpoint.
  */
 restartPackE2E(
-	"keeps an installed pack across a real restart and reopens it through the install command @phase1-pack",
-	async ({ lifecycle, workspaceDir }) => {
+	"keeps an installed pack across a real restart and reopens it at the saved module through the open command @phase1-pack",
+	async ({ lifecycle, workspaceDir, homeDir }) => {
 		let { page } = await lifecycle.launch()
 		await E2ETestHelper.openAiHydroSidebar(page)
 		expect(await runInstallCommand(workspaceDir)).toBe("installed")
 		await expect.poll(async () => Boolean(await courseShell(page)), { timeout: 30_000 }).toBe(true)
+
+		// Complete the first module so progress moves on to the second one.
+		let shell = (await courseShell(page)) as Frame
+		await shell.getByTitle("Mark complete & continue to next module").evaluate((element: HTMLElement) => element.click())
+		await expect(shell.getByTitle("1 of 2 modules completed")).toBeVisible({ timeout: 30_000 })
+		await expect
+			.poll(() => ({ current: readProgress(homeDir)?.currentModuleId, completed: completedIds(homeDir) }), {
+				timeout: 30_000,
+			})
+			.toEqual({ current: TEST_MODULE_IDS[1], completed: [TEST_MODULE_IDS[0]] })
 
 		const firstPid = await lifecycle.close()
 		expect(firstPid).not.toBeNull()
@@ -228,11 +266,21 @@ restartPackE2E(
 		expect(relaunched.app.process().pid).not.toBe(firstPid)
 		await E2ETestHelper.openAiHydroSidebar(page)
 
+		// Reopen through the open command: no reinstall, same module, same tally.
+		expect(await runPackCommand("aihydro.learningPacks.open", {})).toBe("opened")
+		await expect.poll(async () => Boolean(await courseShell(page)), { timeout: 30_000 }).toBe(true)
+		shell = (await courseShell(page)) as Frame
+		await expect(shell.locator("iframe").first()).toHaveAttribute("srcdoc", SECOND_MODULE_BODY, { timeout: 30_000 })
+		await expect(shell.getByTitle("1 of 2 modules completed")).toBeVisible({ timeout: 30_000 })
+		expect(readProgress(homeDir)?.currentModuleId).toBe(TEST_MODULE_IDS[1])
+		expect(completedIds(homeDir)).toEqual([TEST_MODULE_IDS[0]])
+
+		// Re-running Install is still a noop and reopens the same module.
 		expect(await runInstallCommand(workspaceDir)).toBe("noop")
 		await expect.poll(async () => Boolean(await courseShell(page)), { timeout: 30_000 }).toBe(true)
-		const shell = (await courseShell(page)) as Frame
-		await expect(shell.locator("iframe").first()).toHaveAttribute("srcdoc", /data-phase1-installed-pack="true"/, {
-			timeout: 30_000,
-		})
+		shell = (await courseShell(page)) as Frame
+		await expect(shell.locator("iframe").first()).toHaveAttribute("srcdoc", SECOND_MODULE_BODY, { timeout: 30_000 })
+		expect(readProgress(homeDir)?.currentModuleId).toBe(TEST_MODULE_IDS[1])
+		expect(completedIds(homeDir)).toEqual([TEST_MODULE_IDS[0]])
 	},
 )

@@ -48,6 +48,7 @@ const AiHydroCommands = {
 	SkillsButton: prefix + ".skillsButtonClicked",
 	LearningPacksInstall: prefix + ".learningPacks.install",
 	LearningPacksRollback: prefix + ".learningPacks.rollback",
+	LearningPacksOpen: prefix + ".learningPacks.open",
 	LearningPacksRemove: prefix + ".learningPacks.remove",
 	LearningPacksManageTrustedPublishers: prefix + ".learningPacks.manageTrustedPublishers",
 	ExperimentTableButton: prefix + ".experimentTableButtonClicked",

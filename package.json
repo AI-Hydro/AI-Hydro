@@ -202,6 +202,11 @@
 				"category": "AI-Hydro"
 			},
 			{
+				"command": "aihydro.learningPacks.open",
+				"title": "Open Installed Course",
+				"category": "AI-Hydro"
+			},
+			{
 				"command": "aihydro.learningPacks.rollback",
 				"title": "Roll Back Learning Pack",
 				"category": "AI-Hydro"

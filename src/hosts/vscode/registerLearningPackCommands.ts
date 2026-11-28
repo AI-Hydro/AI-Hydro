@@ -5,7 +5,6 @@ import * as vscode from "vscode"
 import type { Controller } from "@/core/controller"
 import { previewHtml } from "@/core/controller/htmlPreview/previewHtml"
 import { VscodeHtmlPreviewProvider } from "@/hosts/vscode/VscodeHtmlPreviewProvider"
-import { loadProgress as loadCourseProgress } from "@/services/htmlPreview/courseProgressStore"
 import {
 	createLearningPackApprovalPresentation,
 	requestLearningPackApproval,
@@ -22,12 +21,8 @@ import {
 	removeLearningPack,
 	rollbackLearningPack,
 } from "@/services/learning-pack/learningPackLifecycle"
-import {
-	defaultLearningPackRoot,
-	learningPackProgressKey,
-	resolveActiveLearningPackEntry,
-	resolveActiveLearningPackLaunch,
-} from "@/services/learning-pack/runtimeIntegration"
+import { resolveResumeLaunch, runOpenInstalledPack } from "@/services/learning-pack/openInstalledPack"
+import { defaultLearningPackRoot } from "@/services/learning-pack/runtimeIntegration"
 import { loadTrustedPublishers, removeTrustedPublisher } from "@/services/learning-pack/trustStore"
 import { isInTestMode } from "@/services/test/TestMode"
 import { PreviewHtmlRequest } from "@/shared/proto/cline/html_preview"
@@ -37,6 +32,7 @@ export interface LearningPackCommandIds {
 	readonly rollback: string
 	readonly remove: string
 	readonly manageTrustedPublishers: string
+	readonly open: string
 }
 
 interface TestInstallOptions {
@@ -44,6 +40,8 @@ interface TestInstallOptions {
 	readonly approval?: LearningPackApproval
 	readonly prereleaseOptIn?: boolean
 }
+
+const INSTALL_BUTTON = "Install Learning Pack"
 
 interface TestTransitionOptions {
 	readonly packId?: string
@@ -92,9 +90,7 @@ async function chooseApproval(root: string, inspection: LearningPackArchiveInspe
 }
 
 async function openActiveModule(controller: Controller, root: string, packId: string): Promise<void> {
-	const entry = await resolveActiveLearningPackEntry(root, packId)
-	const progress = await loadCourseProgress(learningPackProgressKey(entry.scope))
-	const module = await resolveActiveLearningPackLaunch(root, packId, progress.currentModuleId)
+	const module = await resolveResumeLaunch(root, packId)
 	await previewHtml(controller, PreviewHtmlRequest.create({ htmlContent: "", title: module.title, filePath: module.filePath }))
 	await VscodeHtmlPreviewProvider.createOrShow()
 }
@@ -182,6 +178,45 @@ export function registerLearningPackCommands(
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error)
 				void vscode.window.showErrorMessage(`Learning Pack installation failed: ${message}`)
+				return { status: "failed", message }
+			}
+		}),
+		vscode.commands.registerCommand(commands.open, async (commandArgument?: TestTransitionOptions) => {
+			const injected = isInTestMode() ? commandArgument : undefined
+			try {
+				return await runOpenInstalledPack(
+					{
+						listInstalled: async () =>
+							Object.entries((await loadLearningPackRegistry(root)).packs).map(([packId, record]) => ({
+								packId,
+								version: record.active.version,
+								edition: record.active.edition,
+							})),
+						pick: async (choices) =>
+							(
+								await vscode.window.showQuickPick(
+									choices.map((choice) => ({
+										label: choice.packId,
+										description: `${choice.version} · ${choice.edition}`,
+										packId: choice.packId,
+									})),
+									{ placeHolder: "Select a Learning Pack to open" },
+								)
+							)?.packId,
+						open: (packId) => openActiveModule(controller, root, packId),
+						offerInstall: () => {
+							void Promise.resolve(
+								vscode.window.showInformationMessage("No Learning Packs are installed.", INSTALL_BUTTON),
+							).then((choice) => {
+								if (choice === INSTALL_BUTTON) void vscode.commands.executeCommand(commands.install)
+							})
+						},
+					},
+					injected?.packId,
+				)
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error)
+				void vscode.window.showErrorMessage(`Could not open the Learning Pack: ${message}`)
 				return { status: "failed", message }
 			}
 		}),

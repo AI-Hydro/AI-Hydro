@@ -437,6 +437,11 @@ service HtmlPreviewService {
     // requires a real user click; the command still asks the user to approve before anything is installed.
     rpc openInstallLearningPack(EmptyRequest) returns (Empty);
 
+    // Open an already-installed Learning Pack at its saved module (the aihydro.learningPacks.open command: opens
+    // directly for one installed pack, a picker for several, an Install offer for none). Called only from the
+    // Studio empty state's "Open an installed course" button. It installs nothing and takes no path or pack id.
+    rpc openInstalledLearningPack(EmptyRequest) returns (Empty);
+
     // Phase 3.5 — reactive parameters.
     // Re-executes a cell when a parameter widget value changes in the artifact preview.
     rpc notifyParamChanged(NotifyParamChangedRequest) returns (NotifyParamChangedResponse);
