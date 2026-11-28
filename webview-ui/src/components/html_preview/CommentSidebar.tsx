@@ -17,6 +17,7 @@
 
 import React, { useCallback, useEffect, useState } from "react"
 import { isFromChildFrame } from "./hostMessage"
+import { chrome } from "./chromeTheme"
 
 interface PendingComment {
 	id: string
@@ -114,8 +115,8 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 						padding: "7px 10px",
 						borderRadius: 8,
 						border: "none",
-						background: "linear-gradient(135deg, #00A3FF, #00DDFF)",
-						color: "#0a0a15",
+						background: chrome.btnGrad,
+						color: chrome.onBtn,
 						fontFamily: "Poppins, system-ui, sans-serif",
 						fontSize: 11,
 						fontWeight: 700,
@@ -136,8 +137,8 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 				<div
 					key={p.id}
 					style={{
-						background: "rgba(15,15,30,0.5)",
-						border: "1px solid rgba(125,211,252,0.18)",
+						background: chrome.cardBg,
+						border: `1px solid ${chrome.lineSoft}`,
 						borderRadius: 8,
 						padding: 8,
 						fontFamily: "Nunito, system-ui, sans-serif",
@@ -145,7 +146,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 					<div
 						style={{
 							fontSize: 10,
-							color: "#00DDFF",
+							color: chrome.accent,
 							fontWeight: 700,
 							textTransform: "uppercase",
 							letterSpacing: "0.05em",
@@ -159,10 +160,10 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 						<div
 							style={{
 								fontSize: 11,
-								color: "#94a3b8",
+								color: chrome.textMuted,
 								fontStyle: "italic",
 								marginBottom: 4,
-								borderLeft: "2px solid rgba(0,221,255,0.4)",
+								borderLeft: `2px solid ${chrome.accentBorderStrong}`,
 								paddingLeft: 6,
 								overflow: "hidden",
 								textOverflow: "ellipsis",
@@ -171,7 +172,7 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 							“{p.anchor.quote}”
 						</div>
 					)}
-					<div style={{ fontSize: 12, color: "#e2e8f0", lineHeight: 1.4 }}>{p.body}</div>
+					<div style={{ fontSize: 12, color: chrome.textStrong, lineHeight: 1.4 }}>{p.body}</div>
 				</div>
 			))}
 
@@ -181,9 +182,9 @@ export const CommentSidebar: React.FC<CommentSidebarProps> = ({ moduleId, iframe
 					style={{
 						padding: "4px 8px",
 						background: "transparent",
-						border: "1px solid rgba(125,211,252,0.18)",
+						border: `1px solid ${chrome.lineSoft}`,
 						borderRadius: 6,
-						color: "#94a3b8",
+						color: chrome.textMuted,
 						fontFamily: "Poppins, system-ui, sans-serif",
 						fontSize: 10,
 						cursor: "pointer",

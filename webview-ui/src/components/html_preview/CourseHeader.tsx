@@ -18,6 +18,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import type { CourseManifest } from "./useCourse"
 import { type CourseProgressHook, canAccessCourseModule } from "./useCourseProgress"
+import { chrome, ensureChromeThemeStyle } from "./chromeTheme"
 
 interface CourseHeaderProps {
 	course: CourseManifest
@@ -26,11 +27,12 @@ interface CourseHeaderProps {
 	onNavigate: (moduleId: string) => void
 }
 
-const ACCENT = "#00DDFF"
-const ACCENT_DIM = "rgba(0,221,255,0.35)"
-const GREEN = "#4ade80"
+const ACCENT = chrome.accent
+const ACCENT_DIM = chrome.accentBorder
+const GREEN = chrome.ok
 
 export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModuleId, progress, onNavigate }) => {
+	ensureChromeThemeStyle()
 	const total = course.modules.length
 	const idx = currentModuleId ? course.modules.findIndex((m) => m.id === currentModuleId) : -1
 	const currentIdx = idx
@@ -95,7 +97,7 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 			style={{
 				display: "flex",
 				flexDirection: "column",
-				background: "linear-gradient(180deg, rgba(0,221,255,0.10), rgba(0,163,255,0.04))",
+				background: chrome.headerBg,
 				borderBottom: `1px solid ${ACCENT_DIM}`,
 				flexShrink: 0,
 				fontFamily: "Poppins, system-ui, sans-serif",
@@ -116,21 +118,17 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 					📚
 				</span>
 				<strong style={{ color: ACCENT, fontWeight: 700, letterSpacing: 0.2 }}>{course.title}</strong>
-				{authorsLine && (
-					<span style={{ opacity: 0.7, fontSize: 11 }}>
-						· <span style={{ color: "var(--vscode-descriptionForeground, #999)" }}>{authorsLine}</span>
-					</span>
-				)}
-				{course.version && <span style={{ opacity: 0.6, fontSize: 11 }}>· v{course.version}</span>}
+				{authorsLine && <span style={{ fontSize: 11, color: chrome.textDesc }}>· {authorsLine}</span>}
+				{course.version && <span style={{ fontSize: 11, color: chrome.textDesc }}>· v{course.version}</span>}
 				{course.estimatedHours !== undefined && (
-					<span style={{ opacity: 0.6, fontSize: 11 }}>· ⏱ {course.estimatedHours}h</span>
+					<span style={{ fontSize: 11, color: chrome.textDesc }}>· ⏱ {course.estimatedHours}h</span>
 				)}
 				<div style={{ flex: 1 }} />
 				{/* Progress count */}
 				<span
 					style={{
 						fontSize: 10,
-						color: completedCount > 0 ? GREEN : "var(--vscode-descriptionForeground, #888)",
+						color: completedCount > 0 ? GREEN : chrome.textDesc,
 						fontWeight: 600,
 					}}
 					title={`${completedCount} of ${total} modules completed`}>
@@ -147,7 +145,7 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 						width: 22,
 						height: 22,
 						borderRadius: 4,
-						background: menuOpen ? "rgba(255,255,255,0.08)" : "transparent",
+						background: menuOpen ? chrome.hoverMenu : "transparent",
 						border: "none",
 						color: "var(--vscode-foreground, #ddd)",
 						cursor: "pointer",
@@ -181,7 +179,7 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 							right: 8,
 							zIndex: 1001,
 							background: "var(--vscode-menu-background, #252526)",
-							border: "1px solid var(--vscode-menu-border, rgba(255,255,255,0.15))",
+							border: `1px solid var(--vscode-menu-border, ${chrome.menuLine})`,
 							borderRadius: 6,
 							boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
 							padding: 4,
@@ -222,7 +220,7 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 											fontSize: 11,
 											background: "transparent",
 											color: "var(--vscode-foreground)",
-											border: "1px solid rgba(255,255,255,0.15)",
+											border: `1px solid ${chrome.menuLine}`,
 											borderRadius: 4,
 											cursor: "pointer",
 										}}
@@ -234,8 +232,8 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 										style={{
 											padding: "3px 9px",
 											fontSize: 11,
-											background: "var(--vscode-errorForeground, #f48771)",
-											color: "#fff",
+											background: chrome.danger,
+											color: chrome.onDanger,
 											border: "none",
 											borderRadius: 4,
 											cursor: "pointer",
@@ -255,7 +253,7 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 			<div
 				style={{
 					height: 3,
-					background: "rgba(125,211,252,0.10)",
+					background: chrome.track,
 					position: "relative",
 					margin: "0 12px",
 				}}>
@@ -268,10 +266,10 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 						width: `${completionPct}%`,
 						background:
 							completionPct === 100
-								? `linear-gradient(90deg, ${GREEN}, #22c55e)`
-								: `linear-gradient(90deg, #00A3FF, ${ACCENT})`,
+								? `linear-gradient(90deg, ${GREEN}, ${chrome.ok2})`
+								: `linear-gradient(90deg, ${chrome.accent2}, ${ACCENT})`,
 						transition: "width 0.35s ease",
-						boxShadow: completionPct > 0 ? `0 0 8px ${completionPct === 100 ? GREEN : ACCENT}` : "none",
+						boxShadow: completionPct > 0 ? (completionPct === 100 ? chrome.glowOk : chrome.glowAccent) : "none",
 					}}
 				/>
 			</div>
@@ -312,8 +310,8 @@ export const CourseHeader: React.FC<CourseHeaderProps> = ({ course, currentModul
 							gap: 5,
 							padding: "3px 11px",
 							height: 22,
-							background: isCurrentCompleted ? "rgba(74,222,128,0.18)" : "rgba(0,221,255,0.12)",
-							border: `1px solid ${isCurrentCompleted ? "rgba(74,222,128,0.4)" : ACCENT_DIM}`,
+							background: isCurrentCompleted ? chrome.okTintStrong : chrome.accentTintMid,
+							border: `1px solid ${isCurrentCompleted ? chrome.okBorder : ACCENT_DIM}`,
 							borderRadius: 4,
 							color: isCurrentCompleted ? GREEN : ACCENT,
 							cursor: isMarkingComplete ? "default" : "pointer",
@@ -380,7 +378,7 @@ const MenuItem: React.FC<{
 				gap: 8,
 				width: "100%",
 				padding: "5px 10px",
-				background: hovered && !disabled ? "rgba(255,255,255,0.06)" : "transparent",
+				background: hovered && !disabled ? chrome.hover : "transparent",
 				border: "none",
 				color: disabled
 					? "var(--vscode-disabledForeground, #555)"
@@ -400,7 +398,7 @@ const MenuItem: React.FC<{
 	)
 }
 
-const MenuDivider = () => <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "3px 4px" }} />
+const MenuDivider = () => <div style={{ height: 1, background: chrome.divider, margin: "3px 4px" }} />
 
 const NavBtn: React.FC<{
 	direction: "prev" | "next"
@@ -426,8 +424,8 @@ const NavBtn: React.FC<{
 				gap: 4,
 				padding: "3px 10px",
 				height: 22,
-				background: enabled ? "rgba(0,221,255,0.10)" : "transparent",
-				border: `1px solid ${enabled ? ACCENT_DIM : "rgba(125,211,252,0.10)"}`,
+				background: enabled ? chrome.accentTint : "transparent",
+				border: `1px solid ${enabled ? ACCENT_DIM : chrome.track}`,
 				borderRadius: 4,
 				color: enabled ? ACCENT : "var(--vscode-descriptionForeground, #666)",
 				cursor: enabled ? "pointer" : "not-allowed",

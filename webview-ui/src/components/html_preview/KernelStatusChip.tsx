@@ -1,6 +1,7 @@
 import type { ArtifactKernelInfoResponse } from "@shared/proto/cline/html_preview"
 import { ArtifactKernelState } from "@shared/proto/cline/html_preview"
 import React from "react"
+import { chromeKernel, ensureChromeThemeStyle } from "./chromeTheme"
 
 export interface KernelStatusChipProps {
 	kernelInfo: ArtifactKernelInfoResponse | null
@@ -51,48 +52,13 @@ function resolveChipState(kernelState: ArtifactKernelState | undefined, dirty: b
 }
 
 const CHIP_PALETTE: Record<ChipState, { dot: string; bg: string; border: string; fg: string }> = {
-	"ready-clean": {
-		dot: "#89d185",
-		bg: "rgba(137,209,133,0.10)",
-		border: "rgba(137,209,133,0.30)",
-		fg: "#a0c8a0",
-	},
-	"ready-dirty": {
-		dot: "#cca700",
-		bg: "rgba(204,167,0,0.10)",
-		border: "rgba(204,167,0,0.30)",
-		fg: "#c8b060",
-	},
-	busy: {
-		dot: "#0e70c0",
-		bg: "rgba(14,112,192,0.12)",
-		border: "rgba(14,112,192,0.35)",
-		fg: "#6ab0e0",
-	},
-	starting: {
-		dot: "#cca700",
-		bg: "rgba(204,167,0,0.10)",
-		border: "rgba(204,167,0,0.30)",
-		fg: "#c8b060",
-	},
-	error: {
-		dot: "#f14c4c",
-		bg: "rgba(241,76,76,0.10)",
-		border: "rgba(241,76,76,0.30)",
-		fg: "#d88080",
-	},
-	stopped: {
-		dot: "#777",
-		bg: "rgba(120,120,120,0.08)",
-		border: "rgba(120,120,120,0.22)",
-		fg: "#888",
-	},
-	idle: {
-		dot: "#555",
-		bg: "rgba(80,80,80,0.08)",
-		border: "rgba(80,80,80,0.20)",
-		fg: "#777",
-	},
+	"ready-clean": chromeKernel("ready"),
+	"ready-dirty": chromeKernel("dirty"),
+	busy: chromeKernel("busy"),
+	starting: chromeKernel("starting"),
+	error: chromeKernel("error"),
+	stopped: chromeKernel("stopped"),
+	idle: chromeKernel("idle"),
 }
 
 const CHIP_LABEL: Record<ChipState, string> = {
@@ -129,6 +95,7 @@ export const KernelStatusChip: React.FC<KernelStatusChipProps> = ({
 	isRunning = false,
 }) => {
 	ensurePulseStyle()
+	ensureChromeThemeStyle()
 
 	const dirty = kernelInfo?.kernelDirty ?? false
 	const chipState = resolveChipState(kernelInfo?.state, dirty, isRunning)

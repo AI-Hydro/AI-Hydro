@@ -13,6 +13,7 @@ import ModulesMarketplaceView from "./marketplace/ModulesMarketplaceView"
 import { SHELL_INSTANCE_ID, SHELL_LOADED_AT, startShellReadyHandshake } from "./shellReadyHandshake"
 import { resolveModuleFilePath, useCourse } from "./useCourse"
 import { useCourseProgress } from "./useCourseProgress"
+import { chrome } from "./chromeTheme"
 
 /**
  * HtmlPreviewPanel — container for the HTML Preview tab.
@@ -257,7 +258,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 	const fg = "var(--vscode-foreground, #ddd)"
 	const border = "var(--vscode-panel-border, rgba(255,255,255,0.12))"
 	const _subtle = "var(--vscode-panel-background, rgba(255,255,255,0.06))"
-	const danger = "var(--vscode-errorForeground, #dc3545)"
+	const danger = chrome.errFg
 	// UI refinement: when collapsed, the sidebar disappears entirely (width 0).
 	// The hamburger ≡ button in the main HtmlPreviewToolbar re-opens it.
 	const sidebarWidth = sidebarCollapsed ? 0 : 240
@@ -297,7 +298,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 						position: "absolute",
 						inset: 0,
 						zIndex: 50,
-						background: "rgba(14,99,156,0.15)",
+						background: chrome.dropBg,
 						border: "2px dashed var(--vscode-focusBorder, #0e639c)",
 						display: "flex",
 						alignItems: "center",
@@ -565,8 +566,8 @@ export const HtmlPreviewPanel: React.FC = () => {
 										style={{
 											padding: "2px 7px",
 											fontSize: 10,
-											background: danger,
-											color: "#fff",
+											background: chrome.danger,
+											color: chrome.onDanger,
 											border: "none",
 											borderRadius: 3,
 											cursor: "pointer",
@@ -637,7 +638,7 @@ export const HtmlPreviewPanel: React.FC = () => {
 								padding: "3px 12px",
 								fontSize: 11,
 								color: loadStatus.kind === "err" ? danger : "var(--vscode-descriptionForeground, #888)",
-								background: loadStatus.kind === "err" ? "rgba(220,53,69,0.08)" : "rgba(125,211,252,0.04)",
+								background: loadStatus.kind === "err" ? chrome.errBg : chrome.tintFaint,
 								borderBottom: `1px solid ${border}`,
 								overflow: "hidden",
 								textOverflow: "ellipsis",
@@ -835,14 +836,16 @@ const EmptyState: React.FC<{
 
 // Muted category colors for the capability badge — distinct hues, readable in
 // both themes because they sit on a translucent tint of the same hue.
-const CAPABILITY_BADGE_HUE: Record<ArtifactIdentity["capability"], string> = {
-	executable: "120, 200, 130", // green — runnable
-	module: "150, 190, 240", // blue — module, non-executable
-	"installed-pack": "200, 160, 240", // violet — signed pack
-	static: "170, 170, 170", // grey — inert document
+const CAPABILITY_BADGE_TONE: Record<ArtifactIdentity["capability"], BadgeTone> = {
+	executable: "capExecutable", // green — runnable
+	module: "capModule", // blue — module, non-executable
+	"installed-pack": "capPack", // violet — signed pack
+	static: "capStatic", // grey — inert document
 }
 
-const Badge: React.FC<{ label: string; rgb: string; title?: string }> = ({ label, rgb, title }) => (
+type BadgeTone = "capExecutable" | "capModule" | "capPack" | "capStatic"
+
+const Badge: React.FC<{ label: string; tone: BadgeTone; title?: string }> = ({ label, tone, title }) => (
 	<span
 		style={{
 			display: "inline-flex",
@@ -852,9 +855,9 @@ const Badge: React.FC<{ label: string; rgb: string; title?: string }> = ({ label
 			lineHeight: 1.2,
 			padding: "1px 5px",
 			borderRadius: 3,
-			color: `rgb(${rgb})`,
-			background: `rgba(${rgb}, 0.15)`,
-			border: `1px solid rgba(${rgb}, 0.35)`,
+			color: chrome[`${tone}Fg`],
+			background: chrome[`${tone}Bg`],
+			border: `1px solid ${chrome[`${tone}Border`]}`,
 			whiteSpace: "nowrap",
 		}}
 		title={title}>
@@ -875,14 +878,10 @@ const SidebarItemCard: React.FC<{
 }> = ({ isActive, isModule, displayTitle, authorLine, subline, identity, fg, onSelect, onRemove }) => {
 	const [hovered, setHovered] = useState(false)
 
-	const bg = isActive
-		? "var(--vscode-list-activeSelectionBackground, #0e639c)"
-		: hovered
-			? "rgba(255,255,255,0.05)"
-			: "transparent"
+	const bg = isActive ? "var(--vscode-list-activeSelectionBackground, #0e639c)" : hovered ? chrome.hoverCard : "transparent"
 
 	const textColor = isActive ? "var(--vscode-list-activeSelectionForeground, #fff)" : fg
-	const metaColor = isActive ? "rgba(255,255,255,0.7)" : "var(--vscode-descriptionForeground, #888)"
+	const metaColor = isActive ? chrome.selMeta : "var(--vscode-descriptionForeground, #888)"
 
 	return (
 		<div
@@ -944,7 +943,6 @@ const SidebarItemCard: React.FC<{
 						style={{
 							fontSize: 10,
 							color: metaColor,
-							opacity: 0.8,
 							overflow: "hidden",
 							textOverflow: "ellipsis",
 							whiteSpace: "nowrap",
@@ -958,13 +956,13 @@ const SidebarItemCard: React.FC<{
 				<span style={{ display: "flex", gap: 4, marginTop: 2, flexWrap: "wrap" }}>
 					<Badge
 						label={identity.capabilityLabel}
-						rgb={CAPABILITY_BADGE_HUE[identity.capability]}
+						tone={CAPABILITY_BADGE_TONE[identity.capability]}
 						title={`Capability: ${identity.capabilityLabel}`}
 					/>
 					{identity.profile && (
 						<Badge
 							label={identity.profile}
-							rgb="150, 190, 240"
+							tone="capModule"
 							title={
 								identity.profileSource === "pack-edition"
 									? `Learning Pack edition: ${identity.profile}`
@@ -980,7 +978,6 @@ const SidebarItemCard: React.FC<{
 					style={{
 						fontSize: 9,
 						color: metaColor,
-						opacity: 0.7,
 						overflow: "hidden",
 						textOverflow: "ellipsis",
 						whiteSpace: "nowrap",

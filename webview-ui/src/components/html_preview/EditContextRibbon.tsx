@@ -23,6 +23,7 @@
  */
 
 import React, { useEffect, useRef, useState } from "react"
+import { chrome } from "./chromeTheme"
 
 interface EditContextRibbonProps {
 	iframeRef: React.RefObject<HTMLIFrameElement | null>
@@ -41,7 +42,7 @@ interface EditContextRibbonProps {
 	canRedo: boolean
 }
 
-const BORDER = "var(--vscode-panel-border, rgba(125,211,252,0.18))"
+const BORDER = `var(--vscode-panel-border, ${chrome.lineSoft})`
 
 // ─── Format button (posts aihydro-editor-command to iframe) ──────────────────
 const FormatBtn: React.FC<{
@@ -78,8 +79,8 @@ const FormatBtn: React.FC<{
 				alignItems: "center",
 				justifyContent: "center",
 				padding: label ? "0 6px" : 0,
-				background: hovered && !disabled ? "rgba(0,221,255,0.10)" : "transparent",
-				border: `1px solid ${hovered && !disabled ? "rgba(0,221,255,0.35)" : "transparent"}`,
+				background: hovered && !disabled ? chrome.accentTint : "transparent",
+				border: `1px solid ${hovered && !disabled ? chrome.accentBorder : "transparent"}`,
 				borderRadius: 4,
 				color: disabled ? "var(--vscode-disabledForeground, #555)" : "var(--vscode-foreground, #ddd)",
 				cursor: disabled ? "not-allowed" : "pointer",
@@ -106,7 +107,7 @@ const FormatGroup: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 			alignItems: "center",
 			gap: 1,
 			padding: "0 2px",
-			background: "rgba(255,255,255,0.03)",
+			background: chrome.surface,
 			border: `1px solid ${BORDER}`,
 			borderRadius: 5,
 		}}>
@@ -149,8 +150,8 @@ export const EditContextRibbon: React.FC<EditContextRibbonProps> = ({
 				alignItems: "center",
 				gap: 6,
 				padding: "5px 10px",
-				background: "linear-gradient(180deg, rgba(0,221,255,0.08), rgba(0,163,255,0.04))",
-				borderBottom: `1px solid rgba(0,221,255,0.25)`,
+				background: chrome.ribbonBg,
+				borderBottom: `1px solid ${chrome.ribbonBorder}`,
 				flexShrink: 0,
 				minHeight: 34,
 				boxSizing: "border-box",
@@ -206,7 +207,7 @@ export const EditContextRibbon: React.FC<EditContextRibbonProps> = ({
 					alignItems: "center",
 					gap: 5,
 					fontSize: 11,
-					color: pendingCount > 0 ? "#00DDFF" : "var(--vscode-descriptionForeground, #888)",
+					color: pendingCount > 0 ? chrome.accent : chrome.textDesc,
 					fontFamily: "Nunito, system-ui, sans-serif",
 					flexShrink: 0,
 				}}>
@@ -228,10 +229,10 @@ export const EditContextRibbon: React.FC<EditContextRibbonProps> = ({
 					height: 26,
 					borderRadius: 6,
 					border: `1px solid ${
-						canSave ? "rgba(0,221,255,0.4)" : hasPendingTextEdits ? "rgba(0,221,255,0.2)" : "rgba(125,211,252,0.12)"
+						canSave ? chrome.accentBorderStrong : hasPendingTextEdits ? chrome.accentBorderWeak : chrome.badge
 					}`,
-					background: canSave ? "rgba(0,221,255,0.10)" : "transparent",
-					color: canSave ? "#00DDFF" : "var(--vscode-descriptionForeground, #555)",
+					background: canSave ? chrome.accentTint : "transparent",
+					color: canSave ? chrome.accent : "var(--vscode-descriptionForeground, #555)",
 					fontFamily: "Poppins, system-ui, sans-serif",
 					fontSize: 11,
 					fontWeight: 600,
@@ -265,11 +266,11 @@ export const EditContextRibbon: React.FC<EditContextRibbonProps> = ({
 					borderRadius: 13,
 					border: "none",
 					background: justSent
-						? "linear-gradient(135deg, #1f9d55, #2ecc71)"
+						? chrome.okGrad
 						: canSend
-							? "linear-gradient(135deg, #00A3FF, #00DDFF)"
+							? chrome.btnGrad
 							: "var(--vscode-button-secondaryBackground, rgba(125,211,252,0.10))",
-					color: justSent ? "#0a0a15" : canSend ? "#0a0a15" : "var(--vscode-descriptionForeground, #666)",
+					color: justSent ? chrome.onOkGrad : canSend ? chrome.onBtn : "var(--vscode-descriptionForeground, #666)",
 					fontFamily: "Poppins, system-ui, sans-serif",
 					fontSize: 11,
 					fontWeight: 700,
@@ -297,7 +298,7 @@ export const EditContextRibbon: React.FC<EditContextRibbonProps> = ({
 				aria-label={hasPendingTextEdits ? "Exit Edit Mode (unsaved changes)" : "Exit Edit Mode"}
 				onClick={onExit}
 				onMouseEnter={(e) => {
-					;(e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"
+					;(e.currentTarget as HTMLElement).style.background = chrome.hoverMenu
 				}}
 				onMouseLeave={(e) => {
 					;(e.currentTarget as HTMLElement).style.background = "transparent"

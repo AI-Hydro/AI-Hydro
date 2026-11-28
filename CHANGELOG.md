@@ -9,6 +9,18 @@ The companion Python package (`aihydro-tools`) has its own changelog at
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Studio course-view chrome follows the VS Code theme (light, dark, high-contrast dark, high-contrast light).** Covered: course header, course navigator, kernel chip, cell toolbar, the Files sidebar (capability badges, selected-row text, "Remove all?" confirm, load toast, drop zone), the Edit Mode ribbon, the comments sidebar and the unsaved-edits modal. Their colours were a dark-only palette (`#00DDFF` course title 1.64:1, `#4ade80` completed marker 1.74:1, kernel "Ready" 1.86:1 on a white editor). They are now per-theme-kind tokens (`--aihydro-chrome-*`) published from the webview body theme class, so a theme switch needs no re-render. Not covered: the preview bar's `--vscode-charts-*` status text, lesson documents (lessons own their body) and the cell bridge.
+  - **Dark themes keep their previous values except where the new contrast sweep found a failure.** Changed dark values: kernel busy dot `#0e70c0`→`#1a7fd4` (2.9:1), kernel idle dot `#555`→`#6e6e6e` (2.0:1), kernel idle label `#777`→`#8a8a8a` (3.9:1), kernel stopped label `#888`→`#8f8f8f` (4.3:1 on its tint), module durations, locked numbers, authors, version and hours now use a fixed `#a8a8a8` description colour instead of VS Code's description colour at 60-70% opacity (the opacity was dropped because it cannot reach 4.5:1 in light themes), the "Saving…" label `#94a3b8`→`#aab7ca`, and the Reset button now has dark text (`#1f1f1f`) on `#f48771` (white was about 2.3:1).
+  - **Selected Files row**: its path/meta text is now the VS Code list selection foreground at 78% (it was fixed white at 70%, nearly invisible on Light Modern's light grey selection `#E8E8E8`, verified against the theme source), without the extra 70-80% opacity; the capability badges for executable and signed-pack documents are lifted slightly in dark themes (`rgb(120,200,130)`→`rgb(135,215,145)`, `rgb(200,160,240)`→`rgb(215,175,250)`, static grey `rgb(170,170,170)`→`rgb(190,190,190)`) so they clear 4.5:1 on both the active and inactive selection backgrounds.
+  - **Decision: Reset and the workspace-not-trusted banner use fixed per-kind colours** rather than `--vscode-errorForeground` and `--vscode-editorWarning-foreground`, because those VS Code colours are about 3:1 on white in Light Modern. The "Remove all?" text and load-error toast use a per-kind error colour (dark keeps the VS Code variable with the old fallback).
+  - Tests: `chromeTheme.test.tsx` asserts >= 4.5:1 for text and >= 3:1 for indicators under representative Light Modern, Dark Modern, Dark HC and Light HC values, against both the editor and the sidebar background, including the chrome description-text colour over every tint it is painted on (VS Code's own description colour is checked on the plain backgrounds), and checks that no component keeps a dark-only literal.
+
+---
+
 ## [0.4.15] - 2026-11-24
 
 Lessons follow the VS Code theme (light, dark and both high-contrast themes) instead of being forced dark. Pairs with the Modules catalog update that moved reading-a-hydrograph and watershed-runoff to 0.5.0 on shared theme tokens and raised the evapotranspiration-budyko 0.1.1 axis contrast to 3:1; other modules keep their own styling.
