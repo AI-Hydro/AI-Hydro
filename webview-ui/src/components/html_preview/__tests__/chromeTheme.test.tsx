@@ -54,11 +54,46 @@ function ratio(fg: RGBA, bg: RGBA): number {
 // Hand-entered from the published default themes, not captured from a running VS Code.
 // Light description text uses #717171 (the stricter value); sidebar is where the navigator sits.
 
-const HOST: Record<ThemeKind, { bg: string; sidebar: string; fg: string; desc: string; err: string; sel: string }> = {
-	light: { bg: "#ffffff", sidebar: "#f8f8f8", fg: "#3b3b3b", desc: "#717171", err: "#f85149", sel: "#0060c0" },
-	dark: { bg: "#1f1f1f", sidebar: "#181818", fg: "#cccccc", desc: "#9d9d9d", err: "#f85149", sel: "#04395e" },
-	"hc-dark": { bg: "#000000", sidebar: "#000000", fg: "#ffffff", desc: "#ffffff", err: "#f48771", sel: "#000000" },
-	"hc-light": { bg: "#ffffff", sidebar: "#ffffff", fg: "#292929", desc: "#292929", err: "#b5200d", sel: "#ffffff" },
+const HOST: Record<
+	ThemeKind,
+	{ bg: string; sidebar: string; fg: string; desc: string; err: string; sel: string[]; selFg: string }
+> = {
+	light: {
+		bg: "#ffffff",
+		sidebar: "#f8f8f8",
+		fg: "#3b3b3b",
+		desc: "#717171",
+		err: "#f85149",
+		sel: ["#E8E8E8", "#E4E6F1"],
+		selFg: "#000000",
+	},
+	dark: {
+		bg: "#1f1f1f",
+		sidebar: "#181818",
+		fg: "#cccccc",
+		desc: "#9d9d9d",
+		err: "#f85149",
+		sel: ["#04395E", "#37373D"],
+		selFg: "#ffffff",
+	},
+	"hc-dark": {
+		bg: "#000000",
+		sidebar: "#000000",
+		fg: "#ffffff",
+		desc: "#ffffff",
+		err: "#f48771",
+		sel: ["#000000"],
+		selFg: "#ffffff",
+	},
+	"hc-light": {
+		bg: "#ffffff",
+		sidebar: "#ffffff",
+		fg: "#292929",
+		desc: "#292929",
+		err: "#b5200d",
+		sel: ["#ffffff"],
+		selFg: "#000000",
+	},
 }
 
 const TEXT_MIN = 4.5
@@ -212,8 +247,26 @@ describe("chrome theme tokens", () => {
 				}
 			})
 
-			it("secondary text on the active list selection >= 4.5:1", () => {
-				expect(ratio(parseColor(value(kind, "selMeta")), parseColor(host.sel))).toBeGreaterThanOrEqual(TEXT_MIN)
+			it("selected Files row: meta text, badges and the close glyph on the active and inactive selection backgrounds", () => {
+				// Light Modern: list.activeSelectionBackground #E8E8E8 / foreground #000 (theme source);
+				// inactive #E4E6F1 is the workbench default. The component paints the active colours either way.
+				const fg = parseColor(host.selFg)
+				const withAlpha = (a: number): RGBA => [fg[0], fg[1], fg[2], a]
+				expect(value(kind, "selMeta")).toContain("--vscode-list-activeSelectionForeground")
+				for (const selBg of host.sel) {
+					const bg = parseColor(selBg)
+					// selMeta is color-mix(selection foreground 78%, transparent)
+					expect(ratio(withAlpha(0.78), bg)).toBeGreaterThanOrEqual(TEXT_MIN)
+					expect(ratio(fg, bg)).toBeGreaterThanOrEqual(TEXT_MIN)
+					// close glyph is the selection foreground at 0.6 opacity (non-text, 3:1)
+					expect(ratio(withAlpha(0.6), bg)).toBeGreaterThanOrEqual(UI_MIN)
+					for (const c of CAPS) {
+						const badgeBg = colorsIn(value(kind, cap(c, "Bg"))).map((x) => over(x, bg))
+						for (const bb of badgeBg) {
+							expect(ratio(parseColor(value(kind, cap(c, "Fg"))), bb)).toBeGreaterThanOrEqual(TEXT_MIN)
+						}
+					}
+				}
 			})
 
 			it("theme-supplied foregrounds the chrome relies on stay legible on editor and sidebar bg", () => {

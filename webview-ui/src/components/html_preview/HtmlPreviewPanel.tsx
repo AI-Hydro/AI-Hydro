@@ -943,7 +943,6 @@ const SidebarItemCard: React.FC<{
 						style={{
 							fontSize: 10,
 							color: metaColor,
-							opacity: 0.8,
 							overflow: "hidden",
 							textOverflow: "ellipsis",
 							whiteSpace: "nowrap",
@@ -979,7 +978,6 @@ const SidebarItemCard: React.FC<{
 					style={{
 						fontSize: 9,
 						color: metaColor,
-						opacity: 0.7,
 						overflow: "hidden",
 						textOverflow: "ellipsis",
 						whiteSpace: "nowrap",
